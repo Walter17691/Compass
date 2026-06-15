@@ -1745,7 +1745,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               {transcript.length>0&&<div style={{fontSize:11,color:"#555",marginRight:4}}>{transcript.length} {transcript.length===1?"note":"notes"}</div>}
-              <Btn onClick={handleReview} disabled={aiProcessing||transcript.length===0} style={{padding:"10px 20px",fontSize:13}}>
+              <Btn onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}} disabled={aiProcessing||(transcript.length===0&&!inputText.trim())} style={{padding:"10px 20px",fontSize:13}}>
                 {aiProcessing?"Processing...":"End meeting"}
               </Btn>
             </div>
