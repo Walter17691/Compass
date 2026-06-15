@@ -1803,25 +1803,18 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           if(!chatInput.trim()||chatProcessing) return;
           const msg = chatInput.trim();
           setChatInput("");
-          const newHistory = [...chatHistory,{role:"user",content:msg}];
-          setChatHistory(newHistory);
+          setChatHistory(h=>[...h,{role:"user",content:msg}]);
           setChatProcessing(true);
           const sys = "You are Compass, a UK HR AI assistant. The structured meeting record is:\n\n"+reviewOutput+"\n\nNext steps:\n"+nextSteps.map((s,i)=>(i+1)+". "+s.step).join("\n")+"\n\nHelp the user refine the record, answer questions, or provide guidance. Be concise and professional.";
-          let reply = "";
           try {
-            const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,stream:true,system:sys,messages:newHistory})});
-            const reader = res.body.getReader();
-            const dec = new TextDecoder();
-            while(true){
-              const {done,value} = await reader.read();
-              if(done) break;
-              dec.decode(value).split("\n").forEach(line=>{
-                if(line.startsWith("data:")){try{const d=JSON.parse(line.slice(5));if(d.type==="content_block_delta")reply+=d.delta?.text||"";}catch(e){}}
-              });
-              setChatHistory([...newHistory,{role:"assistant",content:reply}]);
-            }
-          } catch(e){ reply="Sorry, something went wrong."; }
-          setChatHistory([...newHistory,{role:"assistant",content:reply}]);
+            const msgs = [...chatHistory,{role:"user",content:msg}];
+            const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,stream:false,system:sys,messages:msgs})});
+            const data = await res.json();
+            const reply = data.content?.[0]?.text || "Sorry, no response received.";
+            setChatHistory(h=>[...h,{role:"assistant",content:reply}]);
+          } catch(e){
+            setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong. Please try again."}]);
+          }
           setChatProcessing(false);
         };
 
