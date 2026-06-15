@@ -4,12 +4,12 @@ import { useState, useRef, useEffect, useCallback } from "react";
 //  CONSTANTS
 // ─────────────────────────────────────────────
 const MEETING_TYPES = [
-  { id:"investigation", label:"Investigation",  tag:"ACAS S1",    group:"formal" },
-  { id:"disciplinary",  label:"Disciplinary",    tag:"ACAS S2",    group:"formal" },
-  { id:"formal",        label:"Formal Meeting",  tag:"ERA 1996",   group:"formal" },
-  { id:"informal",      label:"Informal / 1-1",  tag:"Best Practice", group:"formal" },
-  { id:"grievance",     label:"Grievance",       tag:"ACAS S6",    group:"formal" },
-  { id:"return",        label:"Return to Work",  tag:"EqA 2010",   group:"formal" },
+  { id:"investigation", label:"Investigation",  tag:"ACAS S1",    group:"formal", mode:"er" },
+  { id:"disciplinary",  label:"Disciplinary",    tag:"ACAS S2",    group:"formal", mode:"er" },
+  { id:"formal",        label:"Formal Meeting",  tag:"ERA 1996",   group:"formal", mode:"er" },
+  { id:"informal",      label:"Informal / 1-1",  tag:"Best Practice", group:"formal", mode:"quick" },
+  { id:"grievance",     label:"Grievance",       tag:"ACAS S6",    group:"formal", mode:"er" },
+  { id:"return",        label:"Return to Work",  tag:"EqA 2010",   group:"formal", mode:"er" },
   { id:"probation",     label:"Probation Review", tag:"Development", group:"dev" },
   { id:"appraisal",     label:"Appraisal",        tag:"Development", group:"dev" },
   { id:"pip-review",    label:"PIP Review",       tag:"Development", group:"dev" },
@@ -153,7 +153,7 @@ const TEMPLATES = [
 async function streamClaude(system, user, onChunk) {
   let apiKey = "";
   try { apiKey = window.COMPASS_API_KEY || ""; } catch(e) {}
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/chat", {
     method:"POST",
     headers:{
       "Content-Type":"application/json",
@@ -397,7 +397,7 @@ export default function Compass() {
 
   // ── Session ──
   const [meetingType, setMeetingType] = useState(null);
-  const [caseInfo, setCaseInfo] = useState({employee:"", date:"", manager:"", context:"", email:""});
+  const [caseInfo, setCaseInfo] = useState({employee:"", date:new Date().toISOString().split("T")[0], manager:"", context:"", email:""});
   const [participants, setParticipants] = useState([]); // [{name, role, email}]
 
   // ── Transcript ──
@@ -492,6 +492,7 @@ export default function Compass() {
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatProcessing, setChatProcessing] = useState(false);
+  const [bgDoc, setBgDoc] = useState(null); // {name, text}
 
   // ── Deadline reminders ──
   const [dueSoon, setDueSoon] = useState([]);
@@ -1463,13 +1464,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         .pu{animation:pu 1.4s infinite;}@keyframes pu{0%,100%{opacity:1}50%{opacity:0.3}}
         .fu{animation:fu 0.2s ease;}@keyframes fu{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-        @media(max-width:768px){
-          .desktop-only{display:none!important;}
-          .mobile-full{width:100%!important;max-width:100%!important;}
-        }
-        @media(min-width:769px){
-          .mobile-only{display:none!important;}
-        }
         button{cursor:pointer;}
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#0D0D0F;}::-webkit-scrollbar-thumb{background:#2A2A35;border-radius:2px;}
       `}</style>
@@ -1625,7 +1619,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       )}
 
       {/* ══ HOME ══ */}
-      {screen===SCREENS.HOME&&(
+      {screen===SCREENS.HOME&&(()=>{
+        return(
           <div style={{maxWidth:760,margin:"0 auto",padding:"80px 20px",textAlign:"center"}}>
             <div style={{display:"flex",justifyContent:"center",marginBottom:20}}><CompassLogo size={52}/></div>
             <div style={{fontSize:11,letterSpacing:2.5,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>UK HR Intelligence</div>
@@ -1635,8 +1630,31 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <p style={{fontSize:15,color:"#666",maxWidth:420,margin:"0 auto 40px",lineHeight:1.8}}>
               AI-powered meeting records, legal risk scoring, outcome letters, and full case management.
             </p>
-            <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:48}}>
-              <Btn onClick={()=>setShowPicker(true)} style={{padding:"14px 32px",fontSize:15,borderRadius:8}}>+ Start a meeting</Btn>
+            <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:48,position:"relative"}}>
+              <div style={{position:"relative"}}>
+                <button onClick={()=>setShowPicker(p=>!p)}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"14px 28px",fontSize:15,color:"#fff",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+                  + Start meeting <span style={{fontSize:10,opacity:0.7}}>&#9660;</span>
+                </button>
+                {showPicker&&(
+                  <div style={{position:"absolute",top:"calc(100% + 8px)",left:"50%",transform:"translateX(-50%)",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,overflow:"hidden",width:280,zIndex:200,boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
+                    <button onClick={()=>{setShowPicker(false);const t={id:"catchup",label:"General meeting",mode:"quick",group:"quick"};setMeetingType(t);setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setNextSteps([]);setScreen(SCREENS.RECORD);}}
+                      style={{width:"100%",background:"none",border:"none",borderBottom:"1px solid #2A2A35",padding:"18px 20px",textAlign:"left",cursor:"pointer"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="#141418"}
+                      onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>Start now</div>
+                      <div style={{fontSize:12,color:"#555",lineHeight:1.5}}>Jump straight into the notepad. Compass structures everything after.</div>
+                    </button>
+                    <button onClick={()=>{setShowPicker(false);setMeetingType(null);setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setNextSteps([]);setScreen(SCREENS.PREP);}}
+                      style={{width:"100%",background:"none",border:"none",padding:"18px 20px",textAlign:"left",cursor:"pointer"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="#141418"}
+                      onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>Prepare first</div>
+                      <div style={{fontSize:12,color:"#555",lineHeight:1.5}}>Enter case details. Compass generates targeted questions and a prep pack.</div>
+                    </button>
+                  </div>
+                )}
+              </div>
               {cases.length>0&&<Btn variant="ghost" onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"14px 24px",fontSize:14}}>View cases ({cases.length})</Btn>}
             </div>
             {dueSoon.some(d=>d.overdue)&&(
@@ -1662,71 +1680,112 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               ))}
             </div>
             <p style={{fontSize:11,color:"#333",marginTop:32}}>Compass provides AI-assisted guidance. Always verify against current UK employment law.</p>
-            {showPicker&&(
-              <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-                <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:560,textAlign:"left"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",fontWeight:600}}>What type of meeting?</div>
-                    <button onClick={()=>setShowPicker(false)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer"}}>&#10005;</button>
-                  </div>
-                  <div style={{fontSize:10,color:"#555",letterSpacing:1.5,textTransform:"uppercase",fontWeight:600,marginBottom:10}}>Formal</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
-                    {MEETING_TYPES.filter(t=>t.group==="formal").map(t=>(
-                      <button key={t.id} onClick={()=>{setShowPicker(false);startSession(t);}}
-                        style={{background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 12px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
-                        onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
-                        <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>{t.label}</div>
-                        <div style={{fontSize:11,color:"#7C5CFC"}}>Begin &#8594;</div>
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{fontSize:10,color:"#555",letterSpacing:1.5,textTransform:"uppercase",fontWeight:600,marginBottom:10}}>Development</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    {MEETING_TYPES.filter(t=>t.group==="dev").map(t=>(
-                      <button key={t.id} onClick={()=>{setShowPicker(false);startSession(t);}}
-                        style={{background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 12px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
-                        onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
-                        <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>{t.label}</div>
-                        <div style={{fontSize:11,color:"#7C5CFC"}}>Begin &#8594;</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            
           </div>
-      )}
+        );
+      })()}
 
-      {/* ══ PREP ══ */}
+
+            {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <div style={{maxWidth:560,margin:"0 auto",padding:"80px 20px",textAlign:"center"}}>
-          <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>{meetingType?.label}</div>
-          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:32,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Who is this meeting with?</h1>
-          <p style={{fontSize:14,color:"#555",margin:"0 0 40px",lineHeight:1.7}}>Just two things to start. You can add more detail after.</p>
+        <div style={{maxWidth:560,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
+          <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
+          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:30,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
+          <p style={{fontSize:14,color:"#555",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#E8622A"}}>*</span></label>
+            <select value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#F2EDE4":"#555",boxSizing:"border-box"}}>
+              <option value="" disabled>Select meeting type...</option>
+              <option disabled style={{color:"#555"}}>── ER Meetings ──</option>
+              {MEETING_TYPES.filter(t=>t.mode==="er").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+              <option disabled style={{color:"#555"}}>── Development ──</option>
+              {MEETING_TYPES.filter(t=>t.group==="dev").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </div>
+
           <div style={{textAlign:"left",marginBottom:16}}>
             <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#E8622A"}}>*</span></label>
             <input autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
               onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
-              onKeyDown={e=>e.key==="Enter"&&caseInfo.employee.trim()&&setScreen(SCREENS.RECORD)}
-              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:16,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
           </div>
-          <div style={{textAlign:"left",marginBottom:32}}>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
             <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
             <DateInput value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
           </div>
-          <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:20}}>
-            <Btn onClick={()=>setScreen(SCREENS.RECORD)} disabled={!caseInfo.employee.trim()} style={{padding:"14px 32px",fontSize:15}}>Start meeting</Btn>
-            <Btn variant="ghost" onClick={reset} style={{padding:"14px 20px",fontSize:14}}>Cancel</Btn>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+            <input placeholder="Chair / HR manager name" value={caseInfo.manager}
+              onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
           </div>
-          <button onClick={handlePrepare} disabled={aiProcessing||!caseInfo.employee.trim()}
-            style={{background:"none",border:"none",color:aiProcessing?"#444":"#7C5CFC",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
-            {aiProcessing?"Building prep pack...":"Generate prep pack first"}
+
+          <div style={{textAlign:"left",marginBottom:32}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#555",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
+            <textarea value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
+              placeholder="Previous warnings, allegations, relevant history, reasonable adjustments..."
+              rows={4} style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
+          </div>
+
+          <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
+            <Btn onClick={handlePrepare} disabled={aiProcessing||!caseInfo.employee.trim()||!meetingType}
+              style={{padding:"14px 28px",fontSize:15,background:"#E8622A",borderColor:"#E8622A"}}>
+              {aiProcessing?"Building...":"Generate prep pack"}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{padding:"14px 20px",fontSize:14}}>Cancel</Btn>
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:24}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#555",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></label>
+            {bgDoc?(
+              <div style={{display:"flex",alignItems:"center",gap:10,background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
+                <span style={{fontSize:20}}>&#128196;</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,color:"#F2EDE4",fontWeight:500}}>{bgDoc.name}</div>
+                  <div style={{fontSize:11,color:"#555"}}>{bgDoc.text.length} characters extracted</div>
+                </div>
+                <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#555",fontSize:18,cursor:"pointer"}}>&#10005;</button>
+              </div>
+            ):(
+              <label style={{display:"block",background:"#1C1C22",border:"1px dashed #2A2A35",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
+                onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
+                  const file = e.target.files[0];
+                  if(!file) return;
+                  const name = file.name;
+                  if(name.endsWith(".txt")) {
+                    const text = await file.text();
+                    setBgDoc({name, text: text.slice(0,8000)});
+                  } else if(name.endsWith(".pdf")) {
+                    const arr = await file.arrayBuffer();
+                    const bytes = new Uint8Array(arr);
+                    const str = new TextDecoder("utf-8").decode(bytes);
+                    const text = str.split("").filter(ch=>ch.charCodeAt(0)>31).join("").replace(/  +/g," ").trim().slice(0,8000);
+                    setBgDoc({name, text});
+                  } else {
+                    const text = await file.text();
+                    setBgDoc({name, text: text.slice(0,8000)});
+                  }
+                }}/>
+                <div style={{fontSize:13,color:"#666",marginBottom:4}}>Click to upload</div>
+                <div style={{fontSize:11,color:"#444"}}>PDF, Word or text file</div>
+              </label>
+            )}
+          </div>
+
+          <button onClick={()=>setScreen(SCREENS.RECORD)}
+            style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
+            Skip prep and start meeting now
           </button>
+
           {prepNotes&&(
-            <div style={{marginTop:28,textAlign:"left",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:20}}>
-              <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
+            <div style={{marginTop:28,textAlign:"left",background:"#1C1C22",border:"1px solid #E8622A33",borderRadius:12,padding:20}}>
+              <div style={{fontSize:11,fontWeight:600,color:"#E8622A",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
               <MDRenderer text={prepNotes}/>
               <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
             </div>
@@ -1736,192 +1795,245 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
       {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <div style={{maxWidth:800,margin:"0 auto",padding:"40px 20px",minHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32}}>
-            <div>
-              <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>{meetingType?.label}</div>
-              <div style={{fontSize:22,fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4",fontWeight:400}}>{caseInfo.employee||"Meeting notes"}</div>
-              <div style={{fontSize:12,color:"#444",marginTop:2}}>{caseInfo.date||new Date().toLocaleDateString("en-GB")}</div>
+        <div style={{maxWidth:1440,margin:"0 auto",padding:"20px",display:"grid",gridTemplateColumns:"1fr 360px",gap:16,alignItems:"start"}}>
+          {/* Transcript feed */}
+          <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#7C5CFC",fontWeight:600,marginRight:8}}>Live transcript</span>
+                <span style={{fontSize:11,color:"#555"}}>{transcript.length} {transcript.length===1?"entry":"entries"}</span>
+              </div>
+              {transcript.length>0&&<Btn onClick={handleReview} disabled={aiProcessing} style={{padding:"6px 16px",fontSize:12}}>End meeting →</Btn>}
             </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              {transcript.length>0&&<div style={{fontSize:11,color:"#555",marginRight:4}}>{transcript.length} {transcript.length===1?"note":"notes"}</div>}
-              <Btn onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}} disabled={aiProcessing||(transcript.length===0&&!inputText.trim())} style={{padding:"10px 20px",fontSize:13}}>
-                {aiProcessing?"Processing...":"End meeting"}
-              </Btn>
-            </div>
-          </div>
-          <div style={{flex:1,position:"relative"}}>
-            <textarea ref={inputRef} value={inputText} onChange={e=>setInputText(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&inputText.trim()){e.preventDefault();addUtterance(inputText);}}}
-              placeholder="Type your notes here... Press Enter to log each note."
-              style={{width:"100%",minHeight:320,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:"20px 22px",fontSize:15,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"none",boxSizing:"border-box"}}
-            ></textarea>
-            {inputText.trim()&&<div style={{position:"absolute",bottom:14,right:14,fontSize:11,color:"#555"}}>Enter to log</div>}
-          </div>
-          {transcript.length>0&&(
-            <div style={{marginTop:20}}>
-              <div style={{fontSize:10,letterSpacing:1.5,textTransform:"uppercase",color:"#444",fontWeight:600,marginBottom:10}}>Logged notes</div>
-              {transcript.filter(u=>!u.pending).map((u,i)=>(
-                <div key={u.id} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"10px 14px",background:"#1C1C22",borderRadius:8,border:"1px solid #2A2A35",marginBottom:6}}>
-                  <span style={{fontSize:10,color:"#444",fontFamily:"JetBrains Mono,monospace",flexShrink:0,paddingTop:2}}>{u.ts}</span>
-                  <span style={{fontSize:13,color:"#C4BDAF",lineHeight:1.6,flex:1}}>{u.text}</span>
-                  <button onClick={()=>setTranscript(t=>t.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#333",fontSize:14,cursor:"pointer",padding:0}}>&#10005;</button>
+            <div ref={feedRef} style={{padding:"14px 18px",overflowY:"auto",flex:1,minHeight:440,maxHeight:"calc(100vh - 250px)"}}>
+              {transcript.length===0&&(
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"50px 20px",gap:10}}>
+                  <CompassLogo size={40}/>
+                  <div style={{fontSize:14,color:"#555"}}>Waiting to begin</div>
+                  <div style={{fontSize:11,color:"#444",textAlign:"center",maxWidth:260,lineHeight:1.6}}>Type or speak — Compass automatically identifies who is speaking.</div>
+                </div>
+              )}
+              {transcript.map(u=>(
+                <div key={u.id} className="fu" style={{marginBottom:12,padding:"9px 12px",borderRadius:8,borderLeft:"3px solid "+(u.pending?"#333":spBdr(u.speaker)),background:u.pending?"#111":spBg(u.speaker),opacity:u.pending?0.6:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
+                    <span style={{fontSize:9,fontWeight:700,letterSpacing:0.8,borderRadius:3,padding:"2px 7px",border:"1px solid",textTransform:"uppercase",
+                      color:u.pending?"#444":spColor(u.speaker),background:u.pending?"#44444422":spColor(u.speaker)+"18",borderColor:u.pending?"#44444433":spColor(u.speaker)+"33"}}>
+                      {u.pending?"identifying...":u.speaker}
+                    </span>
+                    <span style={{fontSize:9,color:"#333",fontFamily:"JetBrains Mono,monospace"}}>{u.ts}</span>
+                    {u.aiAttributed&&!u.pending&&<Badge color="#7C5CFC">AI</Badge>}
+                  </div>
+                  <div style={{fontSize:13,color:"#F2EDE4",lineHeight:1.6,fontFamily:"JetBrains Mono,monospace"}}>{u.text}</div>
                 </div>
               ))}
             </div>
-          )}
-          <div style={{marginTop:16,background:"#141418",borderRadius:10,overflow:"hidden"}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1}}>
-              <button onClick={isListening?stopSpeech:startSpeech}
-                style={{background:isListening?"#2A1008":"#1C1C22",border:"none",padding:"14px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                <span style={{fontSize:20}}>{isListening?"🔴":"🎤"}</span>
-                <span style={{fontSize:11,color:isListening?"#E8622A":"#888",fontWeight:isListening?600:400}}>{isListening?"Stop mic":"Microphone"}</span>
-              </button>
-              <button onClick={isScreenCapturing?stopScreenCapture:startScreenCapture}
-                style={{background:isScreenCapturing?"#0A1A0A":"#1C1C22",border:"none",padding:"14px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                <span style={{fontSize:20}}>{isScreenCapturing?"🟢":"🖥️"}</span>
-                <span style={{fontSize:11,color:isScreenCapturing?"#7C5CFC":"#888",fontWeight:isScreenCapturing?600:400}}>{isScreenCapturing?"Stop":"Screen audio"}</span>
-              </button>
-              <button onClick={()=>importFileRef.current?.click()}
-                style={{background:"#1C1C22",border:"none",padding:"14px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                <span style={{fontSize:20}}>📁</span>
-                <span style={{fontSize:11,color:"#888"}}>Import</span>
-              </button>
+          </Card>
+
+          {/* Input panel */}
+          <Card style={{position:"sticky",top:70,padding:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14}}>
+              {[{id:"type",l:"Type"},{id:"mic",l:"Mic"},{id:"screen",l:"Screen"},{id:"import",l:"Import"}].map(m=>(
+                <button key={m.id} onClick={()=>setCaptureMode(m.id)}
+                  style={{background:captureMode===m.id?"#7C5CFC18":"#0D0D0F",border:"1px solid",borderColor:captureMode===m.id?"#7C5CFC":"#2A2A35",borderRadius:6,padding:"8px 6px",textAlign:"center",cursor:"pointer"}}>
+                  <div style={{fontSize:11,color:captureMode===m.id?"#A98FFF":"#888",fontWeight:captureMode===m.id?600:400}}>{m.l}</div>
+                </button>
+              ))}
             </div>
-            {isListening&&<div style={{padding:"8px 14px",background:"#1C1C22",borderTop:"1px solid #2A2A35",fontSize:11,color:"#E8622A",textAlign:"center"}}><span className="pu">●</span> Listening — speak clearly, place device on the table between participants</div>}
-            {isScreenCapturing&&<div style={{padding:"8px 14px",background:"#1C1C22",borderTop:"1px solid #2A2A35",fontSize:11,color:"#7C5CFC",textAlign:"center"}}><span className="pu">●</span> Capturing screen audio</div>}
-            <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}} />
-          </div>
+
+            {captureMode==="type"&&(
+              <>
+                <textarea ref={inputRef} value={inputText} onChange={e=>setInputText(e.target.value)} onKeyDown={handleKeyDown}
+                  placeholder="Type what was said — Enter to log" rows={4}
+                  style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:7,padding:"10px 12px",fontSize:12,resize:"none",outline:"none",lineHeight:1.6,fontFamily:"JetBrains Mono,monospace",marginBottom:8}} ></textarea>
+                <Btn onClick={()=>addUtterance(inputText)} disabled={!inputText.trim()} style={{width:"100%"}}>Log ↵</Btn>
+              </>
+            )}
+
+            {captureMode==="mic"&&(
+              <div style={{textAlign:"center",padding:"8px 0"}}>
+                <div style={{fontSize:11,color:"#555",marginBottom:12,lineHeight:1.6}}>For in-person meetings. Compass transcribes and attributes speakers.</div>
+                <Btn onClick={isListening?stopSpeech:startSpeech} variant={isListening?"danger":"primary"} style={{width:"100%",marginBottom:8}}>
+                  {isListening?"Stop recording":"Start microphone"}
+                </Btn>
+                {isListening&&<div style={{fontSize:11,color:"#7C5CFC"}}><span className="pu">●</span> Live transcribing...</div>}
+                {inputText&&<div style={{marginTop:8,background:"#0D0D0F",borderRadius:5,padding:"8px 10px",fontSize:11,color:"#888",fontFamily:"JetBrains Mono,monospace",textAlign:"left"}}>{inputText}</div>}
+              </div>
+            )}
+
+            {captureMode==="screen"&&(
+              <div style={{textAlign:"center",padding:"8px 0"}}>
+                <div style={{fontSize:11,color:"#555",marginBottom:12,lineHeight:1.6}}>For <b style={{color:"#F2EDE4"}}>Teams, Google Meet, Zoom</b>. Share window and tick Share audio.</div>
+                <Btn onClick={isScreenCapturing?stopScreenCapture:startScreenCapture} variant={isScreenCapturing?"danger":"primary"} style={{width:"100%",marginBottom:8}}>
+                  {isScreenCapturing?"Stop capture":"Share meeting audio"}
+                </Btn>
+                {screenStatus&&<div style={{fontSize:11,color:isScreenCapturing?"#7C5CFC":"#666",lineHeight:1.6}}>{isScreenCapturing&&<span className="pu" style={{marginRight:4}}>●</span>}{screenStatus}</div>}
+                <div style={{marginTop:12,background:"#0D0D0F",borderRadius:6,padding:"10px",textAlign:"left"}}>
+                  <div style={{fontSize:9,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:6}}>HOW TO</div>
+                  <div style={{fontSize:10,color:"#444",lineHeight:1.8}}>1. Click Share meeting audio  2. Select meeting window/tab  3. Tick Share audio  4. Compass transcribes automatically</div>
+                </div>
+              </div>
+            )}
+
+            {captureMode==="import"&&(
+              <div style={{padding:"4px 0"}}>
+                <div style={{fontSize:11,color:"#555",marginBottom:10,lineHeight:1.6}}>Upload .vtt from Teams/Meet/Zoom or paste transcript text.</div>
+                <div style={{background:"#0D0D0F",borderRadius:6,padding:"10px",marginBottom:10}}>
+                  <div style={{fontSize:9,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:6}}>HOW TO EXPORT</div>
+                  <div style={{fontSize:10,color:"#444",lineHeight:1.8}}>Teams: Meeting recap → Download transcript  |  Meet: Activities → Transcripts → Download  |  Zoom: Recording → Audio transcript</div>
+                </div>
+                <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}} />
+                <button onClick={()=>importFileRef.current?.click()} style={{width:"100%",background:"#0D0D0F",border:"1px dashed #2A2A35",borderRadius:6,padding:"10px",fontSize:12,color:"#666",marginBottom:8}}>↑ Upload file</button>
+                <textarea value={importText} onChange={e=>setImportText(e.target.value)} placeholder="Or paste transcript here..." rows={3}
+                  style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 10px",fontSize:11,resize:"none",outline:"none",fontFamily:"JetBrains Mono,monospace"}} ></textarea>
+                {importText&&<Btn onClick={handleImportSubmit} style={{width:"100%",marginTop:8}}>Import &amp; attribute →</Btn>}
+              </div>
+            )}
+
+            <div style={{borderTop:"1px solid #1C1C22",marginTop:14,paddingTop:14}}>
+              {transcript.length>0?(
+                <>
+                  <Btn onClick={handleReview} disabled={aiProcessing} style={{width:"100%",padding:"12px",fontSize:13,marginBottom:6}}>End meeting &amp; structure notes →</Btn>
+                  <div style={{fontSize:10,color:"#444",textAlign:"center"}}>{transcript.length} utterances recorded</div>
+                </>
+              ):<div style={{fontSize:11,color:"#444",textAlign:"center"}}>Start capturing to enable end meeting</div>}
+            </div>
+          </Card>
         </div>
       )}
 
       {/* ══ REVIEW ══ */}
-      {screen===SCREENS.REVIEW&&(()=>{
-
-
-        const sendChat = async () => {
-          if(!chatInput.trim()||chatProcessing) return;
-          const msg = chatInput.trim();
-          setChatInput("");
-          setChatHistory(h=>[...h,{role:"user",content:msg}]);
-          setChatProcessing(true);
-          const sys = "You are Compass, a UK HR AI assistant. The structured meeting record is:\n\n"+reviewOutput+"\n\nNext steps:\n"+nextSteps.map((s,i)=>(i+1)+". "+s.step).join("\n")+"\n\nHelp the user refine the record, answer questions, or provide guidance. Be concise and professional.";
-          try {
-            const msgs = [...chatHistory,{role:"user",content:msg}];
-            const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,stream:false,system:sys,messages:msgs})});
-            const data = await res.json();
-            const reply = data.content?.[0]?.text || "Sorry, no response received.";
-            setChatHistory(h=>[...h,{role:"assistant",content:reply}]);
-          } catch(e){
-            setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong. Please try again."}]);
-          }
-          setChatProcessing(false);
-        };
-
-        return(
-          <div style={{maxWidth:1200,margin:"0 auto",padding:"24px 20px",display:"grid",gridTemplateColumns:"1fr 360px",gap:20,alignItems:"start"}}>
+      {screen===SCREENS.REVIEW&&(
+        <div style={{maxWidth:1440,margin:"0 auto",padding:"28px 20px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start"}}>
             <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-                <div>
-                  <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>{meetingType?.label}</div>
-                  <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#F2EDE4",margin:0,fontWeight:400}}>{caseInfo.employee}</h2>
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
-                  <Btn onClick={()=>handleLetter("outcome")}>Draft letter</Btn>
-                </div>
-              </div>
-              {aiProcessing&&!reviewOutput&&(
-                <Card style={{textAlign:"center",padding:"60px 20px"}}>
-                  <span className="pu" style={{color:"#7C5CFC",fontSize:28}}>●</span>
-                  <div style={{color:"#666",marginTop:16,fontSize:14}}>Compass is reviewing your notes...</div>
-                  <div style={{color:"#444",marginTop:8,fontSize:12}}>Structuring record · Scoring risk · Identifying next steps</div>
-                </Card>
-              )}
-              {reviewOutput&&(
-                <Card style={{marginBottom:16}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase"}}>Structured record</div>
-                    <button onClick={()=>navigator.clipboard.writeText(reviewOutput)} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#888",cursor:"pointer"}}>Copy</button>
+              {/* Meeting record */}
+              <Card style={{marginBottom:16}}>
+                <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:20,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Structured record</h2>
+                <p style={{fontSize:12,color:"#666",margin:"0 0 16px"}}>AI-structured record. Save to case file then draft letters.</p>
+                {aiProcessing&&!reviewOutput&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#666",marginTop:10,fontSize:12}}>Structuring...</div></div>}
+                {aiError&&(
+                  <div style={{background:"#2A1010",border:"1px solid #E8622A44",borderRadius:8,padding:"14px 18px",marginBottom:14}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#E8622A",marginBottom:4}}>Error</div>
+                    <div style={{fontSize:11,color:"#888",fontFamily:"JetBrains Mono,monospace"}}>{aiError}</div>
+                    <Btn onClick={handleReview} style={{marginTop:10,padding:"6px 14px",fontSize:11}}>Retry</Btn>
                   </div>
-                  <MDRenderer text={reviewOutput}/>
-                </Card>
-              )}
+                )}
+                {reviewOutput&&(
+                  <>
+                    <MDRenderer text={reviewOutput}/>
+                    <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
+                      <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
+                      <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
+                      <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(reviewOutput)}>Copy</Btn>
+                    </div>
+                  </>
+                )}
+              </Card>
+
+              {/* Next steps & deadlines */}
               {nextSteps.length>0&&(
                 <Card style={{marginBottom:16}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:14}}>Next Steps &amp; ACAS Deadlines</div>
+                  <SectionTitle>Next Steps &amp; ACAS Deadlines</SectionTitle>
                   {nextSteps.map((s,i)=>(
                     <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<nextSteps.length-1?"1px solid #1C1C22":"none"}}>
-                      <button onClick={()=>setNextSteps(ns=>ns.map((x,j)=>j===i?{...x,done:!x.done}:x))} style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:s.done?"#7C5CFC":"#2A2A35",background:s.done?"#7C5CFC22":"none",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        {s.done&&<span style={{color:"#7C5CFC",fontSize:11}}>&#10003;</span>}
+                      <button onClick={()=>setNextSteps(ns=>ns.map((x,j)=>j===i?{...x,done:!x.done}:x))}
+                        style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:s.done?"#7C5CFC":"#2A2A35",background:s.done?"#7C5CFC22":"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        {s.done&&<span style={{color:"#7C5CFC",fontSize:11}}>✓</span>}
                       </button>
-                      <div style={{flex:1,fontSize:13,color:s.done?"#555":"#F2EDE4",textDecoration:s.done?"line-through":"none"}}>{s.step}</div>
-                      {s.deadline&&<div style={{fontSize:11,color:"#888",fontFamily:"JetBrains Mono,monospace"}}>{s.deadline}</div>}
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,color:s.done?"#555":"#F2EDE4",textDecoration:s.done?"line-through":"none"}}>{s.step}</div>
+                      </div>
+                      {s.deadline&&(
+                        <div style={{fontSize:11,color:"#888",fontFamily:"JetBrains Mono,monospace",flexShrink:0,textAlign:"right"}}>
+                          <div style={{fontSize:9,color:"#555",marginBottom:1}}>deadline</div>
+                          {s.deadline}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </Card>
               )}
-              {riskScore&&(()=>{
-                const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
-                const col=rC[riskScore.rating]||"#888";
-                return(
-                  <Card style={{background:"#141418"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Legal risk score</div>
-                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
-                      <div style={{width:40,height:40,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        <span style={{fontSize:10,fontWeight:800,color:col}}>{riskScore.rating}</span>
-                      </div>
-                      <div style={{fontSize:13,color:"#C4BDAF",lineHeight:1.5,flex:1}}>{riskScore.summary}</div>
-                    </div>
-                    {riskScore.flags?.slice(0,3).map((f,i)=>(
-                      <div key={i} style={{background:"#0D0D0F",borderRadius:7,padding:"8px 12px",marginBottom:6,fontSize:12,color:"#888",lineHeight:1.5}}>
-                        <span style={{color:rC[f.severity]||"#888",fontWeight:600,marginRight:6}}>{f.severity}:</span>{f.issue}
-                      </div>
-                    ))}
-                  </Card>
-                );
-              })()}
-            </div>
-            <div style={{position:"sticky",top:70}}>
-              <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column",maxHeight:"calc(100vh - 120px)"}}>
-                <div style={{padding:"14px 16px",borderBottom:"1px solid #2A2A35",background:"#141418"}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#F2EDE4",marginBottom:2}}>Chat with Compass</div>
-                  <div style={{fontSize:11,color:"#555"}}>Ask questions or give instructions</div>
+
+              {/* Outcome prediction */}
+              <Card>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <SectionTitle>TRIBUNAL OUTCOME PREDICTION</SectionTitle>
+                  <Btn onClick={runPrediction} disabled={predProcessing} style={{padding:"5px 12px",fontSize:11}}>{predProcessing?"Analysing...":"Run prediction"}</Btn>
                 </div>
-                <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:8,minHeight:300}}>
-                  {chatHistory.length===0&&(
-                    <div style={{padding:"10px 0"}}>
-                      <div style={{fontSize:11,color:"#444",marginBottom:12}}>Try asking:</div>
-                      {["Soften the tone","Add a final written warning","What are the main legal risks?","Draft the outcome letter","Extend the appeal deadline by 5 days"].map((s,i)=>(
-                        <button key={i} onClick={()=>setChatInput(s)} style={{display:"block",width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#888",cursor:"pointer",marginBottom:6,textAlign:"left"}}>
-                          "{s}"
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {chatHistory.map((m,i)=>(
-                    <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
-                      <div style={{maxWidth:"85%",padding:"10px 13px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
-                        <div style={{fontSize:12,color:m.role==="user"?"#fff":"#C4BDAF",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.content}</div>
+                {predProcessing&&<div style={{textAlign:"center",padding:20}}><span className="pu" style={{color:"#7C5CFC",fontSize:20}}>●</span></div>}
+                {prediction&&<MDRenderer text={prediction}/>}
+                {!prediction&&!predProcessing&&(
+                  <div style={{fontSize:12,color:"#444",lineHeight:1.6}}>
+                    Analyses the case against ERA 1996, ACAS Code, and comparable tribunal outcomes. Identifies vulnerabilities and recommended actions to strengthen your position.
+                    <div style={{fontSize:10,color:"#333",marginTop:8}}>Not legal advice — always consult a qualified employment solicitor for complex cases.</div>
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* Right panel */}
+            <div>
+              {/* Risk score */}
+              <Card style={{background:"#141418",marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <SectionTitle>LEGAL RISK SCORE</SectionTitle>
+                  {riskScore&&<button onClick={runRiskScore} style={{fontSize:10,color:"#555",background:"none",border:"1px solid #2A2A35",borderRadius:4,padding:"2px 8px"}}>Re-run</button>}
+                </div>
+                {riskProcessing&&!riskScore&&<div style={{textAlign:"center",padding:16}}><span className="pu" style={{color:"#7C5CFC",fontSize:18}}>●</span><div style={{color:"#555",fontSize:11,marginTop:6}}>Analysing risk...</div></div>}
+                {riskScore&&(()=>{
+                  const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
+                  const rB={HIGH:"#2A1408",MEDIUM:"#2A1E08",LOW:"#141418",UNKNOWN:"#111"};
+                  const col=rC[riskScore.rating]||"#888";
+                  return(
+                    <>
+                      <div style={{background:rB[riskScore.rating]||"#111",border:`1px solid ${col}44`,borderRadius:8,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+                        <div style={{width:44,height:44,borderRadius:"50%",background:`${col}22`,border:`2px solid ${col}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <span style={{fontSize:12,fontWeight:800,color:col}}>{riskScore.rating}</span>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:col,fontWeight:700,marginBottom:2}}>Legal risk: {riskScore.rating}</div>
+                          <div style={{fontSize:11,color:"#C4BDAF",lineHeight:1.5}}>{riskScore.summary}</div>
+                        </div>
                       </div>
+                      {riskScore.flags?.map((f,i)=>{
+                        const fc=rC[f.severity]||"#888";
+                        return(
+                          <div key={i} style={{background:"#0D0D0F",border:`1px solid ${fc}22`,borderRadius:7,padding:"10px 12px",marginBottom:8}}>
+                            <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+                              <Badge color={fc}>{f.severity}</Badge>
+                              <span style={{fontSize:9,color:"#555",fontFamily:"JetBrains Mono,monospace"}}>{f.law}</span>
+                            </div>
+                            <div style={{fontSize:12,color:"#F2EDE4",fontWeight:600,marginBottom:3}}>{f.issue}</div>
+                            <div style={{fontSize:11,color:"#888",lineHeight:1.5}}>{f.recommendation}</div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+                {!riskScore&&!riskProcessing&&<div style={{fontSize:11,color:"#444",textAlign:"center",padding:"12px 0"}}>Runs automatically after structuring</div>}
+              </Card>
+
+              {/* Raw transcript */}
+              <Card style={{background:"#141418"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <SectionTitle>TRANSCRIPT</SectionTitle>
+                  <span style={{fontSize:11,color:"#444"}}>{transcript.length}</span>
+                </div>
+                <div style={{maxHeight:280,overflowY:"auto"}}>
+                  {transcript.filter(u=>!u.pending).map((u,i)=>(
+                    <div key={i} style={{borderBottom:"1px solid #0D0D0F",paddingBottom:8,marginBottom:8}}>
+                      <span style={{fontSize:9,fontWeight:700,textTransform:"uppercase",color:spColor(u.speaker)}}>{u.speaker}</span>
+                      <div style={{fontSize:12,color:"#C4BDAF",fontFamily:"JetBrains Mono,monospace",marginTop:2,lineHeight:1.5}}>{u.text}</div>
                     </div>
                   ))}
-                  {chatProcessing&&<div style={{padding:"10px 13px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start"}}><span className="pu" style={{color:"#7C5CFC",fontSize:16}}>●</span></div>}
-                  
                 </div>
-                <div style={{padding:"10px 12px",borderTop:"1px solid #2A2A35",display:"flex",gap:8}}>
-                  <textarea value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}}}
-                    placeholder="Ask Compass..." rows={2}
-                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:7,padding:"8px 12px",fontSize:12,resize:"none",outline:"none",color:"#F2EDE4",lineHeight:1.5}}
-                  ></textarea>
-                  <button onClick={sendChat} disabled={!chatInput.trim()||chatProcessing}
-                    style={{background:"#7C5CFC",border:"none",borderRadius:7,padding:"0 14px",color:"#fff",fontSize:18,cursor:"pointer",opacity:(!chatInput.trim()||chatProcessing)?0.4:1}}>&#8593;</button>
-                </div>
+                <Btn variant="ghost" onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:10,width:"100%",fontSize:11}}>← Back to recording</Btn>
               </Card>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
