@@ -251,6 +251,7 @@ function MDRenderer({ text, light }) {
   const muted = light ? "#4A5060" : "#C4BDAF";
   const accent = "#7C5CFC";
   if(!text) return null;
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
       {text.split("\n").map((line, i) => {
@@ -492,6 +493,76 @@ export default function Compass() {
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatProcessing, setChatProcessing] = useState(false);
+  const [homeChatInput, setHomeChatInput] = useState("");
+  const [homeChatHistory, setHomeChatHistory] = useState([]);
+  const [homeChatOpen, setHomeChatOpen] = useState(false);
+  const [homeChatProcessing, setHomeChatProcessing] = useState(false);
+  const [homeAttachment, setHomeAttachment] = useState(null);
+  const [showCasePrompt, setShowCasePrompt] = useState(false);
+  const [casePromptName, setCasePromptName] = useState("");
+
+  const createCaseFromChat = () => {
+    if(!casePromptName.trim()) return;
+    const newCase = {
+      id: Date.now().toString(),
+      employeeName: casePromptName.trim(),
+      employeeEmail: "",
+      createdAt: new Date().toISOString(),
+      meetings: [],
+      backgroundChat: homeChatHistory,
+    };
+    saveCases([...cases, newCase]);
+    setShowCasePrompt(false);
+    setCasePromptName("");
+    setScreen(SCREENS.CASES);
+  };
+
+  const askCompass = async (msg, history, setHistory, setProcessing) => {
+    if(!msg.trim() && !homeAttachment) return;
+    setProcessing(true);
+    const caseContext = cases.length > 0
+      ? "Active cases: " + cases.map(ca=>ca.employeeName + " ("+ca.meetings.length+" meetings)").join(", ")
+      : "No active cases yet.";
+    const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Be concise and practical. Format responses using plain text with clear sections. Use numbered lists (1. 2. 3.) and bullet points (- ) but avoid markdown symbols like ** for bold or ### for headers. Write headers as plain text on their own line in CAPS or with a colon. No tables. No emoji unless essential. " + caseContext;
+    
+    let userContent;
+    if(homeAttachment?.base64) {
+      userContent = [
+        {type:"document", source:{type:"base64", media_type:"application/pdf", data:homeAttachment.base64}},
+        {type:"text", text:msg||"Please review this document and advise on any HR or legal considerations."}
+      ];
+    } else {
+      userContent = msg;
+    }
+    
+    const newHistory = [...history, {role:"user", content:userContent}];
+    const displayHistory = [...history, {role:"user", content:msg||"Please review the attached document."}];
+    setHistory(displayHistory);
+    
+    try {
+      const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:800,
+          stream:false,
+          system:sys,
+          messages:newHistory,
+          tools:[{type:"web_search_20250305",name:"web_search"}]
+        })});
+      const data = await res.json();
+      const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("") || "Sorry, I could not generate a response.";
+      setHistory([...displayHistory, {role:"assistant", content:reply}]);
+      setHomeAttachment(null);
+      
+      // Show case prompt after first response
+      console.log("Setting showCasePrompt to true");
+      setShowCasePrompt(true);
+      console.log("showCasePrompt set");
+    } catch(e) {
+      setHistory([...displayHistory, {role:"assistant", content:"Sorry, something went wrong."}]);
+    }
+    setProcessing(false);
+  };
   const [bgDoc, setBgDoc] = useState(null); // {name, text}
 
   // ── Deadline reminders ──
@@ -1470,6 +1541,27 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
       {showSigPad && <SignaturePad onSave={handleSaveSignature} onClose={()=>{setShowSigPad(false);setPendingSend(null);}} />}
 
+      {/* Case file prompt */}
+      {showCasePrompt&&screen===SCREENS.HOME&&(
+        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",zIndex:1000,background:"#1C1C22",border:"1px solid #7C5CFC",borderRadius:12,padding:"16px 20px",width:"100%",maxWidth:500,boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+            <div>
+              <div style={{fontSize:13,color:"#7C5CFC",fontWeight:600,marginBottom:3}}>Save to a case file?</div>
+              <div style={{fontSize:11,color:"#555"}}>This looks like it relates to a specific employee situation.</div>
+            </div>
+            <button onClick={()=>setShowCasePrompt(false)} style={{background:"none",border:"none",color:"#555",fontSize:18,cursor:"pointer",padding:0,marginLeft:12}}>&#10005;</button>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <input value={casePromptName} onChange={e=>setCasePromptName(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&createCaseFromChat()}
+              placeholder="Employee name..."
+              autoFocus
+              style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
+            <Btn onClick={createCaseFromChat} disabled={!casePromptName.trim()} style={{padding:"9px 16px",fontSize:12,flexShrink:0}}>Create case</Btn>
+          </div>
+        </div>
+      )}
+
       {/* ── Toast notification ── */}
       {toast&&(
         <div style={{position:"fixed",bottom:24,right:24,zIndex:3000,background:toast.type==="error"?"#2A1008":"#1C1C22",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
@@ -1655,7 +1747,106 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   </div>
                 )}
               </div>
-              {cases.length>0&&<Btn variant="ghost" onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"14px 24px",fontSize:14}}>View cases ({cases.length})</Btn>}
+              
+            </div>
+
+            {/* Ask Compass */}
+            <div style={{marginBottom:32}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{color:"#fff",fontSize:14,fontWeight:700}}>C</span>
+                </div>
+                <div>
+                  <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",fontWeight:600}}>Ask Compass</div>
+                  <div style={{fontSize:11,color:"#555"}}>Your HR advisor — available anytime</div>
+                </div>
+              </div>
+
+              <div style={{background:"#141418",borderRadius:12,border:"1px solid #2A2A35",overflow:"hidden"}}>
+                {homeChatHistory.length>0&&(
+                  <div style={{maxHeight:360,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:12}}>
+                    {homeChatHistory.map((m,i)=>(
+                      <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:m.role==="user"?"row-reverse":"row"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:m.role==="user"?"#2A2A35":"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                          <span style={{color:"#fff",fontSize:11,fontWeight:700}}>{m.role==="user"?"U":"C"}</span>
+                        </div>
+                        <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:10,background:m.role==="user"?"#2A2A35":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
+                          {m.role==="user"
+                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Inter,sans-serif",lineHeight:1.6}}>{m.content}</div>
+                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Inter,sans-serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
+                          }
+                        </div>
+                      </div>
+                    ))}
+                    {homeChatProcessing&&(
+                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <span style={{color:"#fff",fontSize:11,fontWeight:700}}>C</span>
+                        </div>
+                        <div style={{padding:"12px 14px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35"}}>
+                          <span className="pu" style={{color:"#7C5CFC",fontSize:18}}>&#9679;</span>
+                          <span className="pu" style={{color:"#7C5CFC",fontSize:18,animationDelay:"0.2s",margin:"0 3px"}}>&#9679;</span>
+                          <span className="pu" style={{color:"#7C5CFC",fontSize:18,animationDelay:"0.4s"}}>&#9679;</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{borderTop:"1px solid #2A2A35",padding:"12px 14px",display:"flex",gap:8,alignItems:"center",background:"#0D0D0F"}}>
+                  {homeAttachment&&(
+                    <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"4px 8px",marginRight:4,flexShrink:0}}>
+                      <span style={{fontSize:11,color:"#A98FFF",maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{homeAttachment.name}</span>
+                      <button onClick={()=>setHomeAttachment(null)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",padding:0,lineHeight:1}}>&#10005;</button>
+                    </div>
+                  )}
+                  <input value={homeChatInput} onChange={e=>setHomeChatInput(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter"&&(homeChatInput.trim()||homeAttachment)&&!homeChatProcessing){const msg=homeChatInput||"Please review this document and advise me.";setHomeChatInput("");askCompass(msg,homeChatHistory,setHomeChatHistory,setHomeChatProcessing);}}}
+                    placeholder={homeAttachment?"Ask about the attached document...":"Ask anything about HR or employment law..."}
+                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Inter,sans-serif",padding:"4px 0"}}/>
+                  <label style={{cursor:"pointer",color:"#444",fontSize:16,padding:"0 4px",display:"flex",alignItems:"center"}}
+                    onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
+                    onMouseLeave={e=>e.currentTarget.style.color="#444"}>
+                    &#128206;
+                    <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
+                      const file = e.target.files[0];
+                      if(!file) return;
+                      try {
+                        if(file.name.endsWith(".pdf")) {
+                          const arr = await file.arrayBuffer();
+                          const bytes = new Uint8Array(arr);
+                          let b64 = "";
+                          const chunkSize = 8192;
+                          for(let i=0;i<bytes.length;i+=chunkSize){
+                            b64 += String.fromCharCode.apply(null, bytes.subarray(i,i+chunkSize));
+                          }
+                          const base64 = btoa(b64);
+                          setHomeAttachment({name:file.name, base64});
+                        } else {
+                          const text = await file.text();
+                          setHomeAttachment({name:file.name, text:text.slice(0,8000)});
+                        }
+                      } catch(err) {
+                        setHomeAttachment({name:file.name, text:"Could not read file."});
+                      }
+                      e.target.value = "";
+                    }}/>
+                  </label>
+                  {homeChatHistory.length>0&&(
+                    <button onClick={()=>setHomeChatHistory([])}
+                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Inter,sans-serif",padding:"4px 8px",borderRadius:4}}
+                      onMouseEnter={e=>e.currentTarget.style.color="#666"}
+                      onMouseLeave={e=>e.currentTarget.style.color="#444"}>
+                      Clear
+                    </button>
+                  )}
+                  <button onClick={()=>{if((homeChatInput.trim()||homeAttachment)&&!homeChatProcessing){const msg=homeChatInput||"Please review the attached document and advise me on any HR or legal considerations.";setHomeChatInput("");askCompass(msg,homeChatHistory,setHomeChatHistory,setHomeChatProcessing);}}}
+                    disabled={(!homeChatInput.trim()&&!homeAttachment)||homeChatProcessing}
+                    style={{width:32,height:32,borderRadius:"50%",background:homeChatInput.trim()&&!homeChatProcessing?"#7C5CFC":"#2A2A35",border:"none",color:"#fff",fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background 0.15s"}}>
+                    &#8593;
+                  </button>
+                </div>
+              </div>
             </div>
             {dueSoon.some(d=>d.overdue)&&(
               <div style={{background:"#2A1008",border:"1px solid #E8622A33",borderRadius:10,padding:"12px 18px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",textAlign:"left"}}>
@@ -1679,6 +1870,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 </button>
               ))}
             </div>
+
             <p style={{fontSize:11,color:"#333",marginTop:32}}>Compass provides AI-assisted guidance. Always verify against current UK employment law.</p>
             
           </div>
@@ -1793,115 +1985,70 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         </div>
       )}
 
-      {/* ══ RECORD ══ */}
+            {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <div style={{maxWidth:1440,margin:"0 auto",padding:"20px",display:"grid",gridTemplateColumns:"1fr 360px",gap:16,alignItems:"start"}}>
-          {/* Transcript feed */}
-          <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"14px 18px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#7C5CFC",fontWeight:600,marginRight:8}}>Live transcript</span>
-                <span style={{fontSize:11,color:"#555"}}>{transcript.length} {transcript.length===1?"entry":"entries"}</span>
-              </div>
-              {transcript.length>0&&<Btn onClick={handleReview} disabled={aiProcessing} style={{padding:"6px 16px",fontSize:12}}>End meeting →</Btn>}
+        <div style={{position:"fixed",inset:0,background:"#0D0D0F",display:"flex",flexDirection:"column",zIndex:50}}>
+          {/* Minimal header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid #1C1C22",flexShrink:0}}>
+            <div>
+              <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</div>
+              <div style={{fontSize:16,fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4"}}>{caseInfo.employee||"Notes"}</div>
             </div>
-            <div ref={feedRef} style={{padding:"14px 18px",overflowY:"auto",flex:1,minHeight:440,maxHeight:"calc(100vh - 250px)"}}>
-              {transcript.length===0&&(
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"50px 20px",gap:10}}>
-                  <CompassLogo size={40}/>
-                  <div style={{fontSize:14,color:"#555"}}>Waiting to begin</div>
-                  <div style={{fontSize:11,color:"#444",textAlign:"center",maxWidth:260,lineHeight:1.6}}>Type or speak — Compass automatically identifies who is speaking.</div>
-                </div>
-              )}
-              {transcript.map(u=>(
-                <div key={u.id} className="fu" style={{marginBottom:12,padding:"9px 12px",borderRadius:8,borderLeft:"3px solid "+(u.pending?"#333":spBdr(u.speaker)),background:u.pending?"#111":spBg(u.speaker),opacity:u.pending?0.6:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
-                    <span style={{fontSize:9,fontWeight:700,letterSpacing:0.8,borderRadius:3,padding:"2px 7px",border:"1px solid",textTransform:"uppercase",
-                      color:u.pending?"#444":spColor(u.speaker),background:u.pending?"#44444422":spColor(u.speaker)+"18",borderColor:u.pending?"#44444433":spColor(u.speaker)+"33"}}>
-                      {u.pending?"identifying...":u.speaker}
-                    </span>
-                    <span style={{fontSize:9,color:"#333",fontFamily:"JetBrains Mono,monospace"}}>{u.ts}</span>
-                    {u.aiAttributed&&!u.pending&&<Badge color="#7C5CFC">AI</Badge>}
-                  </div>
-                  <div style={{fontSize:13,color:"#F2EDE4",lineHeight:1.6,fontFamily:"JetBrains Mono,monospace"}}>{u.text}</div>
-                </div>
-              ))}
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              {isListening&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#E8622A"}}><span className="pu">&#9679;</span> Listening</div>}
+              {isScreenCapturing&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#7C5CFC"}}><span className="pu">&#9679;</span> Capturing</div>}
+              <Btn onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}}
+                disabled={aiProcessing||(transcript.length===0&&!inputText.trim())}
+                style={{padding:"9px 20px",fontSize:13}}>
+                {aiProcessing?"Processing...":"End meeting"}
+              </Btn>
             </div>
-          </Card>
+          </div>
 
-          {/* Input panel */}
-          <Card style={{position:"sticky",top:70,padding:16}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14}}>
-              {[{id:"type",l:"Type"},{id:"mic",l:"Mic"},{id:"screen",l:"Screen"},{id:"import",l:"Import"}].map(m=>(
-                <button key={m.id} onClick={()=>setCaptureMode(m.id)}
-                  style={{background:captureMode===m.id?"#7C5CFC18":"#0D0D0F",border:"1px solid",borderColor:captureMode===m.id?"#7C5CFC":"#2A2A35",borderRadius:6,padding:"8px 6px",textAlign:"center",cursor:"pointer"}}>
-                  <div style={{fontSize:11,color:captureMode===m.id?"#A98FFF":"#888",fontWeight:captureMode===m.id?600:400}}>{m.l}</div>
-                </button>
-              ))}
-            </div>
-
-            {captureMode==="type"&&(
-              <>
-                <textarea ref={inputRef} value={inputText} onChange={e=>setInputText(e.target.value)} onKeyDown={handleKeyDown}
-                  placeholder="Type what was said — Enter to log" rows={4}
-                  style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:7,padding:"10px 12px",fontSize:12,resize:"none",outline:"none",lineHeight:1.6,fontFamily:"JetBrains Mono,monospace",marginBottom:8}} ></textarea>
-                <Btn onClick={()=>addUtterance(inputText)} disabled={!inputText.trim()} style={{width:"100%"}}>Log ↵</Btn>
-              </>
-            )}
-
-            {captureMode==="mic"&&(
-              <div style={{textAlign:"center",padding:"8px 0"}}>
-                <div style={{fontSize:11,color:"#555",marginBottom:12,lineHeight:1.6}}>For in-person meetings. Compass transcribes and attributes speakers.</div>
-                <Btn onClick={isListening?stopSpeech:startSpeech} variant={isListening?"danger":"primary"} style={{width:"100%",marginBottom:8}}>
-                  {isListening?"Stop recording":"Start microphone"}
-                </Btn>
-                {isListening&&<div style={{fontSize:11,color:"#7C5CFC"}}><span className="pu">●</span> Live transcribing...</div>}
-                {inputText&&<div style={{marginTop:8,background:"#0D0D0F",borderRadius:5,padding:"8px 10px",fontSize:11,color:"#888",fontFamily:"JetBrains Mono,monospace",textAlign:"left"}}>{inputText}</div>}
+          {/* Full screen notepad */}
+          <div style={{flex:1,position:"relative",overflow:"hidden"}}>
+            <textarea
+              ref={inputRef}
+              value={inputText}
+              onChange={e=>setInputText(e.target.value)}
+              placeholder="Type your notes freely... just capture what is being said. Compass will organise everything when you end the meeting."
+              style={{
+                width:"100%",height:"100%",background:"transparent",border:"none",
+                padding:"32px",fontSize:15,lineHeight:1.9,outline:"none",
+                color:"#F2EDE4",resize:"none",boxSizing:"border-box",
+                fontFamily:"Inter,system-ui,sans-serif"
+              }}
+            ></textarea>
+            {inputText.length>0&&(
+              <div style={{position:"absolute",bottom:16,right:20,fontSize:11,color:"#2A2A35"}}>
+                {inputText.split(/\s+/).filter(Boolean).length} words
               </div>
             )}
+          </div>
 
-            {captureMode==="screen"&&(
-              <div style={{textAlign:"center",padding:"8px 0"}}>
-                <div style={{fontSize:11,color:"#555",marginBottom:12,lineHeight:1.6}}>For <b style={{color:"#F2EDE4"}}>Teams, Google Meet, Zoom</b>. Share window and tick Share audio.</div>
-                <Btn onClick={isScreenCapturing?stopScreenCapture:startScreenCapture} variant={isScreenCapturing?"danger":"primary"} style={{width:"100%",marginBottom:8}}>
-                  {isScreenCapturing?"Stop capture":"Share meeting audio"}
-                </Btn>
-                {screenStatus&&<div style={{fontSize:11,color:isScreenCapturing?"#7C5CFC":"#666",lineHeight:1.6}}>{isScreenCapturing&&<span className="pu" style={{marginRight:4}}>●</span>}{screenStatus}</div>}
-                <div style={{marginTop:12,background:"#0D0D0F",borderRadius:6,padding:"10px",textAlign:"left"}}>
-                  <div style={{fontSize:9,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:6}}>HOW TO</div>
-                  <div style={{fontSize:10,color:"#444",lineHeight:1.8}}>1. Click Share meeting audio  2. Select meeting window/tab  3. Tick Share audio  4. Compass transcribes automatically</div>
-                </div>
-              </div>
-            )}
-
-            {captureMode==="import"&&(
-              <div style={{padding:"4px 0"}}>
-                <div style={{fontSize:11,color:"#555",marginBottom:10,lineHeight:1.6}}>Upload .vtt from Teams/Meet/Zoom or paste transcript text.</div>
-                <div style={{background:"#0D0D0F",borderRadius:6,padding:"10px",marginBottom:10}}>
-                  <div style={{fontSize:9,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:6}}>HOW TO EXPORT</div>
-                  <div style={{fontSize:10,color:"#444",lineHeight:1.8}}>Teams: Meeting recap → Download transcript  |  Meet: Activities → Transcripts → Download  |  Zoom: Recording → Audio transcript</div>
-                </div>
-                <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}} />
-                <button onClick={()=>importFileRef.current?.click()} style={{width:"100%",background:"#0D0D0F",border:"1px dashed #2A2A35",borderRadius:6,padding:"10px",fontSize:12,color:"#666",marginBottom:8}}>↑ Upload file</button>
-                <textarea value={importText} onChange={e=>setImportText(e.target.value)} placeholder="Or paste transcript here..." rows={3}
-                  style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 10px",fontSize:11,resize:"none",outline:"none",fontFamily:"JetBrains Mono,monospace"}} ></textarea>
-                {importText&&<Btn onClick={handleImportSubmit} style={{width:"100%",marginTop:8}}>Import &amp; attribute →</Btn>}
-              </div>
-            )}
-
-            <div style={{borderTop:"1px solid #1C1C22",marginTop:14,paddingTop:14}}>
-              {transcript.length>0?(
-                <>
-                  <Btn onClick={handleReview} disabled={aiProcessing} style={{width:"100%",padding:"12px",fontSize:13,marginBottom:6}}>End meeting &amp; structure notes →</Btn>
-                  <div style={{fontSize:10,color:"#444",textAlign:"center"}}>{transcript.length} utterances recorded</div>
-                </>
-              ):<div style={{fontSize:11,color:"#444",textAlign:"center"}}>Start capturing to enable end meeting</div>}
-            </div>
-          </Card>
+          {/* Bottom toolbar */}
+          <div style={{borderTop:"1px solid #1C1C22",padding:"12px 24px",display:"flex",gap:10,alignItems:"center",background:"#0D0D0F",flexShrink:0}}>
+            <button onClick={isListening?stopSpeech:startSpeech}
+              style={{background:isListening?"#2A1008":"#1C1C22",border:"1px solid",borderColor:isListening?"#E8622A":"#2A2A35",borderRadius:8,padding:"8px 16px",fontSize:12,color:isListening?"#E8622A":"#888",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:16}}>{isListening?"🔴":"🎤"}</span>
+              {isListening?"Stop mic":"Microphone"}
+            </button>
+            <button onClick={isScreenCapturing?stopScreenCapture:startScreenCapture}
+              style={{background:isScreenCapturing?"#0A1A0A":"#1C1C22",border:"1px solid",borderColor:isScreenCapturing?"#7C5CFC33":"#2A2A35",borderRadius:8,padding:"8px 16px",fontSize:12,color:isScreenCapturing?"#7C5CFC":"#888",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:16}}>🖥</span>
+              {isScreenCapturing?"Stop":"Screen audio"}
+            </button>
+            <label style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"8px 16px",fontSize:12,color:"#888",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:16}}>📄</span>
+              Import transcript
+              <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
+            </label>
+            <div style={{marginLeft:"auto",fontSize:11,color:"#333"}}>{transcript.length>0?transcript.length+" notes logged":""}</div>
+          </div>
         </div>
       )}
 
-      {/* ══ REVIEW ══ */}
+{/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
         <div style={{maxWidth:1440,margin:"0 auto",padding:"28px 20px"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start"}}>
@@ -2481,6 +2628,17 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   </div>
                   <div style={{marginTop:12,fontSize:11,color:"#444",lineHeight:1.6}}>Fields in [brackets] should be replaced with actual information. Always review before sending.</div>
                 </div>
+              </div>
+
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
+                {["ACAS dismissal process","Suspend on full pay?","Grievance — what next?","Investigation timescales"].map((s,i)=>(
+                  <button key={i} onClick={()=>askCompass(s,homeChatHistory,setHomeChatHistory,setHomeChatProcessing)}
+                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Inter,sans-serif"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC44";e.currentTarget.style.color="#A98FFF";}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
+                    {s}
+                  </button>
+                ))}
               </div>
             </div>
           )}
