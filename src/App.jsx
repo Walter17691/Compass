@@ -160,7 +160,7 @@ async function streamClaude(system, user, onChunk) {
       "anthropic-version":"2023-06-01",
       ...(apiKey ? { "x-api-key": apiKey } : {})
     },
-    body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:2048, stream:true, system, messages:[{ role:"user", content:user }] })
+    body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:2048, stream:true, system, messages:[{ role:"user", content:user }], tools:[{type:"web_search_20250305",name:"web_search"}] })
   });
   if(!res.ok) { const e = await res.text(); throw new Error(`API ${res.status}: ${e.slice(0,200)}`); }
   const reader = res.body.getReader();
@@ -253,7 +253,7 @@ function MDRenderer({ text, light }) {
   if(!text) return null;
 
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
       {text.split("\n").map((line, i) => {
         if(line.startsWith("## ")) return <h3 key={i} style={{fontFamily:"Playfair Display,Georgia,serif", fontSize:16, fontWeight:600, color:accent, margin:"24px 0 8px"}}>{line.slice(3)}</h3>;
         if(line.startsWith("# ")) return <h2 key={i} style={{fontFamily:"Playfair Display,Georgia,serif", fontSize:20, fontWeight:600, color:base, margin:"8px 0 16px"}}>{line.slice(2)}</h2>;
@@ -299,7 +299,7 @@ function SignaturePad({ onSave, onClose }) {
   };
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <Card style={{width:500,maxWidth:"90vw"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>E-signature</span>
@@ -358,7 +358,7 @@ function AdjustmentForm({ onAdd }) {
   const [adj, setAdj] = useState("");
   const [review, setReview] = useState("");
   return (
-    <div style={{marginTop:14,borderTop:"1px solid #2A2A35",paddingTop:14}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",marginTop:14,borderTop:"1px solid #2A2A35",paddingTop:14}}>
       <div style={{fontSize:11,color:"#555",marginBottom:8,fontWeight:600}}>Add adjustment</div>
       <input placeholder="e.g. Flexible start time, additional breaks, remote working" value={adj} onChange={e=>setAdj(e.target.value)}
         style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
@@ -523,7 +523,7 @@ export default function Compass() {
     const caseContext = cases.length > 0
       ? "Active cases: " + cases.map(ca=>ca.employeeName + " ("+ca.meetings.length+" meetings)").join(", ")
       : "No active cases yet.";
-    const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Be concise and practical. Format responses using plain text with clear sections. Use numbered lists (1. 2. 3.) and bullet points (- ) but avoid markdown symbols like ** for bold or ### for headers. Write headers as plain text on their own line in CAPS or with a colon. No tables. No emoji unless essential. " + caseContext;
+    const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Be concise and practical. Use ## for section headers and - for bullet points. Never use ** for bold, never use emoji, never use markdown tables. Plain clear English only. " + caseContext;
     
     let userContent;
     if(homeAttachment?.base64) {
@@ -1194,7 +1194,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAiError(""); setAiProcessing(true);
     try {
       await streamClaude(
-        `Senior UK HR advisor. ERA 1996, ACAS, Equality Act 2010. Concise. ## headers. 3-5 bullets per section.${policies.length?" Reference company policies where relevant.":""}`,
+        `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
         `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}\n\n## Objectives\n## Agenda\n## Key Questions\n## Legal Checklist\n## Risk Flags`,
         t=>setPrepNotes(t)
       );
@@ -1524,7 +1524,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
   //  RENDER
   // ─────────────────────────────────────────────
   return (
-    <div style={{minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:Inter,system-ui,sans-serif;color:#F2EDE4;}
@@ -1976,8 +1976,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           </button>
 
           {prepNotes&&(
-            <div style={{marginTop:28,textAlign:"left",background:"#1C1C22",border:"1px solid #E8622A33",borderRadius:12,padding:20}}>
-              <div style={{fontSize:11,fontWeight:600,color:"#E8622A",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
+            <div style={{marginTop:28,textAlign:"left",background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:12,padding:20}}>
+              <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
               <MDRenderer text={prepNotes}/>
               <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
             </div>
