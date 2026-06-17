@@ -1256,16 +1256,17 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   const runRiskScore = async () => {
-    if(!transcript.length) return;
+    if(!reviewOutput && !transcript.length) return;
     setRiskProcessing(true);
     try {
-      const tx = transcript.filter(u=>!u.pending).slice(-40).map(u=>u.speaker+": "+u.text).join("\n");
-      const result = await streamClaude(
-        `UK employment law risk specialist. Respond ONLY with JSON: {"rating":"HIGH","summary":"...","flags":[{"severity":"HIGH","law":"ERA 1996 s.98","issue":"...","recommendation":"..."}]} Max 5 flags.`,
-        `Meeting: ${meetingType?.label}\nEmployee: ${caseInfo.employee}\nTranscript:\n${tx}`,
-        ()=>{}
-      );
-      setRiskScore(JSON.parse(result.replace(/```json|```/g,"").trim()));
+      const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
+      const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:300, stream:false,
+          system:'UK employment law risk specialist. Respond ONLY with valid JSON, no other text: {"rating":"HIGH","summary":"two or three plain English sentences"} Rating must be HIGH, MEDIUM or LOW.',
+          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+"\nContent:\n"+tx.slice(0,3000)}]})});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      setRiskScore(JSON.parse(text.replace(/```json|```/g,"").trim()));
     } catch(e) { setRiskScore({rating:"UNKNOWN",summary:"Could not assess.",flags:[]}); }
     setRiskProcessing(false);
   };
@@ -1274,7 +1275,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const runPrediction = async () => {
     setPredProcessing(true);
     try {
-      const tx = transcript.filter(u=>!u.pending).slice(-40).map(u=>u.speaker+": "+u.text).join("\n");
+      const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
       await streamClaude(
         `UK employment tribunal outcome predictor. Analyse based on ERA 1996, ACAS Code, case law. Be honest about risks. ## headers.`,
         `Meeting: ${meetingType?.label}\nEmployee: ${caseInfo.employee}\nRecord:\n${reviewOutput||tx}\n\n## Likely Outcome if Challenged at Tribunal\n## Key Vulnerabilities\n## Strongest Arguments for Employer\n## Recommended Actions to Strengthen Position\n## Comparable Cases`,
