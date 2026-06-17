@@ -498,6 +498,13 @@ export default function Compass() {
   const [homeChatOpen, setHomeChatOpen] = useState(false);
   const [homeChatProcessing, setHomeChatProcessing] = useState(false);
   const [homeAttachment, setHomeAttachment] = useState(null);
+  const [liveContext, setLiveContext] = useState(null);
+  const [liveContextLoading, setLiveContextLoading] = useState(false);
+  const [meetingStartTime, setMeetingStartTime] = useState(null);
+  const [editingRecord, setEditingRecord] = useState(false);
+  const [editingStructured, setEditingStructured] = useState(false);
+  const liveContextTimer = useRef(null);
+  const meetingEndedRef = useRef(false);
   const [showCasePrompt, setShowCasePrompt] = useState(false);
   const [casePromptName, setCasePromptName] = useState("");
 
@@ -1164,6 +1171,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   // ── Session management ──
   const startSession = type => {
+    meetingEndedRef.current = false;
+    setMeetingStartTime(null);
     setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setLetterOutput("");
     setRiskScore(null); setPrediction(""); setNextSteps([]); setParticipants([]);
     if(type && type.group === "dev") {
@@ -1204,7 +1213,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   // ── AI: Review + Risk ──
   const handleReview = async () => {
-    if(!transcript.length) return;
+    meetingEndedRef.current = false;
+    const meetingEndTime = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    const extra = inputText.trim() ? [{id:Date.now(),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
+    const allNotes = [...transcript, ...extra];
+    if(!allNotes.length) return;
+    if(extra.length) { setTranscript(allNotes); setInputText(""); }
     setScreen(SCREENS.REVIEW); setReviewOutput(""); setAiError(""); setRiskScore(null); setPrediction("");
     setAiProcessing(true);
     // Generate next steps deadlines
@@ -1212,9 +1226,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days), done:false }));
     setNextSteps(steps);
     try {
-      const tx = transcript.filter(u=>!u.pending).slice(-60).map(u=>u.speaker+": "+u.text).join("\n");
+      const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
       await streamClaude(
-        `UK HR documentation specialist. Concise. ## headers. Max 3 sentences per section.${policies.length?" Reference company policies by name.":""}`,
+        `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Use actual names: manager is "${caseInfo.manager||"HR Manager"}" and employee is "${caseInfo.employee||"Employee"}". Max 3 sentences per section.${policies.length?" Reference company policies by name.":""}`,
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"standard"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\n## Meeting Record\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
