@@ -1246,7 +1246,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     console.log("TX:", tx.slice(0,200));
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Use actual names: manager is "${caseInfo.manager||"HR Manager"}" and employee is "${caseInfo.employee||"Employee"}". Max 3 sentences per section.${policies.length?" Reference company policies by name.":""}`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"standard"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections. For Meeting Dialogue, rewrite the transcript as a clean readable conversation with each line starting with the speaker name followed by a colon (e.g. "Walter: ..." or "James: ..."). Fix any typos. For other sections be concise.\n\n## Meeting Record\n## Meeting Dialogue\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections. For Meeting Details include: meeting type, date, chair name, employee name, and any other participants. For Meeting Dialogue, rewrite the transcript as a clean readable conversation with each line on a new line starting with the speaker name followed by a colon (e.g. "Walter: ..." or "James: ..."). Fix any typos. For other sections be concise.\n\n## Meeting Dialogue\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
     } catch(e) { setAiError(e.message); }
@@ -1956,7 +1956,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
           <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
             <Btn onClick={handlePrepare} disabled={aiProcessing||!caseInfo.employee.trim()||!meetingType}
-              style={{padding:"14px 28px",fontSize:15,background:"#E8622A",borderColor:"#E8622A"}}>
+              style={{padding:"14px 28px",fontSize:15,background:"#7C5CFC",borderColor:"#E8622A"}}>
               {aiProcessing?"Building...":"Generate prep pack"}
             </Btn>
             <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{padding:"14px 20px",fontSize:14}}>Cancel</Btn>
@@ -2100,8 +2100,10 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <div>
               {/* Meeting record */}
               <Card style={{marginBottom:16}}>
-                <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:20,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Structured record</h2>
-                <p style={{fontSize:12,color:"#666",margin:"0 0 16px"}}>AI-structured record. Save to case file then draft letters.</p>
+                <div style={{display:"flex",justifyContent:"center",alignItems:"center",marginBottom:16,position:"relative"}}>
+                  <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",fontWeight:600,margin:0}}>Meeting Details</h3>
+                  <button onClick={()=>setEditingStructured(e=>!e)} style={{background:editingStructured?"#7C5CFC":"none",border:"1px solid",borderColor:editingStructured?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingStructured?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>{editingStructured?"Done":"Edit record"}</button>
+                </div>
                 {aiProcessing&&!reviewOutput&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#666",marginTop:10,fontSize:12}}>Structuring...</div></div>}
                 {aiError&&(
                   <div style={{background:"#2A1010",border:"1px solid #E8622A44",borderRadius:8,padding:"14px 18px",marginBottom:14}}>
@@ -2112,10 +2114,41 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 )}
                 {reviewOutput&&(
                   <>
-                    <MDRenderer text={reviewOutput}/>
+                    {(()=>{
+                      const dlgMarker = reviewOutput.indexOf("## Meeting Dialogue");
+                      const afterDlg = dlgMarker>-1 ? reviewOutput.indexOf("\n## ",dlgMarker+5) : -1;
+                      const topSection = dlgMarker>-1 ? reviewOutput.slice(0,dlgMarker) : reviewOutput;
+                      const dlgSection = dlgMarker>-1 && afterDlg>-1 ? reviewOutput.slice(dlgMarker,afterDlg) : "";
+                      const bottomSection = afterDlg>-1 ? reviewOutput.slice(afterDlg) : "";
+                      return (<>
+                        {/* Top section - edit button appears next to first header */}
+
+                        {editingStructured
+                          ?<textarea value={topSection} onChange={e=>setReviewOutput(e.target.value+dlgSection+bottomSection)}
+                            style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif",marginBottom:12}}></textarea>
+                          :<MDRenderer text={topSection.replace("## Meeting Details\n","").replace("## Meeting Details\r\n","")}/>
+                        }
+                        {/* Meeting Dialogue with edit button */}
+                        {dlgSection&&(<>
+                          <div style={{display:"flex",justifyContent:"center",alignItems:"center",margin:"16px 0 6px",position:"relative"}}>
+                            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
+                            <button onClick={()=>setEditingRecord(e=>!e)}
+                              style={{background:editingRecord?"#7C5CFC":"none",border:"1px solid",borderColor:editingRecord?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingRecord?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>
+                              {editingRecord?"Done":"Edit dialogue"}
+                            </button>
+                          </div>
+                          {editingRecord
+                            ?<textarea value={dlgSection.replace("## Meeting Dialogue\n","")} onChange={e=>setReviewOutput(topSection+"## Meeting Dialogue\n"+e.target.value+bottomSection)}
+                              style={{width:"100%",minHeight:200,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif"}}></textarea>
+                            :<MDRenderer text={dlgSection.replace("## Meeting Dialogue\n","")}/>
+                          }
+                        </>)}
+                        {bottomSection&&<MDRenderer text={bottomSection}/>}
+                      </>);
+                    })()}
                     <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
-                      <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
+                      <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
                       <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(reviewOutput)}>Copy</Btn>
                     </div>
                   </>
@@ -2166,54 +2199,70 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             {/* Right panel */}
             <div>
               {/* Risk score */}
-              <Card style={{background:"#141418",marginBottom:16}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                  <SectionTitle>LEGAL RISK SCORE</SectionTitle>
-                  {riskScore&&<button onClick={runRiskScore} style={{fontSize:10,color:"#555",background:"none",border:"1px solid #2A2A35",borderRadius:4,padding:"2px 8px"}}>Re-run</button>}
-                </div>
-                {riskProcessing&&!riskScore&&<div style={{textAlign:"center",padding:16}}><span className="pu" style={{color:"#7C5CFC",fontSize:18}}>●</span><div style={{color:"#555",fontSize:11,marginTop:6}}>Analysing risk...</div></div>}
-                {riskScore&&(()=>{
-                  const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
-                  const rB={HIGH:"#2A1408",MEDIUM:"#2A1E08",LOW:"#141418",UNKNOWN:"#111"};
-                  const col=rC[riskScore.rating]||"#888";
-                  return(
-                    <>
-                      <div style={{background:rB[riskScore.rating]||"#111",border:`1px solid ${col}44`,borderRadius:8,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{width:44,height:44,borderRadius:"50%",background:`${col}22`,border:`2px solid ${col}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <span style={{fontSize:12,fontWeight:800,color:col}}>{riskScore.rating}</span>
-                        </div>
-                        <div>
-                          <div style={{fontSize:10,color:col,fontWeight:700,marginBottom:2}}>Legal risk: {riskScore.rating}</div>
-                          <div style={{fontSize:11,color:"#C4BDAF",lineHeight:1.5}}>{riskScore.summary}</div>
-                        </div>
+              {riskScore&&(()=>{
+                const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
+                const col=rC[riskScore.rating]||"#888";
+                return(
+                  <Card style={{background:"#141418",marginBottom:16}}>
+                    <div style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Legal risk</div>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
                       </div>
-                      {riskScore.flags?.map((f,i)=>{
-                        const fc=rC[f.severity]||"#888";
-                        return(
-                          <div key={i} style={{background:"#0D0D0F",border:`1px solid ${fc}22`,borderRadius:7,padding:"10px 12px",marginBottom:8}}>
-                            <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
-                              <Badge color={fc}>{f.severity}</Badge>
-                              <span style={{fontSize:9,color:"#555",fontFamily:"JetBrains Mono,monospace"}}>{f.law}</span>
-                            </div>
-                            <div style={{fontSize:12,color:"#F2EDE4",fontWeight:600,marginBottom:3}}>{f.issue}</div>
-                            <div style={{fontSize:11,color:"#888",lineHeight:1.5}}>{f.recommendation}</div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  );
-                })()}
-                {!riskScore&&!riskProcessing&&<div style={{fontSize:11,color:"#444",textAlign:"center",padding:"12px 0"}}>Runs automatically after structuring</div>}
-              </Card>
+                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
+                    </div>
+                  </Card>
+                );
+              })()}
 
-              {/* Raw transcript */}
-              
+              {/* Chat with Compass */}
+              <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid #2A2A35",background:"#141418"}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#F2EDE4",fontFamily:"Playfair Display,Georgia,serif"}}>Chat with Compass</div>
+                  <div style={{fontSize:11,color:"#555",marginTop:2}}>Ask questions or refine this record</div>
+                </div>
+                <div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,minHeight:200,maxHeight:360}}>
+                  {chatHistory.map((m,i)=>(
+                    <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
+                      <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
+                        {m.role==="user"
+                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
+                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
+                      </div>
+                    </div>
+                  ))}
+                  {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
+                </div>
+                <div style={{padding:"10px 12px",borderTop:"1px solid #2A2A35",display:"flex",gap:8}}>
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter"&&chatInput.trim()&&!chatProcessing){
+                      const msg=chatInput.trim(); setChatInput("");
+                      const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
+                      setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
+                      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
+                        .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
+                        .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
+                    }}}
+                    placeholder="Ask Compass about this meeting..."
+                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Inter,sans-serif"}}/>
+                  <button onClick={()=>{if(chatInput.trim()&&!chatProcessing){
+                      const msg=chatInput.trim(); setChatInput("");
+                      const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
+                      setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
+                      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
+                        .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
+                        .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
+                    }}}
+                    disabled={!chatInput.trim()||chatProcessing}
+                    style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",color:"#fff",fontSize:16,cursor:"pointer",opacity:(!chatInput.trim()||chatProcessing)?0.4:1}}>&#8593;</button>
+                </div>
+              </Card>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══ LETTERS ══ */}
+{/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
         <div>
           <div style={{borderBottom:"1px solid #2A2A35"}}>
@@ -3083,7 +3132,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   )}
                   <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                     {devSummary&&<Btn onClick={()=>setDevStep("output")} style={{background:"#7C5CFC",border:"none"}}>Generate outcome letter →</Btn>}
-                    <Btn variant="blue" onClick={()=>{saveDevMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
+                    <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveDevMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
                     <Btn variant="ghost" onClick={()=>setDevStep("manager")}>← Back</Btn>
                   </div>
                 </Card>
@@ -3490,7 +3539,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                             </div>
                           </div>
                           <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",gap:1}}>
-                            {data.HIGH>0&&<div style={{background:"#E8622A",flex:data.HIGH}}/>}
+                            {data.HIGH>0&&<div style={{background:"#7C5CFC",flex:data.HIGH}}/>}
                             {data.MEDIUM>0&&<div style={{background:"#D4882A",flex:data.MEDIUM}}/>}
                             {data.LOW>0&&<div style={{background:"#7C5CFC",flex:data.LOW}}/>}
                           </div>
