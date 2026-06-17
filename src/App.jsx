@@ -1246,7 +1246,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     console.log("TX:", tx.slice(0,200));
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Use actual names: manager is "${caseInfo.manager||"HR Manager"}" and employee is "${caseInfo.employee||"Employee"}". Max 3 sentences per section.${policies.length?" Reference company policies by name.":""}`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"standard"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\n## Meeting Record\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"standard"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections. For Meeting Dialogue, rewrite the transcript as a clean readable conversation with each line starting with the speaker name followed by a colon (e.g. "Walter: ..." or "James: ..."). Fix any typos. For other sections be concise.\n\n## Meeting Record\n## Meeting Dialogue\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
     } catch(e) { setAiError(e.message); }
