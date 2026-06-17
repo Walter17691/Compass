@@ -252,6 +252,7 @@ function MDRenderer({ text, light }) {
   const accent = "#7C5CFC";
   if(!text) return null;
 
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
       {text.split("\n").map((line, i) => {
@@ -497,6 +498,21 @@ export default function Compass() {
   const [homeChatHistory, setHomeChatHistory] = useState([]);
   const [homeChatOpen, setHomeChatOpen] = useState(false);
   const [homeChatProcessing, setHomeChatProcessing] = useState(false);
+
+  const updateLiveContext = async (notes) => {
+    if(notes.trim().split(/\s+/).length < 20) return;
+    setLiveContextLoading(true);
+    try {
+      const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:250, stream:false,
+          system:"You are a quiet HR advisor listening to a live meeting. Give exactly two things: OBSERVATION: [1-2 sentences flagging risks or important points] SUGGESTED QUESTIONS: 1. [question] 2. [question]. No bold, no emoji.",
+          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nNotes:\n"+notes.slice(-2000)}]})});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text) setLiveContext(text);
+    } catch(e) { console.log("liveContext error:", e); }
+    setLiveContextLoading(false);
+  };
   const [homeAttachment, setHomeAttachment] = useState(null);
   const [liveContext, setLiveContext] = useState(null);
   const [liveContextLoading, setLiveContextLoading] = useState(false);
@@ -2020,11 +2036,12 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             </div>
           </div>
 
-          {/* Full screen notepad */}
-          <div style={{flex:1,position:"relative",overflow:"hidden"}}>
+          {/* Full screen notepad + live context */}
+          <div style={{flex:1,display:"flex",overflow:"hidden"}}>
             <textarea
               ref={inputRef}
               value={inputText}
+              style={{flex:1,background:"transparent",border:"none",padding:"32px",fontSize:15,lineHeight:1.9,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Inter,system-ui,sans-serif"}}
               onChange={e=>{
                 const val = e.target.value;
                 if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
@@ -2034,18 +2051,22 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 } else {
                   setInputText(val);
                 }
+                clearTimeout(liveContextTimer.current);
+                liveContextTimer.current = setTimeout(()=>updateLiveContext(val), 4000);
               }}
               placeholder="Type your notes freely... just capture what is being said. Compass will organise everything when you end the meeting."
-              style={{
-                width:"100%",height:"100%",background:"transparent",border:"none",
-                padding:"32px",fontSize:15,lineHeight:1.9,outline:"none",
-                color:"#F2EDE4",resize:"none",boxSizing:"border-box",
-                fontFamily:"Inter,system-ui,sans-serif"
-              }}
             ></textarea>
-            {inputText.length>0&&(
-              <div style={{position:"absolute",bottom:16,right:20,fontSize:11,color:"#2A2A35"}}>
-                {inputText.split(/\s+/).filter(Boolean).length} words
+            {(liveContext||liveContextLoading)&&(
+              <div style={{width:240,borderLeft:"1px solid #1C1C22",padding:"20px 14px",overflowY:"auto",background:"#080808",display:"flex",flexDirection:"column",gap:12,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:20,height:20,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <span style={{color:"#fff",fontSize:9,fontWeight:700}}>C</span>
+                  </div>
+                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Live context</div>
+                </div>
+                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Inter,sans-serif"}}>{liveContext}</div>}
+                {liveContextLoading&&<div style={{fontSize:12,color:"#444"}}>Analysing...</div>}
+                <button onClick={()=>setLiveContext(null)} style={{background:"none",border:"none",color:"#333",fontSize:11,cursor:"pointer",textDecoration:"underline",textAlign:"left",marginTop:"auto"}}>Dismiss</button>
               </div>
             )}
           </div>
