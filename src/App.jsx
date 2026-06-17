@@ -160,7 +160,7 @@ async function streamClaude(system, user, onChunk) {
       "anthropic-version":"2023-06-01",
       ...(apiKey ? { "x-api-key": apiKey } : {})
     },
-    body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:2048, stream:true, system, messages:[{ role:"user", content:user }], tools:[{type:"web_search_20250305",name:"web_search"}] })
+    body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:2048, stream:true, system, messages:[{ role:"user", content:user }] })
   });
   if(!res.ok) { const e = await res.text(); throw new Error(`API ${res.status}: ${e.slice(0,200)}`); }
   const reader = res.body.getReader();
@@ -1227,6 +1227,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setNextSteps(steps);
     try {
       const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
+    console.log("TX:", tx.slice(0,200));
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Use actual names: manager is "${caseInfo.manager||"HR Manager"}" and employee is "${caseInfo.employee||"Employee"}". Max 3 sentences per section.${policies.length?" Reference company policies by name.":""}`,
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"standard"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\n## Meeting Record\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
@@ -2024,7 +2025,16 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <textarea
               ref={inputRef}
               value={inputText}
-              onChange={e=>setInputText(e.target.value)}
+              onChange={e=>{
+                const val = e.target.value;
+                if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
+                if(val.endsWith("\n")) {
+                  val.split("\n").filter(l=>l.trim()).forEach(line=>addUtterance(line.trim()));
+                  setInputText("");
+                } else {
+                  setInputText(val);
+                }
+              }}
               placeholder="Type your notes freely... just capture what is being said. Compass will organise everything when you end the meeting."
               style={{
                 width:"100%",height:"100%",background:"transparent",border:"none",
@@ -2176,21 +2186,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               </Card>
 
               {/* Raw transcript */}
-              <Card style={{background:"#141418"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                  <SectionTitle>TRANSCRIPT</SectionTitle>
-                  <span style={{fontSize:11,color:"#444"}}>{transcript.length}</span>
-                </div>
-                <div style={{maxHeight:280,overflowY:"auto"}}>
-                  {transcript.filter(u=>!u.pending).map((u,i)=>(
-                    <div key={i} style={{borderBottom:"1px solid #0D0D0F",paddingBottom:8,marginBottom:8}}>
-                      <span style={{fontSize:9,fontWeight:700,textTransform:"uppercase",color:spColor(u.speaker)}}>{u.speaker}</span>
-                      <div style={{fontSize:12,color:"#C4BDAF",fontFamily:"JetBrains Mono,monospace",marginTop:2,lineHeight:1.5}}>{u.text}</div>
-                    </div>
-                  ))}
-                </div>
-                <Btn variant="ghost" onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:10,width:"100%",fontSize:11}}>← Back to recording</Btn>
-              </Card>
+              
             </div>
           </div>
         </div>
