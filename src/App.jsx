@@ -1245,8 +1245,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
     console.log("TX:", tx.slice(0,200));
       await streamClaude(
-        `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Use actual names: manager is "${caseInfo.manager||"HR Manager"}" and employee is "${caseInfo.employee||"Employee"}". Max 3 sentences per section.${policies.length?" Reference company policies by name.":""}`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections. For Meeting Details include: meeting type, date, chair name, employee name, and any other participants. For Meeting Dialogue, rewrite the transcript as a clean readable conversation with each line on a new line starting with the speaker name followed by a colon (e.g. "Walter: ..." or "James: ..."). Fix any typos. For other sections be concise.\n\n## Meeting Dialogue\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
     } catch(e) { setAiError(e.message); }
@@ -2121,12 +2121,12 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       const dlgSection = dlgMarker>-1 && afterDlg>-1 ? reviewOutput.slice(dlgMarker,afterDlg) : "";
                       const bottomSection = afterDlg>-1 ? reviewOutput.slice(afterDlg) : "";
                       return (<>
-                        {/* Top section - edit button appears next to first header */}
+{/* Top section - edit button appears next to first header */}
 
                         {editingStructured
                           ?<textarea value={topSection} onChange={e=>setReviewOutput(e.target.value+dlgSection+bottomSection)}
                             style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif",marginBottom:12}}></textarea>
-                          :<MDRenderer text={topSection.replace("## Meeting Details\n","").replace("## Meeting Details\r\n","")}/>
+                          :<MDRenderer text={topSection.replace("## Meeting Details","").replace("## Meeting Details\n","").trim()}/>
                         }
                         {/* Meeting Dialogue with edit button */}
                         {dlgSection&&(<>
