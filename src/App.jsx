@@ -254,47 +254,6 @@ function MDRenderer({ text, light }) {
 
 
 
-  const sendForSignature = async (employeeEmail) => {
-    if(!employeeEmail||!reviewOutput) return;
-    const signId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    const appUrl = window.location.origin;
-    
-    // Store document in Supabase via API
-    await fetch("/api/signing", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        signId,
-        document: reviewOutput,
-        employeeName: caseInfo.employee||"Employee",
-        managerName: caseInfo.manager||"Manager",
-        meetingType: meetingType?.label||"Meeting",
-        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB")
-      })
-    });
-
-    // Send email via Resend
-    const res = await fetch("/api/send-for-signature", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        employeeEmail,
-        employeeName: caseInfo.employee||"Employee",
-        managerName: caseInfo.manager||"Manager",
-        meetingType: meetingType?.label||"Meeting",
-        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
-        signId,
-        appUrl
-      })
-    });
-    
-    const data = await res.json();
-    if(data.success) {
-      alert("Signature request sent to "+employeeEmail);
-    } else {
-      alert("Failed to send: "+data.error);
-    }
-  };
 
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
@@ -541,6 +500,48 @@ export default function Compass() {
   const [homeChatHistory, setHomeChatHistory] = useState([]);
   const [homeChatOpen, setHomeChatOpen] = useState(false);
   const [homeChatProcessing, setHomeChatProcessing] = useState(false);
+
+  const sendForSignature = async (employeeEmail) => {
+    if(!employeeEmail||!reviewOutput) return;
+    const signId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const appUrl = window.location.origin;
+    
+    // Store document in Supabase via API
+    await fetch("/api/signing", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        signId,
+        document: reviewOutput,
+        employeeName: caseInfo.employee||"Employee",
+        managerName: caseInfo.manager||"Manager",
+        meetingType: meetingType?.label||"Meeting",
+        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB")
+      })
+    });
+
+    // Send email via Resend
+    const res = await fetch("/api/send-for-signature", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        employeeEmail,
+        employeeName: caseInfo.employee||"Employee",
+        managerName: caseInfo.manager||"Manager",
+        meetingType: meetingType?.label||"Meeting",
+        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+        signId,
+        appUrl
+      })
+    });
+    
+    const data = await res.json();
+    if(data.success) {
+      alert("Signature request sent to "+employeeEmail);
+    } else {
+      alert("Failed to send: "+data.error);
+    }
+  };
 
   const updateLiveContext = async (notes) => {
     if(notes.trim().split(/\s+/).length < 20) return;
@@ -2259,6 +2260,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
+                      <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
                       <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(reviewOutput)}>Copy</Btn>
                     </div>
                   </>
