@@ -536,10 +536,11 @@ export default function Compass() {
     });
     
     const data = await res.json();
+    console.log("signing response:", JSON.stringify(data));
     if(data.success) {
       alert("Signature request sent to "+employeeEmail);
     } else {
-      alert("Failed to send: "+data.error);
+      alert("Failed to send: "+JSON.stringify(data));
     }
   };
 
