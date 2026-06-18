@@ -5,10 +5,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!SUPABASE_KEY) {
-    return res.status(500).json({ error: 'Missing SUPABASE_SERVICE_KEY env var' });
+    return res.status(500).json({ error: 'No key found. Env vars: ' + Object.keys(process.env).filter(k=>k.includes('SUPA')).join(',') });
   }
 
   if (req.method === 'POST') {
@@ -41,12 +41,16 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const { signId } = req.query;
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${signId}&select=*`, {
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-    });
-    const data = await r.json();
-    if (!data.length) return res.status(404).json({ error: 'Not found' });
-    return res.status(200).json(data[0]);
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${signId}&select=*`, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+      });
+      const data = await r.json();
+      if (!data.length) return res.status(404).json({ error: 'Not found' });
+      return res.status(200).json(data[0]);
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
 
   res.status(405).json({ error: 'Method not allowed' });
