@@ -563,6 +563,8 @@ export default function Compass() {
   const [meetingEndTime, setMeetingEndTime] = useState(null);
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
+  const [showSignModal, setShowSignModal] = useState(false);
+  const [signEmail, setSignEmail] = useState("");
   const [editingStructured, setEditingStructured] = useState(false);
   const liveContextTimer = useRef(null);
   const meetingEndedRef = useRef(false);
@@ -1617,6 +1619,28 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         button{cursor:pointer;}
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#0D0D0F;}::-webkit-scrollbar-thumb{background:#2A2A35;border-radius:2px;}
       `}</style>
+
+      {showSignModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Send for signature</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:20}}>The employee will receive an email with a link to read and sign the meeting record.</p>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
+            <input value={signEmail} onChange={e=>setSignEmail(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&signEmail.includes("@")&&(sendForSignature(signEmail),setShowSignModal(false),setSignEmail(""))}
+              placeholder="employee@company.com" autoFocus
+              style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",marginBottom:16}}/>
+            <div style={{display:"flex",gap:10}}>
+              <Btn onClick={()=>{if(signEmail.includes("@")){sendForSignature(signEmail);setShowSignModal(false);setSignEmail("");}}}
+                disabled={!signEmail.includes("@")}
+                style={{flex:1}}>
+                Send email
+              </Btn>
+              <Btn variant="ghost" onClick={()=>{setShowSignModal(false);setSignEmail("");}} style={{flex:1}}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSigPad && <SignaturePad onSave={handleSaveSignature} onClose={()=>{setShowSigPad(false);setPendingSend(null);}} />}
 
