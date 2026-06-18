@@ -2131,6 +2131,43 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         }
                         {/* Meeting Dialogue with edit button */}
                         {dlgSection&&(<>
+                          <div style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
+                            <div style={{fontSize:11,color:"#666",marginBottom:8}}>Enter names to update dialogue initials:</div>
+                            <div style={{display:"flex",gap:8}}>
+                              <input value={caseInfo.manager||""} 
+                                onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
+                                onBlur={e=>{const v=e.target.value;if(v)setReviewOutput(r=>{const lines=r.split("\n");return lines.map(l=>l.startsWith("- Chair:")||l.startsWith("Chair:")?l.replace(/:\s*.*/,": "+v):l).join("\n");});}}
+                                placeholder="Chair / Manager name"
+                                style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
+                              <input value={caseInfo.employee||""}
+                                onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
+                                onBlur={e=>{const v=e.target.value;if(v)setReviewOutput(r=>r.replace(/Employee:.*Unknown/g,"Employee: "+v));}}
+                                placeholder="Employee name"
+                                style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
+                              <button onClick={async()=>{
+                                if(!caseInfo.manager||!caseInfo.employee) return;
+                                const mInit=caseInfo.manager.split(" ").filter(Boolean).map(w=>w[0].toUpperCase()).join("");
+                                const eInit=caseInfo.employee.split(" ").filter(Boolean).map(w=>w[0].toUpperCase()).join("");
+                                const dlgStart=reviewOutput.indexOf("## Meeting Dialogue");
+                                const dlgEnd=reviewOutput.indexOf("\n## ",dlgStart+5);
+                                const dlgText=dlgStart>-1?reviewOutput.slice(dlgStart,dlgEnd>-1?dlgEnd:undefined):"";
+                                if(!dlgText) return;
+                                const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                                  body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,stream:false,
+                                    system:"You are a transcript editor. Replace initials in this dialogue. Chair="+mInit+" ("+caseInfo.manager+"), Employee="+eInit+" ("+caseInfo.employee+"). In HR meetings managers ask questions. Return ONLY the dialogue lines with corrected initials, no other text.",
+                                    messages:[{role:"user",content:dlgText}]})});
+                                const data=await res.json();
+                                const updated=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+                                if(updated){
+                                  const before=dlgStart>-1?reviewOutput.slice(0,dlgStart):"";
+                                  const after=dlgEnd>-1?reviewOutput.slice(dlgEnd):"";
+                                  setReviewOutput(before+"## Meeting Dialogue\n"+updated.replace("## Meeting Dialogue\n","").trim()+after);
+                                }
+                              }} style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",fontSize:12,color:"#fff",cursor:"pointer",whiteSpace:"nowrap"}}>
+                                Update initials
+                              </button>
+                            </div>
+                          </div>
                           <div style={{display:"flex",justifyContent:"center",alignItems:"center",margin:"16px 0 6px",position:"relative"}}>
                             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
                             <button onClick={()=>setEditingRecord(e=>!e)}
