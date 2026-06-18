@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Meeting Record - Compass HR</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #0D0D0F; color: #F2EDE4; min-height: 100vh; }
+    .header { background: #1C1C22; border-bottom: 1px solid #2A2A35; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+    .logo { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #7C5CFC, #A98FFF); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px; }
+    .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+    .card { background: #1C1C22; border: 1px solid #2A2A35; border-radius: 12px; padding: 28px; margin-bottom: 24px; }
+    .label { font-size: 10px; font-weight: 600; color: #666; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+    .value { font-size: 14px; color: #F2EDE4; }
+    .field { margin-bottom: 16px; }
+    .document { background: #141418; border: 1px solid #2A2A35; border-radius: 8px; padding: 20px; font-size: 13px; line-height: 1.8; color: #C4BDAF; white-space: pre-wrap; max-height: 400px; overflow-y: auto; margin-bottom: 20px; }
+    canvas { border: 1px solid #2A2A35; border-radius: 8px; background: #fff; cursor: crosshair; display: block; width: 100%; }
+    .btn { background: #7C5CFC; color: white; border: none; border-radius: 8px; padding: 14px 28px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 16px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost { background: none; border: 1px solid #2A2A35; color: #888; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; }
+    .status { text-align: center; padding: 40px; }
+    .status h2 { font-size: 24px; margin-bottom: 12px; }
+    .signed-badge { display: inline-block; background: #0A2A0A; border: 1px solid #2A5A2A; color: #4CAF50; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 16px; }
+    h2 { font-family: 'Playfair Display', Georgia, serif; font-size: 20px; color: #F2EDE4; margin-bottom: 16px; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">C</div>
+    <div>
+      <div style="font-size:16px;font-weight:600">Compass HR</div>
+      <div style="font-size:11px;color:#666">Meeting Record — Electronic Signature</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="loading" class="status"><p style="color:#666">Loading document...</p></div>
+    <div id="content" style="display:none">
+      <div class="card">
+        <h2 id="meeting-type"></h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="field"><div class="label">Employee</div><div class="value" id="employee-name"></div></div>
+          <div class="field"><div class="label">Meeting date</div><div class="value" id="meeting-date"></div></div>
+          <div class="field"><div class="label">Chair</div><div class="value" id="manager-name"></div></div>
+          <div class="field"><div class="label">Status</div><div class="value" id="status-badge"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Meeting Record</h2>
+        <div class="document" id="document-content"></div>
+      </div>
+
+      <div id="sign-section" class="card">
+        <h2>Your Signature</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:16px">By signing below you confirm you have read and received a copy of this meeting record. Your signature does not necessarily indicate agreement with its contents.</p>
+        <canvas id="sig-canvas" width="700" height="160"></canvas>
+        <button class="btn-ghost" onclick="clearSig()">Clear signature</button>
+        <button class="btn" id="submit-btn" onclick="submitSignature()">Submit signature</button>
+      </div>
+
+      <div id="signed-section" style="display:none" class="card">
+        <div class="status">
+          <div class="signed-badge">✓ Signed</div>
+          <h2>Thank you</h2>
+          <p style="color:#666;font-size:14px">Your signature has been recorded. A copy of the signed document will be sent to you and your manager.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const signId = window.location.pathname.split('/sign/')[1];
+    let sigData = null;
+
+    // Load document
+    fetch('/api/signing?signId=' + signId)
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+        document.getElementById('meeting-type').textContent = data.meeting_type || 'Meeting Record';
+        document.getElementById('employee-name').textContent = data.employee_name || '';
+        document.getElementById('meeting-date').textContent = data.meeting_date || '';
+        document.getElementById('manager-name').textContent = data.manager_name || '';
+        document.getElementById('document-content').textContent = data.document || '';
+
+        if (data.status === 'signed') {
+          document.getElementById('sign-section').style.display = 'none';
+          document.getElementById('signed-section').style.display = 'block';
+          document.getElementById('status-badge').innerHTML = '<span style="color:#4CAF50">✓ Signed</span>';
+        } else {
+          document.getElementById('status-badge').innerHTML = '<span style="color:#E8622A">Awaiting signature</span>';
+          initCanvas();
+        }
+      })
+      .catch(() => {
+        document.getElementById('loading').innerHTML = '<p style="color:#E8622A">Document not found or link has expired.</p>';
+      });
+
+    // Signature canvas
+    function initCanvas() {
+      const canvas = document.getElementById('sig-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+      canvas.height = 160 * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      ctx.strokeStyle = '#1C1C22';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+
+      let drawing = false;
+      let hasDrawn = false;
+
+      const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        return { x: (touch.clientX - rect.left), y: (touch.clientY - rect.top) };
+      };
+
+      canvas.addEventListener('mousedown', e => { drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+      canvas.addEventListener('mousemove', e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasDrawn = true; });
+      canvas.addEventListener('mouseup', () => { drawing = false; if (hasDrawn) sigData = canvas.toDataURL(); });
+      canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+      canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasDrawn = true; });
+      canvas.addEventListener('touchend', () => { drawing = false; if (hasDrawn) sigData = canvas.toDataURL(); });
+    }
+
+    function clearSig() {
+      const canvas = document.getElementById('sig-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      sigData = null;
+    }
+
+    function submitSignature() {
+      if (!sigData) { alert('Please sign before submitting.'); return; }
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      fetch('/api/signing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signId, signature: sigData, signedAt: new Date().toISOString() })
+      })
+      .then(r => r.json())
+      .then(() => {
+        document.getElementById('sign-section').style.display = 'none';
+        document.getElementById('signed-section').style.display = 'block';
+      })
+      .catch(() => { btn.disabled = false; btn.textContent = 'Submit signature'; alert('Something went wrong. Please try again.'); });
+    }
+  </script>
+</body>
+</html>

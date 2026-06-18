@@ -253,6 +253,49 @@ function MDRenderer({ text, light }) {
   if(!text) return null;
 
 
+
+  const sendForSignature = async (employeeEmail) => {
+    if(!employeeEmail||!reviewOutput) return;
+    const signId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const appUrl = window.location.origin;
+    
+    // Store document in Supabase via API
+    await fetch("/api/signing", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        signId,
+        document: reviewOutput,
+        employeeName: caseInfo.employee||"Employee",
+        managerName: caseInfo.manager||"Manager",
+        meetingType: meetingType?.label||"Meeting",
+        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB")
+      })
+    });
+
+    // Send email via Resend
+    const res = await fetch("/api/send-for-signature", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        employeeEmail,
+        employeeName: caseInfo.employee||"Employee",
+        managerName: caseInfo.manager||"Manager",
+        meetingType: meetingType?.label||"Meeting",
+        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+        signId,
+        appUrl
+      })
+    });
+    
+    const data = await res.json();
+    if(data.success) {
+      alert("Signature request sent to "+employeeEmail);
+    } else {
+      alert("Failed to send: "+data.error);
+    }
+  };
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
       {text.split("\n").map((line, i) => {
