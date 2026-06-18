@@ -518,6 +518,7 @@ export default function Compass() {
   const [liveContextLoading, setLiveContextLoading] = useState(false);
   const [meetingStartTime, setMeetingStartTime] = useState(null);
   const [editingRecord, setEditingRecord] = useState(false);
+  const [reviewAttachment, setReviewAttachment] = useState(null);
   const [editingStructured, setEditingStructured] = useState(false);
   const liveContextTimer = useRef(null);
   const meetingEndedRef = useRef(false);
@@ -2217,18 +2218,33 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 </Card>
               )}
 
-              {/* Outcome prediction */}
-              <Card>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                  <SectionTitle>TRIBUNAL OUTCOME PREDICTION</SectionTitle>
-                  <Btn onClick={runPrediction} disabled={predProcessing} style={{padding:"5px 12px",fontSize:11}}>{predProcessing?"Analysing...":"Run prediction"}</Btn>
+              {/* Risk & Prediction */}
+              <Card style={{marginBottom:16}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Legal Risk & Tribunal Prediction</div>
+                {riskScore&&(()=>{
+                  const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
+                  const col=rC[riskScore.rating]||"#888";
+                  return(
+                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,paddingBottom:16,borderBottom:"1px solid #2A2A35"}}>
+                      <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
+                      </div>
+                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
+                    </div>
+                  );
+                })()}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{fontSize:11,color:"#666"}}>Tribunal outcome prediction</div>
+                  <Btn onClick={runPrediction} disabled={predProcessing} style={{padding:"4px 10px",fontSize:11}}>
+                    {predProcessing?"Running...":"Run prediction"}
+                  </Btn>
                 </div>
-                {predProcessing&&<div style={{textAlign:"center",padding:20}}><span className="pu" style={{color:"#7C5CFC",fontSize:20}}>●</span></div>}
+                {predProcessing&&<div style={{textAlign:"center",padding:20}}><span className="pu" style={{color:"#7C5CFC",fontSize:18}}>●</span></div>}
                 {prediction&&<MDRenderer text={prediction}/>}
                 {!prediction&&!predProcessing&&(
-                  <div style={{fontSize:12,color:"#444",lineHeight:1.6}}>
-                    Analyses the case against ERA 1996, ACAS Code, and comparable tribunal outcomes. Identifies vulnerabilities and recommended actions to strengthen your position.
-                    <div style={{fontSize:10,color:"#333",marginTop:8}}>Not legal advice — always consult a qualified employment solicitor for complex cases.</div>
+                  <div style={{fontSize:11,color:"#444",lineHeight:1.6}}>
+                    Analyses the case against ERA 1996, ACAS Code, and comparable tribunal outcomes.
+                    <div style={{fontSize:10,color:"#333",marginTop:4}}>Not legal advice — consult a qualified employment solicitor for complex cases.</div>
                   </div>
                 )}
               </Card>
@@ -2236,22 +2252,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
             {/* Right panel */}
             <div>
-              {/* Risk score */}
-              {riskScore&&(()=>{
-                const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
-                const col=rC[riskScore.rating]||"#888";
-                return(
-                  <Card style={{background:"#141418",marginBottom:16}}>
-                    <div style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Legal risk</div>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
-                      <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
-                      </div>
-                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
-                    </div>
-                  </Card>
-                );
-              })()}
+
 
               {/* Chat with Compass */}
               <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
@@ -2271,7 +2272,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   ))}
                   {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
                 </div>
-                <div style={{padding:"10px 12px",borderTop:"1px solid #2A2A35",display:"flex",gap:8}}>
+                <div style={{padding:"10px 12px",borderTop:"1px solid #2A2A35",display:"flex",gap:8,alignItems:"center"}}>
                   <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&chatInput.trim()&&!chatProcessing){
                       const msg=chatInput.trim(); setChatInput("");
@@ -2283,6 +2284,33 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     }}}
                     placeholder="Ask Compass about this meeting..."
                     style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Inter,sans-serif"}}/>
+                  {reviewAttachment&&(
+                    <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"3px 8px",flexShrink:0}}>
+                      <span style={{fontSize:11,color:"#A98FFF",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reviewAttachment.name}</span>
+                      <button onClick={()=>setReviewAttachment(null)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",padding:0}}>&#10005;</button>
+                    </div>
+                  )}
+                  <label style={{cursor:"pointer",color:"#444",fontSize:16,display:"flex",alignItems:"center",padding:"0 2px"}}
+                    onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
+                    onMouseLeave={e=>e.currentTarget.style.color="#444"}>
+                    &#128206;
+                    <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
+                      const file=e.target.files[0]; if(!file) return;
+                      try {
+                        if(file.name.endsWith(".pdf")) {
+                          const arr=await file.arrayBuffer();
+                          const bytes=new Uint8Array(arr);
+                          let b64=""; const chunk=8192;
+                          for(let i=0;i<bytes.length;i+=chunk) b64+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+                          setReviewAttachment({name:file.name, base64:btoa(b64), type:"pdf"});
+                        } else {
+                          const text=await file.text();
+                          setReviewAttachment({name:file.name, text:text.slice(0,4000), type:"text"});
+                        }
+                      } catch(err){}
+                      e.target.value="";
+                    }}/>
+                  </label>
                   <button onClick={()=>{if(chatInput.trim()&&!chatProcessing){
                       const msg=chatInput.trim(); setChatInput("");
                       const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
