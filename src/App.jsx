@@ -2051,13 +2051,14 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 const val = e.target.value;
                 if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
                 if(val.endsWith("\n")) {
-                  val.split("\n").filter(l=>l.trim()).forEach(line=>addUtterance(line.trim()));
+                  const lines=val.split("\n").filter(l=>l.trim());
+                  lines.forEach(line=>addUtterance(line.trim()));
                   setInputText("");
+                  updateLiveContext(val);
                 } else {
                   setInputText(val);
                 }
-                clearTimeout(liveContextTimer.current);
-                liveContextTimer.current = setTimeout(()=>updateLiveContext(val), 4000);
+
               }}
               placeholder="Type your notes freely... just capture what is being said. Compass will organise everything when you end the meeting."
             ></textarea>
@@ -2271,6 +2272,17 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
                           :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
                       </div>
+                      {m.role==="assistant"&&m.content.length>300&&(
+                        <button onClick={()=>{
+                          const blob=new Blob([m.content],{type:'application/msword'});
+                          const url=URL.createObjectURL(blob);
+                          const a=document.createElement("a");
+                          a.href=url; a.download="compass-template.doc"; a.click();
+                          URL.revokeObjectURL(url);
+                        }} style={{marginTop:6,background:"none",border:"1px solid #7C5CFC44",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>
+                          Download as Word
+                        </button>
+                      )}
                     </div>
                   ))}
                   {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
