@@ -517,6 +517,7 @@ export default function Compass() {
   const [liveContext, setLiveContext] = useState(null);
   const [liveContextLoading, setLiveContextLoading] = useState(false);
   const [meetingStartTime, setMeetingStartTime] = useState(null);
+  const [meetingEndTime, setMeetingEndTime] = useState(null);
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [editingStructured, setEditingStructured] = useState(false);
@@ -1190,6 +1191,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const startSession = type => {
     meetingEndedRef.current = false;
     setMeetingStartTime(null);
+    setMeetingEndTime(null);
     setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setLetterOutput("");
     setRiskScore(null); setPrediction(""); setNextSteps([]); setParticipants([]);
     if(type && type.group === "dev") {
@@ -1231,7 +1233,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // ── AI: Review + Risk ──
   const handleReview = async () => {
     meetingEndedRef.current = false;
-    const meetingEndTime = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    const meetingEndTimeVal = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    setMeetingEndTime(meetingEndTimeVal);
     const extra = inputText.trim() ? [{id:Date.now(),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
     const allNotes = [...transcript, ...extra];
     if(!allNotes.length) return;
@@ -1247,7 +1250,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     console.log("TX:", tx.slice(0,200));
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
     } catch(e) { setAiError(e.message); }
@@ -2328,7 +2331,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry."}]);setChatProcessing(false);});
                     }}}
                     disabled={(!chatInput.trim()&&!reviewAttachment)||chatProcessing}
-                    style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",color:"#fff",fontSize:16,cursor:"pointer",opacity:(!chatInput.trim()||chatProcessing)?0.4:1}}>&#8593;</button>
+                    style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",color:"#fff",fontSize:16,cursor:"pointer",opacity:((!chatInput.trim()&&!reviewAttachment)||chatProcessing)?0.4:1}}>&#8593;</button>
                 </div>
               </Card>
             </div>
