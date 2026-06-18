@@ -2311,15 +2311,23 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       e.target.value="";
                     }}/>
                   </label>
-                  <button onClick={()=>{if(chatInput.trim()&&!chatProcessing){
-                      const msg=chatInput.trim(); setChatInput("");
-                      const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
-                      setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
-                      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
+                  <button onClick={()=>{if((chatInput.trim()||reviewAttachment)&&!chatProcessing){
+                      const msg=chatInput.trim()||"Please review the attached document in context of this meeting."; setChatInput("");
+                      const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp the user. No bold asterisks, no emoji.";
+                      let userContent;
+                      if(reviewAttachment?.base64){
+                        userContent=[{type:"document",source:{type:"base64",media_type:"application/pdf",data:reviewAttachment.base64}},{type:"text",text:msg}];
+                      } else if(reviewAttachment?.text){
+                        userContent=msg+"\n\nAttached ("+reviewAttachment.name+"):\n"+reviewAttachment.text;
+                      } else { userContent=msg; }
+                      const displayMsg=reviewAttachment?"["+reviewAttachment.name+"] "+msg:msg;
+                      setChatHistory(h=>[...h,{role:"user",content:displayMsg}]);
+                      setChatProcessing(true); setReviewAttachment(null);
+                      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:userContent}]})})
                         .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
-                        .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
+                        .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry."}]);setChatProcessing(false);});
                     }}}
-                    disabled={!chatInput.trim()||chatProcessing}
+                    disabled={(!chatInput.trim()&&!reviewAttachment)||chatProcessing}
                     style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",color:"#fff",fontSize:16,cursor:"pointer",opacity:(!chatInput.trim()||chatProcessing)?0.4:1}}>&#8593;</button>
                 </div>
               </Card>
