@@ -5,11 +5,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!SUPABASE_KEY) {
-    return res.status(500).json({ error: 'No key found. Env vars: ' + Object.keys(process.env).filter(k=>k.includes('SUPA')).join(',') });
-  }
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
 
   if (req.method === 'POST') {
     const { signId, document, employeeName, managerName, meetingType, meetingDate, signature, signedAt } = req.body;
