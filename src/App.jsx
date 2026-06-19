@@ -266,10 +266,10 @@ function MDRenderer({ text, light }) {
 
 
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
+    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontFamily:"Playfair Display,Georgia,serif", lineHeight:1.75, color:base, fontSize:14}}>
       {text.split("\n").map((line, i) => {
-        if(line.startsWith("## ")) return <h3 key={i} style={{fontFamily:"Inter,system-ui,sans-serif", fontSize:16, fontWeight:600, color:accent, margin:"24px 0 8px"}}>{line.slice(3)}</h3>;
-        if(line.startsWith("# ")) return <h2 key={i} style={{fontFamily:"Inter,system-ui,sans-serif", fontSize:20, fontWeight:600, color:base, margin:"8px 0 16px"}}>{line.slice(2)}</h2>;
+        if(line.startsWith("## ")) return <h3 key={i} style={{fontFamily:"Playfair Display,Georgia,serif", fontSize:16, fontWeight:600, color:accent, margin:"24px 0 8px"}}>{line.slice(3)}</h3>;
+        if(line.startsWith("# ")) return <h2 key={i} style={{fontFamily:"Playfair Display,Georgia,serif", fontSize:20, fontWeight:600, color:base, margin:"8px 0 16px"}}>{line.slice(2)}</h2>;
         if(line.match(/^\*\*(.+)\*\*$/)) return <p key={i} style={{fontWeight:600, color:base, margin:"8px 0 4px"}}>{line.slice(2,-2)}</p>;
         if(line.startsWith("- ") || line.startsWith("* ")) return <div key={i} style={{display:"flex", gap:8, margin:"3px 0"}}><span style={{color:accent}}>·</span><span>{line.slice(2)}</span></div>;
         if(/^\d+\.\s/.test(line)) return <div key={i} style={{display:"flex", gap:10, margin:"3px 0"}}><span style={{color:accent, fontWeight:600}}>{line.match(/^\d+/)[0]}.</span><span>{line.replace(/^\d+\.\s/,"")}</span></div>;
@@ -312,10 +312,10 @@ function SignaturePad({ onSave, onClose }) {
   };
 
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{fontFamily:"Playfair Display,Georgia,serif",position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <Card style={{width:500,maxWidth:"90vw"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <span style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>E-signature</span>
+          <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>E-signature</span>
           <button onClick={onClose} style={{background:"none",border:"none",color:"#888",fontSize:22,cursor:"pointer"}}>&#10005;</button>
         </div>
         <div style={{display:"flex",gap:8,marginBottom:14}}>
@@ -371,7 +371,7 @@ function AdjustmentForm({ onAdd }) {
   const [adj, setAdj] = useState("");
   const [review, setReview] = useState("");
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",marginTop:14,borderTop:"1px solid #2A2A35",paddingTop:14}}>
+    <div style={{fontFamily:"Playfair Display,Georgia,serif",marginTop:14,borderTop:"1px solid #2A2A35",paddingTop:14}}>
       <div style={{fontSize:11,color:"#555",marginBottom:8,fontWeight:600}}>Add adjustment</div>
       <input placeholder="e.g. Flexible start time, additional breaks, remote working" value={adj} onChange={e=>setAdj(e.target.value)}
         style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
@@ -1654,7 +1654,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
   //  RENDER
   // ─────────────────────────────────────────────
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
+    <div style={{fontFamily:"Playfair Display,Georgia,serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:Inter,system-ui,sans-serif;color:#F2EDE4;}
@@ -1672,7 +1672,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       {showSignModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
-            <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Send for signature</h3>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Send for signature</h3>
             <p style={{fontSize:13,color:"#666",marginBottom:20}}>The employee will receive an email with a link to read and sign the meeting record.</p>
             <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
             <input value={signEmail} onChange={e=>setSignEmail(e.target.value)}
@@ -1726,7 +1726,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       {showGdpr && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <Card style={{maxWidth:520,width:"100%"}}>
-            <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:22,color:"#7C5CFC",marginBottom:8,fontWeight:600}}>Data &amp; privacy</div>
+            <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#7C5CFC",marginBottom:8,fontWeight:600}}>Data &amp; privacy</div>
             <p style={{fontSize:13,color:"#888",lineHeight:1.8,marginBottom:16}}>
               Compass stores all HR data locally in your browser. No data is sent to external servers except the text you submit to the AI for processing via the Anthropic API.
             </p>
@@ -1760,7 +1760,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <div style={{height:2,background:"#2A2A35",borderRadius:1,marginBottom:20}}>
               <div style={{height:2,background:"#7C5CFC",borderRadius:1,width:`${((onboardStep+1)/ONBOARD_STEPS.length)*100}%`,transition:"width 0.3s"}}/>
             </div>
-            <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:22,color:"#F2EDE4",marginBottom:10,fontWeight:600}}>{ONBOARD_STEPS[onboardStep].title}</div>
+            <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#F2EDE4",marginBottom:10,fontWeight:600}}>{ONBOARD_STEPS[onboardStep].title}</div>
             <p style={{fontSize:14,color:"#888",lineHeight:1.8,marginBottom:24}}>{ONBOARD_STEPS[onboardStep].body}</p>
             <Btn onClick={()=>{
               if(onboardStep<ONBOARD_STEPS.length-1) setOnboardStep(s=>s+1);
@@ -1775,7 +1775,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1800,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <Card style={{maxWidth:440,width:"100%"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#F2EDE4",fontWeight:600}}>Switch user</div>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",fontWeight:600}}>Switch user</div>
               <button onClick={()=>setShowUserSwitch(false)} style={{background:"none",border:"none",color:"#666",fontSize:20,cursor:"pointer"}}>✕</button>
             </div>
             {users.map(u=>(
@@ -1801,7 +1801,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         <div style={{maxWidth:1440,margin:"0 auto",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <button onClick={reset} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",padding:0,flexShrink:0}}>
             <CompassLogo size={32} />
-            <span style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:20,fontWeight:500,color:"#7C5CFC",letterSpacing:-0.3}}>Compass</span>
+            <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:20,fontWeight:500,color:"#7C5CFC",letterSpacing:-0.3}}>Compass</span>
           </button>
 
           {meetingType && (
@@ -1868,7 +1868,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           <div style={{maxWidth:760,margin:"0 auto",padding:"80px 20px",textAlign:"center"}}>
             <div style={{display:"flex",justifyContent:"center",marginBottom:20}}><CompassLogo size={52}/></div>
             <div style={{fontSize:11,letterSpacing:2.5,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>UK HR Intelligence</div>
-            <h1 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:"clamp(32px,5vw,56px)",fontWeight:400,color:"#F2EDE4",margin:"0 0 16px",lineHeight:1.1}}>
+            <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:"clamp(32px,5vw,56px)",fontWeight:400,color:"#F2EDE4",margin:"0 0 16px",lineHeight:1.1}}>
               Navigate every<br/><em style={{color:"#7C5CFC"}}>HR conversation.</em>
             </h1>
             <p style={{fontSize:15,color:"#666",maxWidth:420,margin:"0 auto 40px",lineHeight:1.8}}>
@@ -1909,7 +1909,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   <span style={{color:"#fff",fontSize:14,fontWeight:700}}>C</span>
                 </div>
                 <div>
-                  <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",fontWeight:600}}>Ask Compass</div>
+                  <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",fontWeight:600}}>Ask Compass</div>
                   <div style={{fontSize:11,color:"#555"}}>Your HR advisor — available anytime</div>
                 </div>
               </div>
@@ -1924,8 +1924,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         </div>
                         <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:10,background:m.role==="user"?"#2A2A35":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                           {m.role==="user"
-                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Inter,system-ui,sans-serif",lineHeight:1.6}}>{m.content}</div>
-                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Inter,system-ui,sans-serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
+                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Playfair Display,Georgia,serif",lineHeight:1.6}}>{m.content}</div>
+                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Playfair Display,Georgia,serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
                           }
                         </div>
                       </div>
@@ -1955,7 +1955,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   <input value={homeChatInput} onChange={e=>setHomeChatInput(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&(homeChatInput.trim()||homeAttachment)&&!homeChatProcessing){const msg=homeChatInput||"Please review this document and advise me.";setHomeChatInput("");askCompass(msg,homeChatHistory,setHomeChatHistory,setHomeChatProcessing);}}}
                     placeholder={homeAttachment?"Ask about the attached document...":"Ask anything about HR or employment law..."}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Inter,system-ui,sans-serif",padding:"4px 0"}}/>
+                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Playfair Display,Georgia,serif",padding:"4px 0"}}/>
                   <label style={{cursor:"pointer",color:"#444",fontSize:16,padding:"0 4px",display:"flex",alignItems:"center"}}
                     onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
                     onMouseLeave={e=>e.currentTarget.style.color="#444"}>
@@ -1986,7 +1986,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   </label>
                   {homeChatHistory.length>0&&(
                     <button onClick={()=>setHomeChatHistory([])}
-                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Inter,system-ui,sans-serif",padding:"4px 8px",borderRadius:4}}
+                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Playfair Display,Georgia,serif",padding:"4px 8px",borderRadius:4}}
                       onMouseEnter={e=>e.currentTarget.style.color="#666"}
                       onMouseLeave={e=>e.currentTarget.style.color="#444"}>
                       Clear
@@ -2034,7 +2034,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       {screen===SCREENS.PREP&&(
         <div style={{maxWidth:560,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
           <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
-          <h1 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:30,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
+          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:30,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
           <p style={{fontSize:14,color:"#555",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
 
           <div style={{textAlign:"left",marginBottom:16}}>
@@ -2144,7 +2144,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid #1C1C22",flexShrink:0}}>
             <div>
               <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</div>
-              <div style={{fontSize:16,fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>{caseInfo.employee||"Notes"}</div>
+              <div style={{fontSize:16,fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4"}}>{caseInfo.employee||"Notes"}</div>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               {isListening&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#E8622A"}}><span className="pu">&#9679;</span> Listening</div>}
@@ -2162,7 +2162,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <textarea
               ref={inputRef}
               value={inputText}
-              style={{flex:1,background:"transparent",border:"none",padding:"32px",fontSize:15,lineHeight:1.9,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Inter,system-ui,sans-serif"}}
+              style={{flex:1,background:"transparent",border:"none",padding:"32px",fontSize:15,lineHeight:1.9,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Playfair Display,Georgia,serif"}}
               onChange={e=>{
                 const val = e.target.value;
                 if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
@@ -2186,7 +2186,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   </div>
                   <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Live context</div>
                 </div>
-                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Inter,system-ui,sans-serif"}}>{liveContext}</div>}
+                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Playfair Display,Georgia,serif"}}>{liveContext}</div>}
                 {liveContextLoading&&<div style={{fontSize:12,color:"#444"}}>Analysing...</div>}
                 <button onClick={()=>setLiveContext(null)} style={{background:"none",border:"none",color:"#333",fontSize:11,cursor:"pointer",textDecoration:"underline",textAlign:"left",marginTop:"auto"}}>Dismiss</button>
               </div>
@@ -2223,7 +2223,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               {/* Meeting record */}
               <Card style={{marginBottom:16}}>
                 <div style={{display:"flex",justifyContent:"center",alignItems:"center",marginBottom:16,position:"relative"}}>
-                  <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#7C5CFC",fontWeight:600,margin:0}}>Meeting Details</h3>
+                  <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",fontWeight:600,margin:0}}>Meeting Details</h3>
                   <button onClick={()=>setEditingStructured(e=>!e)} style={{background:editingStructured?"#7C5CFC":"none",border:"1px solid",borderColor:editingStructured?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingStructured?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>{editingStructured?"Done":"Edit record"}</button>
                 </div>
                 {aiProcessing&&!reviewOutput&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#666",marginTop:10,fontSize:12}}>Structuring...</div></div>}
@@ -2247,7 +2247,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
                         {editingStructured
                           ?<textarea value={topSection} onChange={e=>setReviewOutput(e.target.value+dlgSection+bottomSection)}
-                            style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,system-ui,sans-serif",marginBottom:12}}></textarea>
+                            style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Playfair Display,Georgia,serif",marginBottom:12}}></textarea>
                           :<MDRenderer text={topSection.replace("## Meeting Details","").replace("## Meeting Details\n","").trim()}/>
                         }
                         {/* Meeting Dialogue with edit button */}
@@ -2290,7 +2290,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                             </div>
                           </div>
                           <div style={{display:"flex",justifyContent:"center",alignItems:"center",margin:"16px 0 6px",position:"relative"}}>
-                            <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
+                            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
                             <button onClick={()=>setEditingRecord(e=>!e)}
                               style={{background:editingRecord?"#7C5CFC":"none",border:"1px solid",borderColor:editingRecord?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingRecord?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>
                               {editingRecord?"Done":"Edit dialogue"}
@@ -2298,7 +2298,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           </div>
                           {editingRecord
                             ?<textarea value={dlgSection.replace("## Meeting Dialogue\n","")} onChange={e=>setReviewOutput(topSection+"## Meeting Dialogue\n"+e.target.value+bottomSection)}
-                              style={{width:"100%",minHeight:200,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,system-ui,sans-serif"}}></textarea>
+                              style={{width:"100%",minHeight:200,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Playfair Display,Georgia,serif"}}></textarea>
                             :<MDRenderer text={dlgSection.replace("## Meeting Dialogue\n","")}/>
                           }
                         </>)}
@@ -2359,7 +2359,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
                       </div>
-                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,system-ui,sans-serif",flex:1}}>{riskScore.summary}</div>
+                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Playfair Display,Georgia,serif",flex:1}}>{riskScore.summary}</div>
                     </div>
                   );
                 })()}
@@ -2387,7 +2387,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               {/* Chat with Compass */}
               <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                 <div style={{padding:"12px 16px",borderBottom:"1px solid #2A2A35",background:"#141418"}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#F2EDE4",fontFamily:"Inter,system-ui,sans-serif"}}>Chat with Compass</div>
+                  <div style={{fontSize:13,fontWeight:600,color:"#F2EDE4",fontFamily:"Playfair Display,Georgia,serif"}}>Chat with Compass</div>
                   <div style={{fontSize:11,color:"#555",marginTop:2}}>Ask questions or refine this record</div>
                 </div>
                 <div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,minHeight:200,maxHeight:360}}>
@@ -2395,8 +2395,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
                       <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                         {m.role==="user"
-                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,system-ui,sans-serif"}}>{m.content}</div>
-                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,system-ui,sans-serif"}}>{m.content}</div>}
+                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Playfair Display,Georgia,serif"}}>{m.content}</div>
+                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Playfair Display,Georgia,serif"}}>{m.content}</div>}
                       </div>
                       {m.role==="assistant"&&m.content.length>300&&(
                         <button onClick={()=>{
@@ -2424,7 +2424,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
                     }}}
                     placeholder="Ask Compass about this meeting..."
-                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Inter,system-ui,sans-serif"}}/>
+                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Playfair Display,Georgia,serif"}}/>
                   {reviewAttachment&&(
                     <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"3px 8px",flexShrink:0}}>
                       <span style={{fontSize:11,color:"#A98FFF",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reviewAttachment.name}</span>
@@ -2547,7 +2547,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
         return(
           <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
-            <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Dashboard</h2>
+            <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Dashboard</h2>
             <p style={{fontSize:13,color:"#666",margin:"0 0 28px"}}>Overview of all HR cases and activity</p>
 
             {cases.length===0&&(
@@ -2563,7 +2563,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
                   {[{l:"Total cases",v:cases.length,c:"#7C5CFC"},{l:"Open cases",v:open.length,c:"#7C5CFC"},{l:"Total meetings",v:allM.length,c:"#D4882A"},{l:"High risk",v:rC.HIGH||0,c:"#E8622A"}].map(s=>(
                     <Card key={s.l}>
-                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Inter,system-ui,sans-serif"}}>{s.v}</div>
+                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Playfair Display,Georgia,serif"}}>{s.v}</div>
                       <div style={{fontSize:11,color:"#555",marginTop:3}}>{s.l}</div>
                     </Card>
                   ))}
@@ -2652,7 +2652,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
             <div>
-              <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Case files</h2>
+              <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Case files</h2>
               <p style={{fontSize:13,color:"#666",margin:0}}>All cases grouped by employee, with full meeting history and documents.</p>
             </div>
             <div style={{display:"flex",gap:8}}>
@@ -2674,7 +2674,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               <div style={{padding:"16px 20px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3}}>
-                    <span style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:17,color:"#F2EDE4",fontWeight:600}}>{c.employeeName}</span>
+                    <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:17,color:"#F2EDE4",fontWeight:600}}>{c.employeeName}</span>
                     {c.email&&<span style={{fontSize:11,color:"#555"}}>{c.email}</span>}
                     {c.meetings.some(m=>m.riskScore?.rating==="HIGH")&&<Badge color="#E8622A">HIGH RISK</Badge>}
                   </div>
@@ -2730,7 +2730,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 <div style={{padding:"18px 24px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <Badge style={{marginBottom:6}}>{viewMeeting.type}</Badge>
-                    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#F2EDE4",marginTop:4}}>{viewMeeting.employeeName} — {viewMeeting.date}</div>
+                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginTop:4}}>{viewMeeting.employeeName} — {viewMeeting.date}</div>
                   </div>
                   <button onClick={()=>setViewMeeting(null)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer"}}>✕</button>
                 </div>
@@ -2876,7 +2876,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       {/* ══ TEMPLATES ══ */}
       {screen===SCREENS.TEMPLATES&&(
         <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
-          <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Template library</h2>
+          <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Template library</h2>
           <p style={{fontSize:13,color:"#666",margin:"0 0 20px"}}>UK-compliant HR letter templates. Click to view and copy.</p>
 
           <input placeholder="Search templates..." value={templateSearch} onChange={e=>setTemplateSearch(e.target.value)}
@@ -2895,7 +2895,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
                       onMouseLeave={e=>e.currentTarget.style.borderColor=selectedTemplate?.id===t.id?"#7C5CFC":"#2A2A35"}>
                       <Badge style={{marginBottom:8}}>{cat}</Badge>
-                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,margin:"6px 0 4px",fontFamily:"Inter,system-ui,sans-serif"}}>{t.name}</div>
+                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,margin:"6px 0 4px",fontFamily:"Playfair Display,Georgia,serif"}}>{t.name}</div>
                       <div style={{fontSize:11,color:"#555"}}>Click to preview and copy →</div>
                     </button>
                   ))}
@@ -2910,13 +2910,13 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 <div style={{padding:"16px 24px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <Badge style={{marginBottom:4}}>{selectedTemplate.cat}</Badge>
-                    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#F2EDE4",marginTop:4}}>{selectedTemplate.name}</div>
+                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginTop:4}}>{selectedTemplate.name}</div>
                   </div>
                   <button onClick={()=>setSelectedTemplate(null)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer"}}>✕</button>
                 </div>
                 <div style={{padding:"20px 24px"}}>
                   <div style={{background:"#FDFAF6",borderRadius:8,padding:"24px 28px",marginBottom:16}}>
-                    <pre style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:13,color:"#1C1C22",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
+                    <pre style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:13,color:"#1C1C22",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <Btn onClick={()=>{navigator.clipboard.writeText(selectedTemplate.body);setSelectedTemplate(null);}}>Copy template</Btn>
@@ -2929,7 +2929,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
                 {["ACAS dismissal process","Suspend on full pay?","Grievance — what next?","Investigation timescales"].map((s,i)=>(
                   <button key={i} onClick={()=>askCompass(s,homeChatHistory,setHomeChatHistory,setHomeChatProcessing)}
-                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Inter,system-ui,sans-serif"}}
+                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Playfair Display,Georgia,serif"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC44";e.currentTarget.style.color="#A98FFF";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
                     {s}
@@ -2947,7 +2947,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
             {/* Submit form */}
             <div>
-              <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:22,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Anonymous reporting</h2>
+              <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Anonymous reporting</h2>
               <p style={{fontSize:13,color:"#666",margin:"0 0 20px",lineHeight:1.6}}>Employees can submit concerns anonymously. Reports go directly to HR and are not linked to any user account.</p>
 
               {whistleSubmitted?(
@@ -2994,7 +2994,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
             {/* HR view of reports */}
             <div>
-              <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#F2EDE4",margin:"0 0 14px",fontWeight:600}}>Received reports <span style={{fontSize:13,color:"#555",fontWeight:400}}>({whistleReports.length})</span></h3>
+              <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",margin:"0 0 14px",fontWeight:600}}>Received reports <span style={{fontSize:13,color:"#555",fontWeight:400}}>({whistleReports.length})</span></h3>
               {whistleReports.length===0&&<Card style={{textAlign:"center",padding:"28px"}}><div style={{fontSize:12,color:"#444"}}>No reports received yet</div></Card>}
               {[...whistleReports].reverse().map(r=>(
                 <Card key={r.id} style={{marginBottom:10,padding:16}}>
@@ -3028,7 +3028,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           <div style={{maxWidth:800,margin:"0 auto",padding:"40px 20px"}}>
             <div style={{textAlign:"center",marginBottom:32}}>
               <CompassLogo size={44}/>
-              <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:22,color:"#F2EDE4",margin:"14px 0 4px"}}>Employee Portal</h2>
+              <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#F2EDE4",margin:"14px 0 4px"}}>Employee Portal</h2>
               <p style={{fontSize:13,color:"#666"}}>View your HR correspondence and letters</p>
             </div>
 
@@ -3062,7 +3062,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       {portalCase.employeeName[0].toUpperCase()}
                     </div>
                     <div>
-                      <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:17,color:"#F2EDE4",fontWeight:600}}>{portalCase.employeeName}</div>
+                      <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:17,color:"#F2EDE4",fontWeight:600}}>{portalCase.employeeName}</div>
                       <div style={{fontSize:11,color:"#444"}}>{portalCase.email||"No email on file"} · {portalCase.meetings.length} meeting{portalCase.meetings.length!==1?"s":""}</div>
                     </div>
                   </div>
@@ -3086,7 +3086,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       {/* ══ SEARCH ══ */}
       {screen===SCREENS.SEARCH&&(
         <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
-          <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
+          <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
           <input
             autoFocus
             placeholder="Search cases, records, letters, transcripts..."
@@ -3178,7 +3178,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             {devStep==="self"&&(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
                 <Card>
-                  <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#7C5CFC",fontWeight:600,marginBottom:4}}>{s.type}</div>
+                  <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600,marginBottom:4}}>{s.type}</div>
                   <p style={{fontSize:12,color:"#555",margin:"0 0 18px"}}>Fill in the employee details, then the employee completes their self-assessment.</p>
                   {[
                     {k:"employee",l:"Employee name",req:true,ph:"e.g. Sarah Johnson"},
@@ -3333,7 +3333,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20}}>
                 <Card>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>{s.type} — Summary</div>
+                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>{s.type} — Summary</div>
                     <Btn onClick={generateDevSummary} disabled={devAiProcessing} style={{background:"#7C5CFC",border:"none",padding:"7px 16px",fontSize:12}}>
                       {devAiProcessing?"Generating...":"Generate AI summary"}
                     </Btn>
@@ -3383,7 +3383,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             {devStep==="output"&&(
               <div style={{maxWidth:900,margin:"0 auto"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>Outcome document</div>
+                  <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>Outcome document</div>
                   <Btn onClick={generateDevLetter} disabled={devAiProcessing} style={{background:"#7C5CFC",border:"none"}}>
                     {devAiProcessing?"Generating...":"Generate letter"}
                   </Btn>
@@ -3448,7 +3448,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
               <div>
-                <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>New starter onboarding</h2>
+                <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>New starter onboarding</h2>
                 <p style={{fontSize:13,color:"#555",margin:0}}>AI-customised induction journeys. Track every task from offer accepted to end of probation.</p>
               </div>
               <div style={{display:"flex",gap:8}}>
@@ -3460,7 +3460,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             {/* Add new starter form */}
             {starterView==="new"&&!activeStarter&&(
               <Card style={{marginBottom:24}}>
-                <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#F2EDE4",margin:"0 0 16px",fontWeight:600}}>New starter details</h3>
+                <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",margin:"0 0 16px",fontWeight:600}}>New starter details</h3>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
                   {[
                     {k:"name",l:"Full name",req:true,ph:"e.g. James Wilson"},
@@ -3517,7 +3517,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                           <div>
-                            <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{s.name}</div>
+                            <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{s.name}</div>
                             <div style={{fontSize:11,color:"#555"}}>{s.role}{s.department?" · "+s.department:""}</div>
                           </div>
                           {overdueTasks.length>0&&<Badge color="#E8622A">{overdueTasks.length} overdue</Badge>}
@@ -3545,7 +3545,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 {/* Sidebar */}
                 <div>
                   <Card style={{marginBottom:12}}>
-                    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>{activeStarter.name}</div>
+                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>{activeStarter.name}</div>
                     <div style={{fontSize:12,color:"#555",marginBottom:12}}>{activeStarter.role}{activeStarter.department?" · "+activeStarter.department:""}</div>
                     <div style={{fontSize:11,color:"#555",marginBottom:3}}>Start date: {new Date(activeStarter.startDate).toLocaleDateString("en-GB")}</div>
                     <div style={{fontSize:11,color:"#555",marginBottom:12}}>Manager: {activeStarter.manager||"Not set"}</div>
@@ -3582,7 +3582,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       <Card key={phase.label} style={{marginBottom:12}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <span style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:15,color:"#F2EDE4",fontWeight:600}}>{phase.label}</span>
+                            <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#F2EDE4",fontWeight:600}}>{phase.label}</span>
                             {phaseOverdue.length>0&&<Badge color="#E8622A">{phaseOverdue.length} overdue</Badge>}
                           </div>
                           <span style={{fontSize:11,color:"#555"}}>{phaseDone}/{phase.tasks.length}</span>
@@ -3664,7 +3664,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         return(
           <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
             <div style={{marginBottom:28}}>
-              <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>ER Analytics</h2>
+              <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>ER Analytics</h2>
               <p style={{fontSize:13,color:"#555",margin:0}}>Employee relations case patterns, trends, and risk intelligence.</p>
             </div>
 
@@ -3687,7 +3687,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     {l:"Avg resolution",v:avgResolution+"d"},
                   ].map(s=>(
                     <Card key={s.l} style={{textAlign:"center",padding:"16px 10px"}}>
-                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,system-ui,sans-serif",marginBottom:4}}>{s.v}</div>
+                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Playfair Display,Georgia,serif",marginBottom:4}}>{s.v}</div>
                       <div style={{fontSize:10,color:"#555"}}>{s.l}</div>
                     </Card>
                   ))}
@@ -3797,7 +3797,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       {resolutionTimes.sort((a,b)=>b.days-a.days).map(r=>(
                         <div key={r.name} style={{background:"#0D0D0F",borderRadius:7,padding:"10px 14px",minWidth:140}}>
                           <div style={{fontSize:12,color:"#F2EDE4",fontWeight:500,marginBottom:3}}>{r.name}</div>
-                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,system-ui,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#555",fontWeight:400}}>d</span></div>
+                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Playfair Display,Georgia,serif"}}>{r.days}<span style={{fontSize:11,color:"#555",fontWeight:400}}>d</span></div>
                           <div style={{fontSize:10,color:"#444"}}>{r.meetings} meetings</div>
                         </div>
                       ))}
@@ -3838,7 +3838,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           <div style={{maxWidth:1280,margin:"0 auto",padding:"32px 20px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
               <div>
-                <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Redundancy &amp; consultation</h2>
+                <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Redundancy &amp; consultation</h2>
                 <p style={{fontSize:13,color:"#555",margin:0}}>Individual and collective redundancy processes. Legally guided, document-ready.</p>
               </div>
               <div style={{display:"flex",gap:8}}>
@@ -3862,7 +3862,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-                        <span style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:15,color:"#F2EDE4",fontWeight:600}}>{r.reason}</span>
+                        <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#F2EDE4",fontWeight:600}}>{r.reason}</span>
                         <Badge color={r.type==="collective"?"#E8622A":"#7C5CFC"}>{r.type}</Badge>
                       </div>
                       <div style={{fontSize:11,color:"#555"}}>{r.atRiskEmployees.length} at-risk · Created {new Date(r.createdAt).toLocaleDateString("en-GB")} · {r.createdBy}</div>
@@ -3873,7 +3873,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
                 {/* New case form */}
                 <Card>
-                  <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 14px",fontWeight:600}}>Start new redundancy process</h3>
+                  <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 14px",fontWeight:600}}>Start new redundancy process</h3>
                   <div style={{marginBottom:14}}>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#555",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Process type</label>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -3891,7 +3891,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           style={{background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:8,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                           onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
                           onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
-                          <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:6}}>{opt.title}</div>
+                          <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:6}}>{opt.title}</div>
                           <div style={{fontSize:11,color:"#555",lineHeight:1.6}}>{opt.sub}</div>
                         </button>
                       ))}
@@ -3919,7 +3919,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     {/* SETUP STEP */}
                     {redundancyStep==="setup"&&(
                       <Card>
-                        <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Case details</h3>
+                        <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Case details</h3>
                         <div style={{background:"#0D0D0F",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
                           <div style={{fontSize:11,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>CASE SUMMARY</div>
                           <div style={{fontSize:13,color:"#F2EDE4",marginBottom:4}}><span style={{color:"#555"}}>Type:</span> {activeRedundancy.type} redundancy</div>
@@ -3967,7 +3967,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         {/* Selection criteria */}
                         <Card style={{marginBottom:14}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                            <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>Selection criteria</h3>
+                            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>Selection criteria</h3>
                             <span style={{fontSize:11,color:Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)<1?"#7C5CFC":"#E8622A",fontWeight:600}}>
                               Total: {activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)}% {Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)>1?"(must equal 100%)":"✓"}
                             </span>
@@ -3995,7 +3995,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         {/* At-risk employees */}
                         <Card>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                            <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>At-risk employees</h3>
+                            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>At-risk employees</h3>
                             <Btn onClick={()=>{
                               const name=window.prompt("Employee name:");
                               if(!name) return;
@@ -4014,7 +4014,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                                   <div style={{fontSize:11,color:"#555"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
                                 </div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,system-ui,sans-serif"}}>{emp.totalScore||0}</div>
+                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Playfair Display,Georgia,serif"}}>{emp.totalScore||0}</div>
                                   <div style={{fontSize:10,color:"#555"}}>/ 5.0</div>
                                   {emp.selected!==null&&<Badge color={emp.selected?"#E8622A":"#7C5CFC"}>{emp.selected?"At risk":"Retained"}</Badge>}
                                 </div>
@@ -4053,7 +4053,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     {/* CONSULTATION STEP */}
                     {redundancyStep==="consultation"&&(
                       <Card>
-                        <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Consultation meetings</h3>
+                        <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Consultation meetings</h3>
                         <p style={{fontSize:12,color:"#555",margin:"0 0 16px",lineHeight:1.6}}>
                           {activeRedundancy.type==="collective"
                             ?"Collective consultation must happen before individual consultation. Hold meaningful consultation — employees must be able to influence the outcome."
@@ -4088,7 +4088,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     {/* OUTCOME STEP */}
                     {redundancyStep==="outcome"&&(
                       <Card>
-                        <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Outcome letters</h3>
+                        <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Outcome letters</h3>
                         {activeRedundancy.atRiskEmployees.filter(e=>e.selected).map(emp=>(
                           <div key={emp.id} style={{background:"#0D0D0F",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #2A2A35"}}>
                             <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:8}}>{emp.name}</div>
@@ -4170,7 +4170,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
               <div>
-                <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Mental health &amp; wellbeing</h2>
+                <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Mental health &amp; wellbeing</h2>
                 <p style={{fontSize:13,color:"#555",margin:0}}>Confidential wellbeing case notes. Completely separate from disciplinary and performance records.</p>
               </div>
               <div style={{display:"flex",gap:8}}>
@@ -4201,7 +4201,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             {/* Add note form */}
             {wellbeingView==="new"&&(
               <Card style={{marginBottom:20}}>
-                <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 16px",fontWeight:600}}>Add wellbeing note</h3>
+                <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 16px",fontWeight:600}}>Add wellbeing note</h3>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
                   <div>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#555",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Employee name *</label>
@@ -4296,7 +4296,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 {activeWellbeing&&employeeNotes.length>0&&(
                   <div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                      <div style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:18,color:"#F2EDE4",fontWeight:600}}>{activeWellbeing}</div>
+                      <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",fontWeight:600}}>{activeWellbeing}</div>
                       <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeName:activeWellbeing}));setWellbeingView("new");}} style={{padding:"6px 14px",fontSize:12}}>+ Add note</Btn>
                     </div>
                     {employeeNotes.map(note=>{
@@ -4352,13 +4352,13 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       {/* ══ SETTINGS ══ */}
       {screen===SCREENS.SETTINGS&&(
         <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
-          <h2 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
+          <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
           <p style={{fontSize:13,color:"#666",margin:"0 0 28px"}}>All data saved in your browser.</p>
 
           {/* Word template */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Word letter template</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Upload your .docx with header/footer. Enables Word export on letters.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Word letter template</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Upload your .docx with header/footer. Enables Word export on letters.</p></div>
               <Badge color="#1C5AA0">WORD</Badge>
             </div>
             {wordTemplate?<div style={{background:"#0D0D0F",borderRadius:7,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#F2EDE4"}}>{wordTemplate.name}</span><Btn variant="danger" onClick={()=>{setWordTemplate(null);lsSet("compass_word_template",null);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn></div>:<div style={{background:"#0D0D0F",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#444"}}>No template uploaded</div>}
@@ -4369,7 +4369,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           {/* Letterhead */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Letterhead image</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>PNG or JPG — appears at top of PDF letters.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Letterhead image</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>PNG or JPG — appears at top of PDF letters.</p></div>
               <Badge>PDF</Badge>
             </div>
             {letterhead?<div style={{background:"#fff",borderRadius:7,padding:12,marginBottom:12,position:"relative"}}><img src={letterhead} alt="Letterhead" style={{width:"100%",maxHeight:100,objectFit:"contain",objectPosition:"left"}}/><button onClick={()=>{setLetterhead(null);lsSet("compass_letterhead",null);}} style={{position:"absolute",top:6,right:6,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>Remove</button></div>:<div style={{background:"#0D0D0F",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#444"}}>No letterhead uploaded</div>}
@@ -4380,7 +4380,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           {/* E-signature */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>E-signature</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Draw or type your signature. Applied to all PDF letters.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>E-signature</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Draw or type your signature. Applied to all PDF letters.</p></div>
             </div>
             {signature?<div style={{background:"#fff",borderRadius:7,padding:"12px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               {signature.type==="typed"?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:28,color:"#1C1C22"}}>{signature.data}</div>:<img src={signature.data} alt="Sig" style={{maxHeight:45,maxWidth:160}}/>}
@@ -4392,7 +4392,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           {/* Policies */}
           <Card style={{marginBottom:20}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Company policies</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Upload HR policies (.docx, .txt). Compass references them in all AI outputs.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Company policies</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Upload HR policies (.docx, .txt). Compass references them in all AI outputs.</p></div>
               <Badge color="#7C5CFC">AI</Badge>
             </div>
             {policies.length>0&&(
@@ -4417,7 +4417,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           {/* Team members */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Team members</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Manage who can access Compass. Each user has role-based permissions.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Team members</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Manage who can access Compass. Each user has role-based permissions.</p></div>
             </div>
             {users.length>0&&(
               <div style={{marginBottom:14}}>
@@ -4452,7 +4452,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
           {/* Notifications */}
           <Card style={{marginBottom:12}}>
-            <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Deadline reminders</h3>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Deadline reminders</h3>
             <p style={{fontSize:12,color:"#666",margin:"0 0 14px",lineHeight:1.6}}>Get browser notifications for upcoming and overdue deadlines.</p>
             {dueSoon.length>0?(
               <div style={{marginBottom:14}}>
@@ -4473,7 +4473,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           {/* Audit trail */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Audit trail</h3><p style={{fontSize:12,color:"#666",margin:0}}>Every action timestamped and logged.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Audit trail</h3><p style={{fontSize:12,color:"#666",margin:0}}>Every action timestamped and logged.</p></div>
               <span style={{fontSize:11,color:"#555"}}>{auditLog.length} entries</span>
             </div>
             <div style={{maxHeight:240,overflowY:"auto"}}>
@@ -4493,7 +4493,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
           {/* GDPR / Data */}
           <Card style={{marginBottom:20}}>
-            <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Data &amp; privacy</h3>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Data &amp; privacy</h3>
             <p style={{fontSize:12,color:"#666",margin:"0 0 14px",lineHeight:1.6}}>All data is stored locally in your browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
             <div style={{background:"#0D0D0F",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
               <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>DATA INVENTORY</div>
@@ -4518,7 +4518,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
           {/* Help / Onboarding */}
           <Card style={{marginBottom:20}}>
-            <h3 style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
             <p style={{fontSize:12,color:"#666",margin:"0 0 14px"}}>Rewatch the getting started guide.</p>
             <Btn onClick={()=>{setOnboardStep(0);setShowOnboard(true);}}>Restart tour</Btn>
           </Card>
