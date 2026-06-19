@@ -224,16 +224,11 @@ function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localSt
 function CompassLogo({ size = 36 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
-      <circle cx="50" cy="50" r="47" stroke="#7C5CFC" strokeWidth="1.5" fill="none"/>
-      <circle cx="50" cy="50" r="38" stroke="#7C5CFC" strokeWidth="0.5" opacity="0.3" fill="none"/>
-      <line x1="50" y1="8" x2="50" y2="92" stroke="#7C5CFC" strokeWidth="0.5" opacity="0.2"/>
-      <line x1="8" y1="50" x2="92" y2="50" stroke="#7C5CFC" strokeWidth="0.5" opacity="0.2"/>
-      <polygon points="50,10 54,44 50,50 46,44" fill="#7C5CFC"/>
-      <polygon points="50,90 54,56 50,50 46,56" fill="#7C5CFC" opacity="0.25"/>
-      <polygon points="10,50 44,46 50,50 44,54" fill="#7C5CFC" opacity="0.25"/>
-      <polygon points="90,50 56,46 50,50 56,54" fill="#7C5CFC" opacity="0.5"/>
-      <circle cx="50" cy="50" r="4" fill="#7C5CFC"/>
-      <circle cx="50" cy="50" r="2" fill="#0D0D0F"/>
+      <circle cx="50" cy="50" r="45" stroke="#7C5CFC" strokeWidth="3" fill="none"/>
+      <polygon points="50,14 54,50 50,50 46,50" transform="rotate(40 50 50)" fill="#7C5CFC"/>
+      <polygon points="50,86 54,50 50,50 46,50" transform="rotate(40 50 50)" fill="#7C5CFC" opacity="0.2"/>
+      <circle cx="50" cy="50" r="4" fill="#0D0D0F"/>
+      <circle cx="50" cy="50" r="2" fill="#7C5CFC"/>
     </svg>
   );
 }
