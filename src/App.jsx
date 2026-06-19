@@ -2611,7 +2611,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
                       <div>
                         <div style={{fontSize:13,color:"#F2EDE4",fontWeight:500,marginBottom:2}}>{m.employeeName}</div>
-                        <div style={{fontSize:10,color:"#444"}}>{m.type} · {m.date}</div>
+                        <div style={{fontSize:10,color:"#444"}}>{m.type} · {fmtDate(m.date)}</div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={rColors[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
@@ -2693,7 +2693,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
                         <Badge>{m.type}</Badge>
-                        <span style={{fontSize:12,color:"#F2EDE4"}}>{m.date}</span>
+                        <span style={{fontSize:12,color:"#F2EDE4"}}>{fmtDate(m.date)}</span>
                         {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={{HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"}[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
                       </div>
                       <div style={{fontSize:10,color:"#444"}}>{m.transcript?.length||0} utterances · {m.participants?.length>0?m.participants.map(p=>p.name).join(", "):"HR Manager, Employee"}</div>
@@ -3071,7 +3071,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 {portalCase.meetings.filter(m=>m.letterOutput).map(m=>(
                   <Card key={m.id} style={{marginBottom:12,padding:0,overflow:"hidden"}}>
                     <div style={{padding:"12px 18px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}><Badge>{m.type}</Badge><span style={{fontSize:12,color:"#F2EDE4"}}>{m.date}</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}><Badge>{m.type}</Badge><span style={{fontSize:12,color:"#F2EDE4"}}>{fmtDate(m.date)}</span></div>
                       <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(m.letterOutput)} style={{fontSize:11,padding:"3px 10px"}}>Copy</Btn>
                     </div>
                     <div style={{background:"#FDFAF6",padding:"24px 28px"}}><MDRenderer text={m.letterOutput} light/></div>
