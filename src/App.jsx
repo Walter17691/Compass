@@ -1808,7 +1808,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <div style={{display:"flex",alignItems:"center",gap:8,flex:1,justifyContent:"center",flexWrap:"wrap"}}>
               <span style={{fontSize:12,color:"#888"}}>{meetingType.label}</span>
               {caseInfo.employee&&<span style={{background:"#7C5CFC",color:"#fff",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo.employee}</span>}
-              {caseInfo.date&&<span style={{color:"#555",fontSize:11}}>{caseInfo.date}</span>}
+              {caseInfo.date&&<span style={{color:"#555",fontSize:11}}>{fmtDate(caseInfo.date)}</span>}
             </div>
           )}
 
