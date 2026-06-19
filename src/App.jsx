@@ -507,6 +507,34 @@ export default function Compass() {
     setSignId(id);
     setSignStatus("pending");
     const signId = id;
+
+    // Auto-save case with signId
+    if(caseInfo.employee.trim()) {
+      const meeting = {
+        id: Date.now().toString(),
+        type: meetingType?.label||"Meeting",
+        date: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+        manager: caseInfo.manager,
+        participants,
+        transcript: transcript.filter(u=>!u.pending),
+        record: reviewOutput,
+        letterOutput,
+        riskScore,
+        nextSteps,
+        prediction,
+        letterTracking: {},
+        savedAt: new Date().toISOString(),
+        savedBy: currentUser?.name || "HR Manager",
+        signId: id,
+        signStatus: "pending",
+      };
+      const existing = cases.find(c=>c.employeeName===caseInfo.employee.trim());
+      if(existing) {
+        saveCases(cases.map(c=>c.employeeName===caseInfo.employee.trim()?{...c,meetings:[...(c.meetings||[]),meeting]}:c));
+      } else {
+        saveCases([...cases,{id:Date.now().toString(),employeeName:caseInfo.employee.trim(),meetings:[meeting]}]);
+      }
+    }
     const appUrl = window.location.origin;
     
     // Store document in Supabase via API
