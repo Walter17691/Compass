@@ -503,7 +503,10 @@ export default function Compass() {
 
   const sendForSignature = async (employeeEmail) => {
     if(!employeeEmail||!reviewOutput) return;
-    const signId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    setSignId(id);
+    setSignStatus("pending");
+    const signId = id;
     const appUrl = window.location.origin;
     
     // Store document in Supabase via API
@@ -567,6 +570,8 @@ export default function Compass() {
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
   const [signEmail, setSignEmail] = useState("");
+  const [signId, setSignId] = useState(null);
+  const [signStatus, setSignStatus] = useState(null);
   const [editingStructured, setEditingStructured] = useState(false);
   const liveContextTimer = useRef(null);
   const meetingEndedRef = useRef(false);
@@ -1487,6 +1492,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       letterTracking: {},
       savedAt: new Date().toISOString(),
       savedBy: currentUser?.name || "HR Manager",
+      signId: signId,
+      signStatus: signStatus,
     };
     const existing = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
     if(existing) {
@@ -2262,6 +2269,17 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
                       <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
+                      {signId&&(
+                        <button onClick={async()=>{
+                          const r=await fetch("/api/signing?signId="+signId);
+                          const d=await r.json();
+                          setSignStatus(d.status);
+                          if(d.status==="signed") alert("✓ Signed by employee on "+new Date(d.signed_at).toLocaleDateString("en-GB"));
+                          else alert("Still awaiting signature from employee.");
+                        }} style={{background:"none",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 12px",fontSize:12,color:"#888",cursor:"pointer"}}>
+                          {signStatus==="signed"?"✓ Signed":"Check signature status"}
+                        </button>
+                      )}
                       <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(reviewOutput)}>Copy</Btn>
                     </div>
                   </>
@@ -2644,6 +2662,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     </div>
                   </div>
                   <div style={{display:"flex",gap:6}}>
+                    {m.signId&&<Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:m.signStatus==="signed"?"#4CAF50":"#888"}} onClick={async()=>{const r=await fetch("/api/signing?signId="+m.signId);const d=await r.json();if(d.status){saveCase({...c,meetings:c.meetings.map(x=>x.id===m.id?{...x,signStatus:d.status}:x)});if(d.status==="signed")alert("✓ Signed on "+new Date(d.signed_at).toLocaleDateString("en-GB"));else alert("Still awaiting signature.");}}}>{m.signStatus==="signed"?"✓ Signed":"Check signature"}</Btn>}
                     <Btn variant="secondary" onClick={()=>{setViewMeeting({...m,employeeName:c.employeeName,caseId:c.id});setViewCaseId(c.id);}} style={{fontSize:11,padding:"4px 12px"}}>View</Btn>
                     <Btn variant="danger" onClick={()=>{if(window.confirm("Delete?"))saveCases(cases.map(x=>x.id===c.id?{...x,meetings:x.meetings.filter(mm=>mm.id!==m.id)}:x).filter(x=>x.meetings.length>0));}} style={{fontSize:11,padding:"4px 10px"}}>✕</Btn>
                   </div>
