@@ -222,12 +222,18 @@ function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localSt
 //  UI PRIMITIVES
 // ─────────────────────────────────────────────
 function CompassLogo({ size = 36 }) {
-  const s = size;
   return (
-    <svg width={s} height={s} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
-      <circle cx="50" cy="50" r="44" stroke="#7C5CFC" strokeWidth="9" fill="none" />
-      <ellipse cx="50" cy="50" rx="8" ry="30" transform="rotate(-40 50 50)" fill="#7C5CFC" />
-      <circle cx="50" cy="50" r="5.5" fill="#0D0D0F" />
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
+      <circle cx="50" cy="50" r="47" stroke="#7C5CFC" strokeWidth="1.5" fill="none"/>
+      <circle cx="50" cy="50" r="38" stroke="#7C5CFC" strokeWidth="0.5" opacity="0.3" fill="none"/>
+      <line x1="50" y1="8" x2="50" y2="92" stroke="#7C5CFC" strokeWidth="0.5" opacity="0.2"/>
+      <line x1="8" y1="50" x2="92" y2="50" stroke="#7C5CFC" strokeWidth="0.5" opacity="0.2"/>
+      <polygon points="50,10 54,44 50,50 46,44" fill="#7C5CFC"/>
+      <polygon points="50,90 54,56 50,50 46,56" fill="#7C5CFC" opacity="0.25"/>
+      <polygon points="10,50 44,46 50,50 44,54" fill="#7C5CFC" opacity="0.25"/>
+      <polygon points="90,50 56,46 50,50 56,54" fill="#7C5CFC" opacity="0.5"/>
+      <circle cx="50" cy="50" r="4" fill="#7C5CFC"/>
+      <circle cx="50" cy="50" r="2" fill="#0D0D0F"/>
     </svg>
   );
 }
@@ -2181,9 +2187,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             {(liveContext||liveContextLoading)&&(
               <div style={{width:240,borderLeft:"1px solid #1C1C22",padding:"20px 14px",overflowY:"auto",background:"#080808",display:"flex",flexDirection:"column",gap:12,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:20,height:20,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <span style={{color:"#fff",fontSize:9,fontWeight:700}}>C</span>
-                  </div>
+                  <div style={{flexShrink:0}}><CompassLogo size={20}/></div>
                   <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Live context</div>
                 </div>
                 {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Playfair Display,Georgia,serif"}}>{liveContext}</div>}
