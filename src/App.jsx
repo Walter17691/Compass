@@ -1801,7 +1801,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         <div style={{maxWidth:1440,margin:"0 auto",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <button onClick={reset} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",padding:0,flexShrink:0}}>
             <CompassLogo size={32} />
-            <span style={{fontFamily:"Inter,sans-serif",fontSize:20,fontWeight:500,color:"#7C5CFC",letterSpacing:-0.3}}>Compass</span>
+            <span style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:20,fontWeight:500,color:"#7C5CFC",letterSpacing:-0.3}}>Compass</span>
           </button>
 
           {meetingType && (
@@ -1924,8 +1924,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         </div>
                         <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:10,background:m.role==="user"?"#2A2A35":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                           {m.role==="user"
-                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Inter,sans-serif",lineHeight:1.6}}>{m.content}</div>
-                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Inter,sans-serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
+                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Inter,system-ui,sans-serif",lineHeight:1.6}}>{m.content}</div>
+                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Inter,system-ui,sans-serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
                           }
                         </div>
                       </div>
@@ -1955,7 +1955,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   <input value={homeChatInput} onChange={e=>setHomeChatInput(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&(homeChatInput.trim()||homeAttachment)&&!homeChatProcessing){const msg=homeChatInput||"Please review this document and advise me.";setHomeChatInput("");askCompass(msg,homeChatHistory,setHomeChatHistory,setHomeChatProcessing);}}}
                     placeholder={homeAttachment?"Ask about the attached document...":"Ask anything about HR or employment law..."}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Inter,sans-serif",padding:"4px 0"}}/>
+                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Inter,system-ui,sans-serif",padding:"4px 0"}}/>
                   <label style={{cursor:"pointer",color:"#444",fontSize:16,padding:"0 4px",display:"flex",alignItems:"center"}}
                     onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
                     onMouseLeave={e=>e.currentTarget.style.color="#444"}>
@@ -1986,7 +1986,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   </label>
                   {homeChatHistory.length>0&&(
                     <button onClick={()=>setHomeChatHistory([])}
-                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Inter,sans-serif",padding:"4px 8px",borderRadius:4}}
+                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Inter,system-ui,sans-serif",padding:"4px 8px",borderRadius:4}}
                       onMouseEnter={e=>e.currentTarget.style.color="#666"}
                       onMouseLeave={e=>e.currentTarget.style.color="#444"}>
                       Clear
@@ -2186,7 +2186,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   </div>
                   <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Live context</div>
                 </div>
-                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Inter,sans-serif"}}>{liveContext}</div>}
+                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Inter,system-ui,sans-serif"}}>{liveContext}</div>}
                 {liveContextLoading&&<div style={{fontSize:12,color:"#444"}}>Analysing...</div>}
                 <button onClick={()=>setLiveContext(null)} style={{background:"none",border:"none",color:"#333",fontSize:11,cursor:"pointer",textDecoration:"underline",textAlign:"left",marginTop:"auto"}}>Dismiss</button>
               </div>
@@ -2247,7 +2247,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
                         {editingStructured
                           ?<textarea value={topSection} onChange={e=>setReviewOutput(e.target.value+dlgSection+bottomSection)}
-                            style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif",marginBottom:12}}></textarea>
+                            style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,system-ui,sans-serif",marginBottom:12}}></textarea>
                           :<MDRenderer text={topSection.replace("## Meeting Details","").replace("## Meeting Details\n","").trim()}/>
                         }
                         {/* Meeting Dialogue with edit button */}
@@ -2298,7 +2298,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           </div>
                           {editingRecord
                             ?<textarea value={dlgSection.replace("## Meeting Dialogue\n","")} onChange={e=>setReviewOutput(topSection+"## Meeting Dialogue\n"+e.target.value+bottomSection)}
-                              style={{width:"100%",minHeight:200,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif"}}></textarea>
+                              style={{width:"100%",minHeight:200,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,system-ui,sans-serif"}}></textarea>
                             :<MDRenderer text={dlgSection.replace("## Meeting Dialogue\n","")}/>
                           }
                         </>)}
@@ -2359,7 +2359,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
                       </div>
-                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
+                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,system-ui,sans-serif",flex:1}}>{riskScore.summary}</div>
                     </div>
                   );
                 })()}
@@ -2395,8 +2395,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
                       <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                         {m.role==="user"
-                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
-                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
+                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,system-ui,sans-serif"}}>{m.content}</div>
+                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,system-ui,sans-serif"}}>{m.content}</div>}
                       </div>
                       {m.role==="assistant"&&m.content.length>300&&(
                         <button onClick={()=>{
@@ -2424,7 +2424,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
                     }}}
                     placeholder="Ask Compass about this meeting..."
-                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Inter,sans-serif"}}/>
+                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Inter,system-ui,sans-serif"}}/>
                   {reviewAttachment&&(
                     <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"3px 8px",flexShrink:0}}>
                       <span style={{fontSize:11,color:"#A98FFF",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reviewAttachment.name}</span>
@@ -2563,7 +2563,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
                   {[{l:"Total cases",v:cases.length,c:"#7C5CFC"},{l:"Open cases",v:open.length,c:"#7C5CFC"},{l:"Total meetings",v:allM.length,c:"#D4882A"},{l:"High risk",v:rC.HIGH||0,c:"#E8622A"}].map(s=>(
                     <Card key={s.l}>
-                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Inter,sans-serif"}}>{s.v}</div>
+                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Inter,system-ui,sans-serif"}}>{s.v}</div>
                       <div style={{fontSize:11,color:"#555",marginTop:3}}>{s.l}</div>
                     </Card>
                   ))}
@@ -2916,7 +2916,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 </div>
                 <div style={{padding:"20px 24px"}}>
                   <div style={{background:"#FDFAF6",borderRadius:8,padding:"24px 28px",marginBottom:16}}>
-                    <pre style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#1C1C22",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
+                    <pre style={{fontFamily:"Inter,system-ui,sans-serif",fontSize:13,color:"#1C1C22",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <Btn onClick={()=>{navigator.clipboard.writeText(selectedTemplate.body);setSelectedTemplate(null);}}>Copy template</Btn>
@@ -2929,7 +2929,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
                 {["ACAS dismissal process","Suspend on full pay?","Grievance — what next?","Investigation timescales"].map((s,i)=>(
                   <button key={i} onClick={()=>askCompass(s,homeChatHistory,setHomeChatHistory,setHomeChatProcessing)}
-                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Inter,sans-serif"}}
+                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Inter,system-ui,sans-serif"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC44";e.currentTarget.style.color="#A98FFF";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
                     {s}
@@ -3687,7 +3687,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     {l:"Avg resolution",v:avgResolution+"d"},
                   ].map(s=>(
                     <Card key={s.l} style={{textAlign:"center",padding:"16px 10px"}}>
-                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif",marginBottom:4}}>{s.v}</div>
+                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,system-ui,sans-serif",marginBottom:4}}>{s.v}</div>
                       <div style={{fontSize:10,color:"#555"}}>{s.l}</div>
                     </Card>
                   ))}
@@ -3797,7 +3797,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       {resolutionTimes.sort((a,b)=>b.days-a.days).map(r=>(
                         <div key={r.name} style={{background:"#0D0D0F",borderRadius:7,padding:"10px 14px",minWidth:140}}>
                           <div style={{fontSize:12,color:"#F2EDE4",fontWeight:500,marginBottom:3}}>{r.name}</div>
-                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#555",fontWeight:400}}>d</span></div>
+                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,system-ui,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#555",fontWeight:400}}>d</span></div>
                           <div style={{fontSize:10,color:"#444"}}>{r.meetings} meetings</div>
                         </div>
                       ))}
@@ -4014,7 +4014,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                                   <div style={{fontSize:11,color:"#555"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
                                 </div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif"}}>{emp.totalScore||0}</div>
+                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,system-ui,sans-serif"}}>{emp.totalScore||0}</div>
                                   <div style={{fontSize:10,color:"#555"}}>/ 5.0</div>
                                   {emp.selected!==null&&<Badge color={emp.selected?"#E8622A":"#7C5CFC"}>{emp.selected?"At risk":"Retained"}</Badge>}
                                 </div>
