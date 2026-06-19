@@ -518,6 +518,7 @@ export default function Compass() {
         participants,
         transcript: transcript.filter(u=>!u.pending),
         record: reviewOutput,
+      signDocument: (()=>{const s=reviewOutput.indexOf("## Meeting Details");const e=reviewOutput.indexOf("\n## Key Points");return s>-1?reviewOutput.slice(s,e>-1?e:undefined):reviewOutput;})(),
         letterOutput,
         riskScore,
         nextSteps,
@@ -543,7 +544,7 @@ export default function Compass() {
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
         signId,
-        document: reviewOutput,
+        document: (()=>{const s=reviewOutput.indexOf("## Meeting Details");const e=reviewOutput.indexOf("\n## Key Points");return s>-1?reviewOutput.slice(s,e>-1?e:undefined):reviewOutput;})(),
         employeeName: caseInfo.employee||"Employee",
         managerName: caseInfo.manager||"Manager",
         meetingType: meetingType?.label||"Meeting",
@@ -1513,6 +1514,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       participants,
       transcript: transcript.filter(u=>!u.pending),
       record: reviewOutput,
+      signDocument: (()=>{const s=reviewOutput.indexOf("## Meeting Details");const e=reviewOutput.indexOf("\n## Key Points");return s>-1?reviewOutput.slice(s,e>-1?e:undefined):reviewOutput;})(),
       letterOutput,
       riskScore,
       nextSteps,
@@ -2302,8 +2304,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           const r=await fetch("/api/signing?signId="+signId);
                           const d=await r.json();
                           setSignStatus(d.status);
-                          if(d.status==="signed") alert("✓ Signed by employee on "+new Date(d.signed_at).toLocaleDateString("en-GB"));
-                          else alert("Still awaiting signature from employee.");
                         }} style={{background:"none",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 12px",fontSize:12,color:"#888",cursor:"pointer"}}>
                           {signStatus==="signed"?"✓ Signed":"Check signature status"}
                         </button>
@@ -2690,7 +2690,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     </div>
                   </div>
                   <div style={{display:"flex",gap:6}}>
-                    {m.signId&&m.signStatus==="signed"&&<Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#4CAF50"}} onClick={()=>window.open("/sign/"+m.signId,"_blank")}>View signed doc</Btn>}{m.signId&&<Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:m.signStatus==="signed"?"#4CAF50":"#888"}} onClick={async()=>{const r=await fetch("/api/signing?signId="+m.signId);const d=await r.json();if(d.status){saveCases(cases.map(cs=>cs.id===c.id?{...cs,meetings:cs.meetings.map(x=>x.id===m.id?{...x,signStatus:d.status}:x)}:cs));if(d.status==="signed")alert("✓ Signed on "+new Date(d.signed_at).toLocaleDateString("en-GB"));else alert("Still awaiting signature.");}}}>{m.signStatus==="signed"?"✓ Signed":"Check signature"}</Btn>}
+                    {m.signId&&m.signStatus==="signed"&&<Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#4CAF50"}} onClick={()=>window.open("/sign/"+m.signId,"_blank")}>View signed doc</Btn>}{m.signId&&<Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:m.signStatus==="signed"?"#4CAF50":"#888"}} onClick={async()=>{const r=await fetch("/api/signing?signId="+m.signId);const d=await r.json();if(d.status){saveCases(cases.map(cs=>cs.id===c.id?{...cs,meetings:cs.meetings.map(x=>x.id===m.id?{...x,signStatus:d.status}:x)}:cs));}}}>{m.signStatus==="signed"?"✓ Signed":"Check signature"}</Btn>}
                     <Btn variant="secondary" onClick={()=>{setViewMeeting({...m,employeeName:c.employeeName,caseId:c.id});setViewCaseId(c.id);}} style={{fontSize:11,padding:"4px 12px"}}>View</Btn>
                     <Btn variant="danger" onClick={()=>{if(window.confirm("Delete?"))saveCases(cases.map(x=>x.id===c.id?{...x,meetings:x.meetings.filter(mm=>mm.id!==m.id)}:x).filter(x=>x.meetings.length>0));}} style={{fontSize:11,padding:"4px 10px"}}>✕</Btn>
                   </div>
