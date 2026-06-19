@@ -19,10 +19,9 @@
     .btn { background: #7C5CFC; color: white; border: none; border-radius: 8px; padding: 14px 28px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 16px; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-ghost { background: none; border: 1px solid #2A2A35; color: #888; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; }
-    .status { text-align: center; padding: 40px; }
-    .status h2 { font-size: 24px; margin-bottom: 12px; }
+    .btn-download { background: #7C5CFC; border: none; color: white; border-radius: 8px; padding: 12px 24px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 12px; }
+    h2 { font-family: Georgia, serif; font-size: 20px; color: #F2EDE4; margin-bottom: 16px; font-weight: 400; }
     .signed-badge { display: inline-block; background: #0A2A0A; border: 1px solid #2A5A2A; color: #4CAF50; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 16px; }
-    h2 { font-family: 'Playfair Display', Georgia, serif; font-size: 20px; color: #F2EDE4; margin-bottom: 16px; font-weight: 400; }
   </style>
 </head>
 <body>
@@ -35,7 +34,7 @@
   </div>
 
   <div class="container">
-    <div id="loading" class="status"><p style="color:#666">Loading document...</p></div>
+    <div id="loading" style="text-align:center;padding:40px"><p style="color:#666">Loading document...</p></div>
     <div id="content" style="display:none">
       <div class="card">
         <h2 id="meeting-type"></h2>
@@ -55,16 +54,21 @@
       <div id="sign-section" class="card">
         <h2>Your Signature</h2>
         <p style="font-size:13px;color:#666;margin-bottom:16px">By signing below you confirm you have read and received a copy of this meeting record. Your signature does not necessarily indicate agreement with its contents.</p>
-        <canvas id="sig-canvas" width="700" height="160"></canvas>
+        <canvas id="sig-canvas" height="160"></canvas>
         <button class="btn-ghost" onclick="clearSig()">Clear signature</button>
         <button class="btn" id="submit-btn" onclick="submitSignature()">Submit signature</button>
       </div>
 
       <div id="signed-section" style="display:none" class="card">
-        <div class="status">
+        <div style="text-align:center;margin-bottom:24px">
           <div class="signed-badge">✓ Signed</div>
-          <h2>Thank you</h2>
-          <p style="color:#666;font-size:14px">Your signature has been recorded. A copy of the signed document will be sent to you and your manager.</p>
+          <h2 style="margin-top:8px">Document signed successfully</h2>
+          <p style="color:#666;font-size:14px">Signed on <span id="signed-date"></span></p>
+          <button class="btn-download" onclick="downloadSigned()" style="margin-top:16px">⬇ Download signed record</button>
+        </div>
+        <div style="margin-top:16px;padding:16px;background:#141418;border-radius:8px;border:1px solid #2A2A35">
+          <div style="font-size:11px;color:#444;margin-bottom:8px">EMPLOYEE SIGNATURE</div>
+          <img id="sig-image" style="max-width:300px;background:#fff;border-radius:4px;padding:8px"/>
         </div>
       </div>
     </div>
@@ -73,11 +77,12 @@
   <script>
     const signId = window.location.pathname.split('/sign/')[1];
     let sigData = null;
+    let docData = null;
 
-    // Load document
     fetch('/api/signing?signId=' + signId)
       .then(r => r.json())
       .then(data => {
+        docData = data;
         document.getElementById('loading').style.display = 'none';
         document.getElementById('content').style.display = 'block';
         document.getElementById('meeting-type').textContent = data.meeting_type || 'Meeting Record';
@@ -85,11 +90,8 @@
         document.getElementById('meeting-date').textContent = data.meeting_date || '';
         document.getElementById('manager-name').textContent = data.manager_name || '';
         document.getElementById('document-content').textContent = data.document || '';
-
         if (data.status === 'signed') {
-          document.getElementById('sign-section').style.display = 'none';
-          document.getElementById('signed-section').style.display = 'block';
-          document.getElementById('status-badge').innerHTML = '<span style="color:#4CAF50">✓ Signed</span>';
+          showSigned(data);
         } else {
           document.getElementById('status-badge').innerHTML = '<span style="color:#E8622A">Awaiting signature</span>';
           initCanvas();
@@ -99,38 +101,58 @@
         document.getElementById('loading').innerHTML = '<p style="color:#E8622A">Document not found or link has expired.</p>';
       });
 
-    // Signature canvas
+    function showSigned(data) {
+      document.getElementById('sign-section').style.display = 'none';
+      document.getElementById('signed-section').style.display = 'block';
+      document.getElementById('status-badge').innerHTML = '<span style="color:#4CAF50">✓ Signed</span>';
+      const d = data.signed_at ? new Date(data.signed_at).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'}) : '';
+      document.getElementById('signed-date').textContent = d;
+      if (data.signature) document.getElementById('sig-image').src = data.signature;
+    }
+
+    function downloadSigned() {
+      if (!docData) return;
+      const signedDate = docData.signed_at ? new Date(docData.signed_at).toLocaleDateString('en-GB') : '';
+      const content = (docData.document || '') + '\n\n---\nSigned electronically by ' + (docData.employee_name||'Employee') + ' on ' + signedDate + '.';
+      const html = '<html><body><pre style="font-family:Arial;font-size:12pt;line-height:1.6;white-space:pre-wrap;padding:40px">' + content + '</pre></body></html>';
+      const blob = new Blob([html], {type: 'application/msword'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'signed-meeting-record.doc';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     function initCanvas() {
       const canvas = document.getElementById('sig-canvas');
       const ctx = canvas.getContext('2d');
-      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio || 700;
       canvas.height = 160 * window.devicePixelRatio;
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-      ctx.strokeStyle = '#1C1C22';
+      ctx.strokeStyle = '#333';
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
-
       let drawing = false;
-      let hasDrawn = false;
 
-      const getPos = (e) => {
+      const getPos = e => {
         const rect = canvas.getBoundingClientRect();
         const touch = e.touches ? e.touches[0] : e;
         return { x: (touch.clientX - rect.left), y: (touch.clientY - rect.top) };
       };
 
       canvas.addEventListener('mousedown', e => { drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-      canvas.addEventListener('mousemove', e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasDrawn = true; });
-      canvas.addEventListener('mouseup', () => { drawing = false; if (hasDrawn) sigData = canvas.toDataURL(); });
-      canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-      canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasDrawn = true; });
-      canvas.addEventListener('touchend', () => { drawing = false; if (hasDrawn) sigData = canvas.toDataURL(); });
+      canvas.addEventListener('mousemove', e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); sigData = canvas.toDataURL(); });
+      canvas.addEventListener('mouseup', () => drawing = false);
+      canvas.addEventListener('mouseleave', () => drawing = false);
+      canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, {passive:false});
+      canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); sigData = canvas.toDataURL(); }, {passive:false});
+      canvas.addEventListener('touchend', () => drawing = false);
     }
 
     function clearSig() {
       const canvas = document.getElementById('sig-canvas');
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
       sigData = null;
     }
 
@@ -139,7 +161,6 @@
       const btn = document.getElementById('submit-btn');
       btn.disabled = true;
       btn.textContent = 'Submitting...';
-
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,8 +168,10 @@
       })
       .then(r => r.json())
       .then(() => {
-        document.getElementById('sign-section').style.display = 'none';
-        document.getElementById('signed-section').style.display = 'block';
+        docData.signature = sigData;
+        docData.signed_at = new Date().toISOString();
+        docData.status = 'signed';
+        showSigned(docData);
       })
       .catch(() => { btn.disabled = false; btn.textContent = 'Submit signature'; alert('Something went wrong. Please try again.'); });
     }
