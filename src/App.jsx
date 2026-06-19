@@ -2292,10 +2292,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                             :<MDRenderer text={dlgSection.replace("## Meeting Dialogue\n","")}/>
                           }
                         </>)}
-                        {bottomSection&&<MDRenderer text={bottomSection}/>}
-                      </>);
-                    })()}
-                    <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
+                        <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
                       <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
@@ -2310,7 +2307,10 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       )}
                       <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(reviewOutput)}>Copy</Btn>
                     </div>
-                  </>
+                        {bottomSection&&<MDRenderer text={bottomSection}/>}
+                      </>);
+                    })()}
+                                      </>
                 )}
               </Card>
 
