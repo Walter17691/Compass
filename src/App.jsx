@@ -599,6 +599,8 @@ export default function Compass() {
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
   const [showLetterModal, setShowLetterModal] = useState(false);
+  const [showEmailLetter, setShowEmailLetter] = useState(false);
+  const [emailLetterTo, setEmailLetterTo] = useState("");
   const [editingLetter, setEditingLetter] = useState(false);
   const [appealDetected, setAppealDetected] = useState(false);
   const [showLinkCase, setShowLinkCase] = useState(false);
@@ -1750,6 +1752,40 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         </div>
       )}
 
+      {showEmailLetter&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Email letter</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:20}}>The letter will be sent as email body and also available to download as PDF.</p>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Recipient email</label>
+            <input value={emailLetterTo} onChange={e=>setEmailLetterTo(e.target.value)}
+              placeholder="employee@company.com" autoFocus
+              style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",marginBottom:16}}/>
+            <div style={{display:"flex",gap:10}}>
+              <Btn onClick={async()=>{
+                if(!emailLetterTo.includes("@")) return;
+                try {
+                  const r = await fetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
+                    body:JSON.stringify({
+                      to: emailLetterTo,
+                      subject: (meetingType?.label||"Meeting")+" Outcome Letter - "+(caseInfo.employee||"Employee"),
+                      body: letterOutput,
+                      employeeName: caseInfo.employee||"Employee",
+                      meetingType: meetingType?.label||"Meeting",
+                      managerName: caseInfo.manager||"HR Manager",
+                      date: fmtDate(caseInfo.date)||new Date().toLocaleDateString("en-GB")
+                    })});
+                  const d = await r.json();
+                  if(d.success){ alert("Letter sent to "+emailLetterTo); setShowEmailLetter(false); setEmailLetterTo(""); }
+                  else alert("Failed: "+d.error);
+                } catch(e){ alert("Error: "+e.message); }
+              }} disabled={!emailLetterTo.includes("@")} style={{flex:1}}>Send email</Btn>
+              <Btn variant="ghost" onClick={()=>{setShowEmailLetter(false);setEmailLetterTo("");}} style={{flex:1}}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSignModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
@@ -2386,6 +2422,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
                       <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
+                      <Btn onClick={()=>{setEmailLetterTo(caseInfo.email||"");setShowEmailLetter(true);}} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Email letter 📧</Btn>
                       {signId&&(
                         <button onClick={async()=>{
                           const r=await fetch("/api/signing?signId="+signId);
