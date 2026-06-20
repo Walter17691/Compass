@@ -1091,9 +1091,12 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
       const count = activeRedundancy.atRiskEmployees.length;
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         `You are a UK employment law specialist focusing on redundancy. ERA 1996, TULRCA 1992, Equality Act 2010. Be precise and practical. ## headers.`,
@@ -1132,9 +1135,12 @@ Please advise on:
     try {
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         "UK HR professional. Formal, precise, legally compliant. ERA 1996. DD Month YYYY dates.",
@@ -1342,9 +1348,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
@@ -1378,9 +1387,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     console.log("TX:", tx.slice(0,200));
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section. If the transcript contains appeal language (appeal, appealing, original decision, outcome being appealed, grounds of appeal), include "APPEAL_DETECTED" as the very first word of your response.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
@@ -1417,9 +1429,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         `UK employment tribunal outcome predictor. Analyse based on ERA 1996, ACAS Code, case law. Be honest about risks. ## headers.`,
@@ -1441,9 +1456,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         `You are a UK HR specialist facilitating developmental meetings. Write professionally but warmly — this is not disciplinary. Be specific and constructive. Use ## headers.`,
@@ -1493,9 +1511,12 @@ Please produce:
     try {
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         `UK HR professional writing developmental correspondence. Professional but human tone. Not disciplinary. DD Month YYYY dates.`,
@@ -1568,9 +1589,12 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       const prompts = { outcome:`Draft formal ${meetingType?.label} outcome letter.`, invite:`Draft formal invitation to ${meetingType?.label} meeting.`, appeal:`Draft appeal outcome letter for ${meetingType?.label}.` };
       // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
+        setAppealDetected(true);
         setShowLinkCase(true);
+        console.log("showLinkCase set to true");
       }
       await streamClaude(
         `UK HR professional. ACAS Code, ERA 1996. DD Month YYYY dates.${policies.length?" Reference company policies by name.":""}`,
