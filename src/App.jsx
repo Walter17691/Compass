@@ -2850,7 +2850,7 @@ ${m.content}`;
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
                       <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:14,color:"#F2EDE4"}}>{m.type}</span>
                       <span style={{fontSize:11,color:"#555"}}>·</span>
-                      <span style={{fontSize:12,color:"#888"}}>{fmtDate(m.date)}</span>
+                      <span style={{fontSize:12,color:"#888"}}>{m.date&&/^\d{4}-\d{2}-\d{2}$/.test(m.date)?m.date.split("-").reverse().join("/"):m.date}</span>
                       {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={{HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"}[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
                       {m.signId&&<Badge color={m.signStatus==="signed"?"#4CAF50":"#888"}>{m.signStatus==="signed"?"✓ Signed":"Awaiting signature"}</Badge>}
                     </div>
