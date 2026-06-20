@@ -1528,7 +1528,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
   // ── Save to case ──
   const saveMeetingToCase = () => {
-    if(!caseInfo.employee.trim()) return;
+    const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const meeting = {
       id: Date.now().toString(),
       type: meetingType?.label||"Meeting",
@@ -1773,7 +1773,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       employeeName: caseInfo.employee||"Employee",
                       meetingType: meetingType?.label||"Meeting",
                       managerName: caseInfo.manager||"HR Manager",
-                      date: fmtDate(caseInfo.date)||new Date().toLocaleDateString("en-GB")
+                      date: (caseInfo.date&&/^\d{4}-\d{2}-\d{2}$/.test(caseInfo.date)?caseInfo.date.split("-").reverse().join("/"):caseInfo.date)||new Date().toLocaleDateString("en-GB")
                     })});
                   const d = await r.json();
                   if(d.success){ alert("Letter sent to "+emailLetterTo); setShowEmailLetter(false); setEmailLetterTo(""); }
@@ -2421,8 +2421,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         </>)}
                         <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
-                      <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
-                      <Btn onClick={()=>{setEmailLetterTo(caseInfo.email||"");setShowEmailLetter(true);}} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Email letter 📧</Btn>
                       {signId&&(
                         <button onClick={async()=>{
                           const r=await fetch("/api/signing?signId="+signId);
