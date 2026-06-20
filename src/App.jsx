@@ -2594,6 +2594,33 @@ Keep responses concise and friendly. No bullet points in questions.`,
                           Download as Word
                         </button>
                       )}
+                      {m.role==="assistant"&&m.content.includes("##")&&(
+                        <button onClick={()=>{
+                          if(window.confirm("Apply this response to the meeting record?")){
+                            setReviewOutput(r=>{
+                              const sections = m.content.match(/## [^
+]+[\s\S]*?(?=## |$)/g)||[];
+                              let updated = r;
+                              sections.forEach(section=>{
+                                const header = section.match(/## ([^
+]+)/)?.[1];
+                                if(header){
+                                  const re = new RegExp("## "+header+"[\s\S]*?(?=## |$)");
+                                  if(re.test(updated)) updated = updated.replace(re, section.trim()+"
+
+");
+                                  else updated = updated + "
+
+" + section.trim();
+                                }
+                              });
+                              return updated.trim();
+                            });
+                          }
+                        }} style={{marginTop:4,background:"none",border:"1px solid #2A5A2A",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#4CAF50",cursor:"pointer"}}>
+                          Apply to record
+                        </button>
+                      )}
                     </div>
                   ))}
                   {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
