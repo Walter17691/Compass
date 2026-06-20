@@ -613,7 +613,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         const mapped = data.map(row => ({
           id: row.id,
           employeeName: row.employee_name,
-          email: row.email || "",
+          email: row.employee_email || row.email || "",
           meetings: row.meetings || [],
           assignedTo: row.assigned_to,
           createdBy: row.created_by,
@@ -631,7 +631,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         id: caseObj.id,
         org_id: org.id,
         employee_name: caseObj.employeeName,
-        email: caseObj.email || "",
+        employee_email: caseObj.email || "",
         meetings: caseObj.meetings || [],
         assigned_to: user?.id,
         created_by: user?.id,
