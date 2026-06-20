@@ -544,7 +544,7 @@ export default function Compass() {
       if(existing) {
         saveCases(cases.map(c=>c.employeeName===caseInfo.employee.trim()?{...c,meetings:[...(c.meetings||[]),meeting]}:c));
       } else {
-        saveCases([...cases,{id:Date.now().toString(),employeeName:caseInfo.employee.trim(),meetings:[meeting]}]);
+        saveCases([...cases,{id:Date.now().toString(),employeeName:caseInfo.employee.trim(),email:caseInfo.email||"",meetings:[meeting]}]);
       }
     }
     const appUrl = window.location.origin;
@@ -2287,6 +2287,10 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                                 Update initials
                               </button>
                             </div>
+                            <input value={caseInfo.email||""}
+                              onChange={e=>setCaseInfo(p=>({...p,email:e.target.value}))}
+                              placeholder="Employee email (for signature requests)"
+                              style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4",marginTop:8,boxSizing:"border-box"}}/>
                           </div>
                           <div style={{display:"flex",justifyContent:"center",alignItems:"center",margin:"16px 0 6px",position:"relative"}}>
                             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
@@ -2304,7 +2308,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
-                      <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
+                      <Btn onClick={()=>{setShowSignModal(true);setSignEmail(caseInfo.email||"");}} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
                       {signId&&(
                         <button onClick={async()=>{
                           const r=await fetch("/api/signing?signId="+signId);
