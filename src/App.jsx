@@ -617,14 +617,7 @@ export default function Compass() {
   const [showLinkCase, setShowLinkCase] = useState(false);
   const appealDetectedRef = useRef(false);
 
-  useEffect(()=>{
-    if(!aiProcessing && reviewOutput && !appealDetectedRef.current && screen===SCREENS.REVIEW){
-      if(reviewOutput.toLowerCase().includes("appeal") || reviewOutput.toLowerCase().includes("original decision") || reviewOutput.toLowerCase().includes("grounds of appeal")){
-        appealDetectedRef.current = true;
-        setShowLinkCase(true);
-      }
-    }
-  }, [aiProcessing]);
+
   const [prepChatHistory, setPrepChatHistory] = useState([]);
   const [prepChatInput, setPrepChatInput] = useState("");
   const [prepChatProcessing, setPrepChatProcessing] = useState(false);
@@ -1374,6 +1367,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAiProcessing(false);
     // Auto risk score
     runRiskScore();
+    // Appeal detection - run once after review is complete
+    setTimeout(()=>{
+      if(!appealDetectedRef.current){
+        const text = document.body.innerText.toLowerCase();
+        // Check transcript for appeal language
+        const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+        const allNoteText = allNotes.map(u=>u.text).join(" ").toLowerCase();
+        if(appealWords.some(w=>allNoteText.includes(w))){
+          appealDetectedRef.current = true;
+          setShowLinkCase(true);
+        }
+      }
+    }, 500);
   };
 
   const runRiskScore = async () => {
