@@ -9,12 +9,12 @@ const TEXT = "#F2EDE4"
 
 function CompassLogo({ size=40 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-      <circle cx="32" cy="32" r="28" stroke={V} strokeWidth="4"/>
-      <line x1="32" y1="8" x2="32" y2="56" stroke={V} strokeWidth="2" opacity="0.3"/>
-      <line x1="8" y1="32" x2="56" y2="32" stroke={V} strokeWidth="2" opacity="0.3"/>
-      <polygon points="32,12 36,32 32,36 28,32" fill={V}/>
-      <polygon points="32,52 36,32 32,28 28,32" fill="#444"/>
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="45" stroke={V} strokeWidth="3" fill="none"/>
+      <polygon points="50,14 54,50 50,50 46,50" transform="rotate(40 50 50)" fill={V}/>
+      <polygon points="50,86 54,50 50,50 46,50" transform="rotate(40 50 50)" fill={V} opacity="0.2"/>
+      <circle cx="50" cy="50" r="4" fill="#0D0D0F"/>
+      <circle cx="50" cy="50" r="2" fill={V}/>
     </svg>
   )
 }
