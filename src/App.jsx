@@ -2090,8 +2090,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
           </div>
 
           {/* Input area */}
-          {!prepNotes&&(
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
               <div style={{display:"flex",gap:8}}>
                 <textarea value={prepChatInput} onChange={e=>setPrepChatInput(e.target.value)}
                   onKeyDown={async e=>{
@@ -2105,11 +2104,10 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       try {
                         const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
                           body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,stream:false,
-                            system:`You are Compass, a UK HR preparation assistant. You are gathering information to build a meeting prep pack. 
-Ask follow-up questions conversationally to gather: employee name, meeting type, date, chair name, background/allegations, any previous warnings.
-Once you have enough information (at least employee name, meeting type, and background), end your message with exactly: READY_TO_GENERATE
-Do not generate the pack yet - just confirm you have everything and say READY_TO_GENERATE.
-Keep responses concise and friendly. No bullet points in questions.`,
+                            system:`You are Compass, a UK HR preparation assistant gathering information to build a meeting prep pack.
+Have a natural conversation to collect ALL of these before generating: employee full name, meeting type (investigation/disciplinary/grievance/appeal etc), meeting date, chair name, specific allegations or issues, any previous warnings or relevant history, any mitigating factors known, witnesses or evidence available.
+Ask ONE question at a time. Only add READY_TO_GENERATE to your message when you have collected ALL of the above. Minimum 5 exchanges before considering generating.
+Keep responses concise and conversational. No bullet points in questions.`,
                             messages:newHistory})});
                         const data = await res.json();
                         const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Could you tell me more?";
@@ -2120,7 +2118,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                           setPrepChatProcessing(true);
                           const packRes = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
                             body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
-                              system:"You are a UK HR specialist. Generate a detailed meeting preparation pack based on the conversation. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: Meeting Overview, Key Issues to Address, Questions to Ask, Legal Considerations, Procedural Checklist, Possible Outcomes.",
+                              system:"You are a senior UK HR and employment law specialist with deep knowledge of the Employment Rights Act 1996, Equality Act 2010, ACAS Code of Practice on Disciplinary and Grievance Procedures (2015), and current case law. Generate a detailed, legally accurate meeting preparation pack. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: ## Meeting Overview, ## Legal Framework (specific legislation and ACAS sections that apply), ## Key Issues to Address, ## Questions to Ask the Employee, ## Procedural Checklist (what must be done to ensure fairness), ## Evidence to Review, ## Possible Outcomes and Next Steps, ## Risks and Vulnerabilities. Be specific and legally precise - not generic.",
                               messages:[...newHistory,{role:"assistant",content:cleanReply},{role:"user",content:"Please now generate the full prep pack based on everything I have told you."}]})});
                           const packData = await packRes.json();
                           const pack = (packData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
@@ -2163,7 +2161,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                     if(isReady){
                       const packRes = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
                         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
-                          system:"You are a UK HR specialist. Generate a detailed meeting preparation pack based on the conversation. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: Meeting Overview, Key Issues to Address, Questions to Ask, Legal Considerations, Procedural Checklist, Possible Outcomes.",
+                          system:"You are a senior UK HR and employment law specialist with deep knowledge of the Employment Rights Act 1996, Equality Act 2010, ACAS Code of Practice on Disciplinary and Grievance Procedures (2015), and current case law. Generate a detailed, legally accurate meeting preparation pack. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: ## Meeting Overview, ## Legal Framework (specific legislation and ACAS sections that apply), ## Key Issues to Address, ## Questions to Ask the Employee, ## Procedural Checklist (what must be done to ensure fairness), ## Evidence to Review, ## Possible Outcomes and Next Steps, ## Risks and Vulnerabilities. Be specific and legally precise - not generic.",
                           messages:[...newHistory,{role:"assistant",content:cleanReply},{role:"user",content:"Please now generate the full prep pack based on everything I have told you."}]})});
                       const packData = await packRes.json();
                       const pack = (packData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
@@ -2187,7 +2185,6 @@ Keep responses concise and friendly. No bullet points in questions.`,
                   style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer"}}>Skip and start meeting →</button>
               </div>
             </div>
-          )}
         </div>
       )}
 
