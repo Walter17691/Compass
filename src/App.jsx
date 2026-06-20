@@ -613,6 +613,9 @@ export default function Compass() {
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
+  const [prepChatHistory, setPrepChatHistory] = useState([]);
+  const [prepChatInput, setPrepChatInput] = useState("");
+  const [prepChatProcessing, setPrepChatProcessing] = useState(false);
   const [signEmail, setSignEmail] = useState("");
   const [signId, setSignId] = useState(null);
   const [signStatus, setSignStatus] = useState(null);
@@ -2037,108 +2040,152 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
             {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <div style={{maxWidth:560,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
-          <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
-          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:30,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
-          <p style={{fontSize:14,color:"#555",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
-
-          <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#E8622A"}}>*</span></label>
-            <select value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
-              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#F2EDE4":"#555",boxSizing:"border-box"}}>
-              <option value="" disabled>Select meeting type...</option>
-              <option disabled style={{color:"#555"}}>── ER Meetings ──</option>
-              {MEETING_TYPES.filter(t=>t.mode==="er").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-              <option disabled style={{color:"#555"}}>── Appeals ──</option>
-              {MEETING_TYPES.filter(t=>t.group==="appeal").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-              <option disabled style={{color:"#555"}}>── Development ──</option>
-              {MEETING_TYPES.filter(t=>t.group==="dev").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+        <div style={{maxWidth:600,margin:"0 auto",padding:"60px 20px",display:"flex",flexDirection:"column",height:"100vh",boxSizing:"border-box"}}>
+          <div style={{textAlign:"center",marginBottom:32}}>
+            <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:8}}>Prepare first</div>
+            <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Meeting Preparation</h1>
+            <p style={{fontSize:13,color:"#555",margin:0}}>Tell Compass about the meeting and it will build a prep pack for you.</p>
           </div>
 
-          <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#E8622A"}}>*</span></label>
-            <input autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
-              onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
-              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
-          </div>
-
-          <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
-            <DateInput value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
-          </div>
-
-          <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
-            <input placeholder="Chair / HR manager name" value={caseInfo.manager}
-              onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
-              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
-          </div>
-
-          <div style={{textAlign:"left",marginBottom:32}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#555",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
-            <textarea value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
-              placeholder="Previous warnings, allegations, relevant history, reasonable adjustments..."
-              rows={4} style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
-          </div>
-
-          <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
-            <Btn onClick={handlePrepare} disabled={aiProcessing||!caseInfo.employee.trim()||!meetingType}
-              style={{padding:"14px 28px",fontSize:15,background:"#7C5CFC",borderColor:"#E8622A"}}>
-              {aiProcessing?"Building...":"Generate prep pack"}
-            </Btn>
-            <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{padding:"14px 20px",fontSize:14}}>Cancel</Btn>
-          </div>
-
-          <div style={{textAlign:"left",marginBottom:24}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#555",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></label>
-            {bgDoc?(
-              <div style={{display:"flex",alignItems:"center",gap:10,background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
-                <span style={{fontSize:20}}>&#128196;</span>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,color:"#F2EDE4",fontWeight:500}}>{bgDoc.name}</div>
-                  <div style={{fontSize:11,color:"#555"}}>{bgDoc.text.length} characters extracted</div>
+          {/* Chat messages */}
+          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12,marginBottom:16,paddingRight:4}}>
+            {prepChatHistory.length===0&&(
+              <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:"16px 20px",alignSelf:"flex-start",maxWidth:"85%"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <CompassLogo size={20}/>
+                  <span style={{fontSize:12,fontWeight:600,color:"#7C5CFC"}}>Compass</span>
                 </div>
-                <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#555",fontSize:18,cursor:"pointer"}}>&#10005;</button>
+                <div style={{fontSize:13,color:"#C4BDAF",lineHeight:1.8}}>Hello! I'll help you prepare for your meeting. To get started, can you tell me:<br/><br/>
+                  1. Who is the employee?<br/>
+                  2. What type of meeting is this?<br/>
+                  3. What is it about?
+                </div>
               </div>
-            ):(
-              <label style={{display:"block",background:"#1C1C22",border:"1px dashed #2A2A35",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
-                onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
-                <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
-                  const file = e.target.files[0];
-                  if(!file) return;
-                  const name = file.name;
-                  if(name.endsWith(".txt")) {
-                    const text = await file.text();
-                    setBgDoc({name, text: text.slice(0,8000)});
-                  } else if(name.endsWith(".pdf")) {
-                    const arr = await file.arrayBuffer();
-                    const bytes = new Uint8Array(arr);
-                    const str = new TextDecoder("utf-8").decode(bytes);
-                    const text = str.split("").filter(ch=>ch.charCodeAt(0)>31).join("").replace(/  +/g," ").trim().slice(0,8000);
-                    setBgDoc({name, text});
-                  } else {
-                    const text = await file.text();
-                    setBgDoc({name, text: text.slice(0,8000)});
-                  }
-                }}/>
-                <div style={{fontSize:13,color:"#666",marginBottom:4}}>Click to upload</div>
-                <div style={{fontSize:11,color:"#444"}}>PDF, Word or text file</div>
-              </label>
+            )}
+            {prepChatHistory.map((m,i)=>(
+              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
+                <div style={{maxWidth:"85%",padding:"12px 16px",borderRadius:12,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
+                  {m.role==="assistant"&&(
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <CompassLogo size={16}/>
+                      <span style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Compass</span>
+                    </div>
+                  )}
+                  <div style={{fontSize:13,color:m.role==="user"?"#fff":"#C4BDAF",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{m.content}</div>
+                </div>
+              </div>
+            ))}
+            {prepChatProcessing&&(
+              <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:"12px 16px",alignSelf:"flex-start"}}>
+                <span style={{color:"#7C5CFC",fontSize:16}}>●</span>
+              </div>
+            )}
+            {prepNotes&&(
+              <div style={{background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:12,padding:"16px 20px",alignSelf:"flex-start",maxWidth:"100%"}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep Pack Ready</div>
+                <MDRenderer text={prepNotes}/>
+                <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting →</Btn>
+              </div>
             )}
           </div>
 
-          <button onClick={()=>setScreen(SCREENS.RECORD)}
-            style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
-            Skip prep and start meeting now
-          </button>
-
-          {prepNotes&&(
-            <div style={{marginTop:28,textAlign:"left",background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:12,padding:20}}>
-              <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
-              <MDRenderer text={prepNotes}/>
-              <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
+          {/* Input area */}
+          {!prepNotes&&(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",gap:8}}>
+                <textarea value={prepChatInput} onChange={e=>setPrepChatInput(e.target.value)}
+                  onKeyDown={async e=>{
+                    if(e.key==="Enter"&&!e.shiftKey&&prepChatInput.trim()&&!prepChatProcessing){
+                      e.preventDefault();
+                      const msg = prepChatInput.trim();
+                      setPrepChatInput("");
+                      const newHistory = [...prepChatHistory, {role:"user",content:msg}];
+                      setPrepChatHistory(newHistory);
+                      setPrepChatProcessing(true);
+                      try {
+                        const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                          body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,stream:false,
+                            system:`You are Compass, a UK HR preparation assistant. You are gathering information to build a meeting prep pack. 
+Ask follow-up questions conversationally to gather: employee name, meeting type, date, chair name, background/allegations, any previous warnings.
+Once you have enough information (at least employee name, meeting type, and background), end your message with exactly: READY_TO_GENERATE
+Do not generate the pack yet - just confirm you have everything and say READY_TO_GENERATE.
+Keep responses concise and friendly. No bullet points in questions.`,
+                            messages:newHistory})});
+                        const data = await res.json();
+                        const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Could you tell me more?";
+                        const isReady = reply.includes("READY_TO_GENERATE");
+                        const cleanReply = reply.replace("READY_TO_GENERATE","").trim();
+                        setPrepChatHistory(h=>[...h,{role:"assistant",content:cleanReply}]);
+                        if(isReady){
+                          setPrepChatProcessing(true);
+                          const packRes = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                            body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
+                              system:"You are a UK HR specialist. Generate a detailed meeting preparation pack based on the conversation. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: Meeting Overview, Key Issues to Address, Questions to Ask, Legal Considerations, Procedural Checklist, Possible Outcomes.",
+                              messages:[...newHistory,{role:"assistant",content:cleanReply},{role:"user",content:"Please now generate the full prep pack based on everything I have told you."}]})});
+                          const packData = await packRes.json();
+                          const pack = (packData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+                          if(pack) {
+                            setPrepNotes(pack);
+                            // Extract info from conversation
+                            const convText = newHistory.map(m=>m.content).join(" ");
+                            const empMatch = convText.match(/([A-Z][a-z]+ [A-Z][a-z]+)/);
+                            if(empMatch) setCaseInfo(p=>({...p,employee:empMatch[1]}));
+                          }
+                        }
+                      } catch(e){}
+                      setPrepChatProcessing(false);
+                    }
+                  }}
+                  placeholder="Type here... (Enter to send, Shift+Enter for new line)"
+                  rows={2}
+                  style={{flex:1,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",fontSize:13,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Playfair Display,Georgia,serif"}}/>
+                <button onClick={async()=>{
+                  if(!prepChatInput.trim()||prepChatProcessing) return;
+                  const msg = prepChatInput.trim();
+                  setPrepChatInput("");
+                  const newHistory = [...prepChatHistory, {role:"user",content:msg}];
+                  setPrepChatHistory(newHistory);
+                  setPrepChatProcessing(true);
+                  try {
+                    const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,stream:false,
+                        system:`You are Compass, a UK HR preparation assistant. You are gathering information to build a meeting prep pack.
+Ask follow-up questions conversationally to gather: employee name, meeting type, date, chair name, background/allegations, any previous warnings.
+Once you have enough information (at least employee name, meeting type, and background), end your message with exactly: READY_TO_GENERATE
+Do not generate the pack yet - just confirm you have everything and say READY_TO_GENERATE.
+Keep responses concise and friendly. No bullet points in questions.`,
+                        messages:newHistory})});
+                    const data = await res.json();
+                    const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Could you tell me more?";
+                    const isReady = reply.includes("READY_TO_GENERATE");
+                    const cleanReply = reply.replace("READY_TO_GENERATE","").trim();
+                    setPrepChatHistory(h=>[...h,{role:"assistant",content:cleanReply}]);
+                    if(isReady){
+                      const packRes = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
+                          system:"You are a UK HR specialist. Generate a detailed meeting preparation pack based on the conversation. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: Meeting Overview, Key Issues to Address, Questions to Ask, Legal Considerations, Procedural Checklist, Possible Outcomes.",
+                          messages:[...newHistory,{role:"assistant",content:cleanReply},{role:"user",content:"Please now generate the full prep pack based on everything I have told you."}]})});
+                      const packData = await packRes.json();
+                      const pack = (packData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+                      if(pack) {
+                        setPrepNotes(pack);
+                        const convText = newHistory.map(m=>m.content).join(" ");
+                        const empMatch = convText.match(/([A-Z][a-z]+ [A-Z][a-z]+)/);
+                        if(empMatch) setCaseInfo(p=>({...p,employee:empMatch[1]}));
+                      }
+                    }
+                  } catch(e){}
+                  setPrepChatProcessing(false);
+                }}
+                disabled={!prepChatInput.trim()||prepChatProcessing}
+                style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"0 16px",color:"#fff",fontSize:18,cursor:"pointer",opacity:(!prepChatInput.trim()||prepChatProcessing)?0.4:1}}>↑</button>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <button onClick={()=>{setPrepChatHistory([]);setPrepChatInput("");setPrepNotes("");setScreen(SCREENS.HOME);}}
+                  style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer"}}>← Back</button>
+                <button onClick={()=>setScreen(SCREENS.RECORD)}
+                  style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer"}}>Skip and start meeting →</button>
+              </div>
             </div>
           )}
         </div>
