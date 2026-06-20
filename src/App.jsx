@@ -615,6 +615,7 @@ export default function Compass() {
   const [showSignModal, setShowSignModal] = useState(false);
   const [appealDetected, setAppealDetected] = useState(false);
   const [showLinkCase, setShowLinkCase] = useState(false);
+  const appealDetectedRef = useRef(false);
   const [prepChatHistory, setPrepChatHistory] = useState([]);
   const [prepChatInput, setPrepChatInput] = useState("");
   const [prepChatProcessing, setPrepChatProcessing] = useState(false);
@@ -1291,6 +1292,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // ── Session management ──
   const startSession = type => {
     meetingEndedRef.current = false;
+    appealDetectedRef.current = false;
+    setAppealDetected(false);
+    setShowLinkCase(false);
     setMeetingStartTime(null);
     setMeetingEndTime(null);
     setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setLetterOutput("");
@@ -1334,6 +1338,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // ── AI: Review + Risk ──
   const handleReview = async () => {
     meetingEndedRef.current = false;
+    appealDetectedRef.current = false;
+    setAppealDetected(false);
+    setShowLinkCase(false);
     const meetingEndTimeVal = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
     setMeetingEndTime(meetingEndTimeVal);
     const extra = inputText.trim() ? [{id:Date.now(),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
@@ -1352,7 +1359,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section. If the transcript contains appeal language (appeal, appealing, original decision, outcome being appealed, grounds of appeal), include "APPEAL_DETECTED" as the very first word of your response.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${fmtDate(caseInfo.date)||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date in dd/mm/yyyy format]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
-        t=>{ if(t.startsWith("APPEAL_DETECTED")&&!appealDetected){setAppealDetected(true);setShowLinkCase(true);} setReviewOutput(t.replace(/^APPEAL_DETECTED\s*/,"").trim()); }
+        t=>{ if(t.startsWith("APPEAL_DETECTED")&&!appealDetectedRef.current){appealDetectedRef.current=true;setAppealDetected(true);setShowLinkCase(true);} setReviewOutput(t.replace(/^APPEAL_DETECTED\s*/,"").trim()); }
       );
     } catch(e) { setAiError(e.message); }
     setAiProcessing(false);
@@ -1692,6 +1699,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""}));
                     setShowLinkCase(false);
                     setAppealDetected(false);
+                    appealDetectedRef.current=false;
                   }} style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:13,color:"#F2EDE4",cursor:"pointer",textAlign:"left",fontFamily:"Playfair Display,Georgia,serif"}}>
                     <div style={{fontWeight:600}}>{cs.employeeName}</div>
                     <div style={{fontSize:11,color:"#555",marginTop:2}}>{cs.meetings.length} meeting{cs.meetings.length!==1?"s":""} · Latest: {cs.meetings[cs.meetings.length-1]?.type}</div>
@@ -1701,7 +1709,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             ):(
               <div style={{fontSize:13,color:"#555",marginBottom:16}}>No existing cases found. This will be saved as a new case.</div>
             )}
-            <Btn variant="ghost" onClick={()=>{setShowLinkCase(false);setAppealDetected(false);}} style={{width:"100%"}}>Skip — save as new case</Btn>
+            <Btn variant="ghost" onClick={()=>{setShowLinkCase(false);setAppealDetected(false);appealDetectedRef.current=false;setScreen(SCREENS.REVIEW);}} style={{width:"100%"}}>Skip — save as new case</Btn>
           </div>
         </div>
       )}
