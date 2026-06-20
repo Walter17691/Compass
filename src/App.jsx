@@ -598,6 +598,7 @@ export default function Compass() {
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
+  const [showLetterModal, setShowLetterModal] = useState(false);
   const [appealDetected, setAppealDetected] = useState(false);
   const [showLinkCase, setShowLinkCase] = useState(false);
   const appealDetectedRef = useRef(false);
@@ -1722,6 +1723,28 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         </div>
       )}
 
+      {showLetterModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:24}}>How would you like to create the outcome letter?</p>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <button onClick={()=>{setShowLetterModal(false);handleLetter("outcome");}}
+                style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
+                <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
+                <div style={{fontSize:12,color:"#A98FFF"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
+              </button>
+              <button onClick={()=>{setShowLetterModal(false);setScreen(SCREENS.TEMPLATES);}}
+                style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
+                <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>Use a template</div>
+                <div style={{fontSize:12,color:"#555"}}>Pick from your uploaded templates and Compass will populate it with meeting details</div>
+              </button>
+            </div>
+            <Btn variant="ghost" onClick={()=>setShowLetterModal(false)} style={{width:"100%",marginTop:16}}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+
       {showSignModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
@@ -2356,7 +2379,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           }
                         </>)}
                         <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
-                      <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
+                      <Btn onClick={()=>setShowLetterModal(true)}>Draft outcome letter →</Btn>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
                       <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
                       {signId&&(
