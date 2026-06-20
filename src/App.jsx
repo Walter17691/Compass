@@ -2607,16 +2607,30 @@ Keep responses concise and friendly. No bullet points in questions.`,
                       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
                         .then(r=>r.json()).then(d=>{
                           const raw=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";
-                          // Parse update tags
+                          console.log("CHAT RESPONSE RAW:", raw.slice(0,300));
                           let reply = raw;
-                          const recordMatch = raw.match(/UPDATE_RECORD:([\s\S]*?)(?=UPDATE_RISK:|UPDATE_PREDICTION:|$)/);
-                          const riskMatch = raw.match(/UPDATE_RISK:\s*([A-Z]+)\|([^
-]+)/);
-                          const predMatch = raw.match(/UPDATE_PREDICTION:([\s\S]*?)(?=UPDATE_RECORD:|UPDATE_RISK:|$)/);
-                          if(recordMatch) { setReviewOutput(recordMatch[1].trim()); reply = reply.replace(/UPDATE_RECORD:[\s\S]*?(?=UPDATE_RISK:|UPDATE_PREDICTION:|$)/, ""); }
-                          if(riskMatch) { setRiskScore({rating:riskMatch[1].trim(), summary:riskMatch[2].trim()}); reply = reply.replace(/UPDATE_RISK:[^
-]+/, ""); }
-                          if(predMatch) { setPrediction(predMatch[1].trim()); reply = reply.replace(/UPDATE_PREDICTION:[\s\S]*/, ""); }
+                          const recTag = "UPDATE_RECORD:";
+                          const riskTag = "UPDATE_RISK:";
+                          const predTag = "UPDATE_PREDICTION:";
+                          if(raw.includes(recTag)){
+                            const start = raw.indexOf(recTag)+recTag.length;
+                            const end = raw.indexOf("UPDATE_",start+1)>-1?raw.indexOf("UPDATE_",start+1):raw.length;
+                            setReviewOutput(raw.slice(start,end).trim());
+                            reply = reply.slice(0,raw.indexOf(recTag)).trim();
+                          }
+                          if(raw.includes(riskTag)){
+                            const start = raw.indexOf(riskTag)+riskTag.length;
+                            const end = raw.indexOf("\n",start)>-1?raw.indexOf("\n",start):raw.length;
+                            const parts = raw.slice(start,end).trim().split("|");
+                            if(parts.length>=2) setRiskScore({rating:parts[0].trim(),summary:parts[1].trim()});
+                            reply = reply.replace(raw.slice(raw.indexOf(riskTag),end),"").trim();
+                          }
+                          if(raw.includes(predTag)){
+                            const start = raw.indexOf(predTag)+predTag.length;
+                            const end = raw.indexOf("UPDATE_",start+1)>-1?raw.indexOf("UPDATE_",start+1):raw.length;
+                            setPrediction(raw.slice(start,end).trim());
+                            reply = reply.replace(raw.slice(raw.indexOf(predTag),end),"").trim();
+                          }
                           reply = reply.trim();
                           setChatHistory(h=>[...h,{role:"assistant",content:reply}]);
                           setChatProcessing(false);
