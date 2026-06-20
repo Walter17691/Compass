@@ -474,7 +474,7 @@ export default function Compass() {
   const [searchResults, setSearchResults] = useState([]);
 
   // ── Multi-user profiles ──
-  const [currentUser, setCurrentUser] = useState(ls("compass_user", null)); // {name, role, email}
+  const [currentUser, setCurrentUser] = useState(member ? {...member, email: user?.email} : ls("compass_user", null));
   const [showUserSwitch, setShowUserSwitch] = useState(false);
   const [users, setUsers] = useState(ls("compass_users", []));
 
@@ -599,6 +599,56 @@ export default function Compass() {
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // ── Supabase case sync ──
+  const loadCasesFromDB = async () => {
+    if(!org?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('org_id', org.id)
+        .order('created_at', { ascending: false });
+      if(!error && data) {
+        const mapped = data.map(row => ({
+          id: row.id,
+          employeeName: row.employee_name,
+          email: row.email || "",
+          meetings: row.meetings || [],
+          assignedTo: row.assigned_to,
+          createdBy: row.created_by,
+          createdAt: row.created_at,
+        }));
+        setCases(mapped);
+      }
+    } catch(e) { console.error("Load cases error:", e); }
+  };
+
+  const saveCaseToDB = async (caseObj) => {
+    if(!org?.id) return;
+    try {
+      await supabase.from('cases').upsert({
+        id: caseObj.id,
+        org_id: org.id,
+        employee_name: caseObj.employeeName,
+        email: caseObj.email || "",
+        meetings: caseObj.meetings || [],
+        assigned_to: user?.id,
+        created_by: user?.id,
+        updated_at: new Date().toISOString(),
+      });
+    } catch(e) { console.error("Save case error:", e); }
+  };
+
+  const deleteCaseFromDB = async (caseId) => {
+    if(!org?.id) return;
+    try {
+      await supabase.from('cases').delete().eq('id', caseId);
+    } catch(e) {}
+  };
+
+  useEffect(() => { if(org?.id) loadCasesFromDB(); }, [org?.id]);
+
+
   useEffect(()=>{
     const handler = ()=>setIsMobile(window.innerWidth<768);
     window.addEventListener("resize", handler);
@@ -777,7 +827,23 @@ export default function Compass() {
   useEffect(() => { if(feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight; }, [transcript]);
 
   // ── Persistence helpers ──
-  const saveCases = u => { setCases(u); lsSet("compass_cases", u); };
+  const saveCases = u => { 
+    setCases(u); 
+    lsSet("compass_cases", u);
+    // Sync changed cases to DB
+    if(org?.id) {
+      u.forEach(cs => {
+        const existing = cases.find(x=>x.id===cs.id);
+        if(!existing || JSON.stringify(existing)!==JSON.stringify(cs)) {
+          saveCaseToDB(cs);
+        }
+      });
+      // Delete removed cases
+      cases.forEach(cs => {
+        if(!u.find(x=>x.id===cs.id)) deleteCaseFromDB(cs.id);
+      });
+    }
+  };
   const saveWhistle = u => { setWhistleReports(u); lsSet("compass_whistle", u); };
   const saveVault = u => { setVaultDocs(u); lsSet("compass_vault", u); };
 
