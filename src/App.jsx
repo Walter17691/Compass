@@ -2596,22 +2596,19 @@ Keep responses concise and friendly. No bullet points in questions.`,
                       )}
                       {m.role==="assistant"&&m.content.includes("##")&&(
                         <button onClick={()=>{
-                          if(window.confirm("Apply this response to the meeting record?")){
+                          if(window.confirm("Apply this to the meeting record?")){
                             setReviewOutput(r=>{
-                              const sections = m.content.match(/## [^
-]+[\s\S]*?(?=## |$)/g)||[];
+                              const parts = m.content.split("## ").filter(Boolean);
                               let updated = r;
-                              sections.forEach(section=>{
-                                const header = section.match(/## ([^
-]+)/)?.[1];
-                                if(header){
-                                  const re = new RegExp("## "+header+"[\s\S]*?(?=## |$)");
-                                  if(re.test(updated)) updated = updated.replace(re, section.trim()+"
-
-");
-                                  else updated = updated + "
-
-" + section.trim();
+                              parts.forEach(part=>{
+                                const header = part.split("\n")[0].trim();
+                                const content = "## "+part.trim();
+                                const startIdx = updated.indexOf("## "+header);
+                                if(startIdx>-1){
+                                  const nextIdx = updated.indexOf("## ",startIdx+3);
+                                  updated = updated.slice(0,startIdx)+content+(nextIdx>-1?updated.slice(nextIdx):"");
+                                } else {
+                                  updated = updated+"\n\n"+content;
                                 }
                               });
                               return updated.trim();
@@ -2621,13 +2618,6 @@ Keep responses concise and friendly. No bullet points in questions.`,
                           Apply to record
                         </button>
                       )}
-                    </div>
-                  ))}
-                  {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
-                </div>
-                <div style={{padding:"10px 12px",borderTop:"1px solid #2A2A35",display:"flex",gap:8,alignItems:"center"}}>
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
-                    onKeyDown={e=>{if(e.key==="Enter"&&chatInput.trim()&&!chatProcessing){
                       const msg=chatInput.trim(); setChatInput("");
                       const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
                       setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
