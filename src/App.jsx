@@ -14,9 +14,6 @@ const MEETING_TYPES = [
   { id:"appraisal",     label:"Appraisal",        tag:"Development", group:"dev" },
   { id:"pip-review",    label:"PIP Review",       tag:"Development", group:"dev" },
   { id:"pdp",           label:"PDP / 1-2-1",      tag:"Development", group:"dev" },
-  { id:"appeal-disciplinary", label:"Disciplinary Appeal", tag:"ACAS S5", group:"appeal", mode:"er" },
-  { id:"appeal-grievance",   label:"Grievance Appeal",    tag:"ACAS S8", group:"appeal", mode:"er" },
-  { id:"appeal-dismissal",  label:"Dismissal Appeal",   tag:"ERA 1996 s.98", group:"appeal", mode:"er" },
 ];
 
 const SCREENS = {
@@ -206,16 +203,6 @@ function addWorkingDays(date, days) {
   return d.toLocaleDateString("en-GB");
 }
 
-function fmtDate(d) {
-  if(!d) return "";
-  // Handle yyyy-mm-dd format from date inputs
-  if(/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    const [y,m,day] = d.split("-");
-    return `${day}/${m}/${y}`;
-  }
-  return d;
-}
-
 function ls(key, fallback) {
   try { const v = typeof localStorage !== 'undefined' && localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; }
 }
@@ -225,13 +212,12 @@ function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localSt
 //  UI PRIMITIVES
 // ─────────────────────────────────────────────
 function CompassLogo({ size = 36 }) {
+  const s = size;
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
-      <circle cx="50" cy="50" r="45" stroke="#7C5CFC" strokeWidth="3" fill="none"/>
-      <polygon points="50,14 54,50 50,50 46,50" transform="rotate(40 50 50)" fill="#7C5CFC"/>
-      <polygon points="50,86 54,50 50,50 46,50" transform="rotate(40 50 50)" fill="#7C5CFC" opacity="0.2"/>
-      <circle cx="50" cy="50" r="4" fill="#0D0D0F"/>
-      <circle cx="50" cy="50" r="2" fill="#7C5CFC"/>
+    <svg width={s} height={s} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
+      <circle cx="50" cy="50" r="44" stroke="#7C5CFC" strokeWidth="9" fill="none" />
+      <ellipse cx="50" cy="50" rx="8" ry="30" transform="rotate(-40 50 50)" fill="#7C5CFC" />
+      <circle cx="50" cy="50" r="5.5" fill="#0D0D0F" />
     </svg>
   );
 }
@@ -270,7 +256,7 @@ function MDRenderer({ text, light }) {
 
 
   return (
-    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontFamily:"Playfair Display,Georgia,serif", lineHeight:1.75, color:base, fontSize:14}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
       {text.split("\n").map((line, i) => {
         if(line.startsWith("## ")) return <h3 key={i} style={{fontFamily:"Playfair Display,Georgia,serif", fontSize:16, fontWeight:600, color:accent, margin:"24px 0 8px"}}>{line.slice(3)}</h3>;
         if(line.startsWith("# ")) return <h2 key={i} style={{fontFamily:"Playfair Display,Georgia,serif", fontSize:20, fontWeight:600, color:base, margin:"8px 0 16px"}}>{line.slice(2)}</h2>;
@@ -316,7 +302,7 @@ function SignaturePad({ onSave, onClose }) {
   };
 
   return (
-    <div style={{fontFamily:"Playfair Display,Georgia,serif",position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <Card style={{width:500,maxWidth:"90vw"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>E-signature</span>
@@ -375,7 +361,7 @@ function AdjustmentForm({ onAdd }) {
   const [adj, setAdj] = useState("");
   const [review, setReview] = useState("");
   return (
-    <div style={{fontFamily:"Playfair Display,Georgia,serif",marginTop:14,borderTop:"1px solid #2A2A35",paddingTop:14}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",marginTop:14,borderTop:"1px solid #2A2A35",paddingTop:14}}>
       <div style={{fontSize:11,color:"#555",marginBottom:8,fontWeight:600}}>Add adjustment</div>
       <input placeholder="e.g. Flexible start time, additional breaks, remote working" value={adj} onChange={e=>setAdj(e.target.value)}
         style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
@@ -547,7 +533,7 @@ export default function Compass() {
       if(existing) {
         saveCases(cases.map(c=>c.employeeName===caseInfo.employee.trim()?{...c,meetings:[...(c.meetings||[]),meeting]}:c));
       } else {
-        saveCases([...cases,{id:Date.now().toString(),employeeName:caseInfo.employee.trim(),email:caseInfo.email||"",meetings:[meeting]}]);
+        saveCases([...cases,{id:Date.now().toString(),employeeName:caseInfo.employee.trim(),meetings:[meeting]}]);
       }
     }
     const appUrl = window.location.origin;
@@ -558,7 +544,6 @@ export default function Compass() {
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
         signId,
-        managerEmail: currentUser?.email||"",
         document: (()=>{const s=reviewOutput.indexOf("## Meeting Details");const e=reviewOutput.indexOf("\n## Key Points");return s>-1?reviewOutput.slice(s,e>-1?e:undefined):reviewOutput;})(),
         employeeName: caseInfo.employee||"Employee",
         managerName: caseInfo.manager||"Manager",
@@ -613,14 +598,6 @@ export default function Compass() {
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
-  const [appealDetected, setAppealDetected] = useState(false);
-  const [showLinkCase, setShowLinkCase] = useState(false);
-  const appealDetectedRef = useRef(false);
-
-
-  const [prepChatHistory, setPrepChatHistory] = useState([]);
-  const [prepChatInput, setPrepChatInput] = useState("");
-  const [prepChatProcessing, setPrepChatProcessing] = useState(false);
   const [signEmail, setSignEmail] = useState("");
   const [signId, setSignId] = useState(null);
   const [signStatus, setSignStatus] = useState(null);
@@ -1089,15 +1066,6 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
     try {
       const type = activeRedundancy.type;
       const count = activeRedundancy.atRiskEmployees.length;
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
         `You are a UK employment law specialist focusing on redundancy. ERA 1996, TULRCA 1992, Equality Act 2010. Be precise and practical. ## headers.`,
         `Redundancy type: ${type} (${count} at-risk employees)
@@ -1133,15 +1101,6 @@ Please advise on:
       "appeal-invite": `Draft an invitation to a redundancy appeal hearing.`,
     };
     try {
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
         "UK HR professional. Formal, precise, legally compliant. ERA 1996. DD Month YYYY dates.",
         `${letters[letterType]||"Draft a redundancy letter."}
@@ -1312,9 +1271,6 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // ── Session management ──
   const startSession = type => {
     meetingEndedRef.current = false;
-    appealDetectedRef.current = false;
-    setAppealDetected(false);
-    setShowLinkCase(false);
     setMeetingStartTime(null);
     setMeetingEndTime(null);
     setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setLetterOutput("");
@@ -1346,15 +1302,6 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!caseInfo.employee.trim()) return;
     setAiError(""); setAiProcessing(true);
     try {
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
         `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
         `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}\n\n## Objectives\n## Agenda\n## Key Questions\n## Legal Checklist\n## Risk Flags`,
@@ -1367,9 +1314,6 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // ── AI: Review + Risk ──
   const handleReview = async () => {
     meetingEndedRef.current = false;
-    appealDetectedRef.current = false;
-    setAppealDetected(false);
-    setShowLinkCase(false);
     const meetingEndTimeVal = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
     setMeetingEndTime(meetingEndTimeVal);
     const extra = inputText.trim() ? [{id:Date.now(),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
@@ -1385,25 +1329,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
     console.log("TX:", tx.slice(0,200));
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
-        `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section. If the transcript contains appeal language (appeal, appealing, original decision, outcome being appealed, grounds of appeal), include "APPEAL_DETECTED" as the very first word of your response.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${fmtDate(caseInfo.date)||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date in dd/mm/yyyy format]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
-        t=>{ setReviewOutput(t.replace(/^APPEAL_DETECTED\s*/,"").trim()); }
+        `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        t=>setReviewOutput(t)
       );
     } catch(e) { setAiError(e.message); }
     setAiProcessing(false);
     // Auto risk score
     runRiskScore();
-
   };
 
   const runRiskScore = async () => {
@@ -1427,15 +1361,6 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setPredProcessing(true);
     try {
       const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
         `UK employment tribunal outcome predictor. Analyse based on ERA 1996, ACAS Code, case law. Be honest about risks. ## headers.`,
         `Meeting: ${meetingType?.label}\nEmployee: ${caseInfo.employee}\nRecord:\n${reviewOutput||tx}\n\n## Likely Outcome if Challenged at Tribunal\n## Key Vulnerabilities\n## Strongest Arguments for Employer\n## Recommended Actions to Strengthen Position\n## Comparable Cases`,
@@ -1454,15 +1379,6 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const manText = s.config?.managerPrompts?.map((q,i)=>q+"\n"+(s.managerAssessment[i]||"Not completed")).join("\n\n") || "";
     const objText = s.objectives?.map(o=>`${o.label} (Rating: ${o.rating}/5): ${o.note||"No notes"}`).join("\n") || "";
     try {
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
         `You are a UK HR specialist facilitating developmental meetings. Write professionally but warmly — this is not disciplinary. Be specific and constructive. Use ## headers.`,
         `${s.type} for ${s.caseInfo.employee||"employee"} (${s.caseInfo.role||"role"})
@@ -1509,15 +1425,6 @@ Please produce:
       "PDP / 1-2-1": `Write a friendly 1-2-1 follow-up note confirming discussion points and agreed actions.`,
     };
     try {
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
         `UK HR professional writing developmental correspondence. Professional but human tone. Not disciplinary. DD Month YYYY dates.`,
         `${letterConfig[s.type]||"Draft a development meeting outcome letter."}
@@ -1587,15 +1494,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
     try {
       const tx = transcript.map(u=>u.speaker+": "+u.text).join("\n");
       const prompts = { outcome:`Draft formal ${meetingType?.label} outcome letter.`, invite:`Draft formal invitation to ${meetingType?.label} meeting.`, appeal:`Draft appeal outcome letter for ${meetingType?.label}.` };
-      // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Appeal check, ref:", appealDetectedRef.current, "match:", appealWords.some(w=>tx.toLowerCase().includes(w)));
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
-        appealDetectedRef.current = true;
-        setAppealDetected(true);
-        setShowLinkCase(true);
-        console.log("showLinkCase set to true");
-      }
       await streamClaude(
         `UK HR professional. ACAS Code, ERA 1996. DD Month YYYY dates.${policies.length?" Reference company policies by name.":""}`,
         `${prompts[t]}\nEmployee: ${caseInfo.employee||"[Name]"}\nDate: ${caseInfo.date||"[Date]"}\nChair: ${caseInfo.manager||"[Manager]"}\nParticipants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A"}${getPolicyCtx()}\n\nMeeting summary:\n${tx||reviewOutput||"No transcript"}\n\nInclude: formal header, findings, decision, right of appeal, timescales, signature block. End with ## Next Steps for HR.`,
@@ -1746,7 +1644,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
   //  RENDER
   // ─────────────────────────────────────────────
   return (
-    <div style={{fontFamily:"Playfair Display,Georgia,serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4"}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:Inter,system-ui,sans-serif;color:#F2EDE4;}
@@ -1760,54 +1658,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         button{cursor:pointer;}
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#0D0D0F;}::-webkit-scrollbar-thumb{background:#2A2A35;border-radius:2px;}
       `}</style>
-
-      {showLinkCase&&appealDetected&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
-            <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Appeal detected</div>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Link to an existing case?</h3>
-            <p style={{fontSize:13,color:"#666",marginBottom:20}}>This looks like an appeal. Would you like to link it to an existing case so the full proceeding is tracked together?</p>
-            {cases.length>0?(
-              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-                {cases.map(cs=>(
-                  <button key={cs.id} onClick={()=>{
-                    // Link appeal meeting to this case
-                    const meeting = {
-                      id: Date.now().toString(),
-                      type: meetingType?.label||"Appeal",
-                      date: caseInfo.date||new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"2-digit",year:"numeric"}),
-                      manager: caseInfo.manager,
-                      participants,
-                      transcript: transcript.filter(u=>!u.pending),
-                      record: reviewOutput,
-                      letterOutput,
-                      riskScore,
-                      nextSteps,
-                      prediction,
-                      letterTracking: {},
-                      savedAt: new Date().toISOString(),
-                      savedBy: currentUser?.name||"HR Manager",
-                      signId, signStatus,
-                    };
-                    saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:[...x.meetings,meeting]}:x));
-                    setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""}));
-                    setShowLinkCase(false);
-                    setAppealDetected(false);
-                    appealDetectedRef.current=false;
-                    alert("Appeal meeting linked to "+cs.employeeName+"'s case.");
-                  }} style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:13,color:"#F2EDE4",cursor:"pointer",textAlign:"left",fontFamily:"Playfair Display,Georgia,serif"}}>
-                    <div style={{fontWeight:600}}>{cs.employeeName}</div>
-                    <div style={{fontSize:11,color:"#555",marginTop:2}}>{cs.meetings.length} meeting{cs.meetings.length!==1?"s":""} · Latest: {cs.meetings[cs.meetings.length-1]?.type}</div>
-                  </button>
-                ))}
-              </div>
-            ):(
-              <div style={{fontSize:13,color:"#555",marginBottom:16}}>No existing cases found. This will be saved as a new case.</div>
-            )}
-            <Btn variant="ghost" onClick={()=>setShowLinkCase(false)} style={{width:"100%"}}>Skip</Btn>
-          </div>
-        </div>
-      )}
 
       {showSignModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -1941,14 +1791,14 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         <div style={{maxWidth:1440,margin:"0 auto",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <button onClick={reset} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",padding:0,flexShrink:0}}>
             <CompassLogo size={32} />
-            <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:20,fontWeight:500,color:"#7C5CFC",letterSpacing:-0.3}}>Compass</span>
+            <span style={{fontFamily:"Inter,sans-serif",fontSize:20,fontWeight:500,color:"#7C5CFC",letterSpacing:-0.3}}>Compass</span>
           </button>
 
           {meetingType && (
             <div style={{display:"flex",alignItems:"center",gap:8,flex:1,justifyContent:"center",flexWrap:"wrap"}}>
               <span style={{fontSize:12,color:"#888"}}>{meetingType.label}</span>
               {caseInfo.employee&&<span style={{background:"#7C5CFC",color:"#fff",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo.employee}</span>}
-              {caseInfo.date&&<span style={{color:"#555",fontSize:11}}>{fmtDate(caseInfo.date)}</span>}
+              {caseInfo.date&&<span style={{color:"#555",fontSize:11}}>{caseInfo.date}</span>}
             </div>
           )}
 
@@ -2064,8 +1914,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         </div>
                         <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:10,background:m.role==="user"?"#2A2A35":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                           {m.role==="user"
-                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Playfair Display,Georgia,serif",lineHeight:1.6}}>{m.content}</div>
-                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Playfair Display,Georgia,serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
+                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Inter,sans-serif",lineHeight:1.6}}>{m.content}</div>
+                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Inter,sans-serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
                           }
                         </div>
                       </div>
@@ -2095,7 +1945,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   <input value={homeChatInput} onChange={e=>setHomeChatInput(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&(homeChatInput.trim()||homeAttachment)&&!homeChatProcessing){const msg=homeChatInput||"Please review this document and advise me.";setHomeChatInput("");askCompass(msg,homeChatHistory,setHomeChatHistory,setHomeChatProcessing);}}}
                     placeholder={homeAttachment?"Ask about the attached document...":"Ask anything about HR or employment law..."}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Playfair Display,Georgia,serif",padding:"4px 0"}}/>
+                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Inter,sans-serif",padding:"4px 0"}}/>
                   <label style={{cursor:"pointer",color:"#444",fontSize:16,padding:"0 4px",display:"flex",alignItems:"center"}}
                     onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
                     onMouseLeave={e=>e.currentTarget.style.color="#444"}>
@@ -2126,7 +1976,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   </label>
                   {homeChatHistory.length>0&&(
                     <button onClick={()=>setHomeChatHistory([])}
-                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Playfair Display,Georgia,serif",padding:"4px 8px",borderRadius:4}}
+                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Inter,sans-serif",padding:"4px 8px",borderRadius:4}}
                       onMouseEnter={e=>e.currentTarget.style.color="#666"}
                       onMouseLeave={e=>e.currentTarget.style.color="#444"}>
                       Clear
@@ -2172,151 +2022,108 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
             {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <div style={{maxWidth:600,margin:"0 auto",padding:"60px 20px",display:"flex",flexDirection:"column",height:"100vh",boxSizing:"border-box"}}>
-          <div style={{textAlign:"center",marginBottom:32}}>
-            <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:8}}>Prepare first</div>
-            <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Meeting Preparation</h1>
-            <p style={{fontSize:13,color:"#555",margin:0}}>Tell Compass about the meeting and it will build a prep pack for you.</p>
+        <div style={{maxWidth:560,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
+          <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
+          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:30,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
+          <p style={{fontSize:14,color:"#555",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#E8622A"}}>*</span></label>
+            <select value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#F2EDE4":"#555",boxSizing:"border-box"}}>
+              <option value="" disabled>Select meeting type...</option>
+              <option disabled style={{color:"#555"}}>── ER Meetings ──</option>
+              {MEETING_TYPES.filter(t=>t.mode==="er").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+              <option disabled style={{color:"#555"}}>── Development ──</option>
+              {MEETING_TYPES.filter(t=>t.group==="dev").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
           </div>
 
-          {/* Chat messages */}
-          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12,marginBottom:16,paddingRight:4}}>
-            {prepChatHistory.length===0&&(
-              <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:"16px 20px",alignSelf:"flex-start",maxWidth:"85%"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <CompassLogo size={20}/>
-                  <span style={{fontSize:12,fontWeight:600,color:"#7C5CFC"}}>Compass</span>
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#E8622A"}}>*</span></label>
+            <input autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
+              onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
+            <DateInput value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+            <input placeholder="Chair / HR manager name" value={caseInfo.manager}
+              onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:32}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#555",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
+            <textarea value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
+              placeholder="Previous warnings, allegations, relevant history, reasonable adjustments..."
+              rows={4} style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
+          </div>
+
+          <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
+            <Btn onClick={handlePrepare} disabled={aiProcessing||!caseInfo.employee.trim()||!meetingType}
+              style={{padding:"14px 28px",fontSize:15,background:"#7C5CFC",borderColor:"#E8622A"}}>
+              {aiProcessing?"Building...":"Generate prep pack"}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{padding:"14px 20px",fontSize:14}}>Cancel</Btn>
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:24}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#555",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></label>
+            {bgDoc?(
+              <div style={{display:"flex",alignItems:"center",gap:10,background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
+                <span style={{fontSize:20}}>&#128196;</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,color:"#F2EDE4",fontWeight:500}}>{bgDoc.name}</div>
+                  <div style={{fontSize:11,color:"#555"}}>{bgDoc.text.length} characters extracted</div>
                 </div>
-                <div style={{fontSize:13,color:"#C4BDAF",lineHeight:1.8}}>Hello! I'll help you prepare for your meeting. To get started, can you tell me:<br/><br/>
-                  1. Who is the employee?<br/>
-                  2. What type of meeting is this?<br/>
-                  3. What is it about?
-                </div>
+                <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#555",fontSize:18,cursor:"pointer"}}>&#10005;</button>
               </div>
-            )}
-            {prepChatHistory.map((m,i)=>(
-              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
-                <div style={{maxWidth:"85%",padding:"12px 16px",borderRadius:12,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
-                  {m.role==="assistant"&&(
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                      <CompassLogo size={16}/>
-                      <span style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Compass</span>
-                    </div>
-                  )}
-                  <div style={{fontSize:13,color:m.role==="user"?"#fff":"#C4BDAF",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{m.content}</div>
-                </div>
-              </div>
-            ))}
-            {prepChatProcessing&&(
-              <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:"12px 16px",alignSelf:"flex-start"}}>
-                <span style={{color:"#7C5CFC",fontSize:16}}>●</span>
-              </div>
-            )}
-            {prepNotes&&(
-              <div style={{background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:12,padding:"16px 20px",alignSelf:"flex-start",maxWidth:"100%"}}>
-                <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep Pack Ready</div>
-                <MDRenderer text={prepNotes}/>
-                <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting →</Btn>
-              </div>
+            ):(
+              <label style={{display:"block",background:"#1C1C22",border:"1px dashed #2A2A35",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
+                onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
+                  const file = e.target.files[0];
+                  if(!file) return;
+                  const name = file.name;
+                  if(name.endsWith(".txt")) {
+                    const text = await file.text();
+                    setBgDoc({name, text: text.slice(0,8000)});
+                  } else if(name.endsWith(".pdf")) {
+                    const arr = await file.arrayBuffer();
+                    const bytes = new Uint8Array(arr);
+                    const str = new TextDecoder("utf-8").decode(bytes);
+                    const text = str.split("").filter(ch=>ch.charCodeAt(0)>31).join("").replace(/  +/g," ").trim().slice(0,8000);
+                    setBgDoc({name, text});
+                  } else {
+                    const text = await file.text();
+                    setBgDoc({name, text: text.slice(0,8000)});
+                  }
+                }}/>
+                <div style={{fontSize:13,color:"#666",marginBottom:4}}>Click to upload</div>
+                <div style={{fontSize:11,color:"#444"}}>PDF, Word or text file</div>
+              </label>
             )}
           </div>
 
-          {/* Input area */}
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{display:"flex",gap:8}}>
-                <textarea value={prepChatInput} onChange={e=>setPrepChatInput(e.target.value)}
-                  onKeyDown={async e=>{
-                    if(e.key==="Enter"&&!e.shiftKey&&prepChatInput.trim()&&!prepChatProcessing){
-                      e.preventDefault();
-                      const msg = prepChatInput.trim();
-                      setPrepChatInput("");
-                      const newHistory = [...prepChatHistory, {role:"user",content:msg}];
-                      setPrepChatHistory(newHistory);
-                      setPrepChatProcessing(true);
-                      try {
-                        const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                          body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,stream:false,
-                            system:`You are Compass, a UK HR preparation assistant gathering information to build a meeting prep pack.
-Have a natural conversation to collect ALL of these before generating: employee full name, meeting type (investigation/disciplinary/grievance/appeal etc), meeting date, chair name, specific allegations or issues, any previous warnings or relevant history, any mitigating factors known, witnesses or evidence available.
-Ask ONE question at a time. Only add READY_TO_GENERATE to your message when you have collected ALL of the above. Minimum 5 exchanges before considering generating.
-Keep responses concise and conversational. No bullet points in questions.`,
-                            messages:newHistory})});
-                        const data = await res.json();
-                        const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Could you tell me more?";
-                        const isReady = reply.includes("READY_TO_GENERATE");
-                        const cleanReply = reply.replace("READY_TO_GENERATE","").trim();
-                        setPrepChatHistory(h=>[...h,{role:"assistant",content:cleanReply}]);
-                        if(isReady){
-                          setPrepChatProcessing(true);
-                          const packRes = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                            body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
-                              system:"You are a senior UK HR and employment law specialist with deep knowledge of the Employment Rights Act 1996, Equality Act 2010, ACAS Code of Practice on Disciplinary and Grievance Procedures (2015), and current case law. Generate a detailed, legally accurate meeting preparation pack. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: ## Meeting Overview, ## Legal Framework (specific legislation and ACAS sections that apply), ## Key Issues to Address, ## Questions to Ask the Employee, ## Procedural Checklist (what must be done to ensure fairness), ## Evidence to Review, ## Possible Outcomes and Next Steps, ## Risks and Vulnerabilities. Be specific and legally precise - not generic.",
-                              messages:[...newHistory,{role:"assistant",content:cleanReply},{role:"user",content:"Please now generate the full prep pack based on everything I have told you."}]})});
-                          const packData = await packRes.json();
-                          const pack = (packData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-                          if(pack) {
-                            setPrepNotes(pack);
-                            // Extract info from conversation
-                            const convText = newHistory.map(m=>m.content).join(" ");
-                            const empMatch = convText.match(/([A-Z][a-z]+ [A-Z][a-z]+)/);
-                            if(empMatch) setCaseInfo(p=>({...p,employee:empMatch[1]}));
-                          }
-                        }
-                      } catch(e){}
-                      setPrepChatProcessing(false);
-                    }
-                  }}
-                  placeholder="Type here... (Enter to send, Shift+Enter for new line)"
-                  rows={2}
-                  style={{flex:1,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",fontSize:13,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Playfair Display,Georgia,serif"}}/>
-                <button onClick={async()=>{
-                  if(!prepChatInput.trim()||prepChatProcessing) return;
-                  const msg = prepChatInput.trim();
-                  setPrepChatInput("");
-                  const newHistory = [...prepChatHistory, {role:"user",content:msg}];
-                  setPrepChatHistory(newHistory);
-                  setPrepChatProcessing(true);
-                  try {
-                    const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,stream:false,
-                        system:`You are Compass, a UK HR preparation assistant. You are gathering information to build a meeting prep pack.
-Ask follow-up questions conversationally to gather: employee name, meeting type, date, chair name, background/allegations, any previous warnings.
-Once you have enough information (at least employee name, meeting type, and background), end your message with exactly: READY_TO_GENERATE
-Do not generate the pack yet - just confirm you have everything and say READY_TO_GENERATE.
-Keep responses concise and friendly. No bullet points in questions.`,
-                        messages:newHistory})});
-                    const data = await res.json();
-                    const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Could you tell me more?";
-                    const isReady = reply.includes("READY_TO_GENERATE");
-                    const cleanReply = reply.replace("READY_TO_GENERATE","").trim();
-                    setPrepChatHistory(h=>[...h,{role:"assistant",content:cleanReply}]);
-                    if(isReady){
-                      const packRes = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
-                          system:"You are a senior UK HR and employment law specialist with deep knowledge of the Employment Rights Act 1996, Equality Act 2010, ACAS Code of Practice on Disciplinary and Grievance Procedures (2015), and current case law. Generate a detailed, legally accurate meeting preparation pack. Use ## for headers, - for bullets. No bold asterisks, no emoji. Include: ## Meeting Overview, ## Legal Framework (specific legislation and ACAS sections that apply), ## Key Issues to Address, ## Questions to Ask the Employee, ## Procedural Checklist (what must be done to ensure fairness), ## Evidence to Review, ## Possible Outcomes and Next Steps, ## Risks and Vulnerabilities. Be specific and legally precise - not generic.",
-                          messages:[...newHistory,{role:"assistant",content:cleanReply},{role:"user",content:"Please now generate the full prep pack based on everything I have told you."}]})});
-                      const packData = await packRes.json();
-                      const pack = (packData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-                      if(pack) {
-                        setPrepNotes(pack);
-                        const convText = newHistory.map(m=>m.content).join(" ");
-                        const empMatch = convText.match(/([A-Z][a-z]+ [A-Z][a-z]+)/);
-                        if(empMatch) setCaseInfo(p=>({...p,employee:empMatch[1]}));
-                      }
-                    }
-                  } catch(e){}
-                  setPrepChatProcessing(false);
-                }}
-                disabled={!prepChatInput.trim()||prepChatProcessing}
-                style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"0 16px",color:"#fff",fontSize:18,cursor:"pointer",opacity:(!prepChatInput.trim()||prepChatProcessing)?0.4:1}}>↑</button>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between"}}>
-                <button onClick={()=>{setPrepChatHistory([]);setPrepChatInput("");setPrepNotes("");setScreen(SCREENS.HOME);}}
-                  style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer"}}>← Back</button>
-                <button onClick={()=>setScreen(SCREENS.RECORD)}
-                  style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer"}}>Skip and start meeting →</button>
-              </div>
+          <button onClick={()=>setScreen(SCREENS.RECORD)}
+            style={{background:"none",border:"none",color:"#555",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
+            Skip prep and start meeting now
+          </button>
+
+          {prepNotes&&(
+            <div style={{marginTop:28,textAlign:"left",background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:12,padding:20}}>
+              <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
+              <MDRenderer text={prepNotes}/>
+              <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
             </div>
+          )}
         </div>
       )}
 
@@ -2345,7 +2152,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
             <textarea
               ref={inputRef}
               value={inputText}
-              style={{flex:1,background:"transparent",border:"none",padding:"32px",fontSize:15,lineHeight:1.9,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Playfair Display,Georgia,serif"}}
+              style={{flex:1,background:"transparent",border:"none",padding:"32px",fontSize:15,lineHeight:1.9,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Inter,system-ui,sans-serif"}}
               onChange={e=>{
                 const val = e.target.value;
                 if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
@@ -2364,10 +2171,12 @@ Keep responses concise and friendly. No bullet points in questions.`,
             {(liveContext||liveContextLoading)&&(
               <div style={{width:240,borderLeft:"1px solid #1C1C22",padding:"20px 14px",overflowY:"auto",background:"#080808",display:"flex",flexDirection:"column",gap:12,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{flexShrink:0}}><CompassLogo size={20}/></div>
+                  <div style={{width:20,height:20,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <span style={{color:"#fff",fontSize:9,fontWeight:700}}>C</span>
+                  </div>
                   <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Live context</div>
                 </div>
-                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Playfair Display,Georgia,serif"}}>{liveContext}</div>}
+                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Inter,sans-serif"}}>{liveContext}</div>}
                 {liveContextLoading&&<div style={{fontSize:12,color:"#444"}}>Analysing...</div>}
                 <button onClick={()=>setLiveContext(null)} style={{background:"none",border:"none",color:"#333",fontSize:11,cursor:"pointer",textDecoration:"underline",textAlign:"left",marginTop:"auto"}}>Dismiss</button>
               </div>
@@ -2428,7 +2237,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
 
                         {editingStructured
                           ?<textarea value={topSection} onChange={e=>setReviewOutput(e.target.value+dlgSection+bottomSection)}
-                            style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Playfair Display,Georgia,serif",marginBottom:12}}></textarea>
+                            style={{width:"100%",minHeight:120,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif",marginBottom:12}}></textarea>
                           :<MDRenderer text={topSection.replace("## Meeting Details","").replace("## Meeting Details\n","").trim()}/>
                         }
                         {/* Meeting Dialogue with edit button */}
@@ -2469,10 +2278,6 @@ Keep responses concise and friendly. No bullet points in questions.`,
                                 Update initials
                               </button>
                             </div>
-                            <input value={caseInfo.email||""}
-                              onChange={e=>setCaseInfo(p=>({...p,email:e.target.value}))}
-                              placeholder="Employee email (for signature requests)"
-                              style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4",marginTop:8,boxSizing:"border-box"}}/>
                           </div>
                           <div style={{display:"flex",justifyContent:"center",alignItems:"center",margin:"16px 0 6px",position:"relative"}}>
                             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
@@ -2483,14 +2288,14 @@ Keep responses concise and friendly. No bullet points in questions.`,
                           </div>
                           {editingRecord
                             ?<textarea value={dlgSection.replace("## Meeting Dialogue\n","")} onChange={e=>setReviewOutput(topSection+"## Meeting Dialogue\n"+e.target.value+bottomSection)}
-                              style={{width:"100%",minHeight:200,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Playfair Display,Georgia,serif"}}></textarea>
+                              style={{width:"100%",minHeight:200,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif"}}></textarea>
                             :<MDRenderer text={dlgSection.replace("## Meeting Dialogue\n","")}/>
                           }
                         </>)}
                         <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn onClick={()=>handleLetter("outcome")}>Draft outcome letter →</Btn>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
-                      <Btn onClick={()=>{setShowSignModal(true);setSignEmail(caseInfo.email||"");}} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
+                      <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
                       {signId&&(
                         <button onClick={async()=>{
                           const r=await fetch("/api/signing?signId="+signId);
@@ -2544,7 +2349,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                       <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
                       </div>
-                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Playfair Display,Georgia,serif",flex:1}}>{riskScore.summary}</div>
+                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
                     </div>
                   );
                 })()}
@@ -2580,8 +2385,8 @@ Keep responses concise and friendly. No bullet points in questions.`,
                     <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
                       <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                         {m.role==="user"
-                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Playfair Display,Georgia,serif"}}>{m.content}</div>
-                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Playfair Display,Georgia,serif"}}>{m.content}</div>}
+                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
+                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
                       </div>
                       {m.role==="assistant"&&m.content.length>300&&(
                         <button onClick={()=>{
@@ -2597,65 +2402,42 @@ Keep responses concise and friendly. No bullet points in questions.`,
                       {m.role==="assistant"&&m.content.includes("##")&&(
                         <button onClick={()=>{
                           if(window.confirm("Apply this to the meeting record?")){
-                            setReviewOutput(r=>{
-                              const parts = m.content.split("## ").filter(Boolean);
-                              let updated = r;
-                              parts.forEach(part=>{
-                                const header = part.split("\n")[0].trim();
-                                const content = "## "+part.trim();
-                                const startIdx = updated.indexOf("## "+header);
-                                if(startIdx>-1){
-                                  const nextIdx = updated.indexOf("## ",startIdx+3);
-                                  updated = updated.slice(0,startIdx)+content+(nextIdx>-1?updated.slice(nextIdx):"");
-                                } else {
-                                  updated = updated+"\n\n"+content;
-                                }
-                              });
-                              return updated.trim();
+                            const parts = m.content.split("## ").filter(Boolean);
+                            let updated = reviewOutput;
+                            parts.forEach(part=>{
+                              const firstLine = part.indexOf("\n");
+                              const header = firstLine>-1?part.slice(0,firstLine).trim():part.trim();
+                              const fullSection = "## "+part.trim();
+                              const startIdx = updated.indexOf("## "+header);
+                              if(startIdx>-1){
+                                const nextIdx = updated.indexOf("## ",startIdx+3);
+                                updated = updated.slice(0,startIdx)+fullSection+(nextIdx>-1?"\n\n"+updated.slice(nextIdx):"");
+                              } else {
+                                updated = updated+"\n\n"+fullSection;
+                              }
                             });
+                            setReviewOutput(updated.trim());
                           }
                         }} style={{marginTop:4,background:"none",border:"1px solid #2A5A2A",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#4CAF50",cursor:"pointer"}}>
                           Apply to record
                         </button>
                       )}
+                    </div>
+                  ))}
+                  {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
+                </div>
+                <div style={{padding:"10px 12px",borderTop:"1px solid #2A2A35",display:"flex",gap:8,alignItems:"center"}}>
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter"&&chatInput.trim()&&!chatProcessing){
                       const msg=chatInput.trim(); setChatInput("");
                       const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
                       setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
                       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
-                        .then(r=>r.json()).then(d=>{
-                          const raw=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";
-                          console.log("CHAT RESPONSE RAW:", raw.slice(0,300));
-                          let reply = raw;
-                          const recTag = "UPDATE_RECORD:";
-                          const riskTag = "UPDATE_RISK:";
-                          const predTag = "UPDATE_PREDICTION:";
-                          if(raw.includes(recTag)){
-                            const start = raw.indexOf(recTag)+recTag.length;
-                            const end = raw.indexOf("UPDATE_",start+1)>-1?raw.indexOf("UPDATE_",start+1):raw.length;
-                            setReviewOutput(raw.slice(start,end).trim());
-                            reply = reply.slice(0,raw.indexOf(recTag)).trim();
-                          }
-                          if(raw.includes(riskTag)){
-                            const start = raw.indexOf(riskTag)+riskTag.length;
-                            const end = raw.indexOf("\n",start)>-1?raw.indexOf("\n",start):raw.length;
-                            const parts = raw.slice(start,end).trim().split("|");
-                            if(parts.length>=2) setRiskScore({rating:parts[0].trim(),summary:parts[1].trim()});
-                            reply = reply.replace(raw.slice(raw.indexOf(riskTag),end),"").trim();
-                          }
-                          if(raw.includes(predTag)){
-                            const start = raw.indexOf(predTag)+predTag.length;
-                            const end = raw.indexOf("UPDATE_",start+1)>-1?raw.indexOf("UPDATE_",start+1):raw.length;
-                            setPrediction(raw.slice(start,end).trim());
-                            reply = reply.replace(raw.slice(raw.indexOf(predTag),end),"").trim();
-                          }
-                          reply = reply.trim();
-                          setChatHistory(h=>[...h,{role:"assistant",content:reply}]);
-                          setChatProcessing(false);
-                        })
+                        .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
                         .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
                     }}}
                     placeholder="Ask Compass about this meeting..."
-                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Playfair Display,Georgia,serif"}}/>
+                    style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Inter,sans-serif"}}/>
                   {reviewAttachment&&(
                     <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"3px 8px",flexShrink:0}}>
                       <span style={{fontSize:11,color:"#A98FFF",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reviewAttachment.name}</span>
@@ -2794,7 +2576,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
                   {[{l:"Total cases",v:cases.length,c:"#7C5CFC"},{l:"Open cases",v:open.length,c:"#7C5CFC"},{l:"Total meetings",v:allM.length,c:"#D4882A"},{l:"High risk",v:rC.HIGH||0,c:"#E8622A"}].map(s=>(
                     <Card key={s.l}>
-                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Playfair Display,Georgia,serif"}}>{s.v}</div>
+                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Inter,sans-serif"}}>{s.v}</div>
                       <div style={{fontSize:11,color:"#555",marginTop:3}}>{s.l}</div>
                     </Card>
                   ))}
@@ -2842,7 +2624,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                     <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
                       <div>
                         <div style={{fontSize:13,color:"#F2EDE4",fontWeight:500,marginBottom:2}}>{m.employeeName}</div>
-                        <div style={{fontSize:10,color:"#444"}}>{m.type} · {fmtDate(m.date)}</div>
+                        <div style={{fontSize:10,color:"#444"}}>{m.type} · {m.date}</div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={rColors[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
@@ -2924,7 +2706,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
                         <Badge>{m.type}</Badge>
-                        <span style={{fontSize:12,color:"#F2EDE4"}}>{fmtDate(m.date)}</span>
+                        <span style={{fontSize:12,color:"#F2EDE4"}}>{m.date}</span>
                         {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={{HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"}[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
                       </div>
                       <div style={{fontSize:10,color:"#444"}}>{m.transcript?.length||0} utterances · {m.participants?.length>0?m.participants.map(p=>p.name).join(", "):"HR Manager, Employee"}</div>
@@ -3147,7 +2929,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                 </div>
                 <div style={{padding:"20px 24px"}}>
                   <div style={{background:"#FDFAF6",borderRadius:8,padding:"24px 28px",marginBottom:16}}>
-                    <pre style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:13,color:"#1C1C22",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
+                    <pre style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#1C1C22",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <Btn onClick={()=>{navigator.clipboard.writeText(selectedTemplate.body);setSelectedTemplate(null);}}>Copy template</Btn>
@@ -3160,7 +2942,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
                 {["ACAS dismissal process","Suspend on full pay?","Grievance — what next?","Investigation timescales"].map((s,i)=>(
                   <button key={i} onClick={()=>askCompass(s,homeChatHistory,setHomeChatHistory,setHomeChatProcessing)}
-                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Playfair Display,Georgia,serif"}}
+                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Inter,sans-serif"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC44";e.currentTarget.style.color="#A98FFF";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
                     {s}
@@ -3302,7 +3084,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                 {portalCase.meetings.filter(m=>m.letterOutput).map(m=>(
                   <Card key={m.id} style={{marginBottom:12,padding:0,overflow:"hidden"}}>
                     <div style={{padding:"12px 18px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}><Badge>{m.type}</Badge><span style={{fontSize:12,color:"#F2EDE4"}}>{fmtDate(m.date)}</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}><Badge>{m.type}</Badge><span style={{fontSize:12,color:"#F2EDE4"}}>{m.date}</span></div>
                       <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(m.letterOutput)} style={{fontSize:11,padding:"3px 10px"}}>Copy</Btn>
                     </div>
                     <div style={{background:"#FDFAF6",padding:"24px 28px"}}><MDRenderer text={m.letterOutput} light/></div>
@@ -3918,7 +3700,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                     {l:"Avg resolution",v:avgResolution+"d"},
                   ].map(s=>(
                     <Card key={s.l} style={{textAlign:"center",padding:"16px 10px"}}>
-                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Playfair Display,Georgia,serif",marginBottom:4}}>{s.v}</div>
+                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif",marginBottom:4}}>{s.v}</div>
                       <div style={{fontSize:10,color:"#555"}}>{s.l}</div>
                     </Card>
                   ))}
@@ -4028,7 +3810,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                       {resolutionTimes.sort((a,b)=>b.days-a.days).map(r=>(
                         <div key={r.name} style={{background:"#0D0D0F",borderRadius:7,padding:"10px 14px",minWidth:140}}>
                           <div style={{fontSize:12,color:"#F2EDE4",fontWeight:500,marginBottom:3}}>{r.name}</div>
-                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Playfair Display,Georgia,serif"}}>{r.days}<span style={{fontSize:11,color:"#555",fontWeight:400}}>d</span></div>
+                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#555",fontWeight:400}}>d</span></div>
                           <div style={{fontSize:10,color:"#444"}}>{r.meetings} meetings</div>
                         </div>
                       ))}
@@ -4245,7 +4027,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
                                   <div style={{fontSize:11,color:"#555"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
                                 </div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Playfair Display,Georgia,serif"}}>{emp.totalScore||0}</div>
+                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif"}}>{emp.totalScore||0}</div>
                                   <div style={{fontSize:10,color:"#555"}}>/ 5.0</div>
                                   {emp.selected!==null&&<Badge color={emp.selected?"#E8622A":"#7C5CFC"}>{emp.selected?"At risk":"Retained"}</Badge>}
                                 </div>
@@ -4419,7 +4201,7 @@ Keep responses concise and friendly. No bullet points in questions.`,
             {/* Overdue follow-ups */}
             {overdueFollowUps.length>0&&(
               <div style={{background:"#2A1E08",border:"1px solid #D4882A33",borderRadius:8,padding:"12px 16px",marginBottom:16}}>
-                <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,marginBottom:8}}>Overdue follow-ups ({overdueFollowUps.length})</div>
+                <div style={{fontSize:11,color:"#D4882A",fontWeight:600,marginBottom:8}}>Overdue follow-ups ({overdueFollowUps.length})</div>
                 {overdueFollowUps.map(n=>(
                   <div key={n.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0"}}>
                     <span style={{fontSize:12,color:"#C4BDAF"}}>{n.employeeName} — {n.followUpDate}</span>
