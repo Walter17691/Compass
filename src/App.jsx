@@ -474,7 +474,7 @@ export default function Compass() {
   const [searchResults, setSearchResults] = useState([]);
 
   // ── Multi-user profiles ──
-  const [currentUser, setCurrentUser] = useState(member ? {...member, email: user?.email} : ls("compass_user", null));
+  const [currentUser, setCurrentUser] = useState(member ? {...member, email: user?.email} : (user ? {name: user?.user_metadata?.name||user?.email, email: user?.email, role:"hr_manager"} : ls("compass_user", null)));
   const [showUserSwitch, setShowUserSwitch] = useState(false);
   const [users, setUsers] = useState(ls("compass_users", []));
 

@@ -21,7 +21,7 @@ function Root() {
         .from('org_members')
         .select('*, organisations(*)')
         .eq('user_id', u.id)
-        .single()
+        .maybeSingle()
 
       if(memberData) {
         setOrg(memberData.organisations)
