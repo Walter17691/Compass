@@ -534,7 +534,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       if(existing) {
         saveCases(cases.map(c=>c.employeeName===caseInfo.employee.trim()?{...c,meetings:[...(c.meetings||[]),meeting]}:c));
       } else {
-        saveCases([...cases,{id:Date.now().toString(),employeeName:caseInfo.employee.trim(),meetings:[meeting]}]);
+        saveCases([...cases,{id:crypto.randomUUID(),employeeName:caseInfo.employee.trim(),meetings:[meeting]}]);
       }
     }
     const appUrl = window.location.origin;
@@ -602,6 +602,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   // ── Supabase case sync ──
   const loadCasesFromDB = async () => {
+    console.log("Loading cases from DB, org:", org?.id);
     if(!org?.id) return;
     try {
       const { data, error } = await supabase
@@ -609,6 +610,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         .select('*')
         .eq('org_id', org.id)
         ;
+      console.log("Cases from DB:", data, "Error:", error);
       if(!error && data) {
         const mapped = data.map(row => ({
           id: row.id,
@@ -625,18 +627,21 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   };
 
   const saveCaseToDB = async (caseObj) => {
-    if(!org?.id) return;
+    if(!org?.id) { console.log("No org, skipping save"); return; }
     try {
-      await supabase.from('cases').upsert({
-        id: caseObj.id,
+      const payload = {
+        id: caseObj.id.includes('-') ? caseObj.id : crypto.randomUUID(),
         org_id: org.id,
         employee_name: caseObj.employeeName,
         employee_email: caseObj.email || "",
         meetings: caseObj.meetings || [],
-        assigned_to: user?.id,
-        created_by: user?.id,
+        assigned_to: user?.id || null,
+        created_by: user?.id || null,
         updated_at: new Date().toISOString(),
-      });
+      };
+      console.log("Saving to DB:", payload);
+      const { data, error } = await supabase.from('cases').upsert(payload).select();
+      console.log("Save result:", data, "Error:", error);
     } catch(e) { console.error("Save case error:", e); }
   };
 
@@ -1582,7 +1587,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     } else {
-      saveCases([...cases,{id:Date.now().toString(),employeeName:empName,email:devSession.caseInfo.email,createdAt:new Date().toISOString(),meetings:[meeting]}]);
+      saveCases([...cases,{id:crypto.randomUUID(),employeeName:empName,email:devSession.caseInfo.email,createdAt:new Date().toISOString(),meetings:[meeting]}]);
     }
   };
 
