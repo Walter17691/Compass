@@ -2605,7 +2605,22 @@ Keep responses concise and friendly. No bullet points in questions.`,
                       const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
                       setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
                       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
-                        .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
+                        .then(r=>r.json()).then(d=>{
+                          const raw=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";
+                          // Parse update tags
+                          let reply = raw;
+                          const recordMatch = raw.match(/UPDATE_RECORD:([\s\S]*?)(?=UPDATE_RISK:|UPDATE_PREDICTION:|$)/);
+                          const riskMatch = raw.match(/UPDATE_RISK:\s*([A-Z]+)\|([^
+]+)/);
+                          const predMatch = raw.match(/UPDATE_PREDICTION:([\s\S]*?)(?=UPDATE_RECORD:|UPDATE_RISK:|$)/);
+                          if(recordMatch) { setReviewOutput(recordMatch[1].trim()); reply = reply.replace(/UPDATE_RECORD:[\s\S]*?(?=UPDATE_RISK:|UPDATE_PREDICTION:|$)/, ""); }
+                          if(riskMatch) { setRiskScore({rating:riskMatch[1].trim(), summary:riskMatch[2].trim()}); reply = reply.replace(/UPDATE_RISK:[^
+]+/, ""); }
+                          if(predMatch) { setPrediction(predMatch[1].trim()); reply = reply.replace(/UPDATE_PREDICTION:[\s\S]*/, ""); }
+                          reply = reply.trim();
+                          setChatHistory(h=>[...h,{role:"assistant",content:reply}]);
+                          setChatProcessing(false);
+                        })
                         .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
                     }}}
                     placeholder="Ask Compass about this meeting..."
