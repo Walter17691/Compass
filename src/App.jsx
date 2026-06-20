@@ -2462,7 +2462,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           Download as Word
                         </button>
                       )}
-                      {m.role==="assistant"&&m.content.includes("##")&&(
+                      {m.role==="assistant"&&m.content.length>100&&m.role!=="user"&&(
                         <button onClick={()=>{
                           if(window.confirm("Apply this to the meeting record?")){
                             const parts = m.content.split("## ").filter(Boolean);
