@@ -2845,19 +2845,28 @@ ${m.content}`;
               </div>
 
               {c.meetings.map((m,idx)=>(
-                <div key={m.id} style={{padding:"12px 20px",borderBottom:idx<c.meetings.length-1?"1px solid #141414":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-                        <Badge>{m.type}</Badge>
-                        <span style={{fontSize:12,color:"#F2EDE4"}}>{m.date}</span>
-                        {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={{HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"}[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
-                      </div>
-                      <div style={{fontSize:10,color:"#444"}}>{m.transcript?.length||0} utterances · {m.participants?.length>0?m.participants.map(p=>p.name).join(", "):"HR Manager, Employee"}</div>
+                <div key={m.id} style={{padding:"14px 20px",borderBottom:idx<c.meetings.length-1?"1px solid #141414":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                      <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:14,color:"#F2EDE4"}}>{m.type}</span>
+                      <span style={{fontSize:11,color:"#555"}}>·</span>
+                      <span style={{fontSize:12,color:"#888"}}>{fmtDate(m.date)}</span>
+                      {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={{HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"}[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
+                      {m.signId&&<Badge color={m.signStatus==="signed"?"#4CAF50":"#888"}>{m.signStatus==="signed"?"✓ Signed":"Awaiting signature"}</Badge>}
                     </div>
+                    <div style={{fontSize:10,color:"#444"}}>{m.savedBy||"HR Manager"} · {m.savedAt?new Date(m.savedAt).toLocaleDateString("en-GB"):""}</div>
                   </div>
                   <div style={{display:"flex",gap:6}}>
-                    {m.signId&&m.signStatus==="signed"&&<Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#4CAF50"}} onClick={()=>window.open("/sign/"+m.signId,"_blank")}>View signed doc</Btn>}{m.signId&&<Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:m.signStatus==="signed"?"#4CAF50":"#888"}} onClick={async()=>{const r=await fetch("/api/signing?signId="+m.signId);const d=await r.json();if(d.status){saveCases(cases.map(cs=>cs.id===c.id?{...cs,meetings:cs.meetings.map(x=>x.id===m.id?{...x,signStatus:d.status}:x)}:cs));}}}>{m.signStatus==="signed"?"✓ Signed":"Check signature"}</Btn>}
+                    {m.signId&&m.signStatus!=="signed"&&(
+                      <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#888"}} onClick={async()=>{
+                        const r=await fetch("/api/signing?signId="+m.signId);
+                        const d=await r.json();
+                        if(d.status) saveCases(cases.map(cs=>cs.id===c.id?{...cs,meetings:cs.meetings.map(x=>x.id===m.id?{...x,signStatus:d.status}:x)}:cs));
+                      }}>Check signature</Btn>
+                    )}
+                    {m.signId&&m.signStatus==="signed"&&(
+                      <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#4CAF50"}} onClick={()=>window.open("/sign/"+m.signId,"_blank")}>View signed notes</Btn>
+                    )}
                     <Btn variant="secondary" onClick={()=>{setViewMeeting({...m,employeeName:c.employeeName,caseId:c.id});setViewCaseId(c.id);}} style={{fontSize:11,padding:"4px 12px"}}>View</Btn>
                     <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#7C5CFC"}} onClick={()=>{setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||"",manager:m.manager||"",date:m.date||""}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowLetterModal(true);}}>Draft letter</Btn>
                     <Btn variant="danger" onClick={()=>{if(window.confirm("Delete?"))saveCases(cases.map(x=>x.id===c.id?{...x,meetings:x.meetings.filter(mm=>mm.id!==m.id)}:x).filter(x=>x.meetings.length>0));}} style={{fontSize:11,padding:"4px 10px"}}>✕</Btn>
