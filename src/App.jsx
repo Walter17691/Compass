@@ -2464,8 +2464,29 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       )}
                       {m.role==="assistant"&&m.content.length>100&&m.role!=="user"&&(
                         <button onClick={()=>{
-                          if(window.confirm("Replace the meeting record with this updated version?")){
-                            setReviewOutput(m.content.trim());
+                          if(m.content.includes("##")){
+                            if(window.confirm("Replace the meeting record with this updated version?")){
+                              setReviewOutput(m.content.trim());
+                            }
+                          } else {
+                            // Ask Compass to regenerate full record
+                            const sys=`You are Compass, a UK HR documentation specialist. You have the current meeting record and a correction/update from the HR manager. Produce the COMPLETE updated meeting record with ALL sections. Use ## for headers and - for bullets. No bold asterisks, no emoji.
+
+CURRENT RECORD:
+${reviewOutput}
+
+UPDATE TO APPLY:
+${m.content}`;
+                            setChatProcessing(true);
+                            fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,system:sys,messages:[{role:"user",content:"Please produce the complete updated meeting record."}]})})
+                              .then(r=>r.json()).then(d=>{
+                                const updated=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+                                if(updated&&updated.includes("##")){
+                                  setReviewOutput(updated.trim());
+                                  setChatHistory(h=>[...h,{role:"assistant",content:"Record updated."}]);
+                                }
+                                setChatProcessing(false);
+                              }).catch(()=>setChatProcessing(false));
                           }
                         }} style={{marginTop:4,background:"none",border:"1px solid #2A5A2A",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#4CAF50",cursor:"pointer"}}>
                           Apply to record
@@ -2479,7 +2500,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&chatInput.trim()&&!chatProcessing){
                       const msg=chatInput.trim(); setChatInput("");
-                      const sys=`You are Compass, a senior UK HR and employment law assistant.\n\nMEETING RECORD:\n${reviewOutput}\n\nLEGAL RISK: ${riskScore?"Rating: "+riskScore.rating+" - "+riskScore.summary:"Not run"}\nMEETING TYPE: ${meetingType?.label||"General"} | EMPLOYEE: ${caseInfo.employee||"Unknown"} | CHAIR: ${caseInfo.manager||"Unknown"}\n\nWhen asked to update or correct anything, respond with the COMPLETE rewritten meeting record incorporating the change - every section fully rewritten. The user clicks Apply to update the card. For other questions just answer normally. No bold asterisks, no emoji.`;
+                      const sys="You are Compass, a senior UK HR and employment law assistant. Meeting record:\n\n"+reviewOutput+"\n\nLegal risk: "+(riskScore?"Rating: "+riskScore.rating+" - "+riskScore.summary:"Not run")+"\n\nMeeting type: "+(meetingType?.label||"General")+", Employee: "+(caseInfo.employee||"Unknown")+", Chair: "+(caseInfo.manager||"Unknown")+"\n\nAnswer HR and legal questions. When the user shares new information, acknowledge it. They can click Apply on your response to regenerate the full record. No bold asterisks, no emoji.";
                       setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
                       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
                         .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
