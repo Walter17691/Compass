@@ -2464,22 +2464,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       )}
                       {m.role==="assistant"&&m.content.length>100&&m.role!=="user"&&(
                         <button onClick={()=>{
-                          if(window.confirm("Apply this to the meeting record?")){
-                            const parts = m.content.split("## ").filter(Boolean);
-                            let updated = reviewOutput;
-                            parts.forEach(part=>{
-                              const firstLine = part.indexOf("\n");
-                              const header = firstLine>-1?part.slice(0,firstLine).trim():part.trim();
-                              const fullSection = "## "+part.trim();
-                              const startIdx = updated.indexOf("## "+header);
-                              if(startIdx>-1){
-                                const nextIdx = updated.indexOf("## ",startIdx+3);
-                                updated = updated.slice(0,startIdx)+fullSection+(nextIdx>-1?"\n\n"+updated.slice(nextIdx):"");
-                              } else {
-                                updated = updated+"\n\n"+fullSection;
-                              }
-                            });
-                            setReviewOutput(updated.trim());
+                          if(window.confirm("Replace the meeting record with this updated version?")){
+                            setReviewOutput(m.content.trim());
                           }
                         }} style={{marginTop:4,background:"none",border:"1px solid #2A5A2A",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#4CAF50",cursor:"pointer"}}>
                           Apply to record
@@ -2493,7 +2479,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                   <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&chatInput.trim()&&!chatProcessing){
                       const msg=chatInput.trim(); setChatInput("");
-                      const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp refine the record, answer questions, or draft letters. Use ## for headers and - for bullets. No bold asterisks, no emoji.";
+                      const sys=`You are Compass, a senior UK HR and employment law assistant.\n\nMEETING RECORD:\n${reviewOutput}\n\nLEGAL RISK: ${riskScore?"Rating: "+riskScore.rating+" - "+riskScore.summary:"Not run"}\nMEETING TYPE: ${meetingType?.label||"General"} | EMPLOYEE: ${caseInfo.employee||"Unknown"} | CHAIR: ${caseInfo.manager||"Unknown"}\n\nWhen asked to update or correct anything, respond with the COMPLETE rewritten meeting record incorporating the change - every section fully rewritten. The user clicks Apply to update the card. For other questions just answer normally. No bold asterisks, no emoji.`;
                       setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
                       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
                         .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
