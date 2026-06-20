@@ -618,15 +618,13 @@ export default function Compass() {
   const appealDetectedRef = useRef(false);
 
   useEffect(()=>{
-    if(!aiProcessing && reviewOutput && !appealDetectedRef.current){
+    if(!aiProcessing && reviewOutput && !appealDetectedRef.current && screen===SCREENS.REVIEW){
       if(reviewOutput.toLowerCase().includes("appeal") || reviewOutput.toLowerCase().includes("original decision") || reviewOutput.toLowerCase().includes("grounds of appeal")){
         appealDetectedRef.current = true;
-        setAppealDetected(true);
         setShowLinkCase(true);
       }
     }
-    if(!reviewOutput) appealDetectedRef.current = false;
-  }, [aiProcessing, reviewOutput]);
+  }, [aiProcessing]);
   const [prepChatHistory, setPrepChatHistory] = useState([]);
   const [prepChatInput, setPrepChatInput] = useState("");
   const [prepChatProcessing, setPrepChatProcessing] = useState(false);
@@ -1720,7 +1718,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             ):(
               <div style={{fontSize:13,color:"#555",marginBottom:16}}>No existing cases found. This will be saved as a new case.</div>
             )}
-            <Btn variant="ghost" onClick={()=>{setShowLinkCase(false);setAppealDetected(false);appealDetectedRef.current=false;setScreen(SCREENS.REVIEW);}} style={{width:"100%"}}>Skip — save as new case</Btn>
+            <Btn variant="ghost" onClick={()=>setShowLinkCase(false)} style={{width:"100%"}}>Skip — save as new case</Btn>
           </div>
         </div>
       )}
