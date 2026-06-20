@@ -602,7 +602,6 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   // ── Supabase case sync ──
   const loadCasesFromDB = async () => {
-    console.log("Loading cases from DB, org:", org?.id);
     if(!org?.id) return;
     try {
       const { data, error } = await supabase
@@ -610,8 +609,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         .select('*')
         .eq('org_id', org.id)
         ;
-      console.log("Cases from DB:", data, "Error:", error);
-      if(!error && data) {
+  if(!error && data) {
         const mapped = data.map(row => ({
           id: row.id,
           employeeName: row.employee_name,
@@ -627,7 +625,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   };
 
   const saveCaseToDB = async (caseObj) => {
-    if(!org?.id) { console.log("No org, skipping save"); return; }
+    if(!org?.id) return;
     try {
       const payload = {
         id: caseObj.id.includes('-') ? caseObj.id : crypto.randomUUID(),
@@ -639,9 +637,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         created_by: user?.id || null,
         updated_at: new Date().toISOString(),
       };
-      console.log("Saving to DB:", payload);
       const { data, error } = await supabase.from('cases').upsert(payload).select();
-      console.log("Save result:", data, "Error:", error);
     } catch(e) { console.error("Save case error:", e); }
   };
 
