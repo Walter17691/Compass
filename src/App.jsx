@@ -616,6 +616,17 @@ export default function Compass() {
   const [appealDetected, setAppealDetected] = useState(false);
   const [showLinkCase, setShowLinkCase] = useState(false);
   const appealDetectedRef = useRef(false);
+
+  useEffect(()=>{
+    if(!aiProcessing && reviewOutput && !appealDetectedRef.current){
+      if(reviewOutput.toLowerCase().includes("appeal") || reviewOutput.toLowerCase().includes("original decision") || reviewOutput.toLowerCase().includes("grounds of appeal")){
+        appealDetectedRef.current = true;
+        setAppealDetected(true);
+        setShowLinkCase(true);
+      }
+    }
+    if(!reviewOutput) appealDetectedRef.current = false;
+  }, [aiProcessing, reviewOutput]);
   const [prepChatHistory, setPrepChatHistory] = useState([]);
   const [prepChatInput, setPrepChatInput] = useState("");
   const [prepChatProcessing, setPrepChatProcessing] = useState(false);
@@ -1359,7 +1370,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section. If the transcript contains appeal language (appeal, appealing, original decision, outcome being appealed, grounds of appeal), include "APPEAL_DETECTED" as the very first word of your response.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${fmtDate(caseInfo.date)||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date in dd/mm/yyyy format]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
-        t=>{ if(t.startsWith("APPEAL_DETECTED")&&!appealDetectedRef.current){appealDetectedRef.current=true;setAppealDetected(true);setShowLinkCase(true);} setReviewOutput(t.replace(/^APPEAL_DETECTED\s*/,"").trim()); }
+        t=>{ setReviewOutput(t.replace(/^APPEAL_DETECTED\s*/,"").trim()); }
       );
     } catch(e) { setAiError(e.message); }
     setAiProcessing(false);
