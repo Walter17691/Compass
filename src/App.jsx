@@ -599,6 +599,12 @@ export default function Compass() {
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
   const [showLetterModal, setShowLetterModal] = useState(false);
+  const [showBundleBuilder, setShowBundleBuilder] = useState(null); // caseId
+  const [bundleChat, setBundleChat] = useState([]);
+  const [bundleChatInput, setBundleChatInput] = useState("");
+  const [bundleProcessing, setBundleProcessing] = useState(false);
+  const [bundleFiles, setBundleFiles] = useState([]);
+  const [acasData, setAcasData] = useState({}); // keyed by caseId
   const [showEmailLetter, setShowEmailLetter] = useState(false);
   const [emailLetterTo, setEmailLetterTo] = useState("");
   const [editingLetter, setEditingLetter] = useState(false);
@@ -2886,6 +2892,166 @@ ${m.content}`;
                     <button onClick={()=>vaultFileRef.current?.click()} style={{background:"none",border:"1px dashed #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#555",cursor:"pointer"}}>+ Add document</button>
                   </div>
                 </div>
+              </div>
+
+              {/* ACAS Early Conciliation */}
+              <div style={{padding:"12px 20px",background:"#141414",borderTop:"1px solid #1a1a1a"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:acasData[c.id]?"12px":"0"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase"}}>ACAS Early Conciliation</span>
+                    {acasData[c.id]?.status&&<Badge color={acasData[c.id].status==="settled"?"#4CAF50":acasData[c.id].status==="certificate"?"#E8622A":"#D4882A"}>{acasData[c.id].status==="settled"?"Settled":acasData[c.id].status==="certificate"?"Certificate issued":"Active"}</Badge>}
+                  </div>
+                  <button onClick={()=>{
+                    const current = acasData[c.id]||{};
+                    setAcasData(a=>({...a,[c.id]:{...current,open:!current.open}}));
+                  }} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
+                    {acasData[c.id]?.open?"Close":"+ Track EC"}
+                  </button>
+                </div>
+                {acasData[c.id]?.open&&(
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:8}}>
+                    <div>
+                      <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>EC notification received</label>
+                      <input type="date" value={acasData[c.id]?.notified||""} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],notified:e.target.value}}))}
+                        style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                    </div>
+                    <div>
+                      <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>EC certificate number</label>
+                      <input value={acasData[c.id]?.certNumber||""} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],certNumber:e.target.value}}))}
+                        placeholder="e.g. R000000/00/00" style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                    </div>
+                    <div>
+                      <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Certificate issued date</label>
+                      <input type="date" value={acasData[c.id]?.certDate||""} onChange={e=>{
+                        const d = new Date(e.target.value);
+                        d.setMonth(d.getMonth()+1);
+                        const deadline = d.toISOString().split("T")[0];
+                        setAcasData(a=>({...a,[c.id]:{...a[c.id],certDate:e.target.value,tribunalDeadline:deadline,status:"certificate"}}));
+                      }} style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                    </div>
+                    <div>
+                      <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Tribunal claim deadline</label>
+                      <input value={acasData[c.id]?.tribunalDeadline||""} readOnly
+                        style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:acasData[c.id]?.tribunalDeadline&&new Date(acasData[c.id].tribunalDeadline)<new Date(Date.now()+7*86400000)?"#E8622A":"#F2EDE4",outline:"none"}}/>
+                    </div>
+                    <div style={{gridColumn:"1/-1"}}>
+                      <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Status</label>
+                      <select value={acasData[c.id]?.status||"active"} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],status:e.target.value}}))}
+                        style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}>
+                        <option value="active">Active — conciliation ongoing</option>
+                        <option value="certificate">Certificate issued — no settlement</option>
+                        <option value="settled">Settled</option>
+                      </select>
+                    </div>
+                    {acasData[c.id]?.tribunalDeadline&&(
+                      <div style={{gridColumn:"1/-1",background:"#2A1008",border:"1px solid #E8622A33",borderRadius:6,padding:"8px 12px",fontSize:11,color:"#E8622A"}}>
+                        ⚠ Tribunal claim deadline: {acasData[c.id].tribunalDeadline.split("-").reverse().join("/")} — {Math.ceil((new Date(acasData[c.id].tribunalDeadline)-new Date())/(86400000))} days remaining
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Tribunal Bundle Builder */}
+              <div style={{padding:"12px 20px",background:"#0D0D0F",borderTop:"1px solid #1a1a1a",borderBottomLeftRadius:12,borderBottomRightRadius:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase"}}>Tribunal bundle</span>
+                  <button onClick={()=>setShowBundleBuilder(showBundleBuilder===c.id?null:c.id)}
+                    style={{background:"none",border:"1px solid #7C5CFC44",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
+                    {showBundleBuilder===c.id?"Close":"Build bundle"}
+                  </button>
+                </div>
+                {showBundleBuilder===c.id&&(
+                  <div style={{marginTop:12}}>
+                    <p style={{fontSize:12,color:"#666",marginBottom:12}}>Attach documents and Compass will build a numbered tribunal bundle index.</p>
+                    <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto",marginBottom:8}}>
+                      {bundleChat.map((m,i)=>(
+                        <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
+                          <div style={{fontSize:12,color:m.role==="user"?"#fff":"#C4BDAF",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
+                        </div>
+                      ))}
+                      {bundleProcessing&&<div style={{fontSize:14,color:"#7C5CFC"}}>●</div>}
+                      {bundleChat.length===0&&(
+                        <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:10,padding:"12px 16px"}}>
+                          <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.8}}>Hello! I'll help you build a tribunal bundle for {c.employeeName}. Please attach the documents you have — ET1, ET3, meeting records, letters, policies, witness statements — and I'll create a numbered index.<br/><br/>Start by attaching your first document below.</div>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <label style={{cursor:"pointer",display:"flex",alignItems:"center",gap:6,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#888"}}>
+                        📎 Attach
+                        <input type="file" accept=".pdf,.doc,.docx,.txt" multiple style={{display:"none"}} onChange={async e=>{
+                          const files = Array.from(e.target.files);
+                          for(const file of files){
+                            const text = await file.text().catch(()=>"[Binary file - "+file.name+"]");
+                            setBundleFiles(f=>[...f,{name:file.name,text:text.slice(0,3000),size:file.size}]);
+                            setBundleChat(h=>[...h,{role:"user",content:"[Attached: "+file.name+"]"}]);
+                          }
+                          e.target.value="";
+                          // Auto-analyse
+                          setBundleProcessing(true);
+                          const allDocs = [...bundleFiles,...files.map(f=>({name:f.name}))];
+                          try {
+                            const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                              body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,stream:false,
+                                system:`You are a UK employment tribunal bundle specialist. The user is building a tribunal bundle for ${c.employeeName}. As documents are added, maintain a running numbered index and flag any gaps. Format: Tab number | Document | Date | Notes. Flag missing key documents.`,
+                                messages:[...bundleChat,{role:"user",content:"I have just attached: "+files.map(f=>f.name).join(", ")+". Current documents in bundle: "+allDocs.map((d,i)=>(i+1)+". "+d.name).join(", ")}]})});
+                            const data = await res.json();
+                            const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Document added.";
+                            setBundleChat(h=>[...h,{role:"assistant",content:reply}]);
+                          } catch(e){}
+                          setBundleProcessing(false);
+                        }}/>
+                      </label>
+                      <input value={bundleChatInput} onChange={e=>setBundleChatInput(e.target.value)}
+                        onKeyDown={async e=>{
+                          if(e.key==="Enter"&&bundleChatInput.trim()&&!bundleProcessing){
+                            const msg=bundleChatInput.trim(); setBundleChatInput("");
+                            setBundleChat(h=>[...h,{role:"user",content:msg}]);
+                            setBundleProcessing(true);
+                            try {
+                              const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                                body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,stream:false,
+                                  system:`You are a UK employment tribunal bundle specialist building a bundle for ${c.employeeName}. Documents so far: ${bundleFiles.map((d,i)=>(i+1)+". "+d.name).join(", ")||"none yet"}.`,
+                                  messages:[...bundleChat,{role:"user",content:msg}]})});
+                              const data = await res.json();
+                              const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";
+                              setBundleChat(h=>[...h,{role:"assistant",content:reply}]);
+                            } catch(e){}
+                            setBundleProcessing(false);
+                          }
+                        }}
+                        placeholder="Ask Compass about the bundle..."
+                        style={{flex:1,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,outline:"none",color:"#F2EDE4"}}/>
+                      <button onClick={async()=>{
+                        if(!bundleFiles.length) return;
+                        setBundleProcessing(true);
+                        try {
+                          const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+                            body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
+                              system:"You are a UK employment tribunal bundle specialist. Generate a formal tribunal bundle index.",
+                              messages:[...bundleChat,{role:"user",content:"Please generate the complete formal tribunal bundle index for all "+bundleFiles.length+" documents. Format as a proper index with Tab numbers, document descriptions, dates and page references. Also list any missing key documents."}]})});
+                          const data = await res.json();
+                          const index = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+                          if(index){
+                            setBundleChat(h=>[...h,{role:"assistant",content:index}]);
+                            const blob = new Blob([index],{type:"application/msword"});
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href=url; a.download=c.employeeName.replace(/\s/g,"_")+"_Tribunal_Bundle_Index.doc"; a.click();
+                            URL.revokeObjectURL(url);
+                          }
+                        } catch(e){}
+                        setBundleProcessing(false);
+                      }} style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",fontSize:12,color:"#fff",cursor:"pointer",whiteSpace:"nowrap"}}>
+                        Generate index
+                      </button>
+                    </div>
+                    {bundleFiles.length>0&&(
+                      <div style={{marginTop:8,fontSize:11,color:"#555"}}>{bundleFiles.length} document{bundleFiles.length!==1?"s":""} in bundle: {bundleFiles.map(f=>f.name).join(", ")}</div>
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
           ))}
