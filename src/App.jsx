@@ -14,6 +14,9 @@ const MEETING_TYPES = [
   { id:"appraisal",     label:"Appraisal",        tag:"Development", group:"dev" },
   { id:"pip-review",    label:"PIP Review",       tag:"Development", group:"dev" },
   { id:"pdp",           label:"PDP / 1-2-1",      tag:"Development", group:"dev" },
+  { id:"appeal-disciplinary", label:"Disciplinary Appeal", tag:"ACAS S5", group:"appeal", mode:"er" },
+  { id:"appeal-grievance",   label:"Grievance Appeal",    tag:"ACAS S8", group:"appeal", mode:"er" },
+  { id:"appeal-dismissal",  label:"Dismissal Appeal",   tag:"ERA 1996 s.98", group:"appeal", mode:"er" },
 ];
 
 const SCREENS = {
@@ -2046,6 +2049,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               <option value="" disabled>Select meeting type...</option>
               <option disabled style={{color:"#555"}}>── ER Meetings ──</option>
               {MEETING_TYPES.filter(t=>t.mode==="er").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+              <option disabled style={{color:"#555"}}>── Appeals ──</option>
+              {MEETING_TYPES.filter(t=>t.group==="appeal").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
               <option disabled style={{color:"#555"}}>── Development ──</option>
               {MEETING_TYPES.filter(t=>t.group==="dev").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
