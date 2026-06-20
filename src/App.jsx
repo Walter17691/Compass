@@ -598,6 +598,12 @@ export default function Compass() {
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(()=>{
+    const handler = ()=>setIsMobile(window.innerWidth<768);
+    window.addEventListener("resize", handler);
+    return ()=>window.removeEventListener("resize", handler);
+  }, []);
   const [showLetterModal, setShowLetterModal] = useState(false);
   const [showBundleBuilder, setShowBundleBuilder] = useState(null); // caseId
   const [bundleChat, setBundleChat] = useState([]);
@@ -1691,7 +1697,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
       {showLinkCase&&appealDetected&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
             <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Appeal detected</div>
             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Link to an existing case?</h3>
             <p style={{fontSize:13,color:"#666",marginBottom:20}}>This looks like an appeal. Would you like to link it to an existing case so the full proceeding is tracked together?</p>
@@ -1738,7 +1744,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
       {showLetterModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
             <p style={{fontSize:13,color:"#666",marginBottom:24}}>How would you like to create the outcome letter?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -2155,7 +2161,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
             {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <div style={{maxWidth:560,margin:"0 auto",padding:"60px 20px",textAlign:"center"}}>
+        <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
           <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
           <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:30,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
           <p style={{fontSize:14,color:"#555",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
@@ -2341,7 +2347,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
         <div style={{maxWidth:1440,margin:"0 auto",padding:"28px 20px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start",gridTemplateColumns:isMobile?"1fr":"1fr 380px"}}>
             <div>
               {/* Meeting record */}
               <Card style={{marginBottom:16}}>
@@ -2812,7 +2818,7 @@ ${m.content}`;
 
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
-        <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
+        <div style={{maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 12px":"32px 20px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
             <div>
               <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Case files</h2>
@@ -4247,7 +4253,7 @@ ${m.content}`;
                   ))}
                 </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start"}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start",gridTemplateColumns:isMobile?"1fr":"1fr 380px"}}>
                   <div>
                     {/* SETUP STEP */}
                     {redundancyStep==="setup"&&(
