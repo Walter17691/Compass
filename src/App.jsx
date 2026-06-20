@@ -393,7 +393,7 @@ function UserAddForm({ onAdd }) {
   );
 }
 
-export default function Compass() {
+export default function Compass({ user=null, org=null, member=null, onSignOut=null }) {
   useFonts();
 
   // ── Navigation ──
