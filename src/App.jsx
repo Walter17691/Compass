@@ -1089,6 +1089,12 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
     try {
       const type = activeRedundancy.type;
       const count = activeRedundancy.atRiskEmployees.length;
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         `You are a UK employment law specialist focusing on redundancy. ERA 1996, TULRCA 1992, Equality Act 2010. Be precise and practical. ## headers.`,
         `Redundancy type: ${type} (${count} at-risk employees)
@@ -1124,6 +1130,12 @@ Please advise on:
       "appeal-invite": `Draft an invitation to a redundancy appeal hearing.`,
     };
     try {
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         "UK HR professional. Formal, precise, legally compliant. ERA 1996. DD Month YYYY dates.",
         `${letters[letterType]||"Draft a redundancy letter."}
@@ -1328,6 +1340,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!caseInfo.employee.trim()) return;
     setAiError(""); setAiProcessing(true);
     try {
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
         `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}\n\n## Objectives\n## Agenda\n## Key Questions\n## Legal Checklist\n## Risk Flags`,
@@ -1358,6 +1376,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
     console.log("TX:", tx.slice(0,200));
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section. If the transcript contains appeal language (appeal, appealing, original decision, outcome being appealed, grounds of appeal), include "APPEAL_DETECTED" as the very first word of your response.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${fmtDate(caseInfo.date)||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date in dd/mm/yyyy format]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
@@ -1367,16 +1391,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAiProcessing(false);
     // Auto risk score
     runRiskScore();
-    // Appeal detection using tx which is already computed from allNotes
-    if(!appealDetectedRef.current){
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      console.log("Checking TX for appeal:", tx.slice(0,100));
-      if(appealWords.some(w=>tx.toLowerCase().includes(w))){
-        console.log("Appeal detected!");
-        appealDetectedRef.current = true;
-        setShowLinkCase(true);
-      }
-    }
+
   };
 
   const runRiskScore = async () => {
@@ -1400,6 +1415,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setPredProcessing(true);
     try {
       const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         `UK employment tribunal outcome predictor. Analyse based on ERA 1996, ACAS Code, case law. Be honest about risks. ## headers.`,
         `Meeting: ${meetingType?.label}\nEmployee: ${caseInfo.employee}\nRecord:\n${reviewOutput||tx}\n\n## Likely Outcome if Challenged at Tribunal\n## Key Vulnerabilities\n## Strongest Arguments for Employer\n## Recommended Actions to Strengthen Position\n## Comparable Cases`,
@@ -1418,6 +1439,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const manText = s.config?.managerPrompts?.map((q,i)=>q+"\n"+(s.managerAssessment[i]||"Not completed")).join("\n\n") || "";
     const objText = s.objectives?.map(o=>`${o.label} (Rating: ${o.rating}/5): ${o.note||"No notes"}`).join("\n") || "";
     try {
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         `You are a UK HR specialist facilitating developmental meetings. Write professionally but warmly — this is not disciplinary. Be specific and constructive. Use ## headers.`,
         `${s.type} for ${s.caseInfo.employee||"employee"} (${s.caseInfo.role||"role"})
@@ -1464,6 +1491,12 @@ Please produce:
       "PDP / 1-2-1": `Write a friendly 1-2-1 follow-up note confirming discussion points and agreed actions.`,
     };
     try {
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         `UK HR professional writing developmental correspondence. Professional but human tone. Not disciplinary. DD Month YYYY dates.`,
         `${letterConfig[s.type]||"Draft a development meeting outcome letter."}
@@ -1533,6 +1566,12 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
     try {
       const tx = transcript.map(u=>u.speaker+": "+u.text).join("\n");
       const prompts = { outcome:`Draft formal ${meetingType?.label} outcome letter.`, invite:`Draft formal invitation to ${meetingType?.label} meeting.`, appeal:`Draft appeal outcome letter for ${meetingType?.label}.` };
+      // Appeal detection
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
+      }
       await streamClaude(
         `UK HR professional. ACAS Code, ERA 1996. DD Month YYYY dates.${policies.length?" Reference company policies by name.":""}`,
         `${prompts[t]}\nEmployee: ${caseInfo.employee||"[Name]"}\nDate: ${caseInfo.date||"[Date]"}\nChair: ${caseInfo.manager||"[Manager]"}\nParticipants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A"}${getPolicyCtx()}\n\nMeeting summary:\n${tx||reviewOutput||"No transcript"}\n\nInclude: formal header, findings, decision, right of appeal, timescales, signature block. End with ## Next Steps for HR.`,
