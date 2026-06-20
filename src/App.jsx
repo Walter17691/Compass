@@ -3443,7 +3443,15 @@ ${m.content}`;
               {searchResults.map((r,i)=>{
                 const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#4A6FA5",transcript:"#888"};
                 return(
-                  <button key={i} onClick={()=>{setViewMeeting(null);setScreen(SCREENS.CASES);}}
+                  <button key={i} onClick={()=>{
+                    setScreen(SCREENS.CASES);
+                    setExpandedCases(e=>({...e,[r.caseId]:true}));
+                    if(r.meetingId){
+                      const cs = cases.find(c=>c.id===r.caseId);
+                      const m = cs?.meetings.find(m=>m.id===r.meetingId);
+                      if(m) { setViewMeeting({...m,employeeName:cs.employeeName,caseId:cs.id}); setViewCaseId(cs.id); }
+                    }
+                  }}
                     style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
                     onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
@@ -3453,6 +3461,9 @@ ${m.content}`;
                     <div>
                       <div style={{fontSize:13,color:"#F2EDE4",fontWeight:500,marginBottom:2}}>{r.title}</div>
                       <div style={{fontSize:11,color:"#555"}}>{r.sub}</div>
+                      {r.type==="transcript"&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4,fontStyle:"italic"}}>Found in transcript</div>}
+                      {r.type==="record"&&<div style={{fontSize:11,color:"#D4882A",marginTop:4}}>Found in meeting record</div>}
+                      {r.type==="letter"&&<div style={{fontSize:11,color:"#4CAF50",marginTop:4}}>Found in letter</div>}
                     </div>
                   </button>
                 );
