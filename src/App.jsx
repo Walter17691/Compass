@@ -608,7 +608,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         .from('cases')
         .select('*')
         .eq('org_id', org.id)
-        .order('created_at', { ascending: false });
+        ;
       if(!error && data) {
         const mapped = data.map(row => ({
           id: row.id,
