@@ -599,6 +599,7 @@ export default function Compass() {
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
   const [showLetterModal, setShowLetterModal] = useState(false);
+  const [editingLetter, setEditingLetter] = useState(false);
   const [appealDetected, setAppealDetected] = useState(false);
   const [showLinkCase, setShowLinkCase] = useState(false);
   const appealDetectedRef = useRef(false);
@@ -1510,8 +1511,11 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
     setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
     try {
       const tx = transcript.map(u=>u.speaker+": "+u.text).join("\n");
-      const prompts = { outcome:`Draft formal ${meetingType?.label} outcome letter.`, invite:`Draft formal invitation to ${meetingType?.label} meeting.`, appeal:`Draft appeal outcome letter for ${meetingType?.label}.` };
-      await streamClaude(
+      const prompts = {
+      outcome: `You are a senior UK HR letter writer. Draft a formal outcome letter following the ACAS Code of Practice on Disciplinary and Grievance Procedures. The letter must include: 1) Company letterhead placeholder, 2) Employee name and address placeholder, 3) Date, 4) Clear statement of the outcome/decision, 5) Summary of the case and evidence considered, 6) The sanction imposed (if any) and reasons, 7) Duration of any warning, 8) Right of appeal (must be included per ACAS Code), 9) Appeal deadline (recommended 5 working days), 10) Signature block. Use formal but clear language. No jargon. Follow GOV.UK plain English guidance.`,
+      invite: `You are a senior UK HR letter writer. Draft a formal invitation letter following the ACAS Code of Practice. The letter must include: 1) Company letterhead placeholder, 2) Employee name and address, 3) Date, 4) Clear statement of the purpose of the meeting, 5) Date, time and location of meeting, 6) Details of the allegations or issues to be discussed, 7) Right to be accompanied (s.10 Employment Relations Act 1999 - must be included), 8) List of any evidence to be relied upon, 9) Instruction to contact HR if they cannot attend. Use formal but clear language.`,
+      appeal: `You are a senior UK HR letter writer. Draft a formal appeal outcome letter following the ACAS Code of Practice. The letter must include: 1) Company letterhead placeholder, 2) Employee name and address, 3) Date, 4) Reference to the original decision being appealed, 5) Summary of the appeal hearing, 6) The appeal outcome (upheld/not upheld/varied), 7) Reasons for the decision, 8) Whether the original sanction is confirmed, varied or overturned, 9) Statement that this is the final stage of the internal procedure, 10) Signature block. Use formal but clear language.`
+    };      await streamClaude(
         `UK HR professional. ACAS Code, ERA 1996. DD Month YYYY dates.${policies.length?" Reference company policies by name.":""}`,
         `${prompts[t]}\nEmployee: ${caseInfo.employee||"[Name]"}\nDate: ${caseInfo.date||"[Date]"}\nChair: ${caseInfo.manager||"[Manager]"}\nParticipants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A"}${getPolicyCtx()}\n\nMeeting summary:\n${tx||reviewOutput||"No transcript"}\n\nInclude: formal header, findings, decision, right of appeal, timescales, signature block. End with ## Next Steps for HR.`,
         t2=>setLetterOutput(t2)
@@ -1734,7 +1738,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
                 <div style={{fontSize:12,color:"#A98FFF"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
               </button>
-              <button onClick={()=>{setShowLetterModal(false);setScreen(SCREENS.TEMPLATES);}}
+              <button onClick={()=>{setShowLetterModal(false);setScreen(SCREENS.TEMPLATES);setActiveLetter("outcome");}}
                 style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>Use a template</div>
                 <div style={{fontSize:12,color:"#555"}}>Pick from your uploaded templates and Compass will populate it with meeting details</div>
@@ -2600,6 +2604,17 @@ ${m.content}`;
             {aiProcessing&&!letterOutput&&<div style={{textAlign:"center",padding:50}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span><div style={{color:"#666",marginTop:10}}>Drafting...</div></div>}
             {letterOutput&&(
               <>
+                {/* Edit toggle */}
+                <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+                  <button onClick={()=>setEditingLetter(e=>!e)}
+                    style={{background:editingLetter?"#7C5CFC":"none",border:"1px solid",borderColor:editingLetter?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
+                    {editingLetter?"Done editing":"Edit letter"}
+                  </button>
+                </div>
+                {editingLetter&&(
+                  <textarea value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
+                    style={{width:"100%",minHeight:400,background:"#0D0D0F",border:"1px solid #7C5CFC33",borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Playfair Display,Georgia,serif",marginBottom:12}}/>
+                )}
                 {/* Sig bar */}
                 <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
