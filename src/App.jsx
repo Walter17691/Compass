@@ -1367,19 +1367,16 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAiProcessing(false);
     // Auto risk score
     runRiskScore();
-    // Appeal detection - run once after review is complete
-    setTimeout(()=>{
-      if(!appealDetectedRef.current){
-        const text = document.body.innerText.toLowerCase();
-        // Check transcript for appeal language
-        const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-        const allNoteText = allNotes.map(u=>u.text).join(" ").toLowerCase();
-        if(appealWords.some(w=>allNoteText.includes(w))){
-          appealDetectedRef.current = true;
-          setShowLinkCase(true);
-        }
+    // Appeal detection using tx which is already computed from allNotes
+    if(!appealDetectedRef.current){
+      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
+      console.log("Checking TX for appeal:", tx.slice(0,100));
+      if(appealWords.some(w=>tx.toLowerCase().includes(w))){
+        console.log("Appeal detected!");
+        appealDetectedRef.current = true;
+        setShowLinkCase(true);
       }
-    }, 500);
+    }
   };
 
   const runRiskScore = async () => {
