@@ -105,14 +105,14 @@
       document.getElementById('sign-section').style.display = 'none';
       document.getElementById('signed-section').style.display = 'block';
       document.getElementById('status-badge').innerHTML = '<span style="color:#4CAF50">✓ Signed</span>';
-      const d = data.signed_at ? new Date(data.signed_at).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'}) : '';
+      const d = data.signed_at ? new Date(data.signed_at).toLocaleString('en-GB', {day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
       document.getElementById('signed-date').textContent = d;
       if (data.signature) document.getElementById('sig-image').src = data.signature;
     }
 
     function downloadSigned() {
       if (!docData) return;
-      const signedDate = docData.signed_at ? new Date(docData.signed_at).toLocaleDateString('en-GB') : '';
+      const signedDate = docData.signed_at ? new Date(docData.signed_at).toLocaleString('en-GB', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
       const content = (docData.document || '') + '\n\n---\nSigned electronically by ' + (docData.employee_name||'Employee') + ' on ' + signedDate + '.';
       const html = '<html><body><pre style="font-family:Arial;font-size:12pt;line-height:1.6;white-space:pre-wrap;padding:40px">' + content + '</pre></body></html>';
       const blob = new Blob([html], {type: 'application/msword'});
