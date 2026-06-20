@@ -555,6 +555,7 @@ export default function Compass() {
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
         signId,
+        managerEmail: currentUser?.email||"",
         document: (()=>{const s=reviewOutput.indexOf("## Meeting Details");const e=reviewOutput.indexOf("\n## Key Points");return s>-1?reviewOutput.slice(s,e>-1?e:undefined):reviewOutput;})(),
         employeeName: caseInfo.employee||"Employee",
         managerName: caseInfo.manager||"Manager",
