@@ -23,6 +23,7 @@ function Root() {
         .eq('user_id', u.id)
         .maybeSingle()
 
+      console.log("memberData:", memberData);
       if(memberData) {
         setOrg(memberData.organisations)
         setMember({ role: memberData.role, name: memberData.name })

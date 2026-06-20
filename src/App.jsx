@@ -1,3 +1,4 @@
+import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback } from "react";
 
 // ─────────────────────────────────────────────
@@ -1965,31 +1966,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         </div>
       )}
 
-      {/* ── User switcher modal ── */}
-      {showUserSwitch && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1800,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <Card style={{maxWidth:440,width:"100%"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",fontWeight:600}}>Switch user</div>
-              <button onClick={()=>setShowUserSwitch(false)} style={{background:"none",border:"none",color:"#666",fontSize:20,cursor:"pointer"}}>✕</button>
-            </div>
-            {users.map(u=>(
-              <button key={u.id} onClick={()=>switchUser(u)}
-                style={{width:"100%",background:currentUser?.id===u.id?"#7C5CFC18":"#0D0D0F",border:"1px solid",borderColor:currentUser?.id===u.id?"#7C5CFC":"#2A2A35",borderRadius:8,padding:"12px 14px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{u.name}</div>
-                  <div style={{fontSize:11,color:"#555"}}>{u.role} {u.email?"· "+u.email:""}</div>
-                </div>
-                {currentUser?.id===u.id&&<span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>Active</span>}
-              </button>
-            ))}
-            <div style={{borderTop:"1px solid #2A2A35",paddingTop:14,marginTop:6}}>
-              <div style={{fontSize:11,color:"#555",marginBottom:10}}>Add team member</div>
-              <UserAddForm onAdd={(name,role,email)=>{ const u=addUser(name,role,email); switchUser(u); setShowUserSwitch(false); }}/>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* ── HEADER ── */}
       <header style={{background:"#0D0D0F",borderBottom:"1px solid #1C1C22",position:"sticky",top:0,zIndex:99}}>
@@ -2034,10 +2010,11 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 {dueSoon.filter(d=>d.overdue).length} overdue
               </button>
             )}
-            <button onClick={()=>setShowUserSwitch(true)}
-              style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#888",borderRadius:6,padding:"5px 10px",fontSize:11,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-              {currentUser ? currentUser.name : "Set user"}
-            </button>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {org?.name&&<span style={{fontSize:11,color:"#555",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
+              {currentUser?.name&&<span style={{fontSize:11,color:"#888"}}>{currentUser.name}</span>}
+              {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #2A2A35",color:"#555",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>Sign out</button>}
+            </div>
             <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#1C1C22":"none",border:"1px solid #2A2A35",color:"#666",borderRadius:6,padding:"5px 10px",fontSize:14}}>⚙</button>
             {meetingType&&<button onClick={reset} style={{background:"none",border:"1px solid #2A2A35",color:"#555",borderRadius:6,padding:"4px 10px",fontSize:11}}>End meeting</button>}
           </nav>
