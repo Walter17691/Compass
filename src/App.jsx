@@ -1771,10 +1771,30 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
                 {cases.map(cs=>(
                   <button key={cs.id} onClick={()=>{
+                    // Link appeal meeting to this case
+                    const meeting = {
+                      id: Date.now().toString(),
+                      type: meetingType?.label||"Appeal",
+                      date: caseInfo.date||new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"2-digit",year:"numeric"}),
+                      manager: caseInfo.manager,
+                      participants,
+                      transcript: transcript.filter(u=>!u.pending),
+                      record: reviewOutput,
+                      letterOutput,
+                      riskScore,
+                      nextSteps,
+                      prediction,
+                      letterTracking: {},
+                      savedAt: new Date().toISOString(),
+                      savedBy: currentUser?.name||"HR Manager",
+                      signId, signStatus,
+                    };
+                    saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:[...x.meetings,meeting]}:x));
                     setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""}));
                     setShowLinkCase(false);
                     setAppealDetected(false);
                     appealDetectedRef.current=false;
+                    alert("Appeal meeting linked to "+cs.employeeName+"'s case.");
                   }} style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:13,color:"#F2EDE4",cursor:"pointer",textAlign:"left",fontFamily:"Playfair Display,Georgia,serif"}}>
                     <div style={{fontWeight:600}}>{cs.employeeName}</div>
                     <div style={{fontSize:11,color:"#555",marginTop:2}}>{cs.meetings.length} meeting{cs.meetings.length!==1?"s":""} · Latest: {cs.meetings[cs.meetings.length-1]?.type}</div>
@@ -1784,7 +1804,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             ):(
               <div style={{fontSize:13,color:"#555",marginBottom:16}}>No existing cases found. This will be saved as a new case.</div>
             )}
-            <Btn variant="ghost" onClick={()=>setShowLinkCase(false)} style={{width:"100%"}}>Skip — save as new case</Btn>
+            <Btn variant="ghost" onClick={()=>setShowLinkCase(false)} style={{width:"100%"}}>Skip</Btn>
           </div>
         </div>
       )}
