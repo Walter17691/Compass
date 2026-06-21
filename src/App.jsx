@@ -4887,6 +4887,43 @@ ${m.content}`;
           <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
           <p style={{fontSize:13,color:"#666",margin:"0 0 28px"}}>All data saved in your browser.</p>
 
+          {/* Invite code */}
+          {isHR&&org?.invite_code&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Team invite code</div>
+              <p style={{fontSize:12,color:"#555",marginBottom:12}}>Share this code with team members to join your workspace.</p>
+              <div style={{display:"flex",alignItems:"center",gap:10,background:"#141418",borderRadius:8,padding:"12px 16px"}}>
+                <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,color:"#7C5CFC",letterSpacing:4,fontWeight:700}}>{org.invite_code}</span>
+                <button onClick={()=>navigator.clipboard.writeText(org.invite_code)} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#888",cursor:"pointer"}}>Copy</button>
+              </div>
+            </Card>
+          )}
+
+          {/* Locations */}
+          {isHR&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Locations</div>
+              <p style={{fontSize:12,color:"#555",marginBottom:16}}>Add office locations. Managers will be assigned to a location and will only see cases from their location.</p>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+                {locations.map(l=>(
+                  <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#141418",borderRadius:8,padding:"10px 14px"}}>
+                    <span style={{fontSize:13,color:"#F2EDE4"}}>{l.name}</span>
+                    <button onClick={()=>deleteLocation(l.id)} style={{background:"none",border:"none",color:"#E8622A",cursor:"pointer",fontSize:12}}>Remove</button>
+                  </div>
+                ))}
+                {locations.length===0&&<div style={{fontSize:12,color:"#444"}}>No locations added yet</div>}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <input id="new-location-input" placeholder="e.g. London, Manchester..."
+                  style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
+                <Btn onClick={()=>{
+                  const input = document.getElementById("new-location-input");
+                  if(input?.value.trim()){ addLocation(input.value.trim()); input.value=""; }
+                }}>Add</Btn>
+              </div>
+            </Card>
+          )}
+
           {/* Word template */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
