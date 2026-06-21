@@ -21,7 +21,7 @@ const SCREENS = {
   HOME:"home", CASES:"cases", PREP:"prep", RECORD:"record",
   REVIEW:"review", LETTER:"letter", SETTINGS:"settings",
   DASHBOARD:"dashboard", PORTAL:"portal", TIMELINE:"timeline",
-  TEMPLATES:"templates", WHISTLE:"whistle", HR_REVIEW:"hr_review", PREDICT:"predict",
+  TEMPLATES:"templates", WHISTLE:"whistle", HR_REVIEW:"hr_review", AUDIT:"audit", PREDICT:"predict",
   DEVELOP:"develop", SEARCH:"search", GDPR:"gdpr", ONBOARD:"onboard",
   NEWSTARTER:"newstarter", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing",
@@ -3150,6 +3150,31 @@ ${m.content}`;
                 )}
               </div>
 
+              {/* Audit trail for this case */}
+              <div style={{padding:"12px 20px",background:"#0D0D0F",borderTop:"1px solid #1a1a1a"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase"}}>Audit trail</span>
+                  <button onClick={()=>loadAuditLog(c.id)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:10,cursor:"pointer"}}>Refresh</button>
+                </div>
+                {auditLog.filter(a=>a.case_id===c.id).length===0?(
+                  <div style={{fontSize:11,color:"#333"}}>No activity recorded yet</div>
+                ):(
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {auditLog.filter(a=>a.case_id===c.id).slice(0,5).map(a=>(
+                      <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div>
+                          <span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>{a.action}</span>
+                          <span style={{fontSize:11,color:"#555",marginLeft:8}}>{a.details}</span>
+                        </div>
+                        <div style={{fontSize:10,color:"#333",whiteSpace:"nowrap",marginLeft:8}}>
+                          {a.user_name} · {new Date(a.created_at).toLocaleDateString("en-GB")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Tribunal Bundle Builder */}
               <div style={{padding:"12px 20px",background:"#0D0D0F",borderTop:"1px solid #1a1a1a",borderBottomLeftRadius:12,borderBottomRightRadius:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -3467,6 +3492,35 @@ ${m.content}`;
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ AUDIT LOG ══ */}
+      {screen===SCREENS.AUDIT&&(
+        <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
+          <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Audit Log</h2>
+          <p style={{fontSize:13,color:"#666",margin:"0 0 24px"}}>Full record of all actions taken across your organisation.</p>
+          {auditLog.length===0?(
+            <div style={{textAlign:"center",padding:"60px 20px",color:"#444",fontSize:13}}>No activity recorded yet</div>
+          ):(
+            <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,overflow:"hidden"}}>
+              {auditLog.map((a,i)=>(
+                <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",borderBottom:i<auditLog.length-1?"1px solid #141414":"none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
+                    <div>
+                      <span style={{fontSize:13,color:"#F2EDE4",fontWeight:500}}>{a.action}</span>
+                      {a.details&&<span style={{fontSize:12,color:"#555",marginLeft:8}}>{a.details}</span>}
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0,marginLeft:16}}>
+                    <div style={{fontSize:11,color:"#7C5CFC"}}>{a.user_name}</div>
+                    <div style={{fontSize:10,color:"#444"}}>{new Date(a.created_at).toLocaleString("en-GB")}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
