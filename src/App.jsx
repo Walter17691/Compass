@@ -602,6 +602,12 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [toasts, setToasts] = useState([]);
+  const toast = (msg, type="success") => {
+    const id = Date.now();
+    setToasts(t=>[...t,{id,msg,type}]);
+    setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)), 3500);
+  };
   // ── Supabase case sync ──
   const loadCasesFromDB = async () => {
     if(!org?.id) return;
@@ -744,7 +750,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     }).select().single();
     if(data) {
       setHrReviewRequests(r=>[data,...r]);
-      alert("HR review requested. The HR team will be notified.");
+      toast("HR review requested");
     }
   };
 
@@ -1941,6 +1947,15 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#0D0D0F;}::-webkit-scrollbar-thumb{background:#2A2A35;border-radius:2px;}
       `}</style>
 
+      {toasts.length>0&&(
+        <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none"}}>
+          {toasts.map(t=>(
+            <div key={t.id} style={{background:t.type==="error"?"#2A1008":t.type==="warning"?"#1A1500":"#0A1A0A",border:"1px solid",borderColor:t.type==="error"?"#E8622A":t.type==="warning"?"#D4882A":"#7C5CFC",borderRadius:8,padding:"12px 16px",fontSize:13,color:t.type==="error"?"#E8622A":t.type==="warning"?"#D4882A":"#7C5CFC",maxWidth:300,boxShadow:"0 4px 20px rgba(0,0,0,0.5)"}}>
+              {t.msg}
+            </div>
+          ))}
+        </div>
+      )}
       {showLinkCase&&appealDetected&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
@@ -1973,7 +1988,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     setShowLinkCase(false);
                     setAppealDetected(false);
                     appealDetectedRef.current=false;
-                    alert("Appeal linked to "+cs.employeeName);
+                    toast("Appeal linked to "+cs.employeeName);
                   }} style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:13,color:"#F2EDE4",cursor:"pointer",textAlign:"left",fontFamily:"Playfair Display,Georgia,serif"}}>
                     <div style={{fontWeight:600}}>{cs.employeeName}</div>
                     <div style={{fontSize:11,color:"#555",marginTop:2}}>{cs.meetings.length} meeting{cs.meetings.length!==1?"s":""} · Latest: {cs.meetings[cs.meetings.length-1]?.type}</div>
@@ -2034,7 +2049,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                       date: (caseInfo.date&&/^\d{4}-\d{2}-\d{2}$/.test(caseInfo.date)?caseInfo.date.split("-").reverse().join("/"):caseInfo.date)||new Date().toLocaleDateString("en-GB")
                     })});
                   const d = await r.json();
-                  if(d.success){ alert("Letter sent to "+emailLetterTo); setShowEmailLetter(false); setEmailLetterTo(""); }
+                  if(d.success){ toast("Letter sent to "+emailLetterTo); setShowEmailLetter(false); setEmailLetterTo(""); }
                   else alert("Failed: "+d.error);
                 } catch(e){ alert("Error: "+e.message); }
               }} disabled={!emailLetterTo.includes("@")} style={{flex:1}}>Send email</Btn>
@@ -3630,7 +3645,7 @@ ${m.content}`;
                             rows={2} style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,outline:"none",color:"#F2EDE4",resize:"none",boxSizing:"border-box",marginBottom:8}}/>
                           <div style={{display:"flex",gap:8}}>
                             <Btn onClick={()=>respondToReview(r.id,"approved",comments)} style={{background:"#4CAF50",borderColor:"#4CAF50"}}>✓ Approve</Btn>
-                            <Btn onClick={()=>{if(!comments.trim()){alert("Please add comments when rejecting.");return;}respondToReview(r.id,"rejected",comments);}} variant="ghost" style={{color:"#E8622A",borderColor:"#E8622A"}}>✕ Reject</Btn>
+                            <Btn onClick={()=>{if(!comments.trim()){toast("Please add comments when rejecting", "warning");return;}respondToReview(r.id,"rejected",comments);}} variant="ghost" style={{color:"#E8622A",borderColor:"#E8622A"}}>✕ Reject</Btn>
                           </div>
                         </div>
                       );
