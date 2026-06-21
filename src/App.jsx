@@ -5016,6 +5016,19 @@ ${m.content}`;
           <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
           <p style={{fontSize:13,color:"#666",margin:"0 0 28px"}}>All data saved in your browser.</p>
 
+          {/* Data export */}
+          {isHR&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Data export</div>
+              <p style={{fontSize:12,color:"#555",marginBottom:16}}>Export all cases and meeting records for reporting or backup.</p>
+              <div style={{display:"flex",gap:10}}>
+                <Btn onClick={exportCSV} style={{flex:1}}>Export CSV</Btn>
+                <Btn onClick={exportPDF} variant="ghost" style={{flex:1}}>Export PDF</Btn>
+              </div>
+              <div style={{fontSize:11,color:"#444",marginTop:10}}>CSV includes all cases, meetings, risk scores and dates. PDF includes full case summaries.</div>
+            </Card>
+          )}
+
           {/* Invite code */}
           {isHR&&org?.invite_code&&(
             <Card style={{marginBottom:20}}>
