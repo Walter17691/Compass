@@ -650,6 +650,40 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   useEffect(() => { if(org?.id) loadCasesFromDB(); }, [org?.id]);
 
+  // ── Team members ──
+  const loadTeamMembers = async () => {
+    if(!org?.id) return;
+    const { data } = await supabase.from('org_members').select('*').eq('org_id', org.id);
+    if(data) setTeamMembers(data);
+  };
+
+  const inviteMember = async () => {
+    if(!inviteForm.name.trim()||!inviteForm.email.trim()) return;
+    setInviting(true);
+    try {
+      const r = await fetch('/api/invite-member', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          email: inviteForm.email.trim(),
+          name: inviteForm.name.trim(),
+          role: inviteForm.role,
+          orgId: org.id,
+          orgName: org.name
+        })
+      });
+      const d = await r.json();
+      if(d.success) {
+        alert(`Invite sent to ${inviteForm.email}`);
+        setInviteForm({name:"",email:"",role:"hr_manager"});
+        loadTeamMembers();
+      } else {
+        alert("Error: "+d.error);
+      }
+    } catch(e) { alert("Error: "+e.message); }
+    setInviting(false);
+  };
+
   // ── Locations ──
   const loadLocations = async () => {
     if(!org?.id) return;
@@ -710,7 +744,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadTeamMembers(); } }, [org?.id]);
 
 
 
@@ -722,6 +756,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   }, []);
   const [showLetterModal, setShowLetterModal] = useState(false);
   const [locations, setLocations] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager"});
+  const [inviting, setInviting] = useState(false);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
   const [showHrReviewModal, setShowHrReviewModal] = useState(false);
   const [pendingReviewStep, setPendingReviewStep] = useState(null);
@@ -4922,6 +4959,44 @@ ${m.content}`;
                   const input = document.getElementById("new-location-input");
                   if(input?.value.trim()){ addLocation(input.value.trim()); input.value=""; }
                 }}>Add</Btn>
+              </div>
+            </Card>
+          )}
+
+          {/* Team members */}
+          {isHR&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Team members</div>
+              <p style={{fontSize:12,color:"#555",marginBottom:16}}>Invite team members to your workspace. They will receive an email invite.</p>
+              
+              {/* Current members */}
+              <div style={{marginBottom:16}}>
+                {teamMembers.map(m=>(
+                  <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1a1a1a"}}>
+                    <div>
+                      <div style={{fontSize:13,color:"#F2EDE4"}}>{m.name||"Unknown"}</div>
+                      <div style={{fontSize:11,color:"#555"}}>{m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Invite form */}
+              <div style={{borderTop:"1px solid #2A2A35",paddingTop:16}}>
+                <div style={{fontSize:11,color:"#666",marginBottom:12,fontWeight:600}}>Invite new member</div>
+                <input placeholder="Full name" value={inviteForm.name} onChange={e=>setInviteForm(p=>({...p,name:e.target.value}))}
+                  style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4",marginBottom:8,boxSizing:"border-box"}}/>
+                <input placeholder="Email address" type="email" value={inviteForm.email} onChange={e=>setInviteForm(p=>({...p,email:e.target.value}))}
+                  style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4",marginBottom:8,boxSizing:"border-box"}}/>
+                <select value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value}))}
+                  style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4",marginBottom:12}}>
+                  <option value="hr_manager">HR Manager</option>
+                  <option value="hr_director">HR Director</option>
+                  <option value="location_manager">Location Manager</option>
+                </select>
+                <Btn onClick={inviteMember} disabled={inviting||!inviteForm.name.trim()||!inviteForm.email.trim()} style={{width:"100%"}}>
+                  {inviting?"Sending invite...":"Send invite"}
+                </Btn>
               </div>
             </Card>
           )}
