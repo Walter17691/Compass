@@ -606,11 +606,12 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const loadCasesFromDB = async () => {
     if(!org?.id) return;
     try {
-      const { data, error } = await supabase
-        .from('cases')
-        .select('*')
-        .eq('org_id', org.id)
-        ;
+      let query = supabase.from('cases').select('*').eq('org_id', org.id);
+      // Location managers only see their location cases
+      if(member?.role==='location_manager' && member?.location_ids?.length>0) {
+        query = query.in('location_id', member.location_ids);
+      }
+      const { data, error } = await query;
   if(!error && data) {
         const mapped = data.map(row => ({
           id: row.id,
@@ -635,6 +636,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         employee_name: caseObj.employeeName,
         employee_email: caseObj.email || "",
         meetings: caseObj.meetings || [],
+        location_id: caseObj.locationId || (member?.role==='location_manager'&&member?.location_ids?.[0])||null,
         assigned_to: user?.id || null,
         created_by: user?.id || null,
         updated_at: new Date().toISOString(),
@@ -855,9 +857,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       setHomeAttachment(null);
       
       // Show case prompt after first response
-      console.log("Setting showCasePrompt to true");
       setShowCasePrompt(true);
-      console.log("showCasePrompt set");
     } catch(e) {
       setHistory([...displayHistory, {role:"assistant", content:"Sorry, something went wrong."}]);
     }
@@ -952,21 +952,20 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   useEffect(() => { if(feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight; }, [transcript]);
 
   // ── Persistence helpers ──
-  const saveCases = u => { 
+  const saveCases = (u, changedId=null) => { 
     setCases(u); 
     lsSet("compass_cases", u);
-    // Sync changed cases to DB
     if(org?.id) {
-      u.forEach(cs => {
-        const existing = cases.find(x=>x.id===cs.id);
-        if(!existing || JSON.stringify(existing)!==JSON.stringify(cs)) {
-          saveCaseToDB(cs);
-        }
-      });
-      // Delete removed cases
-      cases.forEach(cs => {
-        if(!u.find(x=>x.id===cs.id)) deleteCaseFromDB(cs.id);
-      });
+      if(changedId) {
+        // Only sync the changed case
+        const changed = u.find(x=>x.id===changedId);
+        if(changed) saveCaseToDB(changed);
+        else deleteCaseFromDB(changedId);
+      } else {
+        // Sync all
+        u.forEach(cs => saveCaseToDB(cs));
+        cases.forEach(cs => { if(!u.find(x=>x.id===cs.id)) deleteCaseFromDB(cs.id); });
+      }
     }
   };
   const saveWhistle = u => { setWhistleReports(u); lsSet("compass_whistle", u); };
