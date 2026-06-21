@@ -663,7 +663,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       const r = await fetch("/api/delete-member", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ userId: member.user_id, orgMemberId: member.id })
+        body: JSON.stringify({ userId: member.user_id, orgMemberId: member.id, locationIds: member.location_ids||[] })
       });
       const d = await r.json();
       if(d.success) setTeamMembers(m=>m.filter(x=>x.id!==member.id));
@@ -671,10 +671,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     } catch(e) { alert("Error: "+e.message); }
   };
 
-  const assignLocation = async (memberId, locationId) => {
-    const loc = locationId ? [locationId] : [];
-    await supabase.from("org_members").update({location_ids: loc}).eq("id", memberId);
-    setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,location_ids:loc}:x));
+  const assignLocations = async (memberId, locationIds) => {
+    await supabase.from("org_members").update({location_ids: locationIds}).eq("id", memberId);
+    setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,location_ids:locationIds}:x));
   };
 
   const inviteMember = async () => {
@@ -777,7 +776,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showLetterModal, setShowLetterModal] = useState(false);
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
-  const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager"});
+  const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager",locationIds:[]});
   const [inviting, setInviting] = useState(false);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
   const [showHrReviewModal, setShowHrReviewModal] = useState(false);
@@ -5000,14 +4999,24 @@ ${m.content}`;
                       </div>
                       <button onClick={()=>removeMember(m)} style={{background:"none",border:"none",color:"#E8622A",cursor:"pointer",fontSize:11}}>Remove</button>
                     </div>
-                    {m.role==="location_manager"&&locations.length>0&&(
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:10,color:"#555"}}>Location:</span>
-                        <select value={m.location_ids?.[0]||""} onChange={e=>assignLocation(m.id,e.target.value||null)}
-                          style={{background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:4,padding:"3px 8px",fontSize:11,color:"#F2EDE4",outline:"none"}}>
-                          <option value="">All locations</option>
-                          {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-                        </select>
+                    {locations.length>0&&(
+                      <div style={{marginTop:6}}>
+                        <div style={{fontSize:10,color:"#555",marginBottom:4}}>Locations:</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {locations.map(l=>(
+                            <label key={l.id} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",fontSize:11,color:"#F2EDE4"}}>
+                              <input type="checkbox"
+                                checked={(m.location_ids||[]).includes(l.id)}
+                                onChange={e=>{
+                                  const current = m.location_ids||[];
+                                  const updated = e.target.checked?[...current,l.id]:current.filter(x=>x!==l.id);
+                                  assignLocations(m.id, updated);
+                                }}
+                                style={{accentColor:"#7C5CFC"}}/>
+                              {l.name}
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -5028,6 +5037,23 @@ ${m.content}`;
                   <option value="hr_director">HR Director</option>
                   <option value="location_manager">Location Manager</option>
                 </select>
+                {locations.length>0&&(
+                  <div style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Locations</label>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {locations.map(l=>(
+                        <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#F2EDE4"}}>
+                          <input type="checkbox" checked={inviteForm.locationIds.includes(l.id)}
+                            onChange={e=>{
+                              setInviteForm(p=>({...p,locationIds:e.target.checked?[...p.locationIds,l.id]:p.locationIds.filter(x=>x!==l.id)}));
+                            }}
+                            style={{accentColor:"#7C5CFC"}}/>
+                          {l.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Btn onClick={inviteMember} disabled={inviting||!inviteForm.name.trim()||!inviteForm.email.trim()} style={{width:"100%"}}>
                   {inviting?"Sending invite...":"Send invite"}
                 </Btn>
