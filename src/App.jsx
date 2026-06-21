@@ -21,7 +21,7 @@ const SCREENS = {
   HOME:"home", CASES:"cases", PREP:"prep", RECORD:"record",
   REVIEW:"review", LETTER:"letter", SETTINGS:"settings",
   DASHBOARD:"dashboard", PORTAL:"portal", TIMELINE:"timeline",
-  TEMPLATES:"templates", WHISTLE:"whistle", PREDICT:"predict",
+  TEMPLATES:"templates", WHISTLE:"whistle", HR_REVIEW:"hr_review", PREDICT:"predict",
   DEVELOP:"develop", SEARCH:"search", GDPR:"gdpr", ONBOARD:"onboard",
   NEWSTARTER:"newstarter", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing",
@@ -650,6 +650,70 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   useEffect(() => { if(org?.id) loadCasesFromDB(); }, [org?.id]);
 
+  // ── Locations ──
+  const loadLocations = async () => {
+    if(!org?.id) return;
+    const { data } = await supabase.from('locations').select('*').eq('org_id', org.id);
+    if(data) setLocations(data);
+  };
+
+  const addLocation = async (name) => {
+    if(!org?.id||!name.trim()) return;
+    const { data } = await supabase.from('locations').insert({ org_id: org.id, name: name.trim() }).select().single();
+    if(data) setLocations(l=>[...l, data]);
+  };
+
+  const deleteLocation = async (id) => {
+    await supabase.from('locations').delete().eq('id', id);
+    setLocations(l=>l.filter(x=>x.id!==id));
+  };
+
+  // ── HR Review Requests ──
+  const loadHrReviews = async () => {
+    if(!org?.id) return;
+    const { data } = await supabase.from('hr_review_requests').select('*').eq('org_id', org.id).order('requested_at', {ascending: false});
+    if(data) setHrReviewRequests(data);
+  };
+
+  const requestHrReview = async (step, caseId, meetingId, recordSnapshot) => {
+    if(!org?.id) return;
+    const cs = cases.find(x=>x.id===caseId);
+    const meeting = cs?.meetings.find(m=>m.id===meetingId);
+    const { data } = await supabase.from('hr_review_requests').insert({
+      org_id: org.id,
+      case_id: caseId,
+      meeting_id: meetingId,
+      step,
+      requested_by: user?.id,
+      requested_by_name: member?.name||user?.email,
+      case_employee_name: cs?.employeeName,
+      meeting_type: meeting?.type||meetingType?.label,
+      record_snapshot: recordSnapshot||reviewOutput,
+      status: 'pending'
+    }).select().single();
+    if(data) {
+      setHrReviewRequests(r=>[data,...r]);
+      alert("HR review requested. The HR team will be notified.");
+    }
+  };
+
+  const respondToReview = async (reviewId, status, comments) => {
+    const { data } = await supabase.from('hr_review_requests').update({
+      status,
+      comments,
+      reviewed_by: user?.id,
+      reviewed_by_name: member?.name||user?.email,
+      reviewed_at: new Date().toISOString()
+    }).eq('id', reviewId).select().single();
+    if(data) setHrReviewRequests(r=>r.map(x=>x.id===reviewId?data:x));
+  };
+
+  const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
+
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); } }, [org?.id]);
+
+
+
 
   useEffect(()=>{
     const handler = ()=>setIsMobile(window.innerWidth<768);
@@ -657,6 +721,11 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     return ()=>window.removeEventListener("resize", handler);
   }, []);
   const [showLetterModal, setShowLetterModal] = useState(false);
+  const [locations, setLocations] = useState([]);
+  const [hrReviewRequests, setHrReviewRequests] = useState([]);
+  const [showHrReviewModal, setShowHrReviewModal] = useState(false);
+  const [pendingReviewStep, setPendingReviewStep] = useState(null);
+  const [pendingReviewCaseId, setPendingReviewCaseId] = useState(null);
   const [showBundleBuilder, setShowBundleBuilder] = useState(null); // caseId
   const [bundleChat, setBundleChat] = useState([]);
   const [bundleChatInput, setBundleChatInput] = useState("");
@@ -2477,6 +2546,10 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         </>)}
                         <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
                       <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
+                      {!isHR&&<Btn onClick={()=>{
+                        const cs = cases.find(x=>x.employeeName===caseInfo.employee.trim());
+                        requestHrReview("record", cs?.id||null, null, reviewOutput);
+                      }} style={{background:"#D4882A",borderColor:"#D4882A"}}>Request HR review</Btn>}
                       <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
                       {signId&&(
                         <button onClick={async()=>{
@@ -3321,6 +3394,71 @@ ${m.content}`;
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ══ HR REVIEW ══ */}
+      {screen===SCREENS.HR_REVIEW&&(
+        <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
+          <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>HR Review Queue</h2>
+          <p style={{fontSize:13,color:"#666",margin:"0 0 24px"}}>Review and approve or reject requests from managers.</p>
+
+          {hrReviewRequests.length===0&&(
+            <div style={{textAlign:"center",padding:"60px 20px",color:"#444",fontSize:13}}>No review requests yet</div>
+          )}
+
+          {["pending","approved","rejected"].map(status=>{
+            const filtered = hrReviewRequests.filter(r=>r.status===status);
+            if(!filtered.length) return null;
+            return(
+              <div key={status} style={{marginBottom:32}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#888",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>
+                  {status==="pending"?"Awaiting review":status==="approved"?"Approved":"Rejected"} ({filtered.length})
+                </div>
+                {filtered.map(r=>(
+                  <div key={r.id} style={{background:"#1C1C22",border:"1px solid",borderColor:r.status==="pending"?"#D4882A33":r.status==="approved"?"#4CAF5033":"#E8622A33",borderRadius:12,padding:20,marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                      <div>
+                        <div style={{display:"flex",gap:8,marginBottom:6}}>
+                          <Badge color={r.status==="pending"?"#D4882A":r.status==="approved"?"#4CAF50":"#E8622A"}>{r.status}</Badge>
+                          <Badge>{r.step}</Badge>
+                        </div>
+                        <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:2}}>{r.case_employee_name}</div>
+                        <div style={{fontSize:12,color:"#555"}}>{r.meeting_type} · Requested by {r.requested_by_name} · {new Date(r.requested_at).toLocaleDateString("en-GB")}</div>
+                      </div>
+                    </div>
+                    {r.record_snapshot&&(
+                      <details style={{marginBottom:12}}>
+                        <summary style={{fontSize:11,color:"#7C5CFC",cursor:"pointer",marginBottom:8}}>View record snapshot</summary>
+                        <div style={{background:"#141418",borderRadius:8,padding:"12px 16px",maxHeight:200,overflowY:"auto"}}>
+                          <MDRenderer text={r.record_snapshot}/>
+                        </div>
+                      </details>
+                    )}
+                    {r.status==="pending"&&isHR&&(()=>{
+                      const [comments, setComments] = React.useState("");
+                      return(
+                        <div>
+                          <textarea value={comments} onChange={e=>setComments(e.target.value)}
+                            placeholder="Add comments (required for rejection)..."
+                            rows={2} style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,outline:"none",color:"#F2EDE4",resize:"none",boxSizing:"border-box",marginBottom:8}}/>
+                          <div style={{display:"flex",gap:8}}>
+                            <Btn onClick={()=>respondToReview(r.id,"approved",comments)} style={{background:"#4CAF50",borderColor:"#4CAF50"}}>✓ Approve</Btn>
+                            <Btn onClick={()=>{if(!comments.trim()){alert("Please add comments when rejecting.");return;}respondToReview(r.id,"rejected",comments);}} variant="ghost" style={{color:"#E8622A",borderColor:"#E8622A"}}>✕ Reject</Btn>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {r.status!=="pending"&&r.comments&&(
+                      <div style={{background:"#141418",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#888"}}>
+                        <span style={{color:r.status==="approved"?"#4CAF50":"#E8622A",fontWeight:600}}>{r.status==="approved"?"Approved":"Rejected"}</span> by {r.reviewed_by_name} · {r.comments}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
 
