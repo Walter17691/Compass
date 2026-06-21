@@ -226,7 +226,6 @@ function CompassLogo({ size = 36 }) {
           m.riskScore?.rating||"",
           m.signStatus==="signed"?"Yes":"No",
           (m.record||"").slice(0,200).split("\n").join(" ").split(",").join(";"),
-/g," ").replace(/,/g,";"),
           m.savedBy||"",
           m.savedAt?new Date(m.savedAt).toLocaleDateString("en-GB"):""
         ]);
