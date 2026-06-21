@@ -26,8 +26,32 @@ function Root() {
       if(memberData) {
         setOrg(memberData.organisations)
         setMember({ role: memberData.role, name: memberData.name })
+      } else {
+        // Check if user was invited - look up by org_id in user metadata
+        const orgId = u.user_metadata?.org_id
+        if(orgId) {
+          const { data: org } = await supabase
+            .from('organisations')
+            .select('*')
+            .eq('id', orgId)
+            .maybeSingle()
+          
+          if(org) {
+            // Create member record
+            const role = u.user_metadata?.role || 'hr_manager'
+            const name = u.user_metadata?.name || u.email
+            await supabase.from('org_members').insert({
+              org_id: orgId,
+              user_id: u.id,
+              role,
+              name
+            })
+            setOrg(org)
+            setMember({ role, name })
+          }
+        }
       }
-    } catch(e) {}
+    } catch(e) { console.error("Load org error:", e) }
     setLoading(false)
   }
 
