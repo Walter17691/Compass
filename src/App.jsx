@@ -768,6 +768,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager",locationIds:[]});
   const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
+  const [editingMember, setEditingMember] = useState(null);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
   const [showHrReviewModal, setShowHrReviewModal] = useState(false);
   const [pendingReviewStep, setPendingReviewStep] = useState(null);
@@ -5006,16 +5007,26 @@ ${m.content}`;
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <div>
                         <div style={{fontSize:13,color:"#F2EDE4"}}>{m.name||"Unknown"}</div>
-                        <div style={{fontSize:11,color:"#555"}}>{m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}</div>
+                        <div style={{fontSize:11,color:"#555"}}>
+                          {m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}
+                          {(m.location_ids||[]).length>0&&" · "+locations.filter(l=>(m.location_ids||[]).includes(l.id)).map(l=>l.name).join(", ")}
+                        </div>
                       </div>
-                      <button onClick={()=>removeMember(m)} style={{background:"none",border:"none",color:"#E8622A",cursor:"pointer",fontSize:11}}>Remove</button>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>setEditingMember(editingMember===m.id?null:m.id)}
+                          style={{background:"none",border:"1px solid #2A2A35",borderRadius:4,padding:"3px 8px",color:"#7C5CFC",cursor:"pointer",fontSize:11}}>
+                          {editingMember===m.id?"Done":"Edit access"}
+                        </button>
+                        <button onClick={()=>removeMember(m)}
+                          style={{background:"none",border:"none",color:"#E8622A",cursor:"pointer",fontSize:11}}>Remove</button>
+                      </div>
                     </div>
-                    {locations.length>0&&(
-                      <div style={{marginTop:6}}>
-                        <div style={{fontSize:10,color:"#555",marginBottom:4}}>Locations:</div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {editingMember===m.id&&locations.length>0&&(
+                      <div style={{background:"#141418",borderRadius:8,padding:"10px 14px",marginTop:4}}>
+                        <div style={{fontSize:10,color:"#555",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                           {locations.map(l=>(
-                            <label key={l.id} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",fontSize:11,color:"#F2EDE4"}}>
+                            <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#F2EDE4"}}>
                               <input type="checkbox"
                                 checked={(m.location_ids||[]).includes(l.id)}
                                 onChange={e=>{
