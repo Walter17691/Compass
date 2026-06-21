@@ -657,6 +657,26 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     if(data) setTeamMembers(data);
   };
 
+  const removeMember = async (member) => {
+    if(!window.confirm("Remove "+member.name+" from the team?")) return;
+    try {
+      const r = await fetch("/api/delete-member", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ userId: member.user_id, orgMemberId: member.id })
+      });
+      const d = await r.json();
+      if(d.success) setTeamMembers(m=>m.filter(x=>x.id!==member.id));
+      else alert("Error: "+d.error);
+    } catch(e) { alert("Error: "+e.message); }
+  };
+
+  const assignLocation = async (memberId, locationId) => {
+    const loc = locationId ? [locationId] : [];
+    await supabase.from("org_members").update({location_ids: loc}).eq("id", memberId);
+    setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,location_ids:loc}:x));
+  };
+
   const inviteMember = async () => {
     if(!inviteForm.name.trim()||!inviteForm.email.trim()) return;
     setInviting(true);
