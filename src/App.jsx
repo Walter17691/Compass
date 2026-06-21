@@ -260,8 +260,7 @@ function CompassLogo({ size = 36 }) {
         if(y>260){doc.addPage();y=20;}
         addLine(`${m.type||"Meeting"} — ${m.date||""}`,11,164,143,255,true);
         if(m.riskScore?.rating) addLine(`Risk: ${m.riskScore.rating}`,9,232,98,42);
-        if(m.record) addLine(m.record.slice(0,300).replace(/#{1,3} /g,"").replace(/
-/g," ")+"...",9,196,189,175);
+        if(m.record) addLine(m.record.slice(0,300).split("\n").join(" ")+"...",9,196,189,175);
         addLine(`${m.savedBy||"HR Manager"} · ${m.savedAt?new Date(m.savedAt).toLocaleDateString("en-GB"):""}`,8,80,80,80);
         y+=2;
       });
