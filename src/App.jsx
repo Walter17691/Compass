@@ -4992,13 +4992,27 @@ ${m.content}`;
               {/* Current members */}
               <div style={{marginBottom:16}}>
                 {teamMembers.map(m=>(
-                  <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1a1a1a"}}>
-                    <div>
-                      <div style={{fontSize:13,color:"#F2EDE4"}}>{m.name||"Unknown"}</div>
-                      <div style={{fontSize:11,color:"#555"}}>{m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}</div>
+                  <div key={m.id} style={{padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div>
+                        <div style={{fontSize:13,color:"#F2EDE4"}}>{m.name||"Unknown"}</div>
+                        <div style={{fontSize:11,color:"#555"}}>{m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}</div>
+                      </div>
+                      <button onClick={()=>removeMember(m)} style={{background:"none",border:"none",color:"#E8622A",cursor:"pointer",fontSize:11}}>Remove</button>
                     </div>
+                    {m.role==="location_manager"&&locations.length>0&&(
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:10,color:"#555"}}>Location:</span>
+                        <select value={m.location_ids?.[0]||""} onChange={e=>assignLocation(m.id,e.target.value||null)}
+                          style={{background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:4,padding:"3px 8px",fontSize:11,color:"#F2EDE4",outline:"none"}}>
+                          <option value="">All locations</option>
+                          {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 ))}
+                {teamMembers.length===0&&<div style={{fontSize:12,color:"#444"}}>No team members yet</div>}
               </div>
 
               {/* Invite form */}
