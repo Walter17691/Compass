@@ -778,6 +778,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [teamMembers, setTeamMembers] = useState([]);
   const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager",locationIds:[]});
   const [inviting, setInviting] = useState(false);
+  const [inviteLink, setInviteLink] = useState(null);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
   const [showHrReviewModal, setShowHrReviewModal] = useState(false);
   const [pendingReviewStep, setPendingReviewStep] = useState(null);
@@ -1986,6 +1987,27 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                 } catch(e){ alert("Error: "+e.message); }
               }} disabled={!emailLetterTo.includes("@")} style={{flex:1}}>Send email</Btn>
               <Btn variant="ghost" onClick={()=>{setShowEmailLetter(false);setEmailLetterTo("");}} style={{flex:1}}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inviteLink&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Share invite with {inviteLink.name}</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:20}}>Share this link or invite code with {inviteLink.name} ({inviteLink.email}):</p>
+            <div style={{background:"#141418",borderRadius:8,padding:"12px 16px",marginBottom:12}}>
+              <div style={{fontSize:10,color:"#555",marginBottom:4}}>Invite link</div>
+              <div style={{fontSize:12,color:"#7C5CFC",wordBreak:"break-all"}}>{inviteLink.link}</div>
+            </div>
+            <div style={{background:"#141418",borderRadius:8,padding:"12px 16px",marginBottom:20}}>
+              <div style={{fontSize:10,color:"#555",marginBottom:4}}>Invite code</div>
+              <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,color:"#7C5CFC",letterSpacing:4,fontWeight:700}}>{inviteLink.code}</div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={()=>navigator.clipboard.writeText(inviteLink.link)} style={{flex:1}}>Copy link</Btn>
+              <Btn variant="ghost" onClick={()=>setInviteLink(null)} style={{flex:1}}>Done</Btn>
             </div>
           </div>
         </div>
