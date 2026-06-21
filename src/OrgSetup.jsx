@@ -122,6 +122,7 @@ export default function OrgSetup({ user, onComplete }) {
                 <select value={role} onChange={e=>setRole(e.target.value)} style={{...inp,marginBottom:12}}>
                   <option value="hr_manager">HR Manager</option>
                   <option value="hr_director">HR Director</option>
+                  <option value="location_manager">Location Manager (Business/General Manager)</option>
                 </select>
                 <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Invite code</label>
                 <input placeholder="e.g. ABC123" value={inviteCode} onChange={e=>setInviteCode(e.target.value)} style={{...inp,textTransform:"uppercase",letterSpacing:2}}/>

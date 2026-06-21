@@ -2084,6 +2084,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               {org?.name&&<span style={{fontSize:11,color:"#555",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
               {currentUser?.name&&<span style={{fontSize:11,color:"#888"}}>{currentUser.name}</span>}
+              {member?.role&&<span style={{fontSize:10,color:"#7C5CFC",background:"#7C5CFC11",border:"1px solid #7C5CFC33",borderRadius:4,padding:"2px 6px"}}>{member.role==="hr_director"?"HR Director":member.role==="hr_manager"?"HR Manager":"Location Manager"}</span>}
               {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #2A2A35",color:"#555",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>Sign out</button>}
             </div>
             <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#1C1C22":"none",border:"1px solid #2A2A35",color:"#666",borderRadius:6,padding:"5px 10px",fontSize:14}}>⚙</button>
