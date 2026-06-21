@@ -671,6 +671,11 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     } catch(e) { alert("Error: "+e.message); }
   };
 
+  const updateMemberRole = async (memberId, role) => {
+    await supabase.from("org_members").update({role}).eq("id", memberId);
+    setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,role}:x));
+  };
+
   const assignLocations = async (memberId, locationIds) => {
     await supabase.from("org_members").update({location_ids: locationIds}).eq("id", memberId);
     setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,location_ids:locationIds}:x));
@@ -5023,6 +5028,13 @@ ${m.content}`;
                     </div>
                     {editingMember===m.id&&locations.length>0&&(
                       <div style={{background:"#141418",borderRadius:8,padding:"10px 14px",marginTop:4}}>
+                        <div style={{fontSize:10,color:"#555",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
+                        <select value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
+                          style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:12}}>
+                          <option value="hr_director">HR Director</option>
+                          <option value="hr_manager">HR Manager</option>
+                          <option value="location_manager">Location Manager</option>
+                        </select>
                         <div style={{fontSize:10,color:"#555",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                           {locations.map(l=>(
