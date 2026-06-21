@@ -680,25 +680,14 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     if(!inviteForm.name.trim()||!inviteForm.email.trim()) return;
     setInviting(true);
     try {
-      const r = await fetch('/api/invite-member', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          email: inviteForm.email.trim(),
-          name: inviteForm.name.trim(),
-          role: inviteForm.role,
-          orgId: org.id,
-          orgName: org.name
-        })
+      const link = `https://compass-lemon-iota.vercel.app?invite=${org.invite_code}`;
+      setInviteLink({
+        name: inviteForm.name.trim(),
+        email: inviteForm.email.trim(),
+        link,
+        code: org.invite_code
       });
-      const d = await r.json();
-      if(d.success) {
-        alert(`Invite sent to ${inviteForm.email}`);
-        setInviteForm({name:"",email:"",role:"hr_manager"});
-        loadTeamMembers();
-      } else {
-        alert("Error: "+d.error);
-      }
+      setInviteForm({name:"",email:"",role:"hr_manager",locationIds:[]});
     } catch(e) { alert("Error: "+e.message); }
     setInviting(false);
   };
