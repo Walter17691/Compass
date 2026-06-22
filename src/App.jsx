@@ -2647,13 +2647,13 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                             <div style={{fontSize:11,color:"#666",marginBottom:8}}>Enter names to update dialogue initials:</div>
                             <div style={{display:"flex",gap:8}}>
                               <input value={caseInfo.manager||""} 
-                                onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
-                                onBlur={e=>{const v=e.target.value;if(v)setReviewOutput(r=>{const lines=r.split("\n");console.log("Chair lines:",lines.filter(l=>l.includes("Chair")));return lines.map(l=>l.startsWith("- Chair:")||l.startsWith("Chair:")?l.replace(/:\s*.*/,": "+v):l).join("\n");});}}
+                                onChange={e=>{setCaseInfo(p=>({...p,manager:e.target.value}));syncNameToRecord('manager',e.target.value);}}
+
                                 placeholder="Chair / Manager name"
                                 style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
                               <input value={caseInfo.employee||""}
-                                onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
-                                onBlur={e=>{const v=e.target.value;if(v)setReviewOutput(r=>{const lines=r.split("\n");return lines.map(l=>l.startsWith("- Employee:")||l.startsWith("Employee:")?l.replace(/:\s*.*/,": "+v):l).join("\n");});}}
+                                onChange={e=>{setCaseInfo(p=>({...p,employee:e.target.value}));syncNameToRecord('employee',e.target.value);}}
+
                                 placeholder="Employee name"
                                 style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
                               <button onClick={async()=>{
