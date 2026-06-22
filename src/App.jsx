@@ -2631,12 +2631,16 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           <div style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
                             <div style={{fontSize:11,color:"#666",marginBottom:8}}>Enter names to update dialogue initials:</div>
                             <div style={{display:"flex",gap:8}}>
-                                onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,manager:v}));if(v&&reviewOutput)setReviewOutput(r=>{return r.split("
+                                onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,manager:v}));if(v&&reviewOutput)setReviewOutput(r=>r.split('
+').map(l=>l.startsWith('- Chair:')||l.startsWith('Chair:')?l.split(':')[0]+': '+v:l).join('
+'));}}
 ").map(l=>l.startsWith("- Chair:")||l.startsWith("Chair:")?l.split(":")[0]+": "+v:l).join("
 ")});}}
                                 onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,manager:v}));if(v&&reviewOutput)setReviewOutput(r=>{const ls=r.split("
 ");return ls.map(l=>l.startsWith("- Chair:")||l.startsWith("Chair:")?l.replace(/:\s*.*/,": "+v):l).join("
-")});}}
+                                onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,employee:v}));if(v&&reviewOutput)setReviewOutput(r=>r.split('
+').map(l=>l.startsWith('- Employee:')||l.startsWith('Employee:')?l.split(':')[0]+': '+v:l).join('
+'));}}
 
                                 onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,employee:v}));if(v&&reviewOutput)setReviewOutput(r=>{return r.split("
 ").map(l=>l.startsWith("- Employee:")||l.startsWith("Employee:")?l.split(":")[0]+": "+v:l).join("
