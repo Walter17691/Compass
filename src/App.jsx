@@ -216,6 +216,22 @@ function CompassLogo({ size = 36 }) {
   const s = size;
 
 
+  const syncNameToRecord = (field, value) => {
+    if(!value) return;
+    setReviewOutput(r => {
+      if(!r) return r;
+      const nl = String.fromCharCode(10);
+      return r.split(nl).map(l => {
+        const isChair = l.startsWith('- Chair:') || l.startsWith('Chair:');
+        const isEmp = l.startsWith('- Employee:') || l.startsWith('Employee:');
+        if(field === 'manager' && isChair) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
+        if(field === 'employee' && isEmp) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
+        return l;
+      }).join(nl);
+    });
+  };
+
+
   return (
     <svg width={s} height={s} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
       <circle cx="50" cy="50" r="44" stroke="#7C5CFC" strokeWidth="9" fill="none" />
@@ -1972,7 +1988,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                     saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:[...x.meetings,meeting]}:x));
                     setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""}));
                     setShowLinkCase(false);
-                    showToast("Linked to "+cs.employeeName);
                     setAppealDetected(false);
                     appealDetectedRef.current=false;
                     showToast("Appeal linked to "+cs.employeeName);
@@ -2631,26 +2646,14 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                           <div style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
                             <div style={{fontSize:11,color:"#666",marginBottom:8}}>Enter names to update dialogue initials:</div>
                             <div style={{display:"flex",gap:8}}>
+                              <input value={caseInfo.manager||""} 
                                 onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
-
-'));}}
-").map(l=>l.startsWith("- Chair:")||l.startsWith("Chair:")?l.split(":")[0]+": "+v:l).join("
-")});}}
-                                onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
-
-                                onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,employee:v}));if(v&&reviewOutput)setReviewOutput(r=>r.split('
-').map(l=>l.startsWith('- Employee:')||l.startsWith('Employee:')?l.split(':')[0]+': '+v:l).join('
-'));}}
-
-                                onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,employee:v}));if(v&&reviewOutput)setReviewOutput(r=>{return r.split("
-").map(l=>l.startsWith("- Employee:")||l.startsWith("Employee:")?l.split(":")[0]+": "+v:l).join("
-")});}}
+                                onBlur={e=>{const v=e.target.value;if(v)setReviewOutput(r=>{const lines=r.split("\n");console.log("Chair lines:",lines.filter(l=>l.includes("Chair")));return lines.map(l=>l.startsWith("- Chair:")||l.startsWith("Chair:")?l.replace(/:\s*.*/,": "+v):l).join("\n");});}}
+                                placeholder="Chair / Manager name"
                                 style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
                               <input value={caseInfo.employee||""}
-                                onChange={e=>{const v=e.target.value;setCaseInfo(p=>({...p,employee:v}));if(v&&reviewOutput)setReviewOutput(r=>{const ls=r.split("
-");return ls.map(l=>l.startsWith("- Employee:")||l.startsWith("Employee:")?l.replace(/:\s*.*/,": "+v):l).join("
-")});}}
-
+                                onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
+                                onBlur={e=>{const v=e.target.value;if(v)setReviewOutput(r=>{const lines=r.split("\n");return lines.map(l=>l.startsWith("- Employee:")||l.startsWith("Employee:")?l.replace(/:\s*.*/,": "+v):l).join("\n");});}}
                                 placeholder="Employee name"
                                 style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
                               <button onClick={async()=>{
