@@ -805,7 +805,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [bundleChatInput, setBundleChatInput] = useState("");
   const [bundleProcessing, setBundleProcessing] = useState(false);
   const [bundleFiles, setBundleFiles] = useState([]);
-  const [acasData, setAcasData] = useState({}); // keyed by caseId
+  const [acasData, setAcasData] = useState({});
+  const [redundancyData, setRedundancyData] = useState({}); // keyed by caseId
   const [showEmailLetter, setShowEmailLetter] = useState(false);
   const [emailLetterTo, setEmailLetterTo] = useState("");
   const [editingLetter, setEditingLetter] = useState(false);
@@ -3265,6 +3266,108 @@ ${m.content}`;
                   </div>
                 )}
               </div>
+
+              {/* Redundancy tracker */}
+              {c.meetings.some(m=>m.type?.toLowerCase().includes('redundancy'))&&(
+                <div style={{padding:"12px 20px",background:"#141414",borderTop:"1px solid #1a1a1a"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:redundancyData[c.id]?"12px":"0"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase"}}>Redundancy</span>
+                      {redundancyData[c.id]?.status&&<Badge color={redundancyData[c.id].status==="confirmed"?"#E8622A":redundancyData[c.id].status==="withdrawn"?"#4CAF50":"#D4882A"}>{redundancyData[c.id].status==="confirmed"?"Confirmed":redundancyData[c.id].status==="withdrawn"?"Withdrawn":"At Risk"}</Badge>}
+                    </div>
+                    <button onClick={()=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],open:!r[c.id]?.open}}))}
+                      style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
+                      {redundancyData[c.id]?.open?"Close":"Track"}
+                    </button>
+                  </div>
+                  {redundancyData[c.id]?.open&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <div>
+                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Status</label>
+                          <select value={redundancyData[c.id]?.status||"atrisk"} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],status:e.target.value}}))}
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}>
+                            <option value="atrisk">At risk</option>
+                            <option value="confirmed">Confirmed redundancy</option>
+                            <option value="withdrawn">Withdrawn — alternative found</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Date at risk letter sent</label>
+                          <input type="date" value={redundancyData[c.id]?.atRiskDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],atRiskDate:e.target.value}}))}
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                        </div>
+                        <div>
+                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Start date (for redundancy pay)</label>
+                          <input type="date" value={redundancyData[c.id]?.startDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],startDate:e.target.value}}))}
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                        </div>
+                        <div>
+                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Weekly pay (£)</label>
+                          <input type="number" placeholder="e.g. 650" value={redundancyData[c.id]?.weeklyPay||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],weeklyPay:e.target.value}}))}
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                        </div>
+                        <div>
+                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Date of birth</label>
+                          <input type="date" value={redundancyData[c.id]?.dob||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],dob:e.target.value}}))}
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                        </div>
+                        <div>
+                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Notice period (weeks)</label>
+                          <input type="number" placeholder="e.g. 4" value={redundancyData[c.id]?.noticePeriod||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],noticePeriod:e.target.value}}))}
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                        </div>
+                      </div>
+                      {/* Statutory redundancy pay calculator */}
+                      {redundancyData[c.id]?.startDate&&redundancyData[c.id]?.dob&&redundancyData[c.id]?.weeklyPay&&(()=>{
+                        const start = new Date(redundancyData[c.id].startDate);
+                        const dob = new Date(redundancyData[c.id].dob);
+                        const end = new Date();
+                        const ageAtEnd = Math.floor((end-dob)/(365.25*24*3600*1000));
+                        const yearsService = Math.min(Math.floor((end-start)/(365.25*24*3600*1000)), 20);
+                        const cappedWeeklyPay = Math.min(parseFloat(redundancyData[c.id].weeklyPay), 643);
+                        let weeks = 0;
+                        for(let i=0; i<yearsService; i++){
+                          const ageInYear = ageAtEnd - i;
+                          if(ageInYear >= 41) weeks += 1.5;
+                          else if(ageInYear >= 22) weeks += 1;
+                          else weeks += 0.5;
+                        }
+                        const total = Math.round(weeks * cappedWeeklyPay);
+                        return(
+                          <div style={{background:"#0D0D0F",borderRadius:8,padding:"12px 16px",border:"1px solid #7C5CFC33"}}>
+                            <div style={{fontSize:10,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Statutory Redundancy Pay</div>
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                              <div><div style={{fontSize:10,color:"#555"}}>Age</div><div style={{fontSize:13,color:"#F2EDE4"}}>{ageAtEnd}</div></div>
+                              <div><div style={{fontSize:10,color:"#555"}}>Service</div><div style={{fontSize:13,color:"#F2EDE4"}}>{yearsService} yrs</div></div>
+                              <div><div style={{fontSize:10,color:"#555"}}>Weekly pay</div><div style={{fontSize:13,color:"#F2EDE4"}}>£{cappedWeeklyPay}</div></div>
+                            </div>
+                            <div style={{fontSize:20,color:"#7C5CFC",fontWeight:700}}>£{total.toLocaleString()}</div>
+                            <div style={{fontSize:10,color:"#444",marginTop:4}}>Based on {weeks} weeks × £{cappedWeeklyPay} (capped at £643/week, 20 years max)</div>
+                            {parseFloat(redundancyData[c.id].weeklyPay) > 643&&(
+                              <div style={{fontSize:11,color:"#D4882A",marginTop:4}}>⚠ Weekly pay exceeds statutory cap of £643. Employer may pay enhanced redundancy above this.</div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      <div>
+                        <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Notes / alternatives considered</label>
+                        <textarea value={redundancyData[c.id]?.notes||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],notes:e.target.value}}))}
+                          placeholder="Alternative roles offered, selection criteria applied, consultation notes..."
+                          rows={3} style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",resize:"none",boxSizing:"border-box"}}/>
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <Btn onClick={()=>{
+                          setReviewOutput(redundancyData[c.id]?.notes||"");
+                          setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
+                          setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
+                          setShowLetterModal(true);
+                        }} style={{fontSize:12}}>Draft redundancy letter</Btn>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Tribunal Bundle Builder */}
               <div style={{padding:"12px 20px",background:"#0D0D0F",borderTop:"1px solid #1a1a1a",borderBottomLeftRadius:12,borderBottomRightRadius:12}}>
