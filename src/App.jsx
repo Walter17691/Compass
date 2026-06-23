@@ -1587,9 +1587,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
           const name = l.substring(l.indexOf(':')+1).trim();
           if(name && name !== 'Unknown' && name.length > 1) setCaseInfo(p=>({...p,manager:name}));
         }
-        if(lLow.includes('employee') && l.includes(':') && !caseInfo.employee) {
+        if((lLow.startsWith('- employee') || lLow.startsWith('employee:')) && l.includes(':') && !caseInfo.employee) {
           const name = l.substring(l.indexOf(':')+1).trim();
-          if(name && name !== 'Unknown' && name.length > 1) setCaseInfo(p=>({...p,employee:name}));
+          if(name && name !== 'Unknown' && name.length > 1 && name.length < 50 && !name.includes('.')) setCaseInfo(p=>({...p,employee:name}));
         }
       });
       return r;
