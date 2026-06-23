@@ -2036,7 +2036,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
             <p style={{fontSize:13,color:"#666",marginBottom:24}}>How would you like to create the outcome letter?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>{setShowLetterModal(false);handleLetter("outcome");}}
+              <button onClick={()=>{setShowLetterModal(false);handleLetter(activeLetter||"outcome");}}
                 style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
                 <div style={{fontSize:12,color:"#A98FFF"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
