@@ -222,10 +222,11 @@ function CompassLogo({ size = 36 }) {
       if(!r) return r;
       const nl = String.fromCharCode(10);
       return r.split(nl).map(l => {
-        const isChair = l.startsWith('- Chair:') || l.startsWith('Chair:');
-        const isEmp = l.startsWith('- Employee:') || l.startsWith('Employee:');
-        if(field === 'manager' && isChair) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
-        if(field === 'employee' && isEmp) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
+        const lLower = l.toLowerCase();
+        const hasChair = lLower.includes('chair') && l.includes(':');
+        const hasEmp = (lLower.includes('employee') || lLower.includes('attendee')) && l.includes(':');
+        if(field === 'manager' && hasChair) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
+        if(field === 'employee' && hasEmp) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
         return l;
       }).join(nl);
     });
