@@ -3279,7 +3279,7 @@ ${m.content}`;
               </div>
 
               {/* Redundancy tracker */}
-              {c.meetings.some(m=>m.type?.toLowerCase().includes('redundancy'))&&(
+              {c.meetings.some(m=>m.type?.toLowerCase().includes('redundancy')||m.type?.toLowerCase().includes('at risk')||m.type?.toLowerCase().includes('redundancy consultation')||m.type?.toLowerCase().includes('redundancy outcome'))&&(
                 <div style={{padding:"12px 20px",background:"#141414",borderTop:"1px solid #1a1a1a"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:redundancyData[c.id]?"12px":"0"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
