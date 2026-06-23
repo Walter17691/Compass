@@ -2645,7 +2645,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
                         {/* Meeting Dialogue with edit button */}
                         {dlgSection&&(<>
                           <div style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
-                            <div style={{fontSize:11,color:"#666",marginBottom:8}}>Enter names to update dialogue initials:</div>
+                            <div style={{fontSize:11,color:"#666",marginBottom:8}}>Enter names before generating the record for best results:</div>
                             <div style={{display:"flex",gap:8}}>
                               <input value={caseInfo.manager||""} 
                                 onChange={e=>{setCaseInfo(p=>({...p,manager:e.target.value}));syncNameToRecord('manager',e.target.value);}}
