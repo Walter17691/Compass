@@ -1578,6 +1578,22 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAiProcessing(false);
     // Auto risk score
     runRiskScore();
+    // Auto-populate name fields from generated record
+    setReviewOutput(r => {
+      if(!r) return r;
+      r.split(String.fromCharCode(10)).forEach(l => {
+        const lLow = l.toLowerCase();
+        if(lLow.includes('chair') && l.includes(':') && !caseInfo.manager) {
+          const name = l.substring(l.indexOf(':')+1).trim();
+          if(name && name !== 'Unknown' && name.length > 1) setCaseInfo(p=>({...p,manager:name}));
+        }
+        if(lLow.includes('employee') && l.includes(':') && !caseInfo.employee) {
+          const name = l.substring(l.indexOf(':')+1).trim();
+          if(name && name !== 'Unknown' && name.length > 1) setCaseInfo(p=>({...p,employee:name}));
+        }
+      });
+      return r;
+    });
   };
 
   const runRiskScore = async () => {
