@@ -3305,13 +3305,11 @@ ${m.content}`;
                         </div>
                         <div>
                           <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Date at risk letter sent</label>
-                          <input type="date" value={redundancyData[c.id]?.atRiskDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],atRiskDate:e.target.value}}))}
-                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none",colorScheme:"dark"}}/>
+                          <DateInput value={redundancyData[c.id]?.atRiskDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],atRiskDate:e.target.value}}))}/>
                         </div>
                         <div>
                           <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Start date (for redundancy pay)</label>
-                          <input type="date" value={redundancyData[c.id]?.startDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],startDate:e.target.value}}))}
-                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none",colorScheme:"dark"}}/>
+                          <DateInput value={redundancyData[c.id]?.startDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],startDate:e.target.value}}))}/>
                         </div>
                         <div>
                           <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Weekly pay (£)</label>
