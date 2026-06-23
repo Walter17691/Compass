@@ -806,6 +806,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [bundleProcessing, setBundleProcessing] = useState(false);
   const [bundleFiles, setBundleFiles] = useState([]);
   const [acasData, setAcasData] = useState({});
+  const [redundancyData, setRedundancyData] = useState({});
   const [redundancyData, setRedundancyData] = useState({}); // keyed by caseId
   const [showEmailLetter, setShowEmailLetter] = useState(false);
   const [emailLetterTo, setEmailLetterTo] = useState("");
