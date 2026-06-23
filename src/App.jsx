@@ -3306,12 +3306,12 @@ ${m.content}`;
                         <div>
                           <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Date at risk letter sent</label>
                           <input type="date" value={redundancyData[c.id]?.atRiskDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],atRiskDate:e.target.value}}))}
-                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none",colorScheme:"dark"}}/>
                         </div>
                         <div>
                           <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Start date (for redundancy pay)</label>
                           <input type="date" value={redundancyData[c.id]?.startDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],startDate:e.target.value}}))}
-                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                            style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none",colorScheme:"dark"}}/>
                         </div>
                         <div>
                           <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Weekly pay (£)</label>
@@ -3319,8 +3319,8 @@ ${m.content}`;
                             style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                         </div>
                         <div>
-                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Date of birth</label>
-                          <input type="date" value={redundancyData[c.id]?.dob||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],dob:e.target.value}}))}
+                          <label style={{display:"block",fontSize:10,color:"#555",marginBottom:4}}>Age</label>
+                          <input type="number" placeholder="e.g. 35" value={redundancyData[c.id]?.age||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],age:e.target.value}}))}
                             style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                         </div>
                         <div>
@@ -3330,11 +3330,10 @@ ${m.content}`;
                         </div>
                       </div>
                       {/* Statutory redundancy pay calculator */}
-                      {redundancyData[c.id]?.startDate&&redundancyData[c.id]?.dob&&redundancyData[c.id]?.weeklyPay&&(()=>{
+                      {redundancyData[c.id]?.startDate&&redundancyData[c.id]?.age&&redundancyData[c.id]?.weeklyPay&&(()=>{
                         const start = new Date(redundancyData[c.id].startDate);
-                        const dob = new Date(redundancyData[c.id].dob);
                         const end = new Date();
-                        const ageAtEnd = Math.floor((end-dob)/(365.25*24*3600*1000));
+                        const ageAtEnd = parseInt(redundancyData[c.id].age)||0;
                         const yearsService = Math.min(Math.floor((end-start)/(365.25*24*3600*1000)), 20);
                         const cappedWeeklyPay = Math.min(parseFloat(redundancyData[c.id].weeklyPay), 643);
                         let weeks = 0;
