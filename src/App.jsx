@@ -1755,8 +1755,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
   // ── AI: Letter ──
   const handleLetter = async type => {
-    console.log("handleLetter called with type:", type);
-
     const t = type||"outcome"; setActiveLetter(t); setAiError("");
     setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
     try {
