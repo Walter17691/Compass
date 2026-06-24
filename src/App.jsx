@@ -1692,80 +1692,12 @@ Please produce:
     };
     try {
       await streamClaude(
-        `UK HR professional writing developmental correspondence. Professional but human tone. Not disciplinary. DD Month YYYY dates.`,
-        `${letterConfig[s.type]||"Draft a development meeting outcome letter."}
-
-Employee: ${s.caseInfo.employee||"[Name]"}
-Role: ${s.caseInfo.role||"[Role]"}
-Manager: ${s.caseInfo.manager||"[Manager]"}
-Date: ${s.caseInfo.date||"[Date]"}
-Rating: ${s.rating||"N/A"}
-Outcome: ${s.outcome||"N/A"}
-
-Meeting summary:
-${devSummary||"Please refer to the discussion notes."}
-
-Include: date, greeting, what was discussed, agreed outcomes, next steps, signature block.`,
-        t => setDevLetter(t)
-      );
-    } catch(e) { setDevLetter("Error: "+e.message); }
-    setDevAiProcessing(false);
-  };
-
-  const generateSmartObjectives = async (context) => {
-    if(!devSession) return;
-    setDevAiProcessing(true);
-    try {
-      const result = await streamClaude(
-        `UK HR specialist. Generate SMART objectives. Respond ONLY with JSON array, no markdown: [{"label":"...","desc":"...","measure":"...","timeframe":"..."}]`,
-        `Role: ${devSession.caseInfo.role||"employee"}\nMeeting type: ${devSession.type}\nContext: ${context||devSession.caseInfo.reviewPeriod||"annual review"}\nGenerate 4 specific, measurable objectives appropriate for this person and meeting type.`,
-        ()=>{}
-      );
-      const parsed = JSON.parse(result.replace(/```json|```/g,"").trim());
-      setDevSession(s=>({...s, objectives:[...s.objectives, ...parsed.map(o=>({...o,rating:3,progress:"",note:""}))]}));
-    } catch(e) { alert("Could not generate objectives: "+e.message); }
-    setDevAiProcessing(false);
-  };
-
-  const saveDevMeetingToCase = () => {
-    if(!devSession?.caseInfo?.employee) return;
-    const empName = devSession.caseInfo.employee;
-    const meeting = {
-      id: Date.now().toString(),
-      type: devSession.type,
-      date: devSession.caseInfo.date||new Date().toLocaleDateString("en-GB"),
-      manager: devSession.caseInfo.manager,
-      participants:[],
-      transcript:[],
-      record: devSummary,
-      letterOutput: devLetter,
-      riskScore: null,
-      nextSteps: (NEXT_STEPS_MAP[devSession.type]||[]).map(s=>({...s,done:false})),
-      devSession: devSession,
-      savedAt: new Date().toISOString(),
-      isDev: true,
-    };
-    const existing = cases.find(c=>c.employeeName.toLowerCase()===empName.toLowerCase());
-    if(existing) {
-      saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
-    } else {
-      saveCases([...cases,{id:crypto.randomUUID(),employeeName:empName,email:devSession.caseInfo.email,createdAt:new Date().toISOString(),meetings:[meeting]}]);
-    }
-  };
-
-  // ── AI: Letter ──
-  const handleLetter = async type => {
-    const t = type||"outcome"; setActiveLetter(t); setAiError("");
-    setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
-    try {
-      const tx = transcript.map(u=>u.speaker+": "+u.text).join("\n");
-      const prompts = {
-      outcome: `You are a senior UK HR letter writer. Draft a formal outcome letter following the ACAS Code of Practice on Disciplinary and Grievance Procedures. The letter must include: 1) Company letterhead placeholder, 2) Employee name and address placeholder, 3) Date, 4) Clear statement of the outcome/decision, 5) Summary of the case and evidence considered, 6) The sanction imposed (if any) and reasons, 7) Duration of any warning, 8) Right of appeal (must be included per ACAS Code), 9) Appeal deadline (recommended 5 working days), 10) Signature block. Use formal but clear language. No jargon. Follow GOV.UK plain English guidance.`,
-      invite: `You are a senior UK HR letter writer. Draft a formal invitation letter following the ACAS Code of Practice. The letter must include: 1) Company letterhead placeholder, 2) Employee name and address, 3) Date, 4) Clear statement of the purpose of the meeting, 5) Date, time and location of meeting, 6) Details of the allegations or issues to be discussed, 7) Right to be accompanied (s.10 Employment Relations Act 1999 - must be included), 8) List of any evidence to be relied upon, 9) Instruction to contact HR if they cannot attend. Use formal but clear language.`,
-      appeal: `You are a senior UK HR letter writer. Draft a formal appeal outcome letter following the ACAS Code of Practice. The letter must include: 1) Company letterhead placeholder, 2) Employee name and address, 3) Date, 4) Reference to the original decision being appealed, 5) Summary of the appeal hearing, 6) The appeal outcome (upheld/not upheld/varied), 7) Reasons for the decision, 8) Whether the original sanction is confirmed, varied or overturned, 9) Statement that this is the final stage of the internal procedure, 10) Signature block. Use formal but clear language.`
-    };      await streamClaude(
-        `UK HR professional. ACAS Code, ERA 1996. DD Month YYYY dates.${policies.length?" Reference company policies by name.":""}`,
-        `${prompts[t]}\nEmployee: ${caseInfo.employee||"[Name]"}\nDate: ${caseInfo.date||"[Date]"}\nChair: ${caseInfo.manager||"[Manager]"}\nParticipants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A"}${getPolicyCtx()}\n\nMeeting summary:\n${tx||reviewOutput||"No transcript"}\n\nInclude: formal header, findings, decision, right of appeal, timescales, signature block. Be concise. No next steps tables unless specifically asked.`,
+        "You are a UK HR letter writer.",
+        (()=>{
+          const tmpl = getLetterTemplate(t);
+          if(tmpl) return "Fill in ONLY the placeholders in [brackets] in this template using the meeting information. Keep the exact structure. Output only the completed letter.\n\nTEMPLATE:\n" + tmpl + "\n\nMEETING INFO:\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\nType: " + (meetingType?.label||"") + "\nSummary:\n" + (tx||reviewOutput||"");
+          return (prompts[t]||prompts.outcome) + "\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\nParticipants: " + (participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A") + (getPolicyCtx()) + "\n\nMeeting summary:\n" + (tx||reviewOutput||"");
+        })(),
         t2=>setLetterOutput(t2)
       );
     } catch(e) { setAiError(e.message); }
@@ -1969,6 +1901,8 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
   };
 
   // ─────────────────────────────────────────────
+
+
 
 
 
@@ -2181,7 +2115,6 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
     const fn = LETTER_TEMPLATES[type];
     return fn ? fn(emp, chair, dt, mt) : null;
   };
-
 
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
