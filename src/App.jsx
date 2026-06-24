@@ -3369,7 +3369,7 @@ ${m.content}`;
                           rows={3} style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",resize:"none",boxSizing:"border-box"}}/>
                       </div>
                       <div style={{display:"flex",gap:8}}>
-                        <Btn onClick={()=>{
+                        <Btn onClick={e=>{e.stopPropagation();
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
