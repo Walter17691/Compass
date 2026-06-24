@@ -1754,6 +1754,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
 
   // ── AI: Letter ──
   const handleLetter = async type => {
+    console.log("handleLetter called with type:", type);
     const t = type||"outcome"; setActiveLetter(t); setAiError("");
     setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
     try {
@@ -3370,6 +3371,7 @@ ${m.content}`;
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
+                          setPendingLetterType("redundancy_outcome");
                           setShowLetterModal(true);
                         }} style={{fontSize:12}}>Draft redundancy letter</Btn>
                       </div>
