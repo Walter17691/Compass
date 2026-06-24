@@ -1767,7 +1767,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
       appeal: `You are a senior UK HR letter writer. Draft a formal appeal outcome letter following the ACAS Code of Practice. The letter must include: 1) Company letterhead placeholder, 2) Employee name and address, 3) Date, 4) Reference to the original decision being appealed, 5) Summary of the appeal hearing, 6) The appeal outcome (upheld/not upheld/varied), 7) Reasons for the decision, 8) Whether the original sanction is confirmed, varied or overturned, 9) Statement that this is the final stage of the internal procedure, 10) Signature block. Use formal but clear language.`
     };      await streamClaude(
         `UK HR professional. ACAS Code, ERA 1996. DD Month YYYY dates.${policies.length?" Reference company policies by name.":""}`,
-        `${prompts[t]}\nEmployee: ${caseInfo.employee||"[Name]"}\nDate: ${caseInfo.date||"[Date]"}\nChair: ${caseInfo.manager||"[Manager]"}\nParticipants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A"}${getPolicyCtx()}\n\nMeeting summary:\n${tx||reviewOutput||"No transcript"}\n\nInclude: formal header, findings, decision, right of appeal, timescales, signature block. End with ## Next Steps for HR.`,
+        `${prompts[t]}\nEmployee: ${caseInfo.employee||"[Name]"}\nDate: ${caseInfo.date||"[Date]"}\nChair: ${caseInfo.manager||"[Manager]"}\nParticipants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A"}${getPolicyCtx()}\n\nMeeting summary:\n${tx||reviewOutput||"No transcript"}\n\nInclude: formal header, findings, decision, right of appeal, timescales, signature block. Be concise. No next steps tables unless specifically asked.`,
         t2=>setLetterOutput(t2)
       );
     } catch(e) { setAiError(e.message); }
@@ -3369,7 +3369,7 @@ ${m.content}`;
                           rows={3} style={{width:"100%",background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",resize:"none",boxSizing:"border-box"}}/>
                       </div>
                       <div style={{display:"flex",gap:8}}>
-                        <Btn onClick={e=>{e.stopPropagation();
+                        <Btn onClick={e=>{e.stopPropagation();console.log("REDUNDANCY BTN CLICKED");
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
