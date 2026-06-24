@@ -798,6 +798,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   }, []);
   const [showLetterModal, setShowLetterModal] = useState(false);
   const [pendingLetterType, setPendingLetterType] = useState("outcome");
+  const pendingLetterTypeRef = useRef("outcome");
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager",locationIds:[]});
@@ -2038,7 +2039,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
             <p style={{fontSize:13,color:"#666",marginBottom:24}}>How would you like to create the outcome letter?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>{setShowLetterModal(false);handleLetter(pendingLetterType||"outcome");}}
+              <button onClick={()=>{setShowLetterModal(false);handleLetter(pendingLetterTypeRef.current||"outcome");}}
                 style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
                 <div style={{fontSize:12,color:"#A98FFF"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
@@ -3177,7 +3178,7 @@ ${m.content}`;
                       <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#4CAF50"}} onClick={()=>window.open("/sign/"+m.signId,"_blank")}>View signed notes</Btn>
                     )}
                     <Btn variant="secondary" onClick={()=>{setViewMeeting({...m,employeeName:c.employeeName,caseId:c.id});setViewCaseId(c.id);}} style={{fontSize:11,padding:"4px 12px"}}>View</Btn>
-                    <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#7C5CFC"}} onClick={()=>{setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||"",manager:m.manager||"",date:m.date||""}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setPendingLetterType("outcome");setShowLetterModal(true);}}>Draft letter</Btn>
+                    <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#7C5CFC"}} onClick={()=>{setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||"",manager:m.manager||"",date:m.date||""}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setPendingLetterType("outcome"); pendingLetterTypeRef.current="outcome"; setShowLetterModal(true);}}>Draft letter</Btn>
                     <Btn variant="danger" onClick={()=>{if(window.confirm("Delete?"))saveCases(cases.map(x=>x.id===c.id?{...x,meetings:x.meetings.filter(mm=>mm.id!==m.id)}:x).filter(x=>x.meetings.length>0));}} style={{fontSize:11,padding:"4px 10px"}}>✕</Btn>
                   </div>
                 </div>
@@ -3371,7 +3372,7 @@ ${m.content}`;
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
-                          setPendingLetterType("redundancy_outcome");
+                          setPendingLetterType("redundancy_outcome"); pendingLetterTypeRef.current="redundancy_outcome";
                           setShowLetterModal(true);
                         }} style={{fontSize:12}}>Draft redundancy letter</Btn>
                       </div>
