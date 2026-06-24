@@ -3373,7 +3373,44 @@ ${m.content}`;
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
-                          handleLetter("redundancy_outcome");
+                          const _emp = caseInfo.employee||"[Employee Name]";
+                          const _chair = caseInfo.manager||"[Chair Name]";
+                          const _date = new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+                          const _first = _emp.split(" ")[0];
+                          const _letter = "[COMPANY NAME]
+[Company Address]
+
+"+_emp+"
+[Employee Address]
+
+"+_date+"
+
+PRIVATE AND CONFIDENTIAL
+
+Dear "+_first+",
+
+RE: CONFIRMATION OF REDUNDANCY
+
+I am writing to confirm that, following the completion of our consultation process, your role of [Job Title] has been made redundant. Your last working day will be [insert date].
+
+NOTICE
+Your notice period of [X weeks] runs from "+_date+" to [end date]. You will [work your notice / receive payment in lieu].
+
+REDUNDANCY PAY
+You are entitled to a statutory redundancy payment of £[amount], to be paid on [payment date].
+
+ANNUAL LEAVE
+You have [X days] accrued leave which will be [paid out / taken during notice].
+
+RIGHT OF APPEAL
+You may appeal this decision within 5 working days by writing to [HR contact].
+
+Yours sincerely,
+
+"+_chair+"
+[Job Title]
+[Company Name]";
+                          setLetterOutput(_letter); setActiveLetter("redundancy_outcome"); setScreen(SCREENS.LETTER);
                         }} style={{fontSize:12}}>Draft redundancy letter</Btn>
                       </div>
                     </div>
