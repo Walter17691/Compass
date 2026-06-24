@@ -3372,8 +3372,7 @@ ${m.content}`;
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
-                          setPendingLetterType("redundancy_outcome"); pendingLetterTypeRef.current="redundancy_outcome";
-                          setShowLetterModal(true);
+                          setTimeout(()=>handleLetter("redundancy_outcome"),50);
                         }} style={{fontSize:12}}>Draft redundancy letter</Btn>
                       </div>
                     </div>
