@@ -1756,6 +1756,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
   // ── AI: Letter ──
   const handleLetter = async type => {
     console.log("handleLetter called with type:", type);
+
     const t = type||"outcome"; setActiveLetter(t); setAiError("");
     setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
     try {
@@ -2039,7 +2040,7 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
             <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
             <p style={{fontSize:13,color:"#666",marginBottom:24}}>How would you like to create the outcome letter?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>{setShowLetterModal(false);handleLetter(pendingLetterTypeRef.current||"outcome");}}
+              <button onClick={()=>{console.log("Generate clicked, pendingLetterTypeRef:", pendingLetterTypeRef.current);setShowLetterModal(false);handleLetter(pendingLetterTypeRef.current||"outcome");}}
                 style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
                 <div style={{fontSize:12,color:"#A98FFF"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
@@ -3372,7 +3373,7 @@ ${m.content}`;
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
-                          setTimeout(()=>handleLetter("redundancy_outcome"),50);
+                          handleLetter("redundancy_outcome");
                         }} style={{fontSize:12}}>Draft redundancy letter</Btn>
                       </div>
                     </div>
