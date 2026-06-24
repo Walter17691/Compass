@@ -3140,7 +3140,7 @@ ${m.content}`;
                   </div>
                 </div>
 
-                <div style={{background:"#FDFAF6",borderRadius:12,padding:"36px 44px",marginBottom:16}}>
+                <div style={{background:"#FDFAF6",borderRadius:12,padding:"36px 44px",marginBottom:16,textAlign:"left"}}>
                   <MDRenderer text={letterOutput} light/>
                   {signature&&(
                     <div style={{marginTop:20,paddingTop:18,borderTop:"1px solid #E0DDD8"}}>
@@ -4427,7 +4427,7 @@ ${m.content}`;
                 {devAiProcessing&&!devLetter&&<div style={{textAlign:"center",padding:40}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span></div>}
                 {devLetter&&(
                   <>
-                    <div style={{background:"#FDFAF6",borderRadius:12,padding:"36px 44px",marginBottom:16}}>
+                    <div style={{background:"#FDFAF6",borderRadius:12,padding:"36px 44px",marginBottom:16,textAlign:"left"}}>
                       <MDRenderer text={devLetter} light/>
                     </div>
                     <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
