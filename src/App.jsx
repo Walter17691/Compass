@@ -2116,6 +2116,25 @@ Please produce:
     return fn ? fn(emp, chair, dt, mt) : null;
   };
 
+  const handleLetter = async type => {
+    const t = type||"outcome"; setActiveLetter(t); setAiError("");
+    setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
+    try {
+      const tx = transcript.map(u=>u.speaker+": "+u.text).join("\n");
+      const tmpl = getLetterTemplate(t);
+      const prompt = tmpl
+        ? "You are a UK HR letter writer. Fill in ONLY the placeholders in [brackets] in this template using the meeting information. Keep the exact structure and format. Output only the completed letter with no additional text.\n\nTEMPLATE:\n" + tmpl + "\n\nMEETING INFORMATION:\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\nMeeting type: " + (meetingType?.label||"") + "\nSummary:\n" + (tx||reviewOutput||"")
+        : ({"outcome":"Draft a formal disciplinary outcome letter following the ACAS Code of Practice. Include decision, reasons, duration of warning, and right of appeal within 5 working days.","invite":"Draft a formal invitation letter following the ACAS Code. Include purpose, date/time/location, allegations, evidence, and right to be accompanied.","appeal":"Draft a formal appeal outcome letter following the ACAS Code. Include original decision, grounds of appeal, outcome, reasons, and whether this is the final stage."}[t]||"Draft a formal HR letter.") + "\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\n\nMeeting summary:\n" + (tx||reviewOutput||"");
+      await streamClaude(
+        "You are a UK HR letter writer. Use formal plain English. No tables. No bold. Date at top, employee address, sent via email line, Private and Confidential, then subject, then letter body.",
+        prompt,
+        t2=>setLetterOutput(t2)
+      );
+    } catch(e) { setAiError(e.message); }
+    setAiProcessing(false);
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
