@@ -1971,6 +1971,78 @@ Include: date, greeting, what was discussed, agreed outcomes, next steps, signat
   };
 
   // ─────────────────────────────────────────────
+  const getRedundancyTemplate = (type) => {
+    const emp = caseInfo.employee || "[Employee Name]";
+    const chair = caseInfo.manager || "[Chair Name]";
+    const dt = new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+    const first = emp.split(" ")[0];
+    const lines = [
+      "[COMPANY NAME]",
+      "[Company Address Line 1, Town/City, Postcode]",
+      "",
+      emp,
+      "[Employee Address]",
+      "",
+      dt,
+      "",
+      "PRIVATE AND CONFIDENTIAL",
+      "",
+      "Dear " + first + ",",
+      "",
+      type === "redundancy_atrisk"
+        ? "RE: NOTIFICATION OF AT RISK OF REDUNDANCY"
+        : "RE: CONFIRMATION OF REDUNDANCY",
+      "",
+    ];
+    if(type === "redundancy_atrisk") {
+      lines.push(
+        "I am writing to inform you that your role of [Job Title] has been identified as potentially at risk of redundancy. This is due to [insert business reason].",
+        "",
+        "No final decision has been made. We are entering a formal consultation period with you.",
+        "",
+        "A consultation meeting was held on " + dt + " chaired by " + chair + ". Your views have been noted and will be considered before any decision is made.",
+        "",
+        "You have the right to be accompanied at any future consultation meeting by a trade union representative or a work colleague.",
+        "",
+        "We will continue to explore all reasonable alternatives to redundancy. A further meeting will be arranged in due course.",
+        "",
+        "If you have any questions please contact " + chair + ".",
+        "",
+        "Yours sincerely,",
+        "",
+        chair,
+        "[Job Title]",
+        "[Company Name]",
+        dt
+      );
+    } else {
+      lines.push(
+        "I am writing to confirm that, following the completion of our consultation process, your role of [Job Title] has been made redundant. Your last working day will be [insert last working day].",
+        "",
+        "NOTICE",
+        "Your notice period of [X weeks] runs from " + dt + " to [insert end date]. You will [work your notice / receive payment in lieu of notice].",
+        "",
+        "REDUNDANCY PAY",
+        "You are entitled to a statutory redundancy payment of [insert amount]. This will be paid on [insert payment date].",
+        "",
+        "ANNUAL LEAVE",
+        "You have [X days] of accrued annual leave which will be [paid out with your final salary / taken during notice].",
+        "",
+        "RIGHT OF APPEAL",
+        "You have the right to appeal this decision within 5 working days by writing to [HR contact name].",
+        "",
+        "Yours sincerely,",
+        "",
+        chair,
+        "[Job Title]",
+        "[Company Name]",
+        dt
+      );
+    }
+    return lines.join("\n");
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
@@ -3373,7 +3445,7 @@ ${m.content}`;
                           setReviewOutput(redundancyData[c.id]?.notes||"");
                           setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
                           setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
-                          const _emp = caseInfo.employee||"[Employee Name]";
+                          handleLetter("redundancy_outcome");
                           const _chair = caseInfo.manager||"[Chair Name]";
                           const _date = new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
                           const _first = _emp.split(" ")[0];
