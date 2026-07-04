@@ -2136,6 +2136,73 @@ Please produce:
   };
 
 
+  const MEETING_QUESTIONS = {
+    "investigation": [
+      "Can you tell me in your own words what happened?",
+      "When did this incident take place?",
+      "Were there any witnesses present?",
+      "Have you been involved in any similar incidents before?",
+      "Is there anything else you would like to add?",
+    ],
+    "disciplinary": [
+      "Have you received and read the invitation letter and evidence?",
+      "Do you understand the allegation(s) against you?",
+      "Would you like to respond to the allegation(s)?",
+      "Is there any mitigation you would like me to consider?",
+      "Do you have any witnesses or evidence to present?",
+    ],
+    "grievance": [
+      "Can you explain the nature of your grievance?",
+      "When did the issue first arise?",
+      "Have you tried to resolve this informally?",
+      "Who else is involved or affected?",
+      "What outcome are you hoping for?",
+    ],
+    "redundancy-atrisk": [
+      "Do you understand why your role has been identified as at risk?",
+      "Do you have any questions about the selection process?",
+      "Are there any alternatives to redundancy you would like us to consider?",
+      "Are you interested in any alternative roles within the organisation?",
+      "Do you have any personal circumstances we should be aware of?",
+    ],
+    "redundancy-consult": [
+      "Have you had a chance to consider the information provided?",
+      "Do you have any suggestions to avoid redundancy?",
+      "Have you looked at any of the alternative roles available?",
+      "Do you have any questions about your redundancy pay entitlement?",
+      "Is there anything else you would like to raise at this stage?",
+    ],
+    "appeal-disciplinary": [
+      "What are your grounds for appeal?",
+      "Do you believe the process was followed correctly?",
+      "Do you consider the sanction to be disproportionate?",
+      "Do you have any new evidence to present?",
+      "Is there anything else you would like the panel to consider?",
+    ],
+    "return": [
+      "How are you feeling now compared to when you were absent?",
+      "Is there anything at work that contributed to your absence?",
+      "Do you have any medical restrictions we should be aware of?",
+      "Is there any support we can put in place to help your return?",
+      "Are you aware of the company's absence management policy?",
+    ],
+    "pip-review": [
+      "How do you feel your performance has been against the targets set?",
+      "What progress have you made since our last meeting?",
+      "Are there any obstacles preventing you from meeting your objectives?",
+      "What support do you need from us going forward?",
+      "Do you have any concerns about the targets or timescales?",
+    ],
+    "informal": [
+      "How are things going generally?",
+      "Is there anything you would like to raise or discuss?",
+      "How are you finding your workload?",
+      "Is there any support I can provide?",
+      "Any questions or concerns you would like to discuss?",
+    ],
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0D0D0F",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
@@ -2686,8 +2753,27 @@ Please produce:
               }}
               placeholder="Type your notes freely... just capture what is being said. Compass will organise everything when you end the meeting."
             ></textarea>
-            {(liveContext||liveContextLoading)&&(
-              <div style={{width:240,borderLeft:"1px solid #1C1C22",padding:"20px 14px",overflowY:"auto",background:"#080808",display:"flex",flexDirection:"column",gap:12,flexShrink:0}}>
+            <div style={{width:260,borderLeft:"1px solid #1C1C22",background:"#080808",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
+                {/* Suggested questions */}
+                <div style={{padding:"16px 14px",borderBottom:"1px solid #1C1C22"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Suggested questions</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {(MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).map((q,i)=>(
+                      <button key={i} onClick={()=>setInputText(t=>t+(t&&!t.endsWith("
+")?"
+":"")+q+"
+")}
+                        style={{background:"none",border:"1px solid #1C1C22",borderRadius:6,padding:"8px 10px",fontSize:11,color:"#888",cursor:"pointer",textAlign:"left",lineHeight:1.4,transition:"all 0.1s"}}
+                        onMouseEnter={e=>e.target.style.borderColor="#7C5CFC33"}
+                        onMouseLeave={e=>e.target.style.borderColor="#1C1C22"}>
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Live context */}
+                {(liveContext||liveContextLoading)&&(
+              <div style={{padding:"20px 14px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <div style={{width:20,height:20,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <span style={{color:"#fff",fontSize:9,fontWeight:700}}>C</span>
@@ -2698,7 +2784,8 @@ Please produce:
                 {liveContextLoading&&<div style={{fontSize:12,color:"#444"}}>Analysing...</div>}
                 <button onClick={()=>setLiveContext(null)} style={{background:"none",border:"none",color:"#333",fontSize:11,cursor:"pointer",textDecoration:"underline",textAlign:"left",marginTop:"auto"}}>Dismiss</button>
               </div>
-            )}
+                )}
+              </div>
           </div>
 
           {/* Bottom toolbar */}
