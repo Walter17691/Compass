@@ -2759,11 +2759,7 @@ Please produce:
                   <div style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Suggested questions</div>
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {(MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).map((q,i)=>(
-                      <button key={i} onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q+nl);}}
-":"")+q+"
-")}
-":"")+q+"
-")}
+                    {(MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).map((q,i)=>(
                         style={{background:"none",border:"1px solid #1C1C22",borderRadius:6,padding:"8px 10px",fontSize:11,color:"#888",cursor:"pointer",textAlign:"left",lineHeight:1.4,transition:"all 0.1s"}}
                         onMouseEnter={e=>e.target.style.borderColor="#7C5CFC33"}
                         onMouseLeave={e=>e.target.style.borderColor="#1C1C22"}>
