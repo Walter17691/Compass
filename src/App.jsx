@@ -2489,8 +2489,7 @@ Please produce:
               ].map(t=>(
                 <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
                   style={{background:meetingSetup.type===t.id?"#7C5CFC18":"#1C1C22",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#2A2A35",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
-                  <div style={{fontSize:10,color:meetingSetup.type===t.id?"#7C5CFC":"#444",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{t.tag}</div>
-                  <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{t.label}</div>
+                  <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>{t.label}</div>
                   <div style={{fontSize:11,color:"#555"}}>{t.desc}</div>
                 </button>
               ))}
