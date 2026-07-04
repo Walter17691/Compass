@@ -520,6 +520,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [onboardStep, setOnboardStep] = useState(0);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [meetingSetup, setMeetingSetup] = useState({employee:"", type:"", date:new Date().toISOString().split("T")[0]});
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatProcessing, setChatProcessing] = useState(false);
@@ -2447,174 +2448,94 @@ Please produce:
       )}
 
       {/* ══ HOME ══ */}
-      {screen===SCREENS.HOME&&(()=>{
-        return(
-          <div style={{maxWidth:760,margin:"0 auto",padding:"80px 20px",textAlign:"center"}}>
-            <div style={{display:"flex",justifyContent:"center",marginBottom:20}}><CompassLogo size={52}/></div>
-            <div style={{fontSize:11,letterSpacing:2.5,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>UK HR Intelligence</div>
-            <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:"clamp(32px,5vw,56px)",fontWeight:400,color:"#F2EDE4",margin:"0 0 16px",lineHeight:1.1}}>
-              Navigate every<br/><em style={{color:"#7C5CFC"}}>HR conversation.</em>
-            </h1>
-            <p style={{fontSize:15,color:"#666",maxWidth:420,margin:"0 auto 40px",lineHeight:1.8}}>
-              AI-powered meeting records, legal risk scoring, outcome letters, and full case management.
-            </p>
-            <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:48,position:"relative"}}>
-              <div style={{position:"relative"}}>
-                <button onClick={()=>setShowPicker(p=>!p)}
-                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"14px 28px",fontSize:15,color:"#fff",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-                  + Start meeting <span style={{fontSize:10,opacity:0.7}}>&#9660;</span>
-                </button>
-                {showPicker&&(
-                  <div style={{position:"absolute",top:"calc(100% + 8px)",left:"50%",transform:"translateX(-50%)",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,overflow:"hidden",width:280,zIndex:200,boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
-                    <button onClick={()=>{setShowPicker(false);const t={id:"catchup",label:"General meeting",mode:"quick",group:"quick"};setMeetingType(t);setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setNextSteps([]);setScreen(SCREENS.RECORD);}}
-                      style={{width:"100%",background:"none",border:"none",borderBottom:"1px solid #2A2A35",padding:"18px 20px",textAlign:"left",cursor:"pointer"}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#141418"}
-                      onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>Start now</div>
-                      <div style={{fontSize:12,color:"#555",lineHeight:1.5}}>Jump straight into the notepad. Compass structures everything after.</div>
-                    </button>
-                    <button onClick={()=>{setShowPicker(false);setMeetingType(null);setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setNextSteps([]);setScreen(SCREENS.PREP);}}
-                      style={{width:"100%",background:"none",border:"none",padding:"18px 20px",textAlign:"left",cursor:"pointer"}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#141418"}
-                      onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>Prepare first</div>
-                      <div style={{fontSize:12,color:"#555",lineHeight:1.5}}>Enter case details. Compass generates targeted questions and a prep pack.</div>
-                    </button>
-                  </div>
-                )}
-              </div>
-              
+      {screen===SCREENS.HOME&&(
+        <div style={{maxWidth:600,margin:"0 auto",padding:"48px 20px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
+            <CompassLogo size={36}/>
+            <div>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#F2EDE4",fontWeight:400}}>Start a meeting</div>
+              <div style={{fontSize:12,color:"#555"}}>Compass will guide you through and generate a legal record</div>
             </div>
+          </div>
 
-            {/* Ask Compass */}
-            <div style={{marginBottom:32}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <span style={{color:"#fff",fontSize:14,fontWeight:700}}>C</span>
-                </div>
-                <div>
-                  <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",fontWeight:600}}>Ask Compass</div>
-                  <div style={{fontSize:11,color:"#555"}}>Your HR advisor — available anytime</div>
-                </div>
-              </div>
+          {/* Step 1 — Employee */}
+          <div style={{marginBottom:20}}>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Employee</label>
+            <input
+              autoFocus
+              placeholder="Full name of the employee"
+              value={meetingSetup.employee}
+              onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
+              list="employee-list"
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#F2EDE4",outline:"none",boxSizing:"border-box"}}/>
+            <datalist id="employee-list">
+              {[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
+            </datalist>
+          </div>
 
-              <div style={{background:"#141418",borderRadius:12,border:"1px solid #2A2A35",overflow:"hidden"}}>
-                {homeChatHistory.length>0&&(
-                  <div style={{maxHeight:360,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:12}}>
-                    {homeChatHistory.map((m,i)=>(
-                      <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:m.role==="user"?"row-reverse":"row"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:m.role==="user"?"#2A2A35":"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
-                          <span style={{color:"#fff",fontSize:11,fontWeight:700}}>{m.role==="user"?"U":"C"}</span>
-                        </div>
-                        <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:10,background:m.role==="user"?"#2A2A35":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
-                          {m.role==="user"
-                            ?<div style={{fontSize:13,color:"#F2EDE4",fontFamily:"Inter,sans-serif",lineHeight:1.6}}>{m.content}</div>
-                            :<div style={{fontSize:13,color:"#C4BDAF",fontFamily:"Inter,sans-serif",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
-                          }
-                        </div>
-                      </div>
-                    ))}
-                    {homeChatProcessing&&(
-                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <span style={{color:"#fff",fontSize:11,fontWeight:700}}>C</span>
-                        </div>
-                        <div style={{padding:"12px 14px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35"}}>
-                          <span className="pu" style={{color:"#7C5CFC",fontSize:18}}>&#9679;</span>
-                          <span className="pu" style={{color:"#7C5CFC",fontSize:18,animationDelay:"0.2s",margin:"0 3px"}}>&#9679;</span>
-                          <span className="pu" style={{color:"#7C5CFC",fontSize:18,animationDelay:"0.4s"}}>&#9679;</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div style={{borderTop:"1px solid #2A2A35",padding:"12px 14px",display:"flex",gap:8,alignItems:"center",background:"#0D0D0F"}}>
-                  {homeAttachment&&(
-                    <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"4px 8px",marginRight:4,flexShrink:0}}>
-                      <span style={{fontSize:11,color:"#A98FFF",maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{homeAttachment.name}</span>
-                      <button onClick={()=>setHomeAttachment(null)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",padding:0,lineHeight:1}}>&#10005;</button>
-                    </div>
-                  )}
-                  <input value={homeChatInput} onChange={e=>setHomeChatInput(e.target.value)}
-                    onKeyDown={e=>{if(e.key==="Enter"&&(homeChatInput.trim()||homeAttachment)&&!homeChatProcessing){const msg=homeChatInput||"Please review this document and advise me.";setHomeChatInput("");askCompass(msg,homeChatHistory,setHomeChatHistory,setHomeChatProcessing);}}}
-                    placeholder={homeAttachment?"Ask about the attached document...":"Ask anything about HR or employment law..."}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#F2EDE4",fontSize:13,fontFamily:"Inter,sans-serif",padding:"4px 0"}}/>
-                  <label style={{cursor:"pointer",color:"#444",fontSize:16,padding:"0 4px",display:"flex",alignItems:"center"}}
-                    onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
-                    onMouseLeave={e=>e.currentTarget.style.color="#444"}>
-                    &#128206;
-                    <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
-                      const file = e.target.files[0];
-                      if(!file) return;
-                      try {
-                        if(file.name.endsWith(".pdf")) {
-                          const arr = await file.arrayBuffer();
-                          const bytes = new Uint8Array(arr);
-                          let b64 = "";
-                          const chunkSize = 8192;
-                          for(let i=0;i<bytes.length;i+=chunkSize){
-                            b64 += String.fromCharCode.apply(null, bytes.subarray(i,i+chunkSize));
-                          }
-                          const base64 = btoa(b64);
-                          setHomeAttachment({name:file.name, base64});
-                        } else {
-                          const text = await file.text();
-                          setHomeAttachment({name:file.name, text:text.slice(0,8000)});
-                        }
-                      } catch(err) {
-                        setHomeAttachment({name:file.name, text:"Could not read file."});
-                      }
-                      e.target.value = "";
-                    }}/>
-                  </label>
-                  {homeChatHistory.length>0&&(
-                    <button onClick={()=>setHomeChatHistory([])}
-                      style={{background:"none",border:"none",color:"#444",fontSize:11,cursor:"pointer",fontFamily:"Inter,sans-serif",padding:"4px 8px",borderRadius:4}}
-                      onMouseEnter={e=>e.currentTarget.style.color="#666"}
-                      onMouseLeave={e=>e.currentTarget.style.color="#444"}>
-                      Clear
-                    </button>
-                  )}
-                  <button onClick={()=>{if((homeChatInput.trim()||homeAttachment)&&!homeChatProcessing){const msg=homeChatInput||"Please review the attached document and advise me on any HR or legal considerations.";setHomeChatInput("");askCompass(msg,homeChatHistory,setHomeChatHistory,setHomeChatProcessing);}}}
-                    disabled={(!homeChatInput.trim()&&!homeAttachment)||homeChatProcessing}
-                    style={{width:32,height:32,borderRadius:"50%",background:homeChatInput.trim()&&!homeChatProcessing?"#7C5CFC":"#2A2A35",border:"none",color:"#fff",fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background 0.15s"}}>
-                    &#8593;
-                  </button>
-                </div>
-              </div>
-            </div>
-            {dueSoon.some(d=>d.overdue)&&(
-              <div style={{background:"#2A1008",border:"1px solid #E8622A33",borderRadius:10,padding:"12px 18px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",textAlign:"left"}}>
-                <span style={{fontSize:12,color:"#E8622A"}}>{dueSoon.filter(d=>d.overdue).length} overdue action{dueSoon.filter(d=>d.overdue).length!==1?"s":""}</span>
-                <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#E8622A",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>View all</button>
-              </div>
-            )}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,textAlign:"left"}}>
+          {/* Step 2 — Meeting type */}
+          <div style={{marginBottom:20}}>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Meeting type</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {[
-                {s:SCREENS.CASES,l:"Cases",sub:cases.length+" saved"},
-                {s:SCREENS.NEWSTARTER,l:"New starters",sub:"Onboarding"},
-                {s:SCREENS.DASHBOARD,l:"Dashboard",sub:"Overview"},
-                {s:SCREENS.SETTINGS,l:"Settings",sub:"Policies & more"},
-              ].map(({s,l,sub})=>(
-                <button key={s} onClick={()=>setScreen(s)}
-                  style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"14px",cursor:"pointer",transition:"border-color 0.15s",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-                  onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
-                  <div style={{fontSize:12,color:"#F2EDE4",fontWeight:600,marginBottom:3}}>{l}</div>
-                  <div style={{fontSize:11,color:"#555"}}>{sub}</div>
+                {id:"investigation", label:"Investigation", icon:"🔍", desc:"Fact-finding before formal action"},
+                {id:"disciplinary", label:"Disciplinary", icon:"⚖️", desc:"Formal disciplinary hearing"},
+                {id:"grievance", label:"Grievance", icon:"📋", desc:"Employee raised a concern"},
+                {id:"redundancy-atrisk", label:"At Risk / Redundancy", icon:"📉", desc:"Redundancy consultation"},
+                {id:"return", label:"Return to Work", icon:"🏥", desc:"After sickness absence"},
+                {id:"informal", label:"Informal / 1-1", icon:"💬", desc:"General discussion or check-in"},
+                {id:"appeal-disciplinary", label:"Appeal", icon:"🔄", desc:"Appeal against a decision"},
+                {id:"pip-review", label:"Performance / PIP", icon:"📈", desc:"Performance review or PIP"},
+              ].map(t=>(
+                <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
+                  style={{background:meetingSetup.type===t.id?"#7C5CFC18":"#1C1C22",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#2A2A35",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+                  <div style={{fontSize:18,marginBottom:4}}>{t.icon}</div>
+                  <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{t.label}</div>
+                  <div style={{fontSize:11,color:"#555"}}>{t.desc}</div>
                 </button>
               ))}
             </div>
-
-            <p style={{fontSize:11,color:"#333",marginTop:32}}>Compass provides AI-assisted guidance. Always verify against current UK employment law.</p>
-            
           </div>
-        );
-      })()}
 
+          {/* Step 3 — Date */}
+          <div style={{marginBottom:32}}>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Date</label>
+            <input type="date" value={meetingSetup.date} onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#F2EDE4",outline:"none",boxSizing:"border-box",colorScheme:"dark"}}/>
+          </div>
 
-            {/* ══ PREP ══ */}
+          {/* Start button */}
+          <button
+            disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
+            onClick={()=>{
+              const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
+              setMeetingType(mt);
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
+              setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);
+              setScreen(SCREENS.RECORD);
+            }}
+            style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#2A2A35":"#7C5CFC",border:"none",borderRadius:8,padding:"16px",fontSize:16,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#444":"#fff",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s"}}>
+            Start meeting →
+          </button>
+
+          {/* Quick access to cases */}
+          {cases.length>0&&(
+            <div style={{marginTop:32,paddingTop:24,borderTop:"1px solid #1a1a1a"}}>
+              <div style={{fontSize:11,color:"#444",marginBottom:12,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Recent cases</div>
+              {cases.slice(0,3).map(cs=>(
+                <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #141414",cursor:"pointer"}}>
+                  <span style={{fontSize:13,color:"#F2EDE4"}}>{cs.employeeName}</span>
+                  <span style={{fontSize:11,color:"#555"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</span>
+                </div>
+              ))}
+              <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",marginTop:8,padding:0}}>View all cases →</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
         <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
           <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
