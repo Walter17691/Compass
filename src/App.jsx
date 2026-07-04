@@ -2724,13 +2724,13 @@ Please produce:
               </div>
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 {[{n:1,l:"Record"},{n:2,l:"Review"},{n:3,l:"Letter"}].map((s,i)=>(
-                  <React.Fragment key={s.n}>
+                  <span key={s.n} style={{display:"flex",alignItems:"center",gap:4}}>
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
                       <div style={{width:20,height:20,borderRadius:"50%",background:s.n===1?"#7C5CFC":"#1C1C22",border:"1px solid",borderColor:s.n===1?"#7C5CFC":"#2A2A35",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:s.n===1?"#fff":"#444",fontWeight:600}}>{s.n}</div>
                       <span style={{fontSize:11,color:s.n===1?"#7C5CFC":"#444"}}>{s.l}</span>
                     </div>
                     {i<2&&<div style={{width:16,height:1,background:"#2A2A35"}}/>}
-                  </React.Fragment>
+                  </span>
                 ))}
               </div>
             </div>
