@@ -2478,18 +2478,18 @@ Please produce:
             <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Meeting type</label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {[
-                {id:"investigation", label:"Investigation", icon:"🔍", desc:"Fact-finding before formal action"},
-                {id:"disciplinary", label:"Disciplinary", icon:"⚖️", desc:"Formal disciplinary hearing"},
-                {id:"grievance", label:"Grievance", icon:"📋", desc:"Employee raised a concern"},
-                {id:"redundancy-atrisk", label:"At Risk / Redundancy", icon:"📉", desc:"Redundancy consultation"},
-                {id:"return", label:"Return to Work", icon:"🏥", desc:"After sickness absence"},
-                {id:"informal", label:"Informal / 1-1", icon:"💬", desc:"General discussion or check-in"},
-                {id:"appeal-disciplinary", label:"Appeal", icon:"🔄", desc:"Appeal against a decision"},
-                {id:"pip-review", label:"Performance / PIP", icon:"📈", desc:"Performance review or PIP"},
+                {id:"investigation", label:"Investigation", tag:"ACAS S1", desc:"Fact-finding before formal action"},
+                {id:"disciplinary", label:"Disciplinary", tag:"ACAS S2", desc:"Formal disciplinary hearing"},
+                {id:"grievance", label:"Grievance", tag:"ACAS S6", desc:"Employee raised a concern"},
+                {id:"redundancy-atrisk", label:"At Risk / Redundancy", tag:"ERA 1996", desc:"Redundancy consultation"},
+                {id:"return", label:"Return to Work", tag:"EqA 2010", desc:"After sickness absence"},
+                {id:"informal", label:"Informal / 1-1", tag:"General", desc:"General discussion or check-in"},
+                {id:"appeal-disciplinary", label:"Appeal", tag:"ACAS S5", desc:"Appeal against a decision"},
+                {id:"pip-review", label:"Performance / PIP", tag:"Development", desc:"Performance review or PIP"},
               ].map(t=>(
                 <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
                   style={{background:meetingSetup.type===t.id?"#7C5CFC18":"#1C1C22",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#2A2A35",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
-                  <div style={{fontSize:18,marginBottom:4}}>{t.icon}</div>
+                  <div style={{fontSize:10,color:meetingSetup.type===t.id?"#7C5CFC":"#444",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{t.tag}</div>
                   <div style={{fontSize:13,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{t.label}</div>
                   <div style={{fontSize:11,color:"#555"}}>{t.desc}</div>
                 </button>
