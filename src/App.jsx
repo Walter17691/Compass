@@ -2715,11 +2715,24 @@ Please produce:
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
         <div style={{position:"fixed",inset:0,background:"#0D0D0F",display:"flex",flexDirection:"column",zIndex:50}}>
-          {/* Minimal header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid #1C1C22",flexShrink:0}}>
-            <div>
-              <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</div>
-              <div style={{fontSize:16,fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4"}}>{caseInfo.employee||"Notes"}</div>
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 24px",borderBottom:"1px solid #1C1C22",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:16}}>
+              <div>
+                <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</div>
+                <div style={{fontSize:15,fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4"}}>{caseInfo.employee||"Notes"} {caseInfo.date&&<span style={{fontSize:11,color:"#555",fontWeight:400}}>· {caseInfo.date}</span>}</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                {[{n:1,l:"Record"},{n:2,l:"Review"},{n:3,l:"Letter"}].map((s,i)=>(
+                  <React.Fragment key={s.n}>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <div style={{width:20,height:20,borderRadius:"50%",background:s.n===1?"#7C5CFC":"#1C1C22",border:"1px solid",borderColor:s.n===1?"#7C5CFC":"#2A2A35",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:s.n===1?"#fff":"#444",fontWeight:600}}>{s.n}</div>
+                      <span style={{fontSize:11,color:s.n===1?"#7C5CFC":"#444"}}>{s.l}</span>
+                    </div>
+                    {i<2&&<div style={{width:16,height:1,background:"#2A2A35"}}/>}
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               {isListening&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#E8622A"}}><span className="pu">&#9679;</span> Listening</div>}
@@ -2751,7 +2764,7 @@ Please produce:
                 }
 
               }}
-              placeholder="Type your notes freely... just capture what is being said. Compass will organise everything when you end the meeting."
+              placeholder="Type or dictate what is being said in the meeting. Use the suggested questions on the right as a guide. Press Enter after each point. Compass will organise everything when you end the meeting."
             ></textarea>
             <div style={{width:260,borderLeft:"1px solid #1C1C22",background:"#080808",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
                 {/* Suggested questions */}
