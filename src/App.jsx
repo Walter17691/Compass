@@ -789,6 +789,13 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadTeamMembers(); } }, [org?.id]);
 
+  useEffect(()=>{
+    if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
+      const notes = transcript.map(u=>u.text).join(" ");
+      updateLiveContext(notes);
+    }
+  }, [transcript.length]);
+
 
 
 
