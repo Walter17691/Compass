@@ -2745,10 +2745,8 @@ Please produce:
                 onChange={e=>{
                   const val = e.target.value;
                   if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
-                  if(val.endsWith("
-")) {
-                    const lines=val.split("
-").filter(l=>l.trim());
+                  if(val.endsWith(String.fromCharCode(10))) {
+                    const lines=val.split("").filter(l=>l.trim());
                     lines.forEach(line=>addUtterance(line.trim()));
                     setInputText("");
                     updateLiveContext(val);
@@ -2800,7 +2798,7 @@ Please produce:
                   <label style={{display:"flex",alignItems:"center",gap:10,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:"#888",fontSize:13,fontWeight:500}}>
                     <span style={{fontSize:16}}>📄</span>
                     Import transcript
-                    <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImport} style={{display:"none"}}/>
+                    <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
                   </label>
                 </div>
               </div>
