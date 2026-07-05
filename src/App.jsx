@@ -2766,46 +2766,41 @@ Please produce:
               }}
               placeholder="Type or dictate what is being said in the meeting. Use the suggested questions on the right as a guide. Press Enter after each point. Compass will organise everything when you end the meeting."
             ></textarea>
-            <div style={{width:260,borderLeft:"1px solid #1C1C22",background:"#080808",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
-                <div style={{flex:1,overflowY:"auto",padding:"16px 14px",display:"flex",flexDirection:"column",gap:12}}>
-                  {/* Suggested questions — always shown, update with context */}
-                  <div>
-                    <div style={{fontSize:10,fontWeight:600,color:"#555",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>
-                      {liveContext?"Next questions to ask":"Suggested questions"}
-                    </div>
-                    {liveContextLoading&&!liveContext&&<div style={{fontSize:11,color:"#333"}}>Analysing conversation...</div>}
-                    {liveContext?(
-                      <div style={{fontSize:12,color:"#888",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{liveContext}</div>
-                    ):(
-                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                        {(MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).map((q,i)=>(
-                          <button key={i} onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q+nl);}}
-                            style={{background:"none",border:"1px solid #1C1C22",borderRadius:6,padding:"8px 10px",fontSize:11,color:"#888",cursor:"pointer",textAlign:"left",lineHeight:1.4}}
-                            onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC55"}
-                            onMouseLeave={e=>e.currentTarget.style.borderColor="#1C1C22"}>
-                            {q}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                      {/* Inline AI suggestions */}
+          {(liveContext||(!liveContext&&meetingType))&&(
+            <div style={{padding:"0 32px 12px",flexShrink:0}}>
+              {liveContextLoading&&!liveContext&&(
+                <div style={{fontSize:12,color:"#333",fontStyle:"italic"}}>Compass is listening...</div>
+              )}
+              {liveContext&&(
+                <div style={{borderTop:"1px solid #1C1C22",paddingTop:12}}>
+                  <div style={{fontSize:10,color:"#444",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Suggested next questions</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {liveContext.split(/\d+\./).filter(q=>q.trim()).map((q,i)=>(
+                      <button key={i} onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
+                        style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:20,padding:"6px 12px",fontSize:12,color:"#888",cursor:"pointer",textAlign:"left",transition:"all 0.1s"}}
+                        onMouseEnter={e=>{ e.currentTarget.style.borderColor="#7C5CFC55"; e.currentTarget.style.color="#F2EDE4"; }}
+                        onMouseLeave={e=>{ e.currentTarget.style.borderColor="#2A2A35"; e.currentTarget.style.color="#888"; }}>
+                        {q.trim()}
+                      </button>
+                    ))}
                   </div>
-                  {/* Live context detail */}
-                  {(liveContext||liveContextLoading)&&(
-              <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:20,height:20,borderRadius:"50%",background:"linear-gradient(135deg,#7C5CFC,#A98FFF)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <span style={{color:"#fff",fontSize:9,fontWeight:700}}>C</span>
-                  </div>
-                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>Live context</div>
                 </div>
-                {liveContext&&<div style={{fontSize:12,color:"#888",lineHeight:1.8,fontFamily:"Inter,sans-serif"}}>{liveContext}</div>}
-                {liveContextLoading&&<div style={{fontSize:12,color:"#444"}}>Analysing...</div>}
-                <button onClick={()=>setLiveContext(null)} style={{background:"none",border:"none",color:"#333",fontSize:11,cursor:"pointer",textDecoration:"underline",textAlign:"left",marginTop:"auto"}}>Dismiss</button>
-              </div>
-                  )}
+              )}
+              {!liveContext&&(
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {(MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3).map((q,i)=>(
+                    <button key={i} onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q+nl);}}
+                      style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:20,padding:"6px 12px",fontSize:12,color:"#555",cursor:"pointer",transition:"all 0.1s"}}
+                      onMouseEnter={e=>{ e.currentTarget.style.borderColor="#7C5CFC55"; e.currentTarget.style.color="#F2EDE4"; }}
+                      onMouseLeave={e=>{ e.currentTarget.style.borderColor="#2A2A35"; e.currentTarget.style.color="#555"; }}>
+                      {q}
+                    </button>
+                  ))}
                 </div>
-              </div>
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Bottom toolbar */}
           <div style={{borderTop:"1px solid #1C1C22",padding:"12px 24px",display:"flex",gap:10,alignItems:"center",background:"#0D0D0F",flexShrink:0}}>
