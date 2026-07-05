@@ -2746,7 +2746,7 @@ Please produce:
                   const val = e.target.value;
                   if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
                   if(val.endsWith(String.fromCharCode(10))) {
-                    const lines=val.split("").filter(l=>l.trim());
+                    const lines=val.split(String.fromCharCode(10)).filter(l=>l.trim());
                     lines.forEach(line=>addUtterance(line.trim()));
                     setInputText("");
                     updateLiveContext(val);
