@@ -2806,12 +2806,12 @@ Please produce:
               {/* Live context */}
               {transcript.length>0&&(
                 <div style={{flex:1,padding:"20px 16px",overflowY:"auto"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:"#444",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Live context</div>
+                  <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Live context</div>
                   {liveContextLoading&&!liveContext&&(
                     <div style={{fontSize:12,color:"#333",fontStyle:"italic"}}>Analysing...</div>
                   )}
                   {liveContext&&(
-                    <div style={{fontSize:12,color:"#666",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{liveContext}</div>
+                    <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{liveContext}</div>
                   )}
                 </div>
               )}
