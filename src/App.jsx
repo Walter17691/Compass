@@ -2553,58 +2553,68 @@ Please produce:
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
-        <div style={{maxWidth:600,margin:"0 auto",padding:"48px 20px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
-            <CompassLogo size={36}/>
-            <div>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#1A1535",fontWeight:400}}>Start a meeting</div>
-              <div style={{fontSize:12,color:"#5E5A7A"}}>Compass will guide you through and generate a legal record</div>
-            </div>
+        <div style={{maxWidth:540,margin:"0 auto",padding:"64px 24px"}}>
+
+          {/* Logo + title */}
+          <div style={{marginBottom:48,textAlign:"center"}}>
+            <CompassLogo size={40}/>
+            <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"16px 0 8px"}}>Start a meeting</h1>
+            <p style={{fontSize:14,color:"#9B97B2",margin:0}}>Compass generates a legally compliant record as you go</p>
           </div>
 
-          {/* Step 1 — Employee */}
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Employee</label>
+          {/* Employee name */}
+          <div style={{marginBottom:24}}>
+            <label style={{display:"block",fontSize:12,fontWeight:500,color:"#1A1535",marginBottom:8}}>Employee name</label>
             <input
               autoFocus
-              placeholder="Full name of the employee"
+              placeholder="e.g. Sarah Johnson"
               value={meetingSetup.employee}
               onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
               list="employee-list"
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box"}}/>
+              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"13px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}/>
             <datalist id="employee-list">
-              {[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
+              {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
             </datalist>
           </div>
 
-          {/* Step 2 — Meeting type */}
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Meeting type</label>
+          {/* Meeting type */}
+          <div style={{marginBottom:24}}>
+            <label style={{display:"block",fontSize:12,fontWeight:500,color:"#1A1535",marginBottom:8}}>Meeting type</label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {[
-                {id:"investigation", label:"Investigation", tag:"ACAS S1", desc:"Fact-finding before formal action"},
-                {id:"disciplinary", label:"Disciplinary", tag:"ACAS S2", desc:"Formal disciplinary hearing"},
-                {id:"grievance", label:"Grievance", tag:"ACAS S6", desc:"Employee raised a concern"},
-                {id:"redundancy-atrisk", label:"At Risk / Redundancy", tag:"ERA 1996", desc:"Redundancy consultation"},
-                {id:"return", label:"Return to Work", tag:"EqA 2010", desc:"After sickness absence"},
-                {id:"informal", label:"Informal / 1-1", tag:"General", desc:"General discussion or check-in"},
-                {id:"appeal-disciplinary", label:"Appeal", tag:"ACAS S5", desc:"Appeal against a decision"},
-                {id:"pip-review", label:"Performance / PIP", tag:"Development", desc:"Performance review or PIP"},
+                {id:"investigation", label:"Investigation", desc:"Fact-finding"},
+                {id:"disciplinary", label:"Disciplinary", desc:"Formal hearing"},
+                {id:"grievance", label:"Grievance", desc:"Employee concern"},
+                {id:"redundancy-atrisk", label:"Redundancy", desc:"Consultation"},
+                {id:"return", label:"Return to Work", desc:"After absence"},
+                {id:"informal", label:"Informal / 1-1", desc:"General meeting"},
+                {id:"appeal-disciplinary", label:"Appeal", desc:"Against decision"},
+                {id:"pip-review", label:"Performance", desc:"PIP / Review"},
               ].map(t=>(
                 <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
-                  style={{background:meetingSetup.type===t.id?"#7C5CFC18":"#1C1C22",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#2A2A35",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
-                  <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:4}}>{t.label}</div>
-                  <div style={{fontSize:11,color:"#5E5A7A"}}>{t.desc}</div>
+                  style={{
+                    background:meetingSetup.type===t.id?"#7C5CFC":"#FFFFFF",
+                    border:"1px solid",
+                    borderColor:meetingSetup.type===t.id?"#7C5CFC":"#E4E0F5",
+                    borderRadius:10,
+                    padding:"12px 16px",
+                    cursor:"pointer",
+                    textAlign:"left",
+                    transition:"all 0.15s",
+                    boxShadow:meetingSetup.type===t.id?"0 2px 8px rgba(124,92,252,0.25)":"0 1px 2px rgba(0,0,0,0.04)"
+                  }}>
+                  <div style={{fontSize:13,fontWeight:600,color:meetingSetup.type===t.id?"#FFFFFF":"#1A1535",marginBottom:2}}>{t.label}</div>
+                  <div style={{fontSize:11,color:meetingSetup.type===t.id?"rgba(255,255,255,0.75)":"#9B97B2"}}>{t.desc}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Step 3 — Date */}
+          {/* Date */}
           <div style={{marginBottom:32}}>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Date</label>
+            <label style={{display:"block",fontSize:12,fontWeight:500,color:"#1A1535",marginBottom:8}}>Date</label>
             <input type="date" value={meetingSetup.date} onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",colorScheme:"dark"}}/>
+              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"13px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}/>
           </div>
 
           {/* Start button */}
@@ -2615,24 +2625,43 @@ Please produce:
               setMeetingType(mt);
               setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
               setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);
+              setLiveChatHistory([]);
               setScreen(SCREENS.RECORD);
             }}
-            style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#2A2A35":"#7C5CFC",border:"none",borderRadius:8,padding:"16px",fontSize:16,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#444":"#fff",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s"}}>
+            style={{
+              width:"100%",
+              background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E4E0F5":"#7C5CFC",
+              border:"none",
+              borderRadius:10,
+              padding:"15px",
+              fontSize:15,
+              color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9B97B2":"#FFFFFF",
+              fontWeight:600,
+              cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",
+              transition:"all 0.15s",
+              boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 4px 12px rgba(124,92,252,0.3)"
+            }}>
             Start meeting →
           </button>
 
-          {/* Quick access to cases */}
+          {/* Recent cases */}
           {cases.length>0&&(
-            <div style={{marginTop:32,paddingTop:24,borderTop:"1px solid #1a1a1a"}}>
-              <div style={{fontSize:11,color:"#9B97B2",marginBottom:12,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Recent cases</div>
+            <div style={{marginTop:40,paddingTop:32,borderTop:"1px solid #F0EEF9"}}>
+              <div style={{fontSize:12,fontWeight:500,color:"#9B97B2",marginBottom:16,textTransform:"uppercase",letterSpacing:0.5}}>Recent cases</div>
               {cases.slice(0,3).map(cs=>(
                 <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #F0EEF9",cursor:"pointer"}}>
-                  <span style={{fontSize:14,color:"#1A1535"}}>{cs.employeeName}</span>
-                  <span style={{fontSize:11,color:"#5E5A7A"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</span>
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #F0EEF9",cursor:"pointer"}}>
+                  <div>
+                    <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{cs.employeeName}</div>
+                    <div style={{fontSize:12,color:"#9B97B2"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</div>
+                  </div>
+                  <span style={{color:"#7C5CFC",fontSize:18}}>›</span>
                 </div>
               ))}
-              <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",marginTop:8,padding:0}}>View all cases →</button>
+              <button onClick={()=>setScreen(SCREENS.CASES)}
+                style={{background:"none",border:"none",color:"#7C5CFC",fontSize:13,cursor:"pointer",marginTop:12,padding:0,fontWeight:500}}>
+                View all cases →
+              </button>
             </div>
           )}
         </div>
