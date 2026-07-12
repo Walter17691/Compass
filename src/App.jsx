@@ -522,6 +522,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showPicker, setShowPicker] = useState(false);
   const [meetingSetup, setMeetingSetup] = useState({employee:"", type:"", date:new Date().toISOString().split("T")[0]});
   const [liveChatInput, setLiveChatInput] = useState("");
+  const [openCases, setOpenCases] = useState({});
   const [liveChatHistory, setLiveChatHistory] = useState([]);
   const [liveChatProcessing, setLiveChatProcessing] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -3406,14 +3407,14 @@ ${m.content}`;
 
           {cases.map(c=>(
             <Card key={c.id} style={{marginBottom:14,padding:0,overflow:"hidden"}}>
-              <div style={{padding:"16px 20px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div onClick={()=>setOpenCases(p=>({...p,[c.id]:!p[c.id]}))} style={{padding:"16px 20px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3}}>
                     <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:17,color:"#F2EDE4",fontWeight:600}}>{c.employeeName}</span>
                     {c.email&&<span style={{fontSize:11,color:"#555"}}>{c.email}</span>}
                     {c.meetings.some(m=>m.riskScore?.rating==="HIGH")&&<Badge color="#E8622A">HIGH RISK</Badge>}
                   </div>
-                  <div style={{fontSize:11,color:"#444"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Since {new Date(c.createdAt).toLocaleDateString("en-GB")}</div>
+                  <div style={{fontSize:11,color:"#444"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Since {new Date(c.createdAt).toLocaleDateString("en-GB")} {openCases[c.id]?"▲":"▼"}</div>
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   <Btn variant="secondary" onClick={()=>{setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));setScreen(SCREENS.HOME);}} style={{fontSize:11,padding:"5px 12px"}}>+ Add meeting</Btn>
@@ -3422,7 +3423,7 @@ ${m.content}`;
                 </div>
               </div>
 
-              {c.meetings.map((m,idx)=>(
+              {openCases[c.id]&&c.meetings.map((m,idx)=>(
                 <div key={m.id} style={{padding:"14px 20px",borderBottom:idx<c.meetings.length-1?"1px solid #141414":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
