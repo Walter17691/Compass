@@ -2553,88 +2553,84 @@ Please produce:
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
-        <div style={{minHeight:"100vh",background:"#FAFAFA",display:"flex",flexDirection:"column"}}>
+        <div style={{minHeight:"100vh",background:"#FFFFFF",display:"flex"}}>
 
-          {/* Top bar */}
-          <div style={{padding:"20px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#FFFFFF",borderBottom:"1px solid #F0F0F0"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CompassLogo size={28}/>
-              <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",fontWeight:400,letterSpacing:"-0.3px"}}>Compass</span>
+          {/* Left sidebar — like Granola */}
+          <div style={{width:220,background:"#FAFAFA",borderRight:"1px solid #F0F0F0",padding:"24px 0",display:"flex",flexDirection:"column",flexShrink:0}}>
+            <div style={{padding:"0 16px 24px",borderBottom:"1px solid #F0F0F0",marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <CompassLogo size={22}/>
+                <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
+              </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{padding:"0 8px",flex:1}}>
+              <button onClick={()=>setScreen(SCREENS.HOME)}
+                style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:6,background:"#EEE9FF",border:"none",cursor:"pointer",marginBottom:2}}>
+                <span style={{fontSize:13,color:"#7C5CFC",fontWeight:500}}>New meeting</span>
+              </button>
               <button onClick={()=>setScreen(SCREENS.CASES)}
-                style={{background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",fontWeight:500,padding:"6px 12px",borderRadius:6}}>
-                Cases {cases.length>0&&<span style={{background:"#F0EEF9",color:"#7C5CFC",borderRadius:10,padding:"1px 6px",fontSize:11,fontWeight:600,marginLeft:4}}>{cases.length}</span>}
+                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"7px 10px",borderRadius:6,background:"none",border:"none",cursor:"pointer",marginBottom:2}}>
+                <span style={{fontSize:13,color:"#6B7280",fontWeight:400}}>All cases</span>
+                {cases.length>0&&<span style={{fontSize:11,color:"#9CA3AF"}}>{cases.length}</span>}
               </button>
+              {isHR&&<button onClick={()=>setScreen(SCREENS.HR_REVIEW)}
+                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:6,background:"none",border:"none",cursor:"pointer",marginBottom:2}}>
+                <span style={{fontSize:13,color:"#6B7280"}}>HR Review</span>
+                {hrReviewRequests.filter(r=>r.status==="pending").length>0&&<span style={{fontSize:11,color:"#E8622A",fontWeight:600}}>{hrReviewRequests.filter(r=>r.status==="pending").length}</span>}
+              </button>}
+            </div>
+            <div style={{padding:"16px 8px 0",borderTop:"1px solid #F0F0F0",marginTop:"auto"}}>
               <button onClick={()=>setScreen(SCREENS.SETTINGS)}
-                style={{background:"none",border:"1px solid #E4E0F5",color:"#6B7280",fontSize:13,cursor:"pointer",fontWeight:500,padding:"6px 14px",borderRadius:6}}>
-                Settings
+                style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:6,background:"none",border:"none",cursor:"pointer"}}>
+                <span style={{fontSize:13,color:"#9CA3AF"}}>Settings</span>
               </button>
+              {org?.name&&<div style={{padding:"4px 10px",fontSize:11,color:"#C4C0D0"}}>{org.name}</div>}
             </div>
           </div>
 
           {/* Main content */}
-          <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"64px 24px"}}>
-            <div style={{width:"100%",maxWidth:440}}>
+          <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"64px 48px"}}>
+            <div style={{width:"100%",maxWidth:480}}>
 
-              {/* Heading */}
-              <div style={{marginBottom:40}}>
-                <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:32,fontWeight:400,color:"#1A1535",margin:"0 0 8px",letterSpacing:"-0.5px",lineHeight:1.2}}>New meeting</h1>
-                <p style={{fontSize:14,color:"#9B97B2",margin:0,lineHeight:1.5}}>Fill in the details below and Compass will guide you through the rest</p>
-              </div>
+              <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"0 0 6px",letterSpacing:"-0.5px"}}>New meeting</h1>
+              <p style={{fontSize:14,color:"#9B97B2",margin:"0 0 40px"}}>Compass will generate a legally compliant record as you go</p>
 
               {/* Employee */}
-              <div style={{marginBottom:20}}>
-                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Employee</label>
-                <input
-                  autoFocus
-                  placeholder="Full name"
+              <div style={{marginBottom:24}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Employee name</label>
+                <input autoFocus placeholder="e.g. Sarah Johnson"
                   value={meetingSetup.employee}
                   onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
                   list="employee-list"
-                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",transition:"border-color 0.15s",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
                   onFocus={e=>e.target.style.borderColor="#7C5CFC"}
-                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}
-                />
+                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                 <datalist id="employee-list">
                   {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
                 </datalist>
               </div>
 
-              {/* Meeting type — vertical list */}
-              <div style={{marginBottom:20}}>
+              {/* Meeting type — clean list */}
+              <div style={{marginBottom:24}}>
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Meeting type</label>
-                <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,overflow:"hidden",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}>
+                <div style={{border:"1px solid #E5E7EB",borderRadius:8,overflow:"hidden"}}>
                   {[
                     {id:"investigation", label:"Investigation", desc:"Fact-finding before formal action"},
                     {id:"disciplinary", label:"Disciplinary hearing", desc:"Formal disciplinary process"},
                     {id:"grievance", label:"Grievance", desc:"Employee raised a concern"},
                     {id:"redundancy-atrisk", label:"Redundancy consultation", desc:"At risk or confirmed redundancy"},
                     {id:"return", label:"Return to work", desc:"After sickness absence"},
-                    {id:"informal", label:"Informal / 1-1", desc:"General discussion or check-in"},
-                    {id:"appeal-disciplinary", label:"Appeal", desc:"Appeal against a formal decision"},
+                    {id:"informal", label:"Informal / 1-1", desc:"General check-in"},
+                    {id:"appeal-disciplinary", label:"Appeal", desc:"Appeal against a decision"},
                     {id:"pip-review", label:"Performance review", desc:"PIP or performance discussion"},
                   ].map((t,i,arr)=>(
                     <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
-                      style={{
-                        width:"100%",
-                        display:"flex",
-                        alignItems:"center",
-                        justifyContent:"space-between",
-                        padding:"11px 14px",
-                        background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",
-                        border:"none",
-                        borderBottom:i<arr.length-1?"1px solid #F3F4F6":"none",
-                        borderLeft:`3px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,
-                        cursor:"pointer",
-                        textAlign:"left",
-                        transition:"all 0.1s",
-                      }}>
+                      style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",border:"none",borderBottom:i<arr.length-1?"1px solid #F3F4F6":"none",borderLeft:`2px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,cursor:"pointer",textAlign:"left",transition:"all 0.1s"}}>
                       <div>
-                        <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:500,color:meetingSetup.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
+                        <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:400,color:meetingSetup.type===t.id?"#5B3FD4":"#374151"}}>{t.label}</div>
                         <div style={{fontSize:12,color:"#9B97B2",marginTop:1}}>{t.desc}</div>
                       </div>
-                      {meetingSetup.type===t.id&&<span style={{color:"#7C5CFC",fontSize:16,marginLeft:8}}>✓</span>}
+                      {meetingSetup.type===t.id&&<span style={{color:"#7C5CFC",fontSize:14,marginLeft:8}}>✓</span>}
                     </button>
                   ))}
                 </div>
@@ -2645,10 +2641,9 @@ Please produce:
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Date</label>
                 <input type="date" value={meetingSetup.date}
                   onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
-                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
                   onFocus={e=>e.target.style.borderColor="#7C5CFC"}
-                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}
-                />
+                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
 
               {/* CTA */}
@@ -2662,35 +2657,19 @@ Please produce:
                   setLiveChatHistory([]);
                   setScreen(SCREENS.RECORD);
                 }}
-                style={{
-                  width:"100%",
-                  background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E5E7EB":"#7C5CFC",
-                  border:"none",
-                  borderRadius:8,
-                  padding:"13px",
-                  fontSize:14,
-                  color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9CA3AF":"#FFFFFF",
-                  fontWeight:600,
-                  cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",
-                  transition:"all 0.15s",
-                  boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 2px 8px rgba(124,92,252,0.35)",
-                  letterSpacing:"0.1px"
-                }}>
+                style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#F3F4F6":"#7C5CFC",border:"none",borderRadius:8,padding:"13px",fontSize:14,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9CA3AF":"#FFFFFF",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s",boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 2px 8px rgba(124,92,252,0.3)"}}>
                 Start meeting
               </button>
 
-              {/* Recent */}
+              {/* Recent cases */}
               {cases.length>0&&(
-                <div style={{marginTop:36}}>
-                  <div style={{fontSize:12,fontWeight:500,color:"#9B97B2",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Recent</div>
-                  {cases.slice(0,3).map(cs=>(
-                    <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
-                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #F3F4F6",cursor:"pointer"}}>
-                      <div>
-                        <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{cs.employeeName}</div>
-                        <div style={{fontSize:12,color:"#9B97B2"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</div>
-                      </div>
-                      <span style={{color:"#D1C4F7",fontSize:16}}>›</span>
+                <div style={{marginTop:40}}>
+                  <div style={{fontSize:12,color:"#9B97B2",fontWeight:500,letterSpacing:"0.3px",textTransform:"uppercase",marginBottom:12}}>Recent</div>
+                  {cases.slice(0,4).map(cs=>(
+                    <div key={cs.id} onClick={()=>{ setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""})); setScreen(SCREENS.HOME); setMeetingSetup(p=>({...p,employee:cs.employeeName})); }}
+                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #F9F9F9",cursor:"pointer"}}>
+                      <div style={{fontSize:13,color:"#374151",fontWeight:400}}>{cs.employeeName}</div>
+                      <div style={{fontSize:12,color:"#D1C4F7"}}>{cs.meetings?.slice(-1)[0]?.type||""}</div>
                     </div>
                   ))}
                 </div>
