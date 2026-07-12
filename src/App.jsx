@@ -2513,7 +2513,7 @@ Please produce:
             {!meetingType&&[
               {s:SCREENS.CASES,l:"Cases"},
               ...(isHR?[{s:SCREENS.HR_REVIEW,l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
-            ].map(({s,l})=>>(
+            ].map(({s,l})=>(
               <button key={s} onClick={()=>setScreen(s)}
                 style={{background:screen===s?"#7C5CFC18":"none",border:"1px solid",borderColor:screen===s?"#7C5CFC33":"transparent",color:screen===s?"#A98FFF":"#666",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:screen===s?600:400}}>
                 {l}
