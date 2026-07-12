@@ -2553,117 +2553,150 @@ Please produce:
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
-        <div style={{maxWidth:540,margin:"0 auto",padding:"64px 24px"}}>
+        <div style={{minHeight:"100vh",background:"#FAFAFA",display:"flex",flexDirection:"column"}}>
 
-          {/* Logo + title */}
-          <div style={{marginBottom:48,textAlign:"center"}}>
-            <CompassLogo size={40}/>
-            <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"16px 0 8px"}}>Start a meeting</h1>
-            <p style={{fontSize:14,color:"#9B97B2",margin:0}}>Compass generates a legally compliant record as you go</p>
-          </div>
-
-          {/* Employee name */}
-          <div style={{marginBottom:24}}>
-            <label style={{display:"block",fontSize:12,fontWeight:500,color:"#1A1535",marginBottom:8}}>Employee name</label>
-            <input
-              autoFocus
-              placeholder="e.g. Sarah Johnson"
-              value={meetingSetup.employee}
-              onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
-              list="employee-list"
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"13px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}/>
-            <datalist id="employee-list">
-              {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
-            </datalist>
-          </div>
-
-          {/* Meeting type */}
-          <div style={{marginBottom:24}}>
-            <label style={{display:"block",fontSize:12,fontWeight:500,color:"#1A1535",marginBottom:8}}>Meeting type</label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {[
-                {id:"investigation", label:"Investigation", desc:"Fact-finding"},
-                {id:"disciplinary", label:"Disciplinary", desc:"Formal hearing"},
-                {id:"grievance", label:"Grievance", desc:"Employee concern"},
-                {id:"redundancy-atrisk", label:"Redundancy", desc:"Consultation"},
-                {id:"return", label:"Return to Work", desc:"After absence"},
-                {id:"informal", label:"Informal / 1-1", desc:"General meeting"},
-                {id:"appeal-disciplinary", label:"Appeal", desc:"Against decision"},
-                {id:"pip-review", label:"Performance", desc:"PIP / Review"},
-              ].map(t=>(
-                <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
-                  style={{
-                    background:meetingSetup.type===t.id?"#7C5CFC":"#FFFFFF",
-                    border:"1px solid",
-                    borderColor:meetingSetup.type===t.id?"#7C5CFC":"#E4E0F5",
-                    borderRadius:10,
-                    padding:"12px 16px",
-                    cursor:"pointer",
-                    textAlign:"left",
-                    transition:"all 0.15s",
-                    boxShadow:meetingSetup.type===t.id?"0 2px 8px rgba(124,92,252,0.25)":"0 1px 2px rgba(0,0,0,0.04)"
-                  }}>
-                  <div style={{fontSize:13,fontWeight:600,color:meetingSetup.type===t.id?"#FFFFFF":"#1A1535",marginBottom:2}}>{t.label}</div>
-                  <div style={{fontSize:11,color:meetingSetup.type===t.id?"rgba(255,255,255,0.75)":"#9B97B2"}}>{t.desc}</div>
-                </button>
-              ))}
+          {/* Top bar */}
+          <div style={{padding:"20px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#FFFFFF",borderBottom:"1px solid #F0F0F0"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <CompassLogo size={28}/>
+              <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",fontWeight:400,letterSpacing:"-0.3px"}}>Compass</span>
             </div>
-          </div>
-
-          {/* Date */}
-          <div style={{marginBottom:32}}>
-            <label style={{display:"block",fontSize:12,fontWeight:500,color:"#1A1535",marginBottom:8}}>Date</label>
-            <input type="date" value={meetingSetup.date} onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"13px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}/>
-          </div>
-
-          {/* Start button */}
-          <button
-            disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
-            onClick={()=>{
-              const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
-              setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
-              setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);
-              setLiveChatHistory([]);
-              setScreen(SCREENS.RECORD);
-            }}
-            style={{
-              width:"100%",
-              background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E4E0F5":"#7C5CFC",
-              border:"none",
-              borderRadius:10,
-              padding:"15px",
-              fontSize:15,
-              color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9B97B2":"#FFFFFF",
-              fontWeight:600,
-              cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",
-              transition:"all 0.15s",
-              boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 4px 12px rgba(124,92,252,0.3)"
-            }}>
-            Start meeting →
-          </button>
-
-          {/* Recent cases */}
-          {cases.length>0&&(
-            <div style={{marginTop:40,paddingTop:32,borderTop:"1px solid #F0EEF9"}}>
-              <div style={{fontSize:12,fontWeight:500,color:"#9B97B2",marginBottom:16,textTransform:"uppercase",letterSpacing:0.5}}>Recent cases</div>
-              {cases.slice(0,3).map(cs=>(
-                <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #F0EEF9",cursor:"pointer"}}>
-                  <div>
-                    <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{cs.employeeName}</div>
-                    <div style={{fontSize:12,color:"#9B97B2"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</div>
-                  </div>
-                  <span style={{color:"#7C5CFC",fontSize:18}}>›</span>
-                </div>
-              ))}
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
               <button onClick={()=>setScreen(SCREENS.CASES)}
-                style={{background:"none",border:"none",color:"#7C5CFC",fontSize:13,cursor:"pointer",marginTop:12,padding:0,fontWeight:500}}>
-                View all cases →
+                style={{background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",fontWeight:500,padding:"6px 12px",borderRadius:6}}>
+                Cases {cases.length>0&&<span style={{background:"#F0EEF9",color:"#7C5CFC",borderRadius:10,padding:"1px 6px",fontSize:11,fontWeight:600,marginLeft:4}}>{cases.length}</span>}
+              </button>
+              <button onClick={()=>setScreen(SCREENS.SETTINGS)}
+                style={{background:"none",border:"1px solid #E4E0F5",color:"#6B7280",fontSize:13,cursor:"pointer",fontWeight:500,padding:"6px 14px",borderRadius:6}}>
+                Settings
               </button>
             </div>
-          )}
+          </div>
+
+          {/* Main content */}
+          <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"64px 24px"}}>
+            <div style={{width:"100%",maxWidth:440}}>
+
+              {/* Heading */}
+              <div style={{marginBottom:40}}>
+                <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:32,fontWeight:400,color:"#1A1535",margin:"0 0 8px",letterSpacing:"-0.5px",lineHeight:1.2}}>New meeting</h1>
+                <p style={{fontSize:14,color:"#9B97B2",margin:0,lineHeight:1.5}}>Fill in the details below and Compass will guide you through the rest</p>
+              </div>
+
+              {/* Employee */}
+              <div style={{marginBottom:20}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Employee</label>
+                <input
+                  autoFocus
+                  placeholder="Full name"
+                  value={meetingSetup.employee}
+                  onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
+                  list="employee-list"
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",transition:"border-color 0.15s",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}
+                  onFocus={e=>e.target.style.borderColor="#7C5CFC"}
+                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}
+                />
+                <datalist id="employee-list">
+                  {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
+                </datalist>
+              </div>
+
+              {/* Meeting type — vertical list */}
+              <div style={{marginBottom:20}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Meeting type</label>
+                <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,overflow:"hidden",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}>
+                  {[
+                    {id:"investigation", label:"Investigation", desc:"Fact-finding before formal action"},
+                    {id:"disciplinary", label:"Disciplinary hearing", desc:"Formal disciplinary process"},
+                    {id:"grievance", label:"Grievance", desc:"Employee raised a concern"},
+                    {id:"redundancy-atrisk", label:"Redundancy consultation", desc:"At risk or confirmed redundancy"},
+                    {id:"return", label:"Return to work", desc:"After sickness absence"},
+                    {id:"informal", label:"Informal / 1-1", desc:"General discussion or check-in"},
+                    {id:"appeal-disciplinary", label:"Appeal", desc:"Appeal against a formal decision"},
+                    {id:"pip-review", label:"Performance review", desc:"PIP or performance discussion"},
+                  ].map((t,i,arr)=>(
+                    <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
+                      style={{
+                        width:"100%",
+                        display:"flex",
+                        alignItems:"center",
+                        justifyContent:"space-between",
+                        padding:"11px 14px",
+                        background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",
+                        border:"none",
+                        borderBottom:i<arr.length-1?"1px solid #F3F4F6":"none",
+                        borderLeft:`3px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,
+                        cursor:"pointer",
+                        textAlign:"left",
+                        transition:"all 0.1s",
+                      }}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:500,color:meetingSetup.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
+                        <div style={{fontSize:12,color:"#9B97B2",marginTop:1}}>{t.desc}</div>
+                      </div>
+                      {meetingSetup.type===t.id&&<span style={{color:"#7C5CFC",fontSize:16,marginLeft:8}}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date */}
+              <div style={{marginBottom:28}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Date</label>
+                <input type="date" value={meetingSetup.date}
+                  onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}
+                  onFocus={e=>e.target.style.borderColor="#7C5CFC"}
+                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}
+                />
+              </div>
+
+              {/* CTA */}
+              <button
+                disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
+                onClick={()=>{
+                  const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
+                  setMeetingType(mt);
+                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
+                  setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);
+                  setLiveChatHistory([]);
+                  setScreen(SCREENS.RECORD);
+                }}
+                style={{
+                  width:"100%",
+                  background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E5E7EB":"#7C5CFC",
+                  border:"none",
+                  borderRadius:8,
+                  padding:"13px",
+                  fontSize:14,
+                  color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9CA3AF":"#FFFFFF",
+                  fontWeight:600,
+                  cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",
+                  transition:"all 0.15s",
+                  boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 2px 8px rgba(124,92,252,0.35)",
+                  letterSpacing:"0.1px"
+                }}>
+                Start meeting
+              </button>
+
+              {/* Recent */}
+              {cases.length>0&&(
+                <div style={{marginTop:36}}>
+                  <div style={{fontSize:12,fontWeight:500,color:"#9B97B2",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Recent</div>
+                  {cases.slice(0,3).map(cs=>(
+                    <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
+                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #F3F4F6",cursor:"pointer"}}>
+                      <div>
+                        <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{cs.employeeName}</div>
+                        <div style={{fontSize:12,color:"#9B97B2"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</div>
+                      </div>
+                      <span style={{color:"#D1C4F7",fontSize:16}}>›</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
