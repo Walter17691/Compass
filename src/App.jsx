@@ -614,8 +614,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     setLiveChatHistory(h=>[...h,{role:"user",content:question}]);
     setLiveChatProcessing(true);
     try {
-      const tx = transcript.map(u=>u.text).join("
-")||inputText;
+      const tx = transcript.map(u=>u.text).join(String.fromCharCode(10))||inputText;
       const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-6",
@@ -624,13 +623,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
           system:"You are an HR advisor listening to a live meeting. Answer questions briefly and practically based on the transcript. Reference UK employment law and ACAS where relevant. Be concise — max 3 sentences.",
           messages:[
             ...liveChatHistory.map(m=>({role:m.role,content:m.content})),
-            {role:"user",content:"Meeting type: "+(meetingType?.label||"General")+"
-Employee: "+(caseInfo.employee||"Unknown")+"
-
-Transcript so far:
-"+tx+"
-
-Question: "+question}
+            {role:"user",content:"Meeting type: "+(meetingType?.label||"General")+String.fromCharCode(10)+"Employee: "+(caseInfo.employee||"Unknown")+String.fromCharCode(10)+"Transcript so far:"+String.fromCharCode(10)+tx+String.fromCharCode(10)+"Question: "+question}
           ]
         })
       });
