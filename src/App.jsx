@@ -3392,16 +3392,15 @@ ${m.content}`;
               <p style={{fontSize:13,color:"#666",margin:0}}>All cases grouped by employee, with full meeting history and documents.</p>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <Btn variant="ghost" onClick={()=>{setPortalCaseId(null);setScreen(SCREENS.PORTAL);}}>Employee portal</Btn>
               <Btn onClick={()=>setScreen(SCREENS.HOME)}>+ New meeting</Btn>
             </div>
           </div>
 
           {cases.length===0&&(
-            <Card style={{textAlign:"center",padding:"50px 20px"}}>
-              <div style={{fontSize:32,marginBottom:12}}></div>
-              <div style={{fontSize:15,color:"#666",marginBottom:6}}>No case files yet</div>
-              <div style={{fontSize:12,color:"#444"}}>After reviewing a meeting, click "Save to case file".</div>
+            <Card style={{textAlign:"center",padding:"60px 20px"}}>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:20,color:"#F2EDE4",marginBottom:8}}>No cases yet</div>
+              <div style={{fontSize:13,color:"#555",marginBottom:24,maxWidth:360,margin:"0 auto 24px"}}>Start a meeting from the home screen. After the meeting ends, review the record and save it to create a case file.</div>
+              <Btn onClick={()=>setScreen(SCREENS.HOME)}>Start your first meeting →</Btn>
             </Card>
           )}
 
@@ -3418,7 +3417,7 @@ ${m.content}`;
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   <Btn variant="secondary" onClick={()=>{setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));setScreen(SCREENS.HOME);}} style={{fontSize:11,padding:"5px 12px"}}>+ Add meeting</Btn>
-                  <Btn variant="ghost" onClick={()=>{setPortalCaseId(c.id);setScreen(SCREENS.PORTAL);}} style={{fontSize:11,padding:"5px 12px"}}>Portal</Btn>
+                  
                   <Btn variant="danger" onClick={()=>{if(window.confirm("Delete entire case?"))saveCases(cases.filter(x=>x.id!==c.id));}} style={{fontSize:11,padding:"5px 12px"}}>Delete</Btn>
                 </div>
               </div>
