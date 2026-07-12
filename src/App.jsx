@@ -2511,10 +2511,9 @@ Please produce:
               </button>
             ))}
             {!meetingType&&[
-              {s:SCREENS.CASES,l:"Cases"+(cases.length?` (${cases.length})`:"")},
-              {s:SCREENS.SEARCH,l:"Search"},
+              {s:SCREENS.CASES,l:"Cases"},
               ...(isHR?[{s:SCREENS.HR_REVIEW,l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
-            ].map(({s,l})=>(
+            ].map(({s,l})=>>(
               <button key={s} onClick={()=>setScreen(s)}
                 style={{background:screen===s?"#7C5CFC18":"none",border:"1px solid",borderColor:screen===s?"#7C5CFC33":"transparent",color:screen===s?"#A98FFF":"#666",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:screen===s?600:400}}>
                 {l}
@@ -2791,7 +2790,7 @@ Please produce:
                     setInputText(val);
                   }
                 }}
-                placeholder="Type or dictate the meeting notes here...&#10;&#10;Just capture what is being said — Compass will organise everything when you end the meeting."
+                placeholder="Type or dictate meeting notes here — Compass will organise everything when you end the meeting."
               />
 
               {/* Suggested questions bar */}
@@ -2807,7 +2806,7 @@ Please produce:
                       style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC55";e.currentTarget.style.color="#F2EDE4";}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
-                      {q.trim().length>60?q.trim().slice(0,57)+"...":q.trim()}
+                      {q.trim()}
                     </button>
                   ))}
                   {liveContextLoading&&<span style={{fontSize:11,color:"#333",fontStyle:"italic"}}>updating...</span>}
@@ -2824,16 +2823,13 @@ Please produce:
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   <button onClick={isListening?stopSpeech:startSpeech}
                     style={{display:"flex",alignItems:"center",gap:10,background:isListening?"#2A1008":"#1C1C22",border:"1px solid",borderColor:isListening?"#E8622A44":"#2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isListening?"#E8622A":"#888",fontSize:13,fontWeight:500}}>
-                    <span style={{fontSize:16}}>{isListening?"🔴":"🎤"}</span>
-                    {isListening?"Stop microphone":"Start microphone"}
+                    <span style={{width:8,height:8,borderRadius:"50%",background:isListening?"#E8622A":"#555",display:"inline-block",marginRight:2}}></span>{isListening?"Stop microphone":"Start microphone"}
                   </button>
                   <button onClick={isScreenCapturing?stopScreenCapture:startScreenCapture}
                     style={{display:"flex",alignItems:"center",gap:10,background:isScreenCapturing?"#0A1A0A":"#1C1C22",border:"1px solid",borderColor:isScreenCapturing?"#4CAF5044":"#2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isScreenCapturing?"#4CAF50":"#888",fontSize:13,fontWeight:500}}>
-                    <span style={{fontSize:16}}>🖥</span>
-                    {isScreenCapturing?"Stop screen audio":"Screen audio"}
+                    <span style={{width:8,height:8,borderRadius:"50%",background:isScreenCapturing?"#4CAF50":"#555",display:"inline-block",marginRight:2}}></span>{isScreenCapturing?"Stop screen audio":"Screen audio"}
                   </button>
                   <label style={{display:"flex",alignItems:"center",gap:10,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:"#888",fontSize:13,fontWeight:500}}>
-                    <span style={{fontSize:16}}>📄</span>
                     Import transcript
                     <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
                   </label>
@@ -2898,6 +2894,22 @@ Please produce:
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
         <div style={{maxWidth:1440,margin:"0 auto",padding:"28px 20px"}}>
+
+          {/* Action bar */}
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+            <div>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:2}}>{caseInfo.employee||"Meeting"} — {meetingType?.label}</div>
+              <div style={{fontSize:12,color:"#555"}}>{caseInfo.date} · Review and approve the record before saving</div>
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {!isHR&&<Btn onClick={()=>{
+                const cs = cases.find(x=>x.employeeName===caseInfo.employee?.trim());
+                requestHrReview("record", cs?.id||null, null, reviewOutput);
+              }} variant="ghost" style={{fontSize:13}}>Request HR review</Btn>}
+              <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}} variant="ghost" style={{fontSize:13}}>Save to case file</Btn>
+              <Btn onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC"}}>Draft letter →</Btn>
+            </div>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start",gridTemplateColumns:isMobile?"1fr":"1fr 380px"}}>
             <div>
               {/* Meeting record */}
