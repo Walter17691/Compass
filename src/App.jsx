@@ -3467,6 +3467,7 @@ ${m.content}`;
                 </div>
               </div>
 
+              {openCases[c.id]&&<>
               {/* ACAS Early Conciliation */}
               <div style={{padding:"12px 20px",background:"#141414",borderTop:"1px solid #1a1a1a"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:acasData[c.id]?"12px":"0"}}>
@@ -3754,6 +3755,8 @@ ${m.content}`;
                   </div>
                 )}
               </div>
+            </>
+            }
             </Card>
           ))}
 
