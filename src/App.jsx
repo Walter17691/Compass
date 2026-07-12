@@ -254,19 +254,19 @@ function Badge({ children, color="#7C5CFC" }) {
 }
 
 function Btn({ children, onClick, variant="primary", disabled, style={} }) {
-  const base = { border:"none", borderRadius:8, padding:"11px 22px", fontSize:13, fontWeight:600, cursor:disabled?"not-allowed":"pointer", transition:"all 0.15s", opacity:disabled?0.4:1, ...style };
+  const base = { border:"none", borderRadius:8, padding:"10px 20px", fontSize:13, fontWeight:600, cursor:disabled?"not-allowed":"pointer", transition:"all 0.15s", opacity:disabled?0.4:1, letterSpacing:0.2, ...style };
   const vars = {
-    primary: { background:"#7C5CFC", color:"#fff", boxShadow:"0 2px 8px rgba(124,92,252,0.25)" },
-    secondary: { background:"#F2F0FB", border:"1px solid #E4E0F5", color:"#1A1535" },
-    ghost: { background:"none", border:"1px solid #E4E0F5", color:"#5E5A7A" },
-    danger: { background:"none", border:"1px solid #E8622A44", color:"#E8622A" },
+    primary: { background:"#7C5CFC", color:"#fff", boxShadow:"0 2px 8px rgba(124,92,252,0.3)" },
+    secondary: { background:"#1C1C22", border:"1px solid #2E2E3A", color:"#C8C3D8" },
+    ghost: { background:"none", border:"1px solid #2E2E3A", color:"#888" },
+    danger: { background:"none", border:"1px solid #E8622A33", color:"#E8622A" },
     blue: { background:"#1C5AA0", color:"#fff" },
   };
   return <button onClick={disabled ? undefined : onClick} style={{...base,...vars[variant]}}>{children}</button>;
 }
 
 function Card({ children, style={} }) {
-  return <div style={{background:"#FFFFFF", border:"1px solid #E4E0F5", borderRadius:14, padding:24, boxShadow:"0 1px 3px rgba(124,92,252,0.08)", ...style}}>{children}</div>;
+  return <div style={{background:"#161619", border:"1px solid #2E2E3A", borderRadius:14, padding:24, boxShadow:"0 1px 3px rgba(0,0,0,0.3)", ...style}}>{children}</div>;
 }
 
 function SectionTitle({ children }) {
@@ -333,28 +333,28 @@ function SignaturePad({ onSave, onClose }) {
       <Card style={{width:500,maxWidth:"90vw"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>E-signature</span>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#9B97B2",fontSize:22,cursor:"pointer"}}>&#10005;</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#888",fontSize:22,cursor:"pointer"}}>&#10005;</button>
         </div>
         <div style={{display:"flex",gap:8,marginBottom:14}}>
           {["draw","type"].map(m=><Btn key={m} variant={mode===m?"primary":"ghost"} onClick={()=>setMode(m)}>{m==="draw"?"Draw":"Type"}</Btn>)}
         </div>
         {mode==="draw" ? (
           <>
-            <div style={{background:"#fff",borderRadius:8,border:"1px solid #E4E0F5",marginBottom:10,overflow:"hidden"}}>
+            <div style={{background:"#fff",borderRadius:8,border:"1px solid #2A2A35",marginBottom:10,overflow:"hidden"}}>
               <canvas ref={canvasRef} width={440} height={150} style={{display:"block",width:"100%",touchAction:"none",cursor:"crosshair"}}
                 onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
                 onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
-              <span style={{fontSize:11,color:"#5E5A7A"}}>Draw your signature above</span>
+              <span style={{fontSize:11,color:"#6B6880"}}>Draw your signature above</span>
               <Btn variant="ghost" onClick={clear} style={{padding:"4px 10px",fontSize:11}}>Clear</Btn>
             </div>
           </>
         ) : (
           <div style={{marginBottom:16}}>
             <input value={typed} onChange={e=>setTyped(e.target.value)} placeholder="Type your name"
-              style={{width:"100%",background:"#fff",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 16px",fontSize:28,fontFamily:"'Brush Script MT',cursive",color:"#1C1C22",outline:"none",boxSizing:"border-box"}} />
-            {typed && <div style={{background:"#fff",borderRadius:8,border:"1px solid #E4E0F5",padding:"10px 16px",marginTop:8}}><div style={{fontFamily:"'Brush Script MT',cursive",fontSize:32,color:"#1C1C22"}}>{typed}</div></div>}
+              style={{width:"100%",background:"#fff",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:28,fontFamily:"'Brush Script MT',cursive",color:"#1C1C22",outline:"none",boxSizing:"border-box"}} />
+            {typed && <div style={{background:"#fff",borderRadius:8,border:"1px solid #2A2A35",padding:"10px 16px",marginTop:8}}><div style={{fontFamily:"'Brush Script MT',cursive",fontSize:32,color:"#1C1C22"}}>{typed}</div></div>}
           </div>
         )}
         <div style={{display:"flex",gap:10}}>
@@ -373,7 +373,7 @@ function DateInput({ value, onChange, style={} }) {
   return (
     <div className="date-wrap">
       <input type="date" value={value} onChange={onChange}
-        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 36px 9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box",...style}} />
+        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 36px 9px 12px",fontSize:13,outline:"none",color:"#F2EDE4",boxSizing:"border-box",...style}} />
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C5CFC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
         <line x1="16" y1="2" x2="16" y2="6"/>
@@ -389,11 +389,11 @@ function AdjustmentForm({ onAdd }) {
   const [review, setReview] = useState("");
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",marginTop:14,borderTop:"1px solid #2A2A35",paddingTop:14}}>
-      <div style={{fontSize:11,color:"#5E5A7A",marginBottom:8,fontWeight:600}}>Add adjustment</div>
+      <div style={{fontSize:11,color:"#6B6880",marginBottom:8,fontWeight:600}}>Add adjustment</div>
       <input placeholder="e.g. Flexible start time, additional breaks, remote working" value={adj} onChange={e=>setAdj(e.target.value)}
-        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
+        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
       <input placeholder="Review date (optional)" value={review} onChange={e=>setReview(e.target.value)}
-        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
+        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
       <Btn onClick={()=>{if(adj.trim()){onAdd({adjustment:adj.trim(),review});setAdj("");setReview("");}}} disabled={!adj.trim()} style={{fontSize:11,padding:"7px 14px"}}>Add adjustment</Btn>
     </div>
   );
@@ -407,14 +407,14 @@ function UserAddForm({ onAdd }) {
     <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
         <input placeholder="Full name" value={name} onChange={e=>setName(e.target.value)}
-          style={{background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none"}} />
+          style={{background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}} />
         <select value={role} onChange={e=>setRole(e.target.value)}
-          style={{background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none"}}>
+          style={{background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}>
           {["HR Director","HR Manager","Line Manager","HR Administrator"].map(r=><option key={r}>{r}</option>)}
         </select>
       </div>
       <input placeholder="Email (optional)" value={email} onChange={e=>setEmail(e.target.value)}
-        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
+        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
       <Btn onClick={()=>{if(name.trim()){onAdd(name.trim(),role,email.trim());}}} disabled={!name.trim()} style={{width:"100%",fontSize:12,padding:"8px"}}>Add user</Btn>
     </div>
   );
@@ -2242,7 +2242,7 @@ Please produce:
 
 
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#F8F7FF",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
+    <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0F0F12",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:Inter,system-ui,sans-serif;color:#F2EDE4;}
@@ -2259,10 +2259,10 @@ Please produce:
 
       {showLinkCase&&appealDetected&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
             <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Appeal detected</div>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Link to an existing case?</h3>
-            <p style={{fontSize:13,color:"#5E5A7A",marginBottom:20}}>This looks like an appeal. Would you like to link it to an existing case so the full proceeding is tracked together?</p>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Link to an existing case?</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:20}}>This looks like an appeal. Would you like to link it to an existing case so the full proceeding is tracked together?</p>
             {cases.length>0?(
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
                 {cases.map(cs=>(
@@ -2290,14 +2290,14 @@ Please produce:
                     setAppealDetected(false);
                     appealDetectedRef.current=false;
                     showToast("Appeal linked to "+cs.employeeName);
-                  }} style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 16px",fontSize:14,color:"#1A1535",cursor:"pointer",textAlign:"left",fontFamily:"Playfair Display,Georgia,serif"}}>
+                  }} style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,color:"#E8E4F0",cursor:"pointer",textAlign:"left",fontFamily:"Playfair Display,Georgia,serif"}}>
                     <div style={{fontWeight:600}}>{cs.employeeName}</div>
-                    <div style={{fontSize:11,color:"#5E5A7A",marginTop:2}}>{cs.meetings.length} meeting{cs.meetings.length!==1?"s":""} · Latest: {cs.meetings[cs.meetings.length-1]?.type}</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginTop:2}}>{cs.meetings.length} meeting{cs.meetings.length!==1?"s":""} · Latest: {cs.meetings[cs.meetings.length-1]?.type}</div>
                   </button>
                 ))}
               </div>
             ):(
-              <div style={{fontSize:13,color:"#5E5A7A",marginBottom:16}}>No existing cases found.</div>
+              <div style={{fontSize:13,color:"#6B6880",marginBottom:16}}>No existing cases found.</div>
             )}
             <Btn variant="ghost" onClick={()=>{setShowLinkCase(false);setAppealDetected(false);appealDetectedRef.current=false;}} style={{width:"100%"}}>Skip</Btn>
           </div>
@@ -2306,19 +2306,19 @@ Please produce:
 
       {showLetterModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
-            <p style={{fontSize:13,color:"#5E5A7A",marginBottom:24}}>How would you like to create the outcome letter?</p>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:24}}>How would you like to create the outcome letter?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <button onClick={()=>{console.log("Generate clicked, pendingLetterTypeRef:", pendingLetterTypeRef.current);setShowLetterModal(false);handleLetter(pendingLetterTypeRef.current||"outcome");}}
                 style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
-                <div style={{fontSize:12,color:"#7C5CFC"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
+                <div style={{fontSize:12,color:"#A98FFF"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
               </button>
               <button onClick={()=>{setShowLetterModal(false);setScreen(SCREENS.TEMPLATES);setActiveLetter("outcome");}}
-                style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
-                <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:4}}>Use a template</div>
-                <div style={{fontSize:12,color:"#5E5A7A"}}>Pick from your uploaded templates and Compass will populate it with meeting details</div>
+                style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
+                <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>Use a template</div>
+                <div style={{fontSize:12,color:"#6B6880"}}>Pick from your uploaded templates and Compass will populate it with meeting details</div>
               </button>
             </div>
             <Btn variant="ghost" onClick={()=>setShowLetterModal(false)} style={{width:"100%",marginTop:16}}>Cancel</Btn>
@@ -2328,13 +2328,13 @@ Please produce:
 
       {showEmailLetter&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Email letter</h3>
-            <p style={{fontSize:13,color:"#5E5A7A",marginBottom:20}}>The letter will be sent as email body and also available to download as PDF.</p>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Recipient email</label>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Email letter</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:20}}>The letter will be sent as email body and also available to download as PDF.</p>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Recipient email</label>
             <input value={emailLetterTo} onChange={e=>setEmailLetterTo(e.target.value)}
               placeholder="employee@company.com" autoFocus
-              style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
+              style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",marginBottom:16}}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={async()=>{
                 if(!emailLetterTo.includes("@")) return;
@@ -2362,15 +2362,15 @@ Please produce:
 
       {inviteLink&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share invite with {inviteLink.name}</h3>
-            <p style={{fontSize:13,color:"#5E5A7A",marginBottom:20}}>Share this link or invite code with {inviteLink.name} ({inviteLink.email}):</p>
-            <div style={{background:"#FFFFFF",borderRadius:8,padding:"12px 16px",marginBottom:12}}>
-              <div style={{fontSize:10,color:"#5E5A7A",marginBottom:4}}>Invite link</div>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Share invite with {inviteLink.name}</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:20}}>Share this link or invite code with {inviteLink.name} ({inviteLink.email}):</p>
+            <div style={{background:"#141418",borderRadius:8,padding:"12px 16px",marginBottom:12}}>
+              <div style={{fontSize:10,color:"#6B6880",marginBottom:4}}>Invite link</div>
               <div style={{fontSize:12,color:"#7C5CFC",wordBreak:"break-all"}}>{inviteLink.link}</div>
             </div>
-            <div style={{background:"#FFFFFF",borderRadius:8,padding:"12px 16px",marginBottom:20}}>
-              <div style={{fontSize:10,color:"#5E5A7A",marginBottom:4}}>Invite code</div>
+            <div style={{background:"#141418",borderRadius:8,padding:"12px 16px",marginBottom:20}}>
+              <div style={{fontSize:10,color:"#6B6880",marginBottom:4}}>Invite code</div>
               <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,color:"#7C5CFC",letterSpacing:4,fontWeight:700}}>{inviteLink.code}</div>
             </div>
             <div style={{display:"flex",gap:8}}>
@@ -2383,14 +2383,14 @@ Please produce:
 
       {showSignModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Send for signature</h3>
-            <p style={{fontSize:13,color:"#5E5A7A",marginBottom:20}}>The employee will receive an email with a link to read and sign the meeting record.</p>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginBottom:8,fontWeight:400}}>Send for signature</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:20}}>The employee will receive an email with a link to read and sign the meeting record.</p>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
             <input value={signEmail} onChange={e=>setSignEmail(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&signEmail.includes("@")&&(sendForSignature(signEmail),setShowSignModal(false),setSignEmail(""))}
               placeholder="employee@company.com" autoFocus
-              style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
+              style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",marginBottom:16}}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>{if(signEmail.includes("@")){sendForSignature(signEmail);setShowSignModal(false);setSignEmail("");}}}
                 disabled={!signEmail.includes("@")}
@@ -2407,20 +2407,20 @@ Please produce:
 
       {/* Case file prompt */}
       {showCasePrompt&&screen===SCREENS.HOME&&(
-        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",zIndex:1000,background:"#FFFFFF",border:"1px solid #7C5CFC",borderRadius:12,padding:"16px 20px",width:"100%",maxWidth:500,boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}}>
+        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",zIndex:1000,background:"#1C1C22",border:"1px solid #7C5CFC",borderRadius:12,padding:"16px 20px",width:"100%",maxWidth:500,boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
             <div>
               <div style={{fontSize:13,color:"#7C5CFC",fontWeight:600,marginBottom:3}}>Save to a case file?</div>
-              <div style={{fontSize:11,color:"#5E5A7A"}}>This looks like it relates to a specific employee situation.</div>
+              <div style={{fontSize:11,color:"#6B6880"}}>This looks like it relates to a specific employee situation.</div>
             </div>
-            <button onClick={()=>setShowCasePrompt(false)} style={{background:"none",border:"none",color:"#5E5A7A",fontSize:18,cursor:"pointer",padding:0,marginLeft:12}}>&#10005;</button>
+            <button onClick={()=>setShowCasePrompt(false)} style={{background:"none",border:"none",color:"#6B6880",fontSize:18,cursor:"pointer",padding:0,marginLeft:12}}>&#10005;</button>
           </div>
           <div style={{display:"flex",gap:8}}>
             <input value={casePromptName} onChange={e=>setCasePromptName(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&createCaseFromChat()}
               placeholder="Employee name..."
               autoFocus
-              style={{flex:1,background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#1A1535"}}/>
+              style={{flex:1,background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
             <Btn onClick={createCaseFromChat} disabled={!casePromptName.trim()} style={{padding:"9px 16px",fontSize:12,flexShrink:0}}>Create case</Btn>
           </div>
         </div>
@@ -2430,7 +2430,7 @@ Please produce:
       {toast&&(
         <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3000,background:toast.type==="error"?"#2A1008":"#1C1C22",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#E8622A":"#7C5CFC",flexShrink:0}}/>
-          <span style={{fontSize:14,color:"#1A1535"}}>{toast.message}</span>
+          <span style={{fontSize:14,color:"#E8E4F0"}}>{toast.message}</span>
         </div>
       )}
 
@@ -2439,20 +2439,20 @@ Please produce:
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <Card style={{maxWidth:520,width:"100%"}}>
             <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#7C5CFC",marginBottom:8,fontWeight:600}}>Data &amp; privacy</div>
-            <p style={{fontSize:13,color:"#9B97B2",lineHeight:1.8,marginBottom:16}}>
+            <p style={{fontSize:13,color:"#888",lineHeight:1.8,marginBottom:16}}>
               Compass stores all HR data locally in your browser. No data is sent to external servers except the text you submit to the AI for processing via the Anthropic API.
             </p>
-            <div style={{background:"#F8F7FF",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
+            <div style={{background:"#0F0F12",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
               <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>WHAT IS STORED</div>
               {["Case files, meeting records, transcripts and letters — in your browser only","Company policies you upload — in your browser only","Your signature and letterhead — in your browser only","Whistleblower reports — in your browser only","AI processing: meeting text is sent to Anthropic's API to generate outputs"].map((item,i)=>(
-                <div key={i} style={{display:"flex",gap:8,marginBottom:6,fontSize:12,color:"#5E5A7A"}}>
+                <div key={i} style={{display:"flex",gap:8,marginBottom:6,fontSize:12,color:"#C4BDAF"}}>
                   <span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{item}</span>
                 </div>
               ))}
             </div>
-            <div style={{background:"#F8F7FF",borderRadius:8,padding:"14px 16px",marginBottom:20}}>
+            <div style={{background:"#0F0F12",borderRadius:8,padding:"14px 16px",marginBottom:20}}>
               <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:8}}>YOUR RIGHTS</div>
-              <div style={{fontSize:12,color:"#9B97B2",lineHeight:1.7}}>You can export all your data or delete it at any time from Settings. Data is retained until you delete it. You are responsible for compliance with UK GDPR when processing employee data using this tool.</div>
+              <div style={{fontSize:12,color:"#888",lineHeight:1.7}}>You can export all your data or delete it at any time from Settings. Data is retained until you delete it. You are responsible for compliance with UK GDPR when processing employee data using this tool.</div>
             </div>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>{setGdprAccepted(true);lsSet("compass_gdpr",true);setShowGdpr(false);if(!onboardDone){setShowOnboard(true);setOnboardStep(0);}}}>I understand — continue</Btn>
@@ -2466,14 +2466,14 @@ Please produce:
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1900,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <Card style={{maxWidth:480,width:"100%"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-              <div style={{fontSize:10,color:"#5E5A7A",letterSpacing:1}}>{onboardStep+1} / {ONBOARD_STEPS.length}</div>
-              <button onClick={()=>{setShowOnboard(false);setOnboardDone(true);lsSet("compass_onboard",true);}} style={{background:"none",border:"none",color:"#5E5A7A",fontSize:12,cursor:"pointer"}}>Skip</button>
+              <div style={{fontSize:10,color:"#6B6880",letterSpacing:1}}>{onboardStep+1} / {ONBOARD_STEPS.length}</div>
+              <button onClick={()=>{setShowOnboard(false);setOnboardDone(true);lsSet("compass_onboard",true);}} style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer"}}>Skip</button>
             </div>
             <div style={{height:2,background:"#2A2A35",borderRadius:1,marginBottom:20}}>
               <div style={{height:2,background:"#7C5CFC",borderRadius:1,width:`${((onboardStep+1)/ONBOARD_STEPS.length)*100}%`,transition:"width 0.3s"}}/>
             </div>
-            <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#1A1535",marginBottom:10,fontWeight:600}}>{ONBOARD_STEPS[onboardStep].title}</div>
-            <p style={{fontSize:14,color:"#9B97B2",lineHeight:1.8,marginBottom:24}}>{ONBOARD_STEPS[onboardStep].body}</p>
+            <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#F2EDE4",marginBottom:10,fontWeight:600}}>{ONBOARD_STEPS[onboardStep].title}</div>
+            <p style={{fontSize:14,color:"#888",lineHeight:1.8,marginBottom:24}}>{ONBOARD_STEPS[onboardStep].body}</p>
             <Btn onClick={()=>{
               if(onboardStep<ONBOARD_STEPS.length-1) setOnboardStep(s=>s+1);
               else { setShowOnboard(false); setOnboardDone(true); lsSet("compass_onboard",true); }
@@ -2484,7 +2484,7 @@ Please produce:
 
 
       {/* ── HEADER ── */}
-      <header style={{background:"#F8F7FF",borderBottom:"1px solid #F0EEF9",position:"sticky",top:0,zIndex:99}}>
+      <header style={{background:"#0F0F12",borderBottom:"1px solid #1C1C22",position:"sticky",top:0,zIndex:99}}>
         <div style={{maxWidth:1440,margin:"0 auto",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <button onClick={reset} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",padding:0,flexShrink:0}}>
             <CompassLogo size={32} />
@@ -2493,9 +2493,9 @@ Please produce:
 
           {meetingType && (
             <div style={{display:"flex",alignItems:"center",gap:8,flex:1,justifyContent:"center",flexWrap:"wrap"}}>
-              <span style={{fontSize:12,color:"#9B97B2"}}>{meetingType.label}</span>
+              <span style={{fontSize:12,color:"#888"}}>{meetingType.label}</span>
               {caseInfo.employee&&<span style={{background:"#7C5CFC",color:"#fff",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo.employee}</span>}
-              {caseInfo.date&&<span style={{color:"#5E5A7A",fontSize:11}}>{caseInfo.date}</span>}
+              {caseInfo.date&&<span style={{color:"#6B6880",fontSize:11}}>{caseInfo.date}</span>}
             </div>
           )}
 
@@ -2527,13 +2527,13 @@ Please produce:
               </button>
             )}
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {org?.name&&<span style={{fontSize:11,color:"#5E5A7A",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
-              {currentUser?.name&&<span style={{fontSize:11,color:"#9B97B2"}}>{currentUser.name}</span>}
+              {org?.name&&<span style={{fontSize:11,color:"#6B6880",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
+              {currentUser?.name&&<span style={{fontSize:11,color:"#888"}}>{currentUser.name}</span>}
               {member?.role&&<span style={{fontSize:10,color:"#7C5CFC",background:"#7C5CFC11",border:"1px solid #7C5CFC33",borderRadius:4,padding:"2px 6px"}}>{member.role==="hr_director"?"HR Director":member.role==="hr_manager"?"HR Manager":"Location Manager"}</span>}
-              {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E4E0F5",color:"#5E5A7A",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>Sign out</button>}
+              {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #2A2A35",color:"#6B6880",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>Sign out</button>}
             </div>
-            <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#1C1C22":"none",border:"1px solid #E4E0F5",color:"#5E5A7A",borderRadius:6,padding:"5px 10px",fontSize:14}}>⚙</button>
-            {meetingType&&<button onClick={reset} style={{background:"none",border:"1px solid #E4E0F5",color:"#5E5A7A",borderRadius:6,padding:"4px 10px",fontSize:11}}>End meeting</button>}
+            <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#1C1C22":"none",border:"1px solid #2A2A35",color:"#666",borderRadius:6,padding:"5px 10px",fontSize:14}}>⚙</button>
+            {meetingType&&<button onClick={reset} style={{background:"none",border:"1px solid #2A2A35",color:"#6B6880",borderRadius:6,padding:"4px 10px",fontSize:11}}>End meeting</button>}
           </nav>
         </div>
       </header>
@@ -2544,7 +2544,7 @@ Please produce:
           <div style={{maxWidth:1440,margin:"0 auto",display:"flex",alignItems:"center",gap:12,fontSize:12}}>
             <span style={{color:"#E8622A",fontWeight:600}}>Overdue actions:</span>
             {dueSoon.filter(d=>d.overdue).slice(0,3).map((d,i)=>(
-              <span key={i} style={{color:"#5E5A7A"}}>{d.caseName} — {d.step} <span style={{color:"#E8622A"}}>({Math.abs(d.daysLeft)}d overdue)</span></span>
+              <span key={i} style={{color:"#C4BDAF"}}>{d.caseName} — {d.step} <span style={{color:"#E8622A"}}>({Math.abs(d.daysLeft)}d overdue)</span></span>
             ))}
             <button onClick={()=>setScreen(SCREENS.DASHBOARD)} style={{background:"none",border:"none",color:"#E8622A",fontSize:11,cursor:"pointer",marginLeft:"auto",textDecoration:"underline"}}>View all</button>
           </div>
@@ -2553,129 +2553,88 @@ Please produce:
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
-        <div style={{minHeight:"100vh",background:"#FFFFFF",display:"flex"}}>
-
-          {/* Left sidebar — like Granola */}
-          <div style={{width:220,background:"#FAFAFA",borderRight:"1px solid #F0F0F0",padding:"24px 0",display:"flex",flexDirection:"column",flexShrink:0}}>
-            <div style={{padding:"0 16px 24px",borderBottom:"1px solid #F0F0F0",marginBottom:16}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <CompassLogo size={22}/>
-                <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
-              </div>
-            </div>
-            <div style={{padding:"0 8px",flex:1}}>
-              <button onClick={()=>setScreen(SCREENS.HOME)}
-                style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:6,background:"#EEE9FF",border:"none",cursor:"pointer",marginBottom:2}}>
-                <span style={{fontSize:13,color:"#7C5CFC",fontWeight:500}}>New meeting</span>
-              </button>
-              <button onClick={()=>setScreen(SCREENS.CASES)}
-                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"7px 10px",borderRadius:6,background:"none",border:"none",cursor:"pointer",marginBottom:2}}>
-                <span style={{fontSize:13,color:"#6B7280",fontWeight:400}}>All cases</span>
-                {cases.length>0&&<span style={{fontSize:11,color:"#9CA3AF"}}>{cases.length}</span>}
-              </button>
-              {isHR&&<button onClick={()=>setScreen(SCREENS.HR_REVIEW)}
-                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:6,background:"none",border:"none",cursor:"pointer",marginBottom:2}}>
-                <span style={{fontSize:13,color:"#6B7280"}}>HR Review</span>
-                {hrReviewRequests.filter(r=>r.status==="pending").length>0&&<span style={{fontSize:11,color:"#E8622A",fontWeight:600}}>{hrReviewRequests.filter(r=>r.status==="pending").length}</span>}
-              </button>}
-            </div>
-            <div style={{padding:"16px 8px 0",borderTop:"1px solid #F0F0F0",marginTop:"auto"}}>
-              <button onClick={()=>setScreen(SCREENS.SETTINGS)}
-                style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:6,background:"none",border:"none",cursor:"pointer"}}>
-                <span style={{fontSize:13,color:"#9CA3AF"}}>Settings</span>
-              </button>
-              {org?.name&&<div style={{padding:"4px 10px",fontSize:11,color:"#C4C0D0"}}>{org.name}</div>}
+        <div style={{maxWidth:600,margin:"0 auto",padding:"48px 20px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
+            <CompassLogo size={36}/>
+            <div>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#F2EDE4",fontWeight:400}}>Start a meeting</div>
+              <div style={{fontSize:12,color:"#6B6880"}}>Compass will guide you through and generate a legal record</div>
             </div>
           </div>
 
-          {/* Main content */}
-          <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"64px 48px"}}>
-            <div style={{width:"100%",maxWidth:480}}>
+          {/* Step 1 — Employee */}
+          <div style={{marginBottom:20}}>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Employee</label>
+            <input
+              autoFocus
+              placeholder="Full name of the employee"
+              value={meetingSetup.employee}
+              onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
+              list="employee-list"
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#F2EDE4",outline:"none",boxSizing:"border-box"}}/>
+            <datalist id="employee-list">
+              {[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
+            </datalist>
+          </div>
 
-              <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"0 0 6px",letterSpacing:"-0.5px"}}>New meeting</h1>
-              <p style={{fontSize:14,color:"#9B97B2",margin:"0 0 40px"}}>Compass will generate a legally compliant record as you go</p>
-
-              {/* Employee */}
-              <div style={{marginBottom:24}}>
-                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Employee name</label>
-                <input autoFocus placeholder="e.g. Sarah Johnson"
-                  value={meetingSetup.employee}
-                  onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
-                  list="employee-list"
-                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
-                  onFocus={e=>e.target.style.borderColor="#7C5CFC"}
-                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-                <datalist id="employee-list">
-                  {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
-                </datalist>
-              </div>
-
-              {/* Meeting type — clean list */}
-              <div style={{marginBottom:24}}>
-                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Meeting type</label>
-                <div style={{border:"1px solid #E5E7EB",borderRadius:8,overflow:"hidden"}}>
-                  {[
-                    {id:"investigation", label:"Investigation", desc:"Fact-finding before formal action"},
-                    {id:"disciplinary", label:"Disciplinary hearing", desc:"Formal disciplinary process"},
-                    {id:"grievance", label:"Grievance", desc:"Employee raised a concern"},
-                    {id:"redundancy-atrisk", label:"Redundancy consultation", desc:"At risk or confirmed redundancy"},
-                    {id:"return", label:"Return to work", desc:"After sickness absence"},
-                    {id:"informal", label:"Informal / 1-1", desc:"General check-in"},
-                    {id:"appeal-disciplinary", label:"Appeal", desc:"Appeal against a decision"},
-                    {id:"pip-review", label:"Performance review", desc:"PIP or performance discussion"},
-                  ].map((t,i,arr)=>(
-                    <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
-                      style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",border:"none",borderBottom:i<arr.length-1?"1px solid #F3F4F6":"none",borderLeft:`2px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,cursor:"pointer",textAlign:"left",transition:"all 0.1s"}}>
-                      <div>
-                        <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:400,color:meetingSetup.type===t.id?"#5B3FD4":"#374151"}}>{t.label}</div>
-                        <div style={{fontSize:12,color:"#9B97B2",marginTop:1}}>{t.desc}</div>
-                      </div>
-                      {meetingSetup.type===t.id&&<span style={{color:"#7C5CFC",fontSize:14,marginLeft:8}}>✓</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Date */}
-              <div style={{marginBottom:28}}>
-                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#374151",marginBottom:6}}>Date</label>
-                <input type="date" value={meetingSetup.date}
-                  onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
-                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:8,padding:"11px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
-                  onFocus={e=>e.target.style.borderColor="#7C5CFC"}
-                  onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-              </div>
-
-              {/* CTA */}
-              <button
-                disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
-                onClick={()=>{
-                  const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
-                  setMeetingType(mt);
-                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
-                  setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);
-                  setLiveChatHistory([]);
-                  setScreen(SCREENS.RECORD);
-                }}
-                style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#F3F4F6":"#7C5CFC",border:"none",borderRadius:8,padding:"13px",fontSize:14,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9CA3AF":"#FFFFFF",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s",boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 2px 8px rgba(124,92,252,0.3)"}}>
-                Start meeting
-              </button>
-
-              {/* Recent cases */}
-              {cases.length>0&&(
-                <div style={{marginTop:40}}>
-                  <div style={{fontSize:12,color:"#9B97B2",fontWeight:500,letterSpacing:"0.3px",textTransform:"uppercase",marginBottom:12}}>Recent</div>
-                  {cases.slice(0,4).map(cs=>(
-                    <div key={cs.id} onClick={()=>{ setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""})); setScreen(SCREENS.HOME); setMeetingSetup(p=>({...p,employee:cs.employeeName})); }}
-                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #F9F9F9",cursor:"pointer"}}>
-                      <div style={{fontSize:13,color:"#374151",fontWeight:400}}>{cs.employeeName}</div>
-                      <div style={{fontSize:12,color:"#D1C4F7"}}>{cs.meetings?.slice(-1)[0]?.type||""}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* Step 2 — Meeting type */}
+          <div style={{marginBottom:20}}>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Meeting type</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {[
+                {id:"investigation", label:"Investigation", tag:"ACAS S1", desc:"Fact-finding before formal action"},
+                {id:"disciplinary", label:"Disciplinary", tag:"ACAS S2", desc:"Formal disciplinary hearing"},
+                {id:"grievance", label:"Grievance", tag:"ACAS S6", desc:"Employee raised a concern"},
+                {id:"redundancy-atrisk", label:"At Risk / Redundancy", tag:"ERA 1996", desc:"Redundancy consultation"},
+                {id:"return", label:"Return to Work", tag:"EqA 2010", desc:"After sickness absence"},
+                {id:"informal", label:"Informal / 1-1", tag:"General", desc:"General discussion or check-in"},
+                {id:"appeal-disciplinary", label:"Appeal", tag:"ACAS S5", desc:"Appeal against a decision"},
+                {id:"pip-review", label:"Performance / PIP", tag:"Development", desc:"Performance review or PIP"},
+              ].map(t=>(
+                <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
+                  style={{background:meetingSetup.type===t.id?"#7C5CFC18":"#1C1C22",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#2A2A35",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+                  <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:4}}>{t.label}</div>
+                  <div style={{fontSize:11,color:"#6B6880"}}>{t.desc}</div>
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Step 3 — Date */}
+          <div style={{marginBottom:32}}>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Date</label>
+            <input type="date" value={meetingSetup.date} onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#F2EDE4",outline:"none",boxSizing:"border-box",colorScheme:"dark"}}/>
+          </div>
+
+          {/* Start button */}
+          <button
+            disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
+            onClick={()=>{
+              const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
+              setMeetingType(mt);
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
+              setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);
+              setScreen(SCREENS.RECORD);
+            }}
+            style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#2A2A35":"#7C5CFC",border:"none",borderRadius:8,padding:"16px",fontSize:16,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#444":"#fff",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s"}}>
+            Start meeting →
+          </button>
+
+          {/* Quick access to cases */}
+          {cases.length>0&&(
+            <div style={{marginTop:32,paddingTop:24,borderTop:"1px solid #1a1a1a"}}>
+              <div style={{fontSize:11,color:"#5A5570",marginBottom:12,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Recent cases</div>
+              {cases.slice(0,3).map(cs=>(
+                <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #141414",cursor:"pointer"}}>
+                  <span style={{fontSize:14,color:"#E8E4F0"}}>{cs.employeeName}</span>
+                  <span style={{fontSize:11,color:"#6B6880"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</span>
+                </div>
+              ))}
+              <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",marginTop:8,padding:0}}>View all cases →</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -2683,49 +2642,49 @@ Please produce:
       {screen===SCREENS.PREP&&(
         <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
           <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
-          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:30,color:"#1A1535",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
-          <p style={{fontSize:14,color:"#5E5A7A",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
+          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:30,color:"#F2EDE4",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
+          <p style={{fontSize:14,color:"#6B6880",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
 
           <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#E8622A"}}>*</span></label>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#E8622A"}}>*</span></label>
             <select value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#F2EDE4":"#555",boxSizing:"border-box"}}>
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#F2EDE4":"#555",boxSizing:"border-box"}}>
               <option value="" disabled>Select meeting type...</option>
-              <option disabled style={{color:"#5E5A7A"}}>── ER Meetings ──</option>
+              <option disabled style={{color:"#6B6880"}}>── ER Meetings ──</option>
               {MEETING_TYPES.filter(t=>t.mode==="er"&&t.group==="formal").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-              <option disabled style={{color:"#5E5A7A"}}>── Appeals ──</option>
+              <option disabled style={{color:"#6B6880"}}>── Appeals ──</option>
               {MEETING_TYPES.filter(t=>t.group==="appeal").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-              <option disabled style={{color:"#5E5A7A"}}>── Redundancy ──</option>
+              <option disabled style={{color:"#6B6880"}}>── Redundancy ──</option>
               {MEETING_TYPES.filter(t=>t.group==="redundancy").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-              <option disabled style={{color:"#5E5A7A"}}>── Development ──</option>
+              <option disabled style={{color:"#6B6880"}}>── Development ──</option>
               {MEETING_TYPES.filter(t=>t.group==="dev").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </div>
 
           <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#E8622A"}}>*</span></label>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#E8622A"}}>*</span></label>
             <input autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
               onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
           </div>
 
           <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
             <DateInput value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
           </div>
 
           <div style={{textAlign:"left",marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
             <input placeholder="Chair / HR manager name" value={caseInfo.manager}
               onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
+              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />
           </div>
 
           <div style={{textAlign:"left",marginBottom:32}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#5E5A7A",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
             <textarea value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
               placeholder="Previous warnings, allegations, relevant history, reasonable adjustments..."
-              rows={4} style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
+              rows={4} style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#F2EDE4",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
           </div>
 
           <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
@@ -2737,18 +2696,18 @@ Please produce:
           </div>
 
           <div style={{textAlign:"left",marginBottom:24}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#5E5A7A",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></label>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></label>
             {bgDoc?(
-              <div style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
                 <span style={{fontSize:20}}>&#128196;</span>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{bgDoc.name}</div>
-                  <div style={{fontSize:11,color:"#5E5A7A"}}>{bgDoc.text.length} characters extracted</div>
+                  <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500}}>{bgDoc.name}</div>
+                  <div style={{fontSize:11,color:"#6B6880"}}>{bgDoc.text.length} characters extracted</div>
                 </div>
-                <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#5E5A7A",fontSize:18,cursor:"pointer"}}>&#10005;</button>
+                <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#6B6880",fontSize:18,cursor:"pointer"}}>&#10005;</button>
               </div>
             ):(
-              <label style={{display:"block",background:"#FFFFFF",border:"1px dashed #2A2A35",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
+              <label style={{display:"block",background:"#1C1C22",border:"1px dashed #2A2A35",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
                 onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
                 <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
@@ -2769,19 +2728,19 @@ Please produce:
                     setBgDoc({name, text: text.slice(0,8000)});
                   }
                 }}/>
-                <div style={{fontSize:13,color:"#5E5A7A",marginBottom:4}}>Click to upload</div>
-                <div style={{fontSize:11,color:"#9B97B2"}}>PDF, Word or text file</div>
+                <div style={{fontSize:13,color:"#666",marginBottom:4}}>Click to upload</div>
+                <div style={{fontSize:11,color:"#5A5570"}}>PDF, Word or text file</div>
               </label>
             )}
           </div>
 
           <button onClick={()=>setScreen(SCREENS.RECORD)}
-            style={{background:"none",border:"none",color:"#5E5A7A",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
+            style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
             Skip prep and start meeting now
           </button>
 
           {prepNotes&&(
-            <div style={{marginTop:28,textAlign:"left",background:"#FFFFFF",border:"1px solid #7C5CFC33",borderRadius:12,padding:20}}>
+            <div style={{marginTop:28,textAlign:"left",background:"#1C1C22",border:"1px solid #7C5CFC33",borderRadius:12,padding:20}}>
               <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
               <MDRenderer text={prepNotes}/>
               <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
@@ -2792,13 +2751,13 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <div style={{position:"fixed",inset:0,background:"#F8F7FF",display:"flex",flexDirection:"column",zIndex:50}}>
+        <div style={{position:"fixed",inset:0,background:"#0F0F12",display:"flex",flexDirection:"column",zIndex:50}}>
 
           {/* Header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 24px",borderBottom:"1px solid #F0EEF9",flexShrink:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 24px",borderBottom:"1px solid #1C1C22",flexShrink:0}}>
             <div>
               <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</div>
-              <div style={{fontSize:15,fontFamily:"Playfair Display,Georgia,serif",color:"#1A1535"}}>{caseInfo.employee||"Notes"}</div>
+              <div style={{fontSize:15,fontFamily:"Playfair Display,Georgia,serif",color:"#F2EDE4"}}>{caseInfo.employee||"Notes"}</div>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               {isListening&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#E8622A"}}><span className="pu">&#9679;</span> Listening</div>}
@@ -2819,7 +2778,7 @@ Please produce:
               <textarea
                 ref={inputRef}
                 value={inputText}
-                style={{flex:1,background:"transparent",border:"none",padding:"32px 40px",fontSize:15,lineHeight:1.9,outline:"none",color:"#1A1535",resize:"none",fontFamily:"Inter,system-ui,sans-serif"}}
+                style={{flex:1,background:"transparent",border:"none",padding:"32px 40px",fontSize:15,lineHeight:1.9,outline:"none",color:"#F2EDE4",resize:"none",fontFamily:"Inter,system-ui,sans-serif"}}
                 onChange={e=>{
                   const val = e.target.value;
                   if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
@@ -2836,32 +2795,32 @@ Please produce:
               />
 
               {/* Suggested questions bar */}
-              <div style={{padding:"12px 40px",borderTop:"1px solid #F0EEF9",flexShrink:0}}>
+              <div style={{padding:"12px 40px",borderTop:"1px solid #141414",flexShrink:0}}>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
-                  <span style={{fontSize:10,color:"#9B97B2",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginRight:4}}>Ask next:</span>
+                  <span style={{fontSize:10,color:"#4A4560",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginRight:4}}>Ask next:</span>
                   {(liveContext
                     ? liveContext.split(/\d+\./).filter(q=>q.trim()).slice(0,3)
                     : (MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3)
                   ).map((q,i)=>(
                     <button key={i}
                       onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
-                      style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#5E5A7A",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap"}}
+                      style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC55";e.currentTarget.style.color="#F2EDE4";}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
                       {q.trim()}
                     </button>
                   ))}
-                  {liveContextLoading&&<span style={{fontSize:11,color:"#9B97B2",fontStyle:"italic"}}>updating...</span>}
+                  {liveContextLoading&&<span style={{fontSize:11,color:"#4A4560",fontStyle:"italic"}}>updating...</span>}
                 </div>
               </div>
             </div>
 
             {/* Sidebar */}
-            <div style={{width:280,borderLeft:"1px solid #F0EEF9",background:"#F8F7FF",display:"flex",flexDirection:"column",flexShrink:0}}>
+            <div style={{width:280,borderLeft:"1px solid #1A1A1F",background:"#0C0C0F",display:"flex",flexDirection:"column",flexShrink:0}}>
 
               {/* Controls */}
-              <div style={{padding:"20px 16px",borderBottom:"1px solid #F0EEF9"}}>
-                <div style={{fontSize:10,fontWeight:600,color:"#9B97B2",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Recording</div>
+              <div style={{padding:"20px 16px",borderBottom:"1px solid #141414"}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#5A5570",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Recording</div>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   <button onClick={isListening?stopSpeech:startSpeech}
                     style={{display:"flex",alignItems:"center",gap:10,background:isListening?"#2A1008":"#1C1C22",border:"1px solid",borderColor:isListening?"#E8622A44":"#2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isListening?"#E8622A":"#888",fontSize:13,fontWeight:500}}>
@@ -2871,7 +2830,7 @@ Please produce:
                     style={{display:"flex",alignItems:"center",gap:10,background:isScreenCapturing?"#0A1A0A":"#1C1C22",border:"1px solid",borderColor:isScreenCapturing?"#4CAF5044":"#2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isScreenCapturing?"#4CAF50":"#888",fontSize:13,fontWeight:500}}>
                     <span style={{width:8,height:8,borderRadius:"50%",background:isScreenCapturing?"#4CAF50":"#555",display:"inline-block",marginRight:2}}></span>{isScreenCapturing?"Stop screen audio":"Screen audio"}
                   </button>
-                  <label style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:"#9B97B2",fontSize:13,fontWeight:500}}>
+                  <label style={{display:"flex",alignItems:"center",gap:10,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:"#888",fontSize:13,fontWeight:500}}>
                     Import transcript
                     <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
                   </label>
@@ -2883,13 +2842,13 @@ Please produce:
                 <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
                   <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Ask Compass</div>
                   {liveChatHistory.length===0&&!liveContextLoading&&(
-                    <div style={{fontSize:12,color:"#9B97B2",lineHeight:1.6}}>
+                    <div style={{fontSize:12,color:"#8B87A0",lineHeight:1.6}}>
                       Ask anything about the meeting...<br/>
-                      <span style={{color:"#2A2A35",fontSize:11}}>e.g. "What has the employee admitted?" or "Am I missing anything?"</span>
+                      <span style={{color:"#4A4760",fontSize:11}}>e.g. "What has the employee admitted?" or "Am I missing anything?"</span>
                     </div>
                   )}
                   {liveContext&&liveChatHistory.length===0&&(
-                    <div style={{fontSize:12,color:"#1A1535",lineHeight:1.7,padding:"10px 12px",background:"#F8F7FF",borderRadius:8,marginBottom:8}}>{liveContext}</div>
+                    <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.7,padding:"10px 12px",background:"#0F0F12",borderRadius:8,marginBottom:8}}>{liveContext}</div>
                   )}
                   {liveChatHistory.map((m,i)=>(
                     <div key={i} style={{marginBottom:10}}>
@@ -2898,19 +2857,19 @@ Please produce:
                       ):(
                         <div style={{fontSize:12,color:"#4CAF50",fontWeight:600,marginBottom:2}}>Compass</div>
                       )}
-                      <div style={{fontSize:12,color:"#1A1535",lineHeight:1.6,background:m.role==="assistant"?"#0D0D0F":"none",padding:m.role==="assistant"?"10px 12px":"0",borderRadius:8}}>{m.content}</div>
+                      <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.6,background:m.role==="assistant"?"#0D0D0F":"none",padding:m.role==="assistant"?"10px 12px":"0",borderRadius:8}}>{m.content}</div>
                     </div>
                   ))}
-                  {liveChatProcessing&&<div style={{fontSize:12,color:"#9B97B2",fontStyle:"italic"}}>Compass is thinking...</div>}
+                  {liveChatProcessing&&<div style={{fontSize:12,color:"#4A4560",fontStyle:"italic"}}>Compass is thinking...</div>}
                 </div>
-                <div style={{padding:"12px 16px",borderTop:"1px solid #F0EEF9"}}>
+                <div style={{padding:"12px 16px",borderTop:"1px solid #141414"}}>
                   <div style={{display:"flex",gap:8}}>
                     <input
                       value={liveChatInput}
                       onChange={e=>setLiveChatInput(e.target.value)}
                       onKeyDown={e=>e.key==="Enter"&&sendLiveChat()}
                       placeholder="Ask about the meeting..."
-                      style={{flex:1,background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                      style={{flex:1,background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                     <button onClick={sendLiveChat} disabled={liveChatProcessing||!liveChatInput.trim()}
                       style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>
                       Ask
@@ -2921,10 +2880,10 @@ Please produce:
 
               {/* Participants */}
               {participants.length>0&&(
-                <div style={{padding:"16px",borderTop:"1px solid #F0EEF9"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:"#9B97B2",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Participants</div>
+                <div style={{padding:"16px",borderTop:"1px solid #141414"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"#5A5570",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Participants</div>
                   {participants.map((p,i)=>(
-                    <div key={i} style={{fontSize:12,color:"#5E5A7A",marginBottom:4}}>{p.name} — {p.role}</div>
+                    <div key={i} style={{fontSize:12,color:"#6B6880",marginBottom:4}}>{p.name} — {p.role}</div>
                   ))}
                 </div>
               )}
@@ -2938,10 +2897,10 @@ Please produce:
         <div style={{maxWidth:1440,margin:"0 auto",padding:"28px 20px"}}>
 
           {/* Action bar */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:12,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+          <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
             <div>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:2}}>{caseInfo.employee||"Meeting"} — {meetingType?.label}</div>
-              <div style={{fontSize:12,color:"#5E5A7A"}}>{caseInfo.date} · Review and approve the record before saving</div>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:2}}>{caseInfo.employee||"Meeting"} — {meetingType?.label}</div>
+              <div style={{fontSize:12,color:"#6B6880"}}>{caseInfo.date} · Review and approve the record before saving</div>
             </div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {!isHR&&<Btn onClick={()=>{
@@ -2960,11 +2919,11 @@ Please produce:
                   <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",fontWeight:600,margin:0}}>Meeting Details</h3>
                   <button onClick={()=>setEditingStructured(e=>!e)} style={{background:editingStructured?"#7C5CFC":"none",border:"1px solid",borderColor:editingStructured?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingStructured?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>{editingStructured?"Done":"Edit record"}</button>
                 </div>
-                {aiProcessing&&!reviewOutput&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#5E5A7A",marginTop:10,fontSize:12}}>Structuring...</div></div>}
+                {aiProcessing&&!reviewOutput&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#666",marginTop:10,fontSize:12}}>Structuring...</div></div>}
                 {aiError&&(
                   <div style={{background:"#2A1010",border:"1px solid #E8622A44",borderRadius:8,padding:"14px 18px",marginBottom:14}}>
                     <div style={{fontSize:12,fontWeight:600,color:"#E8622A",marginBottom:4}}>Error</div>
-                    <div style={{fontSize:11,color:"#9B97B2",fontFamily:"JetBrains Mono,monospace"}}>{aiError}</div>
+                    <div style={{fontSize:11,color:"#888",fontFamily:"JetBrains Mono,monospace"}}>{aiError}</div>
                     <Btn onClick={handleReview} style={{marginTop:10,padding:"6px 14px",fontSize:11}}>Retry</Btn>
                   </div>
                 )}
@@ -2981,24 +2940,24 @@ Please produce:
 
                         {editingStructured
                           ?<textarea value={topSection} onChange={e=>setReviewOutput(e.target.value+dlgSection+bottomSection)}
-                            style={{width:"100%",minHeight:120,background:"#F8F7FF",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif",marginBottom:12}}></textarea>
+                            style={{width:"100%",minHeight:120,background:"#0F0F12",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif",marginBottom:12}}></textarea>
                           :<MDRenderer text={topSection.replace("## Meeting Details","").replace("## Meeting Details\n","").trim()}/>
                         }
                         {/* Meeting Dialogue with edit button */}
                         {dlgSection&&(<>
-                          <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
-                            <div style={{fontSize:11,color:"#5E5A7A",marginBottom:8}}>Enter names before generating the record for best results:</div>
+                          <div style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
+                            <div style={{fontSize:11,color:"#666",marginBottom:8}}>Enter names before generating the record for best results:</div>
                             <div style={{display:"flex",gap:8}}>
                               <input value={caseInfo.manager||""} 
                                 onChange={e=>{setCaseInfo(p=>({...p,manager:e.target.value}));syncNameToRecord('manager',e.target.value);}}
 
                                 placeholder="Chair / Manager name"
-                                style={{flex:1,background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#1A1535"}}/>
+                                style={{flex:1,background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
                               <input value={caseInfo.employee||""}
                                 onChange={e=>{setCaseInfo(p=>({...p,employee:e.target.value}));syncNameToRecord('employee',e.target.value);}}
 
                                 placeholder="Employee name"
-                                style={{flex:1,background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#1A1535"}}/>
+                                style={{flex:1,background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
                               <button onClick={async()=>{
                                 if(!caseInfo.manager||!caseInfo.employee) return;
                                 const mInit=caseInfo.manager.split(" ").filter(Boolean).map(w=>w[0].toUpperCase()).join("");
@@ -3032,7 +2991,7 @@ Please produce:
                           </div>
                           {editingRecord
                             ?<textarea value={dlgSection.replace("## Meeting Dialogue\n","")} onChange={e=>setReviewOutput(topSection+"## Meeting Dialogue\n"+e.target.value+bottomSection)}
-                              style={{width:"100%",minHeight:200,background:"#F8F7FF",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif"}}></textarea>
+                              style={{width:"100%",minHeight:200,background:"#0F0F12",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif"}}></textarea>
                             :<MDRenderer text={dlgSection.replace("## Meeting Dialogue\n","")}/>
                           }
                         </>)}
@@ -3042,13 +3001,13 @@ Please produce:
                         const cs = cases.find(x=>x.employeeName===caseInfo.employee.trim());
                         requestHrReview("record", cs?.id||null, null, reviewOutput);
                       }} style={{background:"#D4882A",borderColor:"#D4882A"}}>Request HR review</Btn>}
-                      <Btn onClick={()=>setShowSignModal(true)} style={{background:"#FFFFFF",border:"1px solid #E4E0F5",color:"#1A1535"}}>Send for signature ✉</Btn>
+                      <Btn onClick={()=>setShowSignModal(true)} style={{background:"#1C1C22",border:"1px solid #2A2A35",color:"#F2EDE4"}}>Send for signature ✉</Btn>
                       {signId&&(
                         <button onClick={async()=>{
                           const r=await fetch("/api/signing?signId="+signId);
                           const d=await r.json();
                           setSignStatus(d.status);
-                        }} style={{background:"none",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 12px",fontSize:12,color:"#9B97B2",cursor:"pointer"}}>
+                        }} style={{background:"none",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 12px",fontSize:12,color:"#888",cursor:"pointer"}}>
                           {signStatus==="signed"?"✓ Signed":"Check signature status"}
                         </button>
                       )}
@@ -3075,8 +3034,8 @@ Please produce:
                         <div style={{fontSize:13,color:s.done?"#555":"#F2EDE4",textDecoration:s.done?"line-through":"none"}}>{s.step}</div>
                       </div>
                       {s.deadline&&(
-                        <div style={{fontSize:11,color:"#9B97B2",fontFamily:"JetBrains Mono,monospace",flexShrink:0,textAlign:"right"}}>
-                          <div style={{fontSize:9,color:"#5E5A7A",marginBottom:1}}>deadline</div>
+                        <div style={{fontSize:11,color:"#888",fontFamily:"JetBrains Mono,monospace",flexShrink:0,textAlign:"right"}}>
+                          <div style={{fontSize:9,color:"#6B6880",marginBottom:1}}>deadline</div>
                           {s.deadline}
                         </div>
                       )}
@@ -3087,7 +3046,7 @@ Please produce:
 
               {/* Risk & Prediction */}
               <Card style={{marginBottom:16}}>
-                <div style={{fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Legal Risk & Tribunal Prediction</div>
+                <div style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Legal Risk & Tribunal Prediction</div>
                 {riskScore&&(()=>{
                   const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
                   const col=rC[riskScore.rating]||"#888";
@@ -3096,12 +3055,12 @@ Please produce:
                       <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
                       </div>
-                      <div style={{fontSize:12,color:"#5E5A7A",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
+                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
                     </div>
                   );
                 })()}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <div style={{fontSize:11,color:"#5E5A7A"}}>Tribunal outcome prediction</div>
+                  <div style={{fontSize:11,color:"#666"}}>Tribunal outcome prediction</div>
                   <Btn onClick={runPrediction} disabled={predProcessing} style={{padding:"4px 10px",fontSize:11}}>
                     {predProcessing?"Running...":"Run prediction"}
                   </Btn>
@@ -3109,9 +3068,9 @@ Please produce:
                 {predProcessing&&<div style={{textAlign:"center",padding:20}}><span className="pu" style={{color:"#7C5CFC",fontSize:18}}>●</span></div>}
                 {prediction&&<MDRenderer text={prediction}/>}
                 {!prediction&&!predProcessing&&(
-                  <div style={{fontSize:11,color:"#9B97B2",lineHeight:1.6}}>
+                  <div style={{fontSize:11,color:"#5A5570",lineHeight:1.6}}>
                     Analyses the case against ERA 1996, ACAS Code, and comparable tribunal outcomes.
-                    <div style={{fontSize:10,color:"#9B97B2",marginTop:4}}>Not legal advice — consult a qualified employment solicitor for complex cases.</div>
+                    <div style={{fontSize:10,color:"#4A4560",marginTop:4}}>Not legal advice — consult a qualified employment solicitor for complex cases.</div>
                   </div>
                 )}
               </Card>
@@ -3123,9 +3082,9 @@ Please produce:
 
               {/* Chat with Compass */}
               <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid #2A2A35",background:"#FFFFFF"}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535",fontFamily:"Playfair Display,Georgia,serif"}}>Chat with Compass</div>
-                  <div style={{fontSize:11,color:"#5E5A7A",marginTop:2}}>Ask questions or refine this record</div>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid #2A2A35",background:"#141418"}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#F2EDE4",fontFamily:"Playfair Display,Georgia,serif"}}>Chat with Compass</div>
+                  <div style={{fontSize:11,color:"#6B6880",marginTop:2}}>Ask questions or refine this record</div>
                 </div>
                 <div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,minHeight:200,maxHeight:360}}>
                   {chatHistory.map((m,i)=>(
@@ -3133,7 +3092,7 @@ Please produce:
                       <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                         {m.role==="user"
                           ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
-                          :<div style={{fontSize:12,color:"#5E5A7A",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
+                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
                       </div>
                       {m.role==="assistant"&&m.content.length>300&&(
                         <button onClick={()=>{
@@ -3178,7 +3137,7 @@ ${m.content}`;
                       )}
                     </div>
                   ))}
-                  {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#FFFFFF",border:"1px solid #E4E0F5",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
+                  {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#1C1C22",border:"1px solid #2A2A35",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
                 </div>
                 <div style={{padding:"10px 12px",borderTop:"1px solid #2A2A35",display:"flex",gap:8,alignItems:"center"}}>
                   <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
@@ -3191,14 +3150,14 @@ ${m.content}`;
                         .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
                     }}}
                     placeholder="Ask Compass about this meeting..."
-                    style={{flex:1,background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#1A1535",fontFamily:"Inter,sans-serif"}}/>
+                    style={{flex:1,background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#F2EDE4",fontFamily:"Inter,sans-serif"}}/>
                   {reviewAttachment&&(
                     <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"3px 8px",flexShrink:0}}>
-                      <span style={{fontSize:11,color:"#7C5CFC",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reviewAttachment.name}</span>
+                      <span style={{fontSize:11,color:"#A98FFF",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reviewAttachment.name}</span>
                       <button onClick={()=>setReviewAttachment(null)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",padding:0}}>&#10005;</button>
                     </div>
                   )}
-                  <label style={{cursor:"pointer",color:"#9B97B2",fontSize:16,display:"flex",alignItems:"center",padding:"0 2px"}}
+                  <label style={{cursor:"pointer",color:"#5A5570",fontSize:16,display:"flex",alignItems:"center",padding:"0 2px"}}
                     onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
                     onMouseLeave={e=>e.currentTarget.style.color="#444"}>
                     &#128206;
@@ -3258,7 +3217,7 @@ ${m.content}`;
             </div>
           </div>
           <div style={{maxWidth:900,margin:"28px auto",padding:"0 20px"}}>
-            {aiProcessing&&!letterOutput&&<div style={{textAlign:"center",padding:50}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span><div style={{color:"#5E5A7A",marginTop:10}}>Drafting...</div></div>}
+            {aiProcessing&&!letterOutput&&<div style={{textAlign:"center",padding:50}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span><div style={{color:"#666",marginTop:10}}>Drafting...</div></div>}
             {letterOutput&&(
               <>
                 {/* Edit toggle */}
@@ -3270,19 +3229,19 @@ ${m.content}`;
                 </div>
                 {editingLetter&&(
                   <textarea value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
-                    style={{width:"100%",minHeight:400,background:"#F8F7FF",border:"1px solid #7C5CFC33",borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"Playfair Display,Georgia,serif",marginBottom:12}}/>
+                    style={{width:"100%",minHeight:400,background:"#0F0F12",border:"1px solid #7C5CFC33",borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#F2EDE4",resize:"vertical",boxSizing:"border-box",fontFamily:"Playfair Display,Georgia,serif",marginBottom:12}}/>
                 )}
                 {/* Sig bar */}
-                <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:11,color:"#5E5A7A"}}>E-signature:</span>
+                    <span style={{fontSize:11,color:"#666"}}>E-signature:</span>
                     {signature
                       ?<span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>✓ {signature.type==="typed"?`"${signature.data}"`:"Drawn"}</span>
-                      :<span style={{fontSize:11,color:"#5E5A7A"}}>Not added — will prompt on send</span>}
+                      :<span style={{fontSize:11,color:"#6B6880"}}>Not added — will prompt on send</span>}
                   </div>
                   <div style={{display:"flex",gap:6}}>
-                    <button onClick={()=>setShowSigPad(true)} style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>{signature?"Change":"Add"}</button>
-                    {signature&&<button onClick={()=>{setSignature(null);lsSet("compass_signature",null);}} style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>Remove</button>}
+                    <button onClick={()=>setShowSigPad(true)} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>{signature?"Change":"Add"}</button>
+                    {signature&&<button onClick={()=>{setSignature(null);lsSet("compass_signature",null);}} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>Remove</button>}
                   </div>
                 </div>
 
@@ -3294,7 +3253,7 @@ ${m.content}`;
                       {signature.type==="typed"
                         ?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:30,color:"#1C1C22"}}>{signature.data}</div>
                         :<img src={signature.data} alt="Sig" style={{maxHeight:55,maxWidth:180}}/>}
-                      <div style={{fontSize:11,color:"#9B97B2",marginTop:5}}>{caseInfo.manager||"HR Manager"} | {new Date().toLocaleDateString("en-GB")}</div>
+                      <div style={{fontSize:11,color:"#888",marginTop:5}}>{caseInfo.manager||"HR Manager"} | {new Date().toLocaleDateString("en-GB")}</div>
                     </div>
                   )}
                 </div>
@@ -3326,13 +3285,13 @@ ${m.content}`;
         return(
           <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
             <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Dashboard</h2>
-            <p style={{fontSize:13,color:"#5E5A7A",margin:"0 0 28px"}}>Overview of all HR cases and activity</p>
+            <p style={{fontSize:13,color:"#666",margin:"0 0 28px"}}>Overview of all HR cases and activity</p>
 
             {cases.length===0&&(
               <Card style={{textAlign:"center",padding:"50px 20px"}}>
                 <div style={{fontSize:32,marginBottom:12}}>⬛</div>
-                <div style={{fontSize:15,color:"#5E5A7A",marginBottom:6}}>No data yet</div>
-                <div style={{fontSize:12,color:"#9B97B2"}}>Complete your first meeting and save it to a case file to see your dashboard.</div>
+                <div style={{fontSize:15,color:"#666",marginBottom:6}}>No data yet</div>
+                <div style={{fontSize:12,color:"#5A5570"}}>Complete your first meeting and save it to a case file to see your dashboard.</div>
               </Card>
             )}
 
@@ -3342,38 +3301,38 @@ ${m.content}`;
                   {[{l:"Total cases",v:cases.length,c:"#7C5CFC"},{l:"Open cases",v:open.length,c:"#7C5CFC"},{l:"Total meetings",v:allM.length,c:"#D4882A"},{l:"High risk",v:rC.HIGH||0,c:"#E8622A"}].map(s=>(
                     <Card key={s.l}>
                       <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Inter,sans-serif"}}>{s.v}</div>
-                      <div style={{fontSize:11,color:"#5E5A7A",marginTop:3}}>{s.l}</div>
+                      <div style={{fontSize:11,color:"#6B6880",marginTop:3}}>{s.l}</div>
                     </Card>
                   ))}
                 </div>
 
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
                   <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Risk distribution</div>
+                    <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:14}}>Risk distribution</div>
                     {Object.entries(rC).map(([r,c])=>{
                       const total=Object.values(rC).reduce((a,b)=>a+b,0)||1;
                       return c>0?(
                         <div key={r} style={{marginBottom:10}}>
                           <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                             <span style={{fontSize:11,color:rColors[r],fontWeight:600}}>{r}</span>
-                            <span style={{fontSize:11,color:"#5E5A7A"}}>{c}</span>
+                            <span style={{fontSize:11,color:"#6B6880"}}>{c}</span>
                           </div>
-                          <div style={{background:"#F8F7FF",borderRadius:3,height:5}}>
+                          <div style={{background:"#0F0F12",borderRadius:3,height:5}}>
                             <div style={{background:rColors[r],borderRadius:3,height:5,width:`${Math.round(c/total*100)}%`}}/>
                           </div>
                         </div>
                       ):null;
                     })}
-                    {Object.values(rC).every(v=>v===0)&&<div style={{fontSize:11,color:"#9B97B2"}}>No risk scores yet</div>}
+                    {Object.values(rC).every(v=>v===0)&&<div style={{fontSize:11,color:"#5A5570"}}>No risk scores yet</div>}
                   </Card>
                   <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Meetings by type</div>
-                    {byType.length===0&&<div style={{fontSize:11,color:"#9B97B2"}}>No meetings yet</div>}
+                    <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:14}}>Meetings by type</div>
+                    {byType.length===0&&<div style={{fontSize:11,color:"#5A5570"}}>No meetings yet</div>}
                     {byType.map(t=>(
                       <div key={t.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-                        <span style={{fontSize:11,color:"#5E5A7A"}}>{t.label}</span>
+                        <span style={{fontSize:11,color:"#C4BDAF"}}>{t.label}</span>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <div style={{background:"#F8F7FF",borderRadius:3,height:4,width:70}}>
+                          <div style={{background:"#0F0F12",borderRadius:3,height:4,width:70}}>
                             <div style={{background:"#7C5CFC",borderRadius:3,height:4,width:(t.count/Math.max(...byType.map(x=>x.count))*70)+"px"}}/>
                           </div>
                           <span style={{fontSize:11,color:"#7C5CFC",fontWeight:600,width:14,textAlign:"right"}}>{t.count}</span>
@@ -3384,12 +3343,12 @@ ${m.content}`;
                 </div>
 
                 <Card style={{marginBottom:16}}>
-                  <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Recent meetings</div>
+                  <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:14}}>Recent meetings</div>
                   {recent.map(m=>(
-                    <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #F0EEF9"}}>
+                    <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
                       <div>
-                        <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:2}}>{m.employeeName}</div>
-                        <div style={{fontSize:10,color:"#9B97B2"}}>{m.type} · {m.date}</div>
+                        <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500,marginBottom:2}}>{m.employeeName}</div>
+                        <div style={{fontSize:10,color:"#5A5570"}}>{m.type} · {m.date}</div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={rColors[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
@@ -3400,19 +3359,19 @@ ${m.content}`;
                 </Card>
 
                 <Card>
-                  <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Active cases</div>
-                  {open.length===0&&<div style={{fontSize:11,color:"#9B97B2"}}>No open cases</div>}
+                  <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:14}}>Active cases</div>
+                  {open.length===0&&<div style={{fontSize:11,color:"#5A5570"}}>No open cases</div>}
                   {open.map(c=>{
                     const last=c.meetings[c.meetings.length-1];
                     const high=c.meetings.some(m=>m.riskScore?.rating==="HIGH");
                     return(
-                      <div key={c.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #F0EEF9"}}>
+                      <div key={c.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                         <div>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-                            <span style={{fontSize:14,color:"#1A1535",fontWeight:600}}>{c.employeeName}</span>
+                            <span style={{fontSize:14,color:"#E8E4F0",fontWeight:600}}>{c.employeeName}</span>
                             {high&&<Badge color="#E8622A">HIGH RISK</Badge>}
                           </div>
-                          <div style={{fontSize:10,color:"#9B97B2"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Last: {last?.type} on {last?.date}</div>
+                          <div style={{fontSize:10,color:"#5A5570"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Last: {last?.type} on {last?.date}</div>
                         </div>
                         <Btn onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"5px 14px",fontSize:11}}>Open →</Btn>
                       </div>
@@ -3431,7 +3390,7 @@ ${m.content}`;
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
             <div>
               <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Case files</h2>
-              <p style={{fontSize:13,color:"#5E5A7A",margin:0}}>All cases grouped by employee, with full meeting history and documents.</p>
+              <p style={{fontSize:13,color:"#666",margin:0}}>All cases grouped by employee, with full meeting history and documents.</p>
             </div>
             <div style={{display:"flex",gap:8}}>
               <Btn onClick={()=>setScreen(SCREENS.HOME)}>+ New meeting</Btn>
@@ -3440,8 +3399,8 @@ ${m.content}`;
 
           {cases.length===0&&(
             <Card style={{textAlign:"center",padding:"60px 20px"}}>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:20,color:"#1A1535",marginBottom:8}}>No cases yet</div>
-              <div style={{fontSize:13,color:"#5E5A7A",marginBottom:24,maxWidth:360,margin:"0 auto 24px"}}>Start a meeting from the home screen. After the meeting ends, review the record and save it to create a case file.</div>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:20,color:"#F2EDE4",marginBottom:8}}>No cases yet</div>
+              <div style={{fontSize:13,color:"#6B6880",marginBottom:24,maxWidth:360,margin:"0 auto 24px"}}>Start a meeting from the home screen. After the meeting ends, review the record and save it to create a case file.</div>
               <Btn onClick={()=>setScreen(SCREENS.HOME)}>Start your first meeting →</Btn>
             </Card>
           )}
@@ -3451,11 +3410,11 @@ ${m.content}`;
               <div onClick={()=>setOpenCases(p=>({...p,[c.id]:!p[c.id]}))} style={{padding:"16px 20px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3}}>
-                    <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:17,color:"#1A1535",fontWeight:600}}>{c.employeeName}</span>
-                    {c.email&&<span style={{fontSize:11,color:"#5E5A7A"}}>{c.email}</span>}
+                    <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:17,color:"#F2EDE4",fontWeight:600}}>{c.employeeName}</span>
+                    {c.email&&<span style={{fontSize:11,color:"#6B6880"}}>{c.email}</span>}
                     {c.meetings.some(m=>m.riskScore?.rating==="HIGH")&&<Badge color="#E8622A">HIGH RISK</Badge>}
                   </div>
-                  <div style={{fontSize:11,color:"#9B97B2"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Since {new Date(c.createdAt).toLocaleDateString("en-GB")} {openCases[c.id]?"▲":"▼"}</div>
+                  <div style={{fontSize:11,color:"#5A5570"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Since {new Date(c.createdAt).toLocaleDateString("en-GB")} {openCases[c.id]?"▲":"▼"}</div>
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   <Btn variant="secondary" onClick={()=>{setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));setScreen(SCREENS.HOME);}} style={{fontSize:11,padding:"5px 12px"}}>+ Add meeting</Btn>
@@ -3468,17 +3427,17 @@ ${m.content}`;
                 <div key={m.id} style={{padding:"14px 20px",borderBottom:idx<c.meetings.length-1?"1px solid #141414":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                      <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:14,color:"#1A1535"}}>{m.type}</span>
-                      <span style={{fontSize:11,color:"#5E5A7A"}}>·</span>
-                      <span style={{fontSize:12,color:"#9B97B2"}}>{m.date&&/^\d{4}-\d{2}-\d{2}$/.test(m.date)?m.date.split("-").reverse().join("/"):m.date}</span>
+                      <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:14,color:"#F2EDE4"}}>{m.type}</span>
+                      <span style={{fontSize:11,color:"#6B6880"}}>·</span>
+                      <span style={{fontSize:12,color:"#888"}}>{m.date&&/^\d{4}-\d{2}-\d{2}$/.test(m.date)?m.date.split("-").reverse().join("/"):m.date}</span>
                       {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={{HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"}[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
                       {m.signId&&<Badge color={m.signStatus==="signed"?"#4CAF50":"#888"}>{m.signStatus==="signed"?"✓ Signed":"Awaiting signature"}</Badge>}
                     </div>
-                    <div style={{fontSize:10,color:"#9B97B2"}}>{m.savedBy||"HR Manager"} · {m.savedAt?new Date(m.savedAt).toLocaleDateString("en-GB"):""}</div>
+                    <div style={{fontSize:10,color:"#5A5570"}}>{m.savedBy||"HR Manager"} · {m.savedAt?new Date(m.savedAt).toLocaleDateString("en-GB"):""}</div>
                   </div>
                   <div style={{display:"flex",gap:6}}>
                     {m.signId&&m.signStatus!=="signed"&&(
-                      <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#9B97B2"}} onClick={async()=>{
+                      <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#888"}} onClick={async()=>{
                         const r=await fetch("/api/signing?signId="+m.signId);
                         const d=await r.json();
                         if(d.status) saveCases(cases.map(cs=>cs.id===c.id?{...cs,meetings:cs.meetings.map(x=>x.id===m.id?{...x,signStatus:d.status}:x)}:cs));
@@ -3495,64 +3454,64 @@ ${m.content}`;
               ))}
 
               {/* Document vault for this case */}
-              <div style={{padding:"10px 20px",background:"#FFFFFF",borderTop:"1px solid #1a1a1a"}}>
+              <div style={{padding:"10px 20px",background:"#141414",borderTop:"1px solid #1a1a1a"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:10,color:"#9B97B2"}}>Documents: {(vaultDocs[c.id]||[]).length} file{(vaultDocs[c.id]||[]).length!==1?"s":""}</span>
+                  <span style={{fontSize:10,color:"#5A5570"}}>Documents: {(vaultDocs[c.id]||[]).length} file{(vaultDocs[c.id]||[]).length!==1?"s":""}</span>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     {(vaultDocs[c.id]||[]).map(d=>(
                       <span key={d.id} style={{fontSize:10,color:"#7C5CFC",background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:4,padding:"2px 8px"}}>{d.name}</span>
                     ))}
                     <input type="file" style={{display:"none"}} ref={vaultFileRef} onChange={e=>{if(e.target.files[0])addToVault(c.id,e.target.files[0]);}} />
-                    <button onClick={()=>vaultFileRef.current?.click()} style={{background:"none",border:"1px dashed #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#5E5A7A",cursor:"pointer"}}>+ Add document</button>
+                    <button onClick={()=>vaultFileRef.current?.click()} style={{background:"none",border:"1px dashed #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#6B6880",cursor:"pointer"}}>+ Add document</button>
                   </div>
                 </div>
               </div>
 
               {openCases[c.id]&&<>
               {/* ACAS Early Conciliation */}
-              <div style={{padding:"12px 20px",background:"#FFFFFF",borderTop:"1px solid #1a1a1a"}}>
+              <div style={{padding:"12px 20px",background:"#141414",borderTop:"1px solid #1a1a1a"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:acasData[c.id]?"12px":"0"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase"}}>ACAS Early Conciliation</span>
+                    <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>ACAS Early Conciliation</span>
                     {acasData[c.id]?.status&&<Badge color={acasData[c.id].status==="settled"?"#4CAF50":acasData[c.id].status==="certificate"?"#E8622A":"#D4882A"}>{acasData[c.id].status==="settled"?"Settled":acasData[c.id].status==="certificate"?"Certificate issued":"Active"}</Badge>}
                   </div>
                   <button onClick={()=>{
                     const current = acasData[c.id]||{};
                     setAcasData(a=>({...a,[c.id]:{...current,open:!current.open}}));
-                  }} style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
+                  }} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
                     {acasData[c.id]?.open?"Close":"+ Track EC"}
                   </button>
                 </div>
                 {acasData[c.id]?.open&&(
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:8}}>
                     <div>
-                      <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>EC notification received</label>
+                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>EC notification received</label>
                       <input type="date" value={acasData[c.id]?.notified||""} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],notified:e.target.value}}))}
-                        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                     </div>
                     <div>
-                      <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>EC certificate number</label>
+                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>EC certificate number</label>
                       <input value={acasData[c.id]?.certNumber||""} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],certNumber:e.target.value}}))}
-                        placeholder="e.g. R000000/00/00" style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                        placeholder="e.g. R000000/00/00" style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                     </div>
                     <div>
-                      <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Certificate issued date</label>
+                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Certificate issued date</label>
                       <input type="date" value={acasData[c.id]?.certDate||""} onChange={e=>{
                         const d = new Date(e.target.value);
                         d.setMonth(d.getMonth()+1);
                         const deadline = d.toISOString().split("T")[0];
                         setAcasData(a=>({...a,[c.id]:{...a[c.id],certDate:e.target.value,tribunalDeadline:deadline,status:"certificate"}}));
-                      }} style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                      }} style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                     </div>
                     <div>
-                      <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Tribunal claim deadline</label>
+                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Tribunal claim deadline</label>
                       <input value={acasData[c.id]?.tribunalDeadline||""} readOnly
-                        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:acasData[c.id]?.tribunalDeadline&&new Date(acasData[c.id].tribunalDeadline)<new Date(Date.now()+7*86400000)?"#E8622A":"#F2EDE4",outline:"none"}}/>
+                        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:acasData[c.id]?.tribunalDeadline&&new Date(acasData[c.id].tribunalDeadline)<new Date(Date.now()+7*86400000)?"#E8622A":"#F2EDE4",outline:"none"}}/>
                     </div>
                     <div style={{gridColumn:"1/-1"}}>
-                      <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Status</label>
+                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Status</label>
                       <select value={acasData[c.id]?.status||"active"} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],status:e.target.value}}))}
-                        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}>
+                        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}>
                         <option value="active">Active — conciliation ongoing</option>
                         <option value="certificate">Certificate issued — no settlement</option>
                         <option value="settled">Settled</option>
@@ -3568,22 +3527,22 @@ ${m.content}`;
               </div>
 
               {/* Audit trail for this case */}
-              <div style={{padding:"12px 20px",background:"#F8F7FF",borderTop:"1px solid #1a1a1a"}}>
+              <div style={{padding:"12px 20px",background:"#0F0F12",borderTop:"1px solid #1a1a1a"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase"}}>Audit trail</span>
+                  <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>Audit trail</span>
                   <button onClick={()=>loadAuditLog(c.id)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:10,cursor:"pointer"}}>Refresh</button>
                 </div>
                 {auditLog.filter(a=>a.case_id===c.id).length===0?(
-                  <div style={{fontSize:11,color:"#9B97B2"}}>No activity recorded yet</div>
+                  <div style={{fontSize:11,color:"#4A4560"}}>No activity recorded yet</div>
                 ):(
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {auditLog.filter(a=>a.case_id===c.id).slice(0,5).map(a=>(
                       <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <div>
                           <span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>{a.action}</span>
-                          <span style={{fontSize:11,color:"#5E5A7A",marginLeft:8}}>{a.details}</span>
+                          <span style={{fontSize:11,color:"#6B6880",marginLeft:8}}>{a.details}</span>
                         </div>
-                        <div style={{fontSize:10,color:"#9B97B2",whiteSpace:"nowrap",marginLeft:8}}>
+                        <div style={{fontSize:10,color:"#4A4560",whiteSpace:"nowrap",marginLeft:8}}>
                           {a.user_name} · {new Date(a.created_at).toLocaleDateString("en-GB")}
                         </div>
                       </div>
@@ -3594,14 +3553,14 @@ ${m.content}`;
 
               {/* Redundancy tracker */}
               {c.meetings.some(m=>m.type?.toLowerCase().includes('redundancy')||m.type?.toLowerCase().includes('at risk')||m.type?.toLowerCase().includes('redundancy consultation')||m.type?.toLowerCase().includes('redundancy outcome'))&&(
-                <div style={{padding:"12px 20px",background:"#FFFFFF",borderTop:"1px solid #1a1a1a"}}>
+                <div style={{padding:"12px 20px",background:"#141414",borderTop:"1px solid #1a1a1a"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:redundancyData[c.id]?"12px":"0"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase"}}>Redundancy</span>
+                      <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>Redundancy</span>
                       {redundancyData[c.id]?.status&&<Badge color={redundancyData[c.id].status==="confirmed"?"#E8622A":redundancyData[c.id].status==="withdrawn"?"#4CAF50":"#D4882A"}>{redundancyData[c.id].status==="confirmed"?"Confirmed":redundancyData[c.id].status==="withdrawn"?"Withdrawn":"At Risk"}</Badge>}
                     </div>
                     <button onClick={()=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],open:!r[c.id]?.open}}))}
-                      style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
+                      style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
                       {redundancyData[c.id]?.open?"Close":"Track"}
                     </button>
                   </div>
@@ -3609,36 +3568,36 @@ ${m.content}`;
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                         <div>
-                          <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Status</label>
+                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Status</label>
                           <select value={redundancyData[c.id]?.status||"atrisk"} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],status:e.target.value}}))}
-                            style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}>
+                            style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}>
                             <option value="atrisk">At risk</option>
                             <option value="confirmed">Confirmed redundancy</option>
                             <option value="withdrawn">Withdrawn — alternative found</option>
                           </select>
                         </div>
                         <div>
-                          <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Date at risk letter sent</label>
+                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Date at risk letter sent</label>
                           <DateInput value={redundancyData[c.id]?.atRiskDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],atRiskDate:e.target.value}}))}/>
                         </div>
                         <div>
-                          <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Start date (for redundancy pay)</label>
+                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Start date (for redundancy pay)</label>
                           <DateInput value={redundancyData[c.id]?.startDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],startDate:e.target.value}}))}/>
                         </div>
                         <div>
-                          <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Weekly pay (£)</label>
+                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Weekly pay (£)</label>
                           <input type="number" placeholder="e.g. 650" value={redundancyData[c.id]?.weeklyPay||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],weeklyPay:e.target.value}}))}
-                            style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                            style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                         </div>
                         <div>
-                          <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Age</label>
+                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Age</label>
                           <input type="number" placeholder="e.g. 35" value={redundancyData[c.id]?.age||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],age:e.target.value}}))}
-                            style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                            style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                         </div>
                         <div>
-                          <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Notice period (weeks)</label>
+                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Notice period (weeks)</label>
                           <input type="number" placeholder="e.g. 4" value={redundancyData[c.id]?.noticePeriod||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],noticePeriod:e.target.value}}))}
-                            style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                            style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
                         </div>
                       </div>
                       {/* Statutory redundancy pay calculator */}
@@ -3657,15 +3616,15 @@ ${m.content}`;
                         }
                         const total = Math.round(weeks * cappedWeeklyPay);
                         return(
-                          <div style={{background:"#F8F7FF",borderRadius:8,padding:"12px 16px",border:"1px solid #7C5CFC33"}}>
+                          <div style={{background:"#0F0F12",borderRadius:8,padding:"12px 16px",border:"1px solid #7C5CFC33"}}>
                             <div style={{fontSize:10,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Statutory Redundancy Pay</div>
                             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                              <div><div style={{fontSize:10,color:"#5E5A7A"}}>Age</div><div style={{fontSize:14,color:"#1A1535"}}>{ageAtEnd}</div></div>
-                              <div><div style={{fontSize:10,color:"#5E5A7A"}}>Service</div><div style={{fontSize:14,color:"#1A1535"}}>{yearsService} yrs</div></div>
-                              <div><div style={{fontSize:10,color:"#5E5A7A"}}>Weekly pay</div><div style={{fontSize:14,color:"#1A1535"}}>£{cappedWeeklyPay}</div></div>
+                              <div><div style={{fontSize:10,color:"#6B6880"}}>Age</div><div style={{fontSize:14,color:"#E8E4F0"}}>{ageAtEnd}</div></div>
+                              <div><div style={{fontSize:10,color:"#6B6880"}}>Service</div><div style={{fontSize:14,color:"#E8E4F0"}}>{yearsService} yrs</div></div>
+                              <div><div style={{fontSize:10,color:"#6B6880"}}>Weekly pay</div><div style={{fontSize:14,color:"#E8E4F0"}}>£{cappedWeeklyPay}</div></div>
                             </div>
                             <div style={{fontSize:20,color:"#7C5CFC",fontWeight:700}}>£{total.toLocaleString()}</div>
-                            <div style={{fontSize:10,color:"#9B97B2",marginTop:4}}>Based on {weeks} weeks × £{cappedWeeklyPay} (capped at £643/week, 20 years max)</div>
+                            <div style={{fontSize:10,color:"#5A5570",marginTop:4}}>Based on {weeks} weeks × £{cappedWeeklyPay} (capped at £643/week, 20 years max)</div>
                             {parseFloat(redundancyData[c.id].weeklyPay) > 643&&(
                               <div style={{fontSize:11,color:"#D4882A",marginTop:4}}>⚠ Weekly pay exceeds statutory cap of £643. Employer may pay enhanced redundancy above this.</div>
                             )}
@@ -3673,10 +3632,10 @@ ${m.content}`;
                         );
                       })()}
                       <div>
-                        <label style={{display:"block",fontSize:10,color:"#5E5A7A",marginBottom:4}}>Notes / alternatives considered</label>
+                        <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Notes / alternatives considered</label>
                         <textarea value={redundancyData[c.id]?.notes||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],notes:e.target.value}}))}
                           placeholder="Alternative roles offered, selection criteria applied, consultation notes..."
-                          rows={3} style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",resize:"none",boxSizing:"border-box"}}/>
+                          rows={3} style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",resize:"none",boxSizing:"border-box"}}/>
                       </div>
                       <div style={{display:"flex",gap:8}}>
                         <Btn onClick={e=>{e.stopPropagation();console.log("REDUNDANCY BTN CLICKED");
@@ -3696,9 +3655,9 @@ ${m.content}`;
               )}
 
               {/* Tribunal Bundle Builder */}
-              <div style={{padding:"12px 20px",background:"#F8F7FF",borderTop:"1px solid #1a1a1a",borderBottomLeftRadius:12,borderBottomRightRadius:12}}>
+              <div style={{padding:"12px 20px",background:"#0F0F12",borderTop:"1px solid #1a1a1a",borderBottomLeftRadius:12,borderBottomRightRadius:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase"}}>Tribunal bundle</span>
+                  <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>Tribunal bundle</span>
                   <button onClick={()=>setShowBundleBuilder(showBundleBuilder===c.id?null:c.id)}
                     style={{background:"none",border:"1px solid #7C5CFC44",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
                     {showBundleBuilder===c.id?"Close":"Build bundle"}
@@ -3706,7 +3665,7 @@ ${m.content}`;
                 </div>
                 {showBundleBuilder===c.id&&(
                   <div style={{marginTop:12}}>
-                    <p style={{fontSize:12,color:"#5E5A7A",marginBottom:12}}>Attach documents and Compass will build a numbered tribunal bundle index.</p>
+                    <p style={{fontSize:12,color:"#666",marginBottom:12}}>Attach documents and Compass will build a numbered tribunal bundle index.</p>
                     <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto",marginBottom:8}}>
                       {bundleChat.map((m,i)=>(
                         <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
@@ -3715,13 +3674,13 @@ ${m.content}`;
                       ))}
                       {bundleProcessing&&<div style={{fontSize:14,color:"#7C5CFC"}}>●</div>}
                       {bundleChat.length===0&&(
-                        <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"12px 16px"}}>
-                          <div style={{fontSize:12,color:"#5E5A7A",lineHeight:1.8}}>Hello! I'll help you build a tribunal bundle for {c.employeeName}. Please attach the documents you have — ET1, ET3, meeting records, letters, policies, witness statements — and I'll create a numbered index.<br/><br/>Start by attaching your first document below.</div>
+                        <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:10,padding:"12px 16px"}}>
+                          <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.8}}>Hello! I'll help you build a tribunal bundle for {c.employeeName}. Please attach the documents you have — ET1, ET3, meeting records, letters, policies, witness statements — and I'll create a numbered index.<br/><br/>Start by attaching your first document below.</div>
                         </div>
                       )}
                     </div>
                     <div style={{display:"flex",gap:8}}>
-                      <label style={{cursor:"pointer",display:"flex",alignItems:"center",gap:6,background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#9B97B2"}}>
+                      <label style={{cursor:"pointer",display:"flex",alignItems:"center",gap:6,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#888"}}>
                         📎 Attach
                         <input type="file" accept=".pdf,.doc,.docx,.txt" multiple style={{display:"none"}} onChange={async e=>{
                           const files = Array.from(e.target.files);
@@ -3765,7 +3724,7 @@ ${m.content}`;
                           }
                         }}
                         placeholder="Ask Compass about the bundle..."
-                        style={{flex:1,background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:6,padding:"6px 10px",fontSize:12,outline:"none",color:"#1A1535"}}/>
+                        style={{flex:1,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:6,padding:"6px 10px",fontSize:12,outline:"none",color:"#F2EDE4"}}/>
                       <button onClick={async()=>{
                         if(!bundleFiles.length) return;
                         setBundleProcessing(true);
@@ -3791,7 +3750,7 @@ ${m.content}`;
                       </button>
                     </div>
                     {bundleFiles.length>0&&(
-                      <div style={{marginTop:8,fontSize:11,color:"#5E5A7A"}}>{bundleFiles.length} document{bundleFiles.length!==1?"s":""} in bundle: {bundleFiles.map(f=>f.name).join(", ")}</div>
+                      <div style={{marginTop:8,fontSize:11,color:"#6B6880"}}>{bundleFiles.length} document{bundleFiles.length!==1?"s":""} in bundle: {bundleFiles.map(f=>f.name).join(", ")}</div>
                     )}
                   </div>
                 )}
@@ -3804,13 +3763,13 @@ ${m.content}`;
           {/* Meeting detail modal */}
           {viewMeeting&&(
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:200,overflowY:"auto",padding:"32px 20px"}}>
-              <div style={{maxWidth:860,margin:"0 auto",background:"#FFFFFF",borderRadius:12,border:"1px solid #E4E0F5",overflow:"hidden"}}>
+              <div style={{maxWidth:860,margin:"0 auto",background:"#1C1C22",borderRadius:12,border:"1px solid #2A2A35",overflow:"hidden"}}>
                 <div style={{padding:"18px 24px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <Badge style={{marginBottom:6}}>{viewMeeting.type}</Badge>
-                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",marginTop:4}}>{viewMeeting.employeeName} — {viewMeeting.date}</div>
+                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginTop:4}}>{viewMeeting.employeeName} — {viewMeeting.date}</div>
                   </div>
-                  <button onClick={()=>setViewMeeting(null)} style={{background:"none",border:"none",color:"#5E5A7A",fontSize:22,cursor:"pointer"}}>✕</button>
+                  <button onClick={()=>setViewMeeting(null)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer"}}>✕</button>
                 </div>
                 <div style={{padding:"20px 24px"}}>
                   {/* Tabs: record, transcript, letter, letter tracking, risk, next steps, adjustments, audit */}
@@ -3823,7 +3782,7 @@ ${m.content}`;
                     {label:"Next Steps",type:"nextsteps"},
                     {label:"Adjustments",type:"adjustments"},
                   ].map(tab=>(
-                    <details key={tab.label} style={{marginBottom:12,background:"#FFFFFF",borderRadius:8,overflow:"hidden"}}>
+                    <details key={tab.label} style={{marginBottom:12,background:"#141418",borderRadius:8,overflow:"hidden"}}>
                       <summary style={{padding:"11px 16px",fontSize:11,fontWeight:600,color:"#7C5CFC",cursor:"pointer",letterSpacing:0.5,textTransform:"uppercase"}}>{tab.label}</summary>
                       <div style={{padding:"0 16px 16px"}}>
                         {tab.type==="transcript"&&(
@@ -3831,23 +3790,23 @@ ${m.content}`;
                             {viewMeeting.transcript?.map((u,i)=>(
                               <div key={i} style={{marginBottom:8}}>
                                 <span style={{fontSize:9,fontWeight:700,color:spColor(u.speaker),textTransform:"uppercase"}}>{u.speaker}</span>
-                                <div style={{fontSize:12,color:"#1A1535",fontFamily:"JetBrains Mono,monospace",marginTop:2,lineHeight:1.5}}>{u.text}</div>
+                                <div style={{fontSize:12,color:"#F2EDE4",fontFamily:"JetBrains Mono,monospace",marginTop:2,lineHeight:1.5}}>{u.text}</div>
                               </div>
                             ))}
-                            {!viewMeeting.transcript?.length&&<div style={{fontSize:12,color:"#9B97B2"}}>No transcript recorded</div>}
+                            {!viewMeeting.transcript?.length&&<div style={{fontSize:12,color:"#5A5570"}}>No transcript recorded</div>}
                           </div>
                         )}
                         {tab.type==="tracking"&&(
                           <div>
-                            <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12,lineHeight:1.6}}>Track delivery and acknowledgement for tribunal evidence purposes.</div>
+                            <div style={{fontSize:11,color:"#6B6880",marginBottom:12,lineHeight:1.6}}>Track delivery and acknowledgement for tribunal evidence purposes.</div>
                             {["sent","delivered","acknowledged"].map(event=>{
                               const lt = viewMeeting.letterTracking||{};
                               const done = !!lt[event];
                               return(
-                                <div key={event} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #F0EEF9"}}>
+                                <div key={event} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                                   <div>
                                     <div style={{fontSize:12,color:done?"#F2EDE4":"#555",fontWeight:done?500:400,textTransform:"capitalize"}}>{event}</div>
-                                    {done&&<div style={{fontSize:10,color:"#5E5A7A",marginTop:2}}>
+                                    {done&&<div style={{fontSize:10,color:"#6B6880",marginTop:2}}>
                                       {new Date(lt[event]).toLocaleString("en-GB")} · {lt[event+"By"]||"HR Manager"}
                                     </div>}
                                   </div>
@@ -3867,7 +3826,7 @@ ${m.content}`;
                                 const html = '<html><head><title>Letter</title></head><body>' + viewMeeting.letterOutput.replace(/\n/g,'<br/>') + '</body></html>'; w.document.write(html);
                                 w.print();
                               }}
-                                style={{marginTop:14,width:"100%",background:"none",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px",fontSize:12,color:"#9B97B2",cursor:"pointer"}}>
+                                style={{marginTop:14,width:"100%",background:"none",border:"1px solid #2A2A35",borderRadius:6,padding:"9px",fontSize:12,color:"#888",cursor:"pointer"}}>
                                 Print letter
                               </button>
                             )}
@@ -3877,7 +3836,7 @@ ${m.content}`;
                                 viewMeeting.nextSteps.find(s=>s.deadline)?.deadline,
                                 viewMeeting.nextSteps.filter(s=>s.deadline).map(s=>s.step+" ("+s.deadline+")").join("\n")
                               )}
-                                style={{marginTop:8,width:"100%",background:"none",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px",fontSize:12,color:"#9B97B2",cursor:"pointer"}}>
+                                style={{marginTop:8,width:"100%",background:"none",border:"1px solid #2A2A35",borderRadius:6,padding:"9px",fontSize:12,color:"#888",cursor:"pointer"}}>
                                 Add deadlines to calendar (.ics)
                               </button>
                             )}
@@ -3890,10 +3849,10 @@ ${m.content}`;
                             <div>
                               <div style={{fontSize:13,color:col,fontWeight:700,marginBottom:6}}>{viewMeeting.riskScore.rating} — {viewMeeting.riskScore.summary}</div>
                               {viewMeeting.riskScore.flags?.map((f,i)=>(
-                                <div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:"1px solid #F0EEF9"}}>
-                                  <div style={{display:"flex",gap:8,marginBottom:3}}><Badge color={rColors[f.severity]}>{f.severity}</Badge><span style={{fontSize:10,color:"#5E5A7A"}}>{f.law}</span></div>
-                                  <div style={{fontSize:12,color:"#1A1535",fontWeight:600}}>{f.issue}</div>
-                                  <div style={{fontSize:11,color:"#9B97B2",marginTop:2}}>Recommendation: {f.recommendation}</div>
+                                <div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:"1px solid #1C1C22"}}>
+                                  <div style={{display:"flex",gap:8,marginBottom:3}}><Badge color={rColors[f.severity]}>{f.severity}</Badge><span style={{fontSize:10,color:"#6B6880"}}>{f.law}</span></div>
+                                  <div style={{fontSize:12,color:"#F2EDE4",fontWeight:600}}>{f.issue}</div>
+                                  <div style={{fontSize:11,color:"#888",marginTop:2}}>Recommendation: {f.recommendation}</div>
                                 </div>
                               ))}
                             </div>
@@ -3902,33 +3861,33 @@ ${m.content}`;
                         {tab.type==="nextsteps"&&(
                           <div>
                             {viewMeeting.nextSteps?.map((s,i)=>(
-                              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #F0EEF9"}}>
+                              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1C1C22"}}>
                                 <span style={{fontSize:12,color:s.done?"#555":"#F2EDE4",textDecoration:s.done?"line-through":"none"}}>{s.step}</span>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                  {s.deadline&&<span style={{fontSize:10,color:"#5E5A7A",fontFamily:"JetBrains Mono,monospace"}}>{s.deadline}</span>}
+                                  {s.deadline&&<span style={{fontSize:10,color:"#666",fontFamily:"JetBrains Mono,monospace"}}>{s.deadline}</span>}
                                   {s.deadline&&<button onClick={()=>exportToCalendar(s.step,s.deadline,`${viewMeeting.type} — ${s.step}`)}
-                                    style={{background:"none",border:"1px solid #E4E0F5",borderRadius:4,padding:"2px 8px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>+ Cal</button>}
+                                    style={{background:"none",border:"1px solid #2A2A35",borderRadius:4,padding:"2px 8px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>+ Cal</button>}
                                 </div>
                               </div>
                             ))}
-                            {!viewMeeting.nextSteps?.length&&<div style={{fontSize:12,color:"#9B97B2"}}>No next steps recorded</div>}
+                            {!viewMeeting.nextSteps?.length&&<div style={{fontSize:12,color:"#5A5570"}}>No next steps recorded</div>}
                           </div>
                         )}
                         {tab.type==="adjustments"&&(
                           <div>
-                            <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12,lineHeight:1.6}}>
+                            <div style={{fontSize:11,color:"#6B6880",marginBottom:12,lineHeight:1.6}}>
                               Reasonable adjustments required under the Equality Act 2010. Log and track adjustments agreed for this employee.
                             </div>
                             {(adjustments[viewCaseId]||[]).map(a=>(
-                              <div key={a.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #F0EEF9"}}>
+                              <div key={a.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                                 <button onClick={()=>toggleAdjustment(viewCaseId,a.id)}
                                   style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:a.done?"#7C5CFC":"#2A2A35",background:a.done?"#7C5CFC22":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
                                   {a.done&&<span style={{color:"#7C5CFC",fontSize:10}}>✓</span>}
                                 </button>
                                 <div style={{flex:1}}>
                                   <div style={{fontSize:12,color:a.done?"#555":"#F2EDE4",textDecoration:a.done?"line-through":"none"}}>{a.adjustment}</div>
-                                  {a.review&&<div style={{fontSize:10,color:"#5E5A7A",marginTop:2}}>Review: {a.review}</div>}
-                                  <div style={{fontSize:10,color:"#9B97B2",marginTop:1}}>Added {new Date(a.addedAt).toLocaleDateString("en-GB")}</div>
+                                  {a.review&&<div style={{fontSize:10,color:"#6B6880",marginTop:2}}>Review: {a.review}</div>}
+                                  <div style={{fontSize:10,color:"#5A5570",marginTop:1}}>Added {new Date(a.addedAt).toLocaleDateString("en-GB")}</div>
                                 </div>
                               </div>
                             ))}
@@ -3955,26 +3914,26 @@ ${m.content}`;
       {screen===SCREENS.TEMPLATES&&(
         <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
           <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Template library</h2>
-          <p style={{fontSize:13,color:"#5E5A7A",margin:"0 0 20px"}}>UK-compliant HR letter templates. Click to view and copy.</p>
+          <p style={{fontSize:13,color:"#666",margin:"0 0 20px"}}>UK-compliant HR letter templates. Click to view and copy.</p>
 
           <input placeholder="Search templates..." value={templateSearch} onChange={e=>setTemplateSearch(e.target.value)}
-            style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"10px 14px",fontSize:13,outline:"none",marginBottom:20,color:"#1A1535"}} />
+            style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"10px 14px",fontSize:13,outline:"none",marginBottom:20,color:"#F2EDE4"}} />
 
           {["Disciplinary","Grievance","Investigation","Performance","Appeal","Welfare"].map(cat=>{
             const filtered = TEMPLATES.filter(t=>t.cat===cat&&(templateSearch===""||t.name.toLowerCase().includes(templateSearch.toLowerCase())));
             if(!filtered.length) return null;
             return(
               <div key={cat} style={{marginBottom:24}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#9B97B2",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>{cat}</div>
+                <div style={{fontSize:10,fontWeight:700,color:"#888",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>{cat}</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
                   {filtered.map(t=>(
                     <button key={t.id} onClick={()=>setSelectedTemplate(t)}
-                      style={{background:"#FFFFFF",border:"1px solid",borderColor:selectedTemplate?.id===t.id?"#7C5CFC":"#2A2A35",borderRadius:10,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
+                      style={{background:"#1C1C22",border:"1px solid",borderColor:selectedTemplate?.id===t.id?"#7C5CFC":"#2A2A35",borderRadius:10,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                       onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
                       onMouseLeave={e=>e.currentTarget.style.borderColor=selectedTemplate?.id===t.id?"#7C5CFC":"#2A2A35"}>
                       <Badge style={{marginBottom:8}}>{cat}</Badge>
-                      <div style={{fontSize:14,color:"#1A1535",fontWeight:600,margin:"6px 0 4px",fontFamily:"Playfair Display,Georgia,serif"}}>{t.name}</div>
-                      <div style={{fontSize:11,color:"#5E5A7A"}}>Click to preview and copy →</div>
+                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,margin:"6px 0 4px",fontFamily:"Playfair Display,Georgia,serif"}}>{t.name}</div>
+                      <div style={{fontSize:11,color:"#6B6880"}}>Click to preview and copy →</div>
                     </button>
                   ))}
                 </div>
@@ -3984,13 +3943,13 @@ ${m.content}`;
 
           {selectedTemplate&&(
             <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:200,overflowY:"auto",padding:"32px 20px"}}>
-              <div style={{maxWidth:780,margin:"0 auto",background:"#FFFFFF",borderRadius:12,border:"1px solid #E4E0F5",overflow:"hidden"}}>
+              <div style={{maxWidth:780,margin:"0 auto",background:"#1C1C22",borderRadius:12,border:"1px solid #2A2A35",overflow:"hidden"}}>
                 <div style={{padding:"16px 24px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <Badge style={{marginBottom:4}}>{selectedTemplate.cat}</Badge>
-                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",marginTop:4}}>{selectedTemplate.name}</div>
+                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",marginTop:4}}>{selectedTemplate.name}</div>
                   </div>
-                  <button onClick={()=>setSelectedTemplate(null)} style={{background:"none",border:"none",color:"#5E5A7A",fontSize:22,cursor:"pointer"}}>✕</button>
+                  <button onClick={()=>setSelectedTemplate(null)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer"}}>✕</button>
                 </div>
                 <div style={{padding:"20px 24px"}}>
                   <div style={{background:"#FDFAF6",borderRadius:8,padding:"24px 28px",marginBottom:16}}>
@@ -4000,14 +3959,14 @@ ${m.content}`;
                     <Btn onClick={()=>{navigator.clipboard.writeText(selectedTemplate.body);setSelectedTemplate(null);}}>Copy template</Btn>
                     <Btn variant="ghost" onClick={()=>setSelectedTemplate(null)}>Close</Btn>
                   </div>
-                  <div style={{marginTop:12,fontSize:11,color:"#9B97B2",lineHeight:1.6}}>Fields in [brackets] should be replaced with actual information. Always review before sending.</div>
+                  <div style={{marginTop:12,fontSize:11,color:"#5A5570",lineHeight:1.6}}>Fields in [brackets] should be replaced with actual information. Always review before sending.</div>
                 </div>
               </div>
 
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
                 {["ACAS dismissal process","Suspend on full pay?","Grievance — what next?","Investigation timescales"].map((s,i)=>(
                   <button key={i} onClick={()=>askCompass(s,homeChatHistory,setHomeChatHistory,setHomeChatProcessing)}
-                    style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#5E5A7A",cursor:"pointer",fontFamily:"Inter,sans-serif"}}
+                    style={{background:"#141418",border:"1px solid #2A2A35",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#666",cursor:"pointer",fontFamily:"Inter,sans-serif"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC44";e.currentTarget.style.color="#A98FFF";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
                     {s}
@@ -4023,23 +3982,23 @@ ${m.content}`;
       {screen===SCREENS.AUDIT&&(
         <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
           <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Audit Log</h2>
-          <p style={{fontSize:13,color:"#5E5A7A",margin:"0 0 24px"}}>Full record of all actions taken across your organisation.</p>
+          <p style={{fontSize:13,color:"#666",margin:"0 0 24px"}}>Full record of all actions taken across your organisation.</p>
           {auditLog.length===0?(
-            <div style={{textAlign:"center",padding:"60px 20px",color:"#9B97B2",fontSize:13}}>No activity recorded yet</div>
+            <div style={{textAlign:"center",padding:"60px 20px",color:"#5A5570",fontSize:13}}>No activity recorded yet</div>
           ):(
-            <div style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:12,overflow:"hidden"}}>
+            <div style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:12,overflow:"hidden"}}>
               {auditLog.map((a,i)=>(
                 <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",borderBottom:i<auditLog.length-1?"1px solid #141414":"none"}}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
                     <div>
-                      <span style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{a.action}</span>
-                      {a.details&&<span style={{fontSize:12,color:"#5E5A7A",marginLeft:8}}>{a.details}</span>}
+                      <span style={{fontSize:14,color:"#E8E4F0",fontWeight:500}}>{a.action}</span>
+                      {a.details&&<span style={{fontSize:12,color:"#6B6880",marginLeft:8}}>{a.details}</span>}
                     </div>
                   </div>
                   <div style={{textAlign:"right",flexShrink:0,marginLeft:16}}>
                     <div style={{fontSize:11,color:"#7C5CFC"}}>{a.user_name}</div>
-                    <div style={{fontSize:10,color:"#9B97B2"}}>{new Date(a.created_at).toLocaleString("en-GB")}</div>
+                    <div style={{fontSize:10,color:"#5A5570"}}>{new Date(a.created_at).toLocaleString("en-GB")}</div>
                   </div>
                 </div>
               ))}
@@ -4052,10 +4011,10 @@ ${m.content}`;
       {screen===SCREENS.HR_REVIEW&&(
         <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
           <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>HR Review Queue</h2>
-          <p style={{fontSize:13,color:"#5E5A7A",margin:"0 0 24px"}}>Review and approve or reject requests from managers.</p>
+          <p style={{fontSize:13,color:"#666",margin:"0 0 24px"}}>Review and approve or reject requests from managers.</p>
 
           {hrReviewRequests.length===0&&(
-            <div style={{textAlign:"center",padding:"60px 20px",color:"#9B97B2",fontSize:13}}>No review requests yet</div>
+            <div style={{textAlign:"center",padding:"60px 20px",color:"#5A5570",fontSize:13}}>No review requests yet</div>
           )}
 
           {["pending","approved","rejected"].map(status=>{
@@ -4063,25 +4022,25 @@ ${m.content}`;
             if(!filtered.length) return null;
             return(
               <div key={status} style={{marginBottom:32}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#9B97B2",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#888",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>
                   {status==="pending"?"Awaiting review":status==="approved"?"Approved":"Rejected"} ({filtered.length})
                 </div>
                 {filtered.map(r=>(
-                  <div key={r.id} style={{background:"#FFFFFF",border:"1px solid",borderColor:r.status==="pending"?"#D4882A33":r.status==="approved"?"#4CAF5033":"#E8622A33",borderRadius:12,padding:20,marginBottom:12}}>
+                  <div key={r.id} style={{background:"#1C1C22",border:"1px solid",borderColor:r.status==="pending"?"#D4882A33":r.status==="approved"?"#4CAF5033":"#E8622A33",borderRadius:12,padding:20,marginBottom:12}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
                       <div>
                         <div style={{display:"flex",gap:8,marginBottom:6}}>
                           <Badge color={r.status==="pending"?"#D4882A":r.status==="approved"?"#4CAF50":"#E8622A"}>{r.status}</Badge>
                           <Badge>{r.step}</Badge>
                         </div>
-                        <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:2}}>{r.case_employee_name}</div>
-                        <div style={{fontSize:12,color:"#5E5A7A"}}>{r.meeting_type} · Requested by {r.requested_by_name} · {new Date(r.requested_at).toLocaleDateString("en-GB")}</div>
+                        <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:2}}>{r.case_employee_name}</div>
+                        <div style={{fontSize:12,color:"#6B6880"}}>{r.meeting_type} · Requested by {r.requested_by_name} · {new Date(r.requested_at).toLocaleDateString("en-GB")}</div>
                       </div>
                     </div>
                     {r.record_snapshot&&(
                       <details style={{marginBottom:12}}>
                         <summary style={{fontSize:11,color:"#7C5CFC",cursor:"pointer",marginBottom:8}}>View record snapshot</summary>
-                        <div style={{background:"#FFFFFF",borderRadius:8,padding:"12px 16px",maxHeight:200,overflowY:"auto"}}>
+                        <div style={{background:"#141418",borderRadius:8,padding:"12px 16px",maxHeight:200,overflowY:"auto"}}>
                           <MDRenderer text={r.record_snapshot}/>
                         </div>
                       </details>
@@ -4092,7 +4051,7 @@ ${m.content}`;
                         <div>
                           <textarea value={comments} onChange={e=>setComments(e.target.value)}
                             placeholder="Add comments (required for rejection)..."
-                            rows={2} style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:12,outline:"none",color:"#1A1535",resize:"none",boxSizing:"border-box",marginBottom:8}}/>
+                            rows={2} style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,outline:"none",color:"#F2EDE4",resize:"none",boxSizing:"border-box",marginBottom:8}}/>
                           <div style={{display:"flex",gap:8}}>
                             <Btn onClick={()=>respondToReview(r.id,"approved",comments)} style={{background:"#4CAF50",borderColor:"#4CAF50"}}>✓ Approve</Btn>
                             <Btn onClick={()=>{if(!comments.trim()){showToast("Please add comments when rejecting", "warning");return;}respondToReview(r.id,"rejected",comments);}} variant="ghost" style={{color:"#E8622A",borderColor:"#E8622A"}}>✕ Reject</Btn>
@@ -4101,7 +4060,7 @@ ${m.content}`;
                       );
                     })()}
                     {r.status!=="pending"&&r.comments&&(
-                      <div style={{background:"#FFFFFF",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#9B97B2"}}>
+                      <div style={{background:"#141418",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#888"}}>
                         <span style={{color:r.status==="approved"?"#4CAF50":"#E8622A",fontWeight:600}}>{r.status==="approved"?"Approved":"Rejected"}</span> by {r.reviewed_by_name} · {r.comments}
                       </div>
                     )}
@@ -4120,39 +4079,39 @@ ${m.content}`;
             {/* Submit form */}
             <div>
               <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Anonymous reporting</h2>
-              <p style={{fontSize:13,color:"#5E5A7A",margin:"0 0 20px",lineHeight:1.6}}>Employees can submit concerns anonymously. Reports go directly to HR and are not linked to any user account.</p>
+              <p style={{fontSize:13,color:"#666",margin:"0 0 20px",lineHeight:1.6}}>Employees can submit concerns anonymously. Reports go directly to HR and are not linked to any user account.</p>
 
               {whistleSubmitted?(
                 <Card style={{textAlign:"center",padding:"32px 20px"}}>
                   <div style={{fontSize:32,marginBottom:12}}>✓</div>
                   <div style={{fontSize:15,color:"#7C5CFC",fontWeight:600,marginBottom:6}}>Report submitted</div>
-                  <div style={{fontSize:12,color:"#5E5A7A",marginBottom:16}}>Your report has been received by HR. Thank you for speaking up.</div>
+                  <div style={{fontSize:12,color:"#666",marginBottom:16}}>Your report has been received by HR. Thank you for speaking up.</div>
                   <Btn onClick={()=>{setWhistleSubmitted(false);setWhistleForm({concern:"",category:"",date:"",anonymous:true});}}>Submit another</Btn>
                 </Card>
               ):(
                 <Card>
                   <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Category</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Category</label>
                     <select value={whistleForm.category} onChange={e=>setWhistleForm(p=>({...p,category:e.target.value}))}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
                       <option value="">Select a category...</option>
                       {["Harassment / Bullying","Discrimination","Health & Safety","Financial misconduct","Data protection breach","Management misconduct","Other"].map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>When did this occur?</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>When did this occur?</label>
                     <DateInput value={whistleForm.date} onChange={e=>setWhistleForm(p=>({...p,date:e.target.value}))} />
                   </div>
                   <div style={{marginBottom:16}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Describe your concern *</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Describe your concern *</label>
                     <textarea value={whistleForm.concern} onChange={e=>setWhistleForm(p=>({...p,concern:e.target.value}))}
                       placeholder="Please describe what happened, who was involved (if you wish), and any other relevant details..."
                       rows={6}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",resize:"vertical",color:"#F2EDE4"}} ></textarea>
                   </div>
-                  <div style={{background:"#F8F7FF",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{background:"#0F0F12",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
                     <span style={{fontSize:12,color:"#7C5CFC"}}></span>
-                    <span style={{fontSize:11,color:"#5E5A7A",lineHeight:1.5}}>This report is anonymous. No identifying information is collected or stored.</span>
+                    <span style={{fontSize:11,color:"#666",lineHeight:1.5}}>This report is anonymous. No identifying information is collected or stored.</span>
                   </div>
                   <Btn onClick={()=>{
                     if(!whistleForm.concern.trim()) return;
@@ -4166,8 +4125,8 @@ ${m.content}`;
 
             {/* HR view of reports */}
             <div>
-              <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 14px",fontWeight:600}}>Received reports <span style={{fontSize:13,color:"#5E5A7A",fontWeight:400}}>({whistleReports.length})</span></h3>
-              {whistleReports.length===0&&<Card style={{textAlign:"center",padding:"28px"}}><div style={{fontSize:12,color:"#9B97B2"}}>No reports received yet</div></Card>}
+              <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",margin:"0 0 14px",fontWeight:600}}>Received reports <span style={{fontSize:13,color:"#6B6880",fontWeight:400}}>({whistleReports.length})</span></h3>
+              {whistleReports.length===0&&<Card style={{textAlign:"center",padding:"28px"}}><div style={{fontSize:12,color:"#5A5570"}}>No reports received yet</div></Card>}
               {[...whistleReports].reverse().map(r=>(
                 <Card key={r.id} style={{marginBottom:10,padding:16}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -4175,16 +4134,16 @@ ${m.content}`;
                       {r.category&&<Badge>{r.category}</Badge>}
                       <Badge color={r.status==="New"?"#E8622A":"#7C5CFC"}>{r.status}</Badge>
                     </div>
-                    <span style={{fontSize:10,color:"#9B97B2",fontFamily:"JetBrains Mono,monospace"}}>{new Date(r.receivedAt).toLocaleDateString("en-GB")}</span>
+                    <span style={{fontSize:10,color:"#5A5570",fontFamily:"JetBrains Mono,monospace"}}>{new Date(r.receivedAt).toLocaleDateString("en-GB")}</span>
                   </div>
-                  <div style={{fontSize:12,color:"#5E5A7A",lineHeight:1.6,marginBottom:10}}>{r.concern}</div>
+                  <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.6,marginBottom:10}}>{r.concern}</div>
                   <div style={{display:"flex",gap:6}}>
                     <button onClick={()=>saveWhistle(whistleReports.map(x=>x.id===r.id?{...x,status:x.status==="New"?"Under review":"Closed"}:x))}
-                      style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
+                      style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
                       {r.status==="New"?"Mark under review":"Mark closed"}
                     </button>
                     <button onClick={()=>{if(window.confirm("Delete?"))saveWhistle(whistleReports.filter(x=>x.id!==r.id));}}
-                      style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#E8622A",cursor:"pointer"}}>Delete</button>
+                      style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#E8622A",cursor:"pointer"}}>Delete</button>
                   </div>
                 </Card>
               ))}
@@ -4200,50 +4159,50 @@ ${m.content}`;
           <div style={{maxWidth:800,margin:"0 auto",padding:"40px 20px"}}>
             <div style={{textAlign:"center",marginBottom:32}}>
               <CompassLogo size={44}/>
-              <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:"14px 0 4px"}}>Employee Portal</h2>
-              <p style={{fontSize:13,color:"#5E5A7A"}}>View your HR correspondence and letters</p>
+              <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:22,color:"#F2EDE4",margin:"14px 0 4px"}}>Employee Portal</h2>
+              <p style={{fontSize:13,color:"#666"}}>View your HR correspondence and letters</p>
             </div>
 
             {!portalCase&&(
               <Card>
-                <div style={{fontSize:13,color:"#9B97B2",marginBottom:16,fontWeight:600}}>Select an employee</div>
-                {cases.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No cases saved yet.</div>}
+                <div style={{fontSize:13,color:"#888",marginBottom:16,fontWeight:600}}>Select an employee</div>
+                {cases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No cases saved yet.</div>}
                 {cases.map(c=>(
                   <button key={c.id} onClick={()=>setPortalCaseId(c.id)}
-                    style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 14px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
-                      <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{c.employeeName}</div>
-                      <div style={{fontSize:10,color:"#9B97B2"}}>{c.meetings.filter(m=>m.letterOutput).length} letter{c.meetings.filter(m=>m.letterOutput).length!==1?"s":""} · {c.email||"No email set"}</div>
+                      <div style={{fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{c.employeeName}</div>
+                      <div style={{fontSize:10,color:"#5A5570"}}>{c.meetings.filter(m=>m.letterOutput).length} letter{c.meetings.filter(m=>m.letterOutput).length!==1?"s":""} · {c.email||"No email set"}</div>
                     </div>
                     <span style={{color:"#7C5CFC",fontSize:18}}>›</span>
                   </button>
                 ))}
-                <div style={{marginTop:16,padding:"12px 14px",background:"#F8F7FF",borderRadius:8,border:"1px solid #E4E0F5"}}>
+                <div style={{marginTop:16,padding:"12px 14px",background:"#0F0F12",borderRadius:8,border:"1px solid #2A2A35"}}>
                   <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:5}}>FUTURE UPDATE</div>
-                  <div style={{fontSize:11,color:"#9B97B2",lineHeight:1.7}}>Employees will receive a private link to access their portal directly without HR needing to be present. Coming in the next release.</div>
+                  <div style={{fontSize:11,color:"#5A5570",lineHeight:1.7}}>Employees will receive a private link to access their portal directly without HR needing to be present. Coming in the next release.</div>
                 </div>
               </Card>
             )}
 
             {portalCase&&(
               <div>
-                <button onClick={()=>setPortalCaseId(null)} style={{background:"none",border:"none",color:"#5E5A7A",fontSize:13,cursor:"pointer",marginBottom:18,padding:0}}>← Back</button>
+                <button onClick={()=>setPortalCaseId(null)} style={{background:"none",border:"none",color:"#666",fontSize:13,cursor:"pointer",marginBottom:18,padding:0}}>← Back</button>
                 <Card style={{marginBottom:14}}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div style={{width:40,height:40,borderRadius:"50%",background:"#7C5CFC22",border:"1px solid #7C5CFC44",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#7C5CFC",fontWeight:700,flexShrink:0}}>
                       {portalCase.employeeName[0].toUpperCase()}
                     </div>
                     <div>
-                      <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:17,color:"#1A1535",fontWeight:600}}>{portalCase.employeeName}</div>
-                      <div style={{fontSize:11,color:"#9B97B2"}}>{portalCase.email||"No email on file"} · {portalCase.meetings.length} meeting{portalCase.meetings.length!==1?"s":""}</div>
+                      <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:17,color:"#F2EDE4",fontWeight:600}}>{portalCase.employeeName}</div>
+                      <div style={{fontSize:11,color:"#5A5570"}}>{portalCase.email||"No email on file"} · {portalCase.meetings.length} meeting{portalCase.meetings.length!==1?"s":""}</div>
                     </div>
                   </div>
                 </Card>
-                {portalCase.meetings.filter(m=>m.letterOutput).length===0&&<Card style={{textAlign:"center",padding:"28px"}}><div style={{fontSize:12,color:"#9B97B2"}}>No letters drafted for this employee yet.</div></Card>}
+                {portalCase.meetings.filter(m=>m.letterOutput).length===0&&<Card style={{textAlign:"center",padding:"28px"}}><div style={{fontSize:12,color:"#5A5570"}}>No letters drafted for this employee yet.</div></Card>}
                 {portalCase.meetings.filter(m=>m.letterOutput).map(m=>(
                   <Card key={m.id} style={{marginBottom:12,padding:0,overflow:"hidden"}}>
                     <div style={{padding:"12px 18px",borderBottom:"1px solid #2A2A35",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}><Badge>{m.type}</Badge><span style={{fontSize:12,color:"#1A1535"}}>{m.date}</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}><Badge>{m.type}</Badge><span style={{fontSize:12,color:"#F2EDE4"}}>{m.date}</span></div>
                       <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(m.letterOutput)} style={{fontSize:11,padding:"3px 10px"}}>Copy</Btn>
                     </div>
                     <div style={{background:"#FDFAF6",padding:"24px 28px"}}><MDRenderer text={m.letterOutput} light/></div>
@@ -4264,15 +4223,15 @@ ${m.content}`;
             placeholder="Search cases, records, letters, transcripts..."
             value={searchQuery}
             onChange={e=>{setSearchQuery(e.target.value);runSearch(e.target.value);}}
-            style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"14px 18px",fontSize:15,color:"#1A1535",outline:"none",marginBottom:24,boxSizing:"border-box"}} />
+            style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 18px",fontSize:15,color:"#F2EDE4",outline:"none",marginBottom:24,boxSizing:"border-box"}} />
 
           {searchQuery&&searchResults.length===0&&(
-            <div style={{textAlign:"center",padding:"40px 20px",color:"#9B97B2",fontSize:13}}>No results found for "{searchQuery}"</div>
+            <div style={{textAlign:"center",padding:"40px 20px",color:"#5A5570",fontSize:13}}>No results found for "{searchQuery}"</div>
           )}
 
           {searchResults.length>0&&(
             <div>
-              <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12}}>{searchResults.length} result{searchResults.length!==1?"s":""}</div>
+              <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>{searchResults.length} result{searchResults.length!==1?"s":""}</div>
               {searchResults.map((r,i)=>{
                 const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#4A6FA5",transcript:"#888"};
                 return(
@@ -4285,15 +4244,15 @@ ${m.content}`;
                       if(m) { setViewMeeting({...m,employeeName:cs.employeeName,caseId:cs.id}); setViewCaseId(cs.id); }
                     }
                   }}
-                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"14px 16px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.15s"}}
+                    style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"14px 16px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
                     onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
                     <div style={{width:40,height:40,borderRadius:6,background:typeColors[r.type]+"22",border:`1px solid ${typeColors[r.type]}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                       <span style={{fontSize:9,fontWeight:700,color:typeColors[r.type],letterSpacing:0.5,textTransform:"uppercase"}}>{r.type}</span>
                     </div>
                     <div>
-                      <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:2}}>{r.title}</div>
-                      <div style={{fontSize:11,color:"#5E5A7A"}}>{r.sub}</div>
+                      <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500,marginBottom:2}}>{r.title}</div>
+                      <div style={{fontSize:11,color:"#6B6880"}}>{r.sub}</div>
                       {r.type==="transcript"&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4,fontStyle:"italic"}}>Found in transcript</div>}
                       {r.type==="record"&&<div style={{fontSize:11,color:"#D4882A",marginTop:4}}>Found in meeting record</div>}
                       {r.type==="letter"&&<div style={{fontSize:11,color:"#4CAF50",marginTop:4}}>Found in letter</div>}
@@ -4306,22 +4265,22 @@ ${m.content}`;
 
           {!searchQuery&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <Card style={{background:"#FFFFFF"}}>
-                <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Recent cases</div>
+              <Card style={{background:"#141418"}}>
+                <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Recent cases</div>
                 {cases.slice(-5).reverse().map(c=>(
-                  <div key={c.id} onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"8px 0",borderBottom:"1px solid #F0EEF9",cursor:"pointer",fontSize:12,color:"#5E5A7A"}}>{c.employeeName}</div>
+                  <div key={c.id} onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",cursor:"pointer",fontSize:12,color:"#C4BDAF"}}>{c.employeeName}</div>
                 ))}
-                {cases.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No cases yet</div>}
+                {cases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No cases yet</div>}
               </Card>
-              <Card style={{background:"#FFFFFF"}}>
-                <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Overdue actions</div>
+              <Card style={{background:"#141418"}}>
+                <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Overdue actions</div>
                 {dueSoon.filter(d=>d.overdue).slice(0,5).map((d,i)=>(
-                  <div key={i} style={{padding:"8px 0",borderBottom:"1px solid #F0EEF9",fontSize:12}}>
+                  <div key={i} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
                     <div style={{color:"#E8622A",marginBottom:1}}>{d.caseName}</div>
-                    <div style={{color:"#5E5A7A",fontSize:10}}>{d.step} · {Math.abs(d.daysLeft)}d overdue</div>
+                    <div style={{color:"#6B6880",fontSize:10}}>{d.step} · {Math.abs(d.daysLeft)}d overdue</div>
                   </div>
                 ))}
-                {dueSoon.filter(d=>d.overdue).length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No overdue actions</div>}
+                {dueSoon.filter(d=>d.overdue).length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No overdue actions</div>}
               </Card>
             </div>
           )}
@@ -4362,7 +4321,7 @@ ${m.content}`;
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
                 <Card>
                   <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600,marginBottom:4}}>{s.type}</div>
-                  <p style={{fontSize:12,color:"#5E5A7A",margin:"0 0 18px"}}>Fill in the employee details, then the employee completes their self-assessment.</p>
+                  <p style={{fontSize:12,color:"#6B6880",margin:"0 0 18px"}}>Fill in the employee details, then the employee completes their self-assessment.</p>
                   {[
                     {k:"employee",l:"Employee name",req:true,ph:"e.g. Sarah Johnson"},
                     {k:"role",l:"Job title",ph:"e.g. Marketing Manager"},
@@ -4373,24 +4332,24 @@ ${m.content}`;
                     {k:"reviewPeriod",l:"Review period",ph:"e.g. Jan – Dec 2024"},
                   ].map(f=>(
                     <div key={f.k} style={{marginBottom:12}}>
-                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.l}{f.req&&<span style={{color:"#E8622A"}}> *</span>}</label>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.l}{f.req&&<span style={{color:"#E8622A"}}> *</span>}</label>
                       {f.type==="date"
                         ?<DateInput value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))} />
                         :<input type={f.type||"text"} placeholder={f.ph} value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))}
-                          style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535"}} />}
+                          style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4"}} />}
                     </div>
                   ))}
                 </Card>
 
                 <Card>
                   <div style={{fontSize:12,fontWeight:600,color:"#7C5CFC",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>Employee self-assessment</div>
-                  <p style={{fontSize:11,color:"#5E5A7A",margin:"0 0 16px",lineHeight:1.6}}>The employee fills this in before the meeting. Their answers will sit alongside the manager assessment.</p>
+                  <p style={{fontSize:11,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>The employee fills this in before the meeting. Their answers will sit alongside the manager assessment.</p>
                   {cfg?.selfAssessmentPrompts?.map((q,i)=>(
                     <div key={i} style={{marginBottom:14}}>
-                      <label style={{display:"block",fontSize:12,color:"#5E5A7A",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                      <label style={{display:"block",fontSize:12,color:"#C4BDAF",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
                       <textarea value={s.selfAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,selfAssessment:{...ds.selfAssessment,[i]:e.target.value}}))}
                         placeholder="Employee answer..." rows={2}
-                        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
+                        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#F2EDE4"}} ></textarea>
                     </div>
                   ))}
                   <Btn onClick={()=>setDevStep("manager")} disabled={!s.caseInfo.employee.trim()} style={{marginTop:4,background:"#7C5CFC",border:"none"}}>
@@ -4405,11 +4364,11 @@ ${m.content}`;
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
                 <Card>
                   <div style={{fontSize:12,fontWeight:600,color:"#7C5CFC",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>Manager assessment</div>
-                  <p style={{fontSize:11,color:"#5E5A7A",margin:"0 0 16px",lineHeight:1.6}}>Complete your assessment of {s.caseInfo.employee||"the employee"}. Be specific and evidence-based.</p>
+                  <p style={{fontSize:11,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>Complete your assessment of {s.caseInfo.employee||"the employee"}. Be specific and evidence-based.</p>
 
                   {isAppraisal&&(
                     <div style={{marginBottom:16}}>
-                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Overall rating</label>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Overall rating</label>
                       <div style={{display:"flex",gap:8}}>
                         {["1","2","3","4","5"].map(r=>(
                           <button key={r} onClick={()=>setDevSession(ds=>({...ds,rating:r}))}
@@ -4419,33 +4378,33 @@ ${m.content}`;
                           </button>
                         ))}
                       </div>
-                      <div style={{fontSize:10,color:"#9B97B2",marginTop:6}}>1=Below expectations · 3=Meets · 5=Outstanding</div>
+                      <div style={{fontSize:10,color:"#5A5570",marginTop:6}}>1=Below expectations · 3=Meets · 5=Outstanding</div>
                     </div>
                   )}
 
                   {cfg?.managerPrompts?.map((q,i)=>(
                     <div key={i} style={{marginBottom:14}}>
-                      <label style={{display:"block",fontSize:12,color:"#5E5A7A",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                      <label style={{display:"block",fontSize:12,color:"#C4BDAF",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
                       <textarea value={s.managerAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,managerAssessment:{...ds.managerAssessment,[i]:e.target.value}}))}
                         placeholder="Your assessment..." rows={2}
-                        style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
+                        style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#F2EDE4"}} ></textarea>
                     </div>
                   ))}
 
                   <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Agreed outcome</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Agreed outcome</label>
                     <select value={s.outcome} onChange={e=>setDevSession(ds=>({...ds,outcome:e.target.value}))}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
                       <option value="">Select outcome...</option>
                       {cfg?.outcomeOptions?.map(o=><option key={o} value={o}>{o}</option>)}
                     </select>
                   </div>
 
                   <div style={{marginBottom:16}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Development plan / actions</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Development plan / actions</label>
                     <textarea value={s.devPlan||""} onChange={e=>setDevSession(ds=>({...ds,devPlan:e.target.value}))}
                       placeholder="Training agreed, coaching, support, resources..." rows={3}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#F2EDE4"}} ></textarea>
                   </div>
 
                   <div style={{display:"flex",gap:8}}>
@@ -4455,7 +4414,7 @@ ${m.content}`;
                 </Card>
 
                 {/* Objectives panel */}
-                <Card style={{background:"#FFFFFF"}}>
+                <Card style={{background:"#141418"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <div style={{fontSize:12,fontWeight:600,color:"#7C5CFC",textTransform:"uppercase",letterSpacing:0.5}}>Objectives &amp; ratings</div>
                     <Btn onClick={()=>generateSmartObjectives(s.caseInfo.reviewPeriod)} disabled={devAiProcessing} style={{padding:"4px 12px",fontSize:11,background:"#7C5CFC",border:"none"}}>
@@ -4463,15 +4422,15 @@ ${m.content}`;
                     </Btn>
                   </div>
                   {s.objectives.map((obj,i)=>(
-                    <div key={i} style={{background:"#F8F7FF",border:"1px solid #1C1C22",borderRadius:8,padding:"12px 14px",marginBottom:10}}>
+                    <div key={i} style={{background:"#0F0F12",border:"1px solid #1C1C22",borderRadius:8,padding:"12px 14px",marginBottom:10}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                         <div style={{flex:1}}>
-                          <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{obj.label}</div>
-                          {obj.desc&&<div style={{fontSize:11,color:"#5E5A7A"}}>{obj.desc}</div>}
-                          {obj.measure&&<div style={{fontSize:10,color:"#9B97B2",marginTop:2}}>Measure: {obj.measure}</div>}
+                          <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:2}}>{obj.label}</div>
+                          {obj.desc&&<div style={{fontSize:11,color:"#6B6880"}}>{obj.desc}</div>}
+                          {obj.measure&&<div style={{fontSize:10,color:"#5A5570",marginTop:2}}>Measure: {obj.measure}</div>}
                         </div>
                         <button onClick={()=>setDevSession(ds=>({...ds,objectives:ds.objectives.filter((_,j)=>j!==i)}))}
-                          style={{background:"none",border:"none",color:"#5E5A7A",fontSize:14,cursor:"pointer",marginLeft:8}}>✕</button>
+                          style={{background:"none",border:"none",color:"#6B6880",fontSize:14,cursor:"pointer",marginLeft:8}}>✕</button>
                       </div>
                       {/* Rating */}
                       <div style={{display:"flex",gap:4,marginBottom:8}}>
@@ -4481,15 +4440,15 @@ ${m.content}`;
                             {r}
                           </button>
                         ))}
-                        <span style={{fontSize:10,color:"#9B97B2",lineHeight:"28px",marginLeft:6}}>{["","Below","Developing","Meeting","Exceeding","Exceptional"][obj.rating]}</span>
+                        <span style={{fontSize:10,color:"#5A5570",lineHeight:"28px",marginLeft:6}}>{["","Below","Developing","Meeting","Exceeding","Exceptional"][obj.rating]}</span>
                       </div>
                       <input value={obj.note||""} onChange={e=>setDevSession(ds=>({...ds,objectives:ds.objectives.map((x,j)=>j===i?{...x,note:e.target.value}:x)}))}
                         placeholder="Notes on progress..."
-                        style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:5,padding:"6px 10px",fontSize:11,outline:"none",color:"#1A1535"}} />
+                        style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:5,padding:"6px 10px",fontSize:11,outline:"none",color:"#F2EDE4"}} />
                     </div>
                   ))}
                   <button onClick={()=>setDevSession(ds=>({...ds,objectives:[...ds.objectives,{label:"New objective",desc:"",rating:3,note:""}]}))}
-                    style={{width:"100%",background:"none",border:"1px dashed #2A2A35",borderRadius:7,padding:"9px",fontSize:12,color:"#5E5A7A",cursor:"pointer"}}>
+                    style={{width:"100%",background:"none",border:"1px dashed #2A2A35",borderRadius:7,padding:"9px",fontSize:12,color:"#6B6880",cursor:"pointer"}}>
                     + Add objective
                   </button>
 
@@ -4500,8 +4459,8 @@ ${m.content}`;
                       <div style={{marginTop:10}}>
                         {cfg?.selfAssessmentPrompts?.map((q,i)=>s.selfAssessment[i]?(
                           <div key={i} style={{marginBottom:10}}>
-                            <div style={{fontSize:10,color:"#5E5A7A",marginBottom:3}}>{q}</div>
-                            <div style={{fontSize:12,color:"#5E5A7A",background:"#F8F7FF",borderRadius:5,padding:"7px 10px"}}>{s.selfAssessment[i]}</div>
+                            <div style={{fontSize:10,color:"#6B6880",marginBottom:3}}>{q}</div>
+                            <div style={{fontSize:12,color:"#C4BDAF",background:"#0F0F12",borderRadius:5,padding:"7px 10px"}}>{s.selfAssessment[i]}</div>
                           </div>
                         ):null)}
                       </div>
@@ -4521,12 +4480,12 @@ ${m.content}`;
                       {devAiProcessing?"Generating...":"Generate AI summary"}
                     </Btn>
                   </div>
-                  {devAiProcessing&&!devSummary&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#5E5A7A",marginTop:10,fontSize:12}}>Building your summary...</div></div>}
+                  {devAiProcessing&&!devSummary&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#6B6880",marginTop:10,fontSize:12}}>Building your summary...</div></div>}
                   {devSummary&&<MDRenderer text={devSummary}/>}
                   {!devSummary&&!devAiProcessing&&(
-                    <div style={{background:"#F8F7FF",borderRadius:8,padding:20,textAlign:"center"}}>
-                      <div style={{fontSize:13,color:"#5E5A7A",marginBottom:6}}>Click "Generate AI summary" to produce a structured meeting record</div>
-                      <div style={{fontSize:11,color:"#9B97B2"}}>Combines self-assessment, manager feedback, and objectives into a professional document</div>
+                    <div style={{background:"#0F0F12",borderRadius:8,padding:20,textAlign:"center"}}>
+                      <div style={{fontSize:13,color:"#6B6880",marginBottom:6}}>Click "Generate AI summary" to produce a structured meeting record</div>
+                      <div style={{fontSize:11,color:"#5A5570"}}>Combines self-assessment, manager feedback, and objectives into a professional document</div>
                     </div>
                   )}
                   <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
@@ -4538,13 +4497,13 @@ ${m.content}`;
 
                 {/* Side panel: combined view */}
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <Card style={{background:"#FFFFFF"}}>
+                  <Card style={{background:"#141418"}}>
                     <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:12}}>OBJECTIVES SUMMARY</div>
                     {s.objectives.map((obj,i)=>{
                       const rColors=["","#7C5CFC","#7C5CFC","#7C5CFC","#7C5CFC","#7C5CFC"]; const _ignore=["","#E8622A","#D4882A","#888","#7C5CFC","#7C5CFC"];
                       return(
-                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #F0EEF9"}}>
-                          <span style={{fontSize:12,color:"#5E5A7A"}}>{obj.label}</span>
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1a1a1a"}}>
+                          <span style={{fontSize:12,color:"#C4BDAF"}}>{obj.label}</span>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             {[1,2,3,4,5].map(r=><div key={r} style={{width:8,height:8,borderRadius:"50%",background:obj.rating>=r?rColors[obj.rating]:"#2A2A35"}}/>)}
                             <span style={{fontSize:10,color:rColors[obj.rating],marginLeft:4,fontWeight:600}}>{obj.rating}/5</span>
@@ -4553,7 +4512,7 @@ ${m.content}`;
                       );
                     })}
                   </Card>
-                  <Card style={{background:"#FFFFFF"}}>
+                  <Card style={{background:"#141418"}}>
                     <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>OUTCOME</div>
                     <div style={{fontSize:13,color:s.outcome?"#F2EDE4":"#555"}}>{s.outcome||"Not set"}</div>
                     {s.rating&&<div style={{fontSize:12,color:"#7C5CFC",marginTop:6}}>Rating: {s.rating}/5</div>}
@@ -4587,23 +4546,23 @@ ${m.content}`;
                 )}
                 {!devLetter&&!devAiProcessing&&(
                   <Card style={{textAlign:"center",padding:"32px"}}>
-                    <div style={{fontSize:13,color:"#5E5A7A",marginBottom:8}}>Click "Generate letter" to draft the outcome document</div>
-                    <div style={{fontSize:11,color:"#9B97B2"}}>Available: {Object.values(DEV_TEMPLATES.filter(t=>t.cat.toLowerCase().includes(s.type.split(" ")[0].toLowerCase()))).map(t=>t.name).join(", ")||"outcome letter"}</div>
+                    <div style={{fontSize:13,color:"#6B6880",marginBottom:8}}>Click "Generate letter" to draft the outcome document</div>
+                    <div style={{fontSize:11,color:"#5A5570"}}>Available: {Object.values(DEV_TEMPLATES.filter(t=>t.cat.toLowerCase().includes(s.type.split(" ")[0].toLowerCase()))).map(t=>t.name).join(", ")||"outcome letter"}</div>
                   </Card>
                 )}
 
                 {/* Template alternatives */}
                 <div style={{marginTop:20}}>
-                  <div style={{fontSize:10,color:"#9B97B2",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Or use a template</div>
+                  <div style={{fontSize:10,color:"#5A5570",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Or use a template</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
                     {DEV_TEMPLATES.map(t=>(
                       <button key={t.id} onClick={()=>{navigator.clipboard.writeText(t.body);}}
-                        style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:8,padding:"12px 14px",textAlign:"left",cursor:"pointer"}}
+                        style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:8,padding:"12px 14px",textAlign:"left",cursor:"pointer"}}
                         onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
                         onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
                         <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,marginBottom:3}}>{t.cat}</div>
-                        <div style={{fontSize:12,color:"#1A1535"}}>{t.name}</div>
-                        <div style={{fontSize:10,color:"#5E5A7A",marginTop:3}}>Click to copy →</div>
+                        <div style={{fontSize:12,color:"#F2EDE4"}}>{t.name}</div>
+                        <div style={{fontSize:10,color:"#6B6880",marginTop:3}}>Click to copy →</div>
                       </button>
                     ))}
                   </div>
@@ -4632,7 +4591,7 @@ ${m.content}`;
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
               <div>
                 <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>New starter onboarding</h2>
-                <p style={{fontSize:13,color:"#5E5A7A",margin:0}}>AI-customised induction journeys. Track every task from offer accepted to end of probation.</p>
+                <p style={{fontSize:13,color:"#6B6880",margin:0}}>AI-customised induction journeys. Track every task from offer accepted to end of probation.</p>
               </div>
               <div style={{display:"flex",gap:8}}>
                 {activeStarter&&<Btn variant="ghost" onClick={()=>{setActiveStarter(null);setStarterView("list");}}>← All starters</Btn>}
@@ -4643,7 +4602,7 @@ ${m.content}`;
             {/* Add new starter form */}
             {starterView==="new"&&!activeStarter&&(
               <Card style={{marginBottom:24}}>
-                <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 16px",fontWeight:600}}>New starter details</h3>
+                <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",margin:"0 0 16px",fontWeight:600}}>New starter details</h3>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
                   {[
                     {k:"name",l:"Full name",req:true,ph:"e.g. James Wilson"},
@@ -4654,18 +4613,18 @@ ${m.content}`;
                     {k:"startDate",l:"Start date",req:true,type:"date"},
                   ].map(f=>(
                     <div key={f.k}>
-                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>{f.l}{f.req&&<span style={{color:"#E8622A"}}> *</span>}</label>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>{f.l}{f.req&&<span style={{color:"#E8622A"}}> *</span>}</label>
                       {f.type==="date"
                         ?<DateInput value={newStarterForm[f.k]||""} onChange={e=>setNewStarterForm(p=>({...p,[f.k]:e.target.value}))} />
                         :<input type={f.type||"text"} placeholder={f.ph} value={newStarterForm[f.k]||""} onChange={e=>setNewStarterForm(p=>({...p,[f.k]:e.target.value}))}
-                          style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />}
+                          style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#F2EDE4",boxSizing:"border-box"}} />}
                     </div>
                   ))}
                 </div>
                 <div style={{marginBottom:16}}>
-                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Onboarding template</label>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Onboarding template</label>
                   <select value={newStarterForm.templateId} onChange={e=>setNewStarterForm(p=>({...p,templateId:e.target.value}))}
-                    style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
+                    style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
                     {starterTemplates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
@@ -4682,8 +4641,8 @@ ${m.content}`;
                 {starterInstances.length===0&&(
                   <Card style={{textAlign:"center",padding:"50px 20px"}}>
                     <div style={{fontSize:32,marginBottom:12,color:"#2A2A35"}}>—</div>
-                    <div style={{fontSize:15,color:"#5E5A7A",marginBottom:6}}>No starters yet</div>
-                    <div style={{fontSize:12,color:"#9B97B2",marginBottom:20}}>Create an onboarding journey for each new hire.</div>
+                    <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>No starters yet</div>
+                    <div style={{fontSize:12,color:"#5A5570",marginBottom:20}}>Create an onboarding journey for each new hire.</div>
                     <Btn onClick={()=>setStarterView("new")}>+ Add first starter</Btn>
                   </Card>
                 )}
@@ -4695,23 +4654,23 @@ ${m.content}`;
                     const overdueTasks = s.tasks.filter(t=>!t.done&&t.dueDate&&new Date(t.dueDate.split("/").reverse().join("-"))<new Date());
                     return(
                       <button key={s.id} onClick={()=>{setActiveStarter(s);setStarterView("instance");}}
-                        style={{background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"18px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
+                        style={{background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:10,padding:"18px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                         onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
                         onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                           <div>
-                            <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",fontWeight:600,marginBottom:2}}>{s.name}</div>
-                            <div style={{fontSize:11,color:"#5E5A7A"}}>{s.role}{s.department?" · "+s.department:""}</div>
+                            <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",fontWeight:600,marginBottom:2}}>{s.name}</div>
+                            <div style={{fontSize:11,color:"#6B6880"}}>{s.role}{s.department?" · "+s.department:""}</div>
                           </div>
                           {overdueTasks.length>0&&<Badge color="#E8622A">{overdueTasks.length} overdue</Badge>}
                         </div>
-                        <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12}}>
+                        <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>
                           Start: {new Date(s.startDate).toLocaleDateString("en-GB")} · Manager: {s.manager||"Not set"}
                         </div>
-                        <div style={{background:"#F8F7FF",borderRadius:4,height:4,marginBottom:6}}>
+                        <div style={{background:"#0F0F12",borderRadius:4,height:4,marginBottom:6}}>
                           <div style={{background:"#7C5CFC",borderRadius:4,height:4,width:pct+"%",transition:"width 0.3s"}}/>
                         </div>
-                        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#5E5A7A"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880"}}>
                           <span>{done}/{total} tasks complete</span>
                           <span style={{color:pct===100?"#7C5CFC":"#555"}}>{pct}%</span>
                         </div>
@@ -4728,14 +4687,14 @@ ${m.content}`;
                 {/* Sidebar */}
                 <div>
                   <Card style={{marginBottom:12}}>
-                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",fontWeight:600,marginBottom:4}}>{activeStarter.name}</div>
-                    <div style={{fontSize:12,color:"#5E5A7A",marginBottom:12}}>{activeStarter.role}{activeStarter.department?" · "+activeStarter.department:""}</div>
-                    <div style={{fontSize:11,color:"#5E5A7A",marginBottom:3}}>Start date: {new Date(activeStarter.startDate).toLocaleDateString("en-GB")}</div>
-                    <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12}}>Manager: {activeStarter.manager||"Not set"}</div>
-                    <div style={{background:"#F8F7FF",borderRadius:4,height:6,marginBottom:6}}>
+                    <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",fontWeight:600,marginBottom:4}}>{activeStarter.name}</div>
+                    <div style={{fontSize:12,color:"#6B6880",marginBottom:12}}>{activeStarter.role}{activeStarter.department?" · "+activeStarter.department:""}</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:3}}>Start date: {new Date(activeStarter.startDate).toLocaleDateString("en-GB")}</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>Manager: {activeStarter.manager||"Not set"}</div>
+                    <div style={{background:"#0F0F12",borderRadius:4,height:6,marginBottom:6}}>
                       <div style={{background:"#7C5CFC",borderRadius:4,height:6,width:pct+"%",transition:"width 0.5s"}}/>
                     </div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#5E5A7A",marginBottom:14}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880",marginBottom:14}}>
                       <span>{completedCount}/{totalCount} complete</span>
                       <span style={{color:pct===100?"#7C5CFC":"#555",fontWeight:600}}>{pct}%</span>
                     </div>
@@ -4745,12 +4704,12 @@ ${m.content}`;
                     {activeStarter.aiCustomised&&<div style={{fontSize:10,color:"#7C5CFC",marginTop:6,textAlign:"center"}}>AI tasks added</div>}
                   </Card>
                   {/* Owner legend */}
-                  <Card style={{background:"#FFFFFF",padding:14}}>
-                    <div style={{fontSize:10,color:"#5E5A7A",fontWeight:700,letterSpacing:1,marginBottom:10,textTransform:"uppercase"}}>Task owners</div>
+                  <Card style={{background:"#141418",padding:14}}>
+                    <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,marginBottom:10,textTransform:"uppercase"}}>Task owners</div>
                     {Object.entries(ownerColors).map(([owner,color])=>(
                       <div key={owner} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                         <div style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0}}/>
-                        <span style={{fontSize:11,color:"#5E5A7A"}}>{owner}</span>
+                        <span style={{fontSize:11,color:"#6B6880"}}>{owner}</span>
                       </div>
                     ))}
                   </Card>
@@ -4765,16 +4724,16 @@ ${m.content}`;
                       <Card key={phase.label} style={{marginBottom:12}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#1A1535",fontWeight:600}}>{phase.label}</span>
+                            <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#F2EDE4",fontWeight:600}}>{phase.label}</span>
                             {phaseOverdue.length>0&&<Badge color="#E8622A">{phaseOverdue.length} overdue</Badge>}
                           </div>
-                          <span style={{fontSize:11,color:"#5E5A7A"}}>{phaseDone}/{phase.tasks.length}</span>
+                          <span style={{fontSize:11,color:"#6B6880"}}>{phaseDone}/{phase.tasks.length}</span>
                         </div>
                         {phase.tasks.map(task=>{
                           const ownerColor = ownerColors[task.owner]||"#555";
                           const isOverdue = !task.done&&task.dueDate&&new Date(task.dueDate.split("/").reverse().join("-"))<new Date();
                           return(
-                            <div key={task.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid #F0EEF9",alignItems:"flex-start"}}>
+                            <div key={task.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid #1a1a1a",alignItems:"flex-start"}}>
                               <button onClick={()=>toggleStarterTask(activeStarter.id,task.id)}
                                 style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:task.done?"#7C5CFC":"#2A2A35",background:task.done?"#7C5CFC":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
                                 {task.done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
@@ -4784,15 +4743,15 @@ ${m.content}`;
                                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                                   <div style={{display:"flex",alignItems:"center",gap:5}}>
                                     <div style={{width:6,height:6,borderRadius:"50%",background:ownerColor}}/>
-                                    <span style={{fontSize:10,color:"#5E5A7A"}}>{task.owner}</span>
+                                    <span style={{fontSize:10,color:"#6B6880"}}>{task.owner}</span>
                                   </div>
                                   {task.dueDate&&<span style={{fontSize:10,color:isOverdue?"#E8622A":"#444",fontFamily:"JetBrains Mono,monospace"}}>{task.dueDate}{isOverdue?" (overdue)":""}</span>}
                                   {task.done&&task.doneAt&&<span style={{fontSize:10,color:"#7C5CFC"}}>Done {new Date(task.doneAt).toLocaleDateString("en-GB")}</span>}
                                 </div>
-                                {task.note&&<div style={{fontSize:11,color:"#9B97B2",marginTop:4,fontStyle:"italic"}}>{task.note}</div>}
+                                {task.note&&<div style={{fontSize:11,color:"#888",marginTop:4,fontStyle:"italic"}}>{task.note}</div>}
                               </div>
                               <input placeholder="Add note..." value={task.note||""} onChange={e=>updateStarterTaskNote(activeStarter.id,task.id,e.target.value)}
-                                style={{background:"none",border:"none",borderBottom:"1px solid #2A2A35",color:"#5E5A7A",fontSize:11,outline:"none",width:140,padding:"2px 4px"}}/>
+                                style={{background:"none",border:"none",borderBottom:"1px solid #2A2A35",color:"#6B6880",fontSize:11,outline:"none",width:140,padding:"2px 4px"}}/>
                             </div>
                           );
                         })}
@@ -4848,13 +4807,13 @@ ${m.content}`;
           <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
             <div style={{marginBottom:28}}>
               <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>ER Analytics</h2>
-              <p style={{fontSize:13,color:"#5E5A7A",margin:0}}>Employee relations case patterns, trends, and risk intelligence.</p>
+              <p style={{fontSize:13,color:"#6B6880",margin:0}}>Employee relations case patterns, trends, and risk intelligence.</p>
             </div>
 
             {cases.length<2&&(
               <Card style={{textAlign:"center",padding:"50px 20px"}}>
-                <div style={{fontSize:15,color:"#5E5A7A",marginBottom:6}}>Not enough data yet</div>
-                <div style={{fontSize:12,color:"#9B97B2"}}>Analytics become meaningful once you have 3+ cases saved. Keep using Compass and check back.</div>
+                <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>Not enough data yet</div>
+                <div style={{fontSize:12,color:"#5A5570"}}>Analytics become meaningful once you have 3+ cases saved. Keep using Compass and check back.</div>
               </Card>
             )}
 
@@ -4871,7 +4830,7 @@ ${m.content}`;
                   ].map(s=>(
                     <Card key={s.l} style={{textAlign:"center",padding:"16px 10px"}}>
                       <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif",marginBottom:4}}>{s.v}</div>
-                      <div style={{fontSize:10,color:"#5E5A7A"}}>{s.l}</div>
+                      <div style={{fontSize:10,color:"#6B6880"}}>{s.l}</div>
                     </Card>
                   ))}
                 </div>
@@ -4879,16 +4838,16 @@ ${m.content}`;
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
                   {/* Case type breakdown */}
                   <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Case type breakdown</div>
+                    <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:14}}>Case type breakdown</div>
                     {Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).map(([type,count])=>{
                       const maxCount = Math.max(...Object.values(typeCounts));
                       return(
                         <div key={type} style={{marginBottom:10}}>
                           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                            <span style={{fontSize:12,color:"#5E5A7A"}}>{type}</span>
+                            <span style={{fontSize:12,color:"#C4BDAF"}}>{type}</span>
                             <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600}}>{count}</span>
                           </div>
-                          <div style={{background:"#F8F7FF",borderRadius:3,height:5}}>
+                          <div style={{background:"#0F0F12",borderRadius:3,height:5}}>
                             <div style={{background:"#7C5CFC",borderRadius:3,height:5,width:`${Math.round(count/maxCount*100)}%`}}/>
                           </div>
                         </div>
@@ -4898,13 +4857,13 @@ ${m.content}`;
 
                   {/* Managers in cases */}
                   <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Managers by case involvement</div>
-                    {managerList.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No manager data yet — add manager names when creating meetings</div>}
+                    <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:14}}>Managers by case involvement</div>
+                    {managerList.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No manager data yet — add manager names when creating meetings</div>}
                     {managerList.map(([manager,count],i)=>(
-                      <div key={manager} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #F0EEF9"}}>
+                      <div key={manager} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1a1a1a"}}>
                         <div>
-                          <div style={{fontSize:12,color:"#1A1535"}}>{manager}</div>
-                          <div style={{fontSize:10,color:"#5E5A7A"}}>{count} meeting{count!==1?"s":""}</div>
+                          <div style={{fontSize:12,color:"#F2EDE4"}}>{manager}</div>
+                          <div style={{fontSize:10,color:"#6B6880"}}>{count} meeting{count!==1?"s":""}</div>
                         </div>
                         {count>=3&&<Badge color="#E8622A">High involvement</Badge>}
                         {count===2&&<Badge color="#D4882A">Repeat</Badge>}
@@ -4913,7 +4872,7 @@ ${m.content}`;
                     {managerList.length>0&&managerList.some(([,c])=>c>=3)&&(
                       <div style={{marginTop:12,padding:"10px 12px",background:"#2A1008",borderRadius:6,border:"1px solid #E8622A33"}}>
                         <div style={{fontSize:11,color:"#E8622A",fontWeight:600,marginBottom:3}}>Pattern alert</div>
-                        <div style={{fontSize:11,color:"#9B97B2"}}>One or more managers appear in 3+ ER cases. Consider investigating management practice.</div>
+                        <div style={{fontSize:11,color:"#888"}}>One or more managers appear in 3+ ER cases. Consider investigating management practice.</div>
                       </div>
                     )}
                   </Card>
@@ -4922,15 +4881,15 @@ ${m.content}`;
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
                   {/* Risk trend by month */}
                   <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Risk profile over time</div>
-                    {months.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No risk data yet — complete meeting reviews to see trends</div>}
+                    <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:14}}>Risk profile over time</div>
+                    {months.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No risk data yet — complete meeting reviews to see trends</div>}
                     {months.map(month=>{
                       const data = riskByMonth[month];
                       const total = data.HIGH+data.MEDIUM+data.LOW;
                       return(
                         <div key={month} style={{marginBottom:12}}>
                           <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                            <span style={{fontSize:11,color:"#9B97B2"}}>{month}</span>
+                            <span style={{fontSize:11,color:"#888"}}>{month}</span>
                             <div style={{display:"flex",gap:8}}>
                               {data.HIGH>0&&<span style={{fontSize:10,color:"#E8622A"}}>{data.HIGH}H</span>}
                               {data.MEDIUM>0&&<span style={{fontSize:10,color:"#D4882A"}}>{data.MEDIUM}M</span>}
@@ -4949,17 +4908,17 @@ ${m.content}`;
 
                   {/* Repeat cases */}
                   <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>Repeat ER cases</div>
-                    <div style={{fontSize:11,color:"#5E5A7A",marginBottom:14}}>Employees with 2 or more formal meetings</div>
-                    {repeatCases.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No repeat cases — a positive sign</div>}
+                    <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:6}}>Repeat ER cases</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:14}}>Employees with 2 or more formal meetings</div>
+                    {repeatCases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No repeat cases — a positive sign</div>}
                     {repeatCases.map(c=>{
                       const formalCount = c.meetings.filter(m=>MEETING_TYPES.find(t=>t.label===m.type&&t.group==="formal")).length;
                       const highRisk = c.meetings.some(m=>m.riskScore?.rating==="HIGH");
                       return(
-                        <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #F0EEF9"}}>
+                        <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
                           <div>
-                            <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:1}}>{c.employeeName}</div>
-                            <div style={{fontSize:10,color:"#5E5A7A"}}>{formalCount} formal meetings</div>
+                            <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500,marginBottom:1}}>{c.employeeName}</div>
+                            <div style={{fontSize:10,color:"#6B6880"}}>{formalCount} formal meetings</div>
                           </div>
                           <div style={{display:"flex",gap:6,alignItems:"center"}}>
                             {highRisk&&<Badge color="#E8622A">High risk</Badge>}
@@ -4974,14 +4933,14 @@ ${m.content}`;
                 {/* Resolution times */}
                 {resolutionTimes.length>0&&(
                   <Card style={{marginBottom:16}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>Case resolution times</div>
-                    <div style={{fontSize:11,color:"#5E5A7A",marginBottom:14}}>Days from first to last meeting per case · Average: {avgResolution} days</div>
+                    <div style={{fontSize:12,fontWeight:600,color:"#F2EDE4",marginBottom:6}}>Case resolution times</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:14}}>Days from first to last meeting per case · Average: {avgResolution} days</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
                       {resolutionTimes.sort((a,b)=>b.days-a.days).map(r=>(
-                        <div key={r.name} style={{background:"#F8F7FF",borderRadius:7,padding:"10px 14px",minWidth:140}}>
-                          <div style={{fontSize:12,color:"#1A1535",fontWeight:500,marginBottom:3}}>{r.name}</div>
-                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#5E5A7A",fontWeight:400}}>d</span></div>
-                          <div style={{fontSize:10,color:"#9B97B2"}}>{r.meetings} meetings</div>
+                        <div key={r.name} style={{background:"#0F0F12",borderRadius:7,padding:"10px 14px",minWidth:140}}>
+                          <div style={{fontSize:12,color:"#F2EDE4",fontWeight:500,marginBottom:3}}>{r.name}</div>
+                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#6B6880",fontWeight:400}}>d</span></div>
+                          <div style={{fontSize:10,color:"#5A5570"}}>{r.meetings} meetings</div>
                         </div>
                       ))}
                     </div>
@@ -5022,7 +4981,7 @@ ${m.content}`;
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
               <div>
                 <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Redundancy &amp; consultation</h2>
-                <p style={{fontSize:13,color:"#5E5A7A",margin:0}}>Individual and collective redundancy processes. Legally guided, document-ready.</p>
+                <p style={{fontSize:13,color:"#6B6880",margin:0}}>Individual and collective redundancy processes. Legally guided, document-ready.</p>
               </div>
               <div style={{display:"flex",gap:8}}>
                 {activeRedundancy&&<Btn variant="ghost" onClick={()=>{setActiveRedundancy(null);setRedundancyStep("setup");setRedundancyAiOutput("");}}>← All cases</Btn>}
@@ -5034,21 +4993,21 @@ ${m.content}`;
               <div>
                 {redundancyCases.length===0&&(
                   <Card style={{textAlign:"center",padding:"40px 20px",marginBottom:20}}>
-                    <div style={{fontSize:15,color:"#5E5A7A",marginBottom:6}}>No redundancy cases</div>
-                    <div style={{fontSize:12,color:"#9B97B2",marginBottom:20}}>Start a new individual or collective redundancy process.</div>
+                    <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>No redundancy cases</div>
+                    <div style={{fontSize:12,color:"#5A5570",marginBottom:20}}>Start a new individual or collective redundancy process.</div>
                   </Card>
                 )}
                 {redundancyCases.map(r=>(
                   <button key={r.id} onClick={()=>{setActiveRedundancy(r);setRedundancyStep(r.status||"pool");setRedundancyAiOutput("");}}
-                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:10,padding:"16px 20px",textAlign:"left",marginBottom:10,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",transition:"border-color 0.15s"}}
+                    style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:10,padding:"16px 20px",textAlign:"left",marginBottom:10,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",transition:"border-color 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
                     onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-                        <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#1A1535",fontWeight:600}}>{r.reason}</span>
+                        <span style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:15,color:"#F2EDE4",fontWeight:600}}>{r.reason}</span>
                         <Badge color={r.type==="collective"?"#E8622A":"#7C5CFC"}>{r.type}</Badge>
                       </div>
-                      <div style={{fontSize:11,color:"#5E5A7A"}}>{r.atRiskEmployees.length} at-risk · Created {new Date(r.createdAt).toLocaleDateString("en-GB")} · {r.createdBy}</div>
+                      <div style={{fontSize:11,color:"#6B6880"}}>{r.atRiskEmployees.length} at-risk · Created {new Date(r.createdAt).toLocaleDateString("en-GB")} · {r.createdBy}</div>
                     </div>
                     <Badge color={r.status==="complete"?"#7C5CFC":"#D4882A"}>{r.status||"setup"}</Badge>
                   </button>
@@ -5056,9 +5015,9 @@ ${m.content}`;
 
                 {/* New case form */}
                 <Card>
-                  <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 14px",fontWeight:600}}>Start new redundancy process</h3>
+                  <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 14px",fontWeight:600}}>Start new redundancy process</h3>
                   <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Process type</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Process type</label>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                       {[
                         {type:"individual",title:"Individual redundancy",sub:"Fewer than 20 redundancies · No minimum consultation period · ACAS Early Conciliation recommended"},
@@ -5071,11 +5030,11 @@ ${m.content}`;
                           if(pool===null) return;
                           createRedundancyCase(opt.type, reason, pool||"Not specified");
                         }}
-                          style={{background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:8,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
+                          style={{background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:8,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                           onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
                           onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
-                          <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:6}}>{opt.title}</div>
-                          <div style={{fontSize:11,color:"#5E5A7A",lineHeight:1.6}}>{opt.sub}</div>
+                          <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:14,color:"#F2EDE4",fontWeight:600,marginBottom:6}}>{opt.title}</div>
+                          <div style={{fontSize:11,color:"#6B6880",lineHeight:1.6}}>{opt.sub}</div>
                         </button>
                       ))}
                     </div>
@@ -5088,7 +5047,7 @@ ${m.content}`;
             {activeRedundancy&&(
               <div>
                 {/* Step nav */}
-                <div style={{display:"flex",gap:0,marginBottom:24,background:"#FFFFFF",borderRadius:8,overflow:"hidden",border:"1px solid #E4E0F5"}}>
+                <div style={{display:"flex",gap:0,marginBottom:24,background:"#1C1C22",borderRadius:8,overflow:"hidden",border:"1px solid #2A2A35"}}>
                   {steps.map((s,i)=>(
                     <button key={s} onClick={()=>setRedundancyStep(s)}
                       style={{flex:1,padding:"10px 8px",background:redundancyStep===s?"#7C5CFC18":"none",border:"none",borderRight:i<steps.length-1?"1px solid #2A2A35":"none",color:redundancyStep===s?"#A98FFF":"#555",fontSize:12,fontWeight:redundancyStep===s?600:400,cursor:"pointer"}}>
@@ -5103,12 +5062,12 @@ ${m.content}`;
                     {redundancyStep==="setup"&&(
                       <Card>
                         <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Case details</h3>
-                        <div style={{background:"#F8F7FF",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
+                        <div style={{background:"#0F0F12",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
                           <div style={{fontSize:11,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>CASE SUMMARY</div>
-                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#5E5A7A"}}>Type:</span> {activeRedundancy.type} redundancy</div>
-                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#5E5A7A"}}>Reason:</span> {activeRedundancy.reason}</div>
-                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#5E5A7A"}}>Pool:</span> {activeRedundancy.poolDescription}</div>
-                          <div style={{fontSize:14,color:"#1A1535"}}><span style={{color:"#5E5A7A"}}>Created:</span> {new Date(activeRedundancy.createdAt).toLocaleDateString("en-GB")} by {activeRedundancy.createdBy}</div>
+                          <div style={{fontSize:14,color:"#E8E4F0",marginBottom:4}}><span style={{color:"#6B6880"}}>Type:</span> {activeRedundancy.type} redundancy</div>
+                          <div style={{fontSize:14,color:"#E8E4F0",marginBottom:4}}><span style={{color:"#6B6880"}}>Reason:</span> {activeRedundancy.reason}</div>
+                          <div style={{fontSize:14,color:"#E8E4F0",marginBottom:4}}><span style={{color:"#6B6880"}}>Pool:</span> {activeRedundancy.poolDescription}</div>
+                          <div style={{fontSize:14,color:"#E8E4F0"}}><span style={{color:"#6B6880"}}>Created:</span> {new Date(activeRedundancy.createdAt).toLocaleDateString("en-GB")} by {activeRedundancy.createdBy}</div>
                         </div>
 
                         {activeRedundancy.type==="collective"&&(
@@ -5121,19 +5080,19 @@ ${m.content}`;
                               {label:"Consultation start date",k:"consultationStartDate",type:"date"},
                             ].map(f=>(
                               <div key={f.k} style={{marginBottom:10}}>
-                                <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.label}</label>
+                                <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.label}</label>
                                 {f.type==="checkbox"
                                   ?<input type="checkbox" checked={activeRedundancy.collectiveInfo?.[f.k]||false}
                                     onChange={e=>updateRedundancyCase({collectiveInfo:{...activeRedundancy.collectiveInfo,[f.k]:e.target.checked}})}
                                     style={{accentColor:"#7C5CFC",width:16,height:16}} />
                                   :<input type={f.type||"text"} placeholder={f.ph} value={activeRedundancy.collectiveInfo?.[f.k]||""}
                                     onChange={e=>updateRedundancyCase({collectiveInfo:{...activeRedundancy.collectiveInfo,[f.k]:e.target.value}})}
-                                    style={{background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",width:"100%",boxSizing:"border-box"}} />}
+                                    style={{background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",outline:"none",width:"100%",boxSizing:"border-box"}} />}
                               </div>
                             ))}
                             <div style={{background:"#2A1008",borderRadius:7,padding:"10px 14px",border:"1px solid #E8622A33"}}>
                               <div style={{fontSize:11,color:"#E8622A",fontWeight:600,marginBottom:3}}>Legal requirement</div>
-                              <div style={{fontSize:11,color:"#9B97B2",lineHeight:1.6}}>
+                              <div style={{fontSize:11,color:"#888",lineHeight:1.6}}>
                                 {(activeRedundancy.collectiveInfo?.count||0)>=100?"45 days minimum consultation before any redundancy takes effect":"30 days minimum consultation before any redundancy takes effect"}
                                 {" "}· HR1 form must be submitted to BEIS before consultation starts · Failure to consult is an automatic 90-day protective award per employee.
                               </div>
@@ -5156,22 +5115,22 @@ ${m.content}`;
                             </span>
                           </div>
                           {activeRedundancy.selectionCriteria.map(c=>(
-                            <div key={c.id} style={{background:"#F8F7FF",borderRadius:7,padding:"12px 14px",marginBottom:8}}>
+                            <div key={c.id} style={{background:"#0F0F12",borderRadius:7,padding:"12px 14px",marginBottom:8}}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                                <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{c.criterion}</div>
+                                <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500}}>{c.criterion}</div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                                   <input type="number" min="0" max="100" value={c.weight}
                                     onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,weight:parseInt(e.target.value)||0}:x)})}
-                                    style={{width:56,background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:5,padding:"4px 8px",fontSize:12,color:"#1A1535",outline:"none",textAlign:"center"}} />
-                                  <span style={{fontSize:11,color:"#5E5A7A"}}>%</span>
+                                    style={{width:56,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:5,padding:"4px 8px",fontSize:12,color:"#F2EDE4",outline:"none",textAlign:"center"}} />
+                                  <span style={{fontSize:11,color:"#6B6880"}}>%</span>
                                 </div>
                               </div>
-                              <div style={{fontSize:11,color:"#5E5A7A"}}>{c.description}</div>
+                              <div style={{fontSize:11,color:"#6B6880"}}>{c.description}</div>
                             </div>
                           ))}
-                          <div style={{background:"#F8F7FF",borderRadius:7,padding:"10px 12px",border:"1px solid #E4E0F5",marginTop:8}}>
+                          <div style={{background:"#0F0F12",borderRadius:7,padding:"10px 12px",border:"1px solid #2A2A35",marginTop:8}}>
                             <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:4}}>LEGAL NOTE</div>
-                            <div style={{fontSize:11,color:"#5E5A7A",lineHeight:1.6}}>Criteria must be objective and measurable. Avoid criteria that could be indirectly discriminatory (e.g. part-time working, recent maternity leave). Disability-related absences must be excluded from attendance scoring.</div>
+                            <div style={{fontSize:11,color:"#6B6880",lineHeight:1.6}}>Criteria must be objective and measurable. Avoid criteria that could be indirectly discriminatory (e.g. part-time working, recent maternity leave). Disability-related absences must be excluded from attendance scoring.</div>
                           </div>
                         </Card>
 
@@ -5188,25 +5147,25 @@ ${m.content}`;
                               updateRedundancyCase({atRiskEmployees:[...activeRedundancy.atRiskEmployees,emp]});
                             }} style={{padding:"6px 14px",fontSize:12}}>+ Add employee</Btn>
                           </div>
-                          {activeRedundancy.atRiskEmployees.length===0&&<div style={{fontSize:12,color:"#9B97B2",padding:"20px 0",textAlign:"center"}}>No employees added yet — add all employees in the selection pool</div>}
+                          {activeRedundancy.atRiskEmployees.length===0&&<div style={{fontSize:12,color:"#5A5570",padding:"20px 0",textAlign:"center"}}>No employees added yet — add all employees in the selection pool</div>}
                           {activeRedundancy.atRiskEmployees.map(emp=>(
-                            <div key={emp.id} style={{background:"#F8F7FF",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #E4E0F5"}}>
+                            <div key={emp.id} style={{background:"#0F0F12",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #2A2A35"}}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                                 <div>
-                                  <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{emp.name}</div>
-                                  <div style={{fontSize:11,color:"#5E5A7A"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
+                                  <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:2}}>{emp.name}</div>
+                                  <div style={{fontSize:11,color:"#6B6880"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
                                 </div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                                   <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif"}}>{emp.totalScore||0}</div>
-                                  <div style={{fontSize:10,color:"#5E5A7A"}}>/ 5.0</div>
+                                  <div style={{fontSize:10,color:"#6B6880"}}>/ 5.0</div>
                                   {emp.selected!==null&&<Badge color={emp.selected?"#E8622A":"#7C5CFC"}>{emp.selected?"At risk":"Retained"}</Badge>}
                                 </div>
                               </div>
                               {/* Scoring grid */}
                               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8,marginBottom:10}}>
                                 {activeRedundancy.selectionCriteria.map(c=>(
-                                  <div key={c.id} style={{background:"#FFFFFF",borderRadius:5,padding:"8px 10px"}}>
-                                    <div style={{fontSize:9,color:"#5E5A7A",marginBottom:5,fontWeight:600,letterSpacing:0.3}}>{c.criterion.slice(0,20)}</div>
+                                  <div key={c.id} style={{background:"#1C1C22",borderRadius:5,padding:"8px 10px"}}>
+                                    <div style={{fontSize:9,color:"#6B6880",marginBottom:5,fontWeight:600,letterSpacing:0.3}}>{c.criterion.slice(0,20)}</div>
                                     <div style={{display:"flex",gap:3}}>
                                       {[1,2,3,4,5].map(s=>(
                                         <button key={s} onClick={()=>scoreEmployee(emp.id,c.id,s)}
@@ -5222,9 +5181,9 @@ ${m.content}`;
                                 <button onClick={()=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(e=>e.id===emp.id?{...e,selected:true}:e)})}
                                   style={{background:"#E8622A18",border:"1px solid #E8622A44",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>At risk</button>
                                 <button onClick={()=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(e=>e.id===emp.id?{...e,selected:false}:e)})}
-                                  style={{background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>Retained</button>
+                                  style={{background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#A98FFF",cursor:"pointer"}}>Retained</button>
                                 <button onClick={()=>generateRedundancyLetter("at-risk",emp)}
-                                  style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#9B97B2",cursor:"pointer"}}>At-risk letter</button>
+                                  style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#888",cursor:"pointer"}}>At-risk letter</button>
                               </div>
                             </div>
                           ))}
@@ -5237,32 +5196,32 @@ ${m.content}`;
                     {redundancyStep==="consultation"&&(
                       <Card>
                         <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Consultation meetings</h3>
-                        <p style={{fontSize:12,color:"#5E5A7A",margin:"0 0 16px",lineHeight:1.6}}>
+                        <p style={{fontSize:12,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>
                           {activeRedundancy.type==="collective"
                             ?"Collective consultation must happen before individual consultation. Hold meaningful consultation — employees must be able to influence the outcome."
                             :"Individual consultation must be meaningful. Consider all representations made. Keep records of all meetings."}
                         </p>
                         {activeRedundancy.atRiskEmployees.filter(e=>e.selected).map(emp=>(
-                          <div key={emp.id} style={{background:"#F8F7FF",borderRadius:8,padding:"14px",marginBottom:12,border:"1px solid #E4E0F5"}}>
+                          <div key={emp.id} style={{background:"#0F0F12",borderRadius:8,padding:"14px",marginBottom:12,border:"1px solid #2A2A35"}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                              <div style={{fontSize:14,color:"#1A1535",fontWeight:600}}>{emp.name}</div>
+                              <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600}}>{emp.name}</div>
                               <div style={{display:"flex",gap:8}}>
                                 <button onClick={()=>generateRedundancyLetter("consultation-invite",emp)}
-                                  style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#9B97B2",cursor:"pointer"}}>Invite letter</button>
+                                  style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#888",cursor:"pointer"}}>Invite letter</button>
                                 <button onClick={()=>generateRedundancyLetter("alternative-roles",emp)}
-                                  style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#9B97B2",cursor:"pointer"}}>Alt roles letter</button>
+                                  style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#888",cursor:"pointer"}}>Alt roles letter</button>
                               </div>
                             </div>
-                            <div style={{fontSize:11,color:"#5E5A7A",marginBottom:8}}>{emp.consultationMeetings?.length||0} consultation meeting{(emp.consultationMeetings?.length||0)!==1?"s":""} recorded</div>
+                            <div style={{fontSize:11,color:"#6B6880",marginBottom:8}}>{emp.consultationMeetings?.length||0} consultation meeting{(emp.consultationMeetings?.length||0)!==1?"s":""} recorded</div>
                             <textarea placeholder={`Notes from consultation with ${emp.name}...`}
                               value={emp.consultationNotes||""}
                               onChange={e=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(x=>x.id===emp.id?{...x,consultationNotes:e.target.value}:x)})}
                               rows={3}
-                              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
+                              style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#F2EDE4",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
                           </div>
                         ))}
                         {activeRedundancy.atRiskEmployees.filter(e=>e.selected).length===0&&(
-                          <div style={{fontSize:12,color:"#9B97B2",textAlign:"center",padding:"20px 0"}}>No at-risk employees selected yet — go back to the Selection step</div>
+                          <div style={{fontSize:12,color:"#5A5570",textAlign:"center",padding:"20px 0"}}>No at-risk employees selected yet — go back to the Selection step</div>
                         )}
                         {activeRedundancy.atRiskEmployees.filter(e=>e.selected).length>0&&<Btn onClick={()=>setRedundancyStep("outcome")} style={{marginTop:8}}>Continue to outcome →</Btn>}
                       </Card>
@@ -5273,19 +5232,19 @@ ${m.content}`;
                       <Card>
                         <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Outcome letters</h3>
                         {activeRedundancy.atRiskEmployees.filter(e=>e.selected).map(emp=>(
-                          <div key={emp.id} style={{background:"#F8F7FF",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #E4E0F5"}}>
-                            <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:8}}>{emp.name}</div>
+                          <div key={emp.id} style={{background:"#0F0F12",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #2A2A35"}}>
+                            <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:8}}>{emp.name}</div>
                             <div style={{marginBottom:10}}>
-                              <label style={{display:"block",fontSize:10,color:"#5E5A7A",fontWeight:600,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>Statutory redundancy pay</label>
+                              <label style={{display:"block",fontSize:10,color:"#6B6880",fontWeight:600,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>Statutory redundancy pay</label>
                               <input placeholder="e.g. £3,450 (1.5 weeks × £2,300/week × 1 year)" value={emp.redundancyPay||""}
                                 onChange={e=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(x=>x.id===emp.id?{...x,redundancyPay:e.target.value}:x)})}
-                                style={{width:"100%",background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:5,padding:"7px 10px",fontSize:12,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                                style={{width:"100%",background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:5,padding:"7px 10px",fontSize:12,color:"#F2EDE4",outline:"none",boxSizing:"border-box"}} />
                             </div>
                             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                               <button onClick={()=>generateRedundancyLetter("redundancy-confirmed",emp)}
                                 style={{background:"#7C5CFC",border:"none",borderRadius:5,padding:"6px 14px",fontSize:12,color:"#fff",fontWeight:600,cursor:"pointer"}}>Redundancy letter</button>
                               <button onClick={()=>generateRedundancyLetter("appeal-invite",emp)}
-                                style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"6px 12px",fontSize:12,color:"#9B97B2",cursor:"pointer"}}>Appeal invite</button>
+                                style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"6px 12px",fontSize:12,color:"#888",cursor:"pointer"}}>Appeal invite</button>
                             </div>
                           </div>
                         ))}
@@ -5295,7 +5254,7 @@ ${m.content}`;
                   </div>
 
                   {/* AI advice panel */}
-                  <Card style={{background:"#FFFFFF",position:"sticky",top:70}}>
+                  <Card style={{background:"#141418",position:"sticky",top:70}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                       <SectionTitle>LEGAL GUIDANCE</SectionTitle>
                       <Btn onClick={getRedundancyAiAdvice} disabled={redundancyAiProcessing} style={{padding:"4px 12px",fontSize:11}}>
@@ -5308,7 +5267,7 @@ ${m.content}`;
                     {redundancyAiOutput&&<MDRenderer text={redundancyAiOutput}/>}
                     {!redundancyAiOutput&&!redundancyAiProcessing&&(
                       <div>
-                        <div style={{fontSize:12,color:"#9B97B2",lineHeight:1.8,marginBottom:16}}>
+                        <div style={{fontSize:12,color:"#5A5570",lineHeight:1.8,marginBottom:16}}>
                           Click "Get AI advice" for jurisdiction-specific legal guidance on your redundancy process — consultation requirements, selection risks, equality considerations, and common pitfalls.
                         </div>
                         <div style={{borderTop:"1px solid #2A2A35",paddingTop:14}}>
@@ -5321,9 +5280,9 @@ ${m.content}`;
                             {l:"Protective award",v:"Up to 90 days pay per employee if consultation fails"},
                             {l:"Statutory redundancy pay",v:"1.5 weeks × weekly pay × years service (capped)"},
                           ].map(({l,v})=>(
-                            <div key={l} style={{padding:"6px 0",borderBottom:"1px solid #F0EEF9"}}>
-                              <div style={{fontSize:11,color:"#1A1535",fontWeight:500}}>{l}</div>
-                              <div style={{fontSize:10,color:"#5E5A7A",marginTop:1}}>{v}</div>
+                            <div key={l} style={{padding:"6px 0",borderBottom:"1px solid #1a1a1a"}}>
+                              <div style={{fontSize:11,color:"#F2EDE4",fontWeight:500}}>{l}</div>
+                              <div style={{fontSize:10,color:"#6B6880",marginTop:1}}>{v}</div>
                             </div>
                           ))}
                         </div>
@@ -5354,7 +5313,7 @@ ${m.content}`;
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
               <div>
                 <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Mental health &amp; wellbeing</h2>
-                <p style={{fontSize:13,color:"#5E5A7A",margin:0}}>Confidential wellbeing case notes. Completely separate from disciplinary and performance records.</p>
+                <p style={{fontSize:13,color:"#6B6880",margin:0}}>Confidential wellbeing case notes. Completely separate from disciplinary and performance records.</p>
               </div>
               <div style={{display:"flex",gap:8}}>
                 {activeWellbeing&&<Btn variant="ghost" onClick={()=>{setActiveWellbeing(null);setWellbeingView("list");}}>← All employees</Btn>}
@@ -5363,9 +5322,9 @@ ${m.content}`;
             </div>
 
             {/* Confidentiality notice */}
-            <div style={{background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:8,padding:"10px 14px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+            <div style={{background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:8,padding:"10px 14px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
               <div style={{width:6,height:6,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
-              <div style={{fontSize:11,color:"#5E5A7A",lineHeight:1.5}}>These notes are confidential and are not linked to any disciplinary, performance, or ER case file. Access should be restricted to HR only. Notes may be relevant to reasonable adjustment obligations under the Equality Act 2010.</div>
+              <div style={{fontSize:11,color:"#6B6880",lineHeight:1.5}}>These notes are confidential and are not linked to any disciplinary, performance, or ER case file. Access should be restricted to HR only. Notes may be relevant to reasonable adjustment obligations under the Equality Act 2010.</div>
             </div>
 
             {/* Overdue follow-ups */}
@@ -5374,8 +5333,8 @@ ${m.content}`;
                 <div style={{fontSize:11,color:"#D4882A",fontWeight:600,marginBottom:8}}>Overdue follow-ups ({overdueFollowUps.length})</div>
                 {overdueFollowUps.map(n=>(
                   <div key={n.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0"}}>
-                    <span style={{fontSize:12,color:"#5E5A7A"}}>{n.employeeName} — {n.followUpDate}</span>
-                    <button onClick={()=>toggleFollowUpDone(n.id)} style={{background:"none",border:"1px solid #E4E0F5",borderRadius:4,padding:"2px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>Mark done</button>
+                    <span style={{fontSize:12,color:"#C4BDAF"}}>{n.employeeName} — {n.followUpDate}</span>
+                    <button onClick={()=>toggleFollowUpDone(n.id)} style={{background:"none",border:"1px solid #2A2A35",borderRadius:4,padding:"2px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>Mark done</button>
                   </div>
                 ))}
               </div>
@@ -5384,44 +5343,44 @@ ${m.content}`;
             {/* Add note form */}
             {wellbeingView==="new"&&(
               <Card style={{marginBottom:20}}>
-                <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 16px",fontWeight:600}}>Add wellbeing note</h3>
+                <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 16px",fontWeight:600}}>Add wellbeing note</h3>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
                   <div>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Employee name *</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Employee name *</label>
                     <input placeholder="e.g. James Wilson" value={wellbeingForm.employeeName} onChange={e=>setWellbeingForm(p=>({...p,employeeName:e.target.value}))}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none",boxSizing:"border-box"}} />
                   </div>
                   <div>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Note type</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Note type</label>
                     <select value={wellbeingForm.type} onChange={e=>setWellbeingForm(p=>({...p,type:e.target.value}))}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
                       {Object.entries(WELLBEING_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Date</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Date</label>
                     <DateInput value={wellbeingForm.date} onChange={e=>setWellbeingForm(p=>({...p,date:e.target.value}))} />
                   </div>
                   <div>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>HR manager</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>HR manager</label>
                     <input placeholder="Your name" value={wellbeingForm.manager} onChange={e=>setWellbeingForm(p=>({...p,manager:e.target.value}))}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none",boxSizing:"border-box"}} />
                   </div>
                 </div>
                 <div style={{marginBottom:14}}>
-                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Conversation notes *</label>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Conversation notes *</label>
                   <textarea placeholder="What was discussed? What did the employee share? What was observed? How did they seem?" value={wellbeingForm.content} onChange={e=>setWellbeingForm(p=>({...p,content:e.target.value}))}
                     rows={5}
-                    style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
+                    style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
                   <div>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Support offered</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Support offered</label>
                     <input placeholder="e.g. EAP referral, flexible working, OH referral" value={wellbeingForm.supportOffered} onChange={e=>setWellbeingForm(p=>({...p,supportOffered:e.target.value}))}
-                      style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                      style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none",boxSizing:"border-box"}} />
                   </div>
                   <div>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Follow-up date</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Follow-up date</label>
                     <DateInput value={wellbeingForm.followUpDate} onChange={e=>setWellbeingForm(p=>({...p,followUpDate:e.target.value}))} />
                   </div>
                 </div>
@@ -5436,8 +5395,8 @@ ${m.content}`;
               {/* Employee list */}
               <div>
                 <Card style={{marginBottom:12}}>
-                  <div style={{fontSize:10,color:"#5E5A7A",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Employees ({allEmployees.length})</div>
-                  {allEmployees.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No wellbeing notes yet</div>}
+                  <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Employees ({allEmployees.length})</div>
+                  {allEmployees.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No wellbeing notes yet</div>}
                   {allEmployees.map(emp=>{
                     const empNotes = wellbeingNotes.filter(n=>n.employeeName===emp);
                     const hasOverdue = empNotes.some(n=>!n.followUpDone&&n.followUpDate&&new Date(n.followUpDate.split("/").reverse().join("-"))<new Date());
@@ -5445,8 +5404,8 @@ ${m.content}`;
                       <button key={emp} onClick={()=>{setActiveWellbeing(emp);setWellbeingView("employee");}}
                         style={{width:"100%",background:activeWellbeing===emp?"#7C5CFC18":"none",border:"1px solid",borderColor:activeWellbeing===emp?"#7C5CFC33":"transparent",borderRadius:7,padding:"10px 12px",marginBottom:4,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <div>
-                          <div style={{fontSize:14,color:"#1A1535",fontWeight:activeWellbeing===emp?600:400}}>{emp}</div>
-                          <div style={{fontSize:10,color:"#5E5A7A",marginTop:2}}>{empNotes.length} note{empNotes.length!==1?"s":""}</div>
+                          <div style={{fontSize:14,color:"#E8E4F0",fontWeight:activeWellbeing===emp?600:400}}>{emp}</div>
+                          <div style={{fontSize:10,color:"#6B6880",marginTop:2}}>{empNotes.length} note{empNotes.length!==1?"s":""}</div>
                         </div>
                         {hasOverdue&&<div style={{width:7,height:7,borderRadius:"50%",background:"#D4882A"}}/>}
                       </button>
@@ -5455,13 +5414,13 @@ ${m.content}`;
                 </Card>
 
                 {/* Resources */}
-                <Card style={{background:"#FFFFFF"}}>
-                  <div style={{fontSize:10,color:"#5E5A7A",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Crisis resources</div>
+                <Card style={{background:"#141418"}}>
+                  <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Crisis resources</div>
                   {WELLBEING_RESOURCES.map(r=>(
-                    <div key={r.name} style={{padding:"7px 0",borderBottom:"1px solid #F0EEF9"}}>
-                      <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{r.name}</div>
+                    <div key={r.name} style={{padding:"7px 0",borderBottom:"1px solid #1a1a1a"}}>
+                      <div style={{fontSize:12,color:"#F2EDE4",fontWeight:500}}>{r.name}</div>
                       <div style={{fontSize:11,color:"#7C5CFC",marginTop:1}}>{r.contact}</div>
-                      <div style={{fontSize:10,color:"#9B97B2",marginTop:1}}>{r.note}</div>
+                      <div style={{fontSize:10,color:"#5A5570",marginTop:1}}>{r.note}</div>
                     </div>
                   ))}
                 </Card>
@@ -5470,16 +5429,16 @@ ${m.content}`;
               {/* Notes view */}
               <div>
                 {!activeWellbeing&&wellbeingView!=="new"&&(
-                  <Card style={{textAlign:"center",padding:"40px 20px",background:"#FFFFFF"}}>
-                    <div style={{fontSize:14,color:"#5E5A7A",marginBottom:8}}>Select an employee to view their wellbeing history</div>
-                    <div style={{fontSize:12,color:"#9B97B2"}}>Or click "+ Add note" to log a new wellbeing conversation</div>
+                  <Card style={{textAlign:"center",padding:"40px 20px",background:"#141418"}}>
+                    <div style={{fontSize:14,color:"#6B6880",marginBottom:8}}>Select an employee to view their wellbeing history</div>
+                    <div style={{fontSize:12,color:"#5A5570"}}>Or click "+ Add note" to log a new wellbeing conversation</div>
                   </Card>
                 )}
 
                 {activeWellbeing&&employeeNotes.length>0&&(
                   <div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                      <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#1A1535",fontWeight:600}}>{activeWellbeing}</div>
+                      <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F2EDE4",fontWeight:600}}>{activeWellbeing}</div>
                       <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeName:activeWellbeing}));setWellbeingView("new");}} style={{padding:"6px 14px",fontSize:12}}>+ Add note</Btn>
                     </div>
                     {employeeNotes.map(note=>{
@@ -5491,19 +5450,19 @@ ${m.content}`;
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                             <div style={{display:"flex",alignItems:"center",gap:10}}>
                               <Badge color={typeColor}>{typeInfo?.label||note.type}</Badge>
-                              <span style={{fontSize:11,color:"#5E5A7A"}}>{note.date}</span>
-                              {note.manager&&<span style={{fontSize:11,color:"#9B97B2"}}>{note.manager}</span>}
+                              <span style={{fontSize:11,color:"#6B6880"}}>{note.date}</span>
+                              {note.manager&&<span style={{fontSize:11,color:"#5A5570"}}>{note.manager}</span>}
                             </div>
-                            {note.confidential&&<span style={{fontSize:9,color:"#5E5A7A",border:"1px solid #E4E0F5",borderRadius:3,padding:"1px 6px",letterSpacing:0.5}}>CONFIDENTIAL</span>}
+                            {note.confidential&&<span style={{fontSize:9,color:"#6B6880",border:"1px solid #2A2A35",borderRadius:3,padding:"1px 6px",letterSpacing:0.5}}>CONFIDENTIAL</span>}
                           </div>
-                          <div style={{fontSize:13,color:"#5E5A7A",lineHeight:1.7,marginBottom:10,whiteSpace:"pre-wrap"}}>{note.content}</div>
+                          <div style={{fontSize:13,color:"#C4BDAF",lineHeight:1.7,marginBottom:10,whiteSpace:"pre-wrap"}}>{note.content}</div>
                           {note.supportOffered&&(
-                            <div style={{fontSize:11,color:"#5E5A7A",marginBottom:8}}>
-                              <span style={{color:"#9B97B2",fontWeight:600}}>Support offered: </span>{note.supportOffered}
+                            <div style={{fontSize:11,color:"#6B6880",marginBottom:8}}>
+                              <span style={{color:"#888",fontWeight:600}}>Support offered: </span>{note.supportOffered}
                             </div>
                           )}
                           {note.followUpDate&&(
-                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F8F7FF",borderRadius:6,padding:"8px 12px"}}>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#0F0F12",borderRadius:6,padding:"8px 12px"}}>
                               <div>
                                 <span style={{fontSize:11,color:isOverdue?"#D4882A":"#555"}}>Follow-up: {note.followUpDate}</span>
                                 {isOverdue&&<span style={{fontSize:10,color:"#D4882A",marginLeft:8}}>overdue</span>}
@@ -5521,8 +5480,8 @@ ${m.content}`;
                 )}
 
                 {activeWellbeing&&employeeNotes.length===0&&(
-                  <Card style={{textAlign:"center",padding:"32px",background:"#FFFFFF"}}>
-                    <div style={{fontSize:13,color:"#5E5A7A",marginBottom:12}}>No notes yet for {activeWellbeing}</div>
+                  <Card style={{textAlign:"center",padding:"32px",background:"#141418"}}>
+                    <div style={{fontSize:13,color:"#6B6880",marginBottom:12}}>No notes yet for {activeWellbeing}</div>
                     <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeName:activeWellbeing}));setWellbeingView("new");}}>Add first note</Btn>
                   </Card>
                 )}
@@ -5536,29 +5495,29 @@ ${m.content}`;
       {screen===SCREENS.SETTINGS&&(
         <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
           <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
-          <p style={{fontSize:13,color:"#5E5A7A",margin:"0 0 28px"}}>All data saved in your browser.</p>
+          <p style={{fontSize:13,color:"#666",margin:"0 0 28px"}}>All data saved in your browser.</p>
 
           {/* Data export */}
           {isHR&&(
             <Card style={{marginBottom:20}}>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Data export</div>
-              <p style={{fontSize:12,color:"#5E5A7A",marginBottom:16}}>Export all cases and meeting records for reporting or backup.</p>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Data export</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Export all cases and meeting records for reporting or backup.</p>
               <div style={{display:"flex",gap:10}}>
                 <Btn onClick={exportCSV} style={{flex:1}}>Export CSV</Btn>
                 <Btn onClick={exportPDF} variant="ghost" style={{flex:1}}>Export PDF</Btn>
               </div>
-              <div style={{fontSize:11,color:"#9B97B2",marginTop:10}}>CSV includes all cases, meetings, risk scores and dates. PDF includes full case summaries.</div>
+              <div style={{fontSize:11,color:"#5A5570",marginTop:10}}>CSV includes all cases, meetings, risk scores and dates. PDF includes full case summaries.</div>
             </Card>
           )}
 
           {/* Invite code */}
           {isHR&&org?.invite_code&&(
             <Card style={{marginBottom:20}}>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Team invite code</div>
-              <p style={{fontSize:12,color:"#5E5A7A",marginBottom:12}}>Share this code with team members to join your workspace.</p>
-              <div style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",borderRadius:8,padding:"12px 16px"}}>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Team invite code</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:12}}>Share this code with team members to join your workspace.</p>
+              <div style={{display:"flex",alignItems:"center",gap:10,background:"#141418",borderRadius:8,padding:"12px 16px"}}>
                 <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,color:"#7C5CFC",letterSpacing:4,fontWeight:700}}>{org.invite_code}</span>
-                <button onClick={()=>navigator.clipboard.writeText(org.invite_code)} style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#9B97B2",cursor:"pointer"}}>Copy</button>
+                <button onClick={()=>navigator.clipboard.writeText(org.invite_code)} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#888",cursor:"pointer"}}>Copy</button>
               </div>
             </Card>
           )}
@@ -5566,20 +5525,20 @@ ${m.content}`;
           {/* Locations */}
           {isHR&&(
             <Card style={{marginBottom:20}}>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Locations</div>
-              <p style={{fontSize:12,color:"#5E5A7A",marginBottom:16}}>Add office locations. Managers will be assigned to a location and will only see cases from their location.</p>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Locations</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Add office locations. Managers will be assigned to a location and will only see cases from their location.</p>
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
                 {locations.map(l=>(
-                  <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FFFFFF",borderRadius:8,padding:"10px 14px"}}>
-                    <span style={{fontSize:14,color:"#1A1535"}}>{l.name}</span>
+                  <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#141418",borderRadius:8,padding:"10px 14px"}}>
+                    <span style={{fontSize:14,color:"#E8E4F0"}}>{l.name}</span>
                     <button onClick={()=>deleteLocation(l.id)} style={{background:"none",border:"none",color:"#E8622A",cursor:"pointer",fontSize:12}}>Remove</button>
                   </div>
                 ))}
-                {locations.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No locations added yet</div>}
+                {locations.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No locations added yet</div>}
               </div>
               <div style={{display:"flex",gap:8}}>
                 <input id="new-location-input" placeholder="e.g. London, Manchester..."
-                  style={{flex:1,background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535"}}/>
+                  style={{flex:1,background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4"}}/>
                 <Btn onClick={()=>{
                   const input = document.getElementById("new-location-input");
                   if(input?.value.trim()){ addLocation(input.value.trim()); input.value=""; }
@@ -5591,24 +5550,24 @@ ${m.content}`;
           {/* Team members */}
           {isHR&&(
             <Card style={{marginBottom:20}}>
-              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Team members</div>
-              <p style={{fontSize:12,color:"#5E5A7A",marginBottom:16}}>Invite team members to your workspace. They will receive an email invite.</p>
+              <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",marginBottom:4}}>Team members</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Invite team members to your workspace. They will receive an email invite.</p>
               
               {/* Current members */}
               <div style={{marginBottom:16}}>
                 {teamMembers.map(m=>(
-                  <div key={m.id} style={{padding:"10px 0",borderBottom:"1px solid #F0EEF9"}}>
+                  <div key={m.id} style={{padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <div>
-                        <div style={{fontSize:14,color:"#1A1535"}}>{m.name||"Unknown"}</div>
-                        <div style={{fontSize:11,color:"#5E5A7A"}}>
+                        <div style={{fontSize:14,color:"#E8E4F0"}}>{m.name||"Unknown"}</div>
+                        <div style={{fontSize:11,color:"#6B6880"}}>
                           {m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}
                           {(m.location_ids||[]).length>0&&" · "+locations.filter(l=>(m.location_ids||[]).includes(l.id)).map(l=>l.name).join(", ")}
                         </div>
                       </div>
                       <div style={{display:"flex",gap:6}}>
                         <button onClick={()=>setEditingMember(editingMember===m.id?null:m.id)}
-                          style={{background:"none",border:"1px solid #E4E0F5",borderRadius:4,padding:"3px 8px",color:"#7C5CFC",cursor:"pointer",fontSize:11}}>
+                          style={{background:"none",border:"1px solid #2A2A35",borderRadius:4,padding:"3px 8px",color:"#7C5CFC",cursor:"pointer",fontSize:11}}>
                           {editingMember===m.id?"Done":"Edit access"}
                         </button>
                         <button onClick={()=>removeMember(m)}
@@ -5616,18 +5575,18 @@ ${m.content}`;
                       </div>
                     </div>
                     {editingMember===m.id&&locations.length>0&&(
-                      <div style={{background:"#FFFFFF",borderRadius:8,padding:"10px 14px",marginTop:4}}>
-                        <div style={{fontSize:10,color:"#5E5A7A",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
+                      <div style={{background:"#141418",borderRadius:8,padding:"10px 14px",marginTop:4}}>
+                        <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
                         <select value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
-                          style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:12}}>
+                          style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#F2EDE4",outline:"none",marginBottom:12}}>
                           <option value="hr_director">HR Director</option>
                           <option value="hr_manager">HR Manager</option>
                           <option value="location_manager">Location Manager</option>
                         </select>
-                        <div style={{fontSize:10,color:"#5E5A7A",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
+                        <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                           {locations.map(l=>(
-                            <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
+                            <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#F2EDE4"}}>
                               <input type="checkbox"
                                 checked={(m.location_ids||[]).includes(l.id)}
                                 onChange={e=>{
@@ -5644,28 +5603,28 @@ ${m.content}`;
                     )}
                   </div>
                 ))}
-                {teamMembers.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No team members yet</div>}
+                {teamMembers.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No team members yet</div>}
               </div>
 
               {/* Invite form */}
               <div style={{borderTop:"1px solid #2A2A35",paddingTop:16}}>
-                <div style={{fontSize:11,color:"#5E5A7A",marginBottom:12,fontWeight:600}}>Invite new member</div>
+                <div style={{fontSize:11,color:"#666",marginBottom:12,fontWeight:600}}>Invite new member</div>
                 <input placeholder="Full name" value={inviteForm.name} onChange={e=>setInviteForm(p=>({...p,name:e.target.value}))}
-                  style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
+                  style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4",marginBottom:8,boxSizing:"border-box"}}/>
                 <input placeholder="Email address" type="email" value={inviteForm.email} onChange={e=>setInviteForm(p=>({...p,email:e.target.value}))}
-                  style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
+                  style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4",marginBottom:8,boxSizing:"border-box"}}/>
                 <select value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value}))}
-                  style={{width:"100%",background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:12}}>
+                  style={{width:"100%",background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#F2EDE4",marginBottom:12}}>
                   <option value="hr_manager">HR Manager</option>
                   <option value="hr_director">HR Director</option>
                   <option value="location_manager">Location Manager</option>
                 </select>
                 {locations.length>0&&(
                   <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#5E5A7A",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Locations</label>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Locations</label>
                     <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                       {locations.map(l=>(
-                        <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
+                        <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#F2EDE4"}}>
                           <input type="checkbox" checked={inviteForm.locationIds.includes(l.id)}
                             onChange={e=>{
                               setInviteForm(p=>({...p,locationIds:e.target.checked?[...p.locationIds,l.id]:p.locationIds.filter(x=>x!==l.id)}));
@@ -5687,10 +5646,10 @@ ${m.content}`;
           {/* Word template */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Word letter template</h3><p style={{fontSize:12,color:"#5E5A7A",margin:0,lineHeight:1.6}}>Upload your .docx with header/footer. Enables Word export on letters.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Word letter template</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Upload your .docx with header/footer. Enables Word export on letters.</p></div>
               <Badge color="#1C5AA0">WORD</Badge>
             </div>
-            {wordTemplate?<div style={{background:"#F8F7FF",borderRadius:7,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#1A1535"}}>{wordTemplate.name}</span><Btn variant="danger" onClick={()=>{setWordTemplate(null);lsSet("compass_word_template",null);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn></div>:<div style={{background:"#F8F7FF",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#9B97B2"}}>No template uploaded</div>}
+            {wordTemplate?<div style={{background:"#0F0F12",borderRadius:7,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#F2EDE4"}}>{wordTemplate.name}</span><Btn variant="danger" onClick={()=>{setWordTemplate(null);lsSet("compass_word_template",null);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn></div>:<div style={{background:"#0F0F12",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No template uploaded</div>}
             <input ref={wordTemplateRef} type="file" accept=".docx" onChange={handleWordTemplateUpload} style={{display:"none"}} />
             <Btn variant="blue" onClick={()=>wordTemplateRef.current?.click()}>{wordTemplate?"Replace":"Upload .docx template"} →</Btn>
           </Card>
@@ -5698,10 +5657,10 @@ ${m.content}`;
           {/* Letterhead */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Letterhead image</h3><p style={{fontSize:12,color:"#5E5A7A",margin:0,lineHeight:1.6}}>PNG or JPG — appears at top of PDF letters.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Letterhead image</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>PNG or JPG — appears at top of PDF letters.</p></div>
               <Badge>PDF</Badge>
             </div>
-            {letterhead?<div style={{background:"#fff",borderRadius:7,padding:12,marginBottom:12,position:"relative"}}><img src={letterhead} alt="Letterhead" style={{width:"100%",maxHeight:100,objectFit:"contain",objectPosition:"left"}}/><button onClick={()=>{setLetterhead(null);lsSet("compass_letterhead",null);}} style={{position:"absolute",top:6,right:6,background:"#FFFFFF",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>Remove</button></div>:<div style={{background:"#F8F7FF",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#9B97B2"}}>No letterhead uploaded</div>}
+            {letterhead?<div style={{background:"#fff",borderRadius:7,padding:12,marginBottom:12,position:"relative"}}><img src={letterhead} alt="Letterhead" style={{width:"100%",maxHeight:100,objectFit:"contain",objectPosition:"left"}}/><button onClick={()=>{setLetterhead(null);lsSet("compass_letterhead",null);}} style={{position:"absolute",top:6,right:6,background:"#1C1C22",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>Remove</button></div>:<div style={{background:"#0F0F12",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No letterhead uploaded</div>}
             <input ref={letterheadRef} type="file" accept="image/*" onChange={handleLetterheadUpload} style={{display:"none"}} />
             <Btn onClick={()=>letterheadRef.current?.click()}>{letterhead?"Replace":"Upload letterhead"} →</Btn>
           </Card>
@@ -5709,35 +5668,35 @@ ${m.content}`;
           {/* E-signature */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>E-signature</h3><p style={{fontSize:12,color:"#5E5A7A",margin:0,lineHeight:1.6}}>Draw or type your signature. Applied to all PDF letters.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>E-signature</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Draw or type your signature. Applied to all PDF letters.</p></div>
             </div>
             {signature?<div style={{background:"#fff",borderRadius:7,padding:"12px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               {signature.type==="typed"?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:28,color:"#1C1C22"}}>{signature.data}</div>:<img src={signature.data} alt="Sig" style={{maxHeight:45,maxWidth:160}}/>}
               <Btn variant="danger" onClick={()=>{setSignature(null);lsSet("compass_signature",null);}} style={{padding:"3px 10px",fontSize:11}}>Remove</Btn>
-            </div>:<div style={{background:"#F8F7FF",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#9B97B2"}}>No signature saved</div>}
+            </div>:<div style={{background:"#0F0F12",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No signature saved</div>}
             <Btn onClick={()=>setShowSigPad(true)}>{signature?"Update":"Create"} signature →</Btn>
           </Card>
 
           {/* Policies */}
           <Card style={{marginBottom:20}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Company policies</h3><p style={{fontSize:12,color:"#5E5A7A",margin:0,lineHeight:1.6}}>Upload HR policies (.docx, .txt). Compass references them in all AI outputs.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Company policies</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Upload HR policies (.docx, .txt). Compass references them in all AI outputs.</p></div>
               <Badge color="#7C5CFC">AI</Badge>
             </div>
             {policies.length>0&&(
               <div style={{marginBottom:14}}>
                 {policies.map(p=>(
-                  <div key={p.id} style={{background:"#F8F7FF",border:"1px solid #E4E0F5",borderRadius:7,padding:"9px 12px",marginBottom:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div key={p.id} style={{background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:7,padding:"9px 12px",marginBottom:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
-                      <span style={{fontSize:12,color:"#1A1535",fontWeight:600}}>{p.name}</span>
-                      <span style={{fontSize:10,color:"#9B97B2",marginLeft:8,fontFamily:"JetBrains Mono,monospace"}}>{p.size}</span>
+                      <span style={{fontSize:12,color:"#F2EDE4",fontWeight:600}}>{p.name}</span>
+                      <span style={{fontSize:10,color:"#5A5570",marginLeft:8,fontFamily:"JetBrains Mono,monospace"}}>{p.size}</span>
                     </div>
                     <Btn variant="danger" onClick={()=>{const u=policies.filter(x=>x.id!==p.id);setPolicies(u);lsSet("compass_policies",u);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn>
                   </div>
                 ))}
               </div>
             )}
-            {policies.length===0&&<div style={{background:"#F8F7FF",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:14,fontSize:12,color:"#9B97B2"}}>No policies uploaded</div>}
+            {policies.length===0&&<div style={{background:"#0F0F12",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:14,fontSize:12,color:"#5A5570"}}>No policies uploaded</div>}
             <input ref={policyFileRef} type="file" multiple accept=".txt,.md,.docx" onChange={handlePolicyUpload} style={{display:"none"}} />
             <Btn onClick={()=>policyFileRef.current?.click()} disabled={policyProcessing}>{policyProcessing?"Processing...":"+ Upload policies →"}</Btn>
             {policies.length>0&&<div style={{marginTop:12,fontSize:11,color:"#7C5CFC"}}>✓ Active in: prep, note structuring, letter drafting, risk scoring</div>}
@@ -5746,33 +5705,33 @@ ${m.content}`;
           {/* Team members */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Team members</h3><p style={{fontSize:12,color:"#5E5A7A",margin:0,lineHeight:1.6}}>Manage who can access Compass. Each user has role-based permissions.</p></div>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Team members</h3><p style={{fontSize:12,color:"#666",margin:0,lineHeight:1.6}}>Manage who can access Compass. Each user has role-based permissions.</p></div>
             </div>
             {users.length>0&&(
               <div style={{marginBottom:14}}>
                 {users.map(u=>(
-                  <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #F0EEF9"}}>
+                  <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                     <div>
-                      <div style={{fontSize:14,color:"#1A1535",fontWeight:currentUser?.id===u.id?600:400}}>{u.name}{currentUser?.id===u.id&&" (you)"}</div>
-                      <div style={{fontSize:11,color:"#5E5A7A",marginTop:1}}>{u.role} {u.email?"· "+u.email:""}</div>
+                      <div style={{fontSize:14,color:"#E8E4F0",fontWeight:currentUser?.id===u.id?600:400}}>{u.name}{currentUser?.id===u.id&&" (you)"}</div>
+                      <div style={{fontSize:11,color:"#6B6880",marginTop:1}}>{u.role} {u.email?"· "+u.email:""}</div>
                     </div>
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                      <div style={{fontSize:10,color:"#9B97B2"}}>
+                      <div style={{fontSize:10,color:"#5A5570"}}>
                         {ROLE_PERMS[u.role]?.viewAll?"All cases":"Assigned only"} ·{" "}
                         {ROLE_PERMS[u.role]?.edit?"Can edit":"Read only"}
                       </div>
-                      <button onClick={()=>saveUsers(users.filter(x=>x.id!==u.id))} style={{background:"none",border:"1px solid #E4E0F5",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>Remove</button>
+                      <button onClick={()=>saveUsers(users.filter(x=>x.id!==u.id))} style={{background:"none",border:"1px solid #2A2A35",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#E8622A",cursor:"pointer"}}>Remove</button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
             <UserAddForm onAdd={(name,role,email)=>addUser(name,role,email)} />
-            <div style={{marginTop:12,background:"#F8F7FF",borderRadius:7,padding:"10px 14px"}}>
+            <div style={{marginTop:12,background:"#0F0F12",borderRadius:7,padding:"10px 14px"}}>
               <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:6}}>PERMISSIONS</div>
               {Object.entries(ROLE_PERMS).map(([role,p])=>(
-                <div key={role} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#5E5A7A",padding:"3px 0"}}>
-                  <span style={{color:"#9B97B2",fontWeight:500}}>{role}</span>
+                <div key={role} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880",padding:"3px 0"}}>
+                  <span style={{color:"#888",fontWeight:500}}>{role}</span>
                   <span>{p.viewAll?"All cases":"Assigned"} · {p.edit?"Edit":"Read"} · {p.delete?"Delete":"No delete"} · {p.viewRisk?"Risk":"No risk"}</span>
                 </div>
               ))}
@@ -5781,50 +5740,50 @@ ${m.content}`;
 
           {/* Notifications */}
           <Card style={{marginBottom:12}}>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Deadline reminders</h3>
-            <p style={{fontSize:12,color:"#5E5A7A",margin:"0 0 14px",lineHeight:1.6}}>Get browser notifications for upcoming and overdue deadlines.</p>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Deadline reminders</h3>
+            <p style={{fontSize:12,color:"#666",margin:"0 0 14px",lineHeight:1.6}}>Get browser notifications for upcoming and overdue deadlines.</p>
             {dueSoon.length>0?(
               <div style={{marginBottom:14}}>
                 {dueSoon.slice(0,5).map((d,i)=>(
-                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F0EEF9",fontSize:12}}>
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
                     <div>
                       <span style={{color:d.overdue?"#E8622A":"#F2EDE4"}}>{d.caseName}</span>
-                      <span style={{color:"#5E5A7A",marginLeft:8}}>{d.step}</span>
+                      <span style={{color:"#6B6880",marginLeft:8}}>{d.step}</span>
                     </div>
                     <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:"JetBrains Mono,monospace"}}>{d.overdue?`${Math.abs(d.daysLeft)}d overdue`:`${d.daysLeft}d`}</span>
                   </div>
                 ))}
               </div>
-            ):<div style={{fontSize:12,color:"#9B97B2",marginBottom:14}}>No upcoming deadlines in the next 7 days</div>}
+            ):<div style={{fontSize:12,color:"#5A5570",marginBottom:14}}>No upcoming deadlines in the next 7 days</div>}
             <Btn onClick={requestNotifications} disabled={notifGranted}>{notifGranted?"Notifications enabled":"Enable browser notifications"}</Btn>
           </Card>
 
           {/* Audit trail */}
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Audit trail</h3><p style={{fontSize:12,color:"#5E5A7A",margin:0}}>Every action timestamped and logged.</p></div>
-              <span style={{fontSize:11,color:"#5E5A7A"}}>{auditLog.length} entries</span>
+              <div><h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Audit trail</h3><p style={{fontSize:12,color:"#666",margin:0}}>Every action timestamped and logged.</p></div>
+              <span style={{fontSize:11,color:"#6B6880"}}>{auditLog.length} entries</span>
             </div>
             <div style={{maxHeight:240,overflowY:"auto"}}>
               {auditLog.slice(0,50).map((e,i)=>(
-                <div key={i} style={{display:"flex",gap:12,padding:"8px 0",borderBottom:"1px solid #F0EEF9",alignItems:"flex-start"}}>
-                  <span style={{fontSize:10,color:"#9B97B2",fontFamily:"JetBrains Mono,monospace",flexShrink:0,marginTop:1}}>{new Date(e.ts).toLocaleString("en-GB",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
+                <div key={i} style={{display:"flex",gap:12,padding:"8px 0",borderBottom:"1px solid #1a1a1a",alignItems:"flex-start"}}>
+                  <span style={{fontSize:10,color:"#5A5570",fontFamily:"JetBrains Mono,monospace",flexShrink:0,marginTop:1}}>{new Date(e.ts).toLocaleString("en-GB",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
                   <div>
-                    <span style={{fontSize:11,color:"#1A1535",fontWeight:500}}>{e.action}</span>
-                    {e.detail&&<span style={{fontSize:11,color:"#5E5A7A",marginLeft:6}}>{e.detail}</span>}
+                    <span style={{fontSize:11,color:"#F2EDE4",fontWeight:500}}>{e.action}</span>
+                    {e.detail&&<span style={{fontSize:11,color:"#6B6880",marginLeft:6}}>{e.detail}</span>}
                     {e.user&&e.user!=="HR Manager"&&<span style={{fontSize:10,color:"#7C5CFC",marginLeft:6}}>· {e.user}</span>}
                   </div>
                 </div>
               ))}
-              {auditLog.length===0&&<div style={{fontSize:12,color:"#9B97B2"}}>No actions logged yet</div>}
+              {auditLog.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No actions logged yet</div>}
             </div>
           </Card>
 
           {/* GDPR / Data */}
           <Card style={{marginBottom:20}}>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Data &amp; privacy</h3>
-            <p style={{fontSize:12,color:"#5E5A7A",margin:"0 0 14px",lineHeight:1.6}}>All data is stored locally in your browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
-            <div style={{background:"#F8F7FF",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Data &amp; privacy</h3>
+            <p style={{fontSize:12,color:"#666",margin:"0 0 14px",lineHeight:1.6}}>All data is stored locally in your browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
+            <div style={{background:"#0F0F12",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
               <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>DATA INVENTORY</div>
               {[
                 {l:"Case files & meetings",v:cases.length+" cases, "+cases.reduce((t,c)=>t+c.meetings.length,0)+" meetings"},
@@ -5833,22 +5792,22 @@ ${m.content}`;
                 {l:"Audit log entries",v:auditLog.length+" entries"},
                 {l:"Storage used",v:Math.round(JSON.stringify(localStorage).length/1024)+"kb"},
               ].map(({l,v})=>(
-                <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#5E5A7A",padding:"3px 0"}}>
-                  <span>{l}</span><span style={{color:"#9B97B2"}}>{v}</span>
+                <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880",padding:"3px 0"}}>
+                  <span>{l}</span><span style={{color:"#888"}}>{v}</span>
                 </div>
               ))}
             </div>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               <Btn variant="secondary" onClick={exportAllData}>Export all data</Btn>
               <Btn variant="danger" onClick={deleteAllData} style={{color:"#E8622A"}}>Delete all data</Btn>
-              <button onClick={()=>{setGdprAccepted(false);lsSet("compass_gdpr",false);setShowGdpr(true);}} style={{background:"none",border:"none",color:"#5E5A7A",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>View privacy notice</button>
+              <button onClick={()=>{setGdprAccepted(false);lsSet("compass_gdpr",false);setShowGdpr(true);}} style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>View privacy notice</button>
             </div>
           </Card>
 
           {/* Help / Onboarding */}
           <Card style={{marginBottom:20}}>
-            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
-            <p style={{fontSize:12,color:"#5E5A7A",margin:"0 0 14px"}}>Rewatch the getting started guide.</p>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F2EDE4",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
+            <p style={{fontSize:12,color:"#666",margin:"0 0 14px"}}>Rewatch the getting started guide.</p>
             <Btn onClick={()=>{setOnboardStep(0);setShowOnboard(true);}}>Restart tour</Btn>
           </Card>
 
