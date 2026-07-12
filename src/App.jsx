@@ -521,6 +521,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [meetingSetup, setMeetingSetup] = useState({employee:"", type:"", date:new Date().toISOString().split("T")[0]});
+  const [liveChatInput, setLiveChatInput] = useState("");
+  const [liveChatHistory, setLiveChatHistory] = useState([]);
+  const [liveChatProcessing, setLiveChatProcessing] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatProcessing, setChatProcessing] = useState(false);
@@ -602,6 +605,40 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     } else {
       alert("Failed to send: "+JSON.stringify(data));
     }
+  };
+
+  const sendLiveChat = async () => {
+    if(!liveChatInput.trim()||liveChatProcessing) return;
+    const question = liveChatInput.trim();
+    setLiveChatInput("");
+    setLiveChatHistory(h=>[...h,{role:"user",content:question}]);
+    setLiveChatProcessing(true);
+    try {
+      const tx = transcript.map(u=>u.text).join("
+")||inputText;
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:300,
+          stream:false,
+          system:"You are an HR advisor listening to a live meeting. Answer questions briefly and practically based on the transcript. Reference UK employment law and ACAS where relevant. Be concise — max 3 sentences.",
+          messages:[
+            ...liveChatHistory.map(m=>({role:m.role,content:m.content})),
+            {role:"user",content:"Meeting type: "+(meetingType?.label||"General")+"
+Employee: "+(caseInfo.employee||"Unknown")+"
+
+Transcript so far:
+"+tx+"
+
+Question: "+question}
+          ]
+        })
+      });
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text) setLiveChatHistory(h=>[...h,{role:"assistant",content:text}]);
+    } catch(e) { console.error(e); }
+    setLiveChatProcessing(false);
   };
 
   const updateLiveContext = async (notes) => {
@@ -2810,18 +2847,46 @@ Please produce:
                 </div>
               </div>
 
-              {/* Live context */}
-              {transcript.length>0&&(
-                <div style={{flex:1,padding:"20px 16px",overflowY:"auto"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Live context</div>
-                  {liveContextLoading&&!liveContext&&(
-                    <div style={{fontSize:12,color:"#333",fontStyle:"italic"}}>Analysing...</div>
+              {/* Live chat */}
+              <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Ask Compass</div>
+                  {liveChatHistory.length===0&&!liveContextLoading&&(
+                    <div style={{fontSize:12,color:"#333",lineHeight:1.6}}>
+                      Ask anything about the meeting...<br/>
+                      <span style={{color:"#2A2A35",fontSize:11}}>e.g. "What has the employee admitted?" or "Am I missing anything?"</span>
+                    </div>
                   )}
-                  {liveContext&&(
-                    <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{liveContext}</div>
+                  {liveContext&&liveChatHistory.length===0&&(
+                    <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.7,padding:"10px 12px",background:"#0D0D0F",borderRadius:8,marginBottom:8}}>{liveContext}</div>
                   )}
+                  {liveChatHistory.map((m,i)=>(
+                    <div key={i} style={{marginBottom:10}}>
+                      {m.role==="user"?(
+                        <div style={{fontSize:12,color:"#7C5CFC",fontWeight:600,marginBottom:2}}>You</div>
+                      ):(
+                        <div style={{fontSize:12,color:"#4CAF50",fontWeight:600,marginBottom:2}}>Compass</div>
+                      )}
+                      <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.6,background:m.role==="assistant"?"#0D0D0F":"none",padding:m.role==="assistant"?"10px 12px":"0",borderRadius:8}}>{m.content}</div>
+                    </div>
+                  ))}
+                  {liveChatProcessing&&<div style={{fontSize:12,color:"#333",fontStyle:"italic"}}>Compass is thinking...</div>}
                 </div>
-              )}
+                <div style={{padding:"12px 16px",borderTop:"1px solid #141414"}}>
+                  <div style={{display:"flex",gap:8}}>
+                    <input
+                      value={liveChatInput}
+                      onChange={e=>setLiveChatInput(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&sendLiveChat()}
+                      placeholder="Ask about the meeting..."
+                      style={{flex:1,background:"#0D0D0F",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                    <button onClick={sendLiveChat} disabled={liveChatProcessing||!liveChatInput.trim()}
+                      style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>
+                      Ask
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               {/* Participants */}
               {participants.length>0&&(
