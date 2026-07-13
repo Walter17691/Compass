@@ -257,8 +257,8 @@ function Btn({ children, onClick, variant="primary", disabled, style={} }) {
   const base = { border:"none", borderRadius:8, padding:"10px 20px", fontSize:13, fontWeight:600, cursor:disabled?"not-allowed":"pointer", transition:"all 0.15s", opacity:disabled?0.4:1, letterSpacing:0.2, ...style };
   const vars = {
     primary: { background:"#7C5CFC", color:"#fff", boxShadow:"0 2px 8px rgba(124,92,252,0.3)" },
-    secondary: { background:"#FFFFFF", border:"1px solid #2E2E3A", color:"#C8C3D8" },
-    ghost: { background:"none", border:"1px solid #2E2E3A", color:"#6B6375" },
+    secondary: { background:"#FFFFFF", border:"1px solid #E8E0D0", color:"#C8C3D8" },
+    ghost: { background:"none", border:"1px solid #E8E0D0", color:"#6B6375" },
     danger: { background:"none", border:"1px solid #E8622A33", color:"#C84B2F" },
     blue: { background:"#1C5AA0", color:"#fff" },
   };
@@ -266,7 +266,7 @@ function Btn({ children, onClick, variant="primary", disabled, style={} }) {
 }
 
 function Card({ children, style={} }) {
-  return <div style={{background:"#161619", border:"1px solid #2E2E3A", borderRadius:14, padding:24, boxShadow:"0 1px 3px rgba(0,0,0,0.3)", ...style}}>{children}</div>;
+  return <div style={{background:"#FFFFFF", border:"1px solid #E8E0D0", borderRadius:14, padding:24, boxShadow:"0 1px 3px rgba(0,0,0,0.3)", ...style}}>{children}</div>;
 }
 
 function SectionTitle({ children }) {
@@ -2542,7 +2542,7 @@ Please produce:
             <div style={{background:"#FDFAF5",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
               <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>WHAT IS STORED</div>
               {["Case files, meeting records, transcripts and letters — in your browser only","Company policies you upload — in your browser only","Your signature and letterhead — in your browser only","Whistleblower reports — in your browser only","AI processing: meeting text is sent to Anthropic's API to generate outputs"].map((item,i)=>(
-                <div key={i} style={{display:"flex",gap:8,marginBottom:6,fontSize:12,color:"#C4BDAF"}}>
+                <div key={i} style={{display:"flex",gap:8,marginBottom:6,fontSize:12,color:"#3D3560"}}>
                   <span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{item}</span>
                 </div>
               ))}
@@ -2581,7 +2581,7 @@ Please produce:
 
 
       {/* ── HEADER ── */}
-      <header style={{background:"#FDFAF5",borderBottom:"1px solid #1C1C22",position:"sticky",top:0,zIndex:99}}>
+      <header style={{background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
         <div style={{maxWidth:1440,margin:"0 auto",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <button onClick={reset} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",padding:0,flexShrink:0}}>
             <CompassLogo size={32} />
@@ -2641,7 +2641,7 @@ Please produce:
           <div style={{maxWidth:1440,margin:"0 auto",display:"flex",alignItems:"center",gap:12,fontSize:12}}>
             <span style={{color:"#C84B2F",fontWeight:600}}>Overdue actions:</span>
             {dueSoon.filter(d=>d.overdue).slice(0,3).map((d,i)=>(
-              <span key={i} style={{color:"#C4BDAF"}}>{d.caseName} — {d.step} <span style={{color:"#C84B2F"}}>({Math.abs(d.daysLeft)}d overdue)</span></span>
+              <span key={i} style={{color:"#3D3560"}}>{d.caseName} — {d.step} <span style={{color:"#C84B2F"}}>({Math.abs(d.daysLeft)}d overdue)</span></span>
             ))}
             <button onClick={()=>setScreen(SCREENS.DASHBOARD)} style={{background:"none",border:"none",color:"#C84B2F",fontSize:11,cursor:"pointer",marginLeft:"auto",textDecoration:"underline"}}>View all</button>
           </div>
@@ -2725,7 +2725,7 @@ Please produce:
               <div style={{fontSize:11,color:"#5A5570",marginBottom:12,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Recent cases</div>
               {cases.slice(0,3).map(cs=>(
                 <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #141414",cursor:"pointer"}}>
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #EDE5D8",cursor:"pointer"}}>
                   <span style={{fontSize:14,color:"#1A1535"}}>{cs.employeeName}</span>
                   <span style={{fontSize:11,color:"#6B6880"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</span>
                 </div>
@@ -2959,7 +2959,7 @@ Please produce:
         <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:2000}}>
 
           {/* Header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 24px",borderBottom:"1px solid #1C1C22",flexShrink:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 24px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
             <div>
               <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</div>
               <div style={{fontSize:15,fontFamily:"DM Serif Display,Georgia,serif",color:"#1A1535"}}>{caseInfo.employee||"Notes"}</div>
@@ -3025,7 +3025,7 @@ Please produce:
             <div style={{width:280,borderLeft:"1px solid #EDE5D8",background:"#FDFAF5",display:"flex",flexDirection:"column",flexShrink:0}}>
 
               {/* Controls */}
-              <div style={{padding:"20px 16px",borderBottom:"1px solid #141414"}}>
+              <div style={{padding:"20px 16px",borderBottom:"1px solid #EDE5D8"}}>
                 <div style={{fontSize:10,fontWeight:600,color:"#5A5570",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Recording</div>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   <button onClick={isListening?stopSpeech:startSpeech}
@@ -3264,7 +3264,7 @@ Please produce:
                       <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
                       </div>
-                      <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
+                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
                     </div>
                   );
                 })()}
@@ -3301,7 +3301,7 @@ Please produce:
                       <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
                         {m.role==="user"
                           ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
-                          :<div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
+                          :<div style={{fontSize:12,color:"#3D3560",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
                       </div>
                       {m.role==="assistant"&&m.content.length>300&&(
                         <button onClick={()=>{
@@ -3539,7 +3539,7 @@ ${m.content}`;
                     {byType.length===0&&<div style={{fontSize:11,color:"#5A5570"}}>No meetings yet</div>}
                     {byType.map(t=>(
                       <div key={t.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-                        <span style={{fontSize:11,color:"#C4BDAF"}}>{t.label}</span>
+                        <span style={{fontSize:11,color:"#3D3560"}}>{t.label}</span>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
                           <div style={{background:"#FDFAF5",borderRadius:3,height:4,width:70}}>
                             <div style={{background:"#7C5CFC",borderRadius:3,height:4,width:(t.count/Math.max(...byType.map(x=>x.count))*70)+"px"}}/>
@@ -3884,7 +3884,7 @@ ${m.content}`;
                       {bundleProcessing&&<div style={{fontSize:14,color:"#7C5CFC"}}>●</div>}
                       {bundleChat.length===0&&(
                         <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px"}}>
-                          <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.8}}>Hello! I'll help you build a tribunal bundle for {c.employeeName}. Please attach the documents you have — ET1, ET3, meeting records, letters, policies, witness statements — and I'll create a numbered index.<br/><br/>Start by attaching your first document below.</div>
+                          <div style={{fontSize:12,color:"#3D3560",lineHeight:1.8}}>Hello! I'll help you build a tribunal bundle for {c.employeeName}. Please attach the documents you have — ET1, ET3, meeting records, letters, policies, witness statements — and I'll create a numbered index.<br/><br/>Start by attaching your first document below.</div>
                         </div>
                       )}
                     </div>
@@ -4058,7 +4058,7 @@ ${m.content}`;
                             <div>
                               <div style={{fontSize:13,color:col,fontWeight:700,marginBottom:6}}>{viewMeeting.riskScore.rating} — {viewMeeting.riskScore.summary}</div>
                               {viewMeeting.riskScore.flags?.map((f,i)=>(
-                                <div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:"1px solid #1C1C22"}}>
+                                <div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:"1px solid #EDE5D8"}}>
                                   <div style={{display:"flex",gap:8,marginBottom:3}}><Badge color={rColors[f.severity]}>{f.severity}</Badge><span style={{fontSize:10,color:"#6B6880"}}>{f.law}</span></div>
                                   <div style={{fontSize:12,color:"#1A1535",fontWeight:600}}>{f.issue}</div>
                                   <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>Recommendation: {f.recommendation}</div>
@@ -4070,7 +4070,7 @@ ${m.content}`;
                         {tab.type==="nextsteps"&&(
                           <div>
                             {viewMeeting.nextSteps?.map((s,i)=>(
-                              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1C1C22"}}>
+                              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #EDE5D8"}}>
                                 <span style={{fontSize:12,color:s.done?"#555":"#F2EDE4",textDecoration:s.done?"line-through":"none"}}>{s.step}</span>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                                   {s.deadline&&<span style={{fontSize:10,color:"#6B6375",fontFamily:"JetBrains Mono,monospace"}}>{s.deadline}</span>}
@@ -4345,7 +4345,7 @@ ${m.content}`;
                     </div>
                     <span style={{fontSize:10,color:"#5A5570",fontFamily:"JetBrains Mono,monospace"}}>{new Date(r.receivedAt).toLocaleDateString("en-GB")}</span>
                   </div>
-                  <div style={{fontSize:12,color:"#C4BDAF",lineHeight:1.6,marginBottom:10}}>{r.concern}</div>
+                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,marginBottom:10}}>{r.concern}</div>
                   <div style={{display:"flex",gap:6}}>
                     <button onClick={()=>saveWhistle(whistleReports.map(x=>x.id===r.id?{...x,status:x.status==="New"?"Under review":"Closed"}:x))}
                       style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
@@ -4477,7 +4477,7 @@ ${m.content}`;
               <Card style={{background:"#F5F1EA"}}>
                 <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Recent cases</div>
                 {cases.slice(-5).reverse().map(c=>(
-                  <div key={c.id} onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",cursor:"pointer",fontSize:12,color:"#C4BDAF"}}>{c.employeeName}</div>
+                  <div key={c.id} onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",cursor:"pointer",fontSize:12,color:"#3D3560"}}>{c.employeeName}</div>
                 ))}
                 {cases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No cases yet</div>}
               </Card>
@@ -4555,7 +4555,7 @@ ${m.content}`;
                   <p style={{fontSize:11,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>The employee fills this in before the meeting. Their answers will sit alongside the manager assessment.</p>
                   {cfg?.selfAssessmentPrompts?.map((q,i)=>(
                     <div key={i} style={{marginBottom:14}}>
-                      <label style={{display:"block",fontSize:12,color:"#C4BDAF",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                      <label style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
                       <textarea value={s.selfAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,selfAssessment:{...ds.selfAssessment,[i]:e.target.value}}))}
                         placeholder="Employee answer..." rows={2}
                         style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
@@ -4593,7 +4593,7 @@ ${m.content}`;
 
                   {cfg?.managerPrompts?.map((q,i)=>(
                     <div key={i} style={{marginBottom:14}}>
-                      <label style={{display:"block",fontSize:12,color:"#C4BDAF",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                      <label style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
                       <textarea value={s.managerAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,managerAssessment:{...ds.managerAssessment,[i]:e.target.value}}))}
                         placeholder="Your assessment..." rows={2}
                         style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
@@ -4631,7 +4631,7 @@ ${m.content}`;
                     </Btn>
                   </div>
                   {s.objectives.map((obj,i)=>(
-                    <div key={i} style={{background:"#FDFAF5",border:"1px solid #1C1C22",borderRadius:8,padding:"12px 14px",marginBottom:10}}>
+                    <div key={i} style={{background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:"12px 14px",marginBottom:10}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{obj.label}</div>
@@ -4669,7 +4669,7 @@ ${m.content}`;
                         {cfg?.selfAssessmentPrompts?.map((q,i)=>s.selfAssessment[i]?(
                           <div key={i} style={{marginBottom:10}}>
                             <div style={{fontSize:10,color:"#6B6880",marginBottom:3}}>{q}</div>
-                            <div style={{fontSize:12,color:"#C4BDAF",background:"#FDFAF5",borderRadius:5,padding:"7px 10px"}}>{s.selfAssessment[i]}</div>
+                            <div style={{fontSize:12,color:"#3D3560",background:"#FDFAF5",borderRadius:5,padding:"7px 10px"}}>{s.selfAssessment[i]}</div>
                           </div>
                         ):null)}
                       </div>
@@ -4712,7 +4712,7 @@ ${m.content}`;
                       const rColors=["","#7C5CFC","#7C5CFC","#7C5CFC","#7C5CFC","#7C5CFC"]; const _ignore=["","#E8622A","#D4882A","#888","#7C5CFC","#7C5CFC"];
                       return(
                         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1a1a1a"}}>
-                          <span style={{fontSize:12,color:"#C4BDAF"}}>{obj.label}</span>
+                          <span style={{fontSize:12,color:"#3D3560"}}>{obj.label}</span>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             {[1,2,3,4,5].map(r=><div key={r} style={{width:8,height:8,borderRadius:"50%",background:obj.rating>=r?rColors[obj.rating]:"#2A2A35"}}/>)}
                             <span style={{fontSize:10,color:rColors[obj.rating],marginLeft:4,fontWeight:600}}>{obj.rating}/5</span>
@@ -5053,7 +5053,7 @@ ${m.content}`;
                       return(
                         <div key={type} style={{marginBottom:10}}>
                           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                            <span style={{fontSize:12,color:"#C4BDAF"}}>{type}</span>
+                            <span style={{fontSize:12,color:"#3D3560"}}>{type}</span>
                             <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600}}>{count}</span>
                           </div>
                           <div style={{background:"#FDFAF5",borderRadius:3,height:5}}>
@@ -5542,7 +5542,7 @@ ${m.content}`;
                 <div style={{fontSize:11,color:"#B87520",fontWeight:600,marginBottom:8}}>Overdue follow-ups ({overdueFollowUps.length})</div>
                 {overdueFollowUps.map(n=>(
                   <div key={n.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0"}}>
-                    <span style={{fontSize:12,color:"#C4BDAF"}}>{n.employeeName} — {n.followUpDate}</span>
+                    <span style={{fontSize:12,color:"#3D3560"}}>{n.employeeName} — {n.followUpDate}</span>
                     <button onClick={()=>toggleFollowUpDone(n.id)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>Mark done</button>
                   </div>
                 ))}
@@ -5664,7 +5664,7 @@ ${m.content}`;
                             </div>
                             {note.confidential&&<span style={{fontSize:9,color:"#6B6880",border:"1px solid #E8E0D0",borderRadius:3,padding:"1px 6px",letterSpacing:0.5}}>CONFIDENTIAL</span>}
                           </div>
-                          <div style={{fontSize:13,color:"#C4BDAF",lineHeight:1.7,marginBottom:10,whiteSpace:"pre-wrap"}}>{note.content}</div>
+                          <div style={{fontSize:13,color:"#3D3560",lineHeight:1.7,marginBottom:10,whiteSpace:"pre-wrap"}}>{note.content}</div>
                           {note.supportOffered&&(
                             <div style={{fontSize:11,color:"#6B6880",marginBottom:8}}>
                               <span style={{color:"#6B6375",fontWeight:600}}>Support offered: </span>{note.supportOffered}
