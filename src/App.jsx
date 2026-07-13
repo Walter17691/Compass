@@ -2387,7 +2387,7 @@ Please produce:
                     setAppealDetected(false);
                     appealDetectedRef.current=false;
                     showToast("Appeal linked to "+cs.employeeName);
-                  }} style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,color:"#E8E4F0",cursor:"pointer",textAlign:"left",fontFamily:"DM Serif Display,Georgia,serif"}}>
+                  }} style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,color:"#1A1535",cursor:"pointer",textAlign:"left",fontFamily:"DM Serif Display,Georgia,serif"}}>
                     <div style={{fontWeight:600}}>{cs.employeeName}</div>
                     <div style={{fontSize:11,color:"#6B6880",marginTop:2}}>{cs.meetings.length} meeting{cs.meetings.length!==1?"s":""} · Latest: {cs.meetings[cs.meetings.length-1]?.type}</div>
                   </button>
@@ -2527,7 +2527,7 @@ Please produce:
       {toast&&(
         <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3000,background:toast.type==="error"?"#2A1008":"#1C1C22",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#E8622A":"#7C5CFC",flexShrink:0}}/>
-          <span style={{fontSize:14,color:"#E8E4F0"}}>{toast.message}</span>
+          <span style={{fontSize:14,color:"#1A1535"}}>{toast.message}</span>
         </div>
       )}
 
@@ -2689,8 +2689,8 @@ Please produce:
                 {id:"pip-review", label:"Performance / PIP", tag:"Development", desc:"Performance review or PIP"},
               ].map(t=>(
                 <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
-                  style={{background:meetingSetup.type===t.id?"#7C5CFC18":"#1C1C22",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#2A2A35",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
-                  <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:4}}>{t.label}</div>
+                  style={{background:meetingSetup.type===t.id?"#EDE8FF":"#FFFFFF",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#E8E0D0",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+                  <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:4}}>{t.label}</div>
                   <div style={{fontSize:11,color:"#6B6880"}}>{t.desc}</div>
                 </button>
               ))}
@@ -2715,7 +2715,7 @@ Please produce:
               const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
               if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
             }}
-            style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#2A2A35":"#7C5CFC",border:"none",borderRadius:8,padding:"16px",fontSize:16,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#444":"#fff",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s"}}>
+            style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"16px",fontSize:16,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9B9098":"#fff",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s"}}>
             Start meeting
           </button>
 
@@ -2726,7 +2726,7 @@ Please produce:
               {cases.slice(0,3).map(cs=>(
                 <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
                   style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #141414",cursor:"pointer"}}>
-                  <span style={{fontSize:14,color:"#E8E4F0"}}>{cs.employeeName}</span>
+                  <span style={{fontSize:14,color:"#1A1535"}}>{cs.employeeName}</span>
                   <span style={{fontSize:11,color:"#6B6880"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</span>
                 </div>
               ))}
@@ -2906,7 +2906,7 @@ Please produce:
               <div style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
                 <span style={{fontSize:20}}>&#128196;</span>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500}}>{bgDoc.name}</div>
+                  <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{bgDoc.name}</div>
                   <div style={{fontSize:11,color:"#6B6880"}}>{bgDoc.text.length} characters extracted</div>
                 </div>
                 <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#6B6880",fontSize:18,cursor:"pointer"}}>&#10005;</button>
@@ -3556,7 +3556,7 @@ ${m.content}`;
                   {recent.map(m=>(
                     <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
                       <div>
-                        <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500,marginBottom:2}}>{m.employeeName}</div>
+                        <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:2}}>{m.employeeName}</div>
                         <div style={{fontSize:10,color:"#5A5570"}}>{m.type} · {m.date}</div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -3577,7 +3577,7 @@ ${m.content}`;
                       <div key={c.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                         <div>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-                            <span style={{fontSize:14,color:"#E8E4F0",fontWeight:600}}>{c.employeeName}</span>
+                            <span style={{fontSize:14,color:"#1A1535",fontWeight:600}}>{c.employeeName}</span>
                             {high&&<Badge color="#E8622A">HIGH RISK</Badge>}
                           </div>
                           <div style={{fontSize:10,color:"#5A5570"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Last: {last?.type} on {last?.date}</div>
@@ -3828,9 +3828,9 @@ ${m.content}`;
                           <div style={{background:"#FDFAF5",borderRadius:8,padding:"12px 16px",border:"1px solid #7C5CFC33"}}>
                             <div style={{fontSize:10,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Statutory Redundancy Pay</div>
                             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                              <div><div style={{fontSize:10,color:"#6B6880"}}>Age</div><div style={{fontSize:14,color:"#E8E4F0"}}>{ageAtEnd}</div></div>
-                              <div><div style={{fontSize:10,color:"#6B6880"}}>Service</div><div style={{fontSize:14,color:"#E8E4F0"}}>{yearsService} yrs</div></div>
-                              <div><div style={{fontSize:10,color:"#6B6880"}}>Weekly pay</div><div style={{fontSize:14,color:"#E8E4F0"}}>£{cappedWeeklyPay}</div></div>
+                              <div><div style={{fontSize:10,color:"#6B6880"}}>Age</div><div style={{fontSize:14,color:"#1A1535"}}>{ageAtEnd}</div></div>
+                              <div><div style={{fontSize:10,color:"#6B6880"}}>Service</div><div style={{fontSize:14,color:"#1A1535"}}>{yearsService} yrs</div></div>
+                              <div><div style={{fontSize:10,color:"#6B6880"}}>Weekly pay</div><div style={{fontSize:14,color:"#1A1535"}}>£{cappedWeeklyPay}</div></div>
                             </div>
                             <div style={{fontSize:20,color:"#7C5CFC",fontWeight:700}}>£{total.toLocaleString()}</div>
                             <div style={{fontSize:10,color:"#5A5570",marginTop:4}}>Based on {weeks} weeks × £{cappedWeeklyPay} (capped at £643/week, 20 years max)</div>
@@ -4201,7 +4201,7 @@ ${m.content}`;
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
                     <div>
-                      <span style={{fontSize:14,color:"#E8E4F0",fontWeight:500}}>{a.action}</span>
+                      <span style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{a.action}</span>
                       {a.details&&<span style={{fontSize:12,color:"#6B6880",marginLeft:8}}>{a.details}</span>}
                     </div>
                   </div>
@@ -4302,7 +4302,7 @@ ${m.content}`;
                   <div style={{marginBottom:14}}>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Category</label>
                     <select value={whistleForm.category} onChange={e=>setWhistleForm(p=>({...p,category:e.target.value}))}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
                       <option value="">Select a category...</option>
                       {["Harassment / Bullying","Discrimination","Health & Safety","Financial misconduct","Data protection breach","Management misconduct","Other"].map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
@@ -4460,7 +4460,7 @@ ${m.content}`;
                       <span style={{fontSize:9,fontWeight:700,color:typeColors[r.type],letterSpacing:0.5,textTransform:"uppercase"}}>{r.type}</span>
                     </div>
                     <div>
-                      <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500,marginBottom:2}}>{r.title}</div>
+                      <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:2}}>{r.title}</div>
                       <div style={{fontSize:11,color:"#6B6880"}}>{r.sub}</div>
                       {r.type==="transcript"&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4,fontStyle:"italic"}}>Found in transcript</div>}
                       {r.type==="record"&&<div style={{fontSize:11,color:"#B87520",marginTop:4}}>Found in meeting record</div>}
@@ -4603,7 +4603,7 @@ ${m.content}`;
                   <div style={{marginBottom:14}}>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Agreed outcome</label>
                     <select value={s.outcome} onChange={e=>setDevSession(ds=>({...ds,outcome:e.target.value}))}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
                       <option value="">Select outcome...</option>
                       {cfg?.outcomeOptions?.map(o=><option key={o} value={o}>{o}</option>)}
                     </select>
@@ -4634,7 +4634,7 @@ ${m.content}`;
                     <div key={i} style={{background:"#FDFAF5",border:"1px solid #1C1C22",borderRadius:8,padding:"12px 14px",marginBottom:10}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                         <div style={{flex:1}}>
-                          <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:2}}>{obj.label}</div>
+                          <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{obj.label}</div>
                           {obj.desc&&<div style={{fontSize:11,color:"#6B6880"}}>{obj.desc}</div>}
                           {obj.measure&&<div style={{fontSize:10,color:"#5A5570",marginTop:2}}>Measure: {obj.measure}</div>}
                         </div>
@@ -4833,7 +4833,7 @@ ${m.content}`;
                 <div style={{marginBottom:16}}>
                   <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Onboarding template</label>
                   <select value={newStarterForm.templateId} onChange={e=>setNewStarterForm(p=>({...p,templateId:e.target.value}))}
-                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
                     {starterTemplates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
@@ -5126,7 +5126,7 @@ ${m.content}`;
                       return(
                         <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
                           <div>
-                            <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500,marginBottom:1}}>{c.employeeName}</div>
+                            <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:1}}>{c.employeeName}</div>
                             <div style={{fontSize:10,color:"#6B6880"}}>{formalCount} formal meetings</div>
                           </div>
                           <div style={{display:"flex",gap:6,alignItems:"center"}}>
@@ -5273,10 +5273,10 @@ ${m.content}`;
                         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Case details</h3>
                         <div style={{background:"#FDFAF5",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
                           <div style={{fontSize:11,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>CASE SUMMARY</div>
-                          <div style={{fontSize:14,color:"#E8E4F0",marginBottom:4}}><span style={{color:"#6B6880"}}>Type:</span> {activeRedundancy.type} redundancy</div>
-                          <div style={{fontSize:14,color:"#E8E4F0",marginBottom:4}}><span style={{color:"#6B6880"}}>Reason:</span> {activeRedundancy.reason}</div>
-                          <div style={{fontSize:14,color:"#E8E4F0",marginBottom:4}}><span style={{color:"#6B6880"}}>Pool:</span> {activeRedundancy.poolDescription}</div>
-                          <div style={{fontSize:14,color:"#E8E4F0"}}><span style={{color:"#6B6880"}}>Created:</span> {new Date(activeRedundancy.createdAt).toLocaleDateString("en-GB")} by {activeRedundancy.createdBy}</div>
+                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#6B6880"}}>Type:</span> {activeRedundancy.type} redundancy</div>
+                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#6B6880"}}>Reason:</span> {activeRedundancy.reason}</div>
+                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#6B6880"}}>Pool:</span> {activeRedundancy.poolDescription}</div>
+                          <div style={{fontSize:14,color:"#1A1535"}}><span style={{color:"#6B6880"}}>Created:</span> {new Date(activeRedundancy.createdAt).toLocaleDateString("en-GB")} by {activeRedundancy.createdBy}</div>
                         </div>
 
                         {activeRedundancy.type==="collective"&&(
@@ -5326,7 +5326,7 @@ ${m.content}`;
                           {activeRedundancy.selectionCriteria.map(c=>(
                             <div key={c.id} style={{background:"#FDFAF5",borderRadius:7,padding:"12px 14px",marginBottom:8}}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                                <div style={{fontSize:14,color:"#E8E4F0",fontWeight:500}}>{c.criterion}</div>
+                                <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{c.criterion}</div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                                   <input type="number" min="0" max="100" value={c.weight}
                                     onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,weight:parseInt(e.target.value)||0}:x)})}
@@ -5361,7 +5361,7 @@ ${m.content}`;
                             <div key={emp.id} style={{background:"#FDFAF5",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #E8E0D0"}}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                                 <div>
-                                  <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:2}}>{emp.name}</div>
+                                  <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{emp.name}</div>
                                   <div style={{fontSize:11,color:"#6B6880"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
                                 </div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -5413,7 +5413,7 @@ ${m.content}`;
                         {activeRedundancy.atRiskEmployees.filter(e=>e.selected).map(emp=>(
                           <div key={emp.id} style={{background:"#FDFAF5",borderRadius:8,padding:"14px",marginBottom:12,border:"1px solid #E8E0D0"}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                              <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600}}>{emp.name}</div>
+                              <div style={{fontSize:14,color:"#1A1535",fontWeight:600}}>{emp.name}</div>
                               <div style={{display:"flex",gap:8}}>
                                 <button onClick={()=>generateRedundancyLetter("consultation-invite",emp)}
                                   style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#6B6375",cursor:"pointer"}}>Invite letter</button>
@@ -5442,7 +5442,7 @@ ${m.content}`;
                         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Outcome letters</h3>
                         {activeRedundancy.atRiskEmployees.filter(e=>e.selected).map(emp=>(
                           <div key={emp.id} style={{background:"#FDFAF5",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #E8E0D0"}}>
-                            <div style={{fontSize:14,color:"#E8E4F0",fontWeight:600,marginBottom:8}}>{emp.name}</div>
+                            <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:8}}>{emp.name}</div>
                             <div style={{marginBottom:10}}>
                               <label style={{display:"block",fontSize:10,color:"#6B6880",fontWeight:600,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>Statutory redundancy pay</label>
                               <input placeholder="e.g. £3,450 (1.5 weeks × £2,300/week × 1 year)" value={emp.redundancyPay||""}
@@ -5557,12 +5557,12 @@ ${m.content}`;
                   <div>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Employee name *</label>
                     <input placeholder="e.g. James Wilson" value={wellbeingForm.employeeName} onChange={e=>setWellbeingForm(p=>({...p,employeeName:e.target.value}))}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none",boxSizing:"border-box"}} />
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
                   </div>
                   <div>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Note type</label>
                     <select value={wellbeingForm.type} onChange={e=>setWellbeingForm(p=>({...p,type:e.target.value}))}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none"}}>
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
                       {Object.entries(WELLBEING_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </div>
@@ -5573,20 +5573,20 @@ ${m.content}`;
                   <div>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>HR manager</label>
                     <input placeholder="Your name" value={wellbeingForm.manager} onChange={e=>setWellbeingForm(p=>({...p,manager:e.target.value}))}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none",boxSizing:"border-box"}} />
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
                   </div>
                 </div>
                 <div style={{marginBottom:14}}>
                   <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Conversation notes *</label>
                   <textarea placeholder="What was discussed? What did the employee share? What was observed? How did they seem?" value={wellbeingForm.content} onChange={e=>setWellbeingForm(p=>({...p,content:e.target.value}))}
                     rows={5}
-                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
                   <div>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Support offered</label>
                     <input placeholder="e.g. EAP referral, flexible working, OH referral" value={wellbeingForm.supportOffered} onChange={e=>setWellbeingForm(p=>({...p,supportOffered:e.target.value}))}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#E8E4F0",outline:"none",boxSizing:"border-box"}} />
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
                   </div>
                   <div>
                     <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Follow-up date</label>
@@ -5613,7 +5613,7 @@ ${m.content}`;
                       <button key={emp} onClick={()=>{setActiveWellbeing(emp);setWellbeingView("employee");}}
                         style={{width:"100%",background:activeWellbeing===emp?"#7C5CFC18":"none",border:"1px solid",borderColor:activeWellbeing===emp?"#7C5CFC33":"transparent",borderRadius:7,padding:"10px 12px",marginBottom:4,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <div>
-                          <div style={{fontSize:14,color:"#E8E4F0",fontWeight:activeWellbeing===emp?600:400}}>{emp}</div>
+                          <div style={{fontSize:14,color:"#1A1535",fontWeight:activeWellbeing===emp?600:400}}>{emp}</div>
                           <div style={{fontSize:10,color:"#6B6880",marginTop:2}}>{empNotes.length} note{empNotes.length!==1?"s":""}</div>
                         </div>
                         {hasOverdue&&<div style={{width:7,height:7,borderRadius:"50%",background:"#D4882A"}}/>}
@@ -5739,7 +5739,7 @@ ${m.content}`;
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
                 {locations.map(l=>(
                   <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F5F1EA",borderRadius:8,padding:"10px 14px"}}>
-                    <span style={{fontSize:14,color:"#E8E4F0"}}>{l.name}</span>
+                    <span style={{fontSize:14,color:"#1A1535"}}>{l.name}</span>
                     <button onClick={()=>deleteLocation(l.id)} style={{background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontSize:12}}>Remove</button>
                   </div>
                 ))}
@@ -5768,7 +5768,7 @@ ${m.content}`;
                   <div key={m.id} style={{padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <div>
-                        <div style={{fontSize:14,color:"#E8E4F0"}}>{m.name||"Unknown"}</div>
+                        <div style={{fontSize:14,color:"#1A1535"}}>{m.name||"Unknown"}</div>
                         <div style={{fontSize:11,color:"#6B6880"}}>
                           {m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}
                           {(m.location_ids||[]).length>0&&" · "+locations.filter(l=>(m.location_ids||[]).includes(l.id)).map(l=>l.name).join(", ")}
@@ -5921,7 +5921,7 @@ ${m.content}`;
                 {users.map(u=>(
                   <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                     <div>
-                      <div style={{fontSize:14,color:"#E8E4F0",fontWeight:currentUser?.id===u.id?600:400}}>{u.name}{currentUser?.id===u.id&&" (you)"}</div>
+                      <div style={{fontSize:14,color:"#1A1535",fontWeight:currentUser?.id===u.id?600:400}}>{u.name}{currentUser?.id===u.id&&" (you)"}</div>
                       <div style={{fontSize:11,color:"#6B6880",marginTop:1}}>{u.role} {u.email?"· "+u.email:""}</div>
                     </div>
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
