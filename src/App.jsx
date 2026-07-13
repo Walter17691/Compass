@@ -2733,26 +2733,22 @@ Please produce:
             </div>
 
             {/* Previous meetings list */}
-            {briefData&&briefData.meetingCount>0&&(()=>{
-              const empCases = cases.filter(cs=>cs.employeeName===caseInfo.employee);
-              const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseName:cs.employeeName}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
-              return(
-                <div style={{background:"#131316",border:"1px solid #222228",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"16px 20px",borderBottom:"1px solid #1A1A1F"}}>
-                    <div style={{fontSize:11,color:"#8B87A0",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Previous meetings</div>
-                  </div>
-                  {allMeetings.slice(0,5).map((m,i)=>(
-                    <div key={i} style={{padding:"12px 20px",borderBottom:i<Math.min(allMeetings.length,5)-1?"1px solid #1A1A1F":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div>
-                        <div style={{fontSize:13,color:"#C4C0D4",fontWeight:500}}>{m.type}</div>
-                        <div style={{fontSize:11,color:"#4A4760",marginTop:2}}>{m.date}</div>
-                      </div>
-                      {m.riskScore?.rating&&<span style={{fontSize:11,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#F04E37":m.riskScore.rating==="MEDIUM"?"#F59E0B":"#22C55E",background:m.riskScore.rating==="HIGH"?"rgba(240,78,55,0.1)":m.riskScore.rating==="MEDIUM"?"rgba(245,158,11,0.1)":"rgba(34,197,94,0.1)",padding:"2px 8px",borderRadius:4}}>{m.riskScore.rating}</span>}
-                    </div>
-                  ))}
+            {briefData&&briefData.meetingCount>0&&(
+              <div style={{background:"#131316",border:"1px solid #222228",borderRadius:12,overflow:"hidden"}}>
+                <div style={{padding:"14px 20px",borderBottom:"1px solid #1A1A1F"}}>
+                  <div style={{fontSize:11,color:"#8B87A0",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Previous meetings</div>
                 </div>
-              );
-            })()}
+                {cases.filter(cs=>cs.employeeName===caseInfo.employee).flatMap(cs=>(cs.meetings||[])).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5).map((m,i)=>(
+                  <div key={i} style={{padding:"12px 20px",borderBottom:"1px solid #1A1A1F",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:13,color:"#C4C0D4",fontWeight:500}}>{m.type}</div>
+                      <div style={{fontSize:11,color:"#4A4760",marginTop:2}}>{m.date}</div>
+                    </div>
+                    {m.riskScore?.rating&&<span style={{fontSize:11,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#F04E37":m.riskScore.rating==="MEDIUM"?"#F59E0B":"#22C55E",background:m.riskScore.rating==="HIGH"?"rgba(240,78,55,0.1)":m.riskScore.rating==="MEDIUM"?"rgba(245,158,11,0.1)":"rgba(34,197,94,0.1)",padding:"2px 8px",borderRadius:4}}>{m.riskScore.rating}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Start button */}
             <div style={{marginTop:28,textAlign:"center"}}>
