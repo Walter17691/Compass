@@ -28,7 +28,7 @@ const SCREENS = {
   HOME:"home", CASES:"cases", PREP:"prep", RECORD:"record",
   REVIEW:"review", LETTER:"letter", SETTINGS:"settings",
   DASHBOARD:"dashboard", PORTAL:"portal", TIMELINE:"timeline",
-  TEMPLATES:"templates", WHISTLE:"whistle", HR_REVIEW:"hr_review", AUDIT:"audit", PREDICT:"predict",
+  TEMPLATES:"templates", WHISTLE:"whistle", HR_REVIEW:"hr_review", AUDIT:"audit", BRIEF:"brief", PREDICT:"predict",
   DEVELOP:"develop", SEARCH:"search", GDPR:"gdpr", ONBOARD:"onboard",
   NEWSTARTER:"newstarter", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing",
@@ -522,6 +522,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showPicker, setShowPicker] = useState(false);
   const [meetingSetup, setMeetingSetup] = useState({employee:"", type:"", date:new Date().toISOString().split("T")[0]});
   const [liveChatInput, setLiveChatInput] = useState("");
+  const [briefData, setBriefData] = useState(null);
+  const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
   const [liveChatHistory, setLiveChatHistory] = useState([]);
   const [liveChatProcessing, setLiveChatProcessing] = useState(false);
@@ -2241,6 +2243,30 @@ Please produce:
   };
 
 
+  const generateBrief = async (employeeName, meetingTypeLabel) => {
+    setBriefLoading(true);
+    setBriefData(null);
+    const employeeCases = cases.filter(c=>c.employeeName===employeeName);
+    const allMeetings = employeeCases.flatMap(c=>c.meetings||[]).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    if(allMeetings.length===0) { setBriefLoading(false); return; }
+    const history = allMeetings.slice(0,5).map(m=>`${m.date}: ${m.type} — ${(m.record||"").slice(0,200)}`).join(String.fromCharCode(10));
+    const lastRisk = allMeetings.find(m=>m.riskScore?.rating)?.riskScore?.rating||"Unknown";
+    try {
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",max_tokens:400,stream:false,
+          system:"You are an HR advisor preparing a chair for an HR meeting. Be concise and practical. Use bullet points.",
+          messages:[{role:"user",content:`Prepare a brief for a ${meetingTypeLabel} meeting with ${employeeName}.`+String.fromCharCode(10)+`Previous meeting history:`+String.fromCharCode(10)+history+String.fromCharCode(10)+`Last known risk level: ${lastRisk}`+String.fromCharCode(10)+String.fromCharCode(10)+`Provide:`+String.fromCharCode(10)+`1. Key context from previous meetings (2-3 bullets)`+String.fromCharCode(10)+`2. What to watch out for today (2-3 bullets)`+String.fromCharCode(10)+`3. Key questions to ask (3 bullets)`+String.fromCharCode(10)+`Be specific and legally aware (ACAS, ERA 1996).`}]
+        })
+      });
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      setBriefData({text, employeeName, meetingType:meetingTypeLabel, lastMeeting:allMeetings[0], meetingCount:allMeetings.length, lastRisk});
+    } catch(e) { console.error(e); }
+    setBriefLoading(false);
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0F0F12",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
@@ -2638,7 +2664,108 @@ Please produce:
         </div>
       )}
 
-      {/* ══ PREP ══ */}
+      
+      {/* ══ BRIEF ══ */}
+      {screen===SCREENS.BRIEF&&(
+        <div style={{minHeight:"100vh",background:"#0C0C0F",display:"flex",flexDirection:"column"}}>
+
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid #1A1A1F"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <CompassLogo size={22}/>
+              <div>
+                <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label}</div>
+                <div style={{fontSize:15,fontFamily:"Playfair Display,Georgia,serif",color:"#F0EDF8"}}>{caseInfo.employee}</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setScreen(SCREENS.HOME)}
+                style={{background:"none",border:"1px solid #222228",borderRadius:6,padding:"7px 14px",fontSize:12,color:"#8B87A0",cursor:"pointer"}}>
+                ← Back
+              </button>
+              <button onClick={()=>setScreen(SCREENS.RECORD)}
+                style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 18px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(124,92,252,0.3)"}}>
+                Start meeting →
+              </button>
+            </div>
+          </div>
+
+          {/* Brief content */}
+          <div style={{flex:1,maxWidth:680,margin:"0 auto",padding:"48px 24px",width:"100%"}}>
+
+            <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:24,fontWeight:400,color:"#F0EDF8",margin:"0 0 6px"}}>Meeting brief</h2>
+            <p style={{fontSize:14,color:"#4A4760",margin:"0 0 32px"}}>Review before starting your {meetingType?.label} with {caseInfo.employee}</p>
+
+            {/* Employee history summary */}
+            {briefData&&(
+              <div style={{display:"flex",gap:12,marginBottom:28,flexWrap:"wrap"}}>
+                <div style={{background:"#131316",border:"1px solid #222228",borderRadius:8,padding:"12px 16px",flex:1,minWidth:120}}>
+                  <div style={{fontSize:11,color:"#4A4760",marginBottom:4}}>Previous meetings</div>
+                  <div style={{fontSize:20,fontWeight:600,color:"#F0EDF8"}}>{briefData.meetingCount}</div>
+                </div>
+                <div style={{background:"#131316",border:"1px solid #222228",borderRadius:8,padding:"12px 16px",flex:1,minWidth:120}}>
+                  <div style={{fontSize:11,color:"#4A4760",marginBottom:4}}>Last meeting</div>
+                  <div style={{fontSize:13,color:"#C4C0D4"}}>{briefData.lastMeeting?.type||"—"}</div>
+                  <div style={{fontSize:11,color:"#4A4760"}}>{briefData.lastMeeting?.date||""}</div>
+                </div>
+                <div style={{background:"#131316",border:"1px solid #222228",borderRadius:8,padding:"12px 16px",flex:1,minWidth:120}}>
+                  <div style={{fontSize:11,color:"#4A4760",marginBottom:4}}>Risk level</div>
+                  <div style={{fontSize:13,fontWeight:600,color:briefData.lastRisk==="HIGH"?"#F04E37":briefData.lastRisk==="MEDIUM"?"#F59E0B":"#22C55E"}}>{briefData.lastRisk}</div>
+                </div>
+              </div>
+            )}
+
+            {/* AI Brief */}
+            <div style={{background:"#131316",border:"1px solid #222228",borderRadius:12,padding:"24px",marginBottom:24}}>
+              <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:16}}>AI Brief</div>
+              {briefLoading&&(
+                <div style={{display:"flex",alignItems:"center",gap:10,color:"#4A4760",fontSize:13}}>
+                  <span className="pu" style={{width:6,height:6,borderRadius:"50%",background:"#7C5CFC",display:"inline-block"}}></span>
+                  Preparing your brief...
+                </div>
+              )}
+              {briefData?.text&&(
+                <div style={{fontSize:13,color:"#C4C0D4",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{briefData.text}</div>
+              )}
+              {!briefLoading&&!briefData&&(
+                <div style={{fontSize:13,color:"#4A4760"}}>No previous meetings found for this employee.</div>
+              )}
+            </div>
+
+            {/* Previous meetings list */}
+            {briefData&&briefData.meetingCount>0&&(()=>{
+              const empCases = cases.filter(cs=>cs.employeeName===caseInfo.employee);
+              const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseName:cs.employeeName}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
+              return(
+                <div style={{background:"#131316",border:"1px solid #222228",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"16px 20px",borderBottom:"1px solid #1A1A1F"}}>
+                    <div style={{fontSize:11,color:"#8B87A0",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Previous meetings</div>
+                  </div>
+                  {allMeetings.slice(0,5).map((m,i)=>(
+                    <div key={i} style={{padding:"12px 20px",borderBottom:i<Math.min(allMeetings.length,5)-1?"1px solid #1A1A1F":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:13,color:"#C4C0D4",fontWeight:500}}>{m.type}</div>
+                        <div style={{fontSize:11,color:"#4A4760",marginTop:2}}>{m.date}</div>
+                      </div>
+                      {m.riskScore?.rating&&<span style={{fontSize:11,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#F04E37":m.riskScore.rating==="MEDIUM"?"#F59E0B":"#22C55E",background:m.riskScore.rating==="HIGH"?"rgba(240,78,55,0.1)":m.riskScore.rating==="MEDIUM"?"rgba(245,158,11,0.1)":"rgba(34,197,94,0.1)",padding:"2px 8px",borderRadius:4}}>{m.riskScore.rating}</span>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Start button */}
+            <div style={{marginTop:28,textAlign:"center"}}>
+              <button onClick={()=>setScreen(SCREENS.RECORD)}
+                style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"13px 40px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer",boxShadow:"0 2px 12px rgba(124,92,252,0.3)"}}>
+                Start meeting →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+{/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
         <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
           <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
