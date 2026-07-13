@@ -2956,7 +2956,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:50}}>
+        <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:2000}}>
 
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 24px",borderBottom:"1px solid #1C1C22",flexShrink:0}}>
