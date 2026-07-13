@@ -2837,41 +2837,43 @@ Please produce:
                 </div>
               </div>
 
-              {/* Live chat */}
+              {/* Live context - auto updates */}
+              <div style={{padding:"14px 16px",borderBottom:"1px solid #1A1A1F",flexShrink:0}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Live context</div>
+                {liveContextLoading&&!liveContext&&(
+                  <div style={{fontSize:11,color:"#8B87A0",fontStyle:"italic"}}>Analysing conversation...</div>
+                )}
+                {liveContext?(
+                  <div style={{fontSize:12,color:"#C4C0D4",lineHeight:1.6}}>{liveContext}</div>
+                ):(
+                  !liveContextLoading&&<div style={{fontSize:11,color:"#4A4760"}}>Will update as you take notes</div>
+                )}
+              </div>
+
+              {/* Ask Compass - manual chat */}
               <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-                <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Ask Compass</div>
-                  {liveChatHistory.length===0&&!liveContextLoading&&(
-                    <div style={{fontSize:12,color:"#8B87A0",lineHeight:1.6}}>
-                      Ask anything about the meeting...<br/>
-                      <span style={{color:"#4A4760",fontSize:11}}>e.g. "What has the employee admitted?" or "Am I missing anything?"</span>
-                    </div>
-                  )}
-                  {liveContext&&liveChatHistory.length===0&&(
-                    <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.7,padding:"10px 12px",background:"#0F0F12",borderRadius:8,marginBottom:8}}>{liveContext}</div>
+                <div style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"#8B87A0",letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Ask Compass</div>
+                  {liveChatHistory.length===0&&(
+                    <div style={{fontSize:11,color:"#4A4760",lineHeight:1.6}}>Ask anything about the meeting...<br/>
+                    e.g. "What has the employee admitted?"</div>
                   )}
                   {liveChatHistory.map((m,i)=>(
                     <div key={i} style={{marginBottom:10}}>
-                      {m.role==="user"?(
-                        <div style={{fontSize:12,color:"#7C5CFC",fontWeight:600,marginBottom:2}}>You</div>
-                      ):(
-                        <div style={{fontSize:12,color:"#4CAF50",fontWeight:600,marginBottom:2}}>Compass</div>
-                      )}
-                      <div style={{fontSize:12,color:"#F2EDE4",lineHeight:1.6,background:m.role==="assistant"?"#0D0D0F":"none",padding:m.role==="assistant"?"10px 12px":"0",borderRadius:8}}>{m.content}</div>
+                      <div style={{fontSize:11,color:m.role==="user"?"#7C5CFC":"#22C55E",fontWeight:600,marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
+                      <div style={{fontSize:12,color:"#C4C0D4",lineHeight:1.6,background:m.role==="assistant"?"#131316":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6}}>{m.content}</div>
                     </div>
                   ))}
-                  {liveChatProcessing&&<div style={{fontSize:12,color:"#4A4560",fontStyle:"italic"}}>Compass is thinking...</div>}
+                  {liveChatProcessing&&<div style={{fontSize:11,color:"#8B87A0",fontStyle:"italic"}}>Thinking...</div>}
                 </div>
-                <div style={{padding:"12px 16px",borderTop:"1px solid #141414"}}>
-                  <div style={{display:"flex",gap:8}}>
-                    <input
-                      value={liveChatInput}
-                      onChange={e=>setLiveChatInput(e.target.value)}
+                <div style={{padding:"10px 12px",borderTop:"1px solid #1A1A1F",flexShrink:0}}>
+                  <div style={{display:"flex",gap:6}}>
+                    <input value={liveChatInput} onChange={e=>setLiveChatInput(e.target.value)}
                       onKeyDown={e=>e.key==="Enter"&&sendLiveChat()}
                       placeholder="Ask about the meeting..."
-                      style={{flex:1,background:"#0F0F12",border:"1px solid #2A2A35",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#F2EDE4",outline:"none"}}/>
+                      style={{flex:1,background:"#1A1A1F",border:"1px solid #222228",borderRadius:6,padding:"7px 10px",fontSize:12,color:"#F0EDF8",outline:"none"}}/>
                     <button onClick={sendLiveChat} disabled={liveChatProcessing||!liveChatInput.trim()}
-                      style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>
+                      style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 12px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600,opacity:liveChatProcessing||!liveChatInput.trim()?0.5:1}}>
                       Ask
                     </button>
                   </div>
