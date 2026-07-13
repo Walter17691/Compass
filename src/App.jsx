@@ -244,7 +244,7 @@ function CompassLogo({ size = 36 }) {
     <svg width={s} height={s} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
       <circle cx="50" cy="50" r="44" stroke="#7C5CFC" strokeWidth="9" fill="none" />
       <ellipse cx="50" cy="50" rx="8" ry="30" transform="rotate(-40 50 50)" fill="#7C5CFC" />
-      <circle cx="50" cy="50" r="5.5" fill="#0D0D0F" />
+      <circle cx="50" cy="50" r="5.5" fill="#FDFAF5" />
     </svg>
   );
 }
@@ -309,7 +309,7 @@ function SignaturePad({ onSave, onClose }) {
     const c = canvasRef.current; if(!c) return;
     const ctx = c.getContext("2d");
     ctx.fillStyle = "#fff"; ctx.fillRect(0,0,c.width,c.height);
-    ctx.strokeStyle="#1C1C22"; ctx.lineWidth=2; ctx.lineCap="round";
+    ctx.strokeStyle="#FFFFFF"; ctx.lineWidth=2; ctx.lineCap="round";
   }, [mode]);
 
   const pos = (e, c) => {
@@ -353,8 +353,8 @@ function SignaturePad({ onSave, onClose }) {
         ) : (
           <div style={{marginBottom:16}}>
             <input value={typed} onChange={e=>setTyped(e.target.value)} placeholder="Type your name"
-              style={{width:"100%",background:"#fff",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:28,fontFamily:"'Brush Script MT',cursive",color:"#1C1C22",outline:"none",boxSizing:"border-box"}} />
-            {typed && <div style={{background:"#fff",borderRadius:8,border:"1px solid #E8E0D0",padding:"10px 16px",marginTop:8}}><div style={{fontFamily:"'Brush Script MT',cursive",fontSize:32,color:"#1C1C22"}}>{typed}</div></div>}
+              style={{width:"100%",background:"#fff",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:28,fontFamily:"'Brush Script MT',cursive",color:"#FFFFFF",outline:"none",boxSizing:"border-box"}} />
+            {typed && <div style={{background:"#fff",borderRadius:8,border:"1px solid #E8E0D0",padding:"10px 16px",marginTop:8}}><div style={{fontFamily:"'Brush Script MT',cursive",fontSize:32,color:"#FFFFFF"}}>{typed}</div></div>}
           </div>
         )}
         <div style={{display:"flex",gap:10}}>
@@ -1887,7 +1887,7 @@ Please produce:
   // ── Speaker colours ──
   const spColor=sp=>sp===SPEAKERS.HR?"#7C5CFC":sp===SPEAKERS.NOTE?"#888":"#E8622A";
   const spBg=sp=>sp===SPEAKERS.HR?"#1a1a2e":sp===SPEAKERS.NOTE?"#1a1a1a":"#1e1a14";
-  const spBdr=sp=>sp===SPEAKERS.HR?"#7C5CFC":sp===SPEAKERS.NOTE?"#2A2A35":"#E8622A";
+  const spBdr=sp=>sp===SPEAKERS.HR?"#7C5CFC":sp===SPEAKERS.NOTE?"#E8E0D0":"#E8622A";
 
   // ─────────────────────────────────────────────
   //  RENDER
@@ -2331,7 +2331,7 @@ Please produce:
         .fu{animation:fu 0.2s ease;}@keyframes fu{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
         button{cursor:pointer;}
-        ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#0D0D0F;}::-webkit-scrollbar-thumb{background:#2A2A35;border-radius:2px;}
+        ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#FDFAF5;}::-webkit-scrollbar-thumb{background:#E8E0D0;border-radius:2px;}
       `}</style>
 
       {showShareModal&&(
@@ -2525,7 +2525,7 @@ Please produce:
 
       {/* ── Toast notification ── */}
       {toast&&(
-        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3000,background:toast.type==="error"?"#2A1008":"#1C1C22",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
+        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#FFFFFF",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#E8622A":"#7C5CFC",flexShrink:0}}/>
           <span style={{fontSize:14,color:"#1A1535"}}>{toast.message}</span>
         </div>
@@ -2604,7 +2604,7 @@ Please produce:
               {s:SCREENS.LETTER,l:"Letters"},
             ].map(({s,l})=>(
               <button key={s} onClick={()=>s===SCREENS.REVIEW?handleReview():setScreen(s)}
-                style={{background:screen===s?"#1C1C22":"none",border:"none",color:screen===s?"#F2EDE4":"#666",padding:"5px 10px",borderRadius:6,fontSize:12,fontWeight:screen===s?600:400}}>
+                style={{background:screen===s?"#FFFFFF":"none",border:"none",color:screen===s?"#F2EDE4":"#666",padding:"5px 10px",borderRadius:6,fontSize:12,fontWeight:screen===s?600:400}}>
                 {l}
               </button>
             ))}
@@ -2629,7 +2629,7 @@ Please produce:
               {member?.role&&<span style={{fontSize:10,color:"#7C5CFC",background:"#7C5CFC11",border:"1px solid #7C5CFC33",borderRadius:4,padding:"2px 6px"}}>{member.role==="hr_director"?"HR Director":member.role==="hr_manager"?"HR Manager":"Location Manager"}</span>}
               {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#6B6880",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>Sign out</button>}
             </div>
-            <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#1C1C22":"none",border:"1px solid #E8E0D0",color:"#6B6375",borderRadius:6,padding:"5px 10px",fontSize:14}}>⚙</button>
+            <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#FFFFFF":"none",border:"1px solid #E8E0D0",color:"#6B6375",borderRadius:6,padding:"5px 10px",fontSize:14}}>⚙</button>
             {meetingType&&<button onClick={reset} style={{background:"none",border:"1px solid #E8E0D0",color:"#6B6880",borderRadius:6,padding:"4px 10px",fontSize:11}}>End meeting</button>}
           </nav>
         </div>
@@ -2912,9 +2912,9 @@ Please produce:
                 <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#6B6880",fontSize:18,cursor:"pointer"}}>&#10005;</button>
               </div>
             ):(
-              <label style={{display:"block",background:"#FFFFFF",border:"1px dashed #2A2A35",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
+              <label style={{display:"block",background:"#FFFFFF",border:"1px dashed #E8E0D0",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
                 <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
                   const file = e.target.files[0];
                   if(!file) return;
@@ -3001,7 +3001,7 @@ Please produce:
               />
 
               {/* Suggested questions bar */}
-              <div style={{padding:"12px 40px",borderTop:"1px solid #141414",flexShrink:0}}>
+              <div style={{padding:"12px 40px",borderTop:"1px solid #F5F1EA",flexShrink:0}}>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
                   <span style={{fontSize:10,color:"#4A4560",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginRight:4}}>Ask next:</span>
                   {(liveContext
@@ -3012,7 +3012,7 @@ Please produce:
                       onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
                       style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC55";e.currentTarget.style.color="#F2EDE4";}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#666";}}>
                       {q.trim()}
                     </button>
                   ))}
@@ -3029,11 +3029,11 @@ Please produce:
                 <div style={{fontSize:10,fontWeight:600,color:"#5A5570",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Recording</div>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   <button onClick={isListening?stopSpeech:startSpeech}
-                    style={{display:"flex",alignItems:"center",gap:10,background:isListening?"#2A1008":"#1C1C22",border:"1px solid",borderColor:isListening?"#E8622A44":"#2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isListening?"#E8622A":"#888",fontSize:13,fontWeight:500}}>
+                    style={{display:"flex",alignItems:"center",gap:10,background:isListening?"#FEF0EB":"#FFFFFF",border:"1px solid",borderColor:isListening?"#E8622A44":"#E8E0D0",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isListening?"#E8622A":"#888",fontSize:13,fontWeight:500}}>
                     <span style={{width:8,height:8,borderRadius:"50%",background:isListening?"#E8622A":"#555",display:"inline-block",marginRight:2}}></span>{isListening?"Stop microphone":"Start microphone"}
                   </button>
                   <button onClick={isScreenCapturing?stopScreenCapture:startScreenCapture}
-                    style={{display:"flex",alignItems:"center",gap:10,background:isScreenCapturing?"#0A1A0A":"#1C1C22",border:"1px solid",borderColor:isScreenCapturing?"#4CAF5044":"#2A2A35",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isScreenCapturing?"#4CAF50":"#888",fontSize:13,fontWeight:500}}>
+                    style={{display:"flex",alignItems:"center",gap:10,background:isScreenCapturing?"#E8F5EE":"#FFFFFF",border:"1px solid",borderColor:isScreenCapturing?"#4CAF5044":"#E8E0D0",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isScreenCapturing?"#4CAF50":"#888",fontSize:13,fontWeight:500}}>
                     <span style={{width:8,height:8,borderRadius:"50%",background:isScreenCapturing?"#4CAF50":"#555",display:"inline-block",marginRight:2}}></span>{isScreenCapturing?"Stop screen audio":"Screen audio"}
                   </button>
                   <label style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:"#6B6375",fontSize:13,fontWeight:500}}>
@@ -3067,7 +3067,7 @@ Please produce:
                   {liveChatHistory.map((m,i)=>(
                     <div key={i} style={{marginBottom:10}}>
                       <div style={{fontSize:11,color:m.role==="user"?"#7C5CFC":"#22C55E",fontWeight:600,marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
-                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#131316":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6}}>{m.content}</div>
+                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#FFFFFF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6}}>{m.content}</div>
                     </div>
                   ))}
                   {liveChatProcessing&&<div style={{fontSize:11,color:"#6B6375",fontStyle:"italic"}}>Thinking...</div>}
@@ -3088,7 +3088,7 @@ Please produce:
 
               {/* Participants */}
               {participants.length>0&&(
-                <div style={{padding:"16px",borderTop:"1px solid #141414"}}>
+                <div style={{padding:"16px",borderTop:"1px solid #F5F1EA"}}>
                   <div style={{fontSize:10,fontWeight:600,color:"#5A5570",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Participants</div>
                   {participants.map((p,i)=>(
                     <div key={i} style={{fontSize:12,color:"#6B6880",marginBottom:4}}>{p.name} — {p.role}</div>
@@ -3126,7 +3126,7 @@ Please produce:
               <Card style={{marginBottom:16}}>
                 <div style={{display:"flex",justifyContent:"center",alignItems:"center",marginBottom:16,position:"relative"}}>
                   <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",fontWeight:600,margin:0}}>Meeting Details</h3>
-                  <button onClick={()=>setEditingStructured(e=>!e)} style={{background:editingStructured?"#7C5CFC":"none",border:"1px solid",borderColor:editingStructured?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingStructured?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>{editingStructured?"Done":"Edit record"}</button>
+                  <button onClick={()=>setEditingStructured(e=>!e)} style={{background:editingStructured?"#7C5CFC":"none",border:"1px solid",borderColor:editingStructured?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingStructured?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>{editingStructured?"Done":"Edit record"}</button>
                 </div>
                 {aiProcessing&&!reviewOutput&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#6B6375",marginTop:10,fontSize:12}}>Structuring...</div></div>}
                 {aiError&&(
@@ -3194,7 +3194,7 @@ Please produce:
                           <div style={{display:"flex",justifyContent:"center",alignItems:"center",margin:"16px 0 6px",position:"relative"}}>
                             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
                             <button onClick={()=>setEditingRecord(e=>!e)}
-                              style={{background:editingRecord?"#7C5CFC":"none",border:"1px solid",borderColor:editingRecord?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingRecord?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>
+                              style={{background:editingRecord?"#7C5CFC":"none",border:"1px solid",borderColor:editingRecord?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingRecord?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>
                               {editingRecord?"Done":"Edit dialogue"}
                             </button>
                           </div>
@@ -3234,9 +3234,9 @@ Please produce:
                 <Card style={{marginBottom:16}}>
                   <SectionTitle>Next Steps &amp; ACAS Deadlines</SectionTitle>
                   {nextSteps.map((s,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<nextSteps.length-1?"1px solid #1C1C22":"none"}}>
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<nextSteps.length-1?"1px solid #FFFFFF":"none"}}>
                       <button onClick={()=>setNextSteps(ns=>ns.map((x,j)=>j===i?{...x,done:!x.done}:x))}
-                        style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:s.done?"#7C5CFC":"#2A2A35",background:s.done?"#7C5CFC22":"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:s.done?"#7C5CFC":"#E8E0D0",background:s.done?"#7C5CFC22":"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                         {s.done&&<span style={{color:"#7C5CFC",fontSize:11}}>✓</span>}
                       </button>
                       <div style={{flex:1}}>
@@ -3298,7 +3298,7 @@ Please produce:
                 <div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,minHeight:200,maxHeight:360}}>
                   {chatHistory.map((m,i)=>(
                     <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
-                      <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
+                      <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#FFFFFF",border:m.role==="user"?"none":"1px solid #E8E0D0"}}>
                         {m.role==="user"
                           ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
                           :<div style={{fontSize:12,color:"#3D3560",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
@@ -3432,7 +3432,7 @@ ${m.content}`;
                 {/* Edit toggle */}
                 <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
                   <button onClick={()=>setEditingLetter(e=>!e)}
-                    style={{background:editingLetter?"#7C5CFC":"none",border:"1px solid",borderColor:editingLetter?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
+                    style={{background:editingLetter?"#7C5CFC":"none",border:"1px solid",borderColor:editingLetter?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
                     {editingLetter?"Done editing":"Edit letter"}
                   </button>
                 </div>
@@ -3460,7 +3460,7 @@ ${m.content}`;
                     <div style={{marginTop:20,paddingTop:18,borderTop:"1px solid #E0DDD8"}}>
                       <div style={{fontSize:10,color:"#999",marginBottom:6}}>Signed:</div>
                       {signature.type==="typed"
-                        ?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:30,color:"#1C1C22"}}>{signature.data}</div>
+                        ?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:30,color:"#FFFFFF"}}>{signature.data}</div>
                         :<img src={signature.data} alt="Sig" style={{maxHeight:55,maxWidth:180}}/>}
                       <div style={{fontSize:11,color:"#6B6375",marginTop:5}}>{caseInfo.manager||"HR Manager"} | {new Date().toLocaleDateString("en-GB")}</div>
                     </div>
@@ -3633,7 +3633,7 @@ ${m.content}`;
               </div>
 
               {openCases[c.id]&&c.meetings.map((m,idx)=>(
-                <div key={m.id} style={{padding:"14px 20px",borderBottom:idx<c.meetings.length-1?"1px solid #141414":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div key={m.id} style={{padding:"14px 20px",borderBottom:idx<c.meetings.length-1?"1px solid #F5F1EA":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
                       <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:14,color:"#1A1535"}}>{m.type}</span>
@@ -3671,7 +3671,7 @@ ${m.content}`;
                       <span key={d.id} style={{fontSize:10,color:"#7C5CFC",background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:4,padding:"2px 8px"}}>{d.name}</span>
                     ))}
                     <input type="file" style={{display:"none"}} ref={vaultFileRef} onChange={e=>{if(e.target.files[0])addToVault(c.id,e.target.files[0]);}} />
-                    <button onClick={()=>vaultFileRef.current?.click()} style={{background:"none",border:"1px dashed #2A2A35",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#6B6880",cursor:"pointer"}}>+ Add document</button>
+                    <button onClick={()=>vaultFileRef.current?.click()} style={{background:"none",border:"1px dashed #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#6B6880",cursor:"pointer"}}>+ Add document</button>
                   </div>
                 </div>
               </div>
@@ -3877,7 +3877,7 @@ ${m.content}`;
                     <p style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Attach documents and Compass will build a numbered tribunal bundle index.</p>
                     <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto",marginBottom:8}}>
                       {bundleChat.map((m,i)=>(
-                        <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#1C1C22",border:m.role==="user"?"none":"1px solid #2A2A35"}}>
+                        <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#FFFFFF",border:m.role==="user"?"none":"1px solid #E8E0D0"}}>
                           <div style={{fontSize:12,color:m.role==="user"?"#fff":"#C4BDAF",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
                         </div>
                       ))}
@@ -4090,7 +4090,7 @@ ${m.content}`;
                             {(adjustments[viewCaseId]||[]).map(a=>(
                               <div key={a.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
                                 <button onClick={()=>toggleAdjustment(viewCaseId,a.id)}
-                                  style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:a.done?"#7C5CFC":"#2A2A35",background:a.done?"#7C5CFC22":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                                  style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:a.done?"#7C5CFC":"#E8E0D0",background:a.done?"#7C5CFC22":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
                                   {a.done&&<span style={{color:"#7C5CFC",fontSize:10}}>✓</span>}
                                 </button>
                                 <div style={{flex:1}}>
@@ -4137,9 +4137,9 @@ ${m.content}`;
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
                   {filtered.map(t=>(
                     <button key={t.id} onClick={()=>setSelectedTemplate(t)}
-                      style={{background:"#FFFFFF",border:"1px solid",borderColor:selectedTemplate?.id===t.id?"#7C5CFC":"#2A2A35",borderRadius:10,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
+                      style={{background:"#FFFFFF",border:"1px solid",borderColor:selectedTemplate?.id===t.id?"#7C5CFC":"#E8E0D0",borderRadius:10,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                       onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-                      onMouseLeave={e=>e.currentTarget.style.borderColor=selectedTemplate?.id===t.id?"#7C5CFC":"#2A2A35"}>
+                      onMouseLeave={e=>e.currentTarget.style.borderColor=selectedTemplate?.id===t.id?"#7C5CFC":"#E8E0D0"}>
                       <Badge style={{marginBottom:8}}>{cat}</Badge>
                       <div style={{fontSize:14,color:"#1A1535",fontWeight:600,margin:"6px 0 4px",fontFamily:"DM Serif Display,Georgia,serif"}}>{t.name}</div>
                       <div style={{fontSize:11,color:"#6B6880"}}>Click to preview and copy →</div>
@@ -4162,7 +4162,7 @@ ${m.content}`;
                 </div>
                 <div style={{padding:"20px 24px"}}>
                   <div style={{background:"#FDFAF5",borderRadius:8,padding:"24px 28px",marginBottom:16}}>
-                    <pre style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#1C1C22",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
+                    <pre style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#FFFFFF",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <Btn onClick={()=>{navigator.clipboard.writeText(selectedTemplate.body);setSelectedTemplate(null);}}>Copy template</Btn>
@@ -4177,7 +4177,7 @@ ${m.content}`;
                   <button key={i} onClick={()=>askCompass(s,homeChatHistory,setHomeChatHistory,setHomeChatProcessing)}
                     style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",fontFamily:"Inter,sans-serif"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC44";e.currentTarget.style.color="#A98FFF";}}
-                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#2A2A35";e.currentTarget.style.color="#666";}}>
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#666";}}>
                     {s}
                   </button>
                 ))}
@@ -4197,7 +4197,7 @@ ${m.content}`;
           ):(
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
               {auditLog.map((a,i)=>(
-                <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",borderBottom:i<auditLog.length-1?"1px solid #141414":"none"}}>
+                <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",borderBottom:i<auditLog.length-1?"1px solid #F5F1EA":"none"}}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
                     <div>
@@ -4455,7 +4455,7 @@ ${m.content}`;
                   }}
                     style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                    onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
                     <div style={{width:40,height:40,borderRadius:6,background:typeColors[r.type]+"22",border:`1px solid ${typeColors[r.type]}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                       <span style={{fontSize:9,fontWeight:700,color:typeColors[r.type],letterSpacing:0.5,textTransform:"uppercase"}}>{r.type}</span>
                     </div>
@@ -4512,7 +4512,7 @@ ${m.content}`;
                 <div key={k} style={{display:"flex",alignItems:"center",flex:1}}>
                   <div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
                     <div style={{width:28,height:28,borderRadius:"50%",border:"2px solid",
-                      borderColor:devStep===k?"#7C5CFC":["self","manager","summary","output"].indexOf(devStep)>i?"#7C5CFC44":"#2A2A35",
+                      borderColor:devStep===k?"#7C5CFC":["self","manager","summary","output"].indexOf(devStep)>i?"#7C5CFC44":"#E8E0D0",
                       background:devStep===k?"#7C5CFC22":"none",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:4}}>
                       {["self","manager","summary","output"].indexOf(devStep)>i
                         ?<span style={{color:"#7C5CFC",fontSize:14}}>✓</span>
@@ -4581,8 +4581,8 @@ ${m.content}`;
                       <div style={{display:"flex",gap:8}}>
                         {["1","2","3","4","5"].map(r=>(
                           <button key={r} onClick={()=>setDevSession(ds=>({...ds,rating:r}))}
-                            style={{flex:1,padding:"8px 4px",borderRadius:6,border:"1px solid",borderColor:s.rating===r?"#7C5CFC":"#2A2A35",
-                              background:s.rating===r?"#7C5CFC22":"#0D0D0F",color:s.rating===r?"#A98FFF":"#555",fontSize:13,fontWeight:s.rating===r?700:400,cursor:"pointer"}}>
+                            style={{flex:1,padding:"8px 4px",borderRadius:6,border:"1px solid",borderColor:s.rating===r?"#7C5CFC":"#E8E0D0",
+                              background:s.rating===r?"#7C5CFC22":"#FDFAF5",color:s.rating===r?"#A98FFF":"#555",fontSize:13,fontWeight:s.rating===r?700:400,cursor:"pointer"}}>
                             {r}
                           </button>
                         ))}
@@ -4645,7 +4645,7 @@ ${m.content}`;
                       <div style={{display:"flex",gap:4,marginBottom:8}}>
                         {[1,2,3,4,5].map(r=>(
                           <button key={r} onClick={()=>setDevSession(ds=>({...ds,objectives:ds.objectives.map((x,j)=>j===i?{...x,rating:r}:x)}))}
-                            style={{width:28,height:28,borderRadius:4,border:"1px solid",borderColor:obj.rating>=r?"#7C5CFC":"#2A2A35",background:obj.rating>=r?"#7C5CFC22":"none",color:obj.rating>=r?"#7C5CFC":"#555",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                            style={{width:28,height:28,borderRadius:4,border:"1px solid",borderColor:obj.rating>=r?"#7C5CFC":"#E8E0D0",background:obj.rating>=r?"#7C5CFC22":"none",color:obj.rating>=r?"#7C5CFC":"#555",fontSize:11,fontWeight:600,cursor:"pointer"}}>
                             {r}
                           </button>
                         ))}
@@ -4657,7 +4657,7 @@ ${m.content}`;
                     </div>
                   ))}
                   <button onClick={()=>setDevSession(ds=>({...ds,objectives:[...ds.objectives,{label:"New objective",desc:"",rating:3,note:""}]}))}
-                    style={{width:"100%",background:"none",border:"1px dashed #2A2A35",borderRadius:7,padding:"9px",fontSize:12,color:"#6B6880",cursor:"pointer"}}>
+                    style={{width:"100%",background:"none",border:"1px dashed #E8E0D0",borderRadius:7,padding:"9px",fontSize:12,color:"#6B6880",cursor:"pointer"}}>
                     + Add objective
                   </button>
 
@@ -4714,7 +4714,7 @@ ${m.content}`;
                         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1a1a1a"}}>
                           <span style={{fontSize:12,color:"#3D3560"}}>{obj.label}</span>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            {[1,2,3,4,5].map(r=><div key={r} style={{width:8,height:8,borderRadius:"50%",background:obj.rating>=r?rColors[obj.rating]:"#2A2A35"}}/>)}
+                            {[1,2,3,4,5].map(r=><div key={r} style={{width:8,height:8,borderRadius:"50%",background:obj.rating>=r?rColors[obj.rating]:"#E8E0D0"}}/>)}
                             <span style={{fontSize:10,color:rColors[obj.rating],marginLeft:4,fontWeight:600}}>{obj.rating}/5</span>
                           </div>
                         </div>
@@ -4768,7 +4768,7 @@ ${m.content}`;
                       <button key={t.id} onClick={()=>{navigator.clipboard.writeText(t.body);}}
                         style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px",textAlign:"left",cursor:"pointer"}}
                         onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                        onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
                         <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,marginBottom:3}}>{t.cat}</div>
                         <div style={{fontSize:12,color:"#1A1535"}}>{t.name}</div>
                         <div style={{fontSize:10,color:"#6B6880",marginTop:3}}>Click to copy →</div>
@@ -4849,7 +4849,7 @@ ${m.content}`;
               <>
                 {starterInstances.length===0&&(
                   <Card style={{textAlign:"center",padding:"50px 20px"}}>
-                    <div style={{fontSize:32,marginBottom:12,color:"#2A2A35"}}>—</div>
+                    <div style={{fontSize:32,marginBottom:12,color:"#E8E0D0"}}>—</div>
                     <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>No starters yet</div>
                     <div style={{fontSize:12,color:"#5A5570",marginBottom:20}}>Create an onboarding journey for each new hire.</div>
                     <Btn onClick={()=>setStarterView("new")}>+ Add first starter</Btn>
@@ -4865,7 +4865,7 @@ ${m.content}`;
                       <button key={s.id} onClick={()=>{setActiveStarter(s);setStarterView("instance");}}
                         style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"18px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                         onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                        onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                           <div>
                             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",fontWeight:600,marginBottom:2}}>{s.name}</div>
@@ -4944,7 +4944,7 @@ ${m.content}`;
                           return(
                             <div key={task.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid #1a1a1a",alignItems:"flex-start"}}>
                               <button onClick={()=>toggleStarterTask(activeStarter.id,task.id)}
-                                style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:task.done?"#7C5CFC":"#2A2A35",background:task.done?"#7C5CFC":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                                style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:task.done?"#7C5CFC":"#E8E0D0",background:task.done?"#7C5CFC":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
                                 {task.done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
                               </button>
                               <div style={{flex:1}}>
@@ -5210,7 +5210,7 @@ ${m.content}`;
                   <button key={r.id} onClick={()=>{setActiveRedundancy(r);setRedundancyStep(r.status||"pool");setRedundancyAiOutput("");}}
                     style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px 20px",textAlign:"left",marginBottom:10,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",transition:"border-color 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                    onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
                         <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1A1535",fontWeight:600}}>{r.reason}</span>
@@ -5241,7 +5241,7 @@ ${m.content}`;
                         }}
                           style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                           onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
-                          onMouseLeave={e=>e.currentTarget.style.borderColor="#2A2A35"}>
+                          onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
                           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:6}}>{opt.title}</div>
                           <div style={{fontSize:11,color:"#6B6880",lineHeight:1.6}}>{opt.sub}</div>
                         </button>
@@ -5259,7 +5259,7 @@ ${m.content}`;
                 <div style={{display:"flex",gap:0,marginBottom:24,background:"#FFFFFF",borderRadius:8,overflow:"hidden",border:"1px solid #E8E0D0"}}>
                   {steps.map((s,i)=>(
                     <button key={s} onClick={()=>setRedundancyStep(s)}
-                      style={{flex:1,padding:"10px 8px",background:redundancyStep===s?"#7C5CFC18":"none",border:"none",borderRight:i<steps.length-1?"1px solid #2A2A35":"none",color:redundancyStep===s?"#A98FFF":"#555",fontSize:12,fontWeight:redundancyStep===s?600:400,cursor:"pointer"}}>
+                      style={{flex:1,padding:"10px 8px",background:redundancyStep===s?"#7C5CFC18":"none",border:"none",borderRight:i<steps.length-1?"1px solid #E8E0D0":"none",color:redundancyStep===s?"#A98FFF":"#555",fontSize:12,fontWeight:redundancyStep===s?600:400,cursor:"pointer"}}>
                       {stepLabels[s]}
                     </button>
                   ))}
@@ -5378,7 +5378,7 @@ ${m.content}`;
                                     <div style={{display:"flex",gap:3}}>
                                       {[1,2,3,4,5].map(s=>(
                                         <button key={s} onClick={()=>scoreEmployee(emp.id,c.id,s)}
-                                          style={{width:22,height:22,borderRadius:3,border:"1px solid",borderColor:(emp.scores?.[c.id]||0)>=s?"#7C5CFC":"#2A2A35",background:(emp.scores?.[c.id]||0)>=s?"#7C5CFC22":"none",color:(emp.scores?.[c.id]||0)>=s?"#A98FFF":"#555",fontSize:10,cursor:"pointer"}}>
+                                          style={{width:22,height:22,borderRadius:3,border:"1px solid",borderColor:(emp.scores?.[c.id]||0)>=s?"#7C5CFC":"#E8E0D0",background:(emp.scores?.[c.id]||0)>=s?"#7C5CFC22":"none",color:(emp.scores?.[c.id]||0)>=s?"#A98FFF":"#555",fontSize:10,cursor:"pointer"}}>
                                           {s}
                                         </button>
                                       ))}
@@ -5677,7 +5677,7 @@ ${m.content}`;
                                 {isOverdue&&<span style={{fontSize:10,color:"#B87520",marginLeft:8}}>overdue</span>}
                               </div>
                               <button onClick={()=>toggleFollowUpDone(note.id)}
-                                style={{background:note.followUpDone?"#7C5CFC22":"none",border:"1px solid",borderColor:note.followUpDone?"#7C5CFC":"#2A2A35",borderRadius:5,padding:"3px 10px",fontSize:11,color:note.followUpDone?"#A98FFF":"#666",cursor:"pointer"}}>
+                                style={{background:note.followUpDone?"#7C5CFC22":"none",border:"1px solid",borderColor:note.followUpDone?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:note.followUpDone?"#A98FFF":"#666",cursor:"pointer"}}>
                                 {note.followUpDone?"Done":"Mark done"}
                               </button>
                             </div>
@@ -5858,7 +5858,7 @@ ${m.content}`;
               <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Word letter template</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Upload your .docx with header/footer. Enables Word export on letters.</p></div>
               <Badge color="#1C5AA0">WORD</Badge>
             </div>
-            {wordTemplate?<div style={{background:"#FDFAF5",borderRadius:7,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#1A1535"}}>{wordTemplate.name}</span><Btn variant="danger" onClick={()=>{setWordTemplate(null);lsSet("compass_word_template",null);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn></div>:<div style={{background:"#FDFAF5",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No template uploaded</div>}
+            {wordTemplate?<div style={{background:"#FDFAF5",borderRadius:7,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#1A1535"}}>{wordTemplate.name}</span><Btn variant="danger" onClick={()=>{setWordTemplate(null);lsSet("compass_word_template",null);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn></div>:<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No template uploaded</div>}
             <input ref={wordTemplateRef} type="file" accept=".docx" onChange={handleWordTemplateUpload} style={{display:"none"}} />
             <Btn variant="blue" onClick={()=>wordTemplateRef.current?.click()}>{wordTemplate?"Replace":"Upload .docx template"} →</Btn>
           </Card>
@@ -5869,7 +5869,7 @@ ${m.content}`;
               <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Letterhead image</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>PNG or JPG — appears at top of PDF letters.</p></div>
               <Badge>PDF</Badge>
             </div>
-            {letterhead?<div style={{background:"#fff",borderRadius:7,padding:12,marginBottom:12,position:"relative"}}><img src={letterhead} alt="Letterhead" style={{width:"100%",maxHeight:100,objectFit:"contain",objectPosition:"left"}}/><button onClick={()=>{setLetterhead(null);lsSet("compass_letterhead",null);}} style={{position:"absolute",top:6,right:6,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button></div>:<div style={{background:"#FDFAF5",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No letterhead uploaded</div>}
+            {letterhead?<div style={{background:"#fff",borderRadius:7,padding:12,marginBottom:12,position:"relative"}}><img src={letterhead} alt="Letterhead" style={{width:"100%",maxHeight:100,objectFit:"contain",objectPosition:"left"}}/><button onClick={()=>{setLetterhead(null);lsSet("compass_letterhead",null);}} style={{position:"absolute",top:6,right:6,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button></div>:<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No letterhead uploaded</div>}
             <input ref={letterheadRef} type="file" accept="image/*" onChange={handleLetterheadUpload} style={{display:"none"}} />
             <Btn onClick={()=>letterheadRef.current?.click()}>{letterhead?"Replace":"Upload letterhead"} →</Btn>
           </Card>
@@ -5880,9 +5880,9 @@ ${m.content}`;
               <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>E-signature</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Draw or type your signature. Applied to all PDF letters.</p></div>
             </div>
             {signature?<div style={{background:"#fff",borderRadius:7,padding:"12px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              {signature.type==="typed"?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:28,color:"#1C1C22"}}>{signature.data}</div>:<img src={signature.data} alt="Sig" style={{maxHeight:45,maxWidth:160}}/>}
+              {signature.type==="typed"?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:28,color:"#FFFFFF"}}>{signature.data}</div>:<img src={signature.data} alt="Sig" style={{maxHeight:45,maxWidth:160}}/>}
               <Btn variant="danger" onClick={()=>{setSignature(null);lsSet("compass_signature",null);}} style={{padding:"3px 10px",fontSize:11}}>Remove</Btn>
-            </div>:<div style={{background:"#FDFAF5",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No signature saved</div>}
+            </div>:<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No signature saved</div>}
             <Btn onClick={()=>setShowSigPad(true)}>{signature?"Update":"Create"} signature →</Btn>
           </Card>
 
@@ -5905,7 +5905,7 @@ ${m.content}`;
                 ))}
               </div>
             )}
-            {policies.length===0&&<div style={{background:"#FDFAF5",border:"2px dashed #2A2A35",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:14,fontSize:12,color:"#5A5570"}}>No policies uploaded</div>}
+            {policies.length===0&&<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:14,fontSize:12,color:"#5A5570"}}>No policies uploaded</div>}
             <input ref={policyFileRef} type="file" multiple accept=".txt,.md,.docx" onChange={handlePolicyUpload} style={{display:"none"}} />
             <Btn onClick={()=>policyFileRef.current?.click()} disabled={policyProcessing}>{policyProcessing?"Processing...":"+ Upload policies →"}</Btn>
             {policies.length>0&&<div style={{marginTop:12,fontSize:11,color:"#7C5CFC"}}>✓ Active in: prep, note structuring, letter drafting, risk scoring</div>}
