@@ -2260,8 +2260,8 @@ Please produce:
     try {
       const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:350,stream:false,
-          system:"UK HR advisor. Concise bullet points only. Legally aware.",
-          messages:[{role:"user",content:"Brief for "+mtLabel+" with "+empName+"."+nl+"History:"+nl+history+nl+"Risk: "+lastRisk+nl+nl+"Give: 1) Key context (2-3 bullets) 2) Watch out for (2-3 bullets) 3) Key questions (3 bullets)"}]
+          system:"You are a UK HR advisor. Write in plain prose only. No markdown, no asterisks, no hashes, no emojis, no horizontal rules, no bold. Use clean numbered sections with short bullet points using a simple dash character.",
+          messages:[{role:"user",content:"Prepare a brief for a "+mtLabel+" meeting with "+empName+"."+nl+"Previous meetings: "+history+nl+"Risk level: "+lastRisk+nl+nl+"Write three sections:"+nl+"1. Key context"+nl+"2. Watch out for"+nl+"3. Key questions to ask"+nl+nl+"Use plain text only. Each section has 2-3 short bullet points starting with a dash. No markdown formatting."}]
         })});
       const d = await res.json();
       const txt = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
