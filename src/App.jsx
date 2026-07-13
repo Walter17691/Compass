@@ -274,8 +274,8 @@ function SectionTitle({ children }) {
 }
 
 function MDRenderer({ text, light }) {
-  const base = light ? "#1C1C22" : "#F2EDE4";
-  const muted = light ? "#4A5060" : "#C4BDAF";
+  const base = "#1A1535";
+  const muted = "#6B6375";
   const accent = "#7C5CFC";
   if(!text) return null;
 
@@ -3154,7 +3154,7 @@ Please produce:
                         }
                         {/* Meeting Dialogue with edit button */}
                         {dlgSection&&(<>
-                          <div style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
+                          <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
                             <div style={{fontSize:11,color:"#6B6375",marginBottom:8}}>Enter names before generating the record for best results:</div>
                             <div style={{display:"flex",gap:8}}>
                               <input value={caseInfo.manager||""} 
