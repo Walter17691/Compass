@@ -28,7 +28,7 @@ const SCREENS = {
   HOME:"home", CASES:"cases", PREP:"prep", RECORD:"record",
   REVIEW:"review", LETTER:"letter", SETTINGS:"settings",
   DASHBOARD:"dashboard", PORTAL:"portal", TIMELINE:"timeline",
-  TEMPLATES:"templates", WHISTLE:"whistle", HR_REVIEW:"hr_review", AUDIT:"audit", BRIEF:"brief", PREDICT:"predict",
+  TEMPLATES:"templates", WHISTLE:"whistle", HR_REVIEW:"hr_review", AUDIT:"audit", BRIEF:"brief", PEOPLE:"people", PREDICT:"predict",
   DEVELOP:"develop", SEARCH:"search", GDPR:"gdpr", ONBOARD:"onboard",
   NEWSTARTER:"newstarter", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing",
@@ -522,6 +522,12 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showPicker, setShowPicker] = useState(false);
   const [meetingSetup, setMeetingSetup] = useState({employee:"", type:"", date:new Date().toISOString().split("T")[0]});
   const [liveChatInput, setLiveChatInput] = useState("");
+  const [editInstruction, setEditInstruction] = useState("");
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareProcessing, setShareProcessing] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [editProcessing, setEditProcessing] = useState(false);
   const [briefData, setBriefData] = useState(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
@@ -2264,6 +2270,54 @@ Please produce:
     setBriefLoading(false);
   };
 
+  const editRecord = async (instruction) => {
+    if(!instruction.trim()||!reviewOutput) return;
+    setEditProcessing(true);
+    try {
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
+          system:"You are a UK HR documentation specialist. Edit the meeting record as instructed. Keep the same format and structure. Output only the updated record.",
+          messages:[{role:"user",content:"Current record:"+String.fromCharCode(10)+reviewOutput+String.fromCharCode(10)+String.fromCharCode(10)+"Instruction: "+instruction+String.fromCharCode(10)+String.fromCharCode(10)+"Output the complete updated record only."}]
+        })});
+      const d = await res.json();
+      const txt = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(txt) setReviewOutput(txt);
+      setEditInstruction("");
+    } catch(e){}
+    setEditProcessing(false);
+  };
+
+
+  const ACAS_TEMPLATES = {
+    "investigation": ["Explain purpose of investigation meeting","Ask employee to describe events in their own words","Establish timeline of events","Identify any witnesses","Ask if there is anything else they wish to add","Inform of next steps"],
+    "disciplinary": ["Confirm employee received invitation and evidence","Read out the allegation(s)","Ask employee to respond to each allegation","Hear any mitigation","Ask if employee has any witnesses or evidence","Explain right of appeal"],
+    "grievance": ["Ask employee to explain their grievance in full","Establish key facts and dates","Ask who else is involved","Ask what outcome they are seeking","Explore any previous attempts to resolve","Explain next steps and timescales"],
+    "redundancy-atrisk": ["Explain business reason for redundancy proposal","Confirm role is at risk not the person","Explain selection criteria if applicable","Ask for employee views on alternatives","Discuss suitable alternative vacancies","Confirm consultation period and next meeting date"],
+    "return": ["Welcome employee back","Ask how they are feeling","Discuss any ongoing health concerns","Review any fit note restrictions","Agree any reasonable adjustments","Confirm return to work plan"],
+    "appeal-disciplinary": ["Confirm grounds of appeal","Allow employee to present their case","Review original decision and process","Consider any new evidence","Adjourn to make decision","Communicate outcome"],
+    "pip-review": ["Review objectives set at last meeting","Discuss progress against each objective","Identify any support needed","Set objectives for next review period","Confirm consequences if improvement not achieved","Agree review date"],
+    "informal": ["Check in on wellbeing","Discuss workload and priorities","Raise any concerns","Agree any actions","Confirm support available"],
+  };
+
+
+  const shareRecord = async (email) => {
+    if(!email||!reviewOutput) return;
+    setShareProcessing(true);
+    try {
+      await fetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          to:email,
+          subject:(meetingType?.label||"Meeting")+" Record - "+caseInfo.employee,
+          html:"<div style='font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px'><h2 style='color:#7C5CFC'>Compass HR</h2><h3>"+( meetingType?.label||"Meeting")+" Record</h3><p><strong>Employee:</strong> "+caseInfo.employee+"</p><p><strong>Date:</strong> "+caseInfo.date+"</p><hr/><div style='white-space:pre-wrap;font-size:14px;line-height:1.6'>"+reviewOutput+"</div><p style='color:#999;font-size:12px;margin-top:20px'>Sent via Compass HR | Private and Confidential</p></div>"
+        })});
+      showToast("Record shared with "+email);
+      setShowShareModal(false);
+      setShareEmail("");
+    } catch(e){ showToast("Failed to share record","error"); }
+    setShareProcessing(false);
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#0F0F12",fontFamily:"Inter,system-ui,sans-serif",color:"#F2EDE4"}}>
       <style>{`
@@ -2279,6 +2333,26 @@ Please produce:
         button{cursor:pointer;}
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#0D0D0F;}::-webkit-scrollbar-thumb{background:#2A2A35;border-radius:2px;}
       `}</style>
+
+      {showShareModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#131316",border:"1px solid #222228",borderRadius:16,padding:28,width:"100%",maxWidth:420}}>
+            <h3 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:18,color:"#F0EDF8",marginBottom:8,fontWeight:400}}>Share meeting record</h3>
+            <p style={{fontSize:13,color:"#4A4760",marginBottom:20}}>Send the meeting record to an email address</p>
+            <input value={shareEmail} onChange={e=>setShareEmail(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&shareRecord(shareEmail)}
+              placeholder="Email address"
+              type="email"
+              style={{width:"100%",background:"#0C0C0F",border:"1px solid #222228",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#F0EDF8",outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={()=>shareRecord(shareEmail)} disabled={shareProcessing||!shareEmail.trim()} style={{flex:1}}>
+                {shareProcessing?"Sending...":"Send"}
+              </Btn>
+              <Btn variant="ghost" onClick={()=>setShowShareModal(false)} style={{flex:1}}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLinkCase&&appealDetected&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -2535,7 +2609,7 @@ Please produce:
               </button>
             ))}
             {!meetingType&&[
-              {s:SCREENS.CASES,l:"Cases"},
+              {s:SCREENS.CASES,l:"Cases"},{s:SCREENS.PEOPLE,l:"People"},
               ...(isHR?[{s:SCREENS.HR_REVIEW,l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
             ].map(({s,l})=>(
               <button key={s} onClick={()=>setScreen(s)}
@@ -2728,6 +2802,47 @@ Please produce:
         </div>
       )}
 
+
+      {/* ══ PEOPLE ══ */}
+      {screen===SCREENS.PEOPLE&&(
+        <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
+          <h2 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>People</h2>
+          <p style={{fontSize:13,color:"#4A4760",margin:"0 0 24px"}}>All employees with meeting history</p>
+          {(()=>{
+            const people = [...new Set(cases.map(c=>c.employeeName))].map(name=>{
+              const empCases = cases.filter(c=>c.employeeName===name);
+              const meetings = empCases.flatMap(c=>c.meetings||[]).sort((a,b)=>new Date(b.date)-new Date(a.date));
+              const lastRisk = meetings.find(m=>m.riskScore?.rating)?.riskScore?.rating;
+              return {name, meetings, lastRisk, lastDate:meetings[0]?.date};
+            }).sort((a,b)=>new Date(b.lastDate)-new Date(a.lastDate));
+            return(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {people.map(p=>(
+                  <div key={p.name} onClick={()=>{setScreen(SCREENS.CASES);}}
+                    style={{background:"#131316",border:"1px solid #222228",borderRadius:12,padding:"16px 20px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:16,color:"#F0EDF8",marginBottom:4}}>{p.name}</div>
+                      <div style={{fontSize:12,color:"#4A4760"}}>{p.meetings.length} meeting{p.meetings.length!==1?"s":""} · Last: {p.lastDate||"Unknown"}</div>
+                      <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+                        {p.meetings.slice(0,3).map((m,i)=>(
+                          <span key={i} style={{fontSize:11,background:"#1A1A1F",border:"1px solid #222228",borderRadius:4,padding:"2px 8px",color:"#8B87A0"}}>{m.type}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+                      {p.lastRisk&&<span style={{fontSize:11,fontWeight:600,color:p.lastRisk==="HIGH"?"#F04E37":p.lastRisk==="MEDIUM"?"#F59E0B":"#22C55E",background:p.lastRisk==="HIGH"?"rgba(240,78,55,0.1)":p.lastRisk==="MEDIUM"?"rgba(245,158,11,0.1)":"rgba(34,197,94,0.1)",padding:"3px 8px",borderRadius:4}}>{p.lastRisk} RISK</span>}
+                      <button onClick={e=>{e.stopPropagation();setCaseInfo(p2=>({...p2,employee:p.name}));setMeetingSetup(s=>({...s,employee:p.name}));setScreen(SCREENS.HOME);}}
+                        style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:5,padding:"4px 10px",color:"#fff",cursor:"pointer",fontWeight:500}}>New meeting</button>
+                    </div>
+                  </div>
+                ))}
+                {people.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:"#4A4760",fontSize:13}}>No people yet — start a meeting to create records</div>}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
 {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
         <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
@@ -2851,6 +2966,7 @@ Please produce:
             </div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               {isListening&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#E8622A"}}><span className="pu">&#9679;</span> Listening</div>}
+              {meetingStartTime&&<div style={{fontSize:11,color:"#4A4760",fontFamily:"monospace"}}>{meetingStartTime}</div>}
               {isScreenCapturing&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#7C5CFC"}}><span className="pu">&#9679;</span> Capturing</div>}
               <Btn onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}}
                 disabled={aiProcessing||(transcript.length===0&&!inputText.trim())}
@@ -2890,7 +3006,7 @@ Please produce:
                   <span style={{fontSize:10,color:"#4A4560",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginRight:4}}>Ask next:</span>
                   {(liveContext
                     ? liveContext.split(/\d+\./).filter(q=>q.trim()).slice(0,3)
-                    : (MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3)
+                    : (ACAS_TEMPLATES[meetingType?.id]||MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3)
                   ).map((q,i)=>(
                     <button key={i}
                       onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
@@ -3000,6 +3116,7 @@ Please produce:
                 requestHrReview("record", cs?.id||null, null, reviewOutput);
               }} variant="ghost" style={{fontSize:13}}>Request HR review</Btn>}
               <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}} variant="ghost" style={{fontSize:13}}>Save to case file</Btn>
+              <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share record</Btn>
               <Btn onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC"}}>Draft letter →</Btn>
             </div>
           </div>
