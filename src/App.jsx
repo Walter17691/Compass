@@ -651,7 +651,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     try {
       const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:250, stream:false,
-          system:"You are an HR advisor listening to a live meeting. Based on what has been said so far, suggest 3 short follow-up questions the chair should ask next. Format as a numbered list only. No preamble, no bold, no emoji. Make questions specific to what has been discussed.",
+          system:"You are an HR advisor listening to a live meeting. In 2-3 short sentences, summarise the key points covered so far and flag any immediate legal or procedural risks. No questions. No bullet points. Plain prose only. Be specific to what was said.",
           messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nNotes:\n"+notes.slice(-2000)}]})});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
@@ -3247,7 +3247,7 @@ Please produce:
                   {liveChatHistory.map((m,i)=>(
                     <div key={i} style={{marginBottom:12}}>
                       <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
-                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}>{m.content}</div>
+                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
                     </div>
                   ))}
                   {liveChatProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
