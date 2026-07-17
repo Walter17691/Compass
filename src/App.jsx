@@ -278,25 +278,23 @@ function MDRenderer({ text, light }) {
   const muted = "#6B6375";
   const accent = "#7C5CFC";
   if(!text) return null;
-
-
-
-
+  const clean = text
+    .replace(/\*\*(.+?)\*\*/g, '')
+    .replace(/\*(.+?)\*/g, '')
+    .replace(/#{1,3} /g, '');
+  const lines = clean.split(String.fromCharCode(10));
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",fontFamily:"Inter,system-ui,sans-serif", lineHeight:1.75, color:base, fontSize:14}}>
-      {text.split("\n").map((line, i) => {
-        if(line.startsWith("## ")) return <h3 key={i} style={{fontFamily:"DM Serif Display,Georgia,serif", fontSize:16, fontWeight:600, color:accent, margin:"24px 0 8px"}}>{line.slice(3)}</h3>;
-        if(line.startsWith("# ")) return <h2 key={i} style={{fontFamily:"DM Serif Display,Georgia,serif", fontSize:20, fontWeight:600, color:base, margin:"8px 0 16px"}}>{line.slice(2)}</h2>;
-        if(line.match(/^\*\*(.+)\*\*$/)) return <p key={i} style={{fontWeight:600, color:base, margin:"8px 0 4px"}}>{line.slice(2,-2)}</p>;
-        if(line.startsWith("- ") || line.startsWith("* ")) return <div key={i} style={{display:"flex", gap:8, margin:"3px 0"}}><span style={{color:accent}}>·</span><span>{line.slice(2)}</span></div>;
-        if(/^\d+\.\s/.test(line)) return <div key={i} style={{display:"flex", gap:10, margin:"3px 0"}}><span style={{color:accent, fontWeight:600}}>{line.match(/^\d+/)[0]}.</span><span>{line.replace(/^\d+\.\s/,"")}</span></div>;
-        if(line.trim()==="") return <div key={i} style={{height:6}} />;
-        if(line.startsWith("---")) return <hr key={i} style={{border:"none", borderTop:"1px solid #E8E0D0", margin:"16px 0"}} />;
-        return <p key={i} style={{margin:"2px 0", color:line.startsWith("[") ? muted : base}}>{line}</p>;
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.7,color:base}}>
+      {lines.map((line,i)=>{
+        if(!line.trim()) return <div key={i} style={{height:8}}/>;
+        if(line.startsWith('- ') || line.startsWith('• ')) return <div key={i} style={{display:"flex",gap:8,marginBottom:4}}><span style={{color:accent,flexShrink:0,marginTop:2}}>·</span><span style={{color:base}}>{line.slice(2)}</span></div>;
+        if(/^\d+\./.test(line)) return <div key={i} style={{marginBottom:4,color:base}}>{line}</div>;
+        return <p key={i} style={{margin:"0 0 8px",color:base}}>{line}</p>;
       })}
     </div>
   );
 }
+
 
 function SignaturePad({ onSave, onClose }) {
   const canvasRef = useRef(null);
@@ -631,7 +629,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
           model:"claude-sonnet-4-6",
           max_tokens:300,
           stream:false,
-          system:"You are an HR advisor listening to a live meeting. Answer questions briefly and practically based on the transcript. Reference UK employment law and ACAS where relevant. Be concise — max 3 sentences.",
+          system:"You are an HR advisor listening to a live meeting. Answer questions briefly and practically. Reference UK employment law and ACAS where relevant. Be concise — max 3 sentences. Use plain text only — no asterisks, no bold, no markdown formatting of any kind.",
           messages:[
             ...liveChatHistory.map(m=>({role:m.role,content:m.content})),
             {role:"user",content:"Meeting type: "+(meetingType?.label||"General")+String.fromCharCode(10)+"Employee: "+(caseInfo.employee||"Unknown")+String.fromCharCode(10)+"Transcript so far:"+String.fromCharCode(10)+tx+String.fromCharCode(10)+"Question: "+question}
