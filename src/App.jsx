@@ -528,6 +528,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [editProcessing, setEditProcessing] = useState(false);
   const [briefData, setBriefData] = useState(null);
   const [homeChat, setHomeChat] = useState([]);
+  const [askCompassHistory, setAskCompassHistory] = useState([]);
+  const [askCompassInput, setAskCompassInput] = useState("");
+  const [askCompassProcessing, setAskCompassProcessing] = useState(false);
   const [homeChatInput, setHomeChatInput] = useState("");
   const [homeChatLoading, setHomeChatLoading] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
@@ -2339,6 +2342,26 @@ Please produce:
   };
 
 
+  const askCompass = async (question) => {
+    if(!question.trim()||askCompassProcessing) return;
+    setAskCompassInput("");
+    setAskCompassHistory(h=>[...h,{role:"user",content:question}]);
+    setAskCompassProcessing(true);
+    try {
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:400,stream:false,
+          system:"You are a UK HR advisor. Answer questions about this meeting record. Be concise and practical. No asterisks, no bold, no markdown.",
+          messages:[...askCompassHistory.map(m=>({role:m.role,content:m.content})),
+            {role:"user",content:"Meeting record:"+String.fromCharCode(10)+reviewOutput+String.fromCharCode(10)+String.fromCharCode(10)+"Question: "+question}]
+        })});
+      const d = await res.json();
+      const txt = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(txt) setAskCompassHistory(h=>[...h,{role:"assistant",content:txt}]);
+    } catch(e){}
+    setAskCompassProcessing(false);
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
       <style>{`
@@ -3269,317 +3292,150 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <div style={{maxWidth:1440,margin:"0 auto",padding:"28px 20px"}}>
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
-          {/* Action bar */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-            <div>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:2}}>{caseInfo.employee||"Meeting"} — {meetingType?.label}</div>
-              <div style={{fontSize:12,color:"#6B6880"}}>{caseInfo.date} · Review and approve the record before saving</div>
+          {/* Top action bar */}
+          <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <CompassLogo size={22}/>
+              <div style={{width:1,height:20,background:"#EDE5D8"}}/>
+              <div>
+                <span style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{caseInfo.employee}</span>
+                <span style={{fontSize:13,color:"#9B9098",margin:"0 6px"}}>—</span>
+                <span style={{fontSize:13,color:"#6B6375"}}>{meetingType?.label}</span>
+                <span style={{fontSize:12,color:"#9B9098",marginLeft:8}}>{caseInfo.date}</span>
+              </div>
             </div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {!isHR&&<Btn onClick={()=>{
-                const cs = cases.find(x=>x.employeeName===caseInfo.employee?.trim());
-                requestHrReview("record", cs?.id||null, null, reviewOutput);
-              }} variant="ghost" style={{fontSize:13}}>Request HR review</Btn>}
-              <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}} variant="ghost" style={{fontSize:13}}>Save to case file</Btn>
-              <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share record</Btn>
-              <Btn onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC"}}>Draft letter →</Btn>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {!isHR&&(
+                <Btn onClick={()=>{
+                  const cs=cases.find(x=>x.employeeName===caseInfo.employee?.trim());
+                  requestHrReview("record",cs?.id||null,null,reviewOutput);
+                }} variant="ghost" style={{fontSize:13}}>Request HR review</Btn>
+              )}
+              <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share</Btn>
+              <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} variant="secondary" style={{fontSize:13}}>Save to case</Btn>
+              <Btn onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>Draft letter →</Btn>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start",gridTemplateColumns:isMobile?"1fr":"1fr 380px"}}>
+
+          {/* Main layout */}
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 24px",display:"grid",gridTemplateColumns:"1fr 340px",gap:24,alignItems:"start"}}>
+
+            {/* Left — record */}
             <div>
-              {/* Meeting record */}
-              <Card style={{marginBottom:16}}>
-                <div style={{display:"flex",justifyContent:"center",alignItems:"center",marginBottom:16,position:"relative"}}>
-                  <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",fontWeight:600,margin:0}}>Meeting Details</h3>
-                  <button onClick={()=>setEditingStructured(e=>!e)} style={{background:editingStructured?"#7C5CFC":"none",border:"1px solid",borderColor:editingStructured?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingStructured?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>{editingStructured?"Done":"Edit record"}</button>
-                </div>
-                {aiProcessing&&!reviewOutput&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#6B6375",marginTop:10,fontSize:12}}>Structuring...</div></div>}
-                {aiError&&(
-                  <div style={{background:"#FEEDED",border:"1px solid #E8622A44",borderRadius:8,padding:"14px 18px",marginBottom:14}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"#C84B2F",marginBottom:4}}>Error</div>
-                    <div style={{fontSize:11,color:"#6B6375",fontFamily:"JetBrains Mono,monospace"}}>{aiError}</div>
-                    <Btn onClick={handleReview} style={{marginTop:10,padding:"6px 14px",fontSize:11}}>Retry</Btn>
+              {/* Edit bar */}
+              <div style={{display:"flex",gap:8,marginBottom:16}}>
+                <input value={editInstruction} onChange={e=>setEditInstruction(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&editRecord(editInstruction)}
+                  placeholder='Edit the record... e.g. "Make section 2 more formal" or "Add that the employee denied the allegation"'
+                  style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.08)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="none";}}/>
+                <button onClick={()=>editRecord(editInstruction)} disabled={editProcessing||!editInstruction.trim()}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:500,opacity:editProcessing||!editInstruction.trim()?0.4:1,whiteSpace:"nowrap",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  {editProcessing?"Editing...":"Edit"}
+                </button>
+              </div>
+
+              {/* Name fields */}
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"center"}}>
+                <span style={{fontSize:12,color:"#9B9098",whiteSpace:"nowrap"}}>Chair:</span>
+                <input value={caseInfo.manager||""} onChange={e=>{setCaseInfo(p=>({...p,manager:e.target.value}));syncNameToRecord("manager",e.target.value);}}
+                  placeholder="Chair name"
+                  style={{flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+                <div style={{width:1,height:16,background:"#EDE5D8"}}/>
+                <span style={{fontSize:12,color:"#9B9098",whiteSpace:"nowrap"}}>Employee:</span>
+                <input value={caseInfo.employee||""} onChange={e=>{setCaseInfo(p=>({...p,employee:e.target.value}));syncNameToRecord("employee",e.target.value);}}
+                  placeholder="Employee name"
+                  style={{flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+              </div>
+
+              {/* Record */}
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"28px 32px",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
+                {aiProcessing&&!reviewOutput&&(
+                  <div style={{textAlign:"center",padding:"48px 0",color:"#9B9098",fontSize:14}}>
+                    <div className="pu" style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",display:"inline-block",marginBottom:12}}></div>
+                    <div>Compass is generating your record...</div>
                   </div>
                 )}
-                {reviewOutput&&(
-                  <>
-                    {(()=>{
-                      const dlgMarker = reviewOutput.indexOf("## Meeting Dialogue");
-                      const afterDlg = dlgMarker>-1 ? reviewOutput.indexOf("\n## ",dlgMarker+5) : -1;
-                      const topSection = dlgMarker>-1 ? reviewOutput.slice(0,dlgMarker) : reviewOutput;
-                      const dlgSection = dlgMarker>-1 && afterDlg>-1 ? reviewOutput.slice(dlgMarker,afterDlg) : "";
-                      const bottomSection = afterDlg>-1 ? reviewOutput.slice(afterDlg) : "";
-                      return (<>
-{/* Top section - edit button appears next to first header */}
-
-                        {editingStructured
-                          ?<textarea value={topSection} onChange={e=>setReviewOutput(e.target.value+dlgSection+bottomSection)}
-                            style={{width:"100%",minHeight:120,background:"#FDFAF5",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif",marginBottom:12}}></textarea>
-                          :<MDRenderer text={topSection.replace("## Meeting Details","").replace("## Meeting Details\n","").trim()}/>
-                        }
-                        {/* Meeting Dialogue with edit button */}
-                        {dlgSection&&(<>
-                          <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px",margin:"16px 0 8px"}}>
-                            <div style={{fontSize:11,color:"#6B6375",marginBottom:8}}>Enter names before generating the record for best results:</div>
-                            <div style={{display:"flex",gap:8}}>
-                              <input value={caseInfo.manager||""} 
-                                onChange={e=>{setCaseInfo(p=>({...p,manager:e.target.value}));syncNameToRecord('manager',e.target.value);}}
-
-                                placeholder="Chair / Manager name"
-                                style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#1A1535"}}/>
-                              <input value={caseInfo.employee||""}
-                                onChange={e=>{setCaseInfo(p=>({...p,employee:e.target.value}));syncNameToRecord('employee',e.target.value);}}
-
-                                placeholder="Employee name"
-                                style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:13,outline:"none",color:"#1A1535"}}/>
-                              <button onClick={async()=>{
-                                if(!caseInfo.manager||!caseInfo.employee) return;
-                                const mInit=caseInfo.manager.split(" ").filter(Boolean).map(w=>w[0].toUpperCase()).join("");
-                                const eInit=caseInfo.employee.split(" ").filter(Boolean).map(w=>w[0].toUpperCase()).join("");
-                                const dlgStart=reviewOutput.indexOf("## Meeting Dialogue");
-                                const dlgEnd=reviewOutput.indexOf("\n## ",dlgStart+5);
-                                const dlgText=dlgStart>-1?reviewOutput.slice(dlgStart,dlgEnd>-1?dlgEnd:undefined):"";
-                                if(!dlgText) return;
-                                const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                                  body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,stream:false,
-                                    system:"You are a transcript editor. Replace initials in this dialogue. Chair="+mInit+" ("+caseInfo.manager+"), Employee="+eInit+" ("+caseInfo.employee+"). In HR meetings managers ask questions. Return ONLY the dialogue lines with corrected initials, no other text.",
-                                    messages:[{role:"user",content:dlgText}]})});
-                                const data=await res.json();
-                                const updated=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-                                if(updated){
-                                  const before=dlgStart>-1?reviewOutput.slice(0,dlgStart):"";
-                                  const after=dlgEnd>-1?reviewOutput.slice(dlgEnd):"";
-                                  setReviewOutput(before+"## Meeting Dialogue\n"+updated.replace("## Meeting Dialogue\n","").trim()+after);
-                                }
-                              }} style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",fontSize:12,color:"#fff",cursor:"pointer",whiteSpace:"nowrap"}}>
-                                Update initials
-                              </button>
-                            </div>
-                          </div>
-                          <div style={{display:"flex",justifyContent:"center",alignItems:"center",margin:"16px 0 6px",position:"relative"}}>
-                            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,fontWeight:600,color:"#7C5CFC",margin:0,flex:1,textAlign:"center"}}>Meeting Dialogue</h3>
-                            <button onClick={()=>setEditingRecord(e=>!e)}
-                              style={{background:editingRecord?"#7C5CFC":"none",border:"1px solid",borderColor:editingRecord?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:editingRecord?"#fff":"#888",cursor:"pointer",position:"absolute",right:0}}>
-                              {editingRecord?"Done":"Edit dialogue"}
-                            </button>
-                          </div>
-                          {editingRecord
-                            ?<textarea value={dlgSection.replace("## Meeting Dialogue\n","")} onChange={e=>setReviewOutput(topSection+"## Meeting Dialogue\n"+e.target.value+bottomSection)}
-                              style={{width:"100%",minHeight:200,background:"#FDFAF5",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"Inter,sans-serif"}}></textarea>
-                            :<MDRenderer text={dlgSection.replace("## Meeting Dialogue\n","")}/>
-                          }
-                        </>)}
-                        <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
-                      <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
-                      {!isHR&&<Btn onClick={()=>{
-                        const cs = cases.find(x=>x.employeeName===caseInfo.employee.trim());
-                        requestHrReview("record", cs?.id||null, null, reviewOutput);
-                      }} style={{background:"#D4882A",borderColor:"#D4882A"}}>Request HR review</Btn>}
-                      <Btn onClick={()=>setShowSignModal(true)} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",color:"#1A1535"}}>Send for signature ✉</Btn>
-                      {signId&&(
-                        <button onClick={async()=>{
-                          const r=await fetch("/api/signing?signId="+signId);
-                          const d=await r.json();
-                          setSignStatus(d.status);
-                        }} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 12px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>
-                          {signStatus==="signed"?"✓ Signed":"Check signature status"}
-                        </button>
-                      )}
-                      <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(reviewOutput)}>Copy</Btn>
-                    </div>
-                        {bottomSection&&<MDRenderer text={bottomSection}/>}
-                      </>);
-                    })()}
-                                      </>
-                )}
-              </Card>
-
-              {/* Next steps & deadlines */}
-              {nextSteps.length>0&&(
-                <Card style={{marginBottom:16}}>
-                  <SectionTitle>Next Steps &amp; ACAS Deadlines</SectionTitle>
-                  {nextSteps.map((s,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<nextSteps.length-1?"1px solid #FFFFFF":"none"}}>
-                      <button onClick={()=>setNextSteps(ns=>ns.map((x,j)=>j===i?{...x,done:!x.done}:x))}
-                        style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:s.done?"#7C5CFC":"#E8E0D0",background:s.done?"#7C5CFC22":"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        {s.done&&<span style={{color:"#7C5CFC",fontSize:11}}>✓</span>}
-                      </button>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:13,color:s.done?"#555":"#F2EDE4",textDecoration:s.done?"line-through":"none"}}>{s.step}</div>
-                      </div>
-                      {s.deadline&&(
-                        <div style={{fontSize:11,color:"#6B6375",fontFamily:"JetBrains Mono,monospace",flexShrink:0,textAlign:"right"}}>
-                          <div style={{fontSize:9,color:"#6B6880",marginBottom:1}}>deadline</div>
-                          {s.deadline}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </Card>
-              )}
-
-              {/* Risk & Prediction */}
-              <Card style={{marginBottom:16}}>
-                <div style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Legal Risk & Tribunal Prediction</div>
-                {riskScore&&(()=>{
-                  const rC={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
-                  const col=rC[riskScore.rating]||"#888";
-                  return(
-                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,paddingBottom:16,borderBottom:"1px solid #E8E0D0"}}>
-                      <div style={{width:52,height:52,borderRadius:"50%",background:col+"22",border:"2px solid "+col,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <span style={{fontSize:9,fontWeight:800,color:col,letterSpacing:0.5}}>{riskScore.rating}</span>
-                      </div>
-                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.7,fontFamily:"Inter,sans-serif",flex:1}}>{riskScore.summary}</div>
-                    </div>
-                  );
-                })()}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <div style={{fontSize:11,color:"#6B6375"}}>Tribunal outcome prediction</div>
-                  <Btn onClick={runPrediction} disabled={predProcessing} style={{padding:"4px 10px",fontSize:11}}>
-                    {predProcessing?"Running...":"Run prediction"}
-                  </Btn>
-                </div>
-                {predProcessing&&<div style={{textAlign:"center",padding:20}}><span className="pu" style={{color:"#7C5CFC",fontSize:18}}>●</span></div>}
-                {prediction&&<MDRenderer text={prediction}/>}
-                {!prediction&&!predProcessing&&(
-                  <div style={{fontSize:11,color:"#5A5570",lineHeight:1.6}}>
-                    Analyses the case against ERA 1996, ACAS Code, and comparable tribunal outcomes.
-                    <div style={{fontSize:10,color:"#4A4560",marginTop:4}}>Not legal advice — consult a qualified employment solicitor for complex cases.</div>
-                  </div>
-                )}
-              </Card>
+                {reviewOutput&&<div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={reviewOutput}/></div>}
+                {aiError&&<div style={{color:"#C84B2F",fontSize:13,padding:16}}>{aiError}</div>}
+              </div>
             </div>
 
-            {/* Right panel */}
-            <div>
+            {/* Right sidebar */}
+            <div style={{display:"flex",flexDirection:"column",gap:16,position:"sticky",top:80}}>
 
+              {/* Risk score */}
+              {riskScore&&(
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Risk assessment</div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:riskScore.rating==="HIGH"?"#C84B2F":riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",flexShrink:0}}></div>
+                    <span style={{fontSize:18,fontWeight:700,color:riskScore.rating==="HIGH"?"#C84B2F":riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",fontFamily:"DM Serif Display,Georgia,serif"}}>{riskScore.rating}</span>
+                    <span style={{fontSize:12,color:"#9B9098"}}>tribunal risk</span>
+                  </div>
+                  {riskScore.summary&&<div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}><MDRenderer text={riskScore.summary}/></div>}
+                </div>
+              )}
+
+              {/* What to do next */}
+              {reviewOutput&&(
+                <div style={{background:"#EDE8FF",border:"1px solid #D4C9F5",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10}}>Compass recommends</div>
+                  <div style={{fontSize:13,color:"#3D3560",lineHeight:1.7}}>
+                    {meetingType?.group==="formal"?"Based on this meeting, draft the outcome letter and save to the case file. Ensure the letter is sent within a reasonable timeframe per the ACAS Code.":
+                     meetingType?.group==="redundancy"?"Issue the relevant redundancy letter and update the redundancy tracker in the case file. Ensure consultation continues as required by ERA 1996.":
+                     meetingType?.group==="appeal"?"Issue the appeal outcome letter promptly. This is the final stage of the internal process.":
+                     "Save this record to the case file and take any agreed next steps."}
+                  </div>
+                  <button onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}}
+                    style={{marginTop:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"9px 16px",fontSize:12,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",width:"100%"}}>
+                    Draft letter →
+                  </button>
+                </div>
+              )}
 
               {/* Chat with Compass */}
-              <Card style={{padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid #E8E0D0",background:"#F5F1EA"}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535",fontFamily:"DM Serif Display,Georgia,serif"}}>Chat with Compass</div>
-                  <div style={{fontSize:11,color:"#6B6880",marginTop:2}}>Ask questions or refine this record</div>
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
+                <div style={{padding:"14px 16px",borderBottom:"1px solid #EDE5D8"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Chat with Compass</div>
+                  <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>Ask questions or refine this record</div>
                 </div>
-                <div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,minHeight:200,maxHeight:360}}>
-                  {chatHistory.map((m,i)=>(
-                    <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
-                      <div style={{maxWidth:"85%",padding:"9px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#FFFFFF",border:m.role==="user"?"none":"1px solid #E8E0D0"}}>
-                        {m.role==="user"
-                          ?<div style={{fontSize:12,color:"#fff",fontFamily:"Inter,sans-serif"}}>{m.content}</div>
-                          :<div style={{fontSize:12,color:"#3D3560",lineHeight:1.7,fontFamily:"Inter,sans-serif"}}>{m.content}</div>}
-                      </div>
-                      {m.role==="assistant"&&m.content.length>300&&(
-                        <button onClick={()=>{
-                          const blob=new Blob([m.content],{type:'application/msword'});
-                          const url=URL.createObjectURL(blob);
-                          const a=document.createElement("a");
-                          a.href=url; a.download="compass-template.doc"; a.click();
-                          URL.revokeObjectURL(url);
-                        }} style={{marginTop:6,background:"none",border:"1px solid #7C5CFC44",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>
-                          Download as Word
-                        </button>
-                      )}
-                      {m.role==="assistant"&&m.content.length>100&&m.role!=="user"&&(
-                        <button onClick={()=>{
-                          if(m.content.includes("##")){
-                            if(window.confirm("Replace the meeting record with this updated version?")){
-                              setReviewOutput(m.content.trim());
-                            }
-                          } else {
-                            // Ask Compass to regenerate full record
-                            const sys=`You are Compass, a UK HR documentation specialist. You have the current meeting record and a correction/update from the HR manager. Produce the COMPLETE updated meeting record with ALL sections. Use ## for headers and - for bullets. No bold asterisks, no emoji.
-
-CURRENT RECORD:
-${reviewOutput}
-
-UPDATE TO APPLY:
-${m.content}`;
-                            setChatProcessing(true);
-                            fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,system:sys,messages:[{role:"user",content:"Please produce the complete updated meeting record."}]})})
-                              .then(r=>r.json()).then(d=>{
-                                const updated=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-                                if(updated&&updated.includes("##")){
-                                  setReviewOutput(updated.trim());
-                                  setChatHistory(h=>[...h,{role:"assistant",content:"Record updated."}]);
-                                }
-                                setChatProcessing(false);
-                              }).catch(()=>setChatProcessing(false));
-                          }
-                        }} style={{marginTop:4,background:"none",border:"1px solid #2A5A2A",borderRadius:6,padding:"4px 10px",fontSize:11,color:"#1A7A4A",cursor:"pointer"}}>
-                          Apply to record
-                        </button>
-                      )}
+                <div style={{maxHeight:260,overflowY:"auto",padding:"14px 16px"}}>
+                  {askCompassHistory.length===0&&(
+                    <div style={{fontSize:12,color:"#C4BAB0",lineHeight:1.6}}>Ask anything about this meeting or get HR advice...</div>
+                  )}
+                  {askCompassHistory.map((m,i)=>(
+                    <div key={i} style={{marginBottom:10}}>
+                      <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
+                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6}}><MDRenderer text={m.content}/></div>
                     </div>
                   ))}
-                  {chatProcessing&&<div style={{padding:"9px 12px",borderRadius:10,background:"#FFFFFF",border:"1px solid #E8E0D0",alignSelf:"flex-start",color:"#7C5CFC",fontSize:16}}>●</div>}
+                  {askCompassProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
                 </div>
-                <div style={{padding:"10px 12px",borderTop:"1px solid #E8E0D0",display:"flex",gap:8,alignItems:"center"}}>
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)}
-                    onKeyDown={e=>{if(e.key==="Enter"&&chatInput.trim()&&!chatProcessing){
-                      const msg=chatInput.trim(); setChatInput("");
-                      const sys="You are Compass, a senior UK HR and employment law assistant. Meeting record:\n\n"+reviewOutput+"\n\nLegal risk: "+(riskScore?"Rating: "+riskScore.rating+" - "+riskScore.summary:"Not run")+"\n\nMeeting type: "+(meetingType?.label||"General")+", Employee: "+(caseInfo.employee||"Unknown")+", Chair: "+(caseInfo.manager||"Unknown")+"\n\nAnswer HR and legal questions. When the user shares new information, acknowledge it. They can click Apply on your response to regenerate the full record. No bold asterisks, no emoji.";
-                      setChatHistory(h=>[...h,{role:"user",content:msg}]); setChatProcessing(true);
-                      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:msg}]})})
-                        .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
-                        .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry, something went wrong."}]);setChatProcessing(false);});
-                    }}}
-                    placeholder="Ask Compass about this meeting..."
-                    style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",color:"#1A1535",fontFamily:"Inter,sans-serif"}}/>
-                  {reviewAttachment&&(
-                    <div style={{display:"flex",alignItems:"center",gap:6,background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:6,padding:"3px 8px",flexShrink:0}}>
-                      <span style={{fontSize:11,color:"#7C5CFC",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reviewAttachment.name}</span>
-                      <button onClick={()=>setReviewAttachment(null)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",padding:0}}>&#10005;</button>
-                    </div>
-                  )}
-                  <label style={{cursor:"pointer",color:"#5A5570",fontSize:16,display:"flex",alignItems:"center",padding:"0 2px"}}
-                    onMouseEnter={e=>e.currentTarget.style.color="#7C5CFC"}
-                    onMouseLeave={e=>e.currentTarget.style.color="#444"}>
-                    &#128206;
-                    <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
-                      const file=e.target.files[0]; if(!file) return;
-                      try {
-                        if(file.name.endsWith(".pdf")) {
-                          const arr=await file.arrayBuffer();
-                          const bytes=new Uint8Array(arr);
-                          let b64=""; const chunk=8192;
-                          for(let i=0;i<bytes.length;i+=chunk) b64+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
-                          setReviewAttachment({name:file.name, base64:btoa(b64), type:"pdf"});
-                        } else {
-                          const text=await file.text();
-                          setReviewAttachment({name:file.name, text:text.slice(0,4000), type:"text"});
-                        }
-                      } catch(err){}
-                      e.target.value="";
-                    }}/>
-                  </label>
-                  <button onClick={()=>{if((chatInput.trim()||reviewAttachment)&&!chatProcessing){
-                      const msg=chatInput.trim()||"Please review the attached document in context of this meeting."; setChatInput("");
-                      const sys="You are Compass, a UK HR assistant. Meeting record:\n\n"+reviewOutput+"\n\nHelp the user. No bold asterisks, no emoji.";
-                      let userContent;
-                      if(reviewAttachment?.base64){
-                        userContent=[{type:"document",source:{type:"base64",media_type:"application/pdf",data:reviewAttachment.base64}},{type:"text",text:msg}];
-                      } else if(reviewAttachment?.text){
-                        userContent=msg+"\n\nAttached ("+reviewAttachment.name+"):\n"+reviewAttachment.text;
-                      } else { userContent=msg; }
-                      const displayMsg=reviewAttachment?"["+reviewAttachment.name+"] "+msg:msg;
-                      setChatHistory(h=>[...h,{role:"user",content:displayMsg}]);
-                      setChatProcessing(true); setReviewAttachment(null);
-                      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,stream:false,system:sys,messages:[...chatHistory,{role:"user",content:userContent}]})})
-                        .then(r=>r.json()).then(d=>{const reply=(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";setChatHistory(h=>[...h,{role:"assistant",content:reply}]);setChatProcessing(false);})
-                        .catch(()=>{setChatHistory(h=>[...h,{role:"assistant",content:"Sorry."}]);setChatProcessing(false);});
-                    }}}
-                    disabled={(!chatInput.trim()&&!reviewAttachment)||chatProcessing}
-                    style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",color:"#fff",fontSize:16,cursor:"pointer",opacity:((!chatInput.trim()&&!reviewAttachment)||chatProcessing)?0.4:1}}>&#8593;</button>
+                <div style={{padding:"10px 12px",borderTop:"1px solid #EDE5D8"}}>
+                  <div style={{display:"flex",gap:6,background:"#F5F1EA",borderRadius:8,padding:"8px 12px",alignItems:"center"}}>
+                    <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&askCompass(askCompassInput)}
+                      placeholder="Ask about this meeting..."
+                      style={{flex:1,background:"none",border:"none",outline:"none",fontSize:12,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+                    <button onClick={()=>askCompass(askCompassInput)} disabled={askCompassProcessing||!askCompassInput.trim()}
+                      style={{background:"#7C5CFC",border:"none",borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:askCompassProcessing||!askCompassInput.trim()?0.4:1,flexShrink:0}}>
+                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                        <path d="M5.5 9V2M5.5 2L2.5 5M5.5 2L8.5 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </Card>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-{/* ══ LETTERS ══ */}
+      {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
         <div>
           <div style={{borderBottom:"1px solid #E8E0D0"}}>
