@@ -3231,7 +3231,7 @@ Please produce:
                   <div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Analysing conversation...</div>
                 )}
                 {liveContext?(
-                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.7}}>{liveContext}</div>
+                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.7}}><MDRenderer text={liveContext}/></div>
                 ):(
                   !liveContextLoading&&<div style={{fontSize:12,color:"#C4BAB0"}}>Will update as you take notes</div>
                 )}
@@ -3240,7 +3240,7 @@ Please produce:
               {/* Ask Compass */}
               <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
                 <div style={{flex:1,overflowY:"auto",padding:"16px 18px"}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Ask Compass</div>
+                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Ask Compass</div>
                   {liveChatHistory.length===0&&(
                     <div style={{fontSize:12,color:"#C4BAB0",lineHeight:1.6}}>Ask anything about the meeting or get HR advice in real time</div>
                   )}
