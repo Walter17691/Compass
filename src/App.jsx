@@ -3201,10 +3201,7 @@ Please produce:
                 <div style={{padding:"10px 48px",borderTop:"1px solid #F5F1EA",background:"#FDFAF5",flexShrink:0}}>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
                     <span style={{fontSize:11,color:"#9B9098",fontWeight:500,marginRight:4,whiteSpace:"nowrap"}}>Ask next:</span>
-                    {(liveContext
-                      ? liveContext.split(/\d+\./).filter(q=>q.trim()).slice(0,3)
-                      : (ACAS_TEMPLATES[meetingType?.id]||MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3)
-                    ).map((q,i)=>(
+                    {(ACAS_TEMPLATES[meetingType?.id]||MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3).map((q,i)=>(
                       <button key={i}
                         onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
                         style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap",fontFamily:"DM Sans,system-ui,sans-serif"}}
