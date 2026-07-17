@@ -539,7 +539,6 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatProcessing, setChatProcessing] = useState(false);
-  const [homeChatInput, setHomeChatInput] = useState("");
   const [homeChatHistory, setHomeChatHistory] = useState([]);
   const [homeChatOpen, setHomeChatOpen] = useState(false);
   const [homeChatProcessing, setHomeChatProcessing] = useState(false);
