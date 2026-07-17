@@ -2342,26 +2342,6 @@ Please produce:
   };
 
 
-  const askCompass = async (question) => {
-    if(!question.trim()||askCompassProcessing) return;
-    setAskCompassInput("");
-    setAskCompassHistory(h=>[...h,{role:"user",content:question}]);
-    setAskCompassProcessing(true);
-    try {
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:400,stream:false,
-          system:"You are a UK HR advisor. Answer questions about this meeting record. Be concise and practical. No asterisks, no bold, no markdown.",
-          messages:[...askCompassHistory.map(m=>({role:m.role,content:m.content})),
-            {role:"user",content:"Meeting record:"+String.fromCharCode(10)+reviewOutput+String.fromCharCode(10)+String.fromCharCode(10)+"Question: "+question}]
-        })});
-      const d = await res.json();
-      const txt = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      if(txt) setAskCompassHistory(h=>[...h,{role:"assistant",content:txt}]);
-    } catch(e){}
-    setAskCompassProcessing(false);
-  };
-
-
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
       <style>{`
@@ -3418,10 +3398,10 @@ Please produce:
                 <div style={{padding:"10px 12px",borderTop:"1px solid #EDE5D8"}}>
                   <div style={{display:"flex",gap:6,background:"#F5F1EA",borderRadius:8,padding:"8px 12px",alignItems:"center"}}>
                     <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)}
-                      onKeyDown={e=>e.key==="Enter"&&askCompass(askCompassInput)}
+                      onKeyDown={e=>{if(e.key==="Enter"){const q=askCompassInput;setAskCompassInput("");askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}}
                       placeholder="Ask about this meeting..."
                       style={{flex:1,background:"none",border:"none",outline:"none",fontSize:12,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-                    <button onClick={()=>askCompass(askCompassInput)} disabled={askCompassProcessing||!askCompassInput.trim()}
+                    <button onClick={()=>{const q=askCompassInput;setAskCompassInput("");askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} disabled={askCompassProcessing||!askCompassInput.trim()}
                       style={{background:"#7C5CFC",border:"none",borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:askCompassProcessing||!askCompassInput.trim()?0.4:1,flexShrink:0}}>
                       <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
                         <path d="M5.5 9V2M5.5 2L2.5 5M5.5 2L8.5 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
