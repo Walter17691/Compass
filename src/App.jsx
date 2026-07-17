@@ -529,6 +529,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showTemplates, setShowTemplates] = useState(false);
   const [editProcessing, setEditProcessing] = useState(false);
   const [briefData, setBriefData] = useState(null);
+  const [homeChat, setHomeChat] = useState([]);
+  const [homeChatInput, setHomeChatInput] = useState("");
+  const [homeChatLoading, setHomeChatLoading] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
   const [liveChatHistory, setLiveChatHistory] = useState([]);
@@ -2318,6 +2321,27 @@ Please produce:
   };
 
 
+  const sendHomeChat = async () => {
+    if(!homeChatInput.trim()||homeChatLoading) return;
+    const question = homeChatInput.trim();
+    setHomeChatInput("");
+    setHomeChat(h=>[...h,{role:"user",content:question}]);
+    setHomeChatLoading(true);
+    try {
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",max_tokens:600,stream:false,
+          system:"You are Compass, a UK HR intelligence assistant. Answer HR questions clearly and practically. Reference ACAS Code of Practice, ERA 1996, EqA 2010 where relevant. Be concise and actionable. No markdown headers. Use plain paragraphs or short bullet points.",
+          messages:[...homeChat.map(m=>({role:m.role,content:m.content})),{role:"user",content:question}]
+        })});
+      const d = await res.json();
+      const txt = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(txt) setHomeChat(h=>[...h,{role:"assistant",content:txt}]);
+    } catch(e){}
+    setHomeChatLoading(false);
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
       <style>{`
@@ -2650,93 +2674,235 @@ Please produce:
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
-        <div style={{maxWidth:600,margin:"0 auto",padding:"48px 20px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
-            <CompassLogo size={36}/>
-            <div>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",fontWeight:400}}>Start a meeting</div>
-              <div style={{fontSize:12,color:"#6B6880"}}>Compass will guide you through and generate a legal record</div>
+        <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
+
+          {/* Top nav */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 32px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <CompassLogo size={26}/>
+              <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",letterSpacing:"-0.3px"}}>Compass</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <button onClick={()=>setScreen(SCREENS.CASES)}
+                style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",padding:"6px 12px",borderRadius:6,fontWeight:500}}>
+                Cases {cases.length>0&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:600,marginLeft:3}}>{cases.length}</span>}
+              </button>
+              <button onClick={()=>setScreen(SCREENS.PEOPLE)}
+                style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",padding:"6px 12px",borderRadius:6,fontWeight:500}}>People</button>
+              {isHR&&<button onClick={()=>setScreen(SCREENS.HR_REVIEW)}
+                style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",padding:"6px 12px",borderRadius:6,fontWeight:500}}>
+                HR Review {hrReviewRequests.filter(r=>r.status==="pending").length>0&&<span style={{background:"#FEF0EB",color:"#C84B2F",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:600,marginLeft:3}}>{hrReviewRequests.filter(r=>r.status==="pending").length}</span>}
+              </button>}
+              <button onClick={()=>setScreen(SCREENS.SETTINGS)}
+                style={{background:"#FFFFFF",border:"1px solid #E8E0D0",color:"#6B6375",fontSize:12,cursor:"pointer",padding:"6px 14px",borderRadius:6,fontWeight:500}}>Settings</button>
+              {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"none",color:"#9B9098",fontSize:12,cursor:"pointer",padding:"6px 10px"}}>Sign out</button>}
             </div>
           </div>
 
-          {/* Step 1 — Employee */}
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Employee</label>
-            <input
-              autoFocus
-              placeholder="Full name of the employee"
-              value={meetingSetup.employee}
-              onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
-              list="employee-list"
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box"}}/>
-            <datalist id="employee-list">
-              {[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
-            </datalist>
-          </div>
+          {/* Main content */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 24px"}}>
+            <div style={{width:"100%",maxWidth:680}}>
 
-          {/* Step 2 — Meeting type */}
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Meeting type</label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {[
-                {id:"investigation", label:"Investigation", tag:"ACAS S1", desc:"Fact-finding before formal action"},
-                {id:"disciplinary", label:"Disciplinary", tag:"ACAS S2", desc:"Formal disciplinary hearing"},
-                {id:"grievance", label:"Grievance", tag:"ACAS S6", desc:"Employee raised a concern"},
-                {id:"redundancy-atrisk", label:"At Risk / Redundancy", tag:"ERA 1996", desc:"Redundancy consultation"},
-                {id:"return", label:"Return to Work", tag:"EqA 2010", desc:"After sickness absence"},
-                {id:"informal", label:"Informal / 1-1", tag:"General", desc:"General discussion or check-in"},
-                {id:"appeal-disciplinary", label:"Appeal", tag:"ACAS S5", desc:"Appeal against a decision"},
-                {id:"pip-review", label:"Performance / PIP", tag:"Development", desc:"Performance review or PIP"},
-              ].map(t=>(
-                <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
-                  style={{background:meetingSetup.type===t.id?"#EDE8FF":"#FFFFFF",border:"1px solid",borderColor:meetingSetup.type===t.id?"#7C5CFC":"#E8E0D0",borderRadius:8,padding:"12px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
-                  <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:4}}>{t.label}</div>
-                  <div style={{fontSize:11,color:"#6B6880"}}>{t.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Step 3 — Date */}
-          <div style={{marginBottom:32}}>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Date</label>
-            <input type="date" value={meetingSetup.date} onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",colorScheme:"dark"}}/>
-          </div>
-
-          {/* Start button */}
-          <button
-            disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
-            onClick={()=>{
-              const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
-              setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
-              setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);
-              const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
-              if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
-            }}
-            style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"16px",fontSize:16,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9B9098":"#fff",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s"}}>
-            Start meeting
-          </button>
-
-          {/* Quick access to cases */}
-          {cases.length>0&&(
-            <div style={{marginTop:32,paddingTop:24,borderTop:"1px solid #1a1a1a"}}>
-              <div style={{fontSize:11,color:"#5A5570",marginBottom:12,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Recent cases</div>
-              {cases.slice(0,3).map(cs=>(
-                <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #EDE5D8",cursor:"pointer"}}>
-                  <span style={{fontSize:14,color:"#1A1535"}}>{cs.employeeName}</span>
-                  <span style={{fontSize:11,color:"#6B6880"}}>{cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</span>
+              {/* Hero */}
+              <div style={{textAlign:"center",marginBottom:48}}>
+                <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#EDE8FF",borderRadius:20,padding:"6px 14px",marginBottom:20}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:"#7C5CFC"}}></div>
+                  <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600,letterSpacing:"0.3px"}}>UK HR Intelligence</span>
                 </div>
-              ))}
-              <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:12,cursor:"pointer",marginTop:8,padding:0}}>View all cases →</button>
+                <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:"clamp(32px,5vw,48px)",fontWeight:400,color:"#1A1535",margin:"0 0 16px",lineHeight:1.15,letterSpacing:"-0.5px"}}>
+                  Your HR meetings,<br/><em style={{color:"#7C5CFC",fontStyle:"italic"}}>legally documented.</em>
+                </h1>
+                <p style={{fontSize:16,color:"#6B6375",margin:0,lineHeight:1.7,maxWidth:480,marginLeft:"auto",marginRight:"auto"}}>
+                  Ask Compass anything about HR, or start a meeting and let Compass handle the record, risk assessment, and letters.
+                </p>
+              </div>
+
+              {/* Ask Compass — ChatGPT style */}
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,boxShadow:"0 4px 24px rgba(26,21,53,0.08)",overflow:"hidden",marginBottom:16}}>
+                {/* Chat history */}
+                {homeChat.length>0&&(
+                  <div style={{maxHeight:320,overflowY:"auto",padding:"20px 24px",borderBottom:"1px solid #EDE5D8"}}>
+                    {homeChat.map((m,i)=>(
+                      <div key={i} style={{marginBottom:16,display:"flex",gap:12,alignItems:"flex-start"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:m.role==="user"?"#EDE8FF":"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                          {m.role==="user"
+                            ? <span style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>{(member?.name||user?.email||"U")[0].toUpperCase()}</span>
+                            : <CompassLogo size={14}/>
+                          }
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:12,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:4}}>{m.role==="user"?member?.name||"You":"Compass"}</div>
+                          <div style={{fontSize:14,color:"#1A1535",lineHeight:1.7}}><MDRenderer text={m.content}/></div>
+                        </div>
+                      </div>
+                    ))}
+                    {homeChatLoading&&(
+                      <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <CompassLogo size={14}/>
+                        </div>
+                        <div style={{fontSize:13,color:"#9B9098",fontStyle:"italic",paddingTop:6}}>Compass is thinking...</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Input */}
+                <div style={{padding:"16px 20px",display:"flex",alignItems:"flex-end",gap:12}}>
+                  <textarea
+                    value={homeChatInput}
+                    onChange={e=>setHomeChatInput(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendHomeChat();}}}
+                    placeholder="Ask Compass anything about HR law, ACAS guidance, disciplinary procedures..."
+                    rows={2}
+                    style={{flex:1,background:"none",border:"none",outline:"none",resize:"none",fontSize:15,color:"#1A1535",lineHeight:1.6,fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}
+                  />
+                  <button onClick={sendHomeChat} disabled={homeChatLoading||!homeChatInput.trim()}
+                    style={{background:"#7C5CFC",border:"none",borderRadius:10,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,opacity:homeChatLoading||!homeChatInput.trim()?0.4:1,transition:"opacity 0.15s"}}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick suggestions */}
+              {homeChat.length===0&&(
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center",marginBottom:40}}>
+                  {["What is the ACAS Code of Practice?","How do I conduct a fair disciplinary?","What are redundancy consultation rules?","Employee rights during grievance process"].map((q,i)=>(
+                    <button key={i} onClick={()=>{setHomeChatInput(q);}}
+                      style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:20,padding:"8px 16px",fontSize:12,color:"#6B6375",cursor:"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.color="#7C5CFC";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#6B6375";}}>
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Divider */}
+              <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:32}}>
+                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
+                <span style={{fontSize:12,color:"#9B9098",fontWeight:500}}>or start a meeting</span>
+                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
+              </div>
+
+              {/* Start meeting button */}
+              <button onClick={()=>{
+                  setMeetingSetup({employee:"",type:"",date:new Date().toISOString().split("T")[0]});
+                  setScreen(SCREENS.HOME+"_meeting");
+                }}
+                style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:12,padding:"16px",fontSize:15,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 4px 16px rgba(124,92,252,0.25)",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+                onMouseEnter={e=>e.currentTarget.style.background="#6B4EE8"}
+                onMouseLeave={e=>e.currentTarget.style.background="#7C5CFC"}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="7" stroke="white" strokeWidth="1.5"/>
+                  <path d="M7 6.5L12 9L7 11.5V6.5Z" fill="white"/>
+                </svg>
+                Start a meeting
+              </button>
+
+              {/* Recent cases */}
+              {cases.length>0&&(
+                <div style={{marginTop:40}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:14}}>Recent</div>
+                  {cases.slice(0,3).map(cs=>(
+                    <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
+                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #F5F1EA",cursor:"pointer"}}>
+                      <div>
+                        <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{cs.employeeName}</div>
+                        <div style={{fontSize:12,color:"#9B9098"}}>{cs.meetings?.slice(-1)[0]?.type||""} · {cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</div>
+                      </div>
+                      <span style={{color:"#E8E0D0",fontSize:18}}>›</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      
+      {/* ══ HOME MEETING SETUP ══ */}
+      {screen===SCREENS.HOME+"_meeting"&&(
+        <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 32px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <CompassLogo size={26}/>
+              <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535"}}>Compass</span>
+            </div>
+            <button onClick={()=>setScreen(SCREENS.HOME)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer"}}>← Back</button>
+          </div>
+          <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"48px 24px"}}>
+            <div style={{width:"100%",maxWidth:480}}>
+              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"0 0 6px",letterSpacing:"-0.3px"}}>New meeting</h2>
+              <p style={{fontSize:14,color:"#9B9098",margin:"0 0 32px"}}>Fill in the details — Compass handles the rest</p>
+
+              <div style={{marginBottom:20}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Employee name</label>
+                <input autoFocus placeholder="e.g. Sarah Johnson"
+                  value={meetingSetup.employee}
+                  onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
+                  list="employee-list"
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+                <datalist id="employee-list">
+                  {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
+                </datalist>
+              </div>
+
+              <div style={{marginBottom:20}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Meeting type</label>
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
+                  {[
+                    {id:"investigation",label:"Investigation",desc:"Fact-finding before formal action"},
+                    {id:"disciplinary",label:"Disciplinary hearing",desc:"Formal disciplinary process"},
+                    {id:"grievance",label:"Grievance",desc:"Employee raised a concern"},
+                    {id:"redundancy-atrisk",label:"Redundancy consultation",desc:"At risk or confirmed redundancy"},
+                    {id:"return",label:"Return to work",desc:"After sickness absence"},
+                    {id:"informal",label:"Informal / 1-1",desc:"General check-in"},
+                    {id:"appeal-disciplinary",label:"Appeal",desc:"Appeal against a decision"},
+                    {id:"pip-review",label:"Performance review",desc:"PIP or performance discussion"},
+                  ].map((t,i,arr)=>(
+                    <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
+                      style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",border:"none",borderBottom:i<arr.length-1?"1px solid #F5F1EA":"none",borderLeft:`3px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,cursor:"pointer",textAlign:"left",transition:"all 0.1s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:400,color:meetingSetup.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
+                        <div style={{fontSize:12,color:"#9B9098",marginTop:1}}>{t.desc}</div>
+                      </div>
+                      {meetingSetup.type===t.id&&<span style={{color:"#7C5CFC",fontSize:14,marginLeft:8}}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{marginBottom:28}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Date</label>
+                <input type="date" value={meetingSetup.date}
+                  onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
+              </div>
+
+              <button
+                disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
+                onClick={()=>{
+                  const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
+                  setMeetingType(mt);
+                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
+                  setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);
+                  const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
+                  if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
+                }}
+                style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9B9098":"#FFFFFF",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
+                Start meeting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══ BRIEF ══ */}
       {screen===SCREENS.BRIEF&&(
         <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
