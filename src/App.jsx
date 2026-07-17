@@ -3121,27 +3121,39 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:2000}}>
+        <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:2000,fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
           {/* Header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 24px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
-            <div>
-              <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</div>
-              <div style={{fontSize:15,fontFamily:"DM Serif Display,Georgia,serif",color:"#1A1535"}}>{caseInfo.employee||"Notes"}</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 24px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <CompassLogo size={22}/>
+              <div style={{width:1,height:20,background:"#EDE5D8"}}/>
+              <div>
+                <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600,letterSpacing:"0.5px",textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</span>
+                <span style={{fontSize:12,color:"#9B9098",margin:"0 6px"}}>·</span>
+                <span style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{caseInfo.employee||"Unknown"}</span>
+                <span style={{fontSize:12,color:"#9B9098",margin:"0 6px"}}>·</span>
+                <span style={{fontSize:12,color:"#9B9098"}}>{caseInfo.date}</span>
+              </div>
             </div>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              {isListening&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#C84B2F"}}><span className="pu">&#9679;</span> Listening</div>}
-              {meetingStartTime&&<div style={{fontSize:11,color:"#9B9098",fontFamily:"monospace"}}>{meetingStartTime}</div>}
-              {isScreenCapturing&&<div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#7C5CFC"}}><span className="pu">&#9679;</span> Capturing</div>}
-              <Btn onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}}
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {isListening&&(
+                <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#C84B2F",background:"#FEF0EB",padding:"4px 10px",borderRadius:20}}>
+                  <span className="pu" style={{width:6,height:6,borderRadius:"50%",background:"#C84B2F",display:"inline-block"}}></span>
+                  Live
+                </div>
+              )}
+              {meetingStartTime&&<span style={{fontSize:12,color:"#9B9098",fontFamily:"monospace"}}>{meetingStartTime}</span>}
+              <button
+                onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}}
                 disabled={aiProcessing||(transcript.length===0&&!inputText.trim())}
-                style={{padding:"9px 20px",fontSize:13}}>
+                style={{background:aiProcessing?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"8px 20px",fontSize:13,color:aiProcessing?"#9B9098":"#FFFFFF",fontWeight:600,cursor:aiProcessing?"not-allowed":"pointer",transition:"all 0.15s",boxShadow:aiProcessing?"none":"0 2px 8px rgba(124,92,252,0.25)"}}>
                 {aiProcessing?"Processing...":"End meeting →"}
-              </Btn>
+              </button>
             </div>
           </div>
 
-          {/* Main area — notepad + sidebar */}
+          {/* Main area */}
           <div style={{flex:1,display:"flex",overflow:"hidden"}}>
 
             {/* Notepad */}
@@ -3149,117 +3161,112 @@ Please produce:
               <textarea
                 ref={inputRef}
                 value={inputText}
-                style={{flex:1,background:"transparent",border:"none",padding:"32px 40px",fontSize:15,lineHeight:1.9,outline:"none",color:"#1A1535",resize:"none",fontFamily:"Inter,system-ui,sans-serif"}}
+                style={{flex:1,background:"transparent",border:"none",padding:"40px 48px",fontSize:16,lineHeight:1.9,outline:"none",color:"#1A1535",resize:"none",fontFamily:"DM Sans,system-ui,sans-serif",letterSpacing:"0.1px"}}
                 onChange={e=>{
                   const val = e.target.value;
                   if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
                   if(val.endsWith(String.fromCharCode(10))) {
-                    const lines=val.split(String.fromCharCode(10)).filter(l=>l.trim());
-                    lines.forEach(line=>addUtterance(line.trim()));
+                    const ls=val.split(String.fromCharCode(10)).filter(l=>l.trim());
+                    ls.forEach(line=>addUtterance(line.trim()));
                     setInputText("");
                     updateLiveContext(val);
                   } else {
                     setInputText(val);
                   }
                 }}
-                placeholder="Type or dictate meeting notes here — Compass will organise everything when you end the meeting."
+                placeholder={"Type or speak your meeting notes here..." + String.fromCharCode(10) + String.fromCharCode(10) + "Just capture what is being said — Compass will organise everything when you end the meeting."}
               />
 
-              {/* Suggested questions bar */}
-              <div style={{padding:"12px 40px",borderTop:"1px solid #F5F1EA",flexShrink:0}}>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
-                  <span style={{fontSize:10,color:"#4A4560",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginRight:4}}>Ask next:</span>
-                  {(liveContext
-                    ? liveContext.split(/\d+\./).filter(q=>q.trim()).slice(0,3)
-                    : (ACAS_TEMPLATES[meetingType?.id]||MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3)
-                  ).map((q,i)=>(
-                    <button key={i}
-                      onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
-                      style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC55";e.currentTarget.style.color="#F2EDE4";}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#666";}}>
-                      {q.trim()}
-                    </button>
-                  ))}
-                  {liveContextLoading&&<span style={{fontSize:11,color:"#4A4560",fontStyle:"italic"}}>updating...</span>}
+              {/* Bottom toolbar */}
+              <div style={{padding:"12px 48px",borderTop:"1px solid #EDE5D8",display:"flex",alignItems:"center",gap:8,background:"#FFFFFF",flexShrink:0}}>
+                <button onClick={isListening?stopSpeech:startSpeech}
+                  style={{display:"flex",alignItems:"center",gap:6,background:isListening?"#FEF0EB":"#F5F1EA",border:"1px solid",borderColor:isListening?"#C84B2F44":"#E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:isListening?"#C84B2F":"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:isListening?"#C84B2F":"#9B9098",display:"inline-block"}}></span>
+                  {isListening?"Stop mic":"Microphone"}
+                </button>
+                <button onClick={isScreenCapturing?stopScreenCapture:startScreenCapture}
+                  style={{display:"flex",alignItems:"center",gap:6,background:isScreenCapturing?"#E8F5EE":"#F5F1EA",border:"1px solid",borderColor:isScreenCapturing?"#1A7A4A44":"#E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:isScreenCapturing?"#1A7A4A":"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:isScreenCapturing?"#1A7A4A":"#9B9098",display:"inline-block"}}></span>
+                  {isScreenCapturing?"Stop":"Screen audio"}
+                </button>
+                <label style={{display:"flex",alignItems:"center",gap:6,background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  Import transcript
+                  <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
+                </label>
+                <div style={{marginLeft:"auto",fontSize:11,color:"#9B9098"}}>
+                  {transcript.length>0&&`${transcript.length} note${transcript.length!==1?"s":""} captured`}
                 </div>
               </div>
+
+              {/* Suggested questions */}
+              {(liveContext||meetingType)&&(
+                <div style={{padding:"10px 48px",borderTop:"1px solid #F5F1EA",background:"#FDFAF5",flexShrink:0}}>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                    <span style={{fontSize:11,color:"#9B9098",fontWeight:500,marginRight:4,whiteSpace:"nowrap"}}>Ask next:</span>
+                    {(liveContext
+                      ? liveContext.split(/\d+\./).filter(q=>q.trim()).slice(0,3)
+                      : (ACAS_TEMPLATES[meetingType?.id]||MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3)
+                    ).map((q,i)=>(
+                      <button key={i}
+                        onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
+                        style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.color="#7C5CFC";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#6B6375";}}>
+                        {q.trim().length>55?q.trim().slice(0,52)+"...":q.trim()}
+                      </button>
+                    ))}
+                    {liveContextLoading&&<span style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>updating...</span>}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Sidebar */}
-            <div style={{width:280,borderLeft:"1px solid #EDE5D8",background:"#FDFAF5",display:"flex",flexDirection:"column",flexShrink:0}}>
+            {/* Right sidebar */}
+            <div style={{width:300,borderLeft:"1px solid #EDE5D8",background:"#FFFFFF",display:"flex",flexDirection:"column",flexShrink:0}}>
 
-              {/* Controls */}
-              <div style={{padding:"20px 16px",borderBottom:"1px solid #EDE5D8"}}>
-                <div style={{fontSize:10,fontWeight:600,color:"#5A5570",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Recording</div>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  <button onClick={isListening?stopSpeech:startSpeech}
-                    style={{display:"flex",alignItems:"center",gap:10,background:isListening?"#FEF0EB":"#FFFFFF",border:"1px solid",borderColor:isListening?"#E8622A44":"#E8E0D0",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isListening?"#E8622A":"#888",fontSize:13,fontWeight:500}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:isListening?"#E8622A":"#555",display:"inline-block",marginRight:2}}></span>{isListening?"Stop microphone":"Start microphone"}
-                  </button>
-                  <button onClick={isScreenCapturing?stopScreenCapture:startScreenCapture}
-                    style={{display:"flex",alignItems:"center",gap:10,background:isScreenCapturing?"#E8F5EE":"#FFFFFF",border:"1px solid",borderColor:isScreenCapturing?"#4CAF5044":"#E8E0D0",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:isScreenCapturing?"#4CAF50":"#888",fontSize:13,fontWeight:500}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:isScreenCapturing?"#4CAF50":"#555",display:"inline-block",marginRight:2}}></span>{isScreenCapturing?"Stop screen audio":"Screen audio"}
-                  </button>
-                  <label style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",cursor:"pointer",color:"#6B6375",fontSize:13,fontWeight:500}}>
-                    Import transcript
-                    <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
-                  </label>
-                </div>
-              </div>
-
-              {/* Live context - auto updates */}
-              <div style={{padding:"14px 16px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
-                <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Live context</div>
+              {/* Live context */}
+              <div style={{padding:"16px 18px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>Live context</div>
                 {liveContextLoading&&!liveContext&&(
-                  <div style={{fontSize:11,color:"#6B6375",fontStyle:"italic"}}>Analysing conversation...</div>
+                  <div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Analysing conversation...</div>
                 )}
                 {liveContext?(
-                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6}}>{liveContext}</div>
+                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.7}}>{liveContext}</div>
                 ):(
-                  !liveContextLoading&&<div style={{fontSize:11,color:"#9B9098"}}>Will update as you take notes</div>
+                  !liveContextLoading&&<div style={{fontSize:12,color:"#C4BAB0"}}>Will update as you take notes</div>
                 )}
               </div>
 
-              {/* Ask Compass - manual chat */}
+              {/* Ask Compass */}
               <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-                <div style={{flex:1,overflowY:"auto",padding:"14px 16px"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Ask Compass</div>
+                <div style={{flex:1,overflowY:"auto",padding:"16px 18px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Ask Compass</div>
                   {liveChatHistory.length===0&&(
-                    <div style={{fontSize:11,color:"#9B9098",lineHeight:1.6}}>Ask anything about the meeting...<br/>
-                    e.g. "What has the employee admitted?"</div>
+                    <div style={{fontSize:12,color:"#C4BAB0",lineHeight:1.6}}>Ask anything about the meeting or get HR advice in real time</div>
                   )}
                   {liveChatHistory.map((m,i)=>(
-                    <div key={i} style={{marginBottom:10}}>
-                      <div style={{fontSize:11,color:m.role==="user"?"#7C5CFC":"#22C55E",fontWeight:600,marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
-                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#FFFFFF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6}}>{m.content}</div>
+                    <div key={i} style={{marginBottom:12}}>
+                      <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
+                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}>{m.content}</div>
                     </div>
                   ))}
-                  {liveChatProcessing&&<div style={{fontSize:11,color:"#6B6375",fontStyle:"italic"}}>Thinking...</div>}
+                  {liveChatProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
                 </div>
-                <div style={{padding:"10px 12px",borderTop:"1px solid #EDE5D8",flexShrink:0}}>
-                  <div style={{display:"flex",gap:6}}>
+                <div style={{padding:"12px 14px",borderTop:"1px solid #EDE5D8",flexShrink:0}}>
+                  <div style={{display:"flex",gap:8,background:"#F5F1EA",borderRadius:8,padding:"8px 12px",alignItems:"center"}}>
                     <input value={liveChatInput} onChange={e=>setLiveChatInput(e.target.value)}
                       onKeyDown={e=>e.key==="Enter"&&sendLiveChat()}
-                      placeholder="Ask about the meeting..."
-                      style={{flex:1,background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
+                      placeholder="Ask about this meeting..."
+                      style={{flex:1,background:"none",border:"none",outline:"none",fontSize:12,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
                     <button onClick={sendLiveChat} disabled={liveChatProcessing||!liveChatInput.trim()}
-                      style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 12px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600,opacity:liveChatProcessing||!liveChatInput.trim()?0.5:1}}>
-                      Ask
+                      style={{background:"#7C5CFC",border:"none",borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:liveChatProcessing||!liveChatInput.trim()?0.4:1,flexShrink:0}}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M6 10V2M6 2L3 5M6 2L9 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
                     </button>
                   </div>
                 </div>
               </div>
-
-              {/* Participants */}
-              {participants.length>0&&(
-                <div style={{padding:"16px",borderTop:"1px solid #F5F1EA"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:"#5A5570",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Participants</div>
-                  {participants.map((p,i)=>(
-                    <div key={i} style={{fontSize:12,color:"#6B6880",marginBottom:4}}>{p.name} — {p.role}</div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </div>
