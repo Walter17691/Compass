@@ -3723,26 +3723,39 @@ Please produce:
                       <div style={{padding:"16px 20px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
                         <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Case timeline</div>
                         <div style={{display:"flex",gap:0,position:"relative"}}>
-                          {meetings.map((m,i)=>(
-                            <div key={i} style={{flex:1,position:"relative"}}>
-                              <div style={{display:"flex",alignItems:"center"}}>
-                                <div style={{width:10,height:10,borderRadius:"50%",background:"#7C5CFC",flexShrink:0,zIndex:1}}></div>
-                                {i<meetings.length-1&&<div style={{flex:1,height:2,background:"#E8E0D0"}}></div>}
+                          {(()=>{
+                            const stages = [
+                              {key:"informal",label:"Informal"},
+                              {key:"investigation",label:"Investigation"},
+                              {key:"grievance",label:"Grievance"},
+                              {key:"disciplinary",label:"Disciplinary"},
+                              {key:"redundancy",label:"Redundancy"},
+                              {key:"appeal",label:"Appeal"},
+                            ];
+                            const types = meetings.map(m=>(m.type||"").toLowerCase());
+                            const reached = stages.filter(s=>types.some(t=>t.includes(s.key)));
+                            if(reached.length===0) return null;
+                            return reached.map((s,i)=>(
+                              <div key={i} style={{flex:1,position:"relative"}}>
+                                <div style={{display:"flex",alignItems:"center"}}>
+                                  <div style={{width:10,height:10,borderRadius:"50%",background:"#7C5CFC",flexShrink:0,zIndex:1}}></div>
+                                  {i<reached.length-1&&<div style={{flex:1,height:2,background:"#7C5CFC"}}></div>}
+                                </div>
+                                <div style={{marginTop:6,paddingRight:8}}>
+                                  <div style={{fontSize:11,fontWeight:500,color:"#1A1535"}}>{s.label}</div>
+                                  <div style={{fontSize:10,color:"#9B9098"}}>{meetings.filter(m=>(m.type||"").toLowerCase().includes(s.key)).length} meeting{meetings.filter(m=>(m.type||"").toLowerCase().includes(s.key)).length!==1?"s":""}</div>
+                                </div>
                               </div>
-                              <div style={{marginTop:6,paddingRight:8}}>
-                                <div style={{fontSize:11,fontWeight:500,color:"#1A1535"}}>{m.type}</div>
-                                <div style={{fontSize:10,color:"#9B9098"}}>{m.date}</div>
-                              </div>
-                            </div>
-                          ))}
+                            ));
+                          })()}
                         </div>
                       </div>
 
                       {/* Meetings list */}
-                      {meetings.map((m,i)=>(
+                      {[...meetings].reverse().map((m,i)=>(
                         <div key={i} style={{padding:"14px 20px",borderBottom:i<meetings.length-1?"1px solid #F5F1EA":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:2}}>{m.type}</div>
+                            <div style={{fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:2}}>Meeting {meetings.length-i} — {m.type}</div>
                             <div style={{fontSize:11,color:"#9B9098"}}>{m.date} · {m.savedBy||"HR Manager"}</div>
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
