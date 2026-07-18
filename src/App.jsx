@@ -2343,6 +2343,52 @@ Please produce:
   };
 
 
+  const getCaseStatus = (cs) => {
+    const meetings = cs.meetings || [];
+    const types = meetings.map(m => (m.type || "").toLowerCase());
+    const hasOutcomeLetter = meetings.some(m => m.letterOutput);
+    const hasSigned = meetings.some(m => m.signStatus === "signed");
+    const hasPending = meetings.some(m => m.signStatus === "pending");
+
+    if(cs.status === "closed") return {label:"Closed", color:"#6B6375", bg:"#F5F1EA"};
+    if(hasSigned) return {label:"Signed & closed", color:"#1A7A4A", bg:"#E8F5EE"};
+    if(hasOutcomeLetter && hasPending) return {label:"Outcome — awaiting signature", color:"#B87520", bg:"#FEF5E7"};
+    if(hasOutcomeLetter) return {label:"Outcome issued", color:"#1A7A4A", bg:"#E8F5EE"};
+    if(types.some(t=>t.includes("appeal"))) return {label:"Appeal in progress", color:"#C84B2F", bg:"#FEF0EB"};
+    if(types.some(t=>t.includes("disciplinary"))) return {label:"Disciplinary in progress", color:"#C84B2F", bg:"#FEF0EB"};
+    if(types.some(t=>t.includes("grievance"))) return {label:"Grievance in progress", color:"#B87520", bg:"#FEF5E7"};
+    if(types.some(t=>t.includes("redundancy"))) return {label:"Redundancy consultation", color:"#B87520", bg:"#FEF5E7"};
+    if(types.some(t=>t.includes("investigation"))) return {label:"Under investigation", color:"#7C5CFC", bg:"#EDE8FF"};
+    if(types.some(t=>t.includes("informal")||t.includes("return")||t.includes("performance")||t.includes("pip"))) return {label:"Informal stage", color:"#6B6375", bg:"#F5F1EA"};
+    if(meetings.length === 0) return {label:"Open — no meetings yet", color:"#7C5CFC", bg:"#EDE8FF"};
+    return {label:"In progress", color:"#6B6375", bg:"#F5F1EA"};
+  };
+
+  const getNextAction = (cs) => {
+    const meetings = cs.meetings || [];
+    const types = meetings.map(m => (m.type || "").toLowerCase());
+    const hasOutcomeLetter = meetings.some(m => m.letterOutput);
+    const hasSigned = meetings.some(m => m.signStatus === "signed");
+    const hasPending = meetings.some(m => m.signStatus === "pending");
+    const lastMeeting = meetings[meetings.length - 1];
+    const daysSinceLastMeeting = lastMeeting ? Math.floor((Date.now() - new Date(lastMeeting.date)) / 86400000) : null;
+
+    if(hasSigned) return null;
+    if(hasPending) return {action:"Chase employee signature", deadline:"Overdue if more than 7 days", urgent:daysSinceLastMeeting>7};
+    if(hasOutcomeLetter) return {action:"Send outcome letter for signature", deadline:"Send immediately", urgent:true};
+    if(types.some(t=>t.includes("disciplinary"))&&!hasOutcomeLetter) return {action:"Issue outcome letter", deadline:"Within 5 working days (ACAS)", urgent:daysSinceLastMeeting>5};
+    if(types.some(t=>t.includes("appeal"))&&!hasOutcomeLetter) return {action:"Issue appeal outcome letter", deadline:"As soon as possible", urgent:daysSinceLastMeeting>5};
+    if(types.some(t=>t.includes("grievance"))&&!hasOutcomeLetter) return {action:"Issue grievance outcome letter", deadline:"Within a reasonable time (ACAS)", urgent:daysSinceLastMeeting>10};
+    if(types.some(t=>t.includes("investigation"))) return {action:"Complete investigation — schedule disciplinary if warranted", deadline:"Without unreasonable delay", urgent:daysSinceLastMeeting>14};
+    if(meetings.length===0) return {action:"Schedule first meeting", deadline:"As soon as possible", urgent:cs.urgent};
+    return null;
+  };
+
+  const needsInvitation = (meetingTypeId) => {
+    return ["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"].includes(meetingTypeId);
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
       <style>{`
@@ -2871,6 +2917,27 @@ Please produce:
                   ))}
                 </div>
               </div>
+
+              {/* Invitation warning */}
+              {meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
+                <div style={{background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:10,padding:"14px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
+                  <span style={{fontSize:15,flexShrink:0}}>⚠️</span>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:"#B87520",marginBottom:3}}>Formal invitation required</div>
+                    <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
+                      {meetingSetup.type==="disciplinary"&&"The employee must receive a written invitation at least 48 hours before the hearing, including the allegations, evidence, and right to be accompanied (ERA 1999 s.10)."}
+                      {meetingSetup.type==="grievance"&&"Send a written invitation confirming the date, time, location and the employee's right to be accompanied."}
+                      {meetingSetup.type==="redundancy-atrisk"&&"Employees must receive written notice of the at-risk meeting and have the opportunity to discuss alternatives (ERA 1996)."}
+                      {meetingSetup.type==="appeal-disciplinary"&&"The appeal invitation must confirm the grounds being considered and the employee's right to be accompanied."}
+                      {meetingSetup.type==="pip-review"&&"Send a written invitation with the agenda and any supporting documents in advance."}
+                    </div>
+                    <button onClick={()=>{setPendingLetterType("invite");setShowLetterModal(true);}}
+                      style={{marginTop:8,background:"none",border:"1px solid #B87520",borderRadius:6,padding:"5px 12px",fontSize:11,color:"#B87520",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                      Draft invitation letter →
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div style={{marginBottom:28}}>
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Date</label>
@@ -3857,8 +3924,8 @@ Please produce:
                       </div>
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                      {/* Process stage */}
-                      <span style={{fontSize:11,fontWeight:600,color:processStage.color,background:processStage.color+"18",borderRadius:20,padding:"3px 10px"}}>{processStage.label}</span>
+                      {/* Case status */}
+                      <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
                       {/* Risk badge */}
                       {highRisk&&<span style={{fontSize:11,fontWeight:600,color:"#C84B2F",background:"#FEF0EB",borderRadius:20,padding:"3px 10px"}}>High risk</span>}
                       {!highRisk&&medRisk&&<span style={{fontSize:11,fontWeight:600,color:"#B87520",background:"#FEF5E7",borderRadius:20,padding:"3px 10px"}}>Medium risk</span>}
