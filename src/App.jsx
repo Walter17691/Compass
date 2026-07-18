@@ -3601,835 +3601,180 @@ Please produce:
 
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
-        <div style={{maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 12px":"32px 20px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+
+          {/* Header */}
+          <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Case files</h2>
-              <p style={{fontSize:13,color:"#6B6375",margin:0}}>All cases grouped by employee, with full meeting history and documents.</p>
+              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:0,fontWeight:400}}>Cases</h2>
+              <p style={{fontSize:13,color:"#9B9098",margin:"2px 0 0"}}>{cases.length} active case{cases.length!==1?"s":""}</p>
             </div>
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={()=>setScreen(SCREENS.HOME)}>+ New meeting</Btn>
-            </div>
+            <button onClick={()=>setScreen(SCREENS.HOME)}
+              style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 20px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 2px 8px rgba(124,92,252,0.2)"}}>
+              + New meeting
+            </button>
           </div>
 
-          {cases.length===0&&(
-            <Card style={{textAlign:"center",padding:"60px 20px"}}>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1A1535",marginBottom:8}}>No cases yet</div>
-              <div style={{fontSize:13,color:"#6B6880",marginBottom:24,maxWidth:360,margin:"0 auto 24px"}}>Start a meeting from the home screen. After the meeting ends, review the record and save it to create a case file.</div>
-              <Btn onClick={()=>setScreen(SCREENS.HOME)}>Start your first meeting →</Btn>
-            </Card>
-          )}
+          <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 24px"}}>
 
-          {cases.map(c=>(
-            <Card key={c.id} style={{marginBottom:14,padding:0,overflow:"hidden"}}>
-              <div onClick={()=>setOpenCases(p=>({...p,[c.id]:!p[c.id]}))} style={{padding:"16px 20px",borderBottom:"1px solid #E8E0D0",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
-                <div>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3}}>
-                    <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",fontWeight:600}}>{c.employeeName}</span>
-                    {c.email&&<span style={{fontSize:11,color:"#6B6880"}}>{c.email}</span>}
-                    {c.meetings.some(m=>m.riskScore?.rating==="HIGH")&&<Badge color="#E8622A">HIGH RISK</Badge>}
-                  </div>
-                  <div style={{fontSize:11,color:"#5A5570"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Since {new Date(c.createdAt).toLocaleDateString("en-GB")} {openCases[c.id]?"▲":"▼"}</div>
+            {/* Summary stats */}
+            {cases.length>0&&(()=>{
+              const allMeetings = cases.flatMap(c=>c.meetings||[]);
+              const highRisk = cases.filter(c=>(c.meetings||[]).some(m=>m.riskScore?.rating==="HIGH")).length;
+              const pendingSig = cases.filter(c=>(c.meetings||[]).some(m=>m.signStatus==="pending")).length;
+              const noOutcome = cases.filter(c=>{
+                const meetings = c.meetings||[];
+                const hasFormal = meetings.some(m=>["disciplinary","investigation","grievance"].includes(m.type?.toLowerCase()));
+                const hasOutcome = meetings.some(m=>m.letterOutput);
+                return hasFormal && !hasOutcome;
+              }).length;
+              return(
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
+                  {[
+                    {label:"Total cases",value:cases.length,color:"#1A1535"},
+                    {label:"High risk",value:highRisk,color:"#C84B2F"},
+                    {label:"Awaiting signature",value:pendingSig,color:"#B87520"},
+                    {label:"No outcome letter",value:noOutcome,color:"#7C5CFC"},
+                  ].map((s,i)=>(
+                    <div key={i} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px 20px",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
+                      <div style={{fontSize:11,color:"#9B9098",fontWeight:500,letterSpacing:"0.3px",marginBottom:6}}>{s.label}</div>
+                      <div style={{fontSize:28,fontWeight:700,color:s.color,fontFamily:"DM Serif Display,Georgia,serif"}}>{s.value}</div>
+                    </div>
+                  ))}
                 </div>
-                <div style={{display:"flex",gap:8}}>
-                  <Btn variant="secondary" onClick={()=>{setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));setScreen(SCREENS.HOME);}} style={{fontSize:11,padding:"5px 12px"}}>+ Add meeting</Btn>
-                  
-                  <Btn variant="danger" onClick={()=>{if(window.confirm("Delete entire case?"))saveCases(cases.filter(x=>x.id!==c.id));}} style={{fontSize:11,padding:"5px 12px"}}>Delete</Btn>
-                </div>
+              );
+            })()}
+
+            {/* Empty state */}
+            {cases.length===0&&(
+              <div style={{textAlign:"center",padding:"80px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
+                <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",marginBottom:8}}>No cases yet</div>
+                <div style={{fontSize:14,color:"#9B9098",marginBottom:24}}>Start a meeting to create your first case</div>
+                <button onClick={()=>setScreen(SCREENS.HOME)}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"12px 28px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  Start first meeting →
+                </button>
               </div>
+            )}
 
-              {openCases[c.id]&&c.meetings.map((m,idx)=>(
-                <div key={m.id} style={{padding:"14px 20px",borderBottom:idx<c.meetings.length-1?"1px solid #F5F1EA":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                      <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:14,color:"#1A1535"}}>{m.type}</span>
-                      <span style={{fontSize:11,color:"#6B6880"}}>·</span>
-                      <span style={{fontSize:12,color:"#6B6375"}}>{m.date&&/^\d{4}-\d{2}-\d{2}$/.test(m.date)?m.date.split("-").reverse().join("/"):m.date}</span>
-                      {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={{HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"}[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
-                      {m.signId&&<Badge color={m.signStatus==="signed"?"#4CAF50":"#888"}>{m.signStatus==="signed"?"✓ Signed":"Awaiting signature"}</Badge>}
-                    </div>
-                    <div style={{fontSize:10,color:"#5A5570"}}>{m.savedBy||"HR Manager"} · {m.savedAt?new Date(m.savedAt).toLocaleDateString("en-GB"):""}</div>
-                  </div>
-                  <div style={{display:"flex",gap:6}}>
-                    {m.signId&&m.signStatus!=="signed"&&(
-                      <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#6B6375"}} onClick={async()=>{
-                        const r=await fetch("/api/signing?signId="+m.signId);
-                        const d=await r.json();
-                        if(d.status) saveCases(cases.map(cs=>cs.id===c.id?{...cs,meetings:cs.meetings.map(x=>x.id===m.id?{...x,signStatus:d.status}:x)}:cs));
-                      }}>Check signature</Btn>
-                    )}
-                    {m.signId&&m.signStatus==="signed"&&(
-                      <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#1A7A4A"}} onClick={()=>window.open("/sign/"+m.signId,"_blank")}>View signed notes</Btn>
-                    )}
-                    <Btn variant="secondary" onClick={()=>{setViewMeeting({...m,employeeName:c.employeeName,caseId:c.id});setViewCaseId(c.id);}} style={{fontSize:11,padding:"4px 12px"}}>View</Btn>
-                    <Btn variant="ghost" style={{fontSize:11,padding:"4px 8px",color:"#7C5CFC"}} onClick={()=>{setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||"",manager:m.manager||"",date:m.date||""}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setPendingLetterType("outcome"); pendingLetterTypeRef.current="outcome"; setShowLetterModal(true);}}>Draft letter</Btn>
-                    <Btn variant="danger" onClick={()=>{if(window.confirm("Delete?"))saveCases(cases.map(x=>x.id===c.id?{...x,meetings:x.meetings.filter(mm=>mm.id!==m.id)}:x).filter(x=>x.meetings.length>0));}} style={{fontSize:11,padding:"4px 10px"}}>✕</Btn>
-                  </div>
-                </div>
-              ))}
+            {/* Case list */}
+            {cases.map(cs=>{
+              const meetings = cs.meetings||[];
+              const lastMeeting = meetings[meetings.length-1];
+              const highRisk = meetings.some(m=>m.riskScore?.rating==="HIGH");
+              const medRisk = meetings.some(m=>m.riskScore?.rating==="MEDIUM");
+              const pendingSig = meetings.some(m=>m.signStatus==="pending");
+              const hasPendingHR = hrReviewRequests.some(r=>r.case_employee_name===cs.employeeName&&r.status==="pending");
+              const hasOutcomeLetter = meetings.some(m=>m.letterOutput);
+              const isOpen = openCases[cs.id];
 
-              {/* Document vault for this case */}
-              <div style={{padding:"10px 20px",background:"#F5F1EA",borderTop:"1px solid #1a1a1a"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:10,color:"#5A5570"}}>Documents: {(vaultDocs[c.id]||[]).length} file{(vaultDocs[c.id]||[]).length!==1?"s":""}</span>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    {(vaultDocs[c.id]||[]).map(d=>(
-                      <span key={d.id} style={{fontSize:10,color:"#7C5CFC",background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:4,padding:"2px 8px"}}>{d.name}</span>
-                    ))}
-                    <input type="file" style={{display:"none"}} ref={vaultFileRef} onChange={e=>{if(e.target.files[0])addToVault(c.id,e.target.files[0]);}} />
-                    <button onClick={()=>vaultFileRef.current?.click()} style={{background:"none",border:"1px dashed #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#6B6880",cursor:"pointer"}}>+ Add document</button>
-                  </div>
-                </div>
-              </div>
+              const processStage = (()=>{
+                const types = meetings.map(m=>(m.type||"").toLowerCase());
+                if(types.some(t=>t.includes("appeal"))) return {label:"Appeal",color:"#B87520",step:4};
+                if(types.some(t=>t.includes("disciplinary"))) return {label:"Disciplinary",color:"#C84B2F",step:3};
+                if(types.some(t=>t.includes("investigation"))) return {label:"Investigation",color:"#7C5CFC",step:2};
+                if(types.some(t=>t.includes("grievance"))) return {label:"Grievance",color:"#7C5CFC",step:2};
+                if(types.some(t=>t.includes("redundancy"))) return {label:"Redundancy",color:"#B87520",step:2};
+                return {label:"Informal",color:"#1A7A4A",step:1};
+              })();
 
-              {openCases[c.id]&&<>
-              {/* ACAS Early Conciliation */}
-              <div style={{padding:"12px 20px",background:"#F5F1EA",borderTop:"1px solid #1a1a1a"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:acasData[c.id]?"12px":"0"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>ACAS Early Conciliation</span>
-                    {acasData[c.id]?.status&&<Badge color={acasData[c.id].status==="settled"?"#4CAF50":acasData[c.id].status==="certificate"?"#E8622A":"#D4882A"}>{acasData[c.id].status==="settled"?"Settled":acasData[c.id].status==="certificate"?"Certificate issued":"Active"}</Badge>}
-                  </div>
-                  <button onClick={()=>{
-                    const current = acasData[c.id]||{};
-                    setAcasData(a=>({...a,[c.id]:{...current,open:!current.open}}));
-                  }} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
-                    {acasData[c.id]?.open?"Close":"+ Track EC"}
-                  </button>
-                </div>
-                {acasData[c.id]?.open&&(
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:8}}>
-                    <div>
-                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>EC notification received</label>
-                      <input type="date" value={acasData[c.id]?.notified||""} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],notified:e.target.value}}))}
-                        style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
-                    </div>
-                    <div>
-                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>EC certificate number</label>
-                      <input value={acasData[c.id]?.certNumber||""} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],certNumber:e.target.value}}))}
-                        placeholder="e.g. R000000/00/00" style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
-                    </div>
-                    <div>
-                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Certificate issued date</label>
-                      <input type="date" value={acasData[c.id]?.certDate||""} onChange={e=>{
-                        const d = new Date(e.target.value);
-                        d.setMonth(d.getMonth()+1);
-                        const deadline = d.toISOString().split("T")[0];
-                        setAcasData(a=>({...a,[c.id]:{...a[c.id],certDate:e.target.value,tribunalDeadline:deadline,status:"certificate"}}));
-                      }} style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
-                    </div>
-                    <div>
-                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Tribunal claim deadline</label>
-                      <input value={acasData[c.id]?.tribunalDeadline||""} readOnly
-                        style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:acasData[c.id]?.tribunalDeadline&&new Date(acasData[c.id].tribunalDeadline)<new Date(Date.now()+7*86400000)?"#E8622A":"#F2EDE4",outline:"none"}}/>
-                    </div>
-                    <div style={{gridColumn:"1/-1"}}>
-                      <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Status</label>
-                      <select value={acasData[c.id]?.status||"active"} onChange={e=>setAcasData(a=>({...a,[c.id]:{...a[c.id],status:e.target.value}}))}
-                        style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}>
-                        <option value="active">Active — conciliation ongoing</option>
-                        <option value="certificate">Certificate issued — no settlement</option>
-                        <option value="settled">Settled</option>
-                      </select>
-                    </div>
-                    {acasData[c.id]?.tribunalDeadline&&(
-                      <div style={{gridColumn:"1/-1",background:"#FEF0EB",border:"1px solid #E8622A33",borderRadius:6,padding:"8px 12px",fontSize:11,color:"#C84B2F"}}>
-                        ⚠ Tribunal claim deadline: {acasData[c.id].tribunalDeadline.split("-").reverse().join("/")} — {Math.ceil((new Date(acasData[c.id].tribunalDeadline)-new Date())/(86400000))} days remaining
+              return(
+                <div key={cs.id} style={{background:"#FFFFFF",border:"1px solid",borderColor:highRisk?"#F5C4C4":"#E8E0D0",borderRadius:12,marginBottom:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(26,21,53,0.05)"}}>
+
+                  {/* Case header - always visible */}
+                  <div onClick={()=>setOpenCases(p=>({...p,[cs.id]:!p[cs.id]}))}
+                    style={{padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                    <div style={{display:"flex",alignItems:"center",gap:14,flex:1,minWidth:0}}>
+                      {/* Avatar */}
+                      <div style={{width:38,height:38,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{fontSize:14,fontWeight:600,color:"#7C5CFC"}}>{(cs.employeeName||"?")[0].toUpperCase()}</span>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Audit trail for this case */}
-              <div style={{padding:"12px 20px",background:"#FDFAF5",borderTop:"1px solid #1a1a1a"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>Audit trail</span>
-                  <button onClick={()=>loadAuditLog(c.id)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:10,cursor:"pointer"}}>Refresh</button>
-                </div>
-                {auditLog.filter(a=>a.case_id===c.id).length===0?(
-                  <div style={{fontSize:11,color:"#4A4560"}}>No activity recorded yet</div>
-                ):(
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    {auditLog.filter(a=>a.case_id===c.id).slice(0,5).map(a=>(
-                      <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div>
-                          <span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>{a.action}</span>
-                          <span style={{fontSize:11,color:"#6B6880",marginLeft:8}}>{a.details}</span>
-                        </div>
-                        <div style={{fontSize:10,color:"#4A4560",whiteSpace:"nowrap",marginLeft:8}}>
-                          {a.user_name} · {new Date(a.created_at).toLocaleDateString("en-GB")}
+                      <div style={{minWidth:0}}>
+                        <div style={{fontSize:15,fontWeight:600,color:"#1A1535",marginBottom:2}}>{cs.employeeName}</div>
+                        <div style={{fontSize:12,color:"#9B9098",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                          <span>{meetings.length} meeting{meetings.length!==1?"s":""}</span>
+                          {lastMeeting&&<><span>·</span><span>{lastMeeting.type}</span><span>·</span><span>{lastMeeting.date}</span></>}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Redundancy tracker */}
-              {c.meetings.some(m=>m.type?.toLowerCase().includes('redundancy')||m.type?.toLowerCase().includes('at risk')||m.type?.toLowerCase().includes('redundancy consultation')||m.type?.toLowerCase().includes('redundancy outcome'))&&(
-                <div style={{padding:"12px 20px",background:"#F5F1EA",borderTop:"1px solid #1a1a1a"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:redundancyData[c.id]?"12px":"0"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>Redundancy</span>
-                      {redundancyData[c.id]?.status&&<Badge color={redundancyData[c.id].status==="confirmed"?"#E8622A":redundancyData[c.id].status==="withdrawn"?"#4CAF50":"#D4882A"}>{redundancyData[c.id].status==="confirmed"?"Confirmed":redundancyData[c.id].status==="withdrawn"?"Withdrawn":"At Risk"}</Badge>}
                     </div>
-                    <button onClick={()=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],open:!r[c.id]?.open}}))}
-                      style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
-                      {redundancyData[c.id]?.open?"Close":"Track"}
-                    </button>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      {/* Process stage */}
+                      <span style={{fontSize:11,fontWeight:600,color:processStage.color,background:processStage.color+"18",borderRadius:20,padding:"3px 10px"}}>{processStage.label}</span>
+                      {/* Risk badge */}
+                      {highRisk&&<span style={{fontSize:11,fontWeight:600,color:"#C84B2F",background:"#FEF0EB",borderRadius:20,padding:"3px 10px"}}>High risk</span>}
+                      {!highRisk&&medRisk&&<span style={{fontSize:11,fontWeight:600,color:"#B87520",background:"#FEF5E7",borderRadius:20,padding:"3px 10px"}}>Medium risk</span>}
+                      {/* Pending indicators */}
+                      {pendingSig&&<span style={{fontSize:11,color:"#B87520",background:"#FEF5E7",borderRadius:20,padding:"3px 10px"}}>⏳ Signature pending</span>}
+                      {hasPendingHR&&<span style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"3px 10px"}}>HR review pending</span>}
+                      {/* Quick actions */}
+                      <button onClick={e=>{e.stopPropagation();setMeetingSetup(p=>({...p,employee:cs.employeeName}));setScreen(SCREENS.HOME+"_meeting");}}
+                        style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                        + Meeting
+                      </button>
+                      <span style={{color:"#C4BAB0",fontSize:14,marginLeft:4}}>{isOpen?"▲":"▼"}</span>
+                    </div>
                   </div>
-                  {redundancyData[c.id]?.open&&(
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                        <div>
-                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Status</label>
-                          <select value={redundancyData[c.id]?.status||"atrisk"} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],status:e.target.value}}))}
-                            style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}>
-                            <option value="atrisk">At risk</option>
-                            <option value="confirmed">Confirmed redundancy</option>
-                            <option value="withdrawn">Withdrawn — alternative found</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Date at risk letter sent</label>
-                          <DateInput value={redundancyData[c.id]?.atRiskDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],atRiskDate:e.target.value}}))}/>
-                        </div>
-                        <div>
-                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Start date (for redundancy pay)</label>
-                          <DateInput value={redundancyData[c.id]?.startDate||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],startDate:e.target.value}}))}/>
-                        </div>
-                        <div>
-                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Weekly pay (£)</label>
-                          <input type="number" placeholder="e.g. 650" value={redundancyData[c.id]?.weeklyPay||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],weeklyPay:e.target.value}}))}
-                            style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
-                        </div>
-                        <div>
-                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Age</label>
-                          <input type="number" placeholder="e.g. 35" value={redundancyData[c.id]?.age||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],age:e.target.value}}))}
-                            style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
-                        </div>
-                        <div>
-                          <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Notice period (weeks)</label>
-                          <input type="number" placeholder="e.g. 4" value={redundancyData[c.id]?.noticePeriod||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],noticePeriod:e.target.value}}))}
-                            style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#1A1535",outline:"none"}}/>
-                        </div>
-                      </div>
-                      {/* Statutory redundancy pay calculator */}
-                      {redundancyData[c.id]?.startDate&&redundancyData[c.id]?.age&&redundancyData[c.id]?.weeklyPay&&(()=>{
-                        const start = new Date(redundancyData[c.id].startDate);
-                        const end = new Date();
-                        const ageAtEnd = parseInt(redundancyData[c.id].age)||0;
-                        const yearsService = Math.min(Math.floor((end-start)/(365.25*24*3600*1000)), 20);
-                        const cappedWeeklyPay = Math.min(parseFloat(redundancyData[c.id].weeklyPay), 643);
-                        let weeks = 0;
-                        for(let i=0; i<yearsService; i++){
-                          const ageInYear = ageAtEnd - i;
-                          if(ageInYear >= 41) weeks += 1.5;
-                          else if(ageInYear >= 22) weeks += 1;
-                          else weeks += 0.5;
-                        }
-                        const total = Math.round(weeks * cappedWeeklyPay);
-                        return(
-                          <div style={{background:"#FDFAF5",borderRadius:8,padding:"12px 16px",border:"1px solid #7C5CFC33"}}>
-                            <div style={{fontSize:10,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Statutory Redundancy Pay</div>
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                              <div><div style={{fontSize:10,color:"#6B6880"}}>Age</div><div style={{fontSize:14,color:"#1A1535"}}>{ageAtEnd}</div></div>
-                              <div><div style={{fontSize:10,color:"#6B6880"}}>Service</div><div style={{fontSize:14,color:"#1A1535"}}>{yearsService} yrs</div></div>
-                              <div><div style={{fontSize:10,color:"#6B6880"}}>Weekly pay</div><div style={{fontSize:14,color:"#1A1535"}}>£{cappedWeeklyPay}</div></div>
+
+                  {/* Expanded case content */}
+                  {isOpen&&openCases[cs.id]&&(
+                    <div style={{borderTop:"1px solid #EDE5D8"}}>
+
+                      {/* Process timeline */}
+                      <div style={{padding:"16px 20px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Case timeline</div>
+                        <div style={{display:"flex",gap:0,position:"relative"}}>
+                          {meetings.map((m,i)=>(
+                            <div key={i} style={{flex:1,position:"relative"}}>
+                              <div style={{display:"flex",alignItems:"center"}}>
+                                <div style={{width:10,height:10,borderRadius:"50%",background:"#7C5CFC",flexShrink:0,zIndex:1}}></div>
+                                {i<meetings.length-1&&<div style={{flex:1,height:2,background:"#E8E0D0"}}></div>}
+                              </div>
+                              <div style={{marginTop:6,paddingRight:8}}>
+                                <div style={{fontSize:11,fontWeight:500,color:"#1A1535"}}>{m.type}</div>
+                                <div style={{fontSize:10,color:"#9B9098"}}>{m.date}</div>
+                              </div>
                             </div>
-                            <div style={{fontSize:20,color:"#7C5CFC",fontWeight:700}}>£{total.toLocaleString()}</div>
-                            <div style={{fontSize:10,color:"#5A5570",marginTop:4}}>Based on {weeks} weeks × £{cappedWeeklyPay} (capped at £643/week, 20 years max)</div>
-                            {parseFloat(redundancyData[c.id].weeklyPay) > 643&&(
-                              <div style={{fontSize:11,color:"#B87520",marginTop:4}}>⚠ Weekly pay exceeds statutory cap of £643. Employer may pay enhanced redundancy above this.</div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                      <div>
-                        <label style={{display:"block",fontSize:10,color:"#6B6880",marginBottom:4}}>Notes / alternatives considered</label>
-                        <textarea value={redundancyData[c.id]?.notes||""} onChange={e=>setRedundancyData(r=>({...r,[c.id]:{...r[c.id],notes:e.target.value}}))}
-                          placeholder="Alternative roles offered, selection criteria applied, consultation notes..."
-                          rows={3} style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",resize:"none",boxSizing:"border-box"}}/>
+                          ))}
+                        </div>
                       </div>
-                      <div style={{display:"flex",gap:8}}>
-                        <Btn onClick={e=>{e.stopPropagation();console.log("REDUNDANCY BTN CLICKED");
-                          setReviewOutput(redundancyData[c.id]?.notes||"");
-                          setCaseInfo(p=>({...p,employee:c.employeeName,email:c.email||""}));
-                          setMeetingType(MEETING_TYPES.find(t=>t.id==="redundancy-outcome")||null);
-                          handleLetter("redundancy_outcome");
-                          const _chair = caseInfo.manager||"[Chair Name]";
-                          const _date = new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
-                          const _first = _emp.split(" ")[0];
-                          handleLetter("redundancy_outcome");
-                        }} style={{fontSize:12}}>Draft redundancy letter</Btn>
+
+                      {/* Meetings list */}
+                      {meetings.map((m,i)=>(
+                        <div key={i} style={{padding:"14px 20px",borderBottom:i<meetings.length-1?"1px solid #F5F1EA":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:2}}>{m.type}</div>
+                            <div style={{fontSize:11,color:"#9B9098"}}>{m.date} · {m.savedBy||"HR Manager"}</div>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                            {m.riskScore?.rating&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":m.riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",background:m.riskScore.rating==="HIGH"?"#FEF0EB":m.riskScore.rating==="MEDIUM"?"#FEF5E7":"#E8F5EE",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
+                            {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>✓ Signed</span>}
+                            {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>⏳ Pending</span>}
+                            {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date,email:cs.email||""}));setScreen(SCREENS.REVIEW);}}
+                              style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View</button>}
+                            {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date,email:cs.email||""}));setPendingLetterType("outcome");setShowLetterModal(true);}}
+                              style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Draft letter</button>}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Case footer actions */}
+                      <div style={{padding:"12px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8",display:"flex",gap:8,alignItems:"center"}}>
+                        <button onClick={()=>{if(window.confirm("Delete this case?"))saveCases(cases.filter(x=>x.id!==cs.id));}}
+                          style={{fontSize:11,background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:"4px 0"}}>Delete case</button>
+                        <div style={{flex:1}}/>
+                        {lastMeeting?.record&&!hasOutcomeLetter&&(
+                          <span style={{fontSize:11,color:"#B87520",background:"#FEF5E7",borderRadius:20,padding:"4px 12px"}}>⚠ No outcome letter yet</span>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
-              )}
-
-              {/* Tribunal Bundle Builder */}
-              <div style={{padding:"12px 20px",background:"#FDFAF5",borderTop:"1px solid #1a1a1a",borderBottomLeftRadius:12,borderBottomRightRadius:12}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:1,textTransform:"uppercase"}}>Tribunal bundle</span>
-                  <button onClick={()=>setShowBundleBuilder(showBundleBuilder===c.id?null:c.id)}
-                    style={{background:"none",border:"1px solid #7C5CFC44",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
-                    {showBundleBuilder===c.id?"Close":"Build bundle"}
-                  </button>
-                </div>
-                {showBundleBuilder===c.id&&(
-                  <div style={{marginTop:12}}>
-                    <p style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Attach documents and Compass will build a numbered tribunal bundle index.</p>
-                    <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto",marginBottom:8}}>
-                      {bundleChat.map((m,i)=>(
-                        <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#FFFFFF",border:m.role==="user"?"none":"1px solid #E8E0D0"}}>
-                          <div style={{fontSize:12,color:m.role==="user"?"#fff":"#C4BDAF",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{m.content}</div>
-                        </div>
-                      ))}
-                      {bundleProcessing&&<div style={{fontSize:14,color:"#7C5CFC"}}>●</div>}
-                      {bundleChat.length===0&&(
-                        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px"}}>
-                          <div style={{fontSize:12,color:"#3D3560",lineHeight:1.8}}>Hello! I'll help you build a tribunal bundle for {c.employeeName}. Please attach the documents you have — ET1, ET3, meeting records, letters, policies, witness statements — and I'll create a numbered index.<br/><br/>Start by attaching your first document below.</div>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{display:"flex",gap:8}}>
-                      <label style={{cursor:"pointer",display:"flex",alignItems:"center",gap:6,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#6B6375"}}>
-                        📎 Attach
-                        <input type="file" accept=".pdf,.doc,.docx,.txt" multiple style={{display:"none"}} onChange={async e=>{
-                          const files = Array.from(e.target.files);
-                          for(const file of files){
-                            const text = await file.text().catch(()=>"[Binary file - "+file.name+"]");
-                            setBundleFiles(f=>[...f,{name:file.name,text:text.slice(0,3000),size:file.size}]);
-                            setBundleChat(h=>[...h,{role:"user",content:"[Attached: "+file.name+"]"}]);
-                          }
-                          e.target.value="";
-                          // Auto-analyse
-                          setBundleProcessing(true);
-                          const allDocs = [...bundleFiles,...files.map(f=>({name:f.name}))];
-                          try {
-                            const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                              body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,stream:false,
-                                system:`You are a UK employment tribunal bundle specialist. The user is building a tribunal bundle for ${c.employeeName}. As documents are added, maintain a running numbered index and flag any gaps. Format: Tab number | Document | Date | Notes. Flag missing key documents.`,
-                                messages:[...bundleChat,{role:"user",content:"I have just attached: "+files.map(f=>f.name).join(", ")+". Current documents in bundle: "+allDocs.map((d,i)=>(i+1)+". "+d.name).join(", ")}]})});
-                            const data = await res.json();
-                            const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Document added.";
-                            setBundleChat(h=>[...h,{role:"assistant",content:reply}]);
-                          } catch(e){}
-                          setBundleProcessing(false);
-                        }}/>
-                      </label>
-                      <input value={bundleChatInput} onChange={e=>setBundleChatInput(e.target.value)}
-                        onKeyDown={async e=>{
-                          if(e.key==="Enter"&&bundleChatInput.trim()&&!bundleProcessing){
-                            const msg=bundleChatInput.trim(); setBundleChatInput("");
-                            setBundleChat(h=>[...h,{role:"user",content:msg}]);
-                            setBundleProcessing(true);
-                            try {
-                              const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                                body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,stream:false,
-                                  system:`You are a UK employment tribunal bundle specialist building a bundle for ${c.employeeName}. Documents so far: ${bundleFiles.map((d,i)=>(i+1)+". "+d.name).join(", ")||"none yet"}.`,
-                                  messages:[...bundleChat,{role:"user",content:msg}]})});
-                              const data = await res.json();
-                              const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("")||"Sorry.";
-                              setBundleChat(h=>[...h,{role:"assistant",content:reply}]);
-                            } catch(e){}
-                            setBundleProcessing(false);
-                          }
-                        }}
-                        placeholder="Ask Compass about the bundle..."
-                        style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",fontSize:12,outline:"none",color:"#1A1535"}}/>
-                      <button onClick={async()=>{
-                        if(!bundleFiles.length) return;
-                        setBundleProcessing(true);
-                        try {
-                          const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-                            body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
-                              system:"You are a UK employment tribunal bundle specialist. Generate a formal tribunal bundle index.",
-                              messages:[...bundleChat,{role:"user",content:"Please generate the complete formal tribunal bundle index for all "+bundleFiles.length+" documents. Format as a proper index with Tab numbers, document descriptions, dates and page references. Also list any missing key documents."}]})});
-                          const data = await res.json();
-                          const index = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-                          if(index){
-                            setBundleChat(h=>[...h,{role:"assistant",content:index}]);
-                            const blob = new Blob([index],{type:"application/msword"});
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href=url; a.download=c.employeeName.replace(/\s/g,"_")+"_Tribunal_Bundle_Index.doc"; a.click();
-                            URL.revokeObjectURL(url);
-                          }
-                        } catch(e){}
-                        setBundleProcessing(false);
-                      }} style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"0 12px",fontSize:12,color:"#fff",cursor:"pointer",whiteSpace:"nowrap"}}>
-                        Generate index
-                      </button>
-                    </div>
-                    {bundleFiles.length>0&&(
-                      <div style={{marginTop:8,fontSize:11,color:"#6B6880"}}>{bundleFiles.length} document{bundleFiles.length!==1?"s":""} in bundle: {bundleFiles.map(f=>f.name).join(", ")}</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-            }
-            </Card>
-          ))}
-
-          {/* Meeting detail modal */}
-          {viewMeeting&&(
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:200,overflowY:"auto",padding:"32px 20px"}}>
-              <div style={{maxWidth:860,margin:"0 auto",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0",overflow:"hidden"}}>
-                <div style={{padding:"18px 24px",borderBottom:"1px solid #E8E0D0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <Badge style={{marginBottom:6}}>{viewMeeting.type}</Badge>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginTop:4}}>{viewMeeting.employeeName} — {viewMeeting.date}</div>
-                  </div>
-                  <button onClick={()=>setViewMeeting(null)} style={{background:"none",border:"none",color:"#6B6375",fontSize:22,cursor:"pointer"}}>✕</button>
-                </div>
-                <div style={{padding:"20px 24px"}}>
-                  {/* Tabs: record, transcript, letter, letter tracking, risk, next steps, adjustments, audit */}
-                  {[
-                    {label:"Record",content:viewMeeting.record},
-                    {label:"Transcript",type:"transcript"},
-                    {label:"Letter",content:viewMeeting.letterOutput,light:true},
-                    {label:"Letter tracking",type:"tracking"},
-                    {label:"Risk",type:"risk"},
-                    {label:"Next Steps",type:"nextsteps"},
-                    {label:"Adjustments",type:"adjustments"},
-                  ].map(tab=>(
-                    <details key={tab.label} style={{marginBottom:12,background:"#F5F1EA",borderRadius:8,overflow:"hidden"}}>
-                      <summary style={{padding:"11px 16px",fontSize:11,fontWeight:600,color:"#7C5CFC",cursor:"pointer",letterSpacing:0.5,textTransform:"uppercase"}}>{tab.label}</summary>
-                      <div style={{padding:"0 16px 16px"}}>
-                        {tab.type==="transcript"&&(
-                          <div style={{maxHeight:280,overflowY:"auto"}}>
-                            {viewMeeting.transcript?.map((u,i)=>(
-                              <div key={i} style={{marginBottom:8}}>
-                                <span style={{fontSize:9,fontWeight:700,color:spColor(u.speaker),textTransform:"uppercase"}}>{u.speaker}</span>
-                                <div style={{fontSize:12,color:"#1A1535",fontFamily:"JetBrains Mono,monospace",marginTop:2,lineHeight:1.5}}>{u.text}</div>
-                              </div>
-                            ))}
-                            {!viewMeeting.transcript?.length&&<div style={{fontSize:12,color:"#5A5570"}}>No transcript recorded</div>}
-                          </div>
-                        )}
-                        {tab.type==="tracking"&&(
-                          <div>
-                            <div style={{fontSize:11,color:"#6B6880",marginBottom:12,lineHeight:1.6}}>Track delivery and acknowledgement for tribunal evidence purposes.</div>
-                            {["sent","delivered","acknowledged"].map(event=>{
-                              const lt = viewMeeting.letterTracking||{};
-                              const done = !!lt[event];
-                              return(
-                                <div key={event} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
-                                  <div>
-                                    <div style={{fontSize:12,color:done?"#F2EDE4":"#555",fontWeight:done?500:400,textTransform:"capitalize"}}>{event}</div>
-                                    {done&&<div style={{fontSize:10,color:"#6B6880",marginTop:2}}>
-                                      {new Date(lt[event]).toLocaleString("en-GB")} · {lt[event+"By"]||"HR Manager"}
-                                    </div>}
-                                  </div>
-                                  {!done?(
-                                    <Btn onClick={()=>trackLetter(viewCaseId,viewMeeting.id,event)} style={{padding:"4px 12px",fontSize:11}}>
-                                      Mark as {event}
-                                    </Btn>
-                                  ):(
-                                    <span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>✓ Recorded</span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            {viewMeeting.letterOutput&&(
-                              <button onClick={()=>{
-                                const w=window.open("","_blank");
-                                const html = '<html><head><title>Letter</title></head><body>' + viewMeeting.letterOutput.replace(/\n/g,'<br/>') + '</body></html>'; w.document.write(html);
-                                w.print();
-                              }}
-                                style={{marginTop:14,width:"100%",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>
-                                Print letter
-                              </button>
-                            )}
-                            {viewMeeting.nextSteps?.some(s=>s.deadline)&&(
-                              <button onClick={()=>exportToCalendar(
-                                `${viewMeeting.type} — ${cases.find(c=>c.id===viewCaseId)?.employeeName}`,
-                                viewMeeting.nextSteps.find(s=>s.deadline)?.deadline,
-                                viewMeeting.nextSteps.filter(s=>s.deadline).map(s=>s.step+" ("+s.deadline+")").join("\n")
-                              )}
-                                style={{marginTop:8,width:"100%",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>
-                                Add deadlines to calendar (.ics)
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {tab.type==="risk"&&viewMeeting.riskScore&&(()=>{
-                          const rColors={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#888"};
-                          const col=rColors[viewMeeting.riskScore.rating]||"#888";
-                          return(
-                            <div>
-                              <div style={{fontSize:13,color:col,fontWeight:700,marginBottom:6}}>{viewMeeting.riskScore.rating} — {viewMeeting.riskScore.summary}</div>
-                              {viewMeeting.riskScore.flags?.map((f,i)=>(
-                                <div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:"1px solid #EDE5D8"}}>
-                                  <div style={{display:"flex",gap:8,marginBottom:3}}><Badge color={rColors[f.severity]}>{f.severity}</Badge><span style={{fontSize:10,color:"#6B6880"}}>{f.law}</span></div>
-                                  <div style={{fontSize:12,color:"#1A1535",fontWeight:600}}>{f.issue}</div>
-                                  <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>Recommendation: {f.recommendation}</div>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                        {tab.type==="nextsteps"&&(
-                          <div>
-                            {viewMeeting.nextSteps?.map((s,i)=>(
-                              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #EDE5D8"}}>
-                                <span style={{fontSize:12,color:s.done?"#555":"#F2EDE4",textDecoration:s.done?"line-through":"none"}}>{s.step}</span>
-                                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                  {s.deadline&&<span style={{fontSize:10,color:"#6B6375",fontFamily:"JetBrains Mono,monospace"}}>{s.deadline}</span>}
-                                  {s.deadline&&<button onClick={()=>exportToCalendar(s.step,s.deadline,`${viewMeeting.type} — ${s.step}`)}
-                                    style={{background:"none",border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 8px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>+ Cal</button>}
-                                </div>
-                              </div>
-                            ))}
-                            {!viewMeeting.nextSteps?.length&&<div style={{fontSize:12,color:"#5A5570"}}>No next steps recorded</div>}
-                          </div>
-                        )}
-                        {tab.type==="adjustments"&&(
-                          <div>
-                            <div style={{fontSize:11,color:"#6B6880",marginBottom:12,lineHeight:1.6}}>
-                              Reasonable adjustments required under the Equality Act 2010. Log and track adjustments agreed for this employee.
-                            </div>
-                            {(adjustments[viewCaseId]||[]).map(a=>(
-                              <div key={a.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
-                                <button onClick={()=>toggleAdjustment(viewCaseId,a.id)}
-                                  style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:a.done?"#7C5CFC":"#E8E0D0",background:a.done?"#7C5CFC22":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-                                  {a.done&&<span style={{color:"#7C5CFC",fontSize:10}}>✓</span>}
-                                </button>
-                                <div style={{flex:1}}>
-                                  <div style={{fontSize:12,color:a.done?"#555":"#F2EDE4",textDecoration:a.done?"line-through":"none"}}>{a.adjustment}</div>
-                                  {a.review&&<div style={{fontSize:10,color:"#6B6880",marginTop:2}}>Review: {a.review}</div>}
-                                  <div style={{fontSize:10,color:"#5A5570",marginTop:1}}>Added {new Date(a.addedAt).toLocaleDateString("en-GB")}</div>
-                                </div>
-                              </div>
-                            ))}
-                            {/* Add adjustment form */}
-                            <AdjustmentForm onAdd={(adj)=>addAdjustment(viewCaseId, adj)} />
-                          </div>
-                        )}
-                        {tab.content&&(
-                          tab.light
-                            ?<div style={{background:"#FDFAF5",borderRadius:6,padding:"16px 20px"}}><MDRenderer text={tab.content} light/></div>
-                            :<MDRenderer text={tab.content}/>
-                        )}
-                      </div>
-                    </details>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ TEMPLATES ══ */}
-      {screen===SCREENS.TEMPLATES&&(
-        <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Template library</h2>
-          <p style={{fontSize:13,color:"#6B6375",margin:"0 0 20px"}}>UK-compliant HR letter templates. Click to view and copy.</p>
-
-          <input placeholder="Search templates..." value={templateSearch} onChange={e=>setTemplateSearch(e.target.value)}
-            style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:13,outline:"none",marginBottom:20,color:"#1A1535"}} />
-
-          {["Disciplinary","Grievance","Investigation","Performance","Appeal","Welfare"].map(cat=>{
-            const filtered = TEMPLATES.filter(t=>t.cat===cat&&(templateSearch===""||t.name.toLowerCase().includes(templateSearch.toLowerCase())));
-            if(!filtered.length) return null;
-            return(
-              <div key={cat} style={{marginBottom:24}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#6B6375",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>{cat}</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
-                  {filtered.map(t=>(
-                    <button key={t.id} onClick={()=>setSelectedTemplate(t)}
-                      style={{background:"#FFFFFF",border:"1px solid",borderColor:selectedTemplate?.id===t.id?"#7C5CFC":"#E8E0D0",borderRadius:10,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
-                      onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-                      onMouseLeave={e=>e.currentTarget.style.borderColor=selectedTemplate?.id===t.id?"#7C5CFC":"#E8E0D0"}>
-                      <Badge style={{marginBottom:8}}>{cat}</Badge>
-                      <div style={{fontSize:14,color:"#1A1535",fontWeight:600,margin:"6px 0 4px",fontFamily:"DM Serif Display,Georgia,serif"}}>{t.name}</div>
-                      <div style={{fontSize:11,color:"#6B6880"}}>Click to preview and copy →</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-
-          {selectedTemplate&&(
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:200,overflowY:"auto",padding:"32px 20px"}}>
-              <div style={{maxWidth:780,margin:"0 auto",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0",overflow:"hidden"}}>
-                <div style={{padding:"16px 24px",borderBottom:"1px solid #E8E0D0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <Badge style={{marginBottom:4}}>{selectedTemplate.cat}</Badge>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginTop:4}}>{selectedTemplate.name}</div>
-                  </div>
-                  <button onClick={()=>setSelectedTemplate(null)} style={{background:"none",border:"none",color:"#6B6375",fontSize:22,cursor:"pointer"}}>✕</button>
-                </div>
-                <div style={{padding:"20px 24px"}}>
-                  <div style={{background:"#FDFAF5",borderRadius:8,padding:"24px 28px",marginBottom:16}}>
-                    <pre style={{fontFamily:"Inter,sans-serif",fontSize:13,color:"#FFFFFF",lineHeight:1.8,whiteSpace:"pre-wrap",margin:0}}>{selectedTemplate.body}</pre>
-                  </div>
-                  <div style={{display:"flex",gap:8}}>
-                    <Btn onClick={()=>{navigator.clipboard.writeText(selectedTemplate.body);setSelectedTemplate(null);}}>Copy template</Btn>
-                    <Btn variant="ghost" onClick={()=>setSelectedTemplate(null)}>Close</Btn>
-                  </div>
-                  <div style={{marginTop:12,fontSize:11,color:"#5A5570",lineHeight:1.6}}>Fields in [brackets] should be replaced with actual information. Always review before sending.</div>
-                </div>
-              </div>
-
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
-                {["ACAS dismissal process","Suspend on full pay?","Grievance — what next?","Investigation timescales"].map((s,i)=>(
-                  <button key={i} onClick={()=>askCompass(s,homeChatHistory,setHomeChatHistory,setHomeChatProcessing)}
-                    style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",fontFamily:"Inter,sans-serif"}}
-                    onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC44";e.currentTarget.style.color="#A98FFF";}}
-                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#666";}}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ AUDIT LOG ══ */}
-      {screen===SCREENS.AUDIT&&(
-        <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Audit Log</h2>
-          <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px"}}>Full record of all actions taken across your organisation.</p>
-          {auditLog.length===0?(
-            <div style={{textAlign:"center",padding:"60px 20px",color:"#5A5570",fontSize:13}}>No activity recorded yet</div>
-          ):(
-            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-              {auditLog.map((a,i)=>(
-                <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",borderBottom:i<auditLog.length-1?"1px solid #F5F1EA":"none"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
-                    <div>
-                      <span style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{a.action}</span>
-                      {a.details&&<span style={{fontSize:12,color:"#6B6880",marginLeft:8}}>{a.details}</span>}
-                    </div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0,marginLeft:16}}>
-                    <div style={{fontSize:11,color:"#7C5CFC"}}>{a.user_name}</div>
-                    <div style={{fontSize:10,color:"#5A5570"}}>{new Date(a.created_at).toLocaleString("en-GB")}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ HR REVIEW ══ */}
-      {screen===SCREENS.HR_REVIEW&&(
-        <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>HR Review Queue</h2>
-          <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px"}}>Review and approve or reject requests from managers.</p>
-
-          {hrReviewRequests.length===0&&(
-            <div style={{textAlign:"center",padding:"60px 20px",color:"#5A5570",fontSize:13}}>No review requests yet</div>
-          )}
-
-          {["pending","approved","rejected"].map(status=>{
-            const filtered = hrReviewRequests.filter(r=>r.status===status);
-            if(!filtered.length) return null;
-            return(
-              <div key={status} style={{marginBottom:32}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#6B6375",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>
-                  {status==="pending"?"Awaiting review":status==="approved"?"Approved":"Rejected"} ({filtered.length})
-                </div>
-                {filtered.map(r=>(
-                  <div key={r.id} style={{background:"#FFFFFF",border:"1px solid",borderColor:r.status==="pending"?"#D4882A33":r.status==="approved"?"#4CAF5033":"#E8622A33",borderRadius:12,padding:20,marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-                      <div>
-                        <div style={{display:"flex",gap:8,marginBottom:6}}>
-                          <Badge color={r.status==="pending"?"#D4882A":r.status==="approved"?"#4CAF50":"#E8622A"}>{r.status}</Badge>
-                          <Badge>{r.step}</Badge>
-                        </div>
-                        <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:2}}>{r.case_employee_name}</div>
-                        <div style={{fontSize:12,color:"#6B6880"}}>{r.meeting_type} · Requested by {r.requested_by_name} · {new Date(r.requested_at).toLocaleDateString("en-GB")}</div>
-                      </div>
-                    </div>
-                    {r.record_snapshot&&(
-                      <details style={{marginBottom:12}}>
-                        <summary style={{fontSize:11,color:"#7C5CFC",cursor:"pointer",marginBottom:8}}>View record snapshot</summary>
-                        <div style={{background:"#F5F1EA",borderRadius:8,padding:"12px 16px",maxHeight:200,overflowY:"auto"}}>
-                          <MDRenderer text={r.record_snapshot}/>
-                        </div>
-                      </details>
-                    )}
-                    {r.status==="pending"&&isHR&&(()=>{
-                      const [comments, setComments] = React.useState("");
-                      return(
-                        <div>
-                          <textarea value={comments} onChange={e=>setComments(e.target.value)}
-                            placeholder="Add comments (required for rejection)..."
-                            rows={2} style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,outline:"none",color:"#1A1535",resize:"none",boxSizing:"border-box",marginBottom:8}}/>
-                          <div style={{display:"flex",gap:8}}>
-                            <Btn onClick={()=>respondToReview(r.id,"approved",comments)} style={{background:"#4CAF50",borderColor:"#4CAF50"}}>✓ Approve</Btn>
-                            <Btn onClick={()=>{if(!comments.trim()){showToast("Please add comments when rejecting", "warning");return;}respondToReview(r.id,"rejected",comments);}} variant="ghost" style={{color:"#C84B2F",borderColor:"#E8622A"}}>✕ Reject</Btn>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    {r.status!=="pending"&&r.comments&&(
-                      <div style={{background:"#F5F1EA",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#6B6375"}}>
-                        <span style={{color:r.status==="approved"?"#4CAF50":"#E8622A",fontWeight:600}}>{r.status==="approved"?"Approved":"Rejected"}</span> by {r.reviewed_by_name} · {r.comments}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ══ WHISTLEBLOWER ══ */}
-      {screen===SCREENS.WHISTLE&&(
-        <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
-            {/* Submit form */}
-            <div>
-              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Anonymous reporting</h2>
-              <p style={{fontSize:13,color:"#6B6375",margin:"0 0 20px",lineHeight:1.6}}>Employees can submit concerns anonymously. Reports go directly to HR and are not linked to any user account.</p>
-
-              {whistleSubmitted?(
-                <Card style={{textAlign:"center",padding:"32px 20px"}}>
-                  <div style={{fontSize:32,marginBottom:12}}>✓</div>
-                  <div style={{fontSize:15,color:"#7C5CFC",fontWeight:600,marginBottom:6}}>Report submitted</div>
-                  <div style={{fontSize:12,color:"#6B6375",marginBottom:16}}>Your report has been received by HR. Thank you for speaking up.</div>
-                  <Btn onClick={()=>{setWhistleSubmitted(false);setWhistleForm({concern:"",category:"",date:"",anonymous:true});}}>Submit another</Btn>
-                </Card>
-              ):(
-                <Card>
-                  <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Category</label>
-                    <select value={whistleForm.category} onChange={e=>setWhistleForm(p=>({...p,category:e.target.value}))}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
-                      <option value="">Select a category...</option>
-                      {["Harassment / Bullying","Discrimination","Health & Safety","Financial misconduct","Data protection breach","Management misconduct","Other"].map(c=><option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>When did this occur?</label>
-                    <DateInput value={whistleForm.date} onChange={e=>setWhistleForm(p=>({...p,date:e.target.value}))} />
-                  </div>
-                  <div style={{marginBottom:16}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Describe your concern *</label>
-                    <textarea value={whistleForm.concern} onChange={e=>setWhistleForm(p=>({...p,concern:e.target.value}))}
-                      placeholder="Please describe what happened, who was involved (if you wish), and any other relevant details..."
-                      rows={6}
-                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
-                  </div>
-                  <div style={{background:"#FDFAF5",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
-                    <span style={{fontSize:12,color:"#7C5CFC"}}></span>
-                    <span style={{fontSize:11,color:"#6B6375",lineHeight:1.5}}>This report is anonymous. No identifying information is collected or stored.</span>
-                  </div>
-                  <Btn onClick={()=>{
-                    if(!whistleForm.concern.trim()) return;
-                    const report = { id:Date.now().toString(), ...whistleForm, receivedAt:new Date().toISOString(), status:"New" };
-                    saveWhistle([...whistleReports, report]);
-                    setWhistleSubmitted(true);
-                  }} disabled={!whistleForm.concern.trim()}>Submit report</Btn>
-                </Card>
-              )}
-            </div>
-
-            {/* HR view of reports */}
-            <div>
-              <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 14px",fontWeight:600}}>Received reports <span style={{fontSize:13,color:"#6B6880",fontWeight:400}}>({whistleReports.length})</span></h3>
-              {whistleReports.length===0&&<Card style={{textAlign:"center",padding:"28px"}}><div style={{fontSize:12,color:"#5A5570"}}>No reports received yet</div></Card>}
-              {[...whistleReports].reverse().map(r=>(
-                <Card key={r.id} style={{marginBottom:10,padding:16}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                      {r.category&&<Badge>{r.category}</Badge>}
-                      <Badge color={r.status==="New"?"#E8622A":"#7C5CFC"}>{r.status}</Badge>
-                    </div>
-                    <span style={{fontSize:10,color:"#5A5570",fontFamily:"JetBrains Mono,monospace"}}>{new Date(r.receivedAt).toLocaleDateString("en-GB")}</span>
-                  </div>
-                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,marginBottom:10}}>{r.concern}</div>
-                  <div style={{display:"flex",gap:6}}>
-                    <button onClick={()=>saveWhistle(whistleReports.map(x=>x.id===r.id?{...x,status:x.status==="New"?"Under review":"Closed"}:x))}
-                      style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#7C5CFC",cursor:"pointer"}}>
-                      {r.status==="New"?"Mark under review":"Mark closed"}
-                    </button>
-                    <button onClick={()=>{if(window.confirm("Delete?"))saveWhistle(whistleReports.filter(x=>x.id!==r.id));}}
-                      style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:10,color:"#C84B2F",cursor:"pointer"}}>Delete</button>
-                  </div>
-                </Card>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* ══ EMPLOYEE PORTAL ══ */}
-      {screen===SCREENS.PORTAL&&(()=>{
-        const portalCase = portalCaseId ? cases.find(c=>c.id===portalCaseId) : null;
-        return(
-          <div style={{maxWidth:800,margin:"0 auto",padding:"40px 20px"}}>
-            <div style={{textAlign:"center",marginBottom:32}}>
-              <CompassLogo size={44}/>
-              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:"14px 0 4px"}}>Employee Portal</h2>
-              <p style={{fontSize:13,color:"#6B6375"}}>View your HR correspondence and letters</p>
-            </div>
-
-            {!portalCase&&(
-              <Card>
-                <div style={{fontSize:13,color:"#6B6375",marginBottom:16,fontWeight:600}}>Select an employee</div>
-                {cases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No cases saved yet.</div>}
-                {cases.map(c=>(
-                  <button key={c.id} onClick={()=>setPortalCaseId(c.id)}
-                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{c.employeeName}</div>
-                      <div style={{fontSize:10,color:"#5A5570"}}>{c.meetings.filter(m=>m.letterOutput).length} letter{c.meetings.filter(m=>m.letterOutput).length!==1?"s":""} · {c.email||"No email set"}</div>
-                    </div>
-                    <span style={{color:"#7C5CFC",fontSize:18}}>›</span>
-                  </button>
-                ))}
-                <div style={{marginTop:16,padding:"12px 14px",background:"#FDFAF5",borderRadius:8,border:"1px solid #E8E0D0"}}>
-                  <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:5}}>FUTURE UPDATE</div>
-                  <div style={{fontSize:11,color:"#5A5570",lineHeight:1.7}}>Employees will receive a private link to access their portal directly without HR needing to be present. Coming in the next release.</div>
-                </div>
-              </Card>
-            )}
-
-            {portalCase&&(
-              <div>
-                <button onClick={()=>setPortalCaseId(null)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",marginBottom:18,padding:0}}>← Back</button>
-                <Card style={{marginBottom:14}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{width:40,height:40,borderRadius:"50%",background:"#7C5CFC22",border:"1px solid #7C5CFC44",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#7C5CFC",fontWeight:700,flexShrink:0}}>
-                      {portalCase.employeeName[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",fontWeight:600}}>{portalCase.employeeName}</div>
-                      <div style={{fontSize:11,color:"#5A5570"}}>{portalCase.email||"No email on file"} · {portalCase.meetings.length} meeting{portalCase.meetings.length!==1?"s":""}</div>
-                    </div>
-                  </div>
-                </Card>
-                {portalCase.meetings.filter(m=>m.letterOutput).length===0&&<Card style={{textAlign:"center",padding:"28px"}}><div style={{fontSize:12,color:"#5A5570"}}>No letters drafted for this employee yet.</div></Card>}
-                {portalCase.meetings.filter(m=>m.letterOutput).map(m=>(
-                  <Card key={m.id} style={{marginBottom:12,padding:0,overflow:"hidden"}}>
-                    <div style={{padding:"12px 18px",borderBottom:"1px solid #E8E0D0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}><Badge>{m.type}</Badge><span style={{fontSize:12,color:"#1A1535"}}>{m.date}</span></div>
-                      <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(m.letterOutput)} style={{fontSize:11,padding:"3px 10px"}}>Copy</Btn>
-                    </div>
-                    <div style={{background:"#FDFAF5",padding:"24px 28px"}}><MDRenderer text={m.letterOutput} light/></div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ══ SEARCH ══ */}
       {screen===SCREENS.SEARCH&&(
         <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
           <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
