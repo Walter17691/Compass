@@ -2761,17 +2761,38 @@ Please produce:
               )}
 
               {/* Divider */}
-              <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:32}}>
+              <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
                 <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
-                <span style={{fontSize:12,color:"#9B9098",fontWeight:500}}>or start a meeting</span>
+                <span style={{fontSize:12,color:"#9B9098",fontWeight:500}}>or</span>
                 <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
               </div>
 
-              {/* Start meeting button */}
-              <button onClick={()=>{
+              {/* Two action buttons */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                <button onClick={()=>setScreen(SCREENS.INTAKE)}
+                  style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px",fontSize:14,color:"#1A1535",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",transition:"all 0.15s",textAlign:"center"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#F5F3FF";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                  <div style={{fontSize:20,marginBottom:4}}>📋</div>
+                  <div style={{fontWeight:600,marginBottom:2}}>New case</div>
+                  <div style={{fontSize:12,color:"#9B9098"}}>Log a case file first</div>
+                </button>
+                <button onClick={()=>{
                   setMeetingSetup({employee:"",type:"",date:new Date().toISOString().split("T")[0]});
                   setScreen(SCREENS.HOME+"_meeting");
                 }}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:14,color:"#FFFFFF",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 4px 16px rgba(124,92,252,0.25)",textAlign:"center"}}>
+                  <div style={{fontSize:20,marginBottom:4}}>🎙️</div>
+                  <div style={{fontWeight:600,marginBottom:2}}>Start meeting</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>Quick meeting now</div>
+                </button>
+              </div>
+
+              {/* hidden original start meeting button — kept for meeting setup screen */}
+              <button onClick={()=>{
+                  setMeetingSetup({employee:"",type:"",date:new Date().toISOString().split("T")[0]});
+                  setScreen(SCREENS.HOME+"_meeting");
+                }} style={{display:"none"}}
                 style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:12,padding:"16px",fontSize:15,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 4px 16px rgba(124,92,252,0.25)",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
                 onMouseEnter={e=>e.currentTarget.style.background="#6B4EE8"}
                 onMouseLeave={e=>e.currentTarget.style.background="#7C5CFC"}>
