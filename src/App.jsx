@@ -2773,8 +2773,7 @@ Please produce:
                   style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px",fontSize:14,color:"#1A1535",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",transition:"all 0.15s",textAlign:"center"}}
                   onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#F5F3FF";}}
                   onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
-                  <div style={{fontSize:20,marginBottom:4}}>📋</div>
-                  <div style={{fontWeight:600,marginBottom:2}}>New case</div>
+                  <div style={{fontWeight:600,marginBottom:2,fontSize:14}}>New case</div>
                   <div style={{fontSize:12,color:"#9B9098"}}>Log a case file first</div>
                 </button>
                 <button onClick={()=>{
@@ -2782,26 +2781,11 @@ Please produce:
                   setScreen(SCREENS.HOME+"_meeting");
                 }}
                   style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:14,color:"#FFFFFF",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 4px 16px rgba(124,92,252,0.25)",textAlign:"center"}}>
-                  <div style={{fontSize:20,marginBottom:4}}>🎙️</div>
-                  <div style={{fontWeight:600,marginBottom:2}}>Start meeting</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>Quick meeting now</div>
+                  <div style={{fontWeight:600,marginBottom:2,fontSize:14}}>Start meeting</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>No case file needed</div>
                 </button>
               </div>
 
-              {/* hidden original start meeting button — kept for meeting setup screen */}
-              <button onClick={()=>{
-                  setMeetingSetup({employee:"",type:"",date:new Date().toISOString().split("T")[0]});
-                  setScreen(SCREENS.HOME+"_meeting");
-                }} style={{display:"none"}}
-                style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:12,padding:"16px",fontSize:15,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 4px 16px rgba(124,92,252,0.25)",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
-                onMouseEnter={e=>e.currentTarget.style.background="#6B4EE8"}
-                onMouseLeave={e=>e.currentTarget.style.background="#7C5CFC"}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <circle cx="9" cy="9" r="7" stroke="white" strokeWidth="1.5"/>
-                  <path d="M7 6.5L12 9L7 11.5V6.5Z" fill="white"/>
-                </svg>
-                Start a meeting
-              </button>
 
               {/* Recent cases */}
               {cases.length>0&&(
