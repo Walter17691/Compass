@@ -2677,27 +2677,7 @@ Please produce:
         <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
 
           {/* Top nav */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 32px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CompassLogo size={26}/>
-              <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",letterSpacing:"-0.3px"}}>Compass</span>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <button onClick={()=>setScreen(SCREENS.CASES)}
-                style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",padding:"6px 12px",borderRadius:6,fontWeight:500}}>
-                Cases {cases.length>0&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:600,marginLeft:3}}>{cases.length}</span>}
-              </button>
-              <button onClick={()=>setScreen(SCREENS.PEOPLE)}
-                style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",padding:"6px 12px",borderRadius:6,fontWeight:500}}>People</button>
-              {isHR&&<button onClick={()=>setScreen(SCREENS.HR_REVIEW)}
-                style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",padding:"6px 12px",borderRadius:6,fontWeight:500}}>
-                HR Review {hrReviewRequests.filter(r=>r.status==="pending").length>0&&<span style={{background:"#FEF0EB",color:"#C84B2F",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:600,marginLeft:3}}>{hrReviewRequests.filter(r=>r.status==="pending").length}</span>}
-              </button>}
-              <button onClick={()=>setScreen(SCREENS.SETTINGS)}
-                style={{background:"#FFFFFF",border:"1px solid #E8E0D0",color:"#6B6375",fontSize:12,cursor:"pointer",padding:"6px 14px",borderRadius:6,fontWeight:500}}>Settings</button>
-              {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"none",color:"#9B9098",fontSize:12,cursor:"pointer",padding:"6px 10px"}}>Sign out</button>}
-            </div>
-          </div>
+          
 
           {/* Main content */}
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 24px"}}>
