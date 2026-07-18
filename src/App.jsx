@@ -3401,22 +3401,7 @@ Please produce:
                 </div>
               )}
 
-              {/* What to do next */}
-              {reviewOutput&&(
-                <div style={{background:"#EDE8FF",border:"1px solid #D4C9F5",borderRadius:12,padding:"20px"}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10}}>Compass recommends</div>
-                  <div style={{fontSize:13,color:"#3D3560",lineHeight:1.7}}>
-                    {meetingType?.group==="formal"?"Based on this meeting, draft the outcome letter and save to the case file. Ensure the letter is sent within a reasonable timeframe per the ACAS Code.":
-                     meetingType?.group==="redundancy"?"Issue the relevant redundancy letter and update the redundancy tracker in the case file. Ensure consultation continues as required by ERA 1996.":
-                     meetingType?.group==="appeal"?"Issue the appeal outcome letter promptly. This is the final stage of the internal process.":
-                     "Save this record to the case file and take any agreed next steps."}
-                  </div>
-                  <button onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}}
-                    style={{marginTop:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"9px 16px",fontSize:12,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",width:"100%"}}>
-                    Draft letter →
-                  </button>
-                </div>
-              )}
+              }
 
 
             </div>
