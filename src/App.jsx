@@ -1630,7 +1630,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         setShowLinkCase(true);
       }
       await streamClaude(
-        `You are a UK HR documentation specialist. Use ## for headers and - for bullets. No bold asterisks, no emoji, no tables. Fix typos. Max 3 sentences per section.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
+        `You are a senior UK HR documentation specialist and employment lawyer. Generate a structured meeting record using ONLY these exact sections in this order: ## Meeting Details, ## Meeting Dialogue, ## HR Advisor Notes. The HR Advisor Notes section should read as expert guidance from a senior employment lawyer - written in flowing prose, not bullet points. Cover legal risks, ACAS compliance, procedural fairness, and recommended next steps as one coherent expert opinion. No bold, no emoji, no tables. Fix typos.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
@@ -3308,8 +3308,8 @@ Please produce:
 
 
 
-              {/* Record */}
-              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,boxShadow:"0 1px 3px rgba(26,21,53,0.06)",overflow:"hidden"}}>
+              {/* Meeting record card */}
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,boxShadow:"0 1px 3px rgba(26,21,53,0.06)",overflow:"hidden",marginBottom:16}}>
                 <div style={{padding:"12px 20px",borderBottom:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5"}}>
                   <span style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Meeting record</span>
                   <button onClick={()=>setEditingRecord(r=>!r)}
@@ -3324,7 +3324,11 @@ Please produce:
                       <div>Compass is generating your record...</div>
                     </div>
                   )}
-                  {reviewOutput&&!editingRecord&&<div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={reviewOutput}/></div>}
+                  {reviewOutput&&!editingRecord&&(()=>{
+                    const advisorStart = reviewOutput.indexOf("## HR Advisor");
+                    const meetingPart = advisorStart > -1 ? reviewOutput.slice(0, advisorStart) : reviewOutput;
+                    return <div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={meetingPart}/></div>;
+                  })()}
                   {reviewOutput&&editingRecord&&(
                     <textarea value={reviewOutput} onChange={e=>setReviewOutput(e.target.value)}
                       style={{width:"100%",minHeight:400,background:"none",border:"none",outline:"none",fontSize:14,lineHeight:1.9,color:"#1A1535",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
@@ -3332,6 +3336,39 @@ Please produce:
                   {aiError&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}
                 </div>
               </div>
+
+              {/* HR Advisor Notes — separate card */}
+              {reviewOutput&&reviewOutput.includes("## HR Advisor")&&(
+                <div style={{background:"#F5F3FF",border:"1px solid #D4C9F5",borderRadius:12,overflow:"hidden",marginBottom:16}}>
+                  <div style={{padding:"12px 20px",borderBottom:"1px solid #D4C9F5",background:"#EDE8FF"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass HR Advisor</div>
+                    <div style={{fontSize:11,color:"#8B7FCC",marginTop:2}}>Expert guidance based on UK employment law and ACAS</div>
+                  </div>
+                  <div style={{padding:"24px 28px"}}>
+                    <div style={{fontSize:14,lineHeight:1.9,color:"#2D2060"}}>
+                      <MDRenderer text={reviewOutput.slice(reviewOutput.indexOf("## HR Advisor"))}/>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Ask Compass response — inline below input */}
+              {askCompassHistory.length>0&&(
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:16}}>
+                  <div style={{padding:"12px 16px",borderBottom:"1px solid #EDE5D8",background:"#FDFAF5"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass response</div>
+                  </div>
+                  <div style={{padding:"16px 20px"}}>
+                    {askCompassHistory.slice(-2).map((m,i)=>(
+                      <div key={i} style={{marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#9B9098":"#7C5CFC",marginBottom:4}}>{m.role==="user"?"Your question":"Compass"}</div>
+                        <div style={{fontSize:14,color:m.role==="user"?"#6B6375":"#1A1535",lineHeight:1.8,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"12px 16px":"0",borderRadius:8,borderLeft:m.role==="assistant"?"3px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
+                      </div>
+                    ))}
+                    {askCompassProcessing&&<div style={{fontSize:13,color:"#9B9098",fontStyle:"italic"}}>Compass is thinking...</div>}
+                  </div>
+                </div>
+              )}
 
 
             </div>
