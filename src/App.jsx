@@ -3298,29 +3298,70 @@ Please produce:
                 </button>
               </div>
 
-              {/* Name fields */}
-              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"center"}}>
-                <span style={{fontSize:12,color:"#9B9098",whiteSpace:"nowrap"}}>Chair:</span>
-                <input value={caseInfo.manager||""} onChange={e=>{setCaseInfo(p=>({...p,manager:e.target.value}));syncNameToRecord("manager",e.target.value);}}
-                  placeholder="Chair name"
-                  style={{flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-                <div style={{width:1,height:16,background:"#EDE5D8"}}/>
-                <span style={{fontSize:12,color:"#9B9098",whiteSpace:"nowrap"}}>Employee:</span>
-                <input value={caseInfo.employee||""} onChange={e=>{setCaseInfo(p=>({...p,employee:e.target.value}));syncNameToRecord("employee",e.target.value);}}
-                  placeholder="Employee name"
-                  style={{flex:1,background:"none",border:"none",outline:"none",fontSize:13,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-              </div>
+
 
               {/* Record */}
-              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"28px 32px",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
-                {aiProcessing&&!reviewOutput&&(
-                  <div style={{textAlign:"center",padding:"48px 0",color:"#9B9098",fontSize:14}}>
-                    <div className="pu" style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",display:"inline-block",marginBottom:12}}></div>
-                    <div>Compass is generating your record...</div>
-                  </div>
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,boxShadow:"0 1px 3px rgba(26,21,53,0.06)",overflow:"hidden"}}>
+                <div style={{padding:"12px 20px",borderBottom:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5"}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Meeting record</span>
+                  <button onClick={()=>setEditingRecord(r=>!r)}
+                    style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    {editingRecord?"Done editing":"Edit record"}
+                  </button>
+                </div>
+                <div style={{padding:"28px 32px"}}>
+                  {aiProcessing&&!reviewOutput&&(
+                    <div style={{textAlign:"center",padding:"48px 0",color:"#9B9098",fontSize:14}}>
+                      <div className="pu" style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",display:"inline-block",marginBottom:12}}></div>
+                      <div>Compass is generating your record...</div>
+                    </div>
+                  )}
+                  {reviewOutput&&!editingRecord&&<div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={reviewOutput}/></div>}
+                  {reviewOutput&&editingRecord&&(
+                    <textarea value={reviewOutput} onChange={e=>setReviewOutput(e.target.value)}
+                      style={{width:"100%",minHeight:400,background:"none",border:"none",outline:"none",fontSize:14,lineHeight:1.9,color:"#1A1535",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
+                  )}
+                  {aiError&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}
+                </div>
+              </div>
+
+              {/* Clear separation */}
+              <div style={{margin:"24px 0",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
+                <span style={{fontSize:11,color:"#9B9098",fontWeight:500,letterSpacing:"0.5px",textTransform:"uppercase"}}>Actions</span>
+                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
+              </div>
+
+              {/* Action cards */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:8}}>
+                <button onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}}
+                  style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:3}}>Save to case file</div>
+                  <div style={{fontSize:12,color:"#9B9098"}}>Add this record to the employee's case</div>
+                </button>
+                <button onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",boxShadow:"0 2px 8px rgba(124,92,252,0.25)",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#FFFFFF",marginBottom:3}}>Draft outcome letter →</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>Generate an ACAS-compliant letter</div>
+                </button>
+                <button onClick={()=>setShowShareModal(true)}
+                  style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:3}}>Share record</div>
+                  <div style={{fontSize:12,color:"#9B9098"}}>Email the record to a colleague</div>
+                </button>
+                {!isHR&&(
+                  <button onClick={()=>{const cs=cases.find(x=>x.employeeName===caseInfo.employee?.trim());requestHrReview("record",cs?.id||null,null,reviewOutput);}}
+                    style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:3}}>Request HR review</div>
+                    <div style={{fontSize:12,color:"#9B9098"}}>Ask HR to approve this record</div>
+                  </button>
                 )}
-                {reviewOutput&&<div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={reviewOutput}/></div>}
-                {aiError&&<div style={{color:"#C84B2F",fontSize:13,padding:16}}>{aiError}</div>}
               </div>
             </div>
 
