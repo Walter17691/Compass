@@ -1638,7 +1638,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAiProcessing(false);
     // Auto risk score
     runRiskScore();
-    // Auto-populate name fields from generated record
+    // Auto-populate names and update dialogue initials
     setReviewOutput(r => {
       if(!r) return r;
       r.split(String.fromCharCode(10)).forEach(l => {
@@ -3284,17 +3284,25 @@ Please produce:
 
             {/* Left — record */}
             <div>
-              {/* Edit bar */}
+              {/* Ask Compass / Edit bar */}
               <div style={{display:"flex",gap:8,marginBottom:16}}>
-                <input value={editInstruction} onChange={e=>setEditInstruction(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&editRecord(editInstruction)}
-                  placeholder='Edit the record... e.g. "Make section 2 more formal" or "Add that the employee denied the allegation"'
+                <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter"){const q=askCompassInput;setAskCompassInput("");askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}}
+                  placeholder='Ask Compass or edit the record... e.g. "What should I do next?" or "Make section 2 more formal"'
                   style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.08)";}}
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="none";}}/>
-                <button onClick={()=>editRecord(editInstruction)} disabled={editProcessing||!editInstruction.trim()}
-                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:500,opacity:editProcessing||!editInstruction.trim()?0.4:1,whiteSpace:"nowrap",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                  {editProcessing?"Editing...":"Edit"}
+                <button onClick={()=>{
+                    const q=askCompassInput;
+                    setAskCompassInput("");
+                    if(q.toLowerCase().includes("edit")||q.toLowerCase().includes("change")||q.toLowerCase().includes("make")||q.toLowerCase().includes("add")||q.toLowerCase().includes("remove")){
+                      editRecord(q);
+                    } else {
+                      askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);
+                    }
+                  }} disabled={(askCompassProcessing||editProcessing)||!askCompassInput.trim()}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:500,opacity:(askCompassProcessing||editProcessing)||!askCompassInput.trim()?0.4:1,whiteSpace:"nowrap",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  {askCompassProcessing||editProcessing?"Working...":"Ask →"}
                 </button>
               </div>
 
@@ -3325,44 +3333,7 @@ Please produce:
                 </div>
               </div>
 
-              {/* Clear separation */}
-              <div style={{margin:"24px 0",display:"flex",alignItems:"center",gap:12}}>
-                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
-                <span style={{fontSize:11,color:"#9B9098",fontWeight:500,letterSpacing:"0.5px",textTransform:"uppercase"}}>Actions</span>
-                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
-              </div>
 
-              {/* Action cards */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:8}}>
-                <button onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}}
-                  style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
-                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
-                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:3}}>Save to case file</div>
-                  <div style={{fontSize:12,color:"#9B9098"}}>Add this record to the employee's case</div>
-                </button>
-                <button onClick={()=>{setPendingLetterType("outcome");setShowLetterModal(true);}}
-                  style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",boxShadow:"0 2px 8px rgba(124,92,252,0.25)",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#FFFFFF",marginBottom:3}}>Draft outcome letter →</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>Generate an ACAS-compliant letter</div>
-                </button>
-                <button onClick={()=>setShowShareModal(true)}
-                  style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
-                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
-                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:3}}>Share record</div>
-                  <div style={{fontSize:12,color:"#9B9098"}}>Email the record to a colleague</div>
-                </button>
-                {!isHR&&(
-                  <button onClick={()=>{const cs=cases.find(x=>x.employeeName===caseInfo.employee?.trim());requestHrReview("record",cs?.id||null,null,reviewOutput);}}
-                    style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px",cursor:"pointer",textAlign:"left",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
-                    onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
-                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
-                    <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:3}}>Request HR review</div>
-                    <div style={{fontSize:12,color:"#9B9098"}}>Ask HR to approve this record</div>
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Right sidebar */}
@@ -3398,39 +3369,23 @@ Please produce:
                 </div>
               )}
 
-              {/* Chat with Compass */}
-              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
-                <div style={{padding:"14px 16px",borderBottom:"1px solid #EDE5D8"}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Chat with Compass</div>
-                  <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>Ask questions or refine this record</div>
-                </div>
-                <div style={{maxHeight:260,overflowY:"auto",padding:"14px 16px"}}>
-                  {askCompassHistory.length===0&&(
-                    <div style={{fontSize:12,color:"#C4BAB0",lineHeight:1.6}}>Ask anything about this meeting or get HR advice...</div>
-                  )}
-                  {askCompassHistory.map((m,i)=>(
-                    <div key={i} style={{marginBottom:10}}>
-                      <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
-                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6}}><MDRenderer text={m.content}/></div>
-                    </div>
-                  ))}
-                  {askCompassProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
-                </div>
-                <div style={{padding:"10px 12px",borderTop:"1px solid #EDE5D8"}}>
-                  <div style={{display:"flex",gap:6,background:"#F5F1EA",borderRadius:8,padding:"8px 12px",alignItems:"center"}}>
-                    <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)}
-                      onKeyDown={e=>{if(e.key==="Enter"){const q=askCompassInput;setAskCompassInput("");askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}}
-                      placeholder="Ask about this meeting..."
-                      style={{flex:1,background:"none",border:"none",outline:"none",fontSize:12,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-                    <button onClick={()=>{const q=askCompassInput;setAskCompassInput("");askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} disabled={askCompassProcessing||!askCompassInput.trim()}
-                      style={{background:"#7C5CFC",border:"none",borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:askCompassProcessing||!askCompassInput.trim()?0.4:1,flexShrink:0}}>
-                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                        <path d="M5.5 9V2M5.5 2L2.5 5M5.5 2L8.5 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </button>
+              {/* Compass responses */}
+              {askCompassHistory.length>0&&(
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
+                  <div style={{padding:"12px 16px",borderBottom:"1px solid #EDE5D8"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass</div>
+                  </div>
+                  <div style={{maxHeight:300,overflowY:"auto",padding:"14px 16px"}}>
+                    {askCompassHistory.map((m,i)=>(
+                      <div key={i} style={{marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
+                        <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
+                      </div>
+                    ))}
+                    {askCompassProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
