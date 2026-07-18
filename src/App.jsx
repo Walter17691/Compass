@@ -518,7 +518,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [onboardStep, setOnboardStep] = useState(0);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [meetingSetup, setMeetingSetup] = useState({employee:"", type:"", date:new Date().toISOString().split("T")[0]});
+  const [meetingSetup, setMeetingSetup] = useState({employee:"", manager:"", type:"", date:new Date().toISOString().split("T")[0]});
   const [liveChatInput, setLiveChatInput] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [shareEmail, setShareEmail] = useState("");
@@ -2818,8 +2818,18 @@ Please produce:
               <p style={{fontSize:14,color:"#9B9098",margin:"0 0 32px"}}>Fill in the details — Compass handles the rest</p>
 
               <div style={{marginBottom:20}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Your name (chair)</label>
+                <input autoFocus placeholder="e.g. Tom Norton"
+                  value={meetingSetup.manager||""}
+                  onChange={e=>setMeetingSetup(p=>({...p,manager:e.target.value}))}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+              </div>
+
+              <div style={{marginBottom:20}}>
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Employee name</label>
-                <input autoFocus placeholder="e.g. Sarah Johnson"
+                <input placeholder="e.g. Sarah Johnson"
                   value={meetingSetup.employee}
                   onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
                   list="employee-list"
@@ -2870,7 +2880,7 @@ Please produce:
                 onClick={()=>{
                   const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
                   setMeetingType(mt);
-                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date}));
+                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date,manager:meetingSetup.manager||""}));
                   setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);
                   const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
                   if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
@@ -3408,23 +3418,7 @@ Please produce:
                 </div>
               )}
 
-              {/* Compass responses */}
-              {askCompassHistory.length>0&&(
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
-                  <div style={{padding:"12px 16px",borderBottom:"1px solid #EDE5D8"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass</div>
-                  </div>
-                  <div style={{maxHeight:300,overflowY:"auto",padding:"14px 16px"}}>
-                    {askCompassHistory.map((m,i)=>(
-                      <div key={i} style={{marginBottom:10}}>
-                        <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
-                        <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
-                      </div>
-                    ))}
-                    {askCompassProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
-                  </div>
-                </div>
-              )}
+
             </div>
           </div>
         </div>
