@@ -633,7 +633,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
           model:"claude-sonnet-4-6",
           max_tokens:300,
           stream:false,
-          system:"You are an HR advisor listening to a live meeting. Answer questions briefly and practically. Reference UK employment law and ACAS where relevant. Be concise — max 3 sentences. Use plain text only — no asterisks, no bold, no markdown formatting of any kind.",
+          system:"You are a senior UK HR advisor listening live to a HR meeting. Give brief, direct, practical advice as a trusted colleague in the room would. Reference ACAS and relevant law where helpful. Plain text only — no asterisks, no bold.",,
           messages:[
             ...liveChatHistory.map(m=>({role:m.role,content:m.content})),
             {role:"user",content:"Meeting type: "+(meetingType?.label||"General")+String.fromCharCode(10)+"Employee: "+(caseInfo.employee||"Unknown")+String.fromCharCode(10)+"Transcript so far:"+String.fromCharCode(10)+tx+String.fromCharCode(10)+"Question: "+question}
@@ -2175,7 +2175,7 @@ Please produce:
       const tmpl = getLetterTemplate(t);
       const prompt = tmpl
         ? "You are a UK HR letter writer. Fill in ONLY the placeholders in [brackets] in this template using the meeting information. Keep the exact structure and format. Output only the completed letter with no additional text.\n\nTEMPLATE:\n" + tmpl + "\n\nMEETING INFORMATION:\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\nMeeting type: " + (meetingType?.label||"") + "\nSummary:\n" + (tx||reviewOutput||"")
-        : ({"outcome":"Draft a formal disciplinary outcome letter following the ACAS Code of Practice. Include decision, reasons, duration of warning, and right of appeal within 5 working days.","invite":"Draft a formal invitation letter following the ACAS Code. Include purpose, date/time/location, allegations, evidence, and right to be accompanied.","appeal":"Draft a formal appeal outcome letter following the ACAS Code. Include original decision, grounds of appeal, outcome, reasons, and whether this is the final stage."}[t]||"Draft a formal HR letter.") + "\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\n\nMeeting summary:\n" + (tx||reviewOutput||"");
+        : ({"outcome":"Draft a formal disciplinary outcome letter following the ACAS Code of Practice. Include decision, reasons, duration of warning, and right of appeal within 5 working days.","invite":"Draft a formal invitation letter to a " + (meetingType?.label||"hearing") + " for " + (caseInfo.employee||"the employee") + ". Include: the meeting purpose, proposed date/time/location (use [Date], [Time], [Location] as placeholders), the allegations or agenda items, list of evidence to be considered, the right to be accompanied by a colleague or trade union representative (ERA 1999 s.10), and contact details for the chair " + (caseInfo.manager||"[Chair Name]") + ". Follow the ACAS Code of Practice.","appeal":"Draft a formal appeal outcome letter following the ACAS Code. Include original decision, grounds of appeal, outcome, reasons, and whether this is the final stage."}[t]||"Draft a formal HR letter.") + "\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\n\nMeeting summary:\n" + (tx||reviewOutput||"");
       await streamClaude(
         "You are a UK HR letter writer. Use formal plain English. No tables. No bold. Date at top, employee address, sent via email line, Private and Confidential, then subject, then letter body.",
         prompt,
@@ -2265,7 +2265,7 @@ Please produce:
       const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:350,stream:false,
           system:"You are a UK HR advisor. Write in plain prose only. No markdown, no asterisks, no hashes, no emojis, no horizontal rules, no bold. Use clean numbered sections with short bullet points using a simple dash character.",
-          messages:[{role:"user",content:"Prepare a brief for a "+mtLabel+" meeting with "+empName+"."+nl+"Previous meetings: "+history+nl+"Risk level: "+lastRisk+nl+nl+"Write three sections:"+nl+"1. Key context"+nl+"2. Watch out for"+nl+"3. Key questions to ask"+nl+nl+"Use plain text only. Each section has 2-3 short bullet points starting with a dash. No markdown formatting."}]
+          messages:[{role:"user",content:"Prepare a brief for a "+mtLabel+" meeting with "+empName+"."+nl+"Previous meetings: "+history+nl+"Risk level: "+lastRisk+nl+nl+"Write three sections:"+nl+"1. Key context from previous meetings (2-3 bullets)"+nl+"2. Procedural or legal risks to watch for today (2-3 bullets)"+nl+"3. Specific questions the chair should ask (3 bullets)"+nl+nl+"Plain text only. Short bullet points with a dash. No markdown, no asterisks."}]
         })});
       const d = await res.json();
       const txt = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
@@ -2280,7 +2280,7 @@ Please produce:
     try {
       const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
-          system:"You are a UK HR documentation specialist. Edit the meeting record as instructed. Keep the same format and structure. Output only the updated record.",
+          system:"You are a UK HR documentation specialist. Edit the meeting record exactly as instructed. Keep the same format and sections. Output only the complete updated record with no preamble or explanation.",
           messages:[{role:"user",content:"Current record:"+String.fromCharCode(10)+reviewOutput+String.fromCharCode(10)+String.fromCharCode(10)+"Instruction: "+instruction+String.fromCharCode(10)+String.fromCharCode(10)+"Output the complete updated record only."}]
         })});
       const d = await res.json();
@@ -2332,7 +2332,7 @@ Please produce:
       const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-6",max_tokens:600,stream:false,
-          system:"You are Compass, a UK HR intelligence assistant. Answer HR questions clearly and practically. Reference ACAS Code of Practice, ERA 1996, EqA 2010 where relevant. Be concise and actionable. No markdown headers. Use plain paragraphs or short bullet points.",
+          system:"You are Compass, a senior UK HR advisor and employment lawyer. Answer questions directly and practically, as a trusted senior colleague would. Reference ACAS Code of Practice, ERA 1996, EqA 2010 and other relevant legislation where appropriate. Be concise, warm and human — never robotic or overly formal. No markdown headers or asterisks. Use plain prose or short bullet points.",,
           messages:[...homeChat.map(m=>({role:m.role,content:m.content})),{role:"user",content:question}]
         })});
       const d = await res.json();
@@ -2931,7 +2931,17 @@ Please produce:
                       {meetingSetup.type==="appeal-disciplinary"&&"The appeal invitation must confirm the grounds being considered and the employee's right to be accompanied."}
                       {meetingSetup.type==="pip-review"&&"Send a written invitation with the agenda and any supporting documents in advance."}
                     </div>
-                    <button onClick={()=>{setPendingLetterType("invite");setShowLetterModal(true);}}
+                    <button onClick={()=>{
+                        const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type};
+                        setCaseInfo(p=>({...p,
+                          employee:meetingSetup.employee.trim()||p.employee,
+                          manager:meetingSetup.manager||p.manager,
+                          date:meetingSetup.date
+                        }));
+                        setMeetingType(mt);
+                        setPendingLetterType("invite");
+                        setShowLetterModal(true);
+                      }}
                       style={{marginTop:8,background:"none",border:"1px solid #B87520",borderRadius:6,padding:"5px 12px",fontSize:11,color:"#B87520",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
                       Draft invitation letter →
                     </button>
