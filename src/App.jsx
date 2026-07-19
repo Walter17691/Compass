@@ -2470,7 +2470,7 @@ Please produce:
         if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
         return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true};
       case "outcome":
-        return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true};
+        return {label:"Close case", action:"close_case", primary:true};
       case "appeal":
         if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true};
         if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", primary:true};
@@ -4136,99 +4136,100 @@ Please produce:
                       ))}
 
                                             {/* Next step bar */}
-                      {getNextStep(cs)&&(
-                        <div style={{padding:"14px 20px",background:"#F5F3FF",borderTop:"1px solid #DDD9F5",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                          {getNextStep(cs).action==="post_outcome"?(
-                            <div style={{width:"100%"}}>
-                              <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600,marginBottom:10}}>✓ Outcome letter issued</div>
-                              {!showAppealInput[cs.id]?(
-                                <div style={{display:"flex",gap:8}}>
-                                  <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x))}
-                                    style={{fontSize:12,background:"#1A7A4A",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                    Close case ✓
-                                  </button>
-                                  <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:true}))}
-                                    style={{fontSize:12,background:"none",border:"1px solid #C84B2F",borderRadius:6,padding:"7px 16px",color:"#C84B2F",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                    Employee is appealing →
-                                  </button>
-                                </div>
-                              ):(
-                                <div>
-                                  <div style={{fontSize:12,color:"#5B3FD4",marginBottom:8,fontWeight:500}}>Paste the employee's appeal letter or email below — Compass will use this to prepare the appeal hearing:</div>
-                                  <textarea value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))}
-                                    placeholder="Paste the employee's appeal here..."
-                                    rows={3}
-                                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",marginBottom:8}}/>
-                                  <div style={{display:"flex",gap:8}}>
-                                    <button onClick={()=>{
-                                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));
-                                      setShowAppealInput(p=>({...p,[cs.id]:false}));
-                                      setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:"appeal-disciplinary"}));
-                                      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                                      setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);
-                                      handleLetter("invite");
-                                    }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                      Start appeal — send invitation →
-                                    </button>
-                                    <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))}
-                                      style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ):(
-                          <><div style={{fontSize:13,color:"#5B3FD4",fontWeight:500}}>⚡ Next: {getNextStep(cs).label}</div>
-                          <div style={{display:"flex",gap:8}}>
-                            {getNextStep(cs).secondary&&(
-                              <button onClick={()=>{
-                                if(getNextStep(cs).secondary.action==="close_no_case"){
-                                  saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));
-                                  setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                                  handleLetter("no-case-answer");
-                                }
-                              }} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                {getNextStep(cs).secondary.label}
+                      {(cs.stage==="closed"||getNextStep(cs))&&(
+                        <div style={{padding:"14px 20px",background:"#F5F3FF",borderTop:"1px solid #DDD9F5"}}>
+
+                          {/* Closed — show appeal option */}
+                          {cs.stage==="closed"&&!showAppealInput[cs.id]&&(
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                              <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Case closed</div>
+                              <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:true}))}
+                                style={{fontSize:12,background:"none",border:"1px solid #C84B2F",borderRadius:6,padding:"6px 14px",color:"#C84B2F",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                Employee is appealing
                               </button>
-                            )}
-                            <button onClick={()=>{
-                              const step = getNextStep(cs);
-                              if(step.action==="start_investigation"||step.action==="start_disciplinary"||step.action==="start_appeal_meeting"){
-                                setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:step.action==="start_investigation"?"investigation":step.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));
-                                setScreen(SCREENS.HOME+"_meeting");
-                              } else if(step.action==="send_signature"){
-                                const stage=getCaseStage(cs);
-                                const relevantMeetings=stage==="investigation"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")):stage==="appeal"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal")):cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary"));
-                                const m=relevantMeetings[relevantMeetings.length-1]||cs.meetings[cs.meetings.length-1];
-                                if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
-                              } else if(step.action==="inv_report"){
-                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
-                                setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                                setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
-                                handleLetter("investigation-report");
-                              } else if(step.action==="disciplinary_invite"){
-                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));
-                                setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                                setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);
-                                handleLetter("invite");
-                              } else if(step.action==="outcome_letter"||step.action==="appeal_letter"){
-                                const m=cs.meetings[cs.meetings.length-1];
-                                if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}
-                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));
-                                handleLetter("outcome");
-                              } else if(step.action==="close_case"){
-                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));
-                              } else if(step.action==="start_appeal"){
-                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal"}:x));
-                                setMeetingSetup(p=>({...p,employee:cs.employeeName,type:"appeal-disciplinary"}));
-                                setScreen(SCREENS.HOME+"_meeting");
-                              }
-                            }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 2px 6px rgba(124,92,252,0.2)"}}>
-                              {getNextStep(cs).label} →
-                            </button>
-                          </div>
-                          </>)}
+                            </div>
+                          )}
+
+                          {/* Appeal text input */}
+                          {cs.stage==="closed"&&showAppealInput[cs.id]&&(
+                            <div>
+                              <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Paste the employee appeal below — Compass will use this for the appeal hearing:</div>
+                              <textarea value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))}
+                                placeholder="Paste the employee's appeal letter or email here..."
+                                rows={3}
+                                style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",marginBottom:8}}/>
+                              <div style={{display:"flex",gap:8}}>
+                                <button onClick={()=>{
+                                  saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));
+                                  setShowAppealInput(p=>({...p,[cs.id]:false}));
+                                  setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                  setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);
+                                  handleLetter("invite");
+                                }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                  Start appeal and send invitation
+                                </button>
+                                <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))}
+                                  style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Active next step */}
+                          {cs.stage!=="closed"&&getNextStep(cs)&&(
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                              <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500}}>Next: {getNextStep(cs).label}</div>
+                              <div style={{display:"flex",gap:8}}>
+                                {getNextStep(cs).secondary&&(
+                                  <button onClick={()=>{
+                                    if(getNextStep(cs).secondary.action==="close_no_case"){
+                                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));
+                                      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                      handleLetter("no-case-answer");
+                                    }
+                                  }} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                    {getNextStep(cs).secondary.label}
+                                  </button>
+                                )}
+                                <button onClick={()=>{
+                                  const step=getNextStep(cs);
+                                  if(step.action==="start_investigation"||step.action==="start_disciplinary"||step.action==="start_appeal_meeting"){
+                                    setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:step.action==="start_investigation"?"investigation":step.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));
+                                    setScreen(SCREENS.HOME+"_meeting");
+                                  } else if(step.action==="send_signature"){
+                                    const stage=getCaseStage(cs);
+                                    const rel=stage==="investigation"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")):stage==="appeal"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal")):cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary"));
+                                    const m=rel[rel.length-1]||cs.meetings[cs.meetings.length-1];
+                                    if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
+                                  } else if(step.action==="inv_report"){
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
+                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                    setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
+                                    handleLetter("investigation-report");
+                                  } else if(step.action==="disciplinary_invite"){
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));
+                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                    setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);
+                                    handleLetter("invite");
+                                  } else if(step.action==="outcome_letter"||step.action==="appeal_letter"){
+                                    const m=cs.meetings[cs.meetings.length-1];
+                                    if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));
+                                    handleLetter("outcome");
+                                  } else if(step.action==="close_case"){
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));
+                                  } else if(step.action==="start_appeal"){
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal"}:x));
+                                    setMeetingSetup(p=>({...p,employee:cs.employeeName,type:"appeal-disciplinary"}));
+                                    setScreen(SCREENS.HOME+"_meeting");
+                                  }
+                                }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 2px 6px rgba(124,92,252,0.2)"}}>
+                                  {getNextStep(cs).label}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
