@@ -2186,7 +2186,7 @@ Please produce:
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. Follow ACAS Code of Practice.",
         "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed, decision reached (infer from context or use [Decision]), reasons for the decision, any sanction imposed (e.g. [First Written Warning] lasting [duration]), right of appeal within 5 working days. Follow ACAS Code of Practice.",
         "appeal": "a formal appeal outcome letter. Include: grounds of appeal considered, outcome of the appeal, reasons, whether original decision is upheld or overturned, confirmation this is the final stage. Follow ACAS Code of Practice.",
-        "grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
+        "investigation-report": "a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed (infer from meeting record), findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections.","no-case-answer": "a formal letter to the employee confirming no case to answer. Include: that an investigation has been completed, that no further action will be taken, that the matter is now closed, and that the record will be kept confidential. Warm but professional tone.","grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
         "warning": "a formal written warning letter. Include: nature of misconduct, previous warnings if any, expected improvement, review period, consequence of further misconduct, right of appeal. Follow ACAS Code of Practice.",
         "dismissal": "a formal dismissal letter. Include: reason for dismissal, date employment ends, notice period or payment in lieu, final pay arrangements, right of appeal within 5 working days. Follow ERA 1996 and ACAS Code of Practice.",
       };
@@ -2411,6 +2411,64 @@ Please produce:
 
   const needsInvitation = (meetingTypeId) => {
     return ["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"].includes(meetingTypeId);
+  };
+
+
+  const CASE_STAGES = [
+    {id:"intake",        label:"Case opened",           icon:"📋"},
+    {id:"investigation", label:"Investigation",          icon:"🔍"},
+    {id:"inv_report",    label:"Investigation report",   icon:"📄"},
+    {id:"disciplinary",  label:"Disciplinary hearing",   icon:"⚖️"},
+    {id:"outcome",       label:"Outcome letter",         icon:"✉️"},
+    {id:"appeal",        label:"Appeal",                 icon:"🔄"},
+    {id:"closed",        label:"Closed",                 icon:"✓"},
+  ];
+
+  const getCaseStage = (cs) => {
+    const meetings = cs.meetings||[];
+    const types = meetings.map(m=>(m.type||"").toLowerCase());
+    const hasOutcome = meetings.some(m=>m.letterOutput);
+    const hasSigned = meetings.some(m=>m.signStatus==="signed");
+    const hasInvReport = cs.investigationReport;
+    if(cs.stage) return cs.stage;
+    if(types.some(t=>t.includes("appeal"))) return "appeal";
+    if(hasOutcome) return "outcome";
+    if(types.some(t=>t.includes("disciplinary"))) return "disciplinary";
+    if(hasInvReport) return "inv_report";
+    if(types.some(t=>t.includes("investigation"))) return "investigation";
+    if(meetings.length>0) return "investigation";
+    return "intake";
+  };
+
+  const getNextStep = (cs) => {
+    const stage = getCaseStage(cs);
+    const meetings = cs.meetings||[];
+    const lastMeeting = meetings[meetings.length-1];
+    const hasSignedRecord = lastMeeting?.signStatus==="signed";
+    const hasOutcome = meetings.some(m=>m.letterOutput);
+    const hasSigned = meetings.some(m=>m.signStatus==="signed");
+
+    switch(stage) {
+      case "intake":
+        return {label:"Schedule investigation meeting", action:"start_investigation", primary:true};
+      case "investigation":
+        if(!lastMeeting?.record) return {label:"Start investigation meeting", action:"start_investigation", primary:true};
+        if(lastMeeting?.signStatus!=="signed") return {label:"Send record for signature", action:"send_signature", primary:true};
+        return {label:"Generate investigation report", action:"inv_report", primary:true};
+      case "inv_report":
+        return {label:"Proceed to disciplinary", action:"disciplinary_invite", primary:true, secondary:{label:"No case to answer — close", action:"close_no_case"}};
+      case "disciplinary":
+        if(!lastMeeting?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true};
+        if(lastMeeting?.signStatus!=="signed") return {label:"Send record for signature", action:"send_signature", primary:true};
+        return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
+      case "outcome":
+        return {label:"Case complete — close case", action:"close_case", primary:true, secondary:{label:"Employee appealing", action:"start_appeal"}};
+      case "appeal":
+        if(!lastMeeting?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true};
+        return {label:"Draft appeal outcome letter", action:"appeal_letter", primary:true};
+      default:
+        return null;
+    }
   };
 
 
@@ -3979,6 +4037,29 @@ Please produce:
                   {/* Expanded case content */}
                   {isOpen&&openCases[cs.id]&&(
                     <div style={{borderTop:"1px solid #EDE5D8"}}>
+
+                      {/* Stage progress */}
+                      <div style={{padding:"16px 20px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:0}}>
+                          {["intake","investigation","inv_report","disciplinary","outcome","closed"].map((stage,i,arr)=>{
+                            const currentStageIdx = ["intake","investigation","inv_report","disciplinary","outcome","closed"].indexOf(getCaseStage(cs));
+                            const done = i<=currentStageIdx;
+                            const labels = {intake:"Opened",investigation:"Investigation",inv_report:"Report",disciplinary:"Disciplinary",outcome:"Outcome",closed:"Closed"};
+                            return(
+                              <div key={stage} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}>
+                                <div style={{display:"flex",alignItems:"center",width:"100%"}}>
+                                  {i>0&&<div style={{flex:1,height:2,background:done?"#7C5CFC":"#E8E0D0"}}></div>}
+                                  <div style={{width:20,height:20,borderRadius:"50%",background:done?"#7C5CFC":"#FFFFFF",border:`2px solid ${done?"#7C5CFC":"#E8E0D0"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,zIndex:1}}>
+                                    {done&&<div style={{width:8,height:8,borderRadius:"50%",background:"#FFFFFF"}}></div>}
+                                  </div>
+                                  {i<arr.length-1&&<div style={{flex:1,height:2,background:i<currentStageIdx?"#7C5CFC":"#E8E0D0"}}></div>}
+                                </div>
+                                <div style={{fontSize:10,color:done?"#7C5CFC":"#9B9098",marginTop:5,textAlign:"center",fontWeight:done?600:400}}>{labels[stage]}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       {/* Case description if exists */}
                       {cs.description&&(
