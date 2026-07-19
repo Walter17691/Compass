@@ -2451,7 +2451,9 @@ Please produce:
     const lastInv = invMeetings[invMeetings.length-1];
     const lastDisc = discMeetings[discMeetings.length-1];
     const lastAppeal = appealMeetings[appealMeetings.length-1];
-    const hasOutcome = meetings.some(m=>m.letterOutput);
+    const hasDiscOutcome = discMeetings.some(m=>m.letterOutput);
+    const hasAppealOutcome = appealMeetings.some(m=>m.letterOutput);
+    const hasOutcome = hasDiscOutcome;
 
     switch(stage) {
       case "intake":
@@ -2465,14 +2467,15 @@ Please produce:
       case "disciplinary":
         if(!lastDisc?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true};
         if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", primary:true};
-        if(!hasOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
+        if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
         return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true};
       case "outcome":
         return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true};
       case "appeal":
         if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true};
         if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", primary:true};
-        return {label:"Draft appeal outcome letter", action:"appeal_letter", primary:true};
+        if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", primary:true};
+        return {label:"Appeal outcome issued — close case", action:"close_case", primary:true};
       case "closed":
         return null;
       default:
