@@ -535,6 +535,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [homeChatLoading, setHomeChatLoading] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
+  const [showAppealInput, setShowAppealInput] = useState({});
+  const [appealText, setAppealText] = useState({});
   const [intake, setIntake] = useState({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});
   const [liveChatHistory, setLiveChatHistory] = useState([]);
   const [liveChatProcessing, setLiveChatProcessing] = useState(false);
@@ -2464,9 +2466,9 @@ Please produce:
         if(!lastDisc?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true};
         if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", primary:true};
         if(!hasOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
-        return {label:"Close case", action:"close_case", primary:true, secondary:{label:"Employee appealing", action:"start_appeal"}};
+        return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true};
       case "outcome":
-        return {label:"Close case", action:"close_case", primary:true, secondary:{label:"Employee appealing", action:"start_appeal"}};
+        return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true};
       case "appeal":
         if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true};
         if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", primary:true};
@@ -4133,7 +4135,48 @@ Please produce:
                                             {/* Next step bar */}
                       {getNextStep(cs)&&(
                         <div style={{padding:"14px 20px",background:"#F5F3FF",borderTop:"1px solid #DDD9F5",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                          <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500}}>⚡ Next: {getNextStep(cs).label}</div>
+                          {getNextStep(cs).action==="post_outcome"?(
+                            <div style={{width:"100%"}}>
+                              <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600,marginBottom:10}}>✓ Outcome letter issued</div>
+                              {!showAppealInput[cs.id]?(
+                                <div style={{display:"flex",gap:8}}>
+                                  <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x))}
+                                    style={{fontSize:12,background:"#1A7A4A",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                    Close case ✓
+                                  </button>
+                                  <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:true}))}
+                                    style={{fontSize:12,background:"none",border:"1px solid #C84B2F",borderRadius:6,padding:"7px 16px",color:"#C84B2F",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                    Employee is appealing →
+                                  </button>
+                                </div>
+                              ):(
+                                <div>
+                                  <div style={{fontSize:12,color:"#5B3FD4",marginBottom:8,fontWeight:500}}>Paste the employee's appeal letter or email below — Compass will use this to prepare the appeal hearing:</div>
+                                  <textarea value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))}
+                                    placeholder="Paste the employee's appeal here..."
+                                    rows={3}
+                                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",marginBottom:8}}/>
+                                  <div style={{display:"flex",gap:8}}>
+                                    <button onClick={()=>{
+                                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));
+                                      setShowAppealInput(p=>({...p,[cs.id]:false}));
+                                      setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:"appeal-disciplinary"}));
+                                      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                      setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);
+                                      handleLetter("invite");
+                                    }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                      Start appeal — send invitation →
+                                    </button>
+                                    <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))}
+                                      style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ):(
+                          <><div style={{fontSize:13,color:"#5B3FD4",fontWeight:500}}>⚡ Next: {getNextStep(cs).label}</div>
                           <div style={{display:"flex",gap:8}}>
                             {getNextStep(cs).secondary&&(
                               <button onClick={()=>{
@@ -4182,6 +4225,7 @@ Please produce:
                               {getNextStep(cs).label} →
                             </button>
                           </div>
+                          </>)}
                         </div>
                       )}
 
