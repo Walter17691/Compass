@@ -3642,7 +3642,7 @@ Please produce:
                 }} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC"}}>Save witness statement to case →</Btn>
               ):(
                 <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>Save and go to case →</Btn>
-              )}}
+              )}
             </div>
           </div>
 
