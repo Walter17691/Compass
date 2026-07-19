@@ -518,7 +518,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [onboardStep, setOnboardStep] = useState(0);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [meetingSetup, setMeetingSetup] = useState({employee:"", manager:"", type:"", date:new Date().toISOString().split("T")[0]});
+  const [meetingSetup, setMeetingSetup] = useState({employee:"", manager:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null});
   const [liveChatInput, setLiveChatInput] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [shareEmail, setShareEmail] = useState("");
@@ -1760,7 +1760,21 @@ Please produce:
   };
 
   // ── Save to case ──
-  const saveMeetingToCase = () => {
+  const saveMeetingToCase = (linkedCaseId) => {
+    if(linkedCaseId) {
+      // Save witness interview to parent case evidence
+      const witnessNote = {
+        name: "Witness interview — "+(caseInfo.employee||"Unknown")+" ("+caseInfo.date+")",
+        type: "Witness statement",
+        date: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+        addedBy: caseInfo.manager||"HR Manager",
+        record: reviewOutput,
+      };
+      saveCases(cases.map(x=>x.id===linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
+      return;
+    }
+    // Original save logic below
+    if(false){
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const meeting = {
       id: Date.now().toString(),
@@ -2978,9 +2992,15 @@ Please produce:
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
               </div>
 
+              {meetingSetup.linkedCaseId&&(
+                <div style={{background:"#EDE8FF",border:"1px solid #D4C9F5",borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#5B3FD4",marginBottom:2}}>Witness interview</div>
+                  <div style={{fontSize:12,color:"#7C5CFC"}}>This interview will be saved as evidence in {meetingSetup.linkedCaseName} case</div>
+                </div>
+              )}
               <div style={{marginBottom:20}}>
-                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Employee name</label>
-                <input placeholder="e.g. Sarah Johnson"
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>{meetingSetup.linkedCaseId?"Witness name":"Employee name"}</label>
+                <input placeholder={meetingSetup.linkedCaseId?"e.g. John Smith (witness)":"e.g. Sarah Johnson"}
                   value={meetingSetup.employee}
                   onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
                   list="employee-list"
@@ -3612,7 +3632,17 @@ Please produce:
               <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share</Btn>
               <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} variant="secondary" style={{fontSize:13}}>Save to case</Btn>
               
-              <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>Save and go to case →</Btn>
+              {meetingSetup.linkedCaseId?(
+                <Btn onClick={()=>{
+                  const witnessNote={name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+caseInfo.date+")",type:"Witness statement",date:caseInfo.date,addedBy:caseInfo.manager||"HR Manager",record:reviewOutput};
+                  saveCases(cases.map(x=>x.id===meetingSetup.linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
+                  setMeetingSetup(p=>({...p,linkedCaseId:null,linkedCaseName:null}));
+                  setScreen(SCREENS.CASES);
+                  showToast("Witness statement saved to case");
+                }} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC"}}>Save witness statement to case →</Btn>
+              ):(
+                <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>Save and go to case →</Btn>
+              )}
             </div>
           </div>
 
@@ -4264,29 +4294,49 @@ Please produce:
                                 ))}
                               </div>
                             )}
-                            {/* Add evidence */}
-                            <div style={{display:"flex",gap:8,marginBottom:8}}>
-                              <input value={evidenceNote[cs.id]||""} onChange={e=>setEvidenceNote(p=>({...p,[cs.id]:e.target.value}))}
-                                placeholder="Evidence description e.g. CCTV footage 12 Jan, Email from line manager..."
-                                style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 12px",fontSize:12,color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+                            {/* File upload */}
+                            <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:"2px dashed #E8E0D0",borderRadius:8,padding:"20px",cursor:"pointer",background:"#FFFFFF",marginBottom:10,transition:"all 0.15s"}}
+                              onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#F5F3FF";}}
+                              onDragLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}
+                              onDrop={e=>{
+                                e.preventDefault();
+                                e.currentTarget.style.borderColor="#E8E0D0";
+                                e.currentTarget.style.background="#FFFFFF";
+                                const files = Array.from(e.dataTransfer.files);
+                                files.forEach(f=>{
+                                  const reader = new FileReader();
+                                  reader.onload = ev => {
+                                    const newEv = {name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),newEv]}:x));
+                                  };
+                                  reader.readAsDataURL(f);
+                                });
+                              }}>
+                              <input type="file" multiple onChange={e=>{
+                                Array.from(e.target.files).forEach(f=>{
+                                  const reader = new FileReader();
+                                  reader.onload = ev => {
+                                    const newEv = {name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),newEv]}:x));
+                                  };
+                                  reader.readAsDataURL(f);
+                                });
+                              }} style={{display:"none"}}/>
+                              <div style={{fontSize:13,color:"#6B6375",fontWeight:500,marginBottom:4}}>Drop files here or click to upload</div>
+                              <div style={{fontSize:11,color:"#9B9098"}}>CCTV footage, emails, screenshots, statements — any file type</div>
+                            </label>
+
+                            {/* Witness interview */}
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8}}>
+                              <div>
+                                <div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interviews</div>
+                                <div style={{fontSize:11,color:"#9B9098"}}>Record a witness interview — notes will be saved to this case</div>
+                              </div>
                               <button onClick={()=>{
-                                if(!evidenceNote[cs.id]?.trim()) return;
-                                const newEv = {name:evidenceNote[cs.id].trim(),type:"Document",date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager"};
-                                saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),newEv]}:x));
-                                setEvidenceNote(p=>({...p,[cs.id]:""}));
-                              }} style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 14px",fontSize:12,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
-                                Add
-                              </button>
-                            </div>
-                            {/* Witness meetings */}
-                            <div style={{marginTop:8}}>
-                              <div style={{fontSize:11,color:"#9B9098",marginBottom:6}}>Witness interviews — add a meeting for each witness</div>
-                              <button onClick={()=>{
-                                setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:"investigation"}));
-                                setCaseInfo(p=>({...p,employee:"Witness — "+cs.employeeName+" case",manager:cs.manager||"",date:new Date().toISOString().split("T")[0]}));
+                                setMeetingSetup(p=>({...p,employee:"",manager:cs.manager||"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));
                                 setScreen(SCREENS.HOME+"_meeting");
-                              }} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                + Record witness interview
+                              }} style={{fontSize:12,background:"none",border:"1px solid #7C5CFC",borderRadius:6,padding:"6px 14px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
+                                + Witness interview
                               </button>
                             </div>
                           </div>
