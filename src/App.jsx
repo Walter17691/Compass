@@ -536,6 +536,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
   const [showAppealInput, setShowAppealInput] = useState({});
+  const [showEvidencePanel, setShowEvidencePanel] = useState({});
+  const [evidenceNote, setEvidenceNote] = useState({});
   const [appealText, setAppealText] = useState({});
   const [intake, setIntake] = useState({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});
   const [liveChatHistory, setLiveChatHistory] = useState([]);
@@ -2175,11 +2177,13 @@ Please produce:
     try {
       const nl = String.fromCharCode(10);
       const tx = transcript.map(u=>u.speaker+": "+u.text).join(nl);
+      const evidenceList = (caseInfo.evidence||[]).map((e,i)=>).join(nl);
       const context = [
         caseInfo.employee ? "Employee: "+caseInfo.employee : "",
         caseInfo.manager ? "Chair/Manager: "+caseInfo.manager : "",
         caseInfo.date ? "Meeting date: "+caseInfo.date : "",
         meetingType?.label ? "Meeting type: "+meetingType.label : "",
+        evidenceList ? "Evidence gathered:"+nl+evidenceList : "",
         reviewOutput ? "Meeting record:"+nl+reviewOutput.slice(0,800) : "",
         tx ? "Transcript:"+nl+tx.slice(0,600) : "",
       ].filter(Boolean).join(nl);
@@ -4204,12 +4208,12 @@ Please produce:
                                     if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
                                   } else if(step.action==="inv_report"){
                                     saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
-                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
                                     setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
                                     handleLetter("investigation-report");
                                   } else if(step.action==="disciplinary_invite"){
                                     saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));
-                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
                                     setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);
                                     handleLetter("invite");
                                   } else if(step.action==="outcome_letter"||step.action==="appeal_letter"){
@@ -4232,6 +4236,62 @@ Please produce:
                           )}
                         </div>
                       )}
+
+                      {/* Evidence & Witnesses */}
+                      <div style={{borderTop:"1px solid #EDE5D8"}}> 
+                        <div onClick={()=>setShowEvidencePanel(p=>({...p,[cs.id]:!p[cs.id]}))}
+                          style={{padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",background:"#FDFAF5"}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"#6B6375",letterSpacing:"0.3px"}}>
+                            Evidence & witnesses
+                            {(cs.evidence||[]).length>0&&<span style={{marginLeft:8,fontSize:11,background:"#EDE8FF",color:"#7C5CFC",borderRadius:10,padding:"1px 7px"}}>{(cs.evidence||[]).length}</span>}
+                          </div>
+                          <span style={{fontSize:11,color:"#9B9098"}}>{showEvidencePanel[cs.id]?"▲":"▼"}</span>
+                        </div>
+                        {showEvidencePanel[cs.id]&&(
+                          <div style={{padding:"0 20px 16px",background:"#FDFAF5"}}>
+                            {/* Evidence list */}
+                            {(cs.evidence||[]).length>0&&(
+                              <div style={{marginBottom:12}}>
+                                {(cs.evidence||[]).map((ev,i)=>(
+                                  <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F0EBE0"}}>
+                                    <div>
+                                      <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{ev.name}</div>
+                                      <div style={{fontSize:11,color:"#9B9098"}}>{ev.type} · {ev.date}</div>
+                                    </div>
+                                    <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter((_,j)=>j!==i)}:x))}
+                                      style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer"}}>Remove</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {/* Add evidence */}
+                            <div style={{display:"flex",gap:8,marginBottom:8}}>
+                              <input value={evidenceNote[cs.id]||""} onChange={e=>setEvidenceNote(p=>({...p,[cs.id]:e.target.value}))}
+                                placeholder="Evidence description e.g. CCTV footage 12 Jan, Email from line manager..."
+                                style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 12px",fontSize:12,color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+                              <button onClick={()=>{
+                                if(!evidenceNote[cs.id]?.trim()) return;
+                                const newEv = {name:evidenceNote[cs.id].trim(),type:"Document",date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager"};
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),newEv]}:x));
+                                setEvidenceNote(p=>({...p,[cs.id]:""}));
+                              }} style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 14px",fontSize:12,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
+                                Add
+                              </button>
+                            </div>
+                            {/* Witness meetings */}
+                            <div style={{marginTop:8}}>
+                              <div style={{fontSize:11,color:"#9B9098",marginBottom:6}}>Witness interviews — add a meeting for each witness</div>
+                              <button onClick={()=>{
+                                setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:"investigation"}));
+                                setCaseInfo(p=>({...p,employee:"Witness — "+cs.employeeName+" case",manager:cs.manager||"",date:new Date().toISOString().split("T")[0]}));
+                                setScreen(SCREENS.HOME+"_meeting");
+                              }} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                + Record witness interview
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Case footer actions */}
                       <div style={{padding:"12px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8",display:"flex",gap:8,alignItems:"center"}}>
