@@ -2171,17 +2171,42 @@ Please produce:
     const t = type||"outcome"; setActiveLetter(t); setAiError("");
     setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
     try {
-      const tx = transcript.map(u=>u.speaker+": "+u.text).join("\n");
-      const tmpl = getLetterTemplate(t);
-      const prompt = tmpl
-        ? "You are a UK HR letter writer. Fill in ONLY the placeholders in [brackets] in this template using the meeting information. Keep the exact structure and format. Output only the completed letter with no additional text.\n\nTEMPLATE:\n" + tmpl + "\n\nMEETING INFORMATION:\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\nMeeting type: " + (meetingType?.label||"") + "\nSummary:\n" + (tx||reviewOutput||"")
-        : ({"outcome":"As a senior UK employment lawyer, draft a complete formal disciplinary outcome letter following the ACAS Code of Practice. Employee: "+(caseInfo.employee||"[Employee Name]")+", Chair: "+(caseInfo.manager||"[Chair Name]")+", Date: "+(caseInfo.date||"[Date]")+". Include: decision reached, reasons, duration of any warning, right of appeal within 5 working days to [Appeal Officer]. Use [placeholder] for any unknown details. Output only the letter.","invite":"Draft a formal invitation letter to a " + (meetingType?.label||"hearing") + " for " + (caseInfo.employee||"the employee") + ". Include: the meeting purpose, proposed date/time/location (use [Date], [Time], [Location] as placeholders), the allegations or agenda items, list of evidence to be considered, the right to be accompanied by a colleague or trade union representative (ERA 1999 s.10), and contact details for the chair " + (caseInfo.manager||"[Chair Name]") + ". Follow the ACAS Code of Practice.","appeal":"Draft a formal appeal outcome letter following the ACAS Code. Include original decision, grounds of appeal, outcome, reasons, and whether this is the final stage."}[t]||"Draft a formal HR letter.") + "\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\n\nMeeting summary:\n" + (tx||reviewOutput||"");
-      await streamClaude(
-        "You are a UK HR letter writer. Use formal plain English. No tables. No bold. Date at top, employee address, sent via email line, Private and Confidential, then subject, then letter body.",
-        prompt,
-        t2=>setLetterOutput(t2)
-      );
-    } catch(e) { setAiError(e.message); }
+      const nl = String.fromCharCode(10);
+      const tx = transcript.map(u=>u.speaker+": "+u.text).join(nl);
+      const context = [
+        caseInfo.employee ? "Employee: "+caseInfo.employee : "",
+        caseInfo.manager ? "Chair/Manager: "+caseInfo.manager : "",
+        caseInfo.date ? "Meeting date: "+caseInfo.date : "",
+        meetingType?.label ? "Meeting type: "+meetingType.label : "",
+        reviewOutput ? "Meeting record:"+nl+reviewOutput.slice(0,800) : "",
+        tx ? "Transcript:"+nl+tx.slice(0,600) : "",
+      ].filter(Boolean).join(nl);
+
+      const letterInstructions = {
+        "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. Follow ACAS Code of Practice.",
+        "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed, decision reached (infer from context or use [Decision]), reasons for the decision, any sanction imposed (e.g. [First Written Warning] lasting [duration]), right of appeal within 5 working days. Follow ACAS Code of Practice.",
+        "appeal": "a formal appeal outcome letter. Include: grounds of appeal considered, outcome of the appeal, reasons, whether original decision is upheld or overturned, confirmation this is the final stage. Follow ACAS Code of Practice.",
+        "grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
+        "warning": "a formal written warning letter. Include: nature of misconduct, previous warnings if any, expected improvement, review period, consequence of further misconduct, right of appeal. Follow ACAS Code of Practice.",
+        "dismissal": "a formal dismissal letter. Include: reason for dismissal, date employment ends, notice period or payment in lieu, final pay arrangements, right of appeal within 5 working days. Follow ERA 1996 and ACAS Code of Practice.",
+      };
+
+      const instruction = letterInstructions[t] || letterInstructions["outcome"];
+
+      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR correspondence that is legally sound and follows ACAS Code of Practice and relevant UK employment legislation. Always produce a complete letter — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets such as [Employee Address], [Date of Hearing], [Appeal Officer Name and Job Title], [Company Name]. The letter should read naturally and professionally. Output only the letter itself with no preamble, explanation or sign-off instructions.";
+
+      const userPrompt = "Draft "+instruction+nl+nl+"Available information:"+nl+context+nl+nl+"Important: Use [placeholder] format for any missing details. Today's date for reference: "+new Date().toLocaleDateString("en-GB")+". Always complete the full letter.";
+
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,stream:false,
+          system:systemPrompt,
+          messages:[{role:"user",content:userPrompt}]
+        })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text) { setLetterOutput(text); }
+      else { setAiError("Failed to generate letter. Please try again."); }
+    } catch(e) { setAiError("Error: "+e.message); }
     setAiProcessing(false);
   };
 
