@@ -536,6 +536,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
   const [activeCaseId, setActiveCaseId] = useState(null);
+  const [activePerson, setActivePerson] = useState(null);
   const [activeCaseStage, setActiveCaseStage] = useState("investigation");
   const [showAppealInput, setShowAppealInput] = useState({});
   const [showEvidencePanel, setShowEvidencePanel] = useState({});
@@ -3202,7 +3203,118 @@ Please produce:
 
 
       
-      {/* ══ CASE VIEW ══ */}
+      
+      {/* ══ PERSON VIEW ══ */}
+      {screen===SCREENS.PERSON_VIEW&&(()=>{
+        const empName = activePerson;
+        const empCases = cases.filter(c=>c.employeeName===empName);
+        const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseId:cs.id,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
+        const activeCases = empCases.filter(cs=>cs.stage!=="closed");
+        const closedCases = empCases.filter(cs=>cs.stage==="closed");
+        const highRisk = allMeetings.some(m=>m.riskScore?.rating==="HIGH");
+
+        return(
+          <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+
+            {/* Header */}
+            <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <button onClick={()=>setScreen(SCREENS.PEOPLE)}
+                  style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>← People</button>
+                <div style={{width:1,height:20,background:"#EDE5D8"}}/>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{width:40,height:40,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <span style={{fontSize:16,fontWeight:600,color:"#7C5CFC"}}>{(empName||"?")[0].toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535"}}>{empName}</div>
+                    <div style={{fontSize:12,color:"#9B9098"}}>{allMeetings.length} meeting{allMeetings.length!==1?"s":""} · {empCases.length} case{empCases.length!==1?"s":""}{highRisk?" · High risk":""}</div>
+                  </div>
+                </div>
+              </div>
+              <button onClick={()=>{setMeetingSetup(p=>({...p,employee:empName}));setScreen(SCREENS.HOME+"_meeting");}}
+                style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                + New meeting
+              </button>
+            </div>
+
+            <div style={{maxWidth:820,margin:"0 auto",padding:"28px 24px"}}>
+
+              {/* Active cases */}
+              {activeCases.length>0&&(
+                <div style={{marginBottom:24}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Active cases</div>
+                  {activeCases.map(cs=>(
+                    <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                      style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all 0.15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:3,textTransform:"capitalize"}}>{cs.caseType||"HR Case"}</div>
+                        <div style={{fontSize:12,color:"#9B9098"}}>Opened {fmtDate(cs.dateReceived)} · {(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
+                        <span style={{color:"#C4BAB0",fontSize:16}}>›</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Full meeting history */}
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Meeting history</div>
+                {allMeetings.length===0&&(
+                  <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:10,border:"1px solid #E8E0D0",color:"#9B9098",fontSize:13}}>
+                    No meetings recorded yet
+                  </div>
+                )}
+                {allMeetings.map((m,i)=>(
+                  <div key={i} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
+                      <div style={{width:36,height:36,borderRadius:"50%",background:(m.type||"").toLowerCase().includes("investigation")?"#EDE8FF":(m.type||"").toLowerCase().includes("disciplinary")?"#FEF0EB":(m.type||"").toLowerCase().includes("appeal")?"#FEF5E7":"#F5F1EA",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{fontSize:11,fontWeight:700,color:(m.type||"").toLowerCase().includes("investigation")?"#7C5CFC":(m.type||"").toLowerCase().includes("disciplinary")?"#C84B2F":(m.type||"").toLowerCase().includes("appeal")?"#B87520":"#6B6375"}}>
+                          {(m.type||"M")[0].toUpperCase()}
+                        </span>
+                      </div>
+                      <div style={{minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>{m.type}</div>
+                        <div style={{fontSize:11,color:"#9B9098",marginTop:1}}>{fmtDate(m.date)} · {m.savedBy||m.manager||"HR Manager"}{m.caseType?" · "+m.caseType:""}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                      {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":"#B87520",background:m.riskScore.rating==="HIGH"?"#FEF0EB":"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
+                      {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Signed</span>}
+                      {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>Pending signature</span>}
+                      {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:empName,date:m.date,manager:m.manager||""}));setScreen(SCREENS.REVIEW);}}
+                        style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Closed cases */}
+              {closedCases.length>0&&(
+                <div style={{marginTop:24}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Closed cases</div>
+                  {closedCases.map(cs=>(
+                    <div key={cs.id} style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div>
+                        <div style={{fontSize:13,color:"#6B6375",textTransform:"capitalize"}}>{cs.caseType||"HR Case"}</div>
+                        <div style={{fontSize:11,color:"#9B9098"}}>Opened {fmtDate(cs.dateReceived)} · {(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</div>
+                      </div>
+                      <span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:20,padding:"3px 10px",fontWeight:600}}>Closed</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+{/* ══ CASE VIEW ══ */}
       {screen===SCREENS.CASE_VIEW&&(()=>{
         const cs = cases.find(x=>x.id===activeCaseId);
         if(!cs) return <div style={{padding:40,color:"#9B9098"}}>Case not found</div>;
