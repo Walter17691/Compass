@@ -4120,6 +4120,59 @@ Please produce:
                         </div>
                       ))}
 
+                                            {/* Next step bar */}
+                      {getNextStep(cs)&&(
+                        <div style={{padding:"14px 20px",background:"#F5F3FF",borderTop:"1px solid #DDD9F5",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                          <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500}}>⚡ Next: {getNextStep(cs).label}</div>
+                          <div style={{display:"flex",gap:8}}>
+                            {getNextStep(cs).secondary&&(
+                              <button onClick={()=>{
+                                if(getNextStep(cs).secondary.action==="close_no_case"){
+                                  saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));
+                                  setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                  handleLetter("no-case-answer");
+                                }
+                              }} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                {getNextStep(cs).secondary.label}
+                              </button>
+                            )}
+                            <button onClick={()=>{
+                              const step = getNextStep(cs);
+                              if(step.action==="start_investigation"||step.action==="start_disciplinary"||step.action==="start_appeal_meeting"){
+                                setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:step.action==="start_investigation"?"investigation":step.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));
+                                setScreen(SCREENS.HOME+"_meeting");
+                              } else if(step.action==="send_signature"){
+                                const m=cs.meetings[cs.meetings.length-1];
+                                if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
+                              } else if(step.action==="inv_report"){
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
+                                setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
+                                handleLetter("investigation-report");
+                              } else if(step.action==="disciplinary_invite"){
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));
+                                setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+                                setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);
+                                handleLetter("invite");
+                              } else if(step.action==="outcome_letter"||step.action==="appeal_letter"){
+                                const m=cs.meetings[cs.meetings.length-1];
+                                if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));
+                                handleLetter("outcome");
+                              } else if(step.action==="close_case"){
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));
+                              } else if(step.action==="start_appeal"){
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal"}:x));
+                                setMeetingSetup(p=>({...p,employee:cs.employeeName,type:"appeal-disciplinary"}));
+                                setScreen(SCREENS.HOME+"_meeting");
+                              }
+                            }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 2px 6px rgba(124,92,252,0.2)"}}>
+                              {getNextStep(cs).label} →
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Case footer actions */}
                       <div style={{padding:"12px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8",display:"flex",gap:8,alignItems:"center"}}>
                         <button onClick={()=>{if(window.confirm("Delete this case?"))saveCases(cases.filter(x=>x.id!==cs.id));}}
