@@ -2177,7 +2177,7 @@ Please produce:
     try {
       const nl = String.fromCharCode(10);
       const tx = transcript.map(u=>u.speaker+": "+u.text).join(nl);
-      const evidenceList = (caseInfo.evidence||[]).map((e,i)=>).join(nl);
+      const evidenceList = (caseInfo.evidence||[]).map((e,i)=>(i+1)+". "+e.name+" ("+e.type+", "+e.date+")").join(nl);
       const context = [
         caseInfo.employee ? "Employee: "+caseInfo.employee : "",
         caseInfo.manager ? "Chair/Manager: "+caseInfo.manager : "",
