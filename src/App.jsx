@@ -3620,7 +3620,7 @@ Please produce:
               
               {meetingSetup.linkedCaseId?(
                 <Btn onClick={()=>{
-                  const witnessNote={name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+caseInfo.date+")",type:"Witness statement",date:caseInfo.date,addedBy:caseInfo.manager||"HR Manager",record:reviewOutput};
+                  const witnessNote={name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+caseInfo.date+")",type:"Witness statement",date:caseInfo.date,addedBy:caseInfo.manager||"HR Manager",record:reviewOutput,signStatus:"pending"};
                   saveCases(cases.map(x=>x.id===meetingSetup.linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
                   setMeetingSetup(p=>({...p,linkedCaseId:null,linkedCaseName:null}));
                   setScreen(SCREENS.CASES);
@@ -4269,13 +4269,52 @@ Please produce:
                             {(cs.evidence||[]).length>0&&(
                               <div style={{marginBottom:12}}>
                                 {(cs.evidence||[]).map((ev,i)=>(
-                                  <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F0EBE0"}}>
-                                    <div>
-                                      <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{ev.name}</div>
-                                      <div style={{fontSize:11,color:"#9B9098"}}>{ev.type} · {ev.date}</div>
+                                  <div key={i} style={{padding:"10px 12px",marginBottom:6,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                                    <div style={{flex:1,minWidth:0}}>
+                                      <div style={{fontSize:12,color:"#1A1535",fontWeight:500,marginBottom:2}}>{ev.name}</div>
+                                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                                        <span style={{fontSize:11,color:"#9B9098"}}>{ev.type} · {ev.date}</span>
+                                        {ev.type==="Witness statement"&&(
+                                          ev.signStatus==="signed"
+                                            ? <span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Signed</span>
+                                            : <span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Pending signature</span>
+                                        )}
+                                      </div>
                                     </div>
-                                    <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter((_,j)=>j!==i)}:x))}
-                                      style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer"}}>Remove</button>
+                                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                                      {ev.dataUrl&&(
+                                        <a href={ev.dataUrl} download={ev.name}
+                                          style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>
+                                          View
+                                        </a>
+                                      )}
+                                      {ev.record&&(
+                                        <button onClick={()=>{setReviewOutput(ev.record);setScreen(SCREENS.REVIEW);}}
+                                          style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                          View notes
+                                        </button>
+                                      )}
+                                      {ev.type==="Witness statement"&&ev.signStatus!=="signed"&&(
+                                        <button onClick={()=>{
+                                          setReviewOutput(ev.record||"");
+                                          setCaseInfo(p=>({...p,employee:ev.name,manager:cs.manager||"",date:ev.date}));
+                                          setShowSignModal(true);
+                                        }}
+                                          style={{fontSize:11,color:"#B87520",background:"#FEF5E7",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                          Send for signature
+                                        </button>
+                                      )}
+                                      {ev.type==="Witness statement"&&ev.signStatus!=="signed"&&(
+                                        <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed"}:e)}:x))}
+                                          style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                          Mark signed
+                                        </button>
+                                      )}
+                                      <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter((_,j)=>j!==i)}:x))}
+                                        style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                        Remove
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
