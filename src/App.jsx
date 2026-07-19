@@ -2443,29 +2443,36 @@ Please produce:
   const getNextStep = (cs) => {
     const stage = getCaseStage(cs);
     const meetings = cs.meetings||[];
-    const lastMeeting = meetings[meetings.length-1];
-    const hasSignedRecord = lastMeeting?.signStatus==="signed";
+    const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
+    const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary"));
+    const appealMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal"));
+    const lastInv = invMeetings[invMeetings.length-1];
+    const lastDisc = discMeetings[discMeetings.length-1];
+    const lastAppeal = appealMeetings[appealMeetings.length-1];
     const hasOutcome = meetings.some(m=>m.letterOutput);
-    const hasSigned = meetings.some(m=>m.signStatus==="signed");
 
     switch(stage) {
       case "intake":
         return {label:"Schedule investigation meeting", action:"start_investigation", primary:true};
       case "investigation":
-        if(!lastMeeting?.record) return {label:"Start investigation meeting", action:"start_investigation", primary:true};
-        if(lastMeeting?.signStatus!=="signed") return {label:"Send record for signature", action:"send_signature", primary:true};
+        if(!lastInv?.record) return {label:"Start investigation meeting", action:"start_investigation", primary:true};
+        if(lastInv?.signStatus!=="signed") return {label:"Send investigation record for signature", action:"send_signature", primary:true};
         return {label:"Generate investigation report", action:"inv_report", primary:true};
       case "inv_report":
-        return {label:"Proceed to disciplinary", action:"disciplinary_invite", primary:true, secondary:{label:"No case to answer — close", action:"close_no_case"}};
+        return {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", primary:true, secondary:{label:"No case to answer — close", action:"close_no_case"}};
       case "disciplinary":
-        if(!lastMeeting?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true};
-        if(lastMeeting?.signStatus!=="signed") return {label:"Send record for signature", action:"send_signature", primary:true};
-        return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
+        if(!lastDisc?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true};
+        if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", primary:true};
+        if(!hasOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
+        return {label:"Close case", action:"close_case", primary:true, secondary:{label:"Employee appealing", action:"start_appeal"}};
       case "outcome":
-        return {label:"Case complete — close case", action:"close_case", primary:true, secondary:{label:"Employee appealing", action:"start_appeal"}};
+        return {label:"Close case", action:"close_case", primary:true, secondary:{label:"Employee appealing", action:"start_appeal"}};
       case "appeal":
-        if(!lastMeeting?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true};
+        if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true};
+        if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", primary:true};
         return {label:"Draft appeal outcome letter", action:"appeal_letter", primary:true};
+      case "closed":
+        return null;
       default:
         return null;
     }
@@ -4145,7 +4152,9 @@ Please produce:
                                 setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:step.action==="start_investigation"?"investigation":step.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));
                                 setScreen(SCREENS.HOME+"_meeting");
                               } else if(step.action==="send_signature"){
-                                const m=cs.meetings[cs.meetings.length-1];
+                                const stage=getCaseStage(cs);
+                                const relevantMeetings=stage==="investigation"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")):stage==="appeal"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal")):cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary"));
+                                const m=relevantMeetings[relevantMeetings.length-1]||cs.meetings[cs.meetings.length-1];
                                 if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
                               } else if(step.action==="inv_report"){
                                 saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
