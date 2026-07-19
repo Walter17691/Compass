@@ -1762,7 +1762,6 @@ Please produce:
   // ── Save to case ──
   const saveMeetingToCase = () => {
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
-    const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const meeting = {
       id: Date.now().toString(),
       type: meetingType?.label||"Meeting",
