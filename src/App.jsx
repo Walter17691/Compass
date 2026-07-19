@@ -535,6 +535,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [homeChatLoading, setHomeChatLoading] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
+  const [activeCaseId, setActiveCaseId] = useState(null);
+  const [activeCaseStage, setActiveCaseStage] = useState("investigation");
   const [showAppealInput, setShowAppealInput] = useState({});
   const [showEvidencePanel, setShowEvidencePanel] = useState({});
   const [evidenceNote, setEvidenceNote] = useState({});
