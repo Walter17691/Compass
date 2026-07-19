@@ -3176,7 +3176,7 @@ Please produce:
             return(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {people.map(p=>(
-                  <div key={p.name} onClick={()=>{setScreen(SCREENS.CASES);}}
+                  <div key={p.name} onClick={()=>{setActivePerson(p.name);setScreen(SCREENS.PERSON_VIEW);}}
                     style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
                       <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>{p.name}</div>
