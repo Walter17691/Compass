@@ -1760,21 +1760,8 @@ Please produce:
   };
 
   // ── Save to case ──
-  const saveMeetingToCase = (linkedCaseId) => {
-    if(linkedCaseId) {
-      // Save witness interview to parent case evidence
-      const witnessNote = {
-        name: "Witness interview — "+(caseInfo.employee||"Unknown")+" ("+caseInfo.date+")",
-        type: "Witness statement",
-        date: caseInfo.date||new Date().toLocaleDateString("en-GB"),
-        addedBy: caseInfo.manager||"HR Manager",
-        record: reviewOutput,
-      };
-      saveCases(cases.map(x=>x.id===linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
-      return;
-    }
-    // Original save logic below
-    if(false){
+  const saveMeetingToCase = () => {
+    const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const meeting = {
       id: Date.now().toString(),
