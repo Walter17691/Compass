@@ -2488,6 +2488,17 @@ Please produce:
   };
 
 
+  const fmtDate = (d) => {
+    if(!d) return "";
+    if(/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d; // already UK format
+    if(/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      const [y,m,day] = d.split("-");
+      return day+"/"+m+"/"+y;
+    }
+    try { return new Date(d).toLocaleDateString("en-GB"); } catch(e) { return d; }
+  };
+
+
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
       <style>{`
@@ -4133,27 +4144,59 @@ Please produce:
                         </div>
                       </div>
 
-                      {/* Meetings list */}
-                      {[...meetings].reverse().map((m,i)=>(
-                        <div key={i} style={{padding:"14px 20px",borderBottom:i<meetings.length-1?"1px solid #F5F1EA":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:2}}>Meeting {meetings.length-i} — {m.type}</div>
-                            <div style={{fontSize:11,color:"#9B9098"}}>{m.date} · {m.savedBy||"HR Manager"}</div>
-                          </div>
-                          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                            {m.riskScore?.rating&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":m.riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",background:m.riskScore.rating==="HIGH"?"#FEF0EB":m.riskScore.rating==="MEDIUM"?"#FEF5E7":"#E8F5EE",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
-                            {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>✓ Signed</span>}
-                            {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>⏳ Pending</span>}
-                            {m.signStatus==="pending"&&<button onClick={()=>{
-                              saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,signStatus:"signed"}:mt)}:x));
-                            }} style={{fontSize:10,background:"#E8F5EE",border:"1px solid #1A7A4A44",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed ✓</button>}
-                            {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date,email:cs.email||""}));setScreen(SCREENS.REVIEW);}}
-                              style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View</button>}
-                            {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date,email:cs.email||""}));setPendingLetterType("outcome");setShowLetterModal(true);}}
-                              style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Draft letter</button>}
+                      {/* Meetings grouped by stage */}
+                      {(()=>{
+                        const groups = [
+                          {key:"investigation", label:"Investigation", types:["investigation"], color:"#7C5CFC", bg:"#EDE8FF"},
+                          {key:"disciplinary", label:"Disciplinary", types:["disciplinary","informal","return","pip","performance"], color:"#C84B2F", bg:"#FEF0EB"},
+                          {key:"appeal", label:"Appeal", types:["appeal"], color:"#B87520", bg:"#FEF5E7"},
+                          {key:"other", label:"Other", types:[], color:"#6B6375", bg:"#F5F1EA"},
+                        ];
+                        const sortedMeetings = [...meetings].sort((a,b)=>new Date(b.date)-new Date(a.date));
+                        return groups.map(g=>{
+                          const gMeetings = g.key==="other"
+                            ? sortedMeetings.filter(m=>!groups.slice(0,3).some(gr=>gr.types.some(t=>(m.type||"").toLowerCase().includes(t))))
+                            : sortedMeetings.filter(m=>g.types.some(t=>(m.type||"").toLowerCase().includes(t)));
+                          if(gMeetings.length===0) return null;
+                          return(
+                            <div key={g.key}>
+                              <div style={{padding:"8px 20px",background:g.bg,borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{fontSize:11,fontWeight:700,color:g.color,letterSpacing:"0.5px",textTransform:"uppercase"}}>{g.label}</span>
+                                <span style={{fontSize:11,color:g.color,opacity:0.7}}>{gMeetings.length} meeting{gMeetings.length!==1?"s":""}</span>
+                              </div>
+                              {gMeetings.map((m,i)=>(
+                                <div key={m.id||i} style={{padding:"12px 20px",borderBottom:"1px solid #F5F1EA",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:2}}>{m.type}</div>
+                                    <div style={{fontSize:11,color:"#9B9098"}}>{fmtDate(m.date)} · {m.savedBy||m.manager||"HR Manager"}</div>
+                                  </div>
+                                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                                    {m.riskScore?.rating&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":m.riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",background:m.riskScore.rating==="HIGH"?"#FEF0EB":m.riskScore.rating==="MEDIUM"?"#FEF5E7":"#E8F5EE",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
+                                    {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Signed</span>}
+                                    {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Pending signature</span>}
+                                    {m.signStatus==="pending"&&<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,signStatus:"signed"}:mt)}:x))}
+                                      style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
+                                    {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(SCREENS.REVIEW);}}
+                                      style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View</button>}
+                                    {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setPendingLetterType("outcome");setShowLetterModal(true);}}
+                                      style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Draft letter</button>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        });
+                      })()}
+
+                      {/* Investigation bundle - evidence and witnesses */}
+                      {meetings.some(m=>(m.type||"").toLowerCase().includes("investigation"))&&(
+                        <div style={{borderTop:"1px solid #EDE5D8"}}>
+                          <div style={{padding:"8px 20px",background:"#EDE8FF",display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Investigation bundle</span>
+                            <span style={{fontSize:11,color:"#7C5CFC",opacity:0.7}}>{(cs.evidence||[]).length} item{(cs.evidence||[]).length!==1?"s":""}</span>
                           </div>
                         </div>
-                      ))}
+                      )}
 
                                             {/* Next step bar */}
                       {(cs.stage==="closed"||getNextStep(cs))&&(
@@ -4273,7 +4316,7 @@ Please produce:
                                     <div style={{flex:1,minWidth:0}}>
                                       <div style={{fontSize:12,color:"#1A1535",fontWeight:500,marginBottom:2}}>{ev.name}</div>
                                       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                                        <span style={{fontSize:11,color:"#9B9098"}}>{ev.type} · {ev.date}</span>
+                                        <span style={{fontSize:11,color:"#9B9098"}}>{ev.type} · {fmtDate(ev.date)}</span>
                                         {ev.type==="Witness statement"&&(
                                           ev.signStatus==="signed"
                                             ? <span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Signed</span>
