@@ -4140,7 +4140,7 @@ Please produce:
                         <div style={{padding:"14px 20px",background:"#F5F3FF",borderTop:"1px solid #DDD9F5"}}>
 
                           {/* Closed — show appeal option */}
-                          {cs.stage==="closed"&&!showAppealInput[cs.id]&&(
+                          {cs.stage==="closed"&&!showAppealInput[cs.id]&&!cs.meetings.some(m=>(m.type||"").toLowerCase().includes("appeal"))&&(
                             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                               <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Case closed</div>
                               <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:true}))}
