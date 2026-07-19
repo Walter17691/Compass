@@ -4147,7 +4147,7 @@ Please produce:
                       {/* Meetings grouped by stage */}
                       {(()=>{
                         const groups = [
-                          {key:"investigation", label:"Investigation", types:["investigation"], color:"#7C5CFC", bg:"#EDE8FF"},
+                          {key:"investigation", label:"Investigation bundle", types:["investigation"], color:"#7C5CFC", bg:"#EDE8FF"},
                           {key:"disciplinary", label:"Disciplinary", types:["disciplinary","informal","return","pip","performance"], color:"#C84B2F", bg:"#FEF0EB"},
                           {key:"appeal", label:"Appeal", types:["appeal"], color:"#B87520", bg:"#FEF5E7"},
                           {key:"other", label:"Other", types:[], color:"#6B6375", bg:"#F5F1EA"},
@@ -4183,20 +4183,47 @@ Please produce:
                                   </div>
                                 </div>
                               ))}
+                              {/* Evidence and report inside investigation bundle */}
+                              {g.key==="investigation"&&(cs.evidence||[]).length>0&&(
+                                <div style={{padding:"10px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8"}}>
+                                  <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Evidence</div>
+                                  {(cs.evidence||[]).map((ev,i)=>(
+                                    <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #F5F1EA"}}>
+                                      <div>
+                                        <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{ev.name}</div>
+                                        <div style={{display:"flex",gap:6,marginTop:2}}>
+                                          <span style={{fontSize:10,color:"#9B9098"}}>{ev.type} · {fmtDate(ev.date)}</span>
+                                          {ev.type==="Witness statement"&&(ev.signStatus==="signed"
+                                            ?<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Signed</span>
+                                            :<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Pending signature</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div style={{display:"flex",gap:6}}>
+                                        {ev.dataUrl&&<a href={ev.dataUrl} download={ev.name} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>View</a>}
+                                        {ev.record&&<button onClick={()=>{setReviewOutput(ev.record);setScreen(SCREENS.REVIEW);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
+                                        {ev.type==="Witness statement"&&ev.signStatus!=="signed"&&<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed"}:e)}:x))} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {g.key==="investigation"&&cs.investigationReport&&(
+                                <div style={{padding:"10px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                  <div>
+                                    <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>Investigation report</div>
+                                    <div style={{fontSize:11,color:"#9B9098"}}>{fmtDate(cs.investigationReportDate)}</div>
+                                  </div>
+                                  <button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(SCREENS.LETTER);}}
+                                    style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View report</button>
+                                </div>
+                              )}
                             </div>
                           );
                         });
                       })()}
 
-                      {/* Investigation bundle - evidence and witnesses */}
-                      {meetings.some(m=>(m.type||"").toLowerCase().includes("investigation"))&&(
-                        <div style={{borderTop:"1px solid #EDE5D8"}}>
-                          <div style={{padding:"8px 20px",background:"#EDE8FF",display:"flex",alignItems:"center",gap:8}}>
-                            <span style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Investigation bundle</span>
-                            <span style={{fontSize:11,color:"#7C5CFC",opacity:0.7}}>{(cs.evidence||[]).length} item{(cs.evidence||[]).length!==1?"s":""}</span>
-                          </div>
-                        </div>
-                      )}
+
 
                                             {/* Next step bar */}
                       {(cs.stage==="closed"||getNextStep(cs))&&(
@@ -4266,8 +4293,8 @@ Please produce:
                                     const m=rel[rel.length-1]||cs.meetings[cs.meetings.length-1];
                                     if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
                                   } else if(step.action==="inv_report"){
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
-                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
+                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report",_pendingReportCaseId:cs.id}:x));
+                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[],_caseId:cs.id}));
                                     setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
                                     handleLetter("investigation-report");
                                   } else if(step.action==="disciplinary_invite"){
