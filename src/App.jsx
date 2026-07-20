@@ -622,6 +622,15 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     console.log("signing response:", JSON.stringify(data));
     if(data.success) {
       alert("Signature request sent to "+employeeEmail);
+      setShowSignModal(false);
+      if(caseInfo._linkedCaseId) {
+        saveMeetingToCase();
+      } else {
+        saveMeetingToCase();
+        const cs = cases.find(x=>x.employeeName===caseInfo.employee?.trim());
+        if(cs) { setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW); }
+        else setScreen(SCREENS.CASES);
+      }
     } else {
       alert("Failed to send: "+JSON.stringify(data));
     }
@@ -1765,7 +1774,6 @@ Please produce:
   // ── Save to case ──
   const saveMeetingToCase = () => {
     // If this is a witness interview, save to parent case evidence instead
-    console.log("saveMeetingToCase called, _linkedCaseId:", caseInfo._linkedCaseId);
     if(caseInfo._linkedCaseId) {
       const witnessNote = {
         name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+fmtDate(caseInfo.date)+")",
@@ -3975,17 +3983,9 @@ Please produce:
               <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share</Btn>
               <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} variant="secondary" style={{fontSize:13}}>Save to case</Btn>
               
-              {meetingSetup.linkedCaseId?(
-                <Btn onClick={()=>{
-                  const witnessNote={name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+caseInfo.date+")",type:"Witness statement",date:caseInfo.date,addedBy:caseInfo.manager||"HR Manager",record:reviewOutput,signStatus:"pending"};
-                  saveCases(cases.map(x=>x.id===meetingSetup.linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
-                  setMeetingSetup(p=>({...p,linkedCaseId:null,linkedCaseName:null}));
-                  setScreen(SCREENS.CASES);
-                  showToast("Witness statement saved to case");
-                }} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC"}}>Save witness statement to case →</Btn>
-              ):(
-                <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>Save and go to case →</Btn>
-              )}
+<Btn onClick={()=>saveMeetingToCase()} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>
+                {caseInfo._linkedCaseId?"Save witness statement to case →":"Save and go to case →"}
+              </Btn>
             </div>
           </div>
 
