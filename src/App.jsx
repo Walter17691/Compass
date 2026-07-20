@@ -2485,6 +2485,8 @@ Please produce:
         return {label:"Appeal outcome issued — close case", action:"close_case", primary:true};
       case "closed":
         return null;
+      case "outcome":
+        return null;
       default:
         return null;
     }
@@ -2843,10 +2845,10 @@ Please produce:
               {/* Left - active cases */}
               <div>
                 {/* Action required */}
-                {cases.some(cs=>getNextStep(cs)&&cs.stage!=="closed")&&(
+                {cases.some(cs=>cs.stage!=="closed"&&getNextStep(cs)&&getNextStep(cs).action!=="close_case"&&getNextStep(cs).action!=="post_outcome")&&(
                   <div style={{marginBottom:24}}>
                     <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Action required</div>
-                    {cases.filter(cs=>getNextStep(cs)&&cs.stage!=="closed").slice(0,5).map(cs=>(
+                    {cases.filter(cs=>cs.stage!=="closed"&&getNextStep(cs)&&getNextStep(cs).action!=="close_case"&&getNextStep(cs).action!=="post_outcome").slice(0,5).map(cs=>(
                       <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
                         style={{background:"#FFFFFF",border:"1px solid",borderColor:getNextStep(cs)?.label?.includes("overdue")?"#F5C4C4":"#E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
                         onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
