@@ -4389,7 +4389,7 @@ Please produce:
       })()}
 
       {/* ══ CASES ══ */}
-      {{screen===SCREENS.CASES&&(
+      {screen===SCREENS.CASES&&(
         <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
           <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
