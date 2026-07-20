@@ -2439,6 +2439,8 @@ Please produce:
     const hasOutcome = meetings.some(m=>m.letterOutput);
     const hasSigned = meetings.some(m=>m.signStatus==="signed");
     const hasInvReport = cs.investigationReport;
+    if(cs.stage==="closed") return "closed";
+    if(hasSigned&&hasOutcome) return "closed";
     if(cs.stage) return cs.stage;
     if(types.some(t=>t.includes("appeal"))) return "appeal";
     if(hasOutcome) return "outcome";
@@ -2450,6 +2452,7 @@ Please produce:
   };
 
   const getNextStep = (cs) => {
+    if(getCaseStage(cs)==="closed") return null;
     const stage = getCaseStage(cs);
     const meetings = cs.meetings||[];
     const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
