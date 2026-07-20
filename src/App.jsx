@@ -4389,502 +4389,67 @@ Please produce:
       })()}
 
       {/* ══ CASES ══ */}
-      {screen===SCREENS.CASES&&(
+      {{screen===SCREENS.CASES&&(
         <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-
-          {/* Header */}
           <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:0,fontWeight:400}}>Cases</h2>
-              <p style={{fontSize:13,color:"#9B9098",margin:"2px 0 0"}}>{cases.length} active case{cases.length!==1?"s":""}</p>
+              <p style={{fontSize:13,color:"#9B9098",margin:"2px 0 0"}}>{cases.length} case{cases.length!==1?"s":""}</p>
             </div>
-<div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setScreen(SCREENS.INTAKE)}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});setScreen(SCREENS.INTAKE);}}
                 style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 20px",fontSize:13,color:"#1A1535",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                 + New case
               </button>
-              <button onClick={()=>setScreen(SCREENS.HOME)}
-                style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 20px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 2px 8px rgba(124,92,252,0.2)"}}>
+              <button onClick={()=>setScreen(SCREENS.HOME+"_meeting")}
+                style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 20px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                 + New meeting
               </button>
             </div>
           </div>
-
-          <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 24px"}}>
-
-            {/* Summary stats */}
-            {cases.length>0&&(()=>{
-              const allMeetings = cases.flatMap(c=>c.meetings||[]);
-              const highRisk = cases.filter(c=>(c.meetings||[]).some(m=>m.riskScore?.rating==="HIGH")).length;
-              const pendingSig = cases.filter(c=>(c.meetings||[]).some(m=>m.signStatus==="pending")).length;
-              const noOutcome = cases.filter(c=>{
-                const meetings = c.meetings||[];
-                const hasFormal = meetings.some(m=>["disciplinary","investigation","grievance"].includes(m.type?.toLowerCase()));
-                const hasOutcome = meetings.some(m=>m.letterOutput);
-                return hasFormal && !hasOutcome;
-              }).length;
-              return(
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
-                  {[
-                    {label:"Total cases",value:cases.length,color:"#1A1535"},
-                    {label:"High risk",value:highRisk,color:"#C84B2F"},
-                    {label:"Awaiting signature",value:pendingSig,color:"#B87520"},
-                    {label:"No outcome letter",value:noOutcome,color:"#7C5CFC"},
-                  ].map((s,i)=>(
-                    <div key={i} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px 20px",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
-                      <div style={{fontSize:11,color:"#9B9098",fontWeight:500,letterSpacing:"0.3px",marginBottom:6}}>{s.label}</div>
-                      <div style={{fontSize:28,fontWeight:700,color:s.color,fontFamily:"DM Serif Display,Georgia,serif"}}>{s.value}</div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-
-            {/* Empty state */}
+          <div style={{maxWidth:900,margin:"0 auto",padding:"28px 24px"}}>
             {cases.length===0&&(
               <div style={{textAlign:"center",padding:"80px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
                 <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",marginBottom:8}}>No cases yet</div>
-                <div style={{fontSize:14,color:"#9B9098",marginBottom:24}}>Start a meeting to create your first case</div>
-                <button onClick={()=>setScreen(SCREENS.HOME)}
+                <div style={{fontSize:14,color:"#9B9098",marginBottom:24}}>Create a case to start managing HR processes</div>
+                <button onClick={()=>setScreen(SCREENS.INTAKE)}
                   style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"12px 28px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                  Start first meeting →
+                  Create first case →
                 </button>
               </div>
             )}
-
-            {/* Case list */}
             {cases.map(cs=>{
-              const meetings = cs.meetings||[];
-              const lastMeeting = meetings[meetings.length-1];
-              const highRisk = meetings.some(m=>m.riskScore?.rating==="HIGH");
-              const medRisk = meetings.some(m=>m.riskScore?.rating==="MEDIUM");
-              const pendingSig = meetings.some(m=>m.signStatus==="pending");
-              const hasPendingHR = hrReviewRequests.some(r=>r.case_employee_name===cs.employeeName&&r.status==="pending");
-              const hasOutcomeLetter = meetings.some(m=>m.letterOutput);
-              const isOpen = openCases[cs.id];
-
-              const processStage = (()=>{
-                const types = meetings.map(m=>(m.type||"").toLowerCase());
-                if(types.some(t=>t.includes("appeal"))) return {label:"Appeal",color:"#B87520",step:4};
-                if(types.some(t=>t.includes("disciplinary"))) return {label:"Disciplinary",color:"#C84B2F",step:3};
-                if(types.some(t=>t.includes("investigation"))) return {label:"Investigation",color:"#7C5CFC",step:2};
-                if(types.some(t=>t.includes("grievance"))) return {label:"Grievance",color:"#7C5CFC",step:2};
-                if(types.some(t=>t.includes("redundancy"))) return {label:"Redundancy",color:"#B87520",step:2};
-                return {label:"Informal",color:"#1A7A4A",step:1};
-              })();
-
+              const stage = getCaseStage(cs);
+              const next = getNextStep(cs);
+              const highRisk = (cs.meetings||[]).some(m=>m.riskScore?.rating==="HIGH");
               return(
-                <div key={cs.id} style={{background:"#FFFFFF",border:"1px solid",borderColor:highRisk?"#F5C4C4":"#E8E0D0",borderRadius:12,marginBottom:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(26,21,53,0.05)"}}>
-
-                  {/* Case header - always visible */}
-                  <div onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                    style={{padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                    <div style={{display:"flex",alignItems:"center",gap:14,flex:1,minWidth:0}}>
-                      {/* Avatar */}
-                      <div style={{width:38,height:38,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <span style={{fontSize:14,fontWeight:600,color:"#7C5CFC"}}>{(cs.employeeName||"?")[0].toUpperCase()}</span>
-                      </div>
-                      <div style={{minWidth:0}}>
-                        <div style={{fontSize:15,fontWeight:600,color:"#1A1535",marginBottom:2}}>{cs.employeeName}</div>
-                        <div style={{fontSize:12,color:"#9B9098",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                          {cs.caseType&&<span style={{color:"#7C5CFC",fontWeight:500,textTransform:"capitalize"}}>{cs.caseType}</span>}
-                          {cs.caseType&&<span>·</span>}
-                          <span>{meetings.length} meeting{meetings.length!==1?"s":""}</span>
-                          {cs.dateReceived&&<><span>·</span><span>Received {cs.dateReceived}</span></>}
-                          {cs.urgent&&<span style={{color:"#C84B2F",fontWeight:600}}>· URGENT</span>}
-                        </div>
-                      </div>
+                <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                  style={{background:"#FFFFFF",border:"1px solid",borderColor:highRisk?"#F5C4C4":"#E8E0D0",borderRadius:12,padding:"16px 20px",marginBottom:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,transition:"all 0.15s",boxShadow:"0 1px 3px rgba(26,21,53,0.04)"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=highRisk?"#F5C4C4":"#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                  <div style={{display:"flex",alignItems:"center",gap:14,flex:1,minWidth:0}}>
+                    <div style={{width:42,height:42,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{fontSize:16,fontWeight:600,color:"#7C5CFC"}}>{(cs.employeeName||"?")[0].toUpperCase()}</span>
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                      {/* Case status */}
-                      <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
-                      {/* Risk badge */}
-                      {highRisk&&<span style={{fontSize:11,fontWeight:600,color:"#C84B2F",background:"#FEF0EB",borderRadius:20,padding:"3px 10px"}}>High risk</span>}
-                      {!highRisk&&medRisk&&<span style={{fontSize:11,fontWeight:600,color:"#B87520",background:"#FEF5E7",borderRadius:20,padding:"3px 10px"}}>Medium risk</span>}
-                      {/* Pending indicators */}
-                      {pendingSig&&<span style={{fontSize:11,color:"#B87520",background:"#FEF5E7",borderRadius:20,padding:"3px 10px"}}>⏳ Signature pending</span>}
-                      {hasPendingHR&&<span style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"3px 10px"}}>HR review pending</span>}
-                      {/* Quick actions */}
-                      <button onClick={e=>{e.stopPropagation();setMeetingSetup(p=>({...p,employee:cs.employeeName}));setScreen(SCREENS.HOME+"_meeting");}}
-                        style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                        + Meeting
-                      </button>
-                      <span style={{color:"#C4BAB0",fontSize:14,marginLeft:4}}>›</span>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:15,fontWeight:600,color:"#1A1535",marginBottom:3}}>{cs.employeeName}</div>
+                      <div style={{fontSize:12,color:"#9B9098",display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {cs.caseType&&<span style={{textTransform:"capitalize"}}>{cs.caseType}</span>}
+                        <span>·</span>
+                        <span>{(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</span>
+                        {cs.dateReceived&&<><span>·</span><span>Opened {fmtDate(cs.dateReceived)}</span></>}
+                        {cs.urgent&&<span style={{color:"#C84B2F",fontWeight:600}}>· URGENT</span>}
+                      </div>
+                      {next&&stage!=="closed"&&(
+                        <div style={{fontSize:12,color:"#7C5CFC",fontWeight:500,marginTop:4}}>Next: {next.label}</div>
+                      )}
                     </div>
                   </div>
-
-                  {/* Expanded case content */}
-                  {isOpen&&openCases[cs.id]&&(
-                    <div style={{borderTop:"1px solid #EDE5D8"}}>
-
-                      {/* Stage progress */}
-                      <div style={{padding:"16px 20px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:0}}>
-                          {["intake","investigation","inv_report","disciplinary","outcome","closed"].map((stage,i,arr)=>{
-                            const currentStageIdx = ["intake","investigation","inv_report","disciplinary","outcome","closed"].indexOf(getCaseStage(cs));
-                            const done = i<=currentStageIdx;
-                            const labels = {intake:"Opened",investigation:"Investigation",inv_report:"Report",disciplinary:"Disciplinary",outcome:"Outcome",closed:"Closed"};
-                            return(
-                              <div key={stage} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}>
-                                <div style={{display:"flex",alignItems:"center",width:"100%"}}>
-                                  {i>0&&<div style={{flex:1,height:2,background:done?"#7C5CFC":"#E8E0D0"}}></div>}
-                                  <div style={{width:20,height:20,borderRadius:"50%",background:done?"#7C5CFC":"#FFFFFF",border:`2px solid ${done?"#7C5CFC":"#E8E0D0"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,zIndex:1}}>
-                                    {done&&<div style={{width:8,height:8,borderRadius:"50%",background:"#FFFFFF"}}></div>}
-                                  </div>
-                                  {i<arr.length-1&&<div style={{flex:1,height:2,background:i<currentStageIdx?"#7C5CFC":"#E8E0D0"}}></div>}
-                                </div>
-                                <div style={{fontSize:10,color:done?"#7C5CFC":"#9B9098",marginTop:5,textAlign:"center",fontWeight:done?600:400}}>{labels[stage]}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Case description if exists */}
-                      {cs.description&&(
-                        <div style={{padding:"14px 20px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
-                          <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6,fontStyle:"italic"}}>"{cs.description}"</div>
-                          {cs.referredBy&&<div style={{fontSize:11,color:"#9B9098",marginTop:4}}>Referred by: {cs.referredBy}</div>}
-                        </div>
-                      )}
-
-                      {/* Process timeline */}
-                      <div style={{padding:"16px 20px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
-                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Case timeline</div>
-                        <div style={{display:"flex",gap:0,position:"relative"}}>
-                          {(()=>{
-                            const stages = [
-                              {key:"informal",label:"Informal"},
-                              {key:"investigation",label:"Investigation"},
-                              {key:"grievance",label:"Grievance"},
-                              {key:"disciplinary",label:"Disciplinary"},
-                              {key:"redundancy",label:"Redundancy"},
-                              {key:"appeal",label:"Appeal"},
-                            ];
-                            const types = meetings.map(m=>(m.type||"").toLowerCase());
-                            const reached = stages.filter(s=>types.some(t=>t.includes(s.key)));
-                            if(reached.length===0) return null;
-                            return reached.map((s,i)=>(
-                              <div key={i} style={{flex:1,position:"relative"}}>
-                                <div style={{display:"flex",alignItems:"center"}}>
-                                  <div style={{width:10,height:10,borderRadius:"50%",background:"#7C5CFC",flexShrink:0,zIndex:1}}></div>
-                                  {i<reached.length-1&&<div style={{flex:1,height:2,background:"#7C5CFC"}}></div>}
-                                </div>
-                                <div style={{marginTop:6,paddingRight:8}}>
-                                  <div style={{fontSize:11,fontWeight:500,color:"#1A1535"}}>{s.label}</div>
-                                  <div style={{fontSize:10,color:"#9B9098"}}>{meetings.filter(m=>(m.type||"").toLowerCase().includes(s.key)).length} meeting{meetings.filter(m=>(m.type||"").toLowerCase().includes(s.key)).length!==1?"s":""}</div>
-                                </div>
-                              </div>
-                            ));
-                          })()}
-                        </div>
-                      </div>
-
-                      {/* Meetings grouped by stage */}
-                      {(()=>{
-                        const groups = [
-                          {key:"investigation", label:"Investigation bundle", types:["investigation"], color:"#7C5CFC", bg:"#EDE8FF"},
-                          {key:"disciplinary", label:"Disciplinary", types:["disciplinary","informal","return","pip","performance"], color:"#C84B2F", bg:"#FEF0EB"},
-                          {key:"appeal", label:"Appeal", types:["appeal"], color:"#B87520", bg:"#FEF5E7"},
-                          {key:"other", label:"Other", types:[], color:"#6B6375", bg:"#F5F1EA"},
-                        ];
-                        const sortedMeetings = [...meetings].sort((a,b)=>new Date(b.date)-new Date(a.date));
-                        return groups.map(g=>{
-                          const gMeetings = g.key==="other"
-                            ? sortedMeetings.filter(m=>!groups.slice(0,3).some(gr=>gr.types.some(t=>(m.type||"").toLowerCase().includes(t))))
-                            : sortedMeetings.filter(m=>g.types.some(t=>(m.type||"").toLowerCase().includes(t)));
-                          if(gMeetings.length===0) return null;
-                          return(
-                            <div key={g.key}>
-                              <div style={{padding:"8px 20px",background:g.bg,borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",gap:8}}>
-                                <span style={{fontSize:11,fontWeight:700,color:g.color,letterSpacing:"0.5px",textTransform:"uppercase"}}>{g.label}</span>
-                                <span style={{fontSize:11,color:g.color,opacity:0.7}}>{gMeetings.length} meeting{gMeetings.length!==1?"s":""}</span>
-                              </div>
-                              {gMeetings.map((m,i)=>(
-                                <div key={m.id||i} style={{padding:"12px 20px",borderBottom:"1px solid #F5F1EA",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <div style={{fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:2}}>{m.type}</div>
-                                    <div style={{fontSize:11,color:"#9B9098"}}>{fmtDate(m.date)} · {m.savedBy||m.manager||"HR Manager"}</div>
-                                  </div>
-                                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                                    {m.riskScore?.rating&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":m.riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",background:m.riskScore.rating==="HIGH"?"#FEF0EB":m.riskScore.rating==="MEDIUM"?"#FEF5E7":"#E8F5EE",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
-                                    {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Signed</span>}
-                                    {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Pending signature</span>}
-                                    {m.signStatus==="pending"&&<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,signStatus:"signed"}:mt)}:x))}
-                                      style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
-                                    {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(SCREENS.REVIEW);}}
-                                      style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View</button>}
-                                    {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setPendingLetterType("outcome");setShowLetterModal(true);}}
-                                      style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Draft letter</button>}
-                                  </div>
-                                </div>
-                              ))}
-                              {/* Evidence and report inside investigation bundle */}
-                              {g.key==="investigation"&&(cs.evidence||[]).length>0&&(
-                                <div style={{padding:"10px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8"}}>
-                                  <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Evidence</div>
-                                  {(cs.evidence||[]).map((ev,i)=>(
-                                    <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #F5F1EA"}}>
-                                      <div>
-                                        <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{ev.name}</div>
-                                        <div style={{display:"flex",gap:6,marginTop:2}}>
-                                          <span style={{fontSize:10,color:"#9B9098"}}>{ev.type} · {fmtDate(ev.date)}</span>
-                                          {ev.type==="Witness statement"&&(ev.signStatus==="signed"
-                                            ?<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Signed</span>
-                                            :<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Pending signature</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <div style={{display:"flex",gap:6}}>
-                                        {ev.dataUrl&&<a href={ev.dataUrl} download={ev.name} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>View</a>}
-                                        {ev.record&&<button onClick={()=>{setReviewOutput(ev.record);setScreen(SCREENS.REVIEW);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
-                                        {ev.type==="Witness statement"&&ev.signStatus!=="signed"&&<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed"}:e)}:x))} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {g.key==="investigation"&&cs.investigationReport&&(
-                                <div style={{padding:"10px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                  <div>
-                                    <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>Investigation report</div>
-                                    <div style={{fontSize:11,color:"#9B9098"}}>{fmtDate(cs.investigationReportDate)}</div>
-                                  </div>
-                                  <button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(SCREENS.LETTER);}}
-                                    style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View report</button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        });
-                      })()}
-
-
-
-                                            {/* Next step bar */}
-                      {(cs.stage==="closed"||getNextStep(cs))&&(
-                        <div style={{padding:"14px 20px",background:"#F5F3FF",borderTop:"1px solid #DDD9F5"}}>
-
-                          {/* Closed — show appeal option */}
-                          {cs.stage==="closed"&&!showAppealInput[cs.id]&&!cs.meetings.some(m=>(m.type||"").toLowerCase().includes("appeal"))&&(
-                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                              <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Case closed</div>
-                              <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:true}))}
-                                style={{fontSize:12,background:"none",border:"1px solid #C84B2F",borderRadius:6,padding:"6px 14px",color:"#C84B2F",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                Employee is appealing
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Appeal text input */}
-                          {cs.stage==="closed"&&showAppealInput[cs.id]&&(
-                            <div>
-                              <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Paste the employee appeal below — Compass will use this for the appeal hearing:</div>
-                              <textarea value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))}
-                                placeholder="Paste the employee's appeal letter or email here..."
-                                rows={3}
-                                style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",marginBottom:8}}/>
-                              <div style={{display:"flex",gap:8}}>
-                                <button onClick={()=>{
-                                  saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));
-                                  setShowAppealInput(p=>({...p,[cs.id]:false}));
-                                  setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                                  setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);
-                                  handleLetter("invite");
-                                }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                  Start appeal and send invitation
-                                </button>
-                                <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))}
-                                  style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Active next step */}
-                          {cs.stage!=="closed"&&getNextStep(cs)&&(
-                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                              <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500}}>Next: {getNextStep(cs).label}</div>
-                              <div style={{display:"flex",gap:8}}>
-                                {getNextStep(cs).secondary&&(
-                                  <button onClick={()=>{
-                                    if(getNextStep(cs).secondary.action==="close_no_case"){
-                                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));
-                                      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                                      handleLetter("no-case-answer");
-                                    }
-                                  }} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                    {getNextStep(cs).secondary.label}
-                                  </button>
-                                )}
-                                <button onClick={()=>{
-                                  const step=getNextStep(cs);
-                                  if(step.action==="start_investigation"||step.action==="start_disciplinary"||step.action==="start_appeal_meeting"){
-                                    setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:step.action==="start_investigation"?"investigation":step.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));
-                                    setScreen(SCREENS.HOME+"_meeting");
-                                  } else if(step.action==="send_signature"){
-                                    const stage=getCaseStage(cs);
-                                    const rel=stage==="investigation"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")):stage==="appeal"?cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal")):cs.meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary"));
-                                    const m=rel[rel.length-1]||cs.meetings[cs.meetings.length-1];
-                                    if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
-                                  } else if(step.action==="inv_report"){
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report",_pendingReportCaseId:cs.id}:x));
-                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[],_caseId:cs.id}));
-                                    setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
-                                    handleLetter("investigation-report");
-                                  } else if(step.action==="disciplinary_invite"){
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));
-                                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
-                                    setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);
-                                    handleLetter("invite");
-                                  } else if(step.action==="outcome_letter"||step.action==="appeal_letter"){
-                                    const m=cs.meetings[cs.meetings.length-1];
-                                    if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));
-                                    handleLetter("outcome");
-                                  } else if(step.action==="close_case"){
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));
-                                  } else if(step.action==="start_appeal"){
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal"}:x));
-                                    setMeetingSetup(p=>({...p,employee:cs.employeeName,type:"appeal-disciplinary"}));
-                                    setScreen(SCREENS.HOME+"_meeting");
-                                  }
-                                }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 2px 6px rgba(124,92,252,0.2)"}}>
-                                  {getNextStep(cs).label}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Evidence & Witnesses */}
-                      <div style={{borderTop:"1px solid #EDE5D8"}}> 
-                        <div onClick={()=>setShowEvidencePanel(p=>({...p,[cs.id]:!p[cs.id]}))}
-                          style={{padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",background:"#FDFAF5"}}>
-                          <div style={{fontSize:12,fontWeight:600,color:"#6B6375",letterSpacing:"0.3px"}}>
-                            Evidence & witnesses
-                            {(cs.evidence||[]).length>0&&<span style={{marginLeft:8,fontSize:11,background:"#EDE8FF",color:"#7C5CFC",borderRadius:10,padding:"1px 7px"}}>{(cs.evidence||[]).length}</span>}
-                          </div>
-                          <span style={{fontSize:11,color:"#9B9098"}}>{showEvidencePanel[cs.id]?"▲":"▼"}</span>
-                        </div>
-                        {showEvidencePanel[cs.id]&&(
-                          <div style={{padding:"0 20px 16px",background:"#FDFAF5"}}>
-                            {/* Evidence list */}
-                            {(cs.evidence||[]).length>0&&(
-                              <div style={{marginBottom:12}}>
-                                {(cs.evidence||[]).map((ev,i)=>(
-                                  <div key={i} style={{padding:"10px 12px",marginBottom:6,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                                    <div style={{flex:1,minWidth:0}}>
-                                      <div style={{fontSize:12,color:"#1A1535",fontWeight:500,marginBottom:2}}>{ev.name}</div>
-                                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                                        <span style={{fontSize:11,color:"#9B9098"}}>{ev.type} · {fmtDate(ev.date)}</span>
-                                        {ev.type==="Witness statement"&&(
-                                          ev.signStatus==="signed"
-                                            ? <span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Signed</span>
-                                            : <span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Pending signature</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-                                      {ev.dataUrl&&(
-                                        <a href={ev.dataUrl} download={ev.name}
-                                          style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>
-                                          View
-                                        </a>
-                                      )}
-                                      {ev.record&&(
-                                        <button onClick={()=>{setReviewOutput(ev.record);setScreen(SCREENS.REVIEW);}}
-                                          style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                          View notes
-                                        </button>
-                                      )}
-                                      {ev.type==="Witness statement"&&ev.signStatus!=="signed"&&(
-                                        <button onClick={()=>{
-                                          setReviewOutput(ev.record||"");
-                                          setCaseInfo(p=>({...p,employee:ev.name,manager:cs.manager||"",date:ev.date}));
-                                          setShowSignModal(true);
-                                        }}
-                                          style={{fontSize:11,color:"#B87520",background:"#FEF5E7",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                          Send for signature
-                                        </button>
-                                      )}
-                                      {ev.type==="Witness statement"&&ev.signStatus!=="signed"&&(
-                                        <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed"}:e)}:x))}
-                                          style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                          Mark signed
-                                        </button>
-                                      )}
-                                      <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter((_,j)=>j!==i)}:x))}
-                                        style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                        Remove
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {/* File upload */}
-                            <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:"2px dashed #E8E0D0",borderRadius:8,padding:"20px",cursor:"pointer",background:"#FFFFFF",marginBottom:10,transition:"all 0.15s"}}
-                              onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#F5F3FF";}}
-                              onDragLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}
-                              onDrop={e=>{
-                                e.preventDefault();
-                                e.currentTarget.style.borderColor="#E8E0D0";
-                                e.currentTarget.style.background="#FFFFFF";
-                                const files = Array.from(e.dataTransfer.files);
-                                files.forEach(f=>{
-                                  const reader = new FileReader();
-                                  reader.onload = ev => {
-                                    const newEv = {name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),newEv]}:x));
-                                  };
-                                  reader.readAsDataURL(f);
-                                });
-                              }}>
-                              <input type="file" multiple onChange={e=>{
-                                Array.from(e.target.files).forEach(f=>{
-                                  const reader = new FileReader();
-                                  reader.onload = ev => {
-                                    const newEv = {name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};
-                                    saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),newEv]}:x));
-                                  };
-                                  reader.readAsDataURL(f);
-                                });
-                              }} style={{display:"none"}}/>
-                              <div style={{fontSize:13,color:"#6B6375",fontWeight:500,marginBottom:4}}>Drop files here or click to upload</div>
-                              <div style={{fontSize:11,color:"#9B9098"}}>CCTV footage, emails, screenshots, statements — any file type</div>
-                            </label>
-
-                            {/* Witness interview */}
-                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8}}>
-                              <div>
-                                <div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interviews</div>
-                                <div style={{fontSize:11,color:"#9B9098"}}>Record a witness interview — notes will be saved to this case</div>
-                              </div>
-                              <button onClick={()=>{
-                                setMeetingSetup(p=>({...p,employee:"",manager:cs.manager||"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));
-                                setScreen(SCREENS.HOME+"_meeting");
-                              }} style={{fontSize:12,background:"none",border:"1px solid #7C5CFC",borderRadius:6,padding:"6px 14px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
-                                + Witness interview
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Case footer actions */}
-                      <div style={{padding:"12px 20px",background:"#FDFAF5",borderTop:"1px solid #EDE5D8",display:"flex",gap:8,alignItems:"center"}}>
-                        <button onClick={()=>{if(window.confirm("Delete this case?"))saveCases(cases.filter(x=>x.id!==cs.id));}}
-                          style={{fontSize:11,background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:"4px 0"}}>Delete case</button>
-                        <div style={{flex:1}}/>
-                        {lastMeeting?.record&&!hasOutcomeLetter&&(
-                          <span style={{fontSize:11,color:"#B87520",background:"#FEF5E7",borderRadius:20,padding:"4px 12px"}}>⚠ No outcome letter yet</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                    {highRisk&&<span style={{fontSize:11,fontWeight:600,color:"#C84B2F",background:"#FEF0EB",borderRadius:20,padding:"3px 10px"}}>High risk</span>}
+                    <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
+                    <span style={{color:"#C4BAB0",fontSize:18}}>›</span>
+                  </div>
                 </div>
               );
             })}
