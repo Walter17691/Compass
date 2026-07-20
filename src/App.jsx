@@ -2765,57 +2765,46 @@ Please produce:
 
 
       {/* ── HEADER ── */}
-      <header style={{background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
-        <div style={{maxWidth:1440,margin:"0 auto",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-          <button onClick={reset} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",padding:0,flexShrink:0}}>
-            <CompassLogo size={32} />
-            <span style={{fontFamily:"Inter,sans-serif",fontSize:20,fontWeight:500,color:"#7C5CFC",letterSpacing:-0.3}}>Compass</span>
+      <header style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
+        <div style={{maxWidth:1440,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
+          
+          {/* Logo */}
+          <button onClick={()=>setScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:0,cursor:"pointer",flexShrink:0}}>
+            <CompassLogo size={24}/>
+            <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
           </button>
 
-          {meetingType && (
-            <div style={{display:"flex",alignItems:"center",gap:8,flex:1,justifyContent:"center",flexWrap:"wrap"}}>
-              <span style={{fontSize:12,color:"#6B6375"}}>{meetingType.label}</span>
-              {caseInfo.employee&&<span style={{background:"#7C5CFC",color:"#fff",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo.employee}</span>}
-              {caseInfo.date&&<span style={{color:"#6B6880",fontSize:11}}>{caseInfo.date}</span>}
+          {/* Nav - only show when not in meeting */}
+          {!meetingType&&(
+            <nav style={{display:"flex",alignItems:"center",gap:2}}>
+              {[
+                {s:SCREENS.HOME, l:"Home"},
+                {s:SCREENS.CASES, l:"Cases"+(cases.length>0?" ("+cases.length+")":"")},
+                ...(isHR?[{s:SCREENS.HR_REVIEW, l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
+              ].map(({s,l})=>(
+                <button key={s} onClick={()=>setScreen(s)}
+                  style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  {l}
+                </button>
+              ))}
+            </nav>
+          )}
+
+          {/* Meeting indicator */}
+          {meetingType&&(
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:12,color:"#9B9098"}}>{meetingType.label}</span>
+              {caseInfo.employee&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo.employee}</span>}
             </div>
           )}
 
-          <nav style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
-            {meetingType && [
-              {s:SCREENS.PREP,l:"Prepare"},
-              {s:SCREENS.RECORD,l:"Record"},
-              {s:SCREENS.REVIEW,l:"Review"},
-              {s:SCREENS.LETTER,l:"Letters"},
-            ].map(({s,l})=>(
-              <button key={s} onClick={()=>s===SCREENS.REVIEW?handleReview():setScreen(s)}
-                style={{background:screen===s?"#FFFFFF":"none",border:"none",color:screen===s?"#F2EDE4":"#666",padding:"5px 10px",borderRadius:6,fontSize:12,fontWeight:screen===s?600:400}}>
-                {l}
-              </button>
-            ))}
-            {!meetingType&&[
-              {s:SCREENS.CASES,l:"Cases"},{s:SCREENS.PEOPLE,l:"People"},
-              ...(isHR?[{s:SCREENS.HR_REVIEW,l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
-            ].map(({s,l})=>(
-              <button key={s} onClick={()=>setScreen(s)}
-                style={{background:screen===s?"#7C5CFC18":"none",border:"1px solid",borderColor:screen===s?"#7C5CFC33":"transparent",color:screen===s?"#A98FFF":"#666",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:screen===s?600:400}}>
-                {l}
-              </button>
-            ))}
-            {dueSoon.some(d=>d.overdue)&&(
-              <button onClick={()=>setScreen(SCREENS.DASHBOARD)}
-                style={{background:"#FEF0EB",border:"1px solid #E8622A44",color:"#C84B2F",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600}}>
-                {dueSoon.filter(d=>d.overdue).length} overdue
-              </button>
-            )}
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {org?.name&&<span style={{fontSize:11,color:"#6B6880",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
-              {currentUser?.name&&<span style={{fontSize:11,color:"#6B6375"}}>{currentUser.name}</span>}
-              {member?.role&&<span style={{fontSize:10,color:"#7C5CFC",background:"#7C5CFC11",border:"1px solid #7C5CFC33",borderRadius:4,padding:"2px 6px"}}>{member.role==="hr_director"?"HR Director":member.role==="hr_manager"?"HR Manager":"Location Manager"}</span>}
-              {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#6B6880",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>Sign out</button>}
-            </div>
-            <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#FFFFFF":"none",border:"1px solid #E8E0D0",color:"#6B6375",borderRadius:6,padding:"5px 10px",fontSize:14}}>⚙</button>
-            {meetingType&&<button onClick={reset} style={{background:"none",border:"1px solid #E8E0D0",color:"#6B6880",borderRadius:6,padding:"4px 10px",fontSize:11}}>End meeting</button>}
-          </nav>
+          {/* Right side */}
+          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+            {org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
+            {currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
+            {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
+            <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#F5F3FF":"none",border:"1px solid #E8E0D0",color:"#6B6375",borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer"}}>⚙</button>
+          </div>
         </div>
       </header>
 
@@ -2834,134 +2823,152 @@ Please produce:
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
-        <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <div style={{maxWidth:900,margin:"0 auto",padding:"32px 24px"}}>
 
-          {/* Top nav */}
-          
+            {/* Welcome */}
+            <div style={{marginBottom:32}}>
+              <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,fontWeight:400,color:"#1A1535",margin:"0 0 4px"}}>
+                Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
+              </h1>
+              <p style={{fontSize:14,color:"#9B9098",margin:0}}>
+                {cases.filter(cs=>cs.stage!=="closed").length>0
+                  ? cases.filter(cs=>cs.stage!=="closed").length+" active case"+( cases.filter(cs=>cs.stage!=="closed").length!==1?"s":"")+" · "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})
+                  : new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})}
+              </p>
+            </div>
 
-          {/* Main content */}
-          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 24px"}}>
-            <div style={{width:"100%",maxWidth:680}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:24,alignItems:"start"}}>
 
-              {/* Hero */}
-              <div style={{textAlign:"center",marginBottom:48}}>
-                <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#EDE8FF",borderRadius:20,padding:"6px 14px",marginBottom:20}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:"#7C5CFC"}}></div>
-                  <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600,letterSpacing:"0.3px"}}>UK HR Intelligence</span>
-                </div>
-                <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:"clamp(32px,5vw,48px)",fontWeight:400,color:"#1A1535",margin:"0 0 16px",lineHeight:1.15,letterSpacing:"-0.5px"}}>
-                  Your HR meetings,<br/><em style={{color:"#7C5CFC",fontStyle:"italic"}}>legally documented.</em>
-                </h1>
-                <p style={{fontSize:16,color:"#6B6375",margin:0,lineHeight:1.7,maxWidth:480,marginLeft:"auto",marginRight:"auto"}}>
-                  Ask Compass anything about HR, or start a meeting and let Compass handle the record, risk assessment, and letters.
-                </p>
-              </div>
-
-              {/* Ask Compass — ChatGPT style */}
-              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,boxShadow:"0 4px 24px rgba(26,21,53,0.08)",overflow:"hidden",marginBottom:16}}>
-                {/* Chat history */}
-                {homeChat.length>0&&(
-                  <div style={{maxHeight:320,overflowY:"auto",padding:"20px 24px",borderBottom:"1px solid #EDE5D8"}}>
-                    {homeChat.map((m,i)=>(
-                      <div key={i} style={{marginBottom:16,display:"flex",gap:12,alignItems:"flex-start"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:m.role==="user"?"#EDE8FF":"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
-                          {m.role==="user"
-                            ? <span style={{fontSize:11,fontWeight:600,color:"#7C5CFC"}}>{(member?.name||user?.email||"U")[0].toUpperCase()}</span>
-                            : <CompassLogo size={14}/>
-                          }
+              {/* Left - active cases */}
+              <div>
+                {/* Action required */}
+                {cases.some(cs=>getNextStep(cs)&&cs.stage!=="closed")&&(
+                  <div style={{marginBottom:24}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Action required</div>
+                    {cases.filter(cs=>getNextStep(cs)&&cs.stage!=="closed").slice(0,5).map(cs=>(
+                      <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                        style={{background:"#FFFFFF",border:"1px solid",borderColor:getNextStep(cs)?.label?.includes("overdue")?"#F5C4C4":"#E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                            <span style={{fontSize:14,fontWeight:600,color:"#1A1535"}}>{cs.employeeName}</span>
+                            <span style={{fontSize:11,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:10,padding:"1px 8px",fontWeight:500}}>{getCaseStatus(cs).label}</span>
+                          </div>
+                          <div style={{fontSize:12,color:"#7C5CFC",fontWeight:500}}>{getNextStep(cs)?.label}</div>
                         </div>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:12,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:4}}>{m.role==="user"?member?.name||"You":"Compass"}</div>
-                          <div style={{fontSize:14,color:"#1A1535",lineHeight:1.7}}><MDRenderer text={m.content}/></div>
+                        <span style={{color:"#C4BAB0",fontSize:18,flexShrink:0}}>›</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* All active cases */}
+                {cases.filter(cs=>cs.stage!=="closed").length>0&&(
+                  <div style={{marginBottom:24}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>All active cases</div>
+                    {cases.filter(cs=>cs.stage!=="closed").map(cs=>(
+                      <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                        style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",marginBottom:6,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{width:32,height:32,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            <span style={{fontSize:12,fontWeight:600,color:"#7C5CFC"}}>{(cs.employeeName||"?")[0].toUpperCase()}</span>
+                          </div>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>{cs.employeeName}</div>
+                            <div style={{fontSize:11,color:"#9B9098",textTransform:"capitalize"}}>{cs.caseType||"HR Case"} · {(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:11,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:10,padding:"2px 8px",fontWeight:500}}>{getCaseStatus(cs).label}</span>
+                          <span style={{color:"#C4BAB0",fontSize:16}}>›</span>
                         </div>
                       </div>
                     ))}
-                    {homeChatLoading&&(
-                      <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <CompassLogo size={14}/>
-                        </div>
-                        <div style={{fontSize:13,color:"#9B9098",fontStyle:"italic",paddingTop:6}}>Compass is thinking...</div>
-                      </div>
-                    )}
                   </div>
                 )}
-                {/* Input */}
-                <div style={{padding:"16px 20px",display:"flex",alignItems:"flex-end",gap:12}}>
-                  <textarea
-                    value={homeChatInput}
-                    onChange={e=>setHomeChatInput(e.target.value)}
-                    onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendHomeChat();}}}
-                    placeholder="Ask Compass anything about HR law, ACAS guidance, disciplinary procedures..."
-                    rows={2}
-                    style={{flex:1,background:"none",border:"none",outline:"none",resize:"none",fontSize:15,color:"#1A1535",lineHeight:1.6,fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}
-                  />
-                  <button onClick={sendHomeChat} disabled={homeChatLoading||!homeChatInput.trim()}
-                    style={{background:"#7C5CFC",border:"none",borderRadius:10,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,opacity:homeChatLoading||!homeChatInput.trim()?0.4:1,transition:"opacity 0.15s"}}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
 
-              {/* Quick suggestions */}
-              {homeChat.length===0&&(
-                <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center",marginBottom:40}}>
-                  {["What is the ACAS Code of Practice?","How do I conduct a fair disciplinary?","What are redundancy consultation rules?","Employee rights during grievance process"].map((q,i)=>(
-                    <button key={i} onClick={()=>{setHomeChatInput(q);}}
-                      style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:20,padding:"8px 16px",fontSize:12,color:"#6B6375",cursor:"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.color="#7C5CFC";}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#6B6375";}}>
-                      {q}
+                {cases.length===0&&(
+                  <div style={{textAlign:"center",padding:"60px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1A1535",marginBottom:8}}>No active cases</div>
+                    <div style={{fontSize:13,color:"#9B9098",marginBottom:20}}>Create a case to get started</div>
+                    <button onClick={()=>setScreen(SCREENS.INTAKE)}
+                      style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 24px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                      Create first case →
                     </button>
-                  ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Right - Ask Compass + quick actions */}
+              <div>
+                {/* Quick actions */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Quick actions</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <button onClick={()=>setScreen(SCREENS.INTAKE)}
+                      style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"11px 14px",fontSize:13,color:"#1A1535",fontWeight:500,cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"all 0.15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.color="#7C5CFC";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#1A1535";}}>
+                      + New case
+                    </button>
+                    <button onClick={()=>setScreen(SCREENS.HOME+"_meeting")}
+                      style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"11px 14px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                      Start a meeting
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              {/* Divider */}
-              <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
-                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
-                <span style={{fontSize:12,color:"#9B9098",fontWeight:500}}>or</span>
-                <div style={{flex:1,height:1,background:"#EDE5D8"}}></div>
-              </div>
-
-              {/* Two action buttons */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-                <button onClick={()=>setScreen(SCREENS.INTAKE)}
-                  style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px",fontSize:14,color:"#1A1535",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",transition:"all 0.15s",textAlign:"center"}}
-                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#F5F3FF";}}
-                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
-                  <div style={{fontWeight:600,marginBottom:2,fontSize:14}}>New case</div>
-                  <div style={{fontSize:12,color:"#9B9098"}}>Log a case file first</div>
-                </button>
-                <button onClick={()=>{
-                  setMeetingSetup({employee:"",type:"",date:new Date().toISOString().split("T")[0]});
-                  setScreen(SCREENS.HOME+"_meeting");
-                }}
-                  style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:14,color:"#FFFFFF",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:"0 4px 16px rgba(124,92,252,0.25)",textAlign:"center"}}>
-                  <div style={{fontWeight:600,marginBottom:2,fontSize:14}}>Start meeting</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>No case file needed</div>
-                </button>
-              </div>
-
-
-              {/* Recent cases */}
-              {cases.length>0&&(
-                <div style={{marginTop:40}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:14}}>Recent</div>
-                  {cases.slice(0,3).map(cs=>(
-                    <div key={cs.id} onClick={()=>setScreen(SCREENS.CASES)}
-                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #F5F1EA",cursor:"pointer"}}>
-                      <div>
-                        <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{cs.employeeName}</div>
-                        <div style={{fontSize:12,color:"#9B9098"}}>{cs.meetings?.slice(-1)[0]?.type||""} · {cs.meetings?.length||0} meeting{cs.meetings?.length!==1?"s":""}</div>
-                      </div>
-                      <span style={{color:"#E8E0D0",fontSize:18}}>›</span>
+                {/* Ask Compass */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"12px 16px",borderBottom:"1px solid #EDE5D8"}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Ask Compass</div>
+                    <div style={{fontSize:11,color:"#9B9098",marginTop:1}}>HR law, ACAS guidance, procedures</div>
+                  </div>
+                  {homeChat.length>0&&(
+                    <div style={{maxHeight:280,overflowY:"auto",padding:"12px 16px"}}>
+                      {homeChat.map((m,i)=>(
+                        <div key={i} style={{marginBottom:10}}>
+                          <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
+                          <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6}}><MDRenderer text={m.content}/></div>
+                        </div>
+                      ))}
+                      {homeChatLoading&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
                     </div>
-                  ))}
+                  )}
+                  {homeChat.length===0&&(
+                    <div style={{padding:"12px 16px"}}>
+                      <div style={{fontSize:12,color:"#C4BAB0",marginBottom:10}}>Ask anything about UK employment law...</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {["How do I conduct a fair investigation?","What are ACAS timelines for disciplinary?","Employee rights during redundancy"].map((q,i)=>(
+                          <button key={i} onClick={()=>setHomeChatInput(q)}
+                            style={{background:"#F5F1EA",border:"none",borderRadius:6,padding:"7px 10px",fontSize:11,color:"#6B6375",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{padding:"10px 12px",borderTop:"1px solid #EDE5D8"}}>
+                    <div style={{display:"flex",gap:8,background:"#F5F1EA",borderRadius:8,padding:"8px 12px",alignItems:"center"}}>
+                      <textarea value={homeChatInput} onChange={e=>setHomeChatInput(e.target.value)}
+                        onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendHomeChat();}}}
+                        placeholder="Ask about HR law..."
+                        rows={1}
+                        style={{flex:1,background:"none",border:"none",outline:"none",resize:"none",fontSize:13,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.5}}/>
+                      <button onClick={sendHomeChat} disabled={homeChatLoading||!homeChatInput.trim()}
+                        style={{background:"#7C5CFC",border:"none",borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:homeChatLoading||!homeChatInput.trim()?0.4:1,flexShrink:0}}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                          <path d="M6 10V2M6 2L3 5M6 2L9 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
