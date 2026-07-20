@@ -2509,15 +2509,18 @@ Please produce:
 
   const getProceedingTitle = (cs) => {
     if(cs.proceedingTitle) return cs.proceedingTitle;
-    const type = cs.caseType||"HR Matter";
-    const date = cs.dateReceived ? fmtDate(cs.dateReceived) : "";
-    const desc = cs.description ? " — "+cs.description.slice(0,40)+(cs.description.length>40?"...":"") : "";
-    const typeLabel = {
-      misconduct:"Misconduct",grievance:"Grievance",performance:"Performance",
-      attendance:"Attendance",redundancy:"Redundancy",discrimination:"Discrimination",
-      whistleblowing:"Whistleblowing",other:"HR Matter"
-    }[type]||type;
-    return typeLabel+(desc||"")+( date?" · "+date:"");
+    const meetings = cs.meetings||[];
+    const types = meetings.map(m=>(m.type||"").toLowerCase());
+    const typeLabel = cs.caseType ? ({misconduct:"Misconduct",grievance:"Grievance",performance:"Performance",attendance:"Attendance",redundancy:"Redundancy",discrimination:"Discrimination",whistleblowing:"Whistleblowing",other:"HR Matter"}[cs.caseType]||cs.caseType)
+      : types.some(t=>t.includes("disciplinary"))?"Disciplinary"
+      : types.some(t=>t.includes("investigation"))?"Investigation"
+      : types.some(t=>t.includes("grievance"))?"Grievance"
+      : types.some(t=>t.includes("redundancy"))?"Redundancy"
+      : types.some(t=>t.includes("appeal"))?"Appeal"
+      : "HR Matter";
+    const desc = cs.description ? " — "+cs.description.slice(0,50)+(cs.description.length>50?"...":"") : "";
+    const date = cs.dateReceived||cs.createdAt ? new Date(cs.dateReceived||cs.createdAt).toLocaleDateString("en-GB",{month:"short",year:"numeric"}) : "";
+    return typeLabel+(desc||"")+(date?" · "+date:"");
   };
 
 
