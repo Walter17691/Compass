@@ -569,7 +569,14 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
         signId,
-        document: (()=>{const s=reviewOutput.indexOf("## Meeting Details");const e=reviewOutput.indexOf("\n## Key Points");return s>-1?reviewOutput.slice(s,e>-1?e:undefined):reviewOutput;})(),
+        document: (()=>{
+        const full = reviewOutput;
+        const start = full.indexOf("## Meeting Details");
+        const advisorCut = full.indexOf("## HR Advisor");
+        const keyCut = full.indexOf("\n## Key Points");
+        const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
+        return start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
+      })(),
         employeeName: caseInfo.employee||"Employee",
         managerName: caseInfo.manager||"Manager",
         meetingType: meetingType?.label||"Meeting",
@@ -1776,7 +1783,14 @@ Please produce:
       participants,
       transcript: transcript.filter(u=>!u.pending),
       record: reviewOutput,
-      signDocument: (()=>{const s=reviewOutput.indexOf("## Meeting Details");const e=reviewOutput.indexOf("\n## Key Points");return s>-1?reviewOutput.slice(s,e>-1?e:undefined):reviewOutput;})(),
+      signDocument: (()=>{
+        const full = reviewOutput;
+        const start = full.indexOf("## Meeting Details");
+        const advisorCut = full.indexOf("## HR Advisor");
+        const keyCut = full.indexOf("\n## Key Points");
+        const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
+        return start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
+      })(),
       letterOutput,
       riskScore,
       nextSteps,
@@ -3511,9 +3525,25 @@ Please produce:
                           <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Investigation report</div>
                           {cs.investigationReport&&<button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(SCREENS.LETTER);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View report</button>}
                         </div>
-                        <div style={{padding:"14px 16px"}}>
-                          {cs.investigationReport?<div style={{fontSize:13,color:"#1A7A4A"}}>Report generated {fmtDate(cs.investigationReportDate)}</div>:<div style={{fontSize:13,color:"#9B9098"}}>No report yet — complete investigation meetings first, then generate from the action bar above.</div>}
-                        </div>
+                        <div style={{padding:"14px 16px"}}>{
+                          cs.investigationReport?(
+                            <div style={{fontSize:13,color:"#1A7A4A"}}>Report generated {fmtDate(cs.investigationReportDate)}</div>
+                          ):invMeetings.some(m=>m.record)?(
+                            <div>
+                              <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to generate the report.</div>
+                              <button onClick={()=>{
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
+                                setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
+                                setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
+                                handleLetter("investigation-report");
+                              }} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                Generate investigation report →
+                              </button>
+                            </div>
+                          ):(
+                            <div style={{fontSize:13,color:"#9B9098"}}>No report yet — complete investigation meetings first, then generate here.</div>
+                          )
+                        }</div>
                       </div>
                     </>
                   )}
