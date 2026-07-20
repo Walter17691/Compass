@@ -1764,6 +1764,26 @@ Please produce:
 
   // ── Save to case ──
   const saveMeetingToCase = () => {
+    // If this is a witness interview, save to parent case evidence instead
+    if(caseInfo._linkedCaseId) {
+      const witnessNote = {
+        name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+fmtDate(caseInfo.date)+")",
+        type:"Witness statement",
+        date:caseInfo.date||new Date().toLocaleDateString("en-GB"),
+        addedBy:caseInfo.manager||"HR Manager",
+        record:reviewOutput,
+        signStatus:"pending"
+      };
+      saveCases(cases.map(x=>x.id===caseInfo._linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
+      const targetId = caseInfo._linkedCaseId;
+      setCaseInfo(p=>({...p,_linkedCaseId:null,_linkedCaseName:null}));
+      setMeetingSetup(p=>({...p,linkedCaseId:null,linkedCaseName:null}));
+      setActiveCaseId(targetId);
+      setActiveCaseStage("investigation");
+      setScreen(SCREENS.CASE_VIEW);
+      showToast("Witness statement saved to case");
+      return;
+    }
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const meeting = {
       id: Date.now().toString(),
@@ -2796,8 +2816,8 @@ Please produce:
             <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
           </button>
 
-          {/* Nav - only show when not in meeting */}
-          {!meetingType&&(
+          {/* Nav - always show main nav */}
+          {(
             <nav style={{display:"flex",alignItems:"center",gap:2}}>
               {[
                 {s:SCREENS.HOME, l:"Home"},
