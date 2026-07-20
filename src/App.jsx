@@ -2837,8 +2837,8 @@ Please produce:
                 Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
               </h1>
               <p style={{fontSize:14,color:"#9B9098",margin:0}}>
-                {cases.filter(cs=>cs.stage!=="closed").length>0
-                  ? cases.filter(cs=>cs.stage!=="closed").length+" active case"+( cases.filter(cs=>cs.stage!=="closed").length!==1?"s":"")+" · "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})
+                {cases.filter(cs=>getCaseStage(cs)!=="closed").length>0
+                  ? cases.filter(cs=>getCaseStage(cs)!=="closed").length+" active case"+( cases.filter(cs=>cs.stage!=="closed").length!==1?"s":"")+" · "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})
                   : new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})}
               </p>
             </div>
@@ -2870,10 +2870,10 @@ Please produce:
                 )}
 
                 {/* All active cases */}
-                {cases.filter(cs=>cs.stage!=="closed").length>0&&(
+                {cases.filter(cs=>getCaseStage(cs)!=="closed").length>0&&(
                   <div style={{marginBottom:24}}>
                     <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>All active cases</div>
-                    {cases.filter(cs=>cs.stage!=="closed").map(cs=>(
+                    {cases.filter(cs=>getCaseStage(cs)!=="closed").map(cs=>(
                       <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
                         style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",marginBottom:6,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
                         onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";}}
@@ -2914,7 +2914,7 @@ Please produce:
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
                   <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Quick actions</div>
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <button onClick={()=>setScreen(SCREENS.INTAKE)}
+                    <button onClick={()=>{setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});setScreen(SCREENS.INTAKE);}}
                       style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"11px 14px",fontSize:13,color:"#1A1535",fontWeight:500,cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"all 0.15s"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.color="#7C5CFC";}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#1A1535";}}>
@@ -3327,7 +3327,7 @@ Please produce:
       })()}
 
 {/* ══ CASE VIEW ══ */}
-      {screen===SCREENS.CASE_VIEW&&(()=>{
+      {screen===SCREENS.CASE_VIEW&&activeCaseId&&(()=>{
         const cs = cases.find(x=>x.id===activeCaseId);
         if(!cs) return <div style={{padding:40,color:"#9B9098"}}>Case not found</div>;
         const meetings = cs.meetings||[];
