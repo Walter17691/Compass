@@ -2507,23 +2507,6 @@ Please produce:
   };
 
 
-  const getProceedingTitle = (cs) => {
-    if(cs.proceedingTitle) return cs.proceedingTitle;
-    const meetings = cs.meetings||[];
-    const types = meetings.map(m=>(m.type||"").toLowerCase());
-    const typeLabel = cs.caseType ? ({misconduct:"Misconduct",grievance:"Grievance",performance:"Performance",attendance:"Attendance",redundancy:"Redundancy",discrimination:"Discrimination",whistleblowing:"Whistleblowing",other:"HR Matter"}[cs.caseType]||cs.caseType)
-      : types.some(t=>t.includes("disciplinary"))?"Disciplinary"
-      : types.some(t=>t.includes("investigation"))?"Investigation"
-      : types.some(t=>t.includes("grievance"))?"Grievance"
-      : types.some(t=>t.includes("redundancy"))?"Redundancy"
-      : types.some(t=>t.includes("appeal"))?"Appeal"
-      : "HR Matter";
-    const desc = cs.description ? " — "+cs.description.slice(0,50)+(cs.description.length>50?"...":"") : "";
-    const date = cs.dateReceived||cs.createdAt ? new Date(cs.dateReceived||cs.createdAt).toLocaleDateString("en-GB",{month:"short",year:"numeric"}) : "";
-    return typeLabel+(desc||"")+(date?" · "+date:"");
-  };
-
-
   return (
     <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
       <style>{`
@@ -2801,7 +2784,7 @@ Please produce:
             <nav style={{display:"flex",alignItems:"center",gap:2}}>
               {[
                 {s:SCREENS.HOME, l:"Home"},
-                {s:SCREENS.CASES, l:"Cases", badge:(()=>{const n=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)).length;return n>0?n:null;})()},
+                {s:SCREENS.CASES, l:"Cases"+(cases.length>0?" ("+cases.length+")":"")},
                 ...(isHR?[{s:SCREENS.HR_REVIEW, l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
               ].map(({s,l})=>(
                 <button key={s} onClick={()=>setScreen(s)}
@@ -3021,10 +3004,10 @@ Please produce:
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
               </div>
 
-              {(meetingSetup.linkedCaseId||caseInfo._linkedCaseId)&&(
+              {meetingSetup.linkedCaseId&&(
                 <div style={{background:"#EDE8FF",border:"1px solid #D4C9F5",borderRadius:8,padding:"12px 16px",marginBottom:16}}>
                   <div style={{fontSize:13,fontWeight:600,color:"#5B3FD4",marginBottom:2}}>Witness interview</div>
-                  <div style={{fontSize:12,color:"#7C5CFC"}}>This interview will be saved as evidence in {meetingSetup.linkedCaseName||caseInfo._linkedCaseName} case</div>
+                  <div style={{fontSize:12,color:"#7C5CFC"}}>This interview will be saved as evidence in {meetingSetup.linkedCaseName} case</div>
                 </div>
               )}
               <div style={{marginBottom:20}}>
@@ -3347,7 +3330,6 @@ Please produce:
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(()=>{
         const cs = cases.find(x=>x.id===activeCaseId);
         if(!cs) return <div style={{padding:40,color:"#9B9098",fontFamily:"DM Sans,system-ui,sans-serif"}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7C5CFC",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
-
         const meetings = cs.meetings||[];
         const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")).sort((a,b)=>new Date(b.date)-new Date(a.date));
         const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary")).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -3355,17 +3337,13 @@ Please produce:
         const otherMeetings = meetings.filter(m=>!["investigation","disciplinary","appeal"].some(t=>(m.type||"").toLowerCase().includes(t))).sort((a,b)=>new Date(b.date)-new Date(a.date));
         const stage = getCaseStage(cs);
         const nextStep = getNextStep(cs);
-
         const allStages = [
-          {id:"investigation", label:"Investigation", meetings:invMeetings, color:"#7C5CFC"},
-          {id:"disciplinary", label:"Disciplinary", meetings:discMeetings, color:"#C84B2F"},
-          {id:"appeal", label:"Appeal", meetings:appealMeetings, color:"#B87520"},
-          ...(otherMeetings.length>0?[{id:"other", label:"Other", meetings:otherMeetings, color:"#6B6375"}]:[]),
+          {id:"investigation",label:"Investigation",meetings:invMeetings,color:"#7C5CFC"},
+          {id:"disciplinary",label:"Disciplinary",meetings:discMeetings,color:"#C84B2F"},
+          {id:"appeal",label:"Appeal",meetings:appealMeetings,color:"#B87520"},
+          ...(otherMeetings.length>0?[{id:"other",label:"Other",meetings:otherMeetings,color:"#6B6375"}]:[]),
         ].filter(s=>s.meetings.length>0||s.id==="investigation");
-
-        const stageOrder = ["investigation","disciplinary","appeal","other"];
-        const reachedStages = allStages.filter(s=>s.meetings.length>0);
-        const currentStageIdx = reachedStages.findIndex(s=>s.id===activeCaseStage);
+        const activeStage = allStages.find(s=>s.id===activeCaseStage)||allStages[0];
 
         const MeetingRow = ({m})=>(
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid #F5F1EA",gap:12}}>
@@ -3383,126 +3361,68 @@ Please produce:
           </div>
         );
 
-        const activeStage = allStages.find(s=>s.id===activeCaseStage)||allStages[0];
-
         return(
           <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",flexDirection:"column"}}>
-
             {/* Header */}
             <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 28px",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>← Cases</button>
                   <div style={{width:1,height:16,background:"#EDE5D8"}}/>
                   <div>
-                    <div style={{fontSize:11,color:"#9B9098",marginBottom:1}}>{cs.employeeName}</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",fontWeight:400}}>{getProceedingTitle(cs)}</div>
+                    <div style={{fontSize:11,color:"#9B9098"}}>{cs.employeeName}</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535"}}>{getProceedingTitle(cs)}</div>
                   </div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"4px 12px"}}>{getCaseStatus(cs).label}</span>
-                  <button onClick={()=>{
-                    const type = activeCaseStage==="investigation"?"investigation":activeCaseStage==="appeal"?"appeal-disciplinary":"disciplinary";
-                    setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));
-                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));
-                    setScreen(SCREENS.HOME+"_meeting");
-                  }} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                    + New meeting
-                  </button>
+                  <button onClick={()=>{const type=activeStage?.id==="investigation"?"investigation":activeStage?.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}}
+                    style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>
                 </div>
               </div>
-
-              {/* Horizontal stage tabs */}
+              {/* Stage tabs */}
               <div style={{display:"flex",gap:2}}>
-                {allStages.map((s,i)=>{
-                  const isActive = activeCaseStage===s.id;
-                  const hasContent = s.meetings.length>0;
-                  return(
-                    <button key={s.id} onClick={()=>setActiveCaseStage(s.id)}
-                      style={{padding:"6px 16px",borderRadius:6,border:"none",background:isActive?"#F5F3FF":"none",color:isActive?s.color:"#6B6375",fontWeight:isActive?600:400,fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:6,opacity:!hasContent&&s.id!=="investigation"?0.4:1}}>
-                      {s.label}
-                      {hasContent&&<span style={{fontSize:10,background:isActive?s.color:"#E8E0D0",color:isActive?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{s.meetings.length}</span>}
-                    </button>
-                  );
-                })}
+                {allStages.map(s=>(
+                  <button key={s.id} onClick={()=>setActiveCaseStage(s.id)}
+                    style={{padding:"6px 14px",borderRadius:6,border:"none",background:activeCaseStage===s.id?"#F5F3FF":"none",color:activeCaseStage===s.id?s.color:"#6B6375",fontWeight:activeCaseStage===s.id?600:400,fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
+                    {s.label}
+                    {s.meetings.length>0&&<span style={{fontSize:10,background:activeCaseStage===s.id?s.color:"#E8E0D0",color:activeCaseStage===s.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{s.meetings.length}</span>}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Next action bar */}
+            {/* Next action */}
             {nextStep&&stage!=="closed"&&(
               <div style={{background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
                 <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500}}>Next: {nextStep.label}</div>
                 <div style={{display:"flex",gap:8}}>
-                  {nextStep.secondary&&(
-                    <button onClick={()=>{
-                      if(nextStep.secondary.action==="close_no_case"){
-                        saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));
-                        setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                        handleLetter("no-case-answer");
-                      }
-                    }} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                      {nextStep.secondary.label}
-                    </button>
-                  )}
+                  {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));handleLetter("no-case-answer");}}} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.secondary.label}</button>}
                   <button onClick={()=>{
-                    if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"){
-                      setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:nextStep.action==="start_investigation"?"investigation":nextStep.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));
-                      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));
-                      setScreen(SCREENS.HOME+"_meeting");
-                    } else if(nextStep.action==="send_signature"){
-                      const rel=stage==="investigation"?invMeetings:stage==="appeal"?appealMeetings:discMeetings;
-                      const m=rel[0]||meetings[meetings.length-1];
-                      if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}
-                    } else if(nextStep.action==="inv_report"){
-                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
-                      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
-                      setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
-                      handleLetter("investigation-report");
-                    } else if(nextStep.action==="disciplinary_invite"){
-                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));
-                      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
-                      setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);
-                      handleLetter("invite");
-                    } else if(nextStep.action==="outcome_letter"||nextStep.action==="appeal_letter"){
-                      const m=discMeetings[0]||meetings[meetings.length-1];
-                      if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}
-                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));
-                      handleLetter("outcome");
-                    } else if(nextStep.action==="close_case"){
-                      saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));
-                    }
-                  }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                    {nextStep.label} →
-                  </button>
+                    if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"){setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:nextStep.action==="start_investigation"?"investigation":nextStep.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
+                    else if(nextStep.action==="send_signature"){const rel=stage==="investigation"?invMeetings:stage==="appeal"?appealMeetings:discMeetings;const m=rel[0]||meetings[meetings.length-1];if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
+                    else if(nextStep.action==="inv_report"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);handleLetter("investigation-report");}
+                    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);handleLetter("invite");}
+                    else if(nextStep.action==="outcome_letter"||nextStep.action==="appeal_letter"){const m=discMeetings[0]||meetings[meetings.length-1];if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));handleLetter("outcome");}
+                    else if(nextStep.action==="close_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));}
+                  }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.label} →</button>
                 </div>
               </div>
             )}
 
-            {/* Closed - appeal option */}
+            {/* Closed - appeal */}
             {stage==="closed"&&!showAppealInput[cs.id]&&!meetings.some(m=>(m.type||"").toLowerCase().includes("appeal"))&&(
               <div style={{background:"#E8F5EE",borderBottom:"1px solid #C8E6C9",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
                 <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Case closed</div>
-                <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:true}))} style={{fontSize:12,background:"none",border:"1px solid #C84B2F",borderRadius:6,padding:"5px 14px",color:"#C84B2F",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                  Employee is appealing
-                </button>
+                <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:true}))} style={{fontSize:12,background:"none",border:"1px solid #C84B2F",borderRadius:6,padding:"5px 14px",color:"#C84B2F",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Employee is appealing</button>
               </div>
             )}
             {showAppealInput[cs.id]&&(
               <div style={{background:"#FEF5E7",borderBottom:"1px solid #F5E6C4",padding:"14px 28px",flexShrink:0}}>
                 <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Paste the employee appeal — Compass will use this for the appeal hearing:</div>
-                <textarea value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))}
-                  placeholder="Paste the employee's appeal letter or email here..."
-                  rows={3} style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",marginBottom:8}}/>
+                <textarea value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))} rows={3} style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",marginBottom:8}}/>
                 <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>{
-                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));
-                    setShowAppealInput(p=>({...p,[cs.id]:false}));
-                    setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-                    setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);
-                    handleLetter("invite");
-                  }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                    Start appeal and send invitation
-                  </button>
+                  <button onClick={()=>{saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));setShowAppealInput(p=>({...p,[cs.id]:false}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);handleLetter("invite");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Start appeal and send invitation</button>
                   <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
                 </div>
               </div>
@@ -3512,18 +3432,11 @@ Please produce:
             <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
               {activeStage&&(
                 <div style={{maxWidth:800,margin:"0 auto"}}>
-
-                  {/* Meetings */}
                   {activeStage.meetings.length>0?(
                     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
                       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{fontSize:11,fontWeight:700,color:activeStage.color,letterSpacing:"0.5px",textTransform:"uppercase"}}>Meetings ({activeStage.meetings.length})</div>
-                        <button onClick={()=>{
-                          const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";
-                          setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));
-                          setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));
-                          setScreen(SCREENS.HOME+"_meeting");
-                        }} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Add meeting</button>
+                        <button onClick={()=>{const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Add meeting</button>
                       </div>
                       <div style={{padding:"0 16px"}}>
                         {activeStage.meetings.map((m,i)=><MeetingRow key={m.id||i} m={m}/>)}
@@ -3532,24 +3445,14 @@ Please produce:
                   ):(
                     <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0",marginBottom:16}}>
                       <div style={{fontSize:14,color:"#9B9098",marginBottom:12}}>No {activeStage.label.toLowerCase()} meetings yet</div>
-                      <button onClick={()=>{
-                        const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";
-                        setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));
-                        setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));
-                        setScreen(SCREENS.HOME+"_meeting");
-                      }} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>
-                        Start {activeStage.label.toLowerCase()} meeting
-                      </button>
+                      <button onClick={()=>{const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start {activeStage.label.toLowerCase()} meeting</button>
                     </div>
                   )}
 
-                  {/* Investigation extras */}
                   {activeStage.id==="investigation"&&(
                     <>
                       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
-                        <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
-                          <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Evidence & witness statements</div>
-                        </div>
+                        <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}><div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Evidence & witness statements</div></div>
                         <div style={{padding:"16px"}}>
                           {(cs.evidence||[]).length===0&&<div style={{fontSize:13,color:"#9B9098",marginBottom:12}}>No evidence added yet</div>}
                           {(cs.evidence||[]).map((ev,i)=>(
@@ -3574,47 +3477,28 @@ Please produce:
                             onDragLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FDFAF5";}}
                             onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FDFAF5";Array.from(e.dataTransfer.files).forEach(f=>{const r=new FileReader();r.onload=ev=>{const nv={name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),nv]}:x));};r.readAsDataURL(f);});}}>
                             <input type="file" multiple onChange={e=>{Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>{const nv={name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),nv]}:x));};r.readAsDataURL(f);});}} style={{display:"none"}}/>
-                            <div style={{textAlign:"center"}}>
-                              <div style={{fontSize:13,color:"#6B6375",fontWeight:500}}>Drop files or click to upload</div>
-                              <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>CCTV, emails, screenshots, documents</div>
-                            </div>
+                            <div style={{textAlign:"center"}}><div style={{fontSize:13,color:"#6B6375",fontWeight:500}}>Drop files or click to upload</div><div style={{fontSize:11,color:"#9B9098",marginTop:2}}>CCTV, emails, screenshots, documents</div></div>
                           </label>
                           <div style={{marginTop:12,padding:"12px",background:"#F5F3FF",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                            <div>
-                              <div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interview</div>
-                              <div style={{fontSize:11,color:"#9B9098"}}>Record and save directly to this investigation</div>
-                            </div>
-                            <button onClick={()=>{setMeetingSetup(p=>({...p,employee:"",manager:cs.manager||"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));setCaseInfo(p=>({...p,_linkedCaseId:cs.id,_linkedCaseName:cs.employeeName}));setScreen(SCREENS.HOME+"_meeting");}}
-                              style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
-                              + Witness interview
-                            </button>
+                            <div><div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interview</div><div style={{fontSize:11,color:"#9B9098"}}>Record and save directly to this investigation</div></div>
+                            <button onClick={()=>{setMeetingSetup(p=>({...p,employee:"",manager:cs.manager||"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));setCaseInfo(p=>({...p,_linkedCaseId:cs.id,_linkedCaseName:cs.employeeName}));setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>+ Witness interview</button>
                           </div>
                         </div>
                       </div>
-
                       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
                         <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                           <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Investigation report</div>
                           {cs.investigationReport&&<button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(SCREENS.LETTER);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View report</button>}
                         </div>
                         <div style={{padding:"14px 16px"}}>
-                          {cs.investigationReport
-                            ?<div style={{fontSize:13,color:"#1A7A4A"}}>Report generated {fmtDate(cs.investigationReportDate)}</div>
-                            :<div style={{fontSize:13,color:"#9B9098"}}>No report yet — complete investigation meetings first, then generate from the action bar above.</div>
-                          }
+                          {cs.investigationReport?<div style={{fontSize:13,color:"#1A7A4A"}}>Report generated {fmtDate(cs.investigationReportDate)}</div>:<div style={{fontSize:13,color:"#9B9098"}}>No report yet — complete investigation meetings first, then generate from the action bar above.</div>}
                         </div>
                       </div>
                     </>
                   )}
-
-                  {/* Case info footer */}
                   <div style={{marginTop:20,padding:"12px 0",borderTop:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontSize:11,color:"#9B9098"}}>
-                      {cs.description&&<span style={{fontStyle:"italic"}}>"{cs.description.slice(0,60)}{cs.description.length>60?"...":""}"</span>}
-                      {cs.referredBy&&<span style={{marginLeft:8}}>Referred by: {cs.referredBy}</span>}
-                    </div>
-                    <button onClick={()=>{if(window.confirm("Delete this case and all its meetings?"))saveCases(cases.filter(x=>x.id!==cs.id));setScreen(SCREENS.CASES);}}
-                      style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Delete case</button>
+                    <div style={{fontSize:11,color:"#9B9098"}}>{cs.description&&<span style={{fontStyle:"italic"}}>"{cs.description.slice(0,60)}{cs.description.length>60?"...":""}"</span>}{cs.referredBy&&<span style={{marginLeft:8}}>Referred by: {cs.referredBy}</span>}</div>
+                    <button onClick={()=>{if(window.confirm("Delete this case?"))saveCases(cases.filter(x=>x.id!==cs.id));setScreen(SCREENS.CASES);}} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Delete case</button>
                   </div>
                 </div>
               )}
@@ -3622,5 +3506,2427 @@ Please produce:
           </div>
         );
       })()}
+{/* ══ INTAKE ══ */}
+      {screen===SCREENS.INTAKE&&(
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
-      
+          {/* Header */}
+          <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <CompassLogo size={24}/>
+              <div>
+                <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535"}}>New case</div>
+                <div style={{fontSize:12,color:"#9B9098"}}>Log a case before starting any meetings</div>
+              </div>
+            </div>
+            <button onClick={()=>setScreen(SCREENS.CASES)}
+              style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+              ← Back to cases
+            </button>
+          </div>
+
+          <div style={{maxWidth:620,margin:"0 auto",padding:"40px 24px"}}>
+
+            <div style={{background:"#EDE8FF",border:"1px solid #D4C9F5",borderRadius:10,padding:"14px 18px",marginBottom:28,display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16}}>💡</span>
+              <div style={{fontSize:13,color:"#5B3FD4",lineHeight:1.6}}>Log the case first — even before any meetings take place. This creates the case file and helps Compass track ACAS timelines and next steps from day one.</div>
+            </div>
+
+            {/* Employee details */}
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"24px",marginBottom:16,boxShadow:"0 1px 3px rgba(26,21,53,0.04)"}}>
+              <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:16}}>Employee details</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                <div>
+                  <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>Employee name</label>
+                  <input value={intake.employee} onChange={e=>setIntake(p=>({...p,employee:e.target.value}))}
+                    placeholder="Full name"
+                    list="intake-employee-list"
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
+                    onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.background="#FFFFFF";}}
+                    onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.background="#FDFAF5";}}/>
+                  <datalist id="intake-employee-list">
+                    {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
+                  </datalist>
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>HR manager (you)</label>
+                  <input value={intake.manager} onChange={e=>setIntake(p=>({...p,manager:e.target.value}))}
+                    placeholder="Your name"
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
+                    onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.background="#FFFFFF";}}
+                    onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.background="#FDFAF5";}}/>
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>Date received</label>
+                  <input type="date" value={intake.dateReceived} onChange={e=>setIntake(p=>({...p,dateReceived:e.target.value}))}
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
+                    onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
+                    onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>Referred by</label>
+                  <input value={intake.referredBy} onChange={e=>setIntake(p=>({...p,referredBy:e.target.value}))}
+                    placeholder="Line manager, employee, etc"
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
+                    onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.background="#FFFFFF";}}
+                    onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.background="#FDFAF5";}}/>
+                </div>
+              </div>
+            </div>
+
+            {/* Case type */}
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"24px",marginBottom:16,boxShadow:"0 1px 3px rgba(26,21,53,0.04)"}}>
+              <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:16}}>Case type</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[
+                  {id:"misconduct",label:"Misconduct",desc:"Policy breach or behaviour issue"},
+                  {id:"grievance",label:"Grievance",desc:"Employee raised a formal concern"},
+                  {id:"performance",label:"Performance",desc:"Capability or performance issue"},
+                  {id:"attendance",label:"Attendance",desc:"Absence or lateness pattern"},
+                  {id:"redundancy",label:"Redundancy",desc:"Role at risk or confirmed redundancy"},
+                  {id:"discrimination",label:"Discrimination",desc:"Equality Act 2010 concern"},
+                  {id:"whistleblowing",label:"Whistleblowing",desc:"Protected disclosure"},
+                  {id:"other",label:"Other",desc:"Other HR matter"},
+                ].map(t=>(
+                  <button key={t.id} onClick={()=>setIntake(p=>({...p,type:t.id}))}
+                    style={{background:intake.type===t.id?"#F5F3FF":"#FDFAF5",border:"1px solid",borderColor:intake.type===t.id?"#7C5CFC":"#E8E0D0",borderRadius:8,padding:"10px 14px",cursor:"pointer",textAlign:"left",transition:"all 0.1s",fontFamily:"DM Sans,system-ui,sans-serif",borderLeft:intake.type===t.id?"3px solid #7C5CFC":"1px solid #E8E0D0"}}>
+                    <div style={{fontSize:13,fontWeight:intake.type===t.id?600:400,color:intake.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
+                    <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{t.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Issue description */}
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"24px",marginBottom:16,boxShadow:"0 1px 3px rgba(26,21,53,0.04)"}}>
+              <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:16}}>Issue description</div>
+              <div style={{marginBottom:14}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>Brief summary of the issue</label>
+                <textarea value={intake.description} onChange={e=>setIntake(p=>({...p,description:e.target.value}))}
+                  placeholder="Describe the issue in a few sentences. What happened? When? Who is involved?"
+                  rows={4}
+                  style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",lineHeight:1.6}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.background="#FFFFFF";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.background="#FDFAF5";}}/>
+              </div>
+              <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                <input type="checkbox" checked={intake.urgent} onChange={e=>setIntake(p=>({...p,urgent:e.target.checked}))}
+                  style={{width:16,height:16,accentColor:"#C84B2F",cursor:"pointer"}}/>
+                <div>
+                  <span style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>Mark as urgent</span>
+                  <span style={{fontSize:12,color:"#9B9098",marginLeft:8}}>Requires immediate attention or action</span>
+                </div>
+              </label>
+            </div>
+
+            {/* Submit */}
+            <button
+              disabled={!intake.employee.trim()||!intake.type}
+              onClick={()=>{
+                const newCase = {
+                  id: crypto.randomUUID(),
+                  employeeName: intake.employee.trim(),
+                  manager: intake.manager,
+                  email: "",
+                  caseType: intake.type,
+                  description: intake.description,
+                  referredBy: intake.referredBy,
+                  dateReceived: intake.dateReceived,
+                  urgent: intake.urgent,
+                  status: "open",
+                  meetings: [],
+                  createdAt: new Date().toISOString(),
+                };
+                saveCases([...cases, newCase]);
+                setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});
+                setScreen(SCREENS.CASES);
+              }}
+              style={{width:"100%",background:(!intake.employee.trim()||!intake.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:(!intake.employee.trim()||!intake.type)?"#9B9098":"#FFFFFF",fontWeight:600,cursor:(!intake.employee.trim()||!intake.type)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:(!intake.employee.trim()||!intake.type)?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
+              Create case file →
+            </button>
+            <p style={{textAlign:"center",fontSize:12,color:"#9B9098",marginTop:12}}>You can start a meeting from the case file once it's created</p>
+          </div>
+        </div>
+      )}
+
+{/* ══ PREP ══ */}
+      {screen===SCREENS.PREP&&(
+        <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
+          <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
+          <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:30,color:"#1A1535",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
+          <p style={{fontSize:14,color:"#6B6880",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#C84B2F"}}>*</span></label>
+            <select value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
+              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#F2EDE4":"#555",boxSizing:"border-box"}}>
+              <option value="" disabled>Select meeting type...</option>
+              <option disabled style={{color:"#6B6880"}}>── ER Meetings ──</option>
+              {MEETING_TYPES.filter(t=>t.mode==="er"&&t.group==="formal").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+              <option disabled style={{color:"#6B6880"}}>── Appeals ──</option>
+              {MEETING_TYPES.filter(t=>t.group==="appeal").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+              <option disabled style={{color:"#6B6880"}}>── Redundancy ──</option>
+              {MEETING_TYPES.filter(t=>t.group==="redundancy").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+              <option disabled style={{color:"#6B6880"}}>── Development ──</option>
+              {MEETING_TYPES.filter(t=>t.group==="dev").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#C84B2F"}}>*</span></label>
+            <input autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
+              onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
+              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
+            <DateInput value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:16}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+            <input placeholder="Chair / HR manager name" value={caseInfo.manager}
+              onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
+              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:32}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
+            <textarea value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
+              placeholder="Previous warnings, allegations, relevant history, reasonable adjustments..."
+              rows={4} style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
+          </div>
+
+          <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
+            <Btn onClick={handlePrepare} disabled={aiProcessing||!caseInfo.employee.trim()||!meetingType}
+              style={{padding:"14px 28px",fontSize:15,background:"#7C5CFC",borderColor:"#E8622A"}}>
+              {aiProcessing?"Building...":"Generate prep pack"}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{padding:"14px 20px",fontSize:14}}>Cancel</Btn>
+          </div>
+
+          <div style={{textAlign:"left",marginBottom:24}}>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></label>
+            {bgDoc?(
+              <div style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
+                <span style={{fontSize:20}}>&#128196;</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{bgDoc.name}</div>
+                  <div style={{fontSize:11,color:"#6B6880"}}>{bgDoc.text.length} characters extracted</div>
+                </div>
+                <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#6B6880",fontSize:18,cursor:"pointer"}}>&#10005;</button>
+              </div>
+            ):(
+              <label style={{display:"block",background:"#FFFFFF",border:"1px dashed #E8E0D0",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
+                onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
+                  const file = e.target.files[0];
+                  if(!file) return;
+                  const name = file.name;
+                  if(name.endsWith(".txt")) {
+                    const text = await file.text();
+                    setBgDoc({name, text: text.slice(0,8000)});
+                  } else if(name.endsWith(".pdf")) {
+                    const arr = await file.arrayBuffer();
+                    const bytes = new Uint8Array(arr);
+                    const str = new TextDecoder("utf-8").decode(bytes);
+                    const text = str.split("").filter(ch=>ch.charCodeAt(0)>31).join("").replace(/  +/g," ").trim().slice(0,8000);
+                    setBgDoc({name, text});
+                  } else {
+                    const text = await file.text();
+                    setBgDoc({name, text: text.slice(0,8000)});
+                  }
+                }}/>
+                <div style={{fontSize:13,color:"#6B6375",marginBottom:4}}>Click to upload</div>
+                <div style={{fontSize:11,color:"#5A5570"}}>PDF, Word or text file</div>
+              </label>
+            )}
+          </div>
+
+          <button onClick={()=>setScreen(SCREENS.RECORD)}
+            style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
+            Skip prep and start meeting now
+          </button>
+
+          {prepNotes&&(
+            <div style={{marginTop:28,textAlign:"left",background:"#FFFFFF",border:"1px solid #7C5CFC33",borderRadius:12,padding:20}}>
+              <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
+              <MDRenderer text={prepNotes}/>
+              <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
+            </div>
+          )}
+        </div>
+      )}
+
+            {/* ══ RECORD ══ */}
+      {screen===SCREENS.RECORD&&(
+        <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:2000,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 24px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <CompassLogo size={22}/>
+              <div style={{width:1,height:20,background:"#EDE5D8"}}/>
+              <div>
+                <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600,letterSpacing:"0.5px",textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</span>
+                <span style={{fontSize:12,color:"#9B9098",margin:"0 6px"}}>·</span>
+                <span style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{caseInfo.employee||"Unknown"}</span>
+                <span style={{fontSize:12,color:"#9B9098",margin:"0 6px"}}>·</span>
+                <span style={{fontSize:12,color:"#9B9098"}}>{caseInfo.date}</span>
+              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {isListening&&(
+                <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#C84B2F",background:"#FEF0EB",padding:"4px 10px",borderRadius:20}}>
+                  <span className="pu" style={{width:6,height:6,borderRadius:"50%",background:"#C84B2F",display:"inline-block"}}></span>
+                  Live
+                </div>
+              )}
+              {meetingStartTime&&<span style={{fontSize:12,color:"#9B9098",fontFamily:"monospace"}}>{meetingStartTime}</span>}
+              <button
+                onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}}
+                disabled={aiProcessing||(transcript.length===0&&!inputText.trim())}
+                style={{background:aiProcessing?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"8px 20px",fontSize:13,color:aiProcessing?"#9B9098":"#FFFFFF",fontWeight:600,cursor:aiProcessing?"not-allowed":"pointer",transition:"all 0.15s",boxShadow:aiProcessing?"none":"0 2px 8px rgba(124,92,252,0.25)"}}>
+                {aiProcessing?"Processing...":"End meeting →"}
+              </button>
+            </div>
+          </div>
+
+          {/* Main area */}
+          <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+
+            {/* Notepad */}
+            <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+              <textarea
+                ref={inputRef}
+                value={inputText}
+                style={{flex:1,background:"transparent",border:"none",padding:"40px 48px",fontSize:16,lineHeight:1.9,outline:"none",color:"#1A1535",resize:"none",fontFamily:"DM Sans,system-ui,sans-serif",letterSpacing:"0.1px"}}
+                onChange={e=>{
+                  const val = e.target.value;
+                  if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
+                  if(val.endsWith(String.fromCharCode(10))) {
+                    const ls=val.split(String.fromCharCode(10)).filter(l=>l.trim());
+                    ls.forEach(line=>addUtterance(line.trim()));
+                    setInputText("");
+                    updateLiveContext(val);
+                  } else {
+                    setInputText(val);
+                  }
+                }}
+                placeholder={"Type or speak your meeting notes here..." + String.fromCharCode(10) + String.fromCharCode(10) + "Just capture what is being said — Compass will organise everything when you end the meeting."}
+              />
+
+              {/* Bottom toolbar */}
+              <div style={{padding:"12px 48px",borderTop:"1px solid #EDE5D8",display:"flex",alignItems:"center",gap:8,background:"#FFFFFF",flexShrink:0}}>
+                <button onClick={isListening?stopSpeech:startSpeech}
+                  style={{display:"flex",alignItems:"center",gap:6,background:isListening?"#FEF0EB":"#F5F1EA",border:"1px solid",borderColor:isListening?"#C84B2F44":"#E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:isListening?"#C84B2F":"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:isListening?"#C84B2F":"#9B9098",display:"inline-block"}}></span>
+                  {isListening?"Stop mic":"Microphone"}
+                </button>
+                <button onClick={isScreenCapturing?stopScreenCapture:startScreenCapture}
+                  style={{display:"flex",alignItems:"center",gap:6,background:isScreenCapturing?"#E8F5EE":"#F5F1EA",border:"1px solid",borderColor:isScreenCapturing?"#1A7A4A44":"#E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:isScreenCapturing?"#1A7A4A":"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:isScreenCapturing?"#1A7A4A":"#9B9098",display:"inline-block"}}></span>
+                  {isScreenCapturing?"Stop":"Screen audio"}
+                </button>
+                <label style={{display:"flex",alignItems:"center",gap:6,background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  Import transcript
+                  <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
+                </label>
+                <div style={{marginLeft:"auto",fontSize:11,color:"#9B9098"}}>
+                  {transcript.length>0&&`${transcript.length} note${transcript.length!==1?"s":""} captured`}
+                </div>
+              </div>
+
+              {/* Suggested questions */}
+              {false&&(
+                <div style={{padding:"10px 48px",borderTop:"1px solid #F5F1EA",background:"#FDFAF5",flexShrink:0}}>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                    <span style={{fontSize:11,color:"#9B9098",fontWeight:500,marginRight:4,whiteSpace:"nowrap"}}>Ask next:</span>
+                    {(ACAS_TEMPLATES[meetingType?.id]||MEETING_QUESTIONS[meetingType?.id]||MEETING_QUESTIONS["informal"]).slice(0,3).map((q,i)=>(
+                      <button key={i}
+                        onClick={()=>{const nl=String.fromCharCode(10);setInputText(t=>t+(t&&t.slice(-1)!==nl?nl:"")+q.trim()+nl);}}
+                        style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",transition:"all 0.1s",whiteSpace:"nowrap",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.color="#7C5CFC";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.color="#6B6375";}}>
+                        {q.trim().length>55?q.trim().slice(0,52)+"...":q.trim()}
+                      </button>
+                    ))}
+                    {liveContextLoading&&<span style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>updating...</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right sidebar */}
+            <div style={{width:300,borderLeft:"1px solid #EDE5D8",background:"#FFFFFF",display:"flex",flexDirection:"column",flexShrink:0}}>
+
+              {/* Live context */}
+              <div style={{padding:"16px 18px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>Live context</div>
+                {liveContextLoading&&!liveContext&&(
+                  <div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Analysing conversation...</div>
+                )}
+                {liveContext?(
+                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.7}}><MDRenderer text={liveContext}/></div>
+                ):(
+                  !liveContextLoading&&<div style={{fontSize:12,color:"#C4BAB0"}}>Will update as you take notes</div>
+                )}
+              </div>
+
+              {/* Ask Compass */}
+              <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                <div style={{flex:1,overflowY:"auto",padding:"16px 18px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Ask Compass</div>
+                  {liveChatHistory.length===0&&(
+                    <div style={{fontSize:12,color:"#C4BAB0",lineHeight:1.6}}>Ask anything about the meeting or get HR advice in real time</div>
+                  )}
+                  {liveChatHistory.map((m,i)=>(
+                    <div key={i} style={{marginBottom:12}}>
+                      <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
+                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
+                    </div>
+                  ))}
+                  {liveChatProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
+                </div>
+                <div style={{padding:"12px 14px",borderTop:"1px solid #EDE5D8",flexShrink:0}}>
+                  <div style={{display:"flex",gap:8,background:"#F5F1EA",borderRadius:8,padding:"8px 12px",alignItems:"center"}}>
+                    <input value={liveChatInput} onChange={e=>setLiveChatInput(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&sendLiveChat()}
+                      placeholder="Ask about this meeting..."
+                      style={{flex:1,background:"none",border:"none",outline:"none",fontSize:12,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+                    <button onClick={sendLiveChat} disabled={liveChatProcessing||!liveChatInput.trim()}
+                      style={{background:"#7C5CFC",border:"none",borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:liveChatProcessing||!liveChatInput.trim()?0.4:1,flexShrink:0}}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M6 10V2M6 2L3 5M6 2L9 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ REVIEW ══ */}
+      {screen===SCREENS.REVIEW&&(
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+
+          {/* Top action bar */}
+          <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <CompassLogo size={22}/>
+              <div style={{width:1,height:20,background:"#EDE5D8"}}/>
+              <div>
+                <span style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{caseInfo.employee}</span>
+                <span style={{fontSize:13,color:"#9B9098",margin:"0 6px"}}>—</span>
+                <span style={{fontSize:13,color:"#6B6375"}}>{meetingType?.label}</span>
+                <span style={{fontSize:12,color:"#9B9098",marginLeft:8}}>{caseInfo.date}</span>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {!isHR&&(
+                <Btn onClick={()=>{
+                  const cs=cases.find(x=>x.employeeName===caseInfo.employee?.trim());
+                  requestHrReview("record",cs?.id||null,null,reviewOutput);
+                }} variant="ghost" style={{fontSize:13}}>Request HR review</Btn>
+              )}
+              <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share</Btn>
+              <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} variant="secondary" style={{fontSize:13}}>Save to case</Btn>
+              
+              {meetingSetup.linkedCaseId?(
+                <Btn onClick={()=>{
+                  const witnessNote={name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+caseInfo.date+")",type:"Witness statement",date:caseInfo.date,addedBy:caseInfo.manager||"HR Manager",record:reviewOutput,signStatus:"pending"};
+                  saveCases(cases.map(x=>x.id===meetingSetup.linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
+                  setMeetingSetup(p=>({...p,linkedCaseId:null,linkedCaseName:null}));
+                  setScreen(SCREENS.CASES);
+                  showToast("Witness statement saved to case");
+                }} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC"}}>Save witness statement to case →</Btn>
+              ):(
+                <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>Save and go to case →</Btn>
+              )}
+            </div>
+          </div>
+
+          {/* Main layout */}
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 24px",display:"grid",gridTemplateColumns:"1fr 340px",gap:24,alignItems:"start"}}>
+
+            {/* Left — record */}
+            <div>
+              {/* Ask Compass / Edit bar */}
+              <div style={{display:"flex",gap:8,marginBottom:16}}>
+                <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter"){const q=askCompassInput;setAskCompassInput("");askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}}
+                  placeholder='Ask Compass or edit the record... e.g. "What should I do next?" or "Make section 2 more formal"'
+                  style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.08)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="none";}}/>
+                <button onClick={()=>{
+                    const q=askCompassInput;
+                    setAskCompassInput("");
+                    if(q.toLowerCase().includes("edit")||q.toLowerCase().includes("change")||q.toLowerCase().includes("make")||q.toLowerCase().includes("add")||q.toLowerCase().includes("remove")){
+                      editRecord(q);
+                    } else {
+                      askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);
+                    }
+                  }} disabled={(askCompassProcessing||editProcessing)||!askCompassInput.trim()}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:500,opacity:(askCompassProcessing||editProcessing)||!askCompassInput.trim()?0.4:1,whiteSpace:"nowrap",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  {askCompassProcessing||editProcessing?"Working...":"Ask →"}
+                </button>
+              </div>
+
+
+
+              {/* Meeting record card */}
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,boxShadow:"0 1px 3px rgba(26,21,53,0.06)",overflow:"hidden",marginBottom:16}}>
+                <div style={{padding:"12px 20px",borderBottom:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5"}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Meeting record</span>
+                  <button onClick={()=>setEditingRecord(r=>!r)}
+                    style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    {editingRecord?"Done editing":"Edit record"}
+                  </button>
+                </div>
+                <div style={{padding:"28px 32px"}}>
+                  {aiProcessing&&!reviewOutput&&(
+                    <div style={{textAlign:"center",padding:"48px 0",color:"#9B9098",fontSize:14}}>
+                      <div className="pu" style={{width:8,height:8,borderRadius:"50%",background:"#7C5CFC",display:"inline-block",marginBottom:12}}></div>
+                      <div>Compass is generating your record...</div>
+                    </div>
+                  )}
+                  {reviewOutput&&!editingRecord&&(()=>{
+                    const advisorStart = reviewOutput.indexOf("## HR Advisor");
+                    let meetingPart = advisorStart > -1 ? reviewOutput.slice(0, advisorStart) : reviewOutput;
+                    const extraSections = ["## Key Points","## Next Steps","## Summary","## Actions","## Risk","## Outcome","## Recommendations","## Notes"];
+                    extraSections.forEach(s=>{ const si=meetingPart.indexOf(s); if(si>-1) meetingPart=meetingPart.slice(0,si); });
+                    return <div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={meetingPart.trim()}/></div>;
+                  })()}
+                  {reviewOutput&&editingRecord&&(
+                    <textarea value={reviewOutput} onChange={e=>setReviewOutput(e.target.value)}
+                      style={{width:"100%",minHeight:400,background:"none",border:"none",outline:"none",fontSize:14,lineHeight:1.9,color:"#1A1535",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
+                  )}
+                  {aiError&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}
+                </div>
+                {reviewOutput&&!editingRecord&&(
+                  <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5"}}>
+                    <button onClick={()=>setShowSignModal(true)}
+                      style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"11px 24px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(124,92,252,0.2)",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                      Send for signature →
+                    </button>
+                    <span style={{fontSize:12,color:"#9B9098",marginLeft:12}}>Send the meeting record to the employee for signature</span>
+                  </div>
+                )}
+              </div>
+
+              {/* HR Advisor Notes — separate card */}
+              {reviewOutput&&reviewOutput.includes("## HR Advisor")&&(
+                <div style={{background:"#F5F3FF",border:"1px solid #D4C9F5",borderRadius:12,overflow:"hidden",marginBottom:16}}>
+                  <div style={{padding:"12px 20px",borderBottom:"1px solid #D4C9F5",background:"#EDE8FF"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass HR Advisor</div>
+                    <div style={{fontSize:11,color:"#8B7FCC",marginTop:2}}>Expert guidance based on UK employment law and ACAS</div>
+                  </div>
+                  <div style={{padding:"24px 28px"}}>
+                    <div style={{fontSize:14,lineHeight:1.9,color:"#2D2060"}}>
+                      <MDRenderer text={reviewOutput.slice(reviewOutput.indexOf("## HR Advisor"))}/>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Ask Compass response — inline below input */}
+              {askCompassHistory.length>0&&(
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:16}}>
+                  <div style={{padding:"12px 16px",borderBottom:"1px solid #EDE5D8",background:"#FDFAF5"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass response</div>
+                  </div>
+                  <div style={{padding:"16px 20px"}}>
+                    {askCompassHistory.slice(-2).map((m,i)=>(
+                      <div key={i} style={{marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#9B9098":"#7C5CFC",marginBottom:4}}>{m.role==="user"?"Your question":"Compass"}</div>
+                        <div style={{fontSize:14,color:m.role==="user"?"#6B6375":"#1A1535",lineHeight:1.8,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"12px 16px":"0",borderRadius:8,borderLeft:m.role==="assistant"?"3px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
+                      </div>
+                    ))}
+                    {askCompassProcessing&&<div style={{fontSize:13,color:"#9B9098",fontStyle:"italic"}}>Compass is thinking...</div>}
+                  </div>
+                </div>
+              )}
+
+
+            </div>
+
+            {/* Right sidebar */}
+            <div style={{display:"flex",flexDirection:"column",gap:16,position:"sticky",top:80}}>
+
+              {/* Risk score */}
+              {riskScore&&(
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Risk assessment</div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:riskScore.rating==="HIGH"?"#C84B2F":riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",flexShrink:0}}></div>
+                    <span style={{fontSize:18,fontWeight:700,color:riskScore.rating==="HIGH"?"#C84B2F":riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",fontFamily:"DM Serif Display,Georgia,serif"}}>{riskScore.rating}</span>
+                    <span style={{fontSize:12,color:"#9B9098"}}>tribunal risk</span>
+                  </div>
+                  {riskScore.summary&&<div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}><MDRenderer text={riskScore.summary}/></div>}
+                </div>
+              )}
+
+
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ LETTERS ══ */}
+      {screen===SCREENS.LETTER&&(
+        <div>
+          <div style={{borderBottom:"1px solid #E8E0D0"}}>
+            <div style={{maxWidth:1440,margin:"0 auto",padding:"0 20px",display:"flex",gap:2}}>
+              {[{id:"outcome",l:"Outcome letter"},{id:"invite",l:"Invitation"},{id:"appeal",l:"Appeal outcome"}].map(lt=>(
+                <button key={lt.id} onClick={()=>handleLetter(lt.id)}
+                  style={{background:"none",border:"none",borderBottom:"2px solid",borderBottomColor:activeLetter===lt.id?"#7C5CFC":"transparent",padding:"12px 16px",fontSize:13,color:activeLetter===lt.id?"#F2EDE4":"#666",fontWeight:activeLetter===lt.id?600:400}}>
+                  {lt.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{maxWidth:900,margin:"28px auto",padding:"0 20px"}}>
+            {aiProcessing&&!letterOutput&&<div style={{textAlign:"center",padding:50}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span><div style={{color:"#6B6375",marginTop:10}}>Drafting...</div></div>}
+            {letterOutput&&(
+              <>
+                {/* Edit toggle */}
+                <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+                  <button onClick={()=>setEditingLetter(e=>!e)}
+                    style={{background:editingLetter?"#7C5CFC":"none",border:"1px solid",borderColor:editingLetter?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
+                    {editingLetter?"Done editing":"Edit letter"}
+                  </button>
+                </div>
+                {editingLetter&&(
+                  <textarea value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
+                    style={{width:"100%",minHeight:400,background:"#FDFAF5",border:"1px solid #7C5CFC33",borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"DM Serif Display,Georgia,serif",marginBottom:12}}/>
+                )}
+                {/* Sig bar */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,color:"#6B6375"}}>E-signature:</span>
+                    {signature
+                      ?<span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>✓ {signature.type==="typed"?`"${signature.data}"`:"Drawn"}</span>
+                      :<span style={{fontSize:11,color:"#6B6880"}}>Not added — will prompt on send</span>}
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>setShowSigPad(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>{signature?"Change":"Add"}</button>
+                    {signature&&<button onClick={()=>{setSignature(null);lsSet("compass_signature",null);}} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button>}
+                  </div>
+                </div>
+
+                <div style={{background:"#FDFAF5",borderRadius:12,padding:"36px 44px",marginBottom:16,textAlign:"left"}}>
+                  <MDRenderer text={letterOutput} light/>
+                  {signature&&(
+                    <div style={{marginTop:20,paddingTop:18,borderTop:"1px solid #E0DDD8"}}>
+                      <div style={{fontSize:10,color:"#999",marginBottom:6}}>Signed:</div>
+                      {signature.type==="typed"
+                        ?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:30,color:"#FFFFFF"}}>{signature.data}</div>
+                        :<img src={signature.data} alt="Sig" style={{maxHeight:55,maxWidth:180}}/>}
+                      <div style={{fontSize:11,color:"#6B6375",marginTop:5}}>{caseInfo.manager||"HR Manager"} | {new Date().toLocaleDateString("en-GB")}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
+                  <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating}>Send via Gmail</Btn>
+                  <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating}>Send via Outlook</Btn>
+                  <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)}>Copy text</Btn>
+                  <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
+                  <Btn variant="ghost" onClick={()=>setScreen(SCREENS.REVIEW)}>← Back</Btn>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ DASHBOARD ══ */}
+      {screen===SCREENS.DASHBOARD&&(()=>{
+        const allM = cases.flatMap(c=>c.meetings.map(m=>({...m,employeeName:c.employeeName})));
+        const open = cases.filter(c=>!c.meetings[c.meetings.length-1]?.record?.toLowerCase().includes("case closed"));
+        const rC={HIGH:0,MEDIUM:0,LOW:0};
+        allM.forEach(m=>{ if(m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN") rC[m.riskScore.rating]=(rC[m.riskScore.rating]||0)+1; });
+        const byType = MEETING_TYPES.map(t=>({label:t.label,count:allM.filter(m=>m.type===t.label).length})).filter(t=>t.count>0);
+        const recent = [...allM].sort((a,b)=>new Date(b.savedAt)-new Date(a.savedAt)).slice(0,8);
+        const rColors={HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC"};
+
+        return(
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
+            <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Dashboard</h2>
+            <p style={{fontSize:13,color:"#6B6375",margin:"0 0 28px"}}>Overview of all HR cases and activity</p>
+
+            {cases.length===0&&(
+              <Card style={{textAlign:"center",padding:"50px 20px"}}>
+                <div style={{fontSize:32,marginBottom:12}}>⬛</div>
+                <div style={{fontSize:15,color:"#6B6375",marginBottom:6}}>No data yet</div>
+                <div style={{fontSize:12,color:"#5A5570"}}>Complete your first meeting and save it to a case file to see your dashboard.</div>
+              </Card>
+            )}
+
+            {cases.length>0&&(
+              <>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+                  {[{l:"Total cases",v:cases.length,c:"#7C5CFC"},{l:"Open cases",v:open.length,c:"#7C5CFC"},{l:"Total meetings",v:allM.length,c:"#D4882A"},{l:"High risk",v:rC.HIGH||0,c:"#E8622A"}].map(s=>(
+                    <Card key={s.l}>
+                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Inter,sans-serif"}}>{s.v}</div>
+                      <div style={{fontSize:11,color:"#6B6880",marginTop:3}}>{s.l}</div>
+                    </Card>
+                  ))}
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                  <Card>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Risk distribution</div>
+                    {Object.entries(rC).map(([r,c])=>{
+                      const total=Object.values(rC).reduce((a,b)=>a+b,0)||1;
+                      return c>0?(
+                        <div key={r} style={{marginBottom:10}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                            <span style={{fontSize:11,color:rColors[r],fontWeight:600}}>{r}</span>
+                            <span style={{fontSize:11,color:"#6B6880"}}>{c}</span>
+                          </div>
+                          <div style={{background:"#FDFAF5",borderRadius:3,height:5}}>
+                            <div style={{background:rColors[r],borderRadius:3,height:5,width:`${Math.round(c/total*100)}%`}}/>
+                          </div>
+                        </div>
+                      ):null;
+                    })}
+                    {Object.values(rC).every(v=>v===0)&&<div style={{fontSize:11,color:"#5A5570"}}>No risk scores yet</div>}
+                  </Card>
+                  <Card>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Meetings by type</div>
+                    {byType.length===0&&<div style={{fontSize:11,color:"#5A5570"}}>No meetings yet</div>}
+                    {byType.map(t=>(
+                      <div key={t.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+                        <span style={{fontSize:11,color:"#3D3560"}}>{t.label}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{background:"#FDFAF5",borderRadius:3,height:4,width:70}}>
+                            <div style={{background:"#7C5CFC",borderRadius:3,height:4,width:(t.count/Math.max(...byType.map(x=>x.count))*70)+"px"}}/>
+                          </div>
+                          <span style={{fontSize:11,color:"#7C5CFC",fontWeight:600,width:14,textAlign:"right"}}>{t.count}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </Card>
+                </div>
+
+                <Card style={{marginBottom:16}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Recent meetings</div>
+                  {recent.map(m=>(
+                    <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
+                      <div>
+                        <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:2}}>{m.employeeName}</div>
+                        <div style={{fontSize:10,color:"#5A5570"}}>{m.type} · {m.date}</div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<Badge color={rColors[m.riskScore.rating]}>{m.riskScore.rating}</Badge>}
+                        <Btn variant="ghost" onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"3px 10px",fontSize:10}}>View</Btn>
+                      </div>
+                    </div>
+                  ))}
+                </Card>
+
+                <Card>
+                  <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Active cases</div>
+                  {open.length===0&&<div style={{fontSize:11,color:"#5A5570"}}>No open cases</div>}
+                  {open.map(c=>{
+                    const last=c.meetings[c.meetings.length-1];
+                    const high=c.meetings.some(m=>m.riskScore?.rating==="HIGH");
+                    return(
+                      <div key={c.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                            <span style={{fontSize:14,color:"#1A1535",fontWeight:600}}>{c.employeeName}</span>
+                            {high&&<Badge color="#E8622A">HIGH RISK</Badge>}
+                          </div>
+                          <div style={{fontSize:10,color:"#5A5570"}}>{c.meetings.length} meeting{c.meetings.length!==1?"s":""} · Last: {last?.type} on {last?.date}</div>
+                        </div>
+                        <Btn onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"5px 14px",fontSize:11}}>Open →</Btn>
+                      </div>
+                    );
+                  })}
+                </Card>
+              </>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ══ CASES ══ */}
+      {screen===SCREENS.CASES&&(
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:0,fontWeight:400}}>Cases</h2>
+              <p style={{fontSize:13,color:"#9B9098",margin:"2px 0 0"}}>{cases.length} case{cases.length!==1?"s":""}</p>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});setScreen(SCREENS.INTAKE);}}
+                style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 20px",fontSize:13,color:"#1A1535",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                + New case
+              </button>
+              <button onClick={()=>setScreen(SCREENS.HOME+"_meeting")}
+                style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"10px 20px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                + New meeting
+              </button>
+            </div>
+          </div>
+          <div style={{maxWidth:900,margin:"0 auto",padding:"28px 24px"}}>
+            {cases.length===0&&(
+              <div style={{textAlign:"center",padding:"80px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
+                <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",marginBottom:8}}>No cases yet</div>
+                <div style={{fontSize:14,color:"#9B9098",marginBottom:24}}>Create a case to start managing HR processes</div>
+                <button onClick={()=>setScreen(SCREENS.INTAKE)}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"12px 28px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  Create first case →
+                </button>
+              </div>
+            )}
+            {cases.map(cs=>{
+              const stage = getCaseStage(cs);
+              const next = getNextStep(cs);
+              const highRisk = (cs.meetings||[]).some(m=>m.riskScore?.rating==="HIGH");
+              return(
+                <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                  style={{background:"#FFFFFF",border:"1px solid",borderColor:highRisk?"#F5C4C4":"#E8E0D0",borderRadius:12,padding:"16px 20px",marginBottom:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,transition:"all 0.15s",boxShadow:"0 1px 3px rgba(26,21,53,0.04)"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=highRisk?"#F5C4C4":"#E8E0D0";e.currentTarget.style.background="#FFFFFF";}}>
+                  <div style={{display:"flex",alignItems:"center",gap:14,flex:1,minWidth:0}}>
+                    <div style={{width:42,height:42,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{fontSize:16,fontWeight:600,color:"#7C5CFC"}}>{(cs.employeeName||"?")[0].toUpperCase()}</span>
+                    </div>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:15,fontWeight:600,color:"#1A1535",marginBottom:3}}>{cs.employeeName}</div>
+                      <div style={{fontSize:12,color:"#9B9098",display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {cs.caseType&&<span style={{textTransform:"capitalize"}}>{cs.caseType}</span>}
+                        <span>·</span>
+                        <span>{(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</span>
+                        {cs.dateReceived&&<><span>·</span><span>Opened {fmtDate(cs.dateReceived)}</span></>}
+                        {cs.urgent&&<span style={{color:"#C84B2F",fontWeight:600}}>· URGENT</span>}
+                      </div>
+                      {next&&stage!=="closed"&&(
+                        <div style={{fontSize:12,color:"#7C5CFC",fontWeight:500,marginTop:4}}>Next: {next.label}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                    {highRisk&&<span style={{fontSize:11,fontWeight:600,color:"#C84B2F",background:"#FEF0EB",borderRadius:20,padding:"3px 10px"}}>High risk</span>}
+                    <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
+                    <span style={{color:"#C4BAB0",fontSize:18}}>›</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {screen===SCREENS.SEARCH&&(
+        <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
+          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
+          <input
+            autoFocus
+            placeholder="Search cases, records, letters, transcripts..."
+            value={searchQuery}
+            onChange={e=>{setSearchQuery(e.target.value);runSearch(e.target.value);}}
+            style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 18px",fontSize:15,color:"#1A1535",outline:"none",marginBottom:24,boxSizing:"border-box"}} />
+
+          {searchQuery&&searchResults.length===0&&(
+            <div style={{textAlign:"center",padding:"40px 20px",color:"#5A5570",fontSize:13}}>No results found for "{searchQuery}"</div>
+          )}
+
+          {searchResults.length>0&&(
+            <div>
+              <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>{searchResults.length} result{searchResults.length!==1?"s":""}</div>
+              {searchResults.map((r,i)=>{
+                const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#4A6FA5",transcript:"#888"};
+                return(
+                  <button key={i} onClick={()=>{
+                    setScreen(SCREENS.CASES);
+                    setExpandedCases(e=>({...e,[r.caseId]:true}));
+                    if(r.meetingId){
+                      const cs = cases.find(c=>c.id===r.caseId);
+                      const m = cs?.meetings.find(m=>m.id===r.meetingId);
+                      if(m) { setViewMeeting({...m,employeeName:cs.employeeName,caseId:cs.id}); setViewCaseId(cs.id); }
+                    }
+                  }}
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.15s"}}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
+                    onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                    <div style={{width:40,height:40,borderRadius:6,background:typeColors[r.type]+"22",border:`1px solid ${typeColors[r.type]}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{fontSize:9,fontWeight:700,color:typeColors[r.type],letterSpacing:0.5,textTransform:"uppercase"}}>{r.type}</span>
+                    </div>
+                    <div>
+                      <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:2}}>{r.title}</div>
+                      <div style={{fontSize:11,color:"#6B6880"}}>{r.sub}</div>
+                      {r.type==="transcript"&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4,fontStyle:"italic"}}>Found in transcript</div>}
+                      {r.type==="record"&&<div style={{fontSize:11,color:"#B87520",marginTop:4}}>Found in meeting record</div>}
+                      {r.type==="letter"&&<div style={{fontSize:11,color:"#1A7A4A",marginTop:4}}>Found in letter</div>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {!searchQuery&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <Card style={{background:"#F5F1EA"}}>
+                <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Recent cases</div>
+                {cases.slice(-5).reverse().map(c=>(
+                  <div key={c.id} onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",cursor:"pointer",fontSize:12,color:"#3D3560"}}>{c.employeeName}</div>
+                ))}
+                {cases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No cases yet</div>}
+              </Card>
+              <Card style={{background:"#F5F1EA"}}>
+                <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Overdue actions</div>
+                {dueSoon.filter(d=>d.overdue).slice(0,5).map((d,i)=>(
+                  <div key={i} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
+                    <div style={{color:"#C84B2F",marginBottom:1}}>{d.caseName}</div>
+                    <div style={{color:"#6B6880",fontSize:10}}>{d.step} · {Math.abs(d.daysLeft)}d overdue</div>
+                  </div>
+                ))}
+                {dueSoon.filter(d=>d.overdue).length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No overdue actions</div>}
+              </Card>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ DEVELOP ══ */}
+      {screen===SCREENS.DEVELOP&&devSession&&(()=>{
+        const s = devSession;
+        const cfg = s.config;
+        const isAppraisal = s.type==="Appraisal";
+        const green = "#7C5CFC";
+        const stepLabels = { self:"Employee self-assessment", manager:"Manager assessment", summary:"Review & summary", output:"Outcome document" };
+
+        return(
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"28px 20px"}}>
+            {/* Step indicator */}
+            <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:28}}>
+              {Object.entries(stepLabels).map(([k,l],i,arr)=>(
+                <div key={k} style={{display:"flex",alignItems:"center",flex:1}}>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",border:"2px solid",
+                      borderColor:devStep===k?"#7C5CFC":["self","manager","summary","output"].indexOf(devStep)>i?"#7C5CFC44":"#E8E0D0",
+                      background:devStep===k?"#7C5CFC22":"none",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:4}}>
+                      {["self","manager","summary","output"].indexOf(devStep)>i
+                        ?<span style={{color:"#7C5CFC",fontSize:14}}>✓</span>
+                        :<span style={{fontSize:11,color:devStep===k?"#7C5CFC":"#555",fontWeight:600}}>{i+1}</span>}
+                    </div>
+                    <div style={{fontSize:10,color:devStep===k?"#7C5CFC":"#444",fontWeight:devStep===k?600:400,textAlign:"center"}}>{l}</div>
+                  </div>
+                  {i<arr.length-1&&<div style={{width:40,height:1,background:"#F5F1EA",flexShrink:0}}/>}
+                </div>
+              ))}
+            </div>
+
+            {/* ── STEP 1: Case info + Employee self-assessment ── */}
+            {devStep==="self"&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+                <Card>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600,marginBottom:4}}>{s.type}</div>
+                  <p style={{fontSize:12,color:"#6B6880",margin:"0 0 18px"}}>Fill in the employee details, then the employee completes their self-assessment.</p>
+                  {[
+                    {k:"employee",l:"Employee name",req:true,ph:"e.g. Sarah Johnson"},
+                    {k:"role",l:"Job title",ph:"e.g. Marketing Manager"},
+                    {k:"department",l:"Department",ph:"e.g. Marketing"},
+                    {k:"email",l:"Employee email",ph:"sarah@company.com",type:"email"},
+                    {k:"manager",l:"Manager name",ph:"Your name"},
+                    {k:"date",l:"Meeting date",type:"date"},
+                    {k:"reviewPeriod",l:"Review period",ph:"e.g. Jan – Dec 2024"},
+                  ].map(f=>(
+                    <div key={f.k} style={{marginBottom:12}}>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.l}{f.req&&<span style={{color:"#C84B2F"}}> *</span>}</label>
+                      {f.type==="date"
+                        ?<DateInput value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))} />
+                        :<input type={f.type||"text"} placeholder={f.ph} value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))}
+                          style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535"}} />}
+                    </div>
+                  ))}
+                </Card>
+
+                <Card>
+                  <div style={{fontSize:12,fontWeight:600,color:"#7C5CFC",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>Employee self-assessment</div>
+                  <p style={{fontSize:11,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>The employee fills this in before the meeting. Their answers will sit alongside the manager assessment.</p>
+                  {cfg?.selfAssessmentPrompts?.map((q,i)=>(
+                    <div key={i} style={{marginBottom:14}}>
+                      <label style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                      <textarea value={s.selfAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,selfAssessment:{...ds.selfAssessment,[i]:e.target.value}}))}
+                        placeholder="Employee answer..." rows={2}
+                        style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
+                    </div>
+                  ))}
+                  <Btn onClick={()=>setDevStep("manager")} disabled={!s.caseInfo.employee.trim()} style={{marginTop:4,background:"#7C5CFC",border:"none"}}>
+                    Continue to manager assessment →
+                  </Btn>
+                </Card>
+              </div>
+            )}
+
+            {/* ── STEP 2: Manager assessment + Objectives ── */}
+            {devStep==="manager"&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+                <Card>
+                  <div style={{fontSize:12,fontWeight:600,color:"#7C5CFC",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>Manager assessment</div>
+                  <p style={{fontSize:11,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>Complete your assessment of {s.caseInfo.employee||"the employee"}. Be specific and evidence-based.</p>
+
+                  {isAppraisal&&(
+                    <div style={{marginBottom:16}}>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Overall rating</label>
+                      <div style={{display:"flex",gap:8}}>
+                        {["1","2","3","4","5"].map(r=>(
+                          <button key={r} onClick={()=>setDevSession(ds=>({...ds,rating:r}))}
+                            style={{flex:1,padding:"8px 4px",borderRadius:6,border:"1px solid",borderColor:s.rating===r?"#7C5CFC":"#E8E0D0",
+                              background:s.rating===r?"#7C5CFC22":"#FDFAF5",color:s.rating===r?"#A98FFF":"#555",fontSize:13,fontWeight:s.rating===r?700:400,cursor:"pointer"}}>
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{fontSize:10,color:"#5A5570",marginTop:6}}>1=Below expectations · 3=Meets · 5=Outstanding</div>
+                    </div>
+                  )}
+
+                  {cfg?.managerPrompts?.map((q,i)=>(
+                    <div key={i} style={{marginBottom:14}}>
+                      <label style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                      <textarea value={s.managerAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,managerAssessment:{...ds.managerAssessment,[i]:e.target.value}}))}
+                        placeholder="Your assessment..." rows={2}
+                        style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
+                    </div>
+                  ))}
+
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Agreed outcome</label>
+                    <select value={s.outcome} onChange={e=>setDevSession(ds=>({...ds,outcome:e.target.value}))}
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
+                      <option value="">Select outcome...</option>
+                      {cfg?.outcomeOptions?.map(o=><option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+
+                  <div style={{marginBottom:16}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Development plan / actions</label>
+                    <textarea value={s.devPlan||""} onChange={e=>setDevSession(ds=>({...ds,devPlan:e.target.value}))}
+                      placeholder="Training agreed, coaching, support, resources..." rows={3}
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
+                  </div>
+
+                  <div style={{display:"flex",gap:8}}>
+                    <Btn onClick={()=>setDevStep("summary")} style={{background:"#7C5CFC",border:"none"}}>Continue →</Btn>
+                    <Btn variant="ghost" onClick={()=>setDevStep("self")}>← Back</Btn>
+                  </div>
+                </Card>
+
+                {/* Objectives panel */}
+                <Card style={{background:"#F5F1EA"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#7C5CFC",textTransform:"uppercase",letterSpacing:0.5}}>Objectives &amp; ratings</div>
+                    <Btn onClick={()=>generateSmartObjectives(s.caseInfo.reviewPeriod)} disabled={devAiProcessing} style={{padding:"4px 12px",fontSize:11,background:"#7C5CFC",border:"none"}}>
+                      {devAiProcessing?"...":"AI suggest"}
+                    </Btn>
+                  </div>
+                  {s.objectives.map((obj,i)=>(
+                    <div key={i} style={{background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:"12px 14px",marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{obj.label}</div>
+                          {obj.desc&&<div style={{fontSize:11,color:"#6B6880"}}>{obj.desc}</div>}
+                          {obj.measure&&<div style={{fontSize:10,color:"#5A5570",marginTop:2}}>Measure: {obj.measure}</div>}
+                        </div>
+                        <button onClick={()=>setDevSession(ds=>({...ds,objectives:ds.objectives.filter((_,j)=>j!==i)}))}
+                          style={{background:"none",border:"none",color:"#6B6880",fontSize:14,cursor:"pointer",marginLeft:8}}>✕</button>
+                      </div>
+                      {/* Rating */}
+                      <div style={{display:"flex",gap:4,marginBottom:8}}>
+                        {[1,2,3,4,5].map(r=>(
+                          <button key={r} onClick={()=>setDevSession(ds=>({...ds,objectives:ds.objectives.map((x,j)=>j===i?{...x,rating:r}:x)}))}
+                            style={{width:28,height:28,borderRadius:4,border:"1px solid",borderColor:obj.rating>=r?"#7C5CFC":"#E8E0D0",background:obj.rating>=r?"#7C5CFC22":"none",color:obj.rating>=r?"#7C5CFC":"#555",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                            {r}
+                          </button>
+                        ))}
+                        <span style={{fontSize:10,color:"#5A5570",lineHeight:"28px",marginLeft:6}}>{["","Below","Developing","Meeting","Exceeding","Exceptional"][obj.rating]}</span>
+                      </div>
+                      <input value={obj.note||""} onChange={e=>setDevSession(ds=>({...ds,objectives:ds.objectives.map((x,j)=>j===i?{...x,note:e.target.value}:x)}))}
+                        placeholder="Notes on progress..."
+                        style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"6px 10px",fontSize:11,outline:"none",color:"#1A1535"}} />
+                    </div>
+                  ))}
+                  <button onClick={()=>setDevSession(ds=>({...ds,objectives:[...ds.objectives,{label:"New objective",desc:"",rating:3,note:""}]}))}
+                    style={{width:"100%",background:"none",border:"1px dashed #E8E0D0",borderRadius:7,padding:"9px",fontSize:12,color:"#6B6880",cursor:"pointer"}}>
+                    + Add objective
+                  </button>
+
+                  {/* Self-assessment reference */}
+                  {Object.keys(s.selfAssessment).length>0&&(
+                    <details style={{marginTop:14}}>
+                      <summary style={{fontSize:11,color:"#7C5CFC",cursor:"pointer",fontWeight:600}}>View employee self-assessment</summary>
+                      <div style={{marginTop:10}}>
+                        {cfg?.selfAssessmentPrompts?.map((q,i)=>s.selfAssessment[i]?(
+                          <div key={i} style={{marginBottom:10}}>
+                            <div style={{fontSize:10,color:"#6B6880",marginBottom:3}}>{q}</div>
+                            <div style={{fontSize:12,color:"#3D3560",background:"#FDFAF5",borderRadius:5,padding:"7px 10px"}}>{s.selfAssessment[i]}</div>
+                          </div>
+                        ):null)}
+                      </div>
+                    </details>
+                  )}
+                </Card>
+              </div>
+            )}
+
+            {/* ── STEP 3: Summary ── */}
+            {devStep==="summary"&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20}}>
+                <Card>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>{s.type} — Summary</div>
+                    <Btn onClick={generateDevSummary} disabled={devAiProcessing} style={{background:"#7C5CFC",border:"none",padding:"7px 16px",fontSize:12}}>
+                      {devAiProcessing?"Generating...":"Generate AI summary"}
+                    </Btn>
+                  </div>
+                  {devAiProcessing&&!devSummary&&<div style={{textAlign:"center",padding:32}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span><div style={{color:"#6B6880",marginTop:10,fontSize:12}}>Building your summary...</div></div>}
+                  {devSummary&&<MDRenderer text={devSummary}/>}
+                  {!devSummary&&!devAiProcessing&&(
+                    <div style={{background:"#FDFAF5",borderRadius:8,padding:20,textAlign:"center"}}>
+                      <div style={{fontSize:13,color:"#6B6880",marginBottom:6}}>Click "Generate AI summary" to produce a structured meeting record</div>
+                      <div style={{fontSize:11,color:"#5A5570"}}>Combines self-assessment, manager feedback, and objectives into a professional document</div>
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:8,marginTop:20,flexWrap:"wrap"}}>
+                    {devSummary&&<Btn onClick={()=>setDevStep("output")} style={{background:"#7C5CFC",border:"none"}}>Generate outcome letter →</Btn>}
+                    <Btn style={{background:"#7C5CFC",borderColor:"#7C5CFC"}} onClick={()=>{saveDevMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case file</Btn>
+                    <Btn variant="ghost" onClick={()=>setDevStep("manager")}>← Back</Btn>
+                  </div>
+                </Card>
+
+                {/* Side panel: combined view */}
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <Card style={{background:"#F5F1EA"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:12}}>OBJECTIVES SUMMARY</div>
+                    {s.objectives.map((obj,i)=>{
+                      const rColors=["","#7C5CFC","#7C5CFC","#7C5CFC","#7C5CFC","#7C5CFC"]; const _ignore=["","#E8622A","#D4882A","#888","#7C5CFC","#7C5CFC"];
+                      return(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1a1a1a"}}>
+                          <span style={{fontSize:12,color:"#3D3560"}}>{obj.label}</span>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            {[1,2,3,4,5].map(r=><div key={r} style={{width:8,height:8,borderRadius:"50%",background:obj.rating>=r?rColors[obj.rating]:"#E8E0D0"}}/>)}
+                            <span style={{fontSize:10,color:rColors[obj.rating],marginLeft:4,fontWeight:600}}>{obj.rating}/5</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Card>
+                  <Card style={{background:"#F5F1EA"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>OUTCOME</div>
+                    <div style={{fontSize:13,color:s.outcome?"#F2EDE4":"#555"}}>{s.outcome||"Not set"}</div>
+                    {s.rating&&<div style={{fontSize:12,color:"#7C5CFC",marginTop:6}}>Rating: {s.rating}/5</div>}
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* ── STEP 4: Output letter ── */}
+            {devStep==="output"&&(
+              <div style={{maxWidth:900,margin:"0 auto"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>Outcome document</div>
+                  <Btn onClick={generateDevLetter} disabled={devAiProcessing} style={{background:"#7C5CFC",border:"none"}}>
+                    {devAiProcessing?"Generating...":"Generate letter"}
+                  </Btn>
+                </div>
+
+                {devAiProcessing&&!devLetter&&<div style={{textAlign:"center",padding:40}}><span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span></div>}
+                {devLetter&&(
+                  <>
+                    <div style={{background:"#FDFAF5",borderRadius:12,padding:"36px 44px",marginBottom:16,textAlign:"left"}}>
+                      <MDRenderer text={devLetter} light/>
+                    </div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      <Btn onClick={()=>navigator.clipboard.writeText(devLetter)} style={{background:"#7C5CFC",border:"none"}}>Copy letter</Btn>
+                      <Btn variant="blue" onClick={()=>{saveDevMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
+                      <Btn variant="ghost" onClick={()=>setDevStep("summary")}>← Back</Btn>
+                    </div>
+                  </>
+                )}
+                {!devLetter&&!devAiProcessing&&(
+                  <Card style={{textAlign:"center",padding:"32px"}}>
+                    <div style={{fontSize:13,color:"#6B6880",marginBottom:8}}>Click "Generate letter" to draft the outcome document</div>
+                    <div style={{fontSize:11,color:"#5A5570"}}>Available: {Object.values(DEV_TEMPLATES.filter(t=>t.cat.toLowerCase().includes(s.type.split(" ")[0].toLowerCase()))).map(t=>t.name).join(", ")||"outcome letter"}</div>
+                  </Card>
+                )}
+
+                {/* Template alternatives */}
+                <div style={{marginTop:20}}>
+                  <div style={{fontSize:10,color:"#5A5570",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Or use a template</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+                    {DEV_TEMPLATES.map(t=>(
+                      <button key={t.id} onClick={()=>{navigator.clipboard.writeText(t.body);}}
+                        style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px",textAlign:"left",cursor:"pointer"}}
+                        onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
+                        onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                        <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,marginBottom:3}}>{t.cat}</div>
+                        <div style={{fontSize:12,color:"#1A1535"}}>{t.name}</div>
+                        <div style={{fontSize:10,color:"#6B6880",marginTop:3}}>Click to copy →</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ══ NEW STARTER ONBOARDING ══ */}
+      {screen===SCREENS.NEWSTARTER&&(()=>{
+        const phases = activeStarter
+          ? [...new Set(activeStarter.tasks.map(t=>t.phaseLabel))].map(pl=>({
+              label:pl,
+              tasks:activeStarter.tasks.filter(t=>t.phaseLabel===pl)
+            }))
+          : [];
+        const completedCount = activeStarter?.tasks.filter(t=>t.done).length || 0;
+        const totalCount = activeStarter?.tasks.length || 0;
+        const pct = totalCount ? Math.round(completedCount/totalCount*100) : 0;
+        const ownerColors = {"HR":"#7C5CFC","Line Manager":"#D4882A","IT":"#4A6FA5","Facilities":"#4A7C6F","New Starter":"#888"};
+
+        return(
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
+              <div>
+                <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>New starter onboarding</h2>
+                <p style={{fontSize:13,color:"#6B6880",margin:0}}>AI-customised induction journeys. Track every task from offer accepted to end of probation.</p>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {activeStarter&&<Btn variant="ghost" onClick={()=>{setActiveStarter(null);setStarterView("list");}}>← All starters</Btn>}
+                {!activeStarter&&<Btn onClick={()=>setStarterView(starterView==="list"?"new":"list")}>{starterView==="list"?"+ Add starter":"Cancel"}</Btn>}
+              </div>
+            </div>
+
+            {/* Add new starter form */}
+            {starterView==="new"&&!activeStarter&&(
+              <Card style={{marginBottom:24}}>
+                <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 16px",fontWeight:600}}>New starter details</h3>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+                  {[
+                    {k:"name",l:"Full name",req:true,ph:"e.g. James Wilson"},
+                    {k:"role",l:"Job title",ph:"e.g. Marketing Executive"},
+                    {k:"department",l:"Department",ph:"e.g. Marketing"},
+                    {k:"manager",l:"Line manager",ph:"e.g. Sarah Johnson"},
+                    {k:"email",l:"Email",ph:"james@company.com",type:"email"},
+                    {k:"startDate",l:"Start date",req:true,type:"date"},
+                  ].map(f=>(
+                    <div key={f.k}>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>{f.l}{f.req&&<span style={{color:"#C84B2F"}}> *</span>}</label>
+                      {f.type==="date"
+                        ?<DateInput value={newStarterForm[f.k]||""} onChange={e=>setNewStarterForm(p=>({...p,[f.k]:e.target.value}))} />
+                        :<input type={f.type||"text"} placeholder={f.ph} value={newStarterForm[f.k]||""} onChange={e=>setNewStarterForm(p=>({...p,[f.k]:e.target.value}))}
+                          style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />}
+                    </div>
+                  ))}
+                </div>
+                <div style={{marginBottom:16}}>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Onboarding template</label>
+                  <select value={newStarterForm.templateId} onChange={e=>setNewStarterForm(p=>({...p,templateId:e.target.value}))}
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
+                    {starterTemplates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <div style={{display:"flex",gap:10}}>
+                  <Btn onClick={createStarterInstance} disabled={!newStarterForm.name||!newStarterForm.startDate}>Create onboarding journey</Btn>
+                  <Btn variant="ghost" onClick={()=>setStarterView("list")}>Cancel</Btn>
+                </div>
+              </Card>
+            )}
+
+            {/* Starter list */}
+            {starterView==="list"&&!activeStarter&&(
+              <>
+                {starterInstances.length===0&&(
+                  <Card style={{textAlign:"center",padding:"50px 20px"}}>
+                    <div style={{fontSize:32,marginBottom:12,color:"#E8E0D0"}}>—</div>
+                    <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>No starters yet</div>
+                    <div style={{fontSize:12,color:"#5A5570",marginBottom:20}}>Create an onboarding journey for each new hire.</div>
+                    <Btn onClick={()=>setStarterView("new")}>+ Add first starter</Btn>
+                  </Card>
+                )}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:12}}>
+                  {starterInstances.map(s=>{
+                    const done = s.tasks.filter(t=>t.done).length;
+                    const total = s.tasks.length;
+                    const pct = total ? Math.round(done/total*100) : 0;
+                    const overdueTasks = s.tasks.filter(t=>!t.done&&t.dueDate&&new Date(t.dueDate.split("/").reverse().join("-"))<new Date());
+                    return(
+                      <button key={s.id} onClick={()=>{setActiveStarter(s);setStarterView("instance");}}
+                        style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"18px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
+                        onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                          <div>
+                            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",fontWeight:600,marginBottom:2}}>{s.name}</div>
+                            <div style={{fontSize:11,color:"#6B6880"}}>{s.role}{s.department?" · "+s.department:""}</div>
+                          </div>
+                          {overdueTasks.length>0&&<Badge color="#E8622A">{overdueTasks.length} overdue</Badge>}
+                        </div>
+                        <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>
+                          Start: {new Date(s.startDate).toLocaleDateString("en-GB")} · Manager: {s.manager||"Not set"}
+                        </div>
+                        <div style={{background:"#FDFAF5",borderRadius:4,height:4,marginBottom:6}}>
+                          <div style={{background:"#7C5CFC",borderRadius:4,height:4,width:pct+"%",transition:"width 0.3s"}}/>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880"}}>
+                          <span>{done}/{total} tasks complete</span>
+                          <span style={{color:pct===100?"#7C5CFC":"#555"}}>{pct}%</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Active starter journey */}
+            {activeStarter&&(
+              <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:20,alignItems:"start"}}>
+                {/* Sidebar */}
+                <div>
+                  <Card style={{marginBottom:12}}>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",fontWeight:600,marginBottom:4}}>{activeStarter.name}</div>
+                    <div style={{fontSize:12,color:"#6B6880",marginBottom:12}}>{activeStarter.role}{activeStarter.department?" · "+activeStarter.department:""}</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:3}}>Start date: {new Date(activeStarter.startDate).toLocaleDateString("en-GB")}</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>Manager: {activeStarter.manager||"Not set"}</div>
+                    <div style={{background:"#FDFAF5",borderRadius:4,height:6,marginBottom:6}}>
+                      <div style={{background:"#7C5CFC",borderRadius:4,height:6,width:pct+"%",transition:"width 0.5s"}}/>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880",marginBottom:14}}>
+                      <span>{completedCount}/{totalCount} complete</span>
+                      <span style={{color:pct===100?"#7C5CFC":"#555",fontWeight:600}}>{pct}%</span>
+                    </div>
+                    <Btn onClick={()=>aiCustomiseChecklist(activeStarter)} disabled={starterAiProcessing} style={{width:"100%",fontSize:12,padding:"9px"}}>
+                      {starterAiProcessing?"Customising...":"AI customise for role"}
+                    </Btn>
+                    {activeStarter.aiCustomised&&<div style={{fontSize:10,color:"#7C5CFC",marginTop:6,textAlign:"center"}}>AI tasks added</div>}
+                  </Card>
+                  {/* Owner legend */}
+                  <Card style={{background:"#F5F1EA",padding:14}}>
+                    <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,marginBottom:10,textTransform:"uppercase"}}>Task owners</div>
+                    {Object.entries(ownerColors).map(([owner,color])=>(
+                      <div key={owner} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                        <div style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0}}/>
+                        <span style={{fontSize:11,color:"#6B6880"}}>{owner}</span>
+                      </div>
+                    ))}
+                  </Card>
+                </div>
+
+                {/* Task phases */}
+                <div>
+                  {phases.map(phase=>{
+                    const phaseDone = phase.tasks.filter(t=>t.done).length;
+                    const phaseOverdue = phase.tasks.filter(t=>!t.done&&t.dueDate&&new Date(t.dueDate.split("/").reverse().join("-"))<new Date());
+                    return(
+                      <Card key={phase.label} style={{marginBottom:12}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1A1535",fontWeight:600}}>{phase.label}</span>
+                            {phaseOverdue.length>0&&<Badge color="#E8622A">{phaseOverdue.length} overdue</Badge>}
+                          </div>
+                          <span style={{fontSize:11,color:"#6B6880"}}>{phaseDone}/{phase.tasks.length}</span>
+                        </div>
+                        {phase.tasks.map(task=>{
+                          const ownerColor = ownerColors[task.owner]||"#555";
+                          const isOverdue = !task.done&&task.dueDate&&new Date(task.dueDate.split("/").reverse().join("-"))<new Date();
+                          return(
+                            <div key={task.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid #1a1a1a",alignItems:"flex-start"}}>
+                              <button onClick={()=>toggleStarterTask(activeStarter.id,task.id)}
+                                style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:task.done?"#7C5CFC":"#E8E0D0",background:task.done?"#7C5CFC":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                                {task.done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
+                              </button>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:13,color:task.done?"#555":"#F2EDE4",textDecoration:task.done?"line-through":"none",marginBottom:3}}>{task.task}</div>
+                                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                                    <div style={{width:6,height:6,borderRadius:"50%",background:ownerColor}}/>
+                                    <span style={{fontSize:10,color:"#6B6880"}}>{task.owner}</span>
+                                  </div>
+                                  {task.dueDate&&<span style={{fontSize:10,color:isOverdue?"#E8622A":"#444",fontFamily:"JetBrains Mono,monospace"}}>{task.dueDate}{isOverdue?" (overdue)":""}</span>}
+                                  {task.done&&task.doneAt&&<span style={{fontSize:10,color:"#7C5CFC"}}>Done {new Date(task.doneAt).toLocaleDateString("en-GB")}</span>}
+                                </div>
+                                {task.note&&<div style={{fontSize:11,color:"#6B6375",marginTop:4,fontStyle:"italic"}}>{task.note}</div>}
+                              </div>
+                              <input placeholder="Add note..." value={task.note||""} onChange={e=>updateStarterTaskNote(activeStarter.id,task.id,e.target.value)}
+                                style={{background:"none",border:"none",borderBottom:"1px solid #E8E0D0",color:"#6B6880",fontSize:11,outline:"none",width:140,padding:"2px 4px"}}/>
+                            </div>
+                          );
+                        })}
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ══ ER ANALYTICS ══ */}
+      {screen===SCREENS.ERREPORT&&(()=>{
+        const allMeetings = cases.flatMap(c=>c.meetings.map(m=>({...m,employeeName:c.employeeName,email:c.email,caseId:c.id})));
+        const formalMeetings = allMeetings.filter(m=>MEETING_TYPES.find(t=>t.label===m.type&&t.group==="formal"));
+        const rColors = {HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#555"};
+
+        // Resolution time (days between first and last meeting per case)
+        const resolutionTimes = cases.filter(c=>c.meetings.length>1).map(c=>{
+          const dates = c.meetings.map(m=>new Date(m.savedAt)).sort((a,b)=>a-b);
+          const days = Math.round((dates[dates.length-1]-dates[0])/(1000*60*60*24));
+          return {name:c.employeeName, days, meetings:c.meetings.length};
+        });
+        const avgResolution = resolutionTimes.length ? Math.round(resolutionTimes.reduce((t,r)=>t+r.days,0)/resolutionTimes.length) : 0;
+
+        // Managers appearing in cases
+        const managerCounts = {};
+        allMeetings.forEach(m=>{ if(m.manager) managerCounts[m.manager]=(managerCounts[m.manager]||0)+1; });
+        const managerList = Object.entries(managerCounts).sort((a,b)=>b[1]-a[1]);
+
+        // Meeting types breakdown
+        const typeCounts = {};
+        allMeetings.forEach(m=>{ typeCounts[m.type]=(typeCounts[m.type]||0)+1; });
+
+        // Risk trends over time (by month)
+        const riskByMonth = {};
+        allMeetings.filter(m=>m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN").forEach(m=>{
+          const month = m.savedAt ? new Date(m.savedAt).toLocaleDateString("en-GB",{month:"short",year:"2-digit"}) : "Unknown";
+          if(!riskByMonth[month]) riskByMonth[month]={HIGH:0,MEDIUM:0,LOW:0};
+          riskByMonth[month][m.riskScore.rating]=(riskByMonth[month][m.riskScore.rating]||0)+1;
+        });
+        const months = Object.keys(riskByMonth).slice(-6);
+
+        // Repeat cases (employees with 2+ formal meetings)
+        const repeatCases = cases.filter(c=>c.meetings.filter(m=>MEETING_TYPES.find(t=>t.label===m.type&&t.group==="formal")).length>=2);
+
+        // Outcome patterns
+        const highRiskMeetings = allMeetings.filter(m=>m.riskScore?.rating==="HIGH");
+
+        return(
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
+            <div style={{marginBottom:28}}>
+              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>ER Analytics</h2>
+              <p style={{fontSize:13,color:"#6B6880",margin:0}}>Employee relations case patterns, trends, and risk intelligence.</p>
+            </div>
+
+            {cases.length<2&&(
+              <Card style={{textAlign:"center",padding:"50px 20px"}}>
+                <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>Not enough data yet</div>
+                <div style={{fontSize:12,color:"#5A5570"}}>Analytics become meaningful once you have 3+ cases saved. Keep using Compass and check back.</div>
+              </Card>
+            )}
+
+            {cases.length>=2&&(
+              <>
+                {/* Headline stats */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:20}}>
+                  {[
+                    {l:"Total ER cases",v:cases.length},
+                    {l:"Total meetings",v:allMeetings.length},
+                    {l:"High risk meetings",v:highRiskMeetings.length},
+                    {l:"Repeat cases",v:repeatCases.length},
+                    {l:"Avg resolution",v:avgResolution+"d"},
+                  ].map(s=>(
+                    <Card key={s.l} style={{textAlign:"center",padding:"16px 10px"}}>
+                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif",marginBottom:4}}>{s.v}</div>
+                      <div style={{fontSize:10,color:"#6B6880"}}>{s.l}</div>
+                    </Card>
+                  ))}
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                  {/* Case type breakdown */}
+                  <Card>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Case type breakdown</div>
+                    {Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).map(([type,count])=>{
+                      const maxCount = Math.max(...Object.values(typeCounts));
+                      return(
+                        <div key={type} style={{marginBottom:10}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                            <span style={{fontSize:12,color:"#3D3560"}}>{type}</span>
+                            <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600}}>{count}</span>
+                          </div>
+                          <div style={{background:"#FDFAF5",borderRadius:3,height:5}}>
+                            <div style={{background:"#7C5CFC",borderRadius:3,height:5,width:`${Math.round(count/maxCount*100)}%`}}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Card>
+
+                  {/* Managers in cases */}
+                  <Card>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Managers by case involvement</div>
+                    {managerList.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No manager data yet — add manager names when creating meetings</div>}
+                    {managerList.map(([manager,count],i)=>(
+                      <div key={manager} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1a1a1a"}}>
+                        <div>
+                          <div style={{fontSize:12,color:"#1A1535"}}>{manager}</div>
+                          <div style={{fontSize:10,color:"#6B6880"}}>{count} meeting{count!==1?"s":""}</div>
+                        </div>
+                        {count>=3&&<Badge color="#E8622A">High involvement</Badge>}
+                        {count===2&&<Badge color="#D4882A">Repeat</Badge>}
+                      </div>
+                    ))}
+                    {managerList.length>0&&managerList.some(([,c])=>c>=3)&&(
+                      <div style={{marginTop:12,padding:"10px 12px",background:"#FEF0EB",borderRadius:6,border:"1px solid #E8622A33"}}>
+                        <div style={{fontSize:11,color:"#C84B2F",fontWeight:600,marginBottom:3}}>Pattern alert</div>
+                        <div style={{fontSize:11,color:"#6B6375"}}>One or more managers appear in 3+ ER cases. Consider investigating management practice.</div>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                  {/* Risk trend by month */}
+                  <Card>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Risk profile over time</div>
+                    {months.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No risk data yet — complete meeting reviews to see trends</div>}
+                    {months.map(month=>{
+                      const data = riskByMonth[month];
+                      const total = data.HIGH+data.MEDIUM+data.LOW;
+                      return(
+                        <div key={month} style={{marginBottom:12}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                            <span style={{fontSize:11,color:"#6B6375"}}>{month}</span>
+                            <div style={{display:"flex",gap:8}}>
+                              {data.HIGH>0&&<span style={{fontSize:10,color:"#C84B2F"}}>{data.HIGH}H</span>}
+                              {data.MEDIUM>0&&<span style={{fontSize:10,color:"#B87520"}}>{data.MEDIUM}M</span>}
+                              {data.LOW>0&&<span style={{fontSize:10,color:"#7C5CFC"}}>{data.LOW}L</span>}
+                            </div>
+                          </div>
+                          <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",gap:1}}>
+                            {data.HIGH>0&&<div style={{background:"#7C5CFC",flex:data.HIGH}}/>}
+                            {data.MEDIUM>0&&<div style={{background:"#D4882A",flex:data.MEDIUM}}/>}
+                            {data.LOW>0&&<div style={{background:"#7C5CFC",flex:data.LOW}}/>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Card>
+
+                  {/* Repeat cases */}
+                  <Card>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>Repeat ER cases</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:14}}>Employees with 2 or more formal meetings</div>
+                    {repeatCases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No repeat cases — a positive sign</div>}
+                    {repeatCases.map(c=>{
+                      const formalCount = c.meetings.filter(m=>MEETING_TYPES.find(t=>t.label===m.type&&t.group==="formal")).length;
+                      const highRisk = c.meetings.some(m=>m.riskScore?.rating==="HIGH");
+                      return(
+                        <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
+                          <div>
+                            <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:1}}>{c.employeeName}</div>
+                            <div style={{fontSize:10,color:"#6B6880"}}>{formalCount} formal meetings</div>
+                          </div>
+                          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                            {highRisk&&<Badge color="#E8622A">High risk</Badge>}
+                            <Btn variant="ghost" onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"3px 10px",fontSize:10}}>View</Btn>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Card>
+                </div>
+
+                {/* Resolution times */}
+                {resolutionTimes.length>0&&(
+                  <Card style={{marginBottom:16}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>Case resolution times</div>
+                    <div style={{fontSize:11,color:"#6B6880",marginBottom:14}}>Days from first to last meeting per case · Average: {avgResolution} days</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+                      {resolutionTimes.sort((a,b)=>b.days-a.days).map(r=>(
+                        <div key={r.name} style={{background:"#FDFAF5",borderRadius:7,padding:"10px 14px",minWidth:140}}>
+                          <div style={{fontSize:12,color:"#1A1535",fontWeight:500,marginBottom:3}}>{r.name}</div>
+                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#6B6880",fontWeight:400}}>d</span></div>
+                          <div style={{fontSize:10,color:"#5A5570"}}>{r.meetings} meetings</div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Export report */}
+                <div style={{display:"flex",gap:10}}>
+                  <Btn onClick={()=>{
+                    const report = {
+                      generatedAt: new Date().toISOString(),
+                      summary:{ totalCases:cases.length, totalMeetings:allMeetings.length, highRisk:highRiskMeetings.length, repeatCases:repeatCases.length, avgResolutionDays:avgResolution },
+                      caseTypeBreakdown: typeCounts,
+                      managerInvolvement: Object.fromEntries(managerList),
+                      repeatCases: repeatCases.map(c=>c.employeeName),
+                      riskTrend: riskByMonth,
+                    };
+                    const blob = new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href=url; a.download="compass_er_analytics.json"; a.click();
+                    audit("ER analytics report exported");
+                  }}>Export analytics report</Btn>
+                  <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(JSON.stringify({totalCases:cases.length,highRisk:highRiskMeetings.length,repeatCases:repeatCases.length,avgResolution:avgResolution+"d"},null,2))}>Copy summary</Btn>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ══ REDUNDANCY & CONSULTATION ══ */}
+      {screen===SCREENS.REDUNDANCY&&(()=>{
+        const stepLabels = {setup:"Setup",pool:"Selection",consultation:"Consultation",outcome:"Outcome"};
+        const steps = ["setup","pool","consultation","outcome"];
+
+        return(
+          <div style={{maxWidth:1280,margin:"0 auto",padding:"32px 20px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
+              <div>
+                <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Redundancy &amp; consultation</h2>
+                <p style={{fontSize:13,color:"#6B6880",margin:0}}>Individual and collective redundancy processes. Legally guided, document-ready.</p>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {activeRedundancy&&<Btn variant="ghost" onClick={()=>{setActiveRedundancy(null);setRedundancyStep("setup");setRedundancyAiOutput("");}}>← All cases</Btn>}
+              </div>
+            </div>
+
+            {/* Case list */}
+            {!activeRedundancy&&(
+              <div>
+                {redundancyCases.length===0&&(
+                  <Card style={{textAlign:"center",padding:"40px 20px",marginBottom:20}}>
+                    <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>No redundancy cases</div>
+                    <div style={{fontSize:12,color:"#5A5570",marginBottom:20}}>Start a new individual or collective redundancy process.</div>
+                  </Card>
+                )}
+                {redundancyCases.map(r=>(
+                  <button key={r.id} onClick={()=>{setActiveRedundancy(r);setRedundancyStep(r.status||"pool");setRedundancyAiOutput("");}}
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px 20px",textAlign:"left",marginBottom:10,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",transition:"border-color 0.15s"}}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
+                    onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                        <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1A1535",fontWeight:600}}>{r.reason}</span>
+                        <Badge color={r.type==="collective"?"#E8622A":"#7C5CFC"}>{r.type}</Badge>
+                      </div>
+                      <div style={{fontSize:11,color:"#6B6880"}}>{r.atRiskEmployees.length} at-risk · Created {new Date(r.createdAt).toLocaleDateString("en-GB")} · {r.createdBy}</div>
+                    </div>
+                    <Badge color={r.status==="complete"?"#7C5CFC":"#D4882A"}>{r.status||"setup"}</Badge>
+                  </button>
+                ))}
+
+                {/* New case form */}
+                <Card>
+                  <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 14px",fontWeight:600}}>Start new redundancy process</h3>
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Process type</label>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      {[
+                        {type:"individual",title:"Individual redundancy",sub:"Fewer than 20 redundancies · No minimum consultation period · ACAS Early Conciliation recommended"},
+                        {type:"collective",title:"Collective redundancy",sub:"20+ redundancies · 30 days (20-99) or 45 days (100+) consultation · HR1 form required · Employee representatives"},
+                      ].map(opt=>(
+                        <button key={opt.type} onClick={()=>{
+                          const reason = window.prompt("Brief reason for redundancy (e.g. restructure, site closure, role no longer required):");
+                          if(!reason) return;
+                          const pool = window.prompt("Describe the selection pool (e.g. all Marketing Executives, all staff in Leeds office):");
+                          if(pool===null) return;
+                          createRedundancyCase(opt.type, reason, pool||"Not specified");
+                        }}
+                          style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
+                          onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
+                          onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                          <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:6}}>{opt.title}</div>
+                          <div style={{fontSize:11,color:"#6B6880",lineHeight:1.6}}>{opt.sub}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Active redundancy case */}
+            {activeRedundancy&&(
+              <div>
+                {/* Step nav */}
+                <div style={{display:"flex",gap:0,marginBottom:24,background:"#FFFFFF",borderRadius:8,overflow:"hidden",border:"1px solid #E8E0D0"}}>
+                  {steps.map((s,i)=>(
+                    <button key={s} onClick={()=>setRedundancyStep(s)}
+                      style={{flex:1,padding:"10px 8px",background:redundancyStep===s?"#7C5CFC18":"none",border:"none",borderRight:i<steps.length-1?"1px solid #E8E0D0":"none",color:redundancyStep===s?"#A98FFF":"#555",fontSize:12,fontWeight:redundancyStep===s?600:400,cursor:"pointer"}}>
+                      {stepLabels[s]}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start",gridTemplateColumns:isMobile?"1fr":"1fr 380px"}}>
+                  <div>
+                    {/* SETUP STEP */}
+                    {redundancyStep==="setup"&&(
+                      <Card>
+                        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Case details</h3>
+                        <div style={{background:"#FDFAF5",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
+                          <div style={{fontSize:11,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>CASE SUMMARY</div>
+                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#6B6880"}}>Type:</span> {activeRedundancy.type} redundancy</div>
+                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#6B6880"}}>Reason:</span> {activeRedundancy.reason}</div>
+                          <div style={{fontSize:14,color:"#1A1535",marginBottom:4}}><span style={{color:"#6B6880"}}>Pool:</span> {activeRedundancy.poolDescription}</div>
+                          <div style={{fontSize:14,color:"#1A1535"}}><span style={{color:"#6B6880"}}>Created:</span> {new Date(activeRedundancy.createdAt).toLocaleDateString("en-GB")} by {activeRedundancy.createdBy}</div>
+                        </div>
+
+                        {activeRedundancy.type==="collective"&&(
+                          <div style={{marginBottom:16}}>
+                            <div style={{fontSize:11,color:"#C84B2F",fontWeight:700,letterSpacing:1,marginBottom:10}}>COLLECTIVE CONSULTATION REQUIREMENTS</div>
+                            {[
+                              {label:"Number of redundancies",k:"count",type:"number",ph:"e.g. 25"},
+                              {label:"HR1 form submitted to BEIS",k:"hrOneSubmitted",type:"checkbox"},
+                              {label:"Employee representatives elected",k:"repElected",type:"checkbox"},
+                              {label:"Consultation start date",k:"consultationStartDate",type:"date"},
+                            ].map(f=>(
+                              <div key={f.k} style={{marginBottom:10}}>
+                                <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.label}</label>
+                                {f.type==="checkbox"
+                                  ?<input type="checkbox" checked={activeRedundancy.collectiveInfo?.[f.k]||false}
+                                    onChange={e=>updateRedundancyCase({collectiveInfo:{...activeRedundancy.collectiveInfo,[f.k]:e.target.checked}})}
+                                    style={{accentColor:"#7C5CFC",width:16,height:16}} />
+                                  :<input type={f.type||"text"} placeholder={f.ph} value={activeRedundancy.collectiveInfo?.[f.k]||""}
+                                    onChange={e=>updateRedundancyCase({collectiveInfo:{...activeRedundancy.collectiveInfo,[f.k]:e.target.value}})}
+                                    style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",width:"100%",boxSizing:"border-box"}} />}
+                              </div>
+                            ))}
+                            <div style={{background:"#FEF0EB",borderRadius:7,padding:"10px 14px",border:"1px solid #E8622A33"}}>
+                              <div style={{fontSize:11,color:"#C84B2F",fontWeight:600,marginBottom:3}}>Legal requirement</div>
+                              <div style={{fontSize:11,color:"#6B6375",lineHeight:1.6}}>
+                                {(activeRedundancy.collectiveInfo?.count||0)>=100?"45 days minimum consultation before any redundancy takes effect":"30 days minimum consultation before any redundancy takes effect"}
+                                {" "}· HR1 form must be submitted to BEIS before consultation starts · Failure to consult is an automatic 90-day protective award per employee.
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <Btn onClick={()=>setRedundancyStep("pool")}>Continue to selection pool →</Btn>
+                      </Card>
+                    )}
+
+                    {/* POOL / SELECTION STEP */}
+                    {redundancyStep==="pool"&&(
+                      <div>
+                        {/* Selection criteria */}
+                        <Card style={{marginBottom:14}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>Selection criteria</h3>
+                            <span style={{fontSize:11,color:Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)<1?"#7C5CFC":"#E8622A",fontWeight:600}}>
+                              Total: {activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)}% {Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)>1?"(must equal 100%)":"✓"}
+                            </span>
+                          </div>
+                          {activeRedundancy.selectionCriteria.map(c=>(
+                            <div key={c.id} style={{background:"#FDFAF5",borderRadius:7,padding:"12px 14px",marginBottom:8}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                                <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{c.criterion}</div>
+                                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                  <input type="number" min="0" max="100" value={c.weight}
+                                    onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,weight:parseInt(e.target.value)||0}:x)})}
+                                    style={{width:56,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 8px",fontSize:12,color:"#1A1535",outline:"none",textAlign:"center"}} />
+                                  <span style={{fontSize:11,color:"#6B6880"}}>%</span>
+                                </div>
+                              </div>
+                              <div style={{fontSize:11,color:"#6B6880"}}>{c.description}</div>
+                            </div>
+                          ))}
+                          <div style={{background:"#FDFAF5",borderRadius:7,padding:"10px 12px",border:"1px solid #E8E0D0",marginTop:8}}>
+                            <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:4}}>LEGAL NOTE</div>
+                            <div style={{fontSize:11,color:"#6B6880",lineHeight:1.6}}>Criteria must be objective and measurable. Avoid criteria that could be indirectly discriminatory (e.g. part-time working, recent maternity leave). Disability-related absences must be excluded from attendance scoring.</div>
+                          </div>
+                        </Card>
+
+                        {/* At-risk employees */}
+                        <Card>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>At-risk employees</h3>
+                            <Btn onClick={()=>{
+                              const name=window.prompt("Employee name:");
+                              if(!name) return;
+                              const role=window.prompt("Job title:");
+                              const dept=window.prompt("Department:");
+                              const emp={id:Date.now().toString(),name,role:role||"",department:dept||"",scores:{},totalScore:0,selected:null,consultationMeetings:[],outcome:"",redundancyPay:""};
+                              updateRedundancyCase({atRiskEmployees:[...activeRedundancy.atRiskEmployees,emp]});
+                            }} style={{padding:"6px 14px",fontSize:12}}>+ Add employee</Btn>
+                          </div>
+                          {activeRedundancy.atRiskEmployees.length===0&&<div style={{fontSize:12,color:"#5A5570",padding:"20px 0",textAlign:"center"}}>No employees added yet — add all employees in the selection pool</div>}
+                          {activeRedundancy.atRiskEmployees.map(emp=>(
+                            <div key={emp.id} style={{background:"#FDFAF5",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #E8E0D0"}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                                <div>
+                                  <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:2}}>{emp.name}</div>
+                                  <div style={{fontSize:11,color:"#6B6880"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
+                                </div>
+                                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif"}}>{emp.totalScore||0}</div>
+                                  <div style={{fontSize:10,color:"#6B6880"}}>/ 5.0</div>
+                                  {emp.selected!==null&&<Badge color={emp.selected?"#E8622A":"#7C5CFC"}>{emp.selected?"At risk":"Retained"}</Badge>}
+                                </div>
+                              </div>
+                              {/* Scoring grid */}
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8,marginBottom:10}}>
+                                {activeRedundancy.selectionCriteria.map(c=>(
+                                  <div key={c.id} style={{background:"#FFFFFF",borderRadius:5,padding:"8px 10px"}}>
+                                    <div style={{fontSize:9,color:"#6B6880",marginBottom:5,fontWeight:600,letterSpacing:0.3}}>{c.criterion.slice(0,20)}</div>
+                                    <div style={{display:"flex",gap:3}}>
+                                      {[1,2,3,4,5].map(s=>(
+                                        <button key={s} onClick={()=>scoreEmployee(emp.id,c.id,s)}
+                                          style={{width:22,height:22,borderRadius:3,border:"1px solid",borderColor:(emp.scores?.[c.id]||0)>=s?"#7C5CFC":"#E8E0D0",background:(emp.scores?.[c.id]||0)>=s?"#7C5CFC22":"none",color:(emp.scores?.[c.id]||0)>=s?"#A98FFF":"#555",fontSize:10,cursor:"pointer"}}>
+                                          {s}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={{display:"flex",gap:8}}>
+                                <button onClick={()=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(e=>e.id===emp.id?{...e,selected:true}:e)})}
+                                  style={{background:"#E8622A18",border:"1px solid #E8622A44",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>At risk</button>
+                                <button onClick={()=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(e=>e.id===emp.id?{...e,selected:false}:e)})}
+                                  style={{background:"#7C5CFC18",border:"1px solid #7C5CFC33",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>Retained</button>
+                                <button onClick={()=>generateRedundancyLetter("at-risk",emp)}
+                                  style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 12px",fontSize:11,color:"#6B6375",cursor:"pointer"}}>At-risk letter</button>
+                              </div>
+                            </div>
+                          ))}
+                          {activeRedundancy.atRiskEmployees.length>0&&<Btn onClick={()=>setRedundancyStep("consultation")} style={{marginTop:8}}>Continue to consultation →</Btn>}
+                        </Card>
+                      </div>
+                    )}
+
+                    {/* CONSULTATION STEP */}
+                    {redundancyStep==="consultation"&&(
+                      <Card>
+                        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Consultation meetings</h3>
+                        <p style={{fontSize:12,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>
+                          {activeRedundancy.type==="collective"
+                            ?"Collective consultation must happen before individual consultation. Hold meaningful consultation — employees must be able to influence the outcome."
+                            :"Individual consultation must be meaningful. Consider all representations made. Keep records of all meetings."}
+                        </p>
+                        {activeRedundancy.atRiskEmployees.filter(e=>e.selected).map(emp=>(
+                          <div key={emp.id} style={{background:"#FDFAF5",borderRadius:8,padding:"14px",marginBottom:12,border:"1px solid #E8E0D0"}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                              <div style={{fontSize:14,color:"#1A1535",fontWeight:600}}>{emp.name}</div>
+                              <div style={{display:"flex",gap:8}}>
+                                <button onClick={()=>generateRedundancyLetter("consultation-invite",emp)}
+                                  style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#6B6375",cursor:"pointer"}}>Invite letter</button>
+                                <button onClick={()=>generateRedundancyLetter("alternative-roles",emp)}
+                                  style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#6B6375",cursor:"pointer"}}>Alt roles letter</button>
+                              </div>
+                            </div>
+                            <div style={{fontSize:11,color:"#6B6880",marginBottom:8}}>{emp.consultationMeetings?.length||0} consultation meeting{(emp.consultationMeetings?.length||0)!==1?"s":""} recorded</div>
+                            <textarea placeholder={`Notes from consultation with ${emp.name}...`}
+                              value={emp.consultationNotes||""}
+                              onChange={e=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(x=>x.id===emp.id?{...x,consultationNotes:e.target.value}:x)})}
+                              rows={3}
+                              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
+                          </div>
+                        ))}
+                        {activeRedundancy.atRiskEmployees.filter(e=>e.selected).length===0&&(
+                          <div style={{fontSize:12,color:"#5A5570",textAlign:"center",padding:"20px 0"}}>No at-risk employees selected yet — go back to the Selection step</div>
+                        )}
+                        {activeRedundancy.atRiskEmployees.filter(e=>e.selected).length>0&&<Btn onClick={()=>setRedundancyStep("outcome")} style={{marginTop:8}}>Continue to outcome →</Btn>}
+                      </Card>
+                    )}
+
+                    {/* OUTCOME STEP */}
+                    {redundancyStep==="outcome"&&(
+                      <Card>
+                        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:"0 0 14px",fontWeight:600}}>Outcome letters</h3>
+                        {activeRedundancy.atRiskEmployees.filter(e=>e.selected).map(emp=>(
+                          <div key={emp.id} style={{background:"#FDFAF5",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #E8E0D0"}}>
+                            <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:8}}>{emp.name}</div>
+                            <div style={{marginBottom:10}}>
+                              <label style={{display:"block",fontSize:10,color:"#6B6880",fontWeight:600,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>Statutory redundancy pay</label>
+                              <input placeholder="e.g. £3,450 (1.5 weeks × £2,300/week × 1 year)" value={emp.redundancyPay||""}
+                                onChange={e=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(x=>x.id===emp.id?{...x,redundancyPay:e.target.value}:x)})}
+                                style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"7px 10px",fontSize:12,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                            </div>
+                            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                              <button onClick={()=>generateRedundancyLetter("redundancy-confirmed",emp)}
+                                style={{background:"#7C5CFC",border:"none",borderRadius:5,padding:"6px 14px",fontSize:12,color:"#fff",fontWeight:600,cursor:"pointer"}}>Redundancy letter</button>
+                              <button onClick={()=>generateRedundancyLetter("appeal-invite",emp)}
+                                style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"6px 12px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>Appeal invite</button>
+                            </div>
+                          </div>
+                        ))}
+                        <Btn variant="blue" onClick={()=>updateRedundancyCase({status:"complete"})} style={{marginTop:12}}>Mark case complete</Btn>
+                      </Card>
+                    )}
+                  </div>
+
+                  {/* AI advice panel */}
+                  <Card style={{background:"#F5F1EA",position:"sticky",top:70}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                      <SectionTitle>LEGAL GUIDANCE</SectionTitle>
+                      <Btn onClick={getRedundancyAiAdvice} disabled={redundancyAiProcessing} style={{padding:"4px 12px",fontSize:11}}>
+                        {redundancyAiProcessing?"Analysing...":"Get AI advice"}
+                      </Btn>
+                    </div>
+                    {redundancyAiProcessing&&!redundancyAiOutput&&(
+                      <div style={{textAlign:"center",padding:20}}><span className="pu" style={{color:"#7C5CFC",fontSize:20}}>●</span></div>
+                    )}
+                    {redundancyAiOutput&&<MDRenderer text={redundancyAiOutput}/>}
+                    {!redundancyAiOutput&&!redundancyAiProcessing&&(
+                      <div>
+                        <div style={{fontSize:12,color:"#5A5570",lineHeight:1.8,marginBottom:16}}>
+                          Click "Get AI advice" for jurisdiction-specific legal guidance on your redundancy process — consultation requirements, selection risks, equality considerations, and common pitfalls.
+                        </div>
+                        <div style={{borderTop:"1px solid #E8E0D0",paddingTop:14}}>
+                          <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:10}}>QUICK REFERENCE</div>
+                          {[
+                            {l:"Individual redundancy",v:"No statutory minimum — but must be meaningful"},
+                            {l:"20–99 redundancies",v:"30 days before first dismissal"},
+                            {l:"100+ redundancies",v:"45 days before first dismissal"},
+                            {l:"HR1 form",v:"Required for 20+ — notify BEIS before consultation"},
+                            {l:"Protective award",v:"Up to 90 days pay per employee if consultation fails"},
+                            {l:"Statutory redundancy pay",v:"1.5 weeks × weekly pay × years service (capped)"},
+                          ].map(({l,v})=>(
+                            <div key={l} style={{padding:"6px 0",borderBottom:"1px solid #1a1a1a"}}>
+                              <div style={{fontSize:11,color:"#1A1535",fontWeight:500}}>{l}</div>
+                              <div style={{fontSize:10,color:"#6B6880",marginTop:1}}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {redundancyAiOutput&&(
+                      <div style={{display:"flex",gap:8,marginTop:14}}>
+                        <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(redundancyAiOutput)} style={{fontSize:11,padding:"5px 12px"}}>Copy</Btn>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ══ MENTAL HEALTH & WELLBEING ══ */}
+      {screen===SCREENS.WELLBEING&&(()=>{
+        const typeColors = {"chat":"#7C5CFC","eap":"#4A7C6F","adjustment":"#4A6FA5","crisis":"#E8622A","return":"#D4882A","checkin":"#888"};
+        const allEmployees = [...new Set(wellbeingNotes.map(n=>n.employeeName))];
+        const employeeNotes = activeWellbeing ? wellbeingNotes.filter(n=>n.employeeName===activeWellbeing).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)) : [];
+        const overdueFollowUps = wellbeingNotes.filter(n=>!n.followUpDone&&n.followUpDate&&new Date(n.followUpDate.split("/").reverse().join("-"))<new Date());
+
+        return(
+          <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+              <div>
+                <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Mental health &amp; wellbeing</h2>
+                <p style={{fontSize:13,color:"#6B6880",margin:0}}>Confidential wellbeing case notes. Completely separate from disciplinary and performance records.</p>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {activeWellbeing&&<Btn variant="ghost" onClick={()=>{setActiveWellbeing(null);setWellbeingView("list");}}>← All employees</Btn>}
+                <Btn onClick={()=>setWellbeingView(wellbeingView==="new"?"list":"new")}>{wellbeingView==="new"?"Cancel":"+ Add note"}</Btn>
+              </div>
+            </div>
+
+            {/* Confidentiality notice */}
+            <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
+              <div style={{fontSize:11,color:"#6B6880",lineHeight:1.5}}>These notes are confidential and are not linked to any disciplinary, performance, or ER case file. Access should be restricted to HR only. Notes may be relevant to reasonable adjustment obligations under the Equality Act 2010.</div>
+            </div>
+
+            {/* Overdue follow-ups */}
+            {overdueFollowUps.length>0&&(
+              <div style={{background:"#FEF5E7",border:"1px solid #D4882A33",borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                <div style={{fontSize:11,color:"#B87520",fontWeight:600,marginBottom:8}}>Overdue follow-ups ({overdueFollowUps.length})</div>
+                {overdueFollowUps.map(n=>(
+                  <div key={n.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0"}}>
+                    <span style={{fontSize:12,color:"#3D3560"}}>{n.employeeName} — {n.followUpDate}</span>
+                    <button onClick={()=>toggleFollowUpDone(n.id)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>Mark done</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add note form */}
+            {wellbeingView==="new"&&(
+              <Card style={{marginBottom:20}}>
+                <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 16px",fontWeight:600}}>Add wellbeing note</h3>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+                  <div>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Employee name *</label>
+                    <input placeholder="e.g. James Wilson" value={wellbeingForm.employeeName} onChange={e=>setWellbeingForm(p=>({...p,employeeName:e.target.value}))}
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                  </div>
+                  <div>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Note type</label>
+                    <select value={wellbeingForm.type} onChange={e=>setWellbeingForm(p=>({...p,type:e.target.value}))}
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
+                      {Object.entries(WELLBEING_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Date</label>
+                    <DateInput value={wellbeingForm.date} onChange={e=>setWellbeingForm(p=>({...p,date:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>HR manager</label>
+                    <input placeholder="Your name" value={wellbeingForm.manager} onChange={e=>setWellbeingForm(p=>({...p,manager:e.target.value}))}
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                  </div>
+                </div>
+                <div style={{marginBottom:14}}>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Conversation notes *</label>
+                  <textarea placeholder="What was discussed? What did the employee share? What was observed? How did they seem?" value={wellbeingForm.content} onChange={e=>setWellbeingForm(p=>({...p,content:e.target.value}))}
+                    rows={5}
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",resize:"vertical",outline:"none",boxSizing:"border-box"}} ></textarea>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+                  <div>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Support offered</label>
+                    <input placeholder="e.g. EAP referral, flexible working, OH referral" value={wellbeingForm.supportOffered} onChange={e=>setWellbeingForm(p=>({...p,supportOffered:e.target.value}))}
+                      style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+                  </div>
+                  <div>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Follow-up date</label>
+                    <DateInput value={wellbeingForm.followUpDate} onChange={e=>setWellbeingForm(p=>({...p,followUpDate:e.target.value}))} />
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:10}}>
+                  <Btn onClick={addWellbeingNote} disabled={!wellbeingForm.employeeName.trim()||!wellbeingForm.content.trim()}>Save note</Btn>
+                  <Btn variant="ghost" onClick={()=>setWellbeingView("list")}>Cancel</Btn>
+                </div>
+              </Card>
+            )}
+
+            <div style={{display:"grid",gridTemplateColumns:"260px 1fr",gap:20,alignItems:"start"}}>
+              {/* Employee list */}
+              <div>
+                <Card style={{marginBottom:12}}>
+                  <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Employees ({allEmployees.length})</div>
+                  {allEmployees.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No wellbeing notes yet</div>}
+                  {allEmployees.map(emp=>{
+                    const empNotes = wellbeingNotes.filter(n=>n.employeeName===emp);
+                    const hasOverdue = empNotes.some(n=>!n.followUpDone&&n.followUpDate&&new Date(n.followUpDate.split("/").reverse().join("-"))<new Date());
+                    return(
+                      <button key={emp} onClick={()=>{setActiveWellbeing(emp);setWellbeingView("employee");}}
+                        style={{width:"100%",background:activeWellbeing===emp?"#7C5CFC18":"none",border:"1px solid",borderColor:activeWellbeing===emp?"#7C5CFC33":"transparent",borderRadius:7,padding:"10px 12px",marginBottom:4,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div>
+                          <div style={{fontSize:14,color:"#1A1535",fontWeight:activeWellbeing===emp?600:400}}>{emp}</div>
+                          <div style={{fontSize:10,color:"#6B6880",marginTop:2}}>{empNotes.length} note{empNotes.length!==1?"s":""}</div>
+                        </div>
+                        {hasOverdue&&<div style={{width:7,height:7,borderRadius:"50%",background:"#D4882A"}}/>}
+                      </button>
+                    );
+                  })}
+                </Card>
+
+                {/* Resources */}
+                <Card style={{background:"#F5F1EA"}}>
+                  <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Crisis resources</div>
+                  {WELLBEING_RESOURCES.map(r=>(
+                    <div key={r.name} style={{padding:"7px 0",borderBottom:"1px solid #1a1a1a"}}>
+                      <div style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{r.name}</div>
+                      <div style={{fontSize:11,color:"#7C5CFC",marginTop:1}}>{r.contact}</div>
+                      <div style={{fontSize:10,color:"#5A5570",marginTop:1}}>{r.note}</div>
+                    </div>
+                  ))}
+                </Card>
+              </div>
+
+              {/* Notes view */}
+              <div>
+                {!activeWellbeing&&wellbeingView!=="new"&&(
+                  <Card style={{textAlign:"center",padding:"40px 20px",background:"#F5F1EA"}}>
+                    <div style={{fontSize:14,color:"#6B6880",marginBottom:8}}>Select an employee to view their wellbeing history</div>
+                    <div style={{fontSize:12,color:"#5A5570"}}>Or click "+ Add note" to log a new wellbeing conversation</div>
+                  </Card>
+                )}
+
+                {activeWellbeing&&employeeNotes.length>0&&(
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                      <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",fontWeight:600}}>{activeWellbeing}</div>
+                      <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeName:activeWellbeing}));setWellbeingView("new");}} style={{padding:"6px 14px",fontSize:12}}>+ Add note</Btn>
+                    </div>
+                    {employeeNotes.map(note=>{
+                      const typeColor = typeColors[note.type]||"#7C5CFC";
+                      const typeInfo = WELLBEING_TYPES[note.type];
+                      const isOverdue = !note.followUpDone&&note.followUpDate&&new Date(note.followUpDate.split("/").reverse().join("-"))<new Date();
+                      return(
+                        <Card key={note.id} style={{marginBottom:12,borderLeft:`3px solid ${typeColor}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10}}>
+                              <Badge color={typeColor}>{typeInfo?.label||note.type}</Badge>
+                              <span style={{fontSize:11,color:"#6B6880"}}>{note.date}</span>
+                              {note.manager&&<span style={{fontSize:11,color:"#5A5570"}}>{note.manager}</span>}
+                            </div>
+                            {note.confidential&&<span style={{fontSize:9,color:"#6B6880",border:"1px solid #E8E0D0",borderRadius:3,padding:"1px 6px",letterSpacing:0.5}}>CONFIDENTIAL</span>}
+                          </div>
+                          <div style={{fontSize:13,color:"#3D3560",lineHeight:1.7,marginBottom:10,whiteSpace:"pre-wrap"}}>{note.content}</div>
+                          {note.supportOffered&&(
+                            <div style={{fontSize:11,color:"#6B6880",marginBottom:8}}>
+                              <span style={{color:"#6B6375",fontWeight:600}}>Support offered: </span>{note.supportOffered}
+                            </div>
+                          )}
+                          {note.followUpDate&&(
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#FDFAF5",borderRadius:6,padding:"8px 12px"}}>
+                              <div>
+                                <span style={{fontSize:11,color:isOverdue?"#D4882A":"#555"}}>Follow-up: {note.followUpDate}</span>
+                                {isOverdue&&<span style={{fontSize:10,color:"#B87520",marginLeft:8}}>overdue</span>}
+                              </div>
+                              <button onClick={()=>toggleFollowUpDone(note.id)}
+                                style={{background:note.followUpDone?"#7C5CFC22":"none",border:"1px solid",borderColor:note.followUpDone?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:note.followUpDone?"#A98FFF":"#666",cursor:"pointer"}}>
+                                {note.followUpDone?"Done":"Mark done"}
+                              </button>
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {activeWellbeing&&employeeNotes.length===0&&(
+                  <Card style={{textAlign:"center",padding:"32px",background:"#F5F1EA"}}>
+                    <div style={{fontSize:13,color:"#6B6880",marginBottom:12}}>No notes yet for {activeWellbeing}</div>
+                    <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeName:activeWellbeing}));setWellbeingView("new");}}>Add first note</Btn>
+                  </Card>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══ SETTINGS ══ */}
+      {screen===SCREENS.SETTINGS&&(
+        <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
+          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
+          <p style={{fontSize:13,color:"#6B6375",margin:"0 0 28px"}}>All data saved in your browser.</p>
+
+          {/* Data export */}
+          {isHR&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Data export</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Export all cases and meeting records for reporting or backup.</p>
+              <div style={{display:"flex",gap:10}}>
+                <Btn onClick={exportCSV} style={{flex:1}}>Export CSV</Btn>
+                <Btn onClick={exportPDF} variant="ghost" style={{flex:1}}>Export PDF</Btn>
+              </div>
+              <div style={{fontSize:11,color:"#5A5570",marginTop:10}}>CSV includes all cases, meetings, risk scores and dates. PDF includes full case summaries.</div>
+            </Card>
+          )}
+
+          {/* Invite code */}
+          {isHR&&org?.invite_code&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Team invite code</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:12}}>Share this code with team members to join your workspace.</p>
+              <div style={{display:"flex",alignItems:"center",gap:10,background:"#F5F1EA",borderRadius:8,padding:"12px 16px"}}>
+                <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,color:"#7C5CFC",letterSpacing:4,fontWeight:700}}>{org.invite_code}</span>
+                <button onClick={()=>navigator.clipboard.writeText(org.invite_code)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#6B6375",cursor:"pointer"}}>Copy</button>
+              </div>
+            </Card>
+          )}
+
+          {/* Locations */}
+          {isHR&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Locations</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Add office locations. Managers will be assigned to a location and will only see cases from their location.</p>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+                {locations.map(l=>(
+                  <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F5F1EA",borderRadius:8,padding:"10px 14px"}}>
+                    <span style={{fontSize:14,color:"#1A1535"}}>{l.name}</span>
+                    <button onClick={()=>deleteLocation(l.id)} style={{background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontSize:12}}>Remove</button>
+                  </div>
+                ))}
+                {locations.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No locations added yet</div>}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <input id="new-location-input" placeholder="e.g. London, Manchester..."
+                  style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535"}}/>
+                <Btn onClick={()=>{
+                  const input = document.getElementById("new-location-input");
+                  if(input?.value.trim()){ addLocation(input.value.trim()); input.value=""; }
+                }}>Add</Btn>
+              </div>
+            </Card>
+          )}
+
+          {/* Team members */}
+          {isHR&&(
+            <Card style={{marginBottom:20}}>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Team members</div>
+              <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Invite team members to your workspace. They will receive an email invite.</p>
+              
+              {/* Current members */}
+              <div style={{marginBottom:16}}>
+                {teamMembers.map(m=>(
+                  <div key={m.id} style={{padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div>
+                        <div style={{fontSize:14,color:"#1A1535"}}>{m.name||"Unknown"}</div>
+                        <div style={{fontSize:11,color:"#6B6880"}}>
+                          {m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}
+                          {(m.location_ids||[]).length>0&&" · "+locations.filter(l=>(m.location_ids||[]).includes(l.id)).map(l=>l.name).join(", ")}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>setEditingMember(editingMember===m.id?null:m.id)}
+                          style={{background:"none",border:"1px solid #E8E0D0",borderRadius:4,padding:"3px 8px",color:"#7C5CFC",cursor:"pointer",fontSize:11}}>
+                          {editingMember===m.id?"Done":"Edit access"}
+                        </button>
+                        <button onClick={()=>removeMember(m)}
+                          style={{background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontSize:11}}>Remove</button>
+                      </div>
+                    </div>
+                    {editingMember===m.id&&locations.length>0&&(
+                      <div style={{background:"#F5F1EA",borderRadius:8,padding:"10px 14px",marginTop:4}}>
+                        <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
+                        <select value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
+                          style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:12}}>
+                          <option value="hr_director">HR Director</option>
+                          <option value="hr_manager">HR Manager</option>
+                          <option value="location_manager">Location Manager</option>
+                        </select>
+                        <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                          {locations.map(l=>(
+                            <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
+                              <input type="checkbox"
+                                checked={(m.location_ids||[]).includes(l.id)}
+                                onChange={e=>{
+                                  const current = m.location_ids||[];
+                                  const updated = e.target.checked?[...current,l.id]:current.filter(x=>x!==l.id);
+                                  assignLocations(m.id, updated);
+                                }}
+                                style={{accentColor:"#7C5CFC"}}/>
+                              {l.name}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {teamMembers.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No team members yet</div>}
+              </div>
+
+              {/* Invite form */}
+              <div style={{borderTop:"1px solid #E8E0D0",paddingTop:16}}>
+                <div style={{fontSize:11,color:"#6B6375",marginBottom:12,fontWeight:600}}>Invite new member</div>
+                <input placeholder="Full name" value={inviteForm.name} onChange={e=>setInviteForm(p=>({...p,name:e.target.value}))}
+                  style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
+                <input placeholder="Email address" type="email" value={inviteForm.email} onChange={e=>setInviteForm(p=>({...p,email:e.target.value}))}
+                  style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
+                <select value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value}))}
+                  style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:12}}>
+                  <option value="hr_manager">HR Manager</option>
+                  <option value="hr_director">HR Director</option>
+                  <option value="location_manager">Location Manager</option>
+                </select>
+                {locations.length>0&&(
+                  <div style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Locations</label>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {locations.map(l=>(
+                        <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
+                          <input type="checkbox" checked={inviteForm.locationIds.includes(l.id)}
+                            onChange={e=>{
+                              setInviteForm(p=>({...p,locationIds:e.target.checked?[...p.locationIds,l.id]:p.locationIds.filter(x=>x!==l.id)}));
+                            }}
+                            style={{accentColor:"#7C5CFC"}}/>
+                          {l.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <Btn onClick={inviteMember} disabled={inviting||!inviteForm.name.trim()||!inviteForm.email.trim()} style={{width:"100%"}}>
+                  {inviting?"Sending invite...":"Send invite"}
+                </Btn>
+              </div>
+            </Card>
+          )}
+
+          {/* Word template */}
+          <Card style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+              <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Word letter template</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Upload your .docx with header/footer. Enables Word export on letters.</p></div>
+              <Badge color="#1C5AA0">WORD</Badge>
+            </div>
+            {wordTemplate?<div style={{background:"#FDFAF5",borderRadius:7,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#1A1535"}}>{wordTemplate.name}</span><Btn variant="danger" onClick={()=>{setWordTemplate(null);lsSet("compass_word_template",null);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn></div>:<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No template uploaded</div>}
+            <input ref={wordTemplateRef} type="file" accept=".docx" onChange={handleWordTemplateUpload} style={{display:"none"}} />
+            <Btn variant="blue" onClick={()=>wordTemplateRef.current?.click()}>{wordTemplate?"Replace":"Upload .docx template"} →</Btn>
+          </Card>
+
+          {/* Letterhead */}
+          <Card style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+              <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Letterhead image</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>PNG or JPG — appears at top of PDF letters.</p></div>
+              <Badge>PDF</Badge>
+            </div>
+            {letterhead?<div style={{background:"#fff",borderRadius:7,padding:12,marginBottom:12,position:"relative"}}><img src={letterhead} alt="Letterhead" style={{width:"100%",maxHeight:100,objectFit:"contain",objectPosition:"left"}}/><button onClick={()=>{setLetterhead(null);lsSet("compass_letterhead",null);}} style={{position:"absolute",top:6,right:6,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button></div>:<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No letterhead uploaded</div>}
+            <input ref={letterheadRef} type="file" accept="image/*" onChange={handleLetterheadUpload} style={{display:"none"}} />
+            <Btn onClick={()=>letterheadRef.current?.click()}>{letterhead?"Replace":"Upload letterhead"} →</Btn>
+          </Card>
+
+          {/* E-signature */}
+          <Card style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+              <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>E-signature</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Draw or type your signature. Applied to all PDF letters.</p></div>
+            </div>
+            {signature?<div style={{background:"#fff",borderRadius:7,padding:"12px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              {signature.type==="typed"?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:28,color:"#FFFFFF"}}>{signature.data}</div>:<img src={signature.data} alt="Sig" style={{maxHeight:45,maxWidth:160}}/>}
+              <Btn variant="danger" onClick={()=>{setSignature(null);lsSet("compass_signature",null);}} style={{padding:"3px 10px",fontSize:11}}>Remove</Btn>
+            </div>:<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:12,fontSize:12,color:"#5A5570"}}>No signature saved</div>}
+            <Btn onClick={()=>setShowSigPad(true)}>{signature?"Update":"Create"} signature →</Btn>
+          </Card>
+
+          {/* Policies */}
+          <Card style={{marginBottom:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+              <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Company policies</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Upload HR policies (.docx, .txt). Compass references them in all AI outputs.</p></div>
+              <Badge color="#7C5CFC">AI</Badge>
+            </div>
+            {policies.length>0&&(
+              <div style={{marginBottom:14}}>
+                {policies.map(p=>(
+                  <div key={p.id} style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:7,padding:"9px 12px",marginBottom:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <span style={{fontSize:12,color:"#1A1535",fontWeight:600}}>{p.name}</span>
+                      <span style={{fontSize:10,color:"#5A5570",marginLeft:8,fontFamily:"JetBrains Mono,monospace"}}>{p.size}</span>
+                    </div>
+                    <Btn variant="danger" onClick={()=>{const u=policies.filter(x=>x.id!==p.id);setPolicies(u);lsSet("compass_policies",u);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn>
+                  </div>
+                ))}
+              </div>
+            )}
+            {policies.length===0&&<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:14,fontSize:12,color:"#5A5570"}}>No policies uploaded</div>}
+            <input ref={policyFileRef} type="file" multiple accept=".txt,.md,.docx" onChange={handlePolicyUpload} style={{display:"none"}} />
+            <Btn onClick={()=>policyFileRef.current?.click()} disabled={policyProcessing}>{policyProcessing?"Processing...":"+ Upload policies →"}</Btn>
+            {policies.length>0&&<div style={{marginTop:12,fontSize:11,color:"#7C5CFC"}}>✓ Active in: prep, note structuring, letter drafting, risk scoring</div>}
+          </Card>
+
+          {/* Team members */}
+          <Card style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+              <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Team members</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Manage who can access Compass. Each user has role-based permissions.</p></div>
+            </div>
+            {users.length>0&&(
+              <div style={{marginBottom:14}}>
+                {users.map(u=>(
+                  <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
+                    <div>
+                      <div style={{fontSize:14,color:"#1A1535",fontWeight:currentUser?.id===u.id?600:400}}>{u.name}{currentUser?.id===u.id&&" (you)"}</div>
+                      <div style={{fontSize:11,color:"#6B6880",marginTop:1}}>{u.role} {u.email?"· "+u.email:""}</div>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <div style={{fontSize:10,color:"#5A5570"}}>
+                        {ROLE_PERMS[u.role]?.viewAll?"All cases":"Assigned only"} ·{" "}
+                        {ROLE_PERMS[u.role]?.edit?"Can edit":"Read only"}
+                      </div>
+                      <button onClick={()=>saveUsers(users.filter(x=>x.id!==u.id))} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <UserAddForm onAdd={(name,role,email)=>addUser(name,role,email)} />
+            <div style={{marginTop:12,background:"#FDFAF5",borderRadius:7,padding:"10px 14px"}}>
+              <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:6}}>PERMISSIONS</div>
+              {Object.entries(ROLE_PERMS).map(([role,p])=>(
+                <div key={role} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880",padding:"3px 0"}}>
+                  <span style={{color:"#6B6375",fontWeight:500}}>{role}</span>
+                  <span>{p.viewAll?"All cases":"Assigned"} · {p.edit?"Edit":"Read"} · {p.delete?"Delete":"No delete"} · {p.viewRisk?"Risk":"No risk"}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Notifications */}
+          <Card style={{marginBottom:12}}>
+            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Deadline reminders</h3>
+            <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Get browser notifications for upcoming and overdue deadlines.</p>
+            {dueSoon.length>0?(
+              <div style={{marginBottom:14}}>
+                {dueSoon.slice(0,5).map((d,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
+                    <div>
+                      <span style={{color:d.overdue?"#E8622A":"#F2EDE4"}}>{d.caseName}</span>
+                      <span style={{color:"#6B6880",marginLeft:8}}>{d.step}</span>
+                    </div>
+                    <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:"JetBrains Mono,monospace"}}>{d.overdue?`${Math.abs(d.daysLeft)}d overdue`:`${d.daysLeft}d`}</span>
+                  </div>
+                ))}
+              </div>
+            ):<div style={{fontSize:12,color:"#5A5570",marginBottom:14}}>No upcoming deadlines in the next 7 days</div>}
+            <Btn onClick={requestNotifications} disabled={notifGranted}>{notifGranted?"Notifications enabled":"Enable browser notifications"}</Btn>
+          </Card>
+
+          {/* Audit trail */}
+          <Card style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Audit trail</h3><p style={{fontSize:12,color:"#6B6375",margin:0}}>Every action timestamped and logged.</p></div>
+              <span style={{fontSize:11,color:"#6B6880"}}>{auditLog.length} entries</span>
+            </div>
+            <div style={{maxHeight:240,overflowY:"auto"}}>
+              {auditLog.slice(0,50).map((e,i)=>(
+                <div key={i} style={{display:"flex",gap:12,padding:"8px 0",borderBottom:"1px solid #1a1a1a",alignItems:"flex-start"}}>
+                  <span style={{fontSize:10,color:"#5A5570",fontFamily:"JetBrains Mono,monospace",flexShrink:0,marginTop:1}}>{new Date(e.ts).toLocaleString("en-GB",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
+                  <div>
+                    <span style={{fontSize:11,color:"#1A1535",fontWeight:500}}>{e.action}</span>
+                    {e.detail&&<span style={{fontSize:11,color:"#6B6880",marginLeft:6}}>{e.detail}</span>}
+                    {e.user&&e.user!=="HR Manager"&&<span style={{fontSize:10,color:"#7C5CFC",marginLeft:6}}>· {e.user}</span>}
+                  </div>
+                </div>
+              ))}
+              {auditLog.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No actions logged yet</div>}
+            </div>
+          </Card>
+
+          {/* GDPR / Data */}
+          <Card style={{marginBottom:20}}>
+            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Data &amp; privacy</h3>
+            <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>All data is stored locally in your browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
+            <div style={{background:"#FDFAF5",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+              <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>DATA INVENTORY</div>
+              {[
+                {l:"Case files & meetings",v:cases.length+" cases, "+cases.reduce((t,c)=>t+c.meetings.length,0)+" meetings"},
+                {l:"Policies uploaded",v:policies.length+" documents"},
+                {l:"Whistleblower reports",v:whistleReports.length+" reports"},
+                {l:"Audit log entries",v:auditLog.length+" entries"},
+                {l:"Storage used",v:Math.round(JSON.stringify(localStorage).length/1024)+"kb"},
+              ].map(({l,v})=>(
+                <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880",padding:"3px 0"}}>
+                  <span>{l}</span><span style={{color:"#6B6375"}}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              <Btn variant="secondary" onClick={exportAllData}>Export all data</Btn>
+              <Btn variant="danger" onClick={deleteAllData} style={{color:"#C84B2F"}}>Delete all data</Btn>
+              <button onClick={()=>{setGdprAccepted(false);lsSet("compass_gdpr",false);setShowGdpr(true);}} style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>View privacy notice</button>
+            </div>
+          </Card>
+
+          {/* Help / Onboarding */}
+          <Card style={{marginBottom:20}}>
+            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
+            <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px"}}>Rewatch the getting started guide.</p>
+            <Btn onClick={()=>{setOnboardStep(0);setShowOnboard(true);}}>Restart tour</Btn>
+          </Card>
+
+          <Btn variant="ghost" onClick={()=>setScreen(SCREENS.HOME)}>← Back to home</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
