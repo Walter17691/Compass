@@ -3132,7 +3132,7 @@ Please produce:
                 onClick={()=>{
                   const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
                   setMeetingType(mt);
-                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date,manager:meetingSetup.manager||""}));
+                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date,manager:meetingSetup.manager||"",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
                   setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);
                   const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
                   if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
