@@ -1765,6 +1765,7 @@ Please produce:
   // ── Save to case ──
   const saveMeetingToCase = () => {
     // If this is a witness interview, save to parent case evidence instead
+    console.log("saveMeetingToCase called, _linkedCaseId:", caseInfo._linkedCaseId);
     if(caseInfo._linkedCaseId) {
       const witnessNote = {
         name:"Witness: "+(caseInfo.employee||"Unknown")+" ("+fmtDate(caseInfo.date)+")",
