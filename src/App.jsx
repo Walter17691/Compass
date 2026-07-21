@@ -596,7 +596,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         const advisorCut = full.indexOf("## HR Advisor");
         const keyCut = full.indexOf("\n## Key Points");
         const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
-        return start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
+        const raw = start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
+        return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
       })(),
         employeeName: caseInfo.employee||"Employee",
         managerName: caseInfo.manager||"Manager",
@@ -705,6 +706,22 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
           employeeName: row.employee_name,
           email: row.employee_email || row.email || "",
           meetings: row.meetings || [],
+          evidence: row.evidence || [],
+          stage: row.stage || "open",
+          caseType: row.case_type || "",
+          description: row.description || "",
+          dateReceived: row.date_received || "",
+          urgency: row.urgency || "normal",
+          outcome: row.outcome || "",
+          investigationReport: row.investigation_report || null,
+          investigationReportDate: row.investigation_report_date || null,
+          disciplinaryOfficer: row.disciplinary_officer || null,
+          disciplinaryOfficerId: row.disciplinary_officer_id || null,
+          disciplinaryOfficerEmail: row.disciplinary_officer_email || null,
+          investigatingManager: row.investigating_manager || null,
+          handoffDate: row.handoff_date || null,
+          nextSteps: row.next_steps || [],
+          locationId: row.location_id || "",
           assignedTo: row.assigned_to,
           createdBy: row.created_by,
           createdAt: row.created_at,
@@ -723,6 +740,21 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         employee_name: caseObj.employeeName,
         employee_email: caseObj.email || "",
         meetings: caseObj.meetings || [],
+        evidence: caseObj.evidence || [],
+        stage: caseObj.stage || "open",
+        case_type: caseObj.caseType || "",
+        description: caseObj.description || "",
+        date_received: caseObj.dateReceived || null,
+        urgency: caseObj.urgency || "normal",
+        outcome: caseObj.outcome || "",
+        investigation_report: caseObj.investigationReport || null,
+        investigation_report_date: caseObj.investigationReportDate || null,
+        disciplinary_officer: caseObj.disciplinaryOfficer || null,
+        disciplinary_officer_id: caseObj.disciplinaryOfficerId || null,
+        disciplinary_officer_email: caseObj.disciplinaryOfficerEmail || null,
+        investigating_manager: caseObj.investigatingManager || null,
+        handoff_date: caseObj.handoffDate || null,
+        next_steps: caseObj.nextSteps || [],
         location_id: caseObj.locationId || (member?.role==='location_manager'&&member?.location_ids?.[0])||null,
         assigned_to: user?.id || null,
         created_by: user?.id || null,
@@ -1810,7 +1842,8 @@ Please produce:
         const advisorCut = full.indexOf("## HR Advisor");
         const keyCut = full.indexOf("\n## Key Points");
         const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
-        return start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
+        const raw = start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
+        return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
       })(),
       letterOutput,
       riskScore,
@@ -3552,14 +3585,14 @@ Please produce:
                             <div style={{fontSize:13,color:"#1A7A4A"}}>Report generated {fmtDate(cs.investigationReportDate)}</div>
                           ):invMeetings.some(m=>m.record)?(
                             <div>
-                              <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to generate the report.</div>
+                              <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to conclude.</div>
                               <button onClick={()=>{
-                                saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));
-                                setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));
-                                setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);
-                                handleLetter("investigation-report");
-                              }} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                                Generate investigation report →
+                                const rpt = invMeetings.filter(m=>m.record).map(m=>"Meeting: "+m.type+" — "+m.date+"\n\n"+(m.record||"")).join("\n\n---\n\n");
+                                const fullRpt = "Investigation Report\n\nEmployee: "+cs.employeeName+"\nCase: "+(cs.caseType||"HR Matter")+"\nDate concluded: "+new Date().toLocaleDateString("en-GB")+"\n\n"+rpt;
+                                saveCases(cases.map(x=>x.id===cs.id?{...x,investigationReport:fullRpt,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x));
+                                showToast("Investigation concluded");
+                              }} style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                                Conclude investigation &amp; generate report
                               </button>
                             </div>
                           ):(
@@ -3567,6 +3600,19 @@ Please produce:
                           )
                         }</div>
                       </div>
+                      {cs.investigationReport && !cs.disciplinaryOfficer && (
+                        <div style={{marginTop:12,padding:"14px 16px",background:"#EDE8FF",borderRadius:12,border:"1px solid #C8BCFF"}}>
+                          <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Investigation complete</div>
+                          <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Appoint a disciplinary officer to continue the process.</div>
+                          <button onClick={()=>setShowHandoffModal(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Appoint disciplinary officer →</button>
+                        </div>
+                      )}
+                      {cs.disciplinaryOfficer && (
+                        <div style={{marginTop:12,padding:"14px 16px",background:"#E8F5EE",borderRadius:12,border:"1px solid #A8D5B5"}}>
+                          <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Disciplinary officer appointed</div>
+                          <div style={{fontSize:12,color:"#6B6375",marginTop:2}}>{cs.disciplinaryOfficer} · Handed off {fmtDate(cs.handoffDate)}</div>
+                        </div>
+                      )}
                     </>
                   )}
                   <div style={{marginTop:20,padding:"12px 0",borderTop:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
