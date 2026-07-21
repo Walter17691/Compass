@@ -600,18 +600,19 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     });
     
     const data = await res.json();
+    console.log("signing response:", JSON.stringify(data));
     if(data.success) {
       alert("Signature request sent to "+employeeEmail);
       setShowSignModal(false);
-      saveMeetingToCase();
-      if(!caseInfo._linkedCaseId) {
+      if(caseInfo._linkedCaseId) {
+        saveMeetingToCase();
+      } else {
+        saveMeetingToCase();
         const cs = cases.find(x=>x.employeeName===caseInfo.employee?.trim());
         if(cs) { setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW); }
         else setScreen(SCREENS.CASES);
       }
     } else {
-      alert("Failed to send: "+JSON.stringify(data));
-    }
       alert("Failed to send: "+JSON.stringify(data));
     }
   };
@@ -3501,22 +3502,7 @@ Please produce:
                               <div style={{display:"flex",gap:6,flexShrink:0}}>
                                 {ev.dataUrl&&<a href={ev.dataUrl} download={ev.name} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>Download</a>}
                                 {ev.record&&<button onClick={()=>{setReviewOutput(ev.record);setScreen(SCREENS.REVIEW);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
-                                {ev.signStatus==="signed"?(
-                                  <span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"3px 8px",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>✓ Signed</span>
-                                ):(ev.signId?(
-                                  <button onClick={async()=>{
-                                    try{
-                                      const r=await fetch(`/api/signing?signId=${ev.signId}`);
-                                      const d=await r.json();
-                                      if(d.status==="signed"){
-                                        saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed",signedAt:d.signed_at}:e)}:x));
-                                        showToast("Signature confirmed ✓");
-                                      } else {
-                                        showToast("Not yet signed");
-                                      }
-                                    }catch(e){showToast("Could not check status");}
-                                  }} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Check signature</button>
-                                ):null)}
+                                {ev.type==="Witness statement"&&(ev.signStatus==="signed"?<span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"3px 8px",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Signed</span>:<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed"}:e)}:x))} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>)}
                                 <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter((_,j)=>j!==i)}:x))} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
                               </div>
                             </div>
