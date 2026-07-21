@@ -64,7 +64,7 @@
           <div class="signed-badge">✓ Signed</div>
           <h2 style="margin-top:8px">Document signed successfully</h2>
           <p style="color:#666;font-size:14px">Signed on <span id="signed-date"></span></p>
-          <button class="btn-download" onclick="downloadSigned()" style="margin-top:16px">⬇ Download signed record</button>
+          <button class="btn-download" onclick="downloadSigned()" style="margin-top:16px">Download signed record</button>
         </div>
         <div style="margin-top:16px;padding:16px;background:#141418;border-radius:8px;border:1px solid #2A2A35">
           <div style="font-size:11px;color:#444;margin-bottom:8px">EMPLOYEE SIGNATURE</div>
@@ -89,7 +89,7 @@
         document.getElementById('employee-name').textContent = data.employee_name || '';
         document.getElementById('meeting-date').textContent = data.meeting_date || '';
         document.getElementById('manager-name').textContent = data.manager_name || '';
-        document.getElementById('document-content').textContent = data.document || '';
+        document.getElementById('document-content').textContent = (data.document || '').replace(/^## /gm, '').replace(/^# /gm, '').replace(/\*\*/g, '');
         if (data.status === 'signed') {
           showSigned(data);
         } else {
