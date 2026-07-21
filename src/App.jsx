@@ -2872,7 +2872,7 @@ Please produce:
             <nav style={{display:"flex",alignItems:"center",gap:2}}>
               {[
                 {s:SCREENS.HOME, l:"Home"},
-                {s:SCREENS.CASES, l:"Cases"+(cases.length>0?" ("+cases.length+")":"")},
+                {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
                 ...(isHR?[{s:SCREENS.HR_REVIEW, l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
               ].map(({s,l,badge})=>(
                 <button key={s} onClick={()=>setScreen(s)}
