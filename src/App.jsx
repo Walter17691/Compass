@@ -25,6 +25,7 @@ const MEETING_TYPES = [
 ];
 
 const SCREENS = {
+  ORG_SETTINGS: "org_settings",
   HOME:"home", CASES:"cases", PREP:"prep", RECORD:"record",
   REVIEW:"review", LETTER:"letter", SETTINGS:"settings",
   DASHBOARD:"dashboard", PORTAL:"portal", TIMELINE:"timeline",
@@ -246,6 +247,7 @@ function CompassLogo({ size = 36 }) {
       <ellipse cx="50" cy="50" rx="8" ry="30" transform="rotate(-40 50 50)" fill="#7C5CFC" />
       <circle cx="50" cy="50" r="5.5" fill="#FDFAF5" />
     </svg>
+
   );
 }
 
@@ -500,6 +502,25 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   // ── Multi-user profiles ──
   const [currentUser, setCurrentUser] = useState(member ? {...member, email: user?.email} : (user ? {name: user?.user_metadata?.name||user?.email, email: user?.email, role:"hr_manager"} : ls("compass_user", null)));
+  const [orgRoles, setOrgRoles] = useState([]);
+  const [orgMembers, setOrgMembers] = useState([]);
+  const [showHandoffModal, setShowHandoffModal] = useState(false);
+  const [showOrgSettings, setShowOrgSettings] = useState(false);
+
+  const loadOrgRoles = async () => {
+    if(!org?.id) return;
+    try {
+      const {data} = await supabase.from('org_roles').select('*').eq('org_id', org.id).order('access_level', {ascending:false});
+      if(data) setOrgRoles(data);
+    } catch(e) { console.error('loadOrgRoles', e); }
+  };
+  const loadOrgMembers = async () => {
+    if(!org?.id) return;
+    try {
+      const {data} = await supabase.from('org_members').select('*').eq('org_id', org.id);
+      if(data) setOrgMembers(data);
+    } catch(e) { console.error('loadOrgMembers', e); }
+  };
   const [showUserSwitch, setShowUserSwitch] = useState(false);
   const [users, setUsers] = useState(ls("compass_users", []));
 
@@ -827,7 +848,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadTeamMembers(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadTeamMembers(); } }, [org?.id]);
 
   useEffect(()=>{
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
@@ -2843,6 +2864,7 @@ Please produce:
             {org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
             {currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
             {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
+            <button onClick={()=>setShowOrgSettings(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>
             <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#F5F3FF":"none",border:"1px solid #E8E0D0",color:"#6B6375",borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer"}}>⚙</button>
           </div>
         </div>
