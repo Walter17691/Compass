@@ -2860,7 +2860,7 @@ Please produce:
 
 
       {/* ── HEADER ── */}
-      <header style={{display:screen===SCREENS.HOME?"none":"flex",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
+      <header style={{display:screen===SCREENS.HOME?"none":"flex",display:screen===SCREENS.HOME?"none":"flex",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
         <div style={{maxWidth:1440,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
           
           {/* Logo */}
@@ -2921,48 +2921,76 @@ Please produce:
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
         <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 28px"}}>
+
+          {/* ── Top bar (home-specific, replaces main header) ── */}
+          <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8E0D0",padding:"0 32px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
+            <div style={{display:"flex",alignItems:"center",gap:32}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <CompassLogo size={22}/>
+                <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1C1820",fontWeight:400}}>Compass</span>
+              </div>
+              <nav style={{display:"flex",gap:2}}>
+                {[
+                  {label:"Home", s:SCREENS.HOME},
+                  {label:"Cases", s:SCREENS.CASES, badge:cases.filter(x=>getCaseStage(x)!=="closed").length||null},
+                  {label:"People", s:SCREENS.PEOPLE},
+                  {label:"Policies", s:SCREENS.SETTINGS},
+                  {label:"HR Reviews", s:SCREENS.HR_REVIEW},
+                ].map((item,i)=>(
+                  <button key={i} onClick={()=>setScreen(item.s)} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400}}>
+                    {item.label}
+                    {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
+                  </button>
+                ))}
+              </nav>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:6,padding:"3px 8px"}}>{org.name}</span>}
+              <button onClick={()=>setShowOrgSettings(true)} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Settings</button>
+              {onSignOut&&<button onClick={onSignOut} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
+            </div>
+          </div>
+
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 32px"}}>
 
             {/* ── Greeting + primary actions ── */}
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:24,flexWrap:"wrap",gap:16}}>
               <div>
-                <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>
-                  {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}
-                </div>
+                <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
                 <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:32,fontWeight:400,color:"#1C1820",margin:0,letterSpacing:"-0.5px"}}>
                   Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
                 </h1>
                 <p style={{fontSize:13,color:"#9B9098",margin:"5px 0 0"}}>
                   {(()=>{
-                    const active = cases.filter(cs=>getCaseStage(cs)!=="closed").length;
-                    const actions = cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
-                    if(active===0) return "No active cases. Start by creating a new case.";
+                    const active=cases.filter(cs=>getCaseStage(cs)!=="closed").length;
+                    const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
+                    if(active===0) return "No active cases — create one to get started.";
                     return active+" active case"+(active!==1?"s":"")+(actions>0?" · "+actions+" requiring action":"");
                   })()}
                 </p>
               </div>
-              <div style={{display:"flex",gap:10,flexShrink:0}}>
-                <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #1C1820",borderRadius:9,padding:"11px 20px",cursor:"pointer",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600,letterSpacing:"-0.1px"}}>Start meeting</button>
-                <button onClick={()=>setShowCaseIntake(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"11px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600,letterSpacing:"-0.1px"}}>+ New case</button>
+              <div style={{display:"flex",gap:10,flexShrink:0,marginTop:4}}>
+                <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #1C1820",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
+                <button onClick={()=>setShowCaseIntake(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
               </div>
             </div>
 
             {/* ── Priority strip ── */}
             {(()=>{
-              const actions = cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action);
-              const pendingSigs = cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
-              const overdue = dueSoon.filter(d=>d.overdue);
+              const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action);
+              const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
+              const overdue=dueSoon.filter(d=>d.overdue);
               if(actions.length===0&&pendingSigs===0&&overdue.length===0) return null;
               return (
-                <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A33",borderRadius:12,padding:"14px 18px",marginBottom:24,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-                  <div style={{fontSize:12,fontWeight:700,color:"#E8622A",letterSpacing:"0.3px",flexShrink:0}}>Needs attention</div>
+                <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A44",borderRadius:12,padding:"12px 18px",marginBottom:24,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#E8622A",letterSpacing:"0.5px",textTransform:"uppercase",flexShrink:0}}>Needs attention</div>
                   {actions.slice(0,3).map((cs,i)=>(
-                    <button key={i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:"#E8622A",background:"#FFFFFF",border:"1px solid #E8622A44",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
+                    <button key={i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:"#E8622A",background:"#FFFFFF",border:"1px solid #E8622A44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
                       {cs.employeeName} · {getNextStep(cs)?.label}
                     </button>
                   ))}
-                  {pendingSigs>0&&<div style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:7,padding:"6px 12px",fontWeight:500}}>{pendingSigs} pending signature{pendingSigs!==1?"s":""}</div>}
-                  {overdue.length>0&&<div style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:7,padding:"6px 12px",fontWeight:500}}>{overdue.length} overdue deadline{overdue.length!==1?"s":""}</div>}
+                  {pendingSigs>0&&<span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} pending signature{pendingSigs!==1?"s":""}</span>}
+                  {overdue.length>0&&<span style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{overdue.length} overdue deadline{overdue.length!==1?"s":""}</span>}
                 </div>
               );
             })()}
@@ -2970,25 +2998,17 @@ Please produce:
             {/* ── Stat cards ── */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
               {(()=>{
-                const active = cases.filter(cs=>getCaseStage(cs)!=="closed").length;
-                const actions = cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
-                const pendingSigs = cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
-                const closedMonth = cases.filter(cs=>{
-                  if(getCaseStage(cs)!=="closed") return false;
-                  const d = new Date(cs.updatedAt||cs.createdAt||0);
-                  const n = new Date();
-                  return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();
-                }).length;
-                const updatedWeek = cases.filter(cs=>{
-                  const d = new Date(cs.updatedAt||cs.createdAt||0);
-                  return getCaseStage(cs)!=="closed"&&(Date.now()-d)<7*24*60*60*1000;
-                }).length;
-                const overdueCount = dueSoon.filter(d=>d.overdue).length;
+                const active=cases.filter(cs=>getCaseStage(cs)!=="closed").length;
+                const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
+                const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
+                const closedMonth=cases.filter(cs=>{if(getCaseStage(cs)!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
+                const updatedWeek=cases.filter(cs=>{const d=new Date(cs.updatedAt||cs.createdAt||0);return getCaseStage(cs)!=="closed"&&(Date.now()-d)<7*24*60*60*1000;}).length;
+                const overdueCount=dueSoon.filter(d=>d.overdue).length;
                 return [
-                  {label:"Active cases", value:active, sub:updatedWeek>0?updatedWeek+" updated this week":"No updates this week", accent:"#7C5CFC"},
-                  {label:"Awaiting action", value:actions, sub:actions>0?"Review next steps":"All up to date", accent:"#E8622A"},
-                  {label:"Pending signatures", value:pendingSigs, sub:pendingSigs>0?"Awaiting employee sign-off":"None outstanding", accent:"#1A7A4A"},
-                  {label:"Closed this month", value:closedMonth, sub:overdueCount>0?overdueCount+" deadline"+(overdueCount!==1?"s":"")+" overdue":"No overdue deadlines", accent:"#6B6375"},
+                  {label:"Active cases",value:active,sub:updatedWeek>0?updatedWeek+" updated this week":"No updates this week",accent:"#7C5CFC"},
+                  {label:"Awaiting action",value:actions,sub:actions>0?"Review next steps below":"All up to date",accent:"#E8622A"},
+                  {label:"Pending signatures",value:pendingSigs,sub:pendingSigs>0?"Awaiting employee sign-off":"None outstanding",accent:"#1A7A4A"},
+                  {label:"Closed this month",value:closedMonth,sub:overdueCount>0?overdueCount+" deadline"+(overdueCount!==1?"s":"")+" overdue":"No overdue deadlines",accent:"#6B6375"},
                 ].map(s=>(
                   <div key={s.label} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
                     <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>{s.label}</div>
@@ -3002,10 +3022,10 @@ Please produce:
             {/* ── Main grid ── */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:20,alignItems:"start"}}>
 
-              {/* ── Left: Cases + Calendar ── */}
+              {/* ── Left ── */}
               <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-                {/* Cases header + search */}
+                {/* Cases header */}
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                   <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Active cases</div>
                   <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -3013,9 +3033,9 @@ Please produce:
                       <svg style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#9B9098",pointerEvents:"none"}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                       <input value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Search cases…" style={{paddingLeft:28,paddingRight:10,paddingTop:7,paddingBottom:7,fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,background:"#FFFFFF",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",width:160}}/>
                     </div>
-                    {["all","open","investigation","disciplinary","closed"].map(s=>(
-                      <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"5px 11px",borderRadius:20,border:"1px solid",borderColor:dashFilter===s?"#7C5CFC":"#E8E0D0",background:dashFilter===s?"#EDE8FF":"#FFFFFF",color:dashFilter===s?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:dashFilter===s?600:400,textTransform:"capitalize",whiteSpace:"nowrap"}}>
-                        {s==="all"?"All":s.charAt(0).toUpperCase()+s.slice(1)}
+                    {["active","investigation","disciplinary","closed"].map(s=>(
+                      <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"5px 11px",borderRadius:20,border:"1px solid",borderColor:dashFilter===s?"#7C5CFC":"#E8E0D0",background:dashFilter===s?"#EDE8FF":"#FFFFFF",color:dashFilter===s?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:dashFilter===s?600:400,whiteSpace:"nowrap"}}>
+                        {s.charAt(0).toUpperCase()+s.slice(1)}
                       </button>
                     ))}
                     <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>View all →</button>
@@ -3025,18 +3045,19 @@ Please produce:
                 {/* Cases list */}
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
                   {(()=>{
-                    const filtered = cases.filter(cs=>{
-                      const matchStage = dashFilter==="all"||(dashFilter==="closed"?getCaseStage(cs)==="closed":cs.stage===dashFilter||getCaseStage(cs)===dashFilter);
-                      const matchSearch = !dashSearch||cs.employeeName?.toLowerCase().includes(dashSearch.toLowerCase())||cs.caseType?.toLowerCase().includes(dashSearch.toLowerCase());
+                    const filtered=cases.filter(cs=>{
+                      const stage=getCaseStage(cs);
+                      const matchStage=dashFilter==="active"?stage!=="closed":dashFilter==="closed"?stage==="closed":cs.stage===dashFilter||stage===dashFilter;
+                      const matchSearch=!dashSearch||cs.employeeName?.toLowerCase().includes(dashSearch.toLowerCase())||cs.caseType?.toLowerCase().includes(dashSearch.toLowerCase());
                       return matchStage&&matchSearch;
                     });
                     if(filtered.length===0) return (
                       <div style={{padding:"40px",textAlign:"center"}}>
-                        <div style={{fontSize:14,color:"#9B9098",marginBottom:8}}>{dashSearch?"No cases match your search.":"No cases yet."}</div>
-                        {!dashSearch&&<button onClick={()=>setShowCaseIntake(true)} style={{fontSize:13,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Create your first case</button>}
+                        <div style={{fontSize:14,color:"#9B9098",marginBottom:8}}>{dashSearch?"No cases match your search.":"No active cases."}</div>
+                        {!dashSearch&&<button onClick={()=>setShowCaseIntake(true)} style={{fontSize:13,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Create a case</button>}
                       </div>
                     );
-                    const statusMap = {
+                    const statusMap={
                       open:{label:"Open",color:"#6B6375",bg:"#F5F1EA"},
                       investigation:{label:"In progress",color:"#E8622A",bg:"#FFF0EB"},
                       inv_report:{label:"Awaiting action",color:"#7C5CFC",bg:"#EDE8FF"},
@@ -3044,10 +3065,11 @@ Please produce:
                       closed:{label:"Closed",color:"#1A7A4A",bg:"#E8F5EE"},
                     };
                     return filtered.map((cs,i)=>{
-                      const next = getNextStep(cs);
-                      const st = statusMap[cs.stage||getCaseStage(cs)]||statusMap.open;
-                      const lastUpdated = cs.updatedAt||cs.createdAt;
-                      const daysAgo = lastUpdated?Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24)):null;
+                      const next=getNextStep(cs);
+                      const stage=getCaseStage(cs);
+                      const st=statusMap[cs.stage||stage]||statusMap.open;
+                      const lastUpdated=cs.updatedAt||cs.createdAt;
+                      const daysAgo=lastUpdated?Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24)):null;
                       return (
                         <div key={cs.id}
                           onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
@@ -3075,15 +3097,20 @@ Please produce:
                   })()}
                 </div>
 
-                {/* ── Calendar ── */}
+                {/* Calendar */}
                 {(()=>{
-                  const today = new Date();
-                  const weekDays = Array.from({length:7},(_,i)=>{
-                    const d = new Date(today);
-                    d.setDate(today.getDate()-today.getDay()+1+i);
-                    return d;
+                  const today=new Date();
+                  const weekStart=new Date(today);
+                  weekStart.setDate(today.getDate()-today.getDay()+1);
+                  const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return d;});
+                  const caseMeetings=cases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,employeeName:cs.employeeName,caseId:cs.id})));
+                  const getMeetingsForDay=(d)=>caseMeetings.filter(m=>{
+                    if(!m.date)return false;
+                    const parts=m.date.split("/");
+                    if(parts.length===3){const md=new Date(parts[2],parts[1]-1,parts[0]);return md.toDateString()===d.toDateString();}
+                    return false;
                   });
-                  const caseMeetings = cases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,employeeName:cs.employeeName,caseId:cs.id})));
+                  const todayMeetings=getMeetingsForDay(today);
                   return (
                     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
                       <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -3091,89 +3118,78 @@ Please produce:
                           <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>This week</div>
                           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Calendar</div>
                         </div>
-                        <div style={{display:"flex",gap:8}}>
-                          <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Schedule meeting</button>
-                        </div>
+                        <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Schedule meeting</button>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #F5F1EA"}}>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
                         {weekDays.map((d,i)=>{
-                          const isToday = d.toDateString()===today.toDateString();
-                          const dayMeetings = caseMeetings.filter(m=>{
-                            if(!m.date) return false;
-                            const parts = m.date.split("/");
-                            if(parts.length===3){const md=new Date(parts[2],parts[1]-1,parts[0]);return md.toDateString()===d.toDateString();}
-                            return false;
-                          });
+                          const isToday=d.toDateString()===today.toDateString();
+                          const dayMeetings=getMeetingsForDay(d);
                           return (
-                            <div key={i} style={{padding:"10px 8px",textAlign:"center",borderRight:i<6?"1px solid #F5F1EA":"none",background:isToday?"#EDE8FF":"none"}}>
-                              <div style={{fontSize:10,fontWeight:600,color:isToday?"#7C5CFC":"#9B9098",letterSpacing:"0.5px",marginBottom:4}}>{d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</div>
+                            <div key={i} style={{padding:"10px 6px",textAlign:"center",borderRight:i<6?"1px solid #F5F1EA":"none",borderBottom:"1px solid #F5F1EA",background:isToday?"#EDE8FF":"none",minHeight:70}}>
+                              <div style={{fontSize:10,fontWeight:600,color:isToday?"#7C5CFC":"#9B9098",letterSpacing:"0.5px",marginBottom:3}}>{d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</div>
                               <div style={{fontSize:16,fontWeight:700,color:isToday?"#7C5CFC":"#1C1820",marginBottom:4}}>{d.getDate()}</div>
                               {dayMeetings.slice(0,2).map((m,j)=>(
-                                <div key={j} style={{fontSize:9,background:isToday?"#7C5CFC":"#F5F1EA",color:isToday?"#fff":"#6B6375",borderRadius:3,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}} onClick={()=>{setActiveCaseId(m.caseId);setScreen(SCREENS.CASE_VIEW);}}>{m.employeeName}</div>
+                                <div key={j} onClick={e=>{e.stopPropagation();setActiveCaseId(m.caseId);setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:9,background:isToday?"#7C5CFC":"#EDE8FF",color:isToday?"#fff":"#7C5CFC",borderRadius:3,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer",fontWeight:500}}>{m.employeeName}</div>
                               ))}
-                              {dayMeetings.length>2&&<div style={{fontSize:9,color:"#9B9098"}}>+{dayMeetings.length-2}</div>}
+                              {dayMeetings.length>2&&<div style={{fontSize:9,color:"#9B9098"}}>+{dayMeetings.length-2} more</div>}
                             </div>
                           );
                         })}
                       </div>
                       <div style={{padding:"12px 18px"}}>
-                        {(()=>{
-                          const todayMeetings = caseMeetings.filter(m=>{
-                            if(!m.date) return false;
-                            const parts = m.date.split("/");
-                            if(parts.length===3){const md=new Date(parts[2],parts[1]-1,parts[0]);return md.toDateString()===today.toDateString();}
-                            return false;
-                          });
-                          if(todayMeetings.length===0) return <div style={{fontSize:12,color:"#9B9098",textAlign:"center",padding:"8px 0"}}>No meetings logged for today. Connect your calendar to see external events.</div>;
-                          return todayMeetings.map((m,i)=>(
-                            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<todayMeetings.length-1?"1px solid #F5F1EA":"none"}}>
-                              <div style={{width:3,height:32,background:"#7C5CFC",borderRadius:2,flexShrink:0}}/>
-                              <div>
-                                <div style={{fontSize:12,fontWeight:600,color:"#1C1820"}}>{m.employeeName}</div>
-                                <div style={{fontSize:11,color:"#9B9098"}}>{m.type||"Meeting"}</div>
+                        {todayMeetings.length>0?(
+                          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+                            {todayMeetings.map((m,i)=>(
+                              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#FDFAF5",borderRadius:8}}>
+                                <div style={{width:3,height:28,background:"#7C5CFC",borderRadius:2,flexShrink:0}}/>
+                                <div style={{flex:1}}>
+                                  <div style={{fontSize:12,fontWeight:600,color:"#1C1820"}}>{m.employeeName}</div>
+                                  <div style={{fontSize:11,color:"#9B9098"}}>{m.type||"Meeting"}</div>
+                                </div>
                               </div>
-                            </div>
-                          ));
-                        })()}
-                        <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #F5F1EA",display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <button style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Connect Google Calendar</button>
-                          <button style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Connect Outlook</button>
+                            ))}
+                          </div>
+                        ):(
+                          <div style={{fontSize:12,color:"#9B9098",padding:"6px 0",marginBottom:8}}>No meetings logged today.</div>
+                        )}
+                        <div style={{display:"flex",gap:8,paddingTop:8,borderTop:"1px solid #F5F1EA"}}>
+                          <button style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Google Calendar</button>
+                          <button style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Outlook</button>
                         </div>
                       </div>
                     </div>
                   );
                 })()}
-
               </div>
 
               {/* ── Right column ── */}
               <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-                {/* AI HR Advisor */}
-                <div style={{background:"#1C1820",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #2A2535"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI powered</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#FFFFFF",fontWeight:400}}>HR Advisor</div>
-                    <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>UK employment law · ACAS guidance</div>
+                {/* AI HR Advisor — matches main app theme */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",background:"linear-gradient(135deg,#EDE8FF 0%,#FDFAF5 100%)"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI powered</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>HR Advisor</div>
+                    <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>UK employment law · ACAS · Best practice</div>
                   </div>
                   <div style={{padding:14}}>
                     <div style={{maxHeight:200,overflowY:"auto",marginBottom:10,display:"flex",flexDirection:"column",gap:8}}>
                       {askCompassHistory.length===0&&(
                         <div style={{display:"flex",flexDirection:"column",gap:6}}>
                           {["ACAS disciplinary process?","Dismissal on zero-hours contract?","Reasonable adjustments — what's required?","How long should an investigation take?"].map((q,i)=>(
-                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#9B9098",background:"#252030",border:"1px solid #2A2535",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
+                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
                           ))}
                         </div>
                       )}
                       {askCompassHistory.map((m,i)=>(
                         <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.5,padding:"7px 10px",borderRadius:8,background:m.role==="user"?"#7C5CFC":"#252030",color:m.role==="user"?"#fff":"#C4BDAF"}}>{m.content}</div>
+                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.5,padding:"7px 10px",borderRadius:8,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
                         </div>
                       ))}
-                      {askCompassProcessing&&<div style={{fontSize:12,color:"#6B6375",fontStyle:"italic"}}>Thinking…</div>}
+                      {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic",padding:"4px 0"}}>Thinking…</div>}
                     </div>
                     <div style={{display:"flex",gap:6}}>
-                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1px solid #2A2535",borderRadius:7,padding:"7px 10px",background:"#252030",color:"#F2EDE4",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
+                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1.5px solid #E8E0D0",borderRadius:7,padding:"7px 10px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
                       <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600}}>→</button>
                     </div>
                   </div>
@@ -3187,16 +3203,14 @@ Please produce:
                   </div>
                   <div style={{padding:"4px 0"}}>
                     {(()=>{
-                      const links = policies.length>0
-                        ? policies.slice(0,5).map(p=>({label:p.name||p.title||"Policy",type:"POLICY"}))
-                        : [{label:"Disciplinary Policy",type:"POLICY"},{label:"Grievance Policy",type:"POLICY"},{label:"ACAS Code of Practice",type:"GUIDE"},{label:"Invitation to hearing",type:"TEMPLATE"},{label:"Outcome letter",type:"TEMPLATE"}];
+                      const links=policies.length>0
+                        ?policies.slice(0,5).map(p=>({label:p.name||p.title||"Policy",type:"POLICY"}))
+                        :[{label:"Disciplinary Policy",type:"POLICY"},{label:"Grievance Policy",type:"POLICY"},{label:"ACAS Code of Practice",type:"GUIDE"},{label:"Invitation to hearing",type:"TEMPLATE"},{label:"Outcome letter",type:"TEMPLATE"}];
                       return links.map((item,i)=>(
                         <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<links.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
                           onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
                           onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                          <div style={{width:28,height:28,background:"#FFF0EB",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                            <div style={{width:3,height:14,background:"#E8622A",borderRadius:2}}/>
-                          </div>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:10,color:"#9B9098",fontWeight:600,letterSpacing:"0.5px"}}>{item.type}</div>
                             <div style={{fontSize:12,color:"#1C1820",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.label}</div>
@@ -3205,7 +3219,7 @@ Please produce:
                         </button>
                       ));
                     })()}
-                    <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all policies →</button>
+                    <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all →</button>
                   </div>
                 </div>
 
