@@ -3134,6 +3134,7 @@ Please produce:
                   {label:"People", s:SCREENS.PEOPLE},
                   {label:"Policies", s:SCREENS.SETTINGS},
                   {label:"HR Reviews", s:SCREENS.HR_REVIEW},
+                  {label:"Reports", s:SCREENS.ERREPORT},
                 ].map((item,i)=>(
                   <button key={i} onClick={()=>setScreen(item.s)} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400}}>
                     {item.label}
