@@ -3606,7 +3606,7 @@ Please produce:
                           }).join(" ;; ");
                           const evidence = empCases.flatMap(cs=>(cs.evidence||[]).map(e=>e.name||e.type)).filter(Boolean).join(", ")||"None";
                           const prompt = "You are a senior UK HR professional. Generate a comprehensive employment profile report for: "+empName+". Total cases: "+empCases.length+". Active: "+activeCases.length+". Total meetings: "+allMeetings.length+". Evidence on file: "+evidence+". Case history: "+caseHistory+". Write a professional employment profile with sections: 1) Employment Summary 2) Case History Overview 3) Pattern Analysis 4) Current Position 5) Risk Assessment 6) Recommended Next Steps. Be factual, objective, ACAS-compliant. Use professional HR language.";
-                          const response = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:prompt}]})});
+                          const response = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:prompt}]})});
                           const data = await response.json();
                           const text = data.content&&data.content[0]&&data.content[0].text?data.content[0].text:"Unable to generate profile.";
                           setEmploymentProfileOutput(text);
