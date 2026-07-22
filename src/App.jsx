@@ -273,22 +273,23 @@ function SectionTitle({ children }) {
 }
 
 function MDRenderer({ text, light }) {
-  const base = "#1A1535";
-  const muted = "#6B6375";
+  const base = light ? "#1C1820" : "#1A1535";
   const accent = "#7C5CFC";
   if(!text) return null;
   const clean = text
-    .replace(/\*\*(.+?)\*\*/g, '')
-    .replace(/\*(.+?)\*/g, '')
-    .replace(/#{1,3} /g, '');
-  const lines = clean.split(String.fromCharCode(10));
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/#{1,6} /g, '');
+  const lns = clean.split(String.fromCharCode(10));
   return (
-    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.7,color:base}}>
-      {lines.map((line,i)=>{
-        if(!line.trim()) return <div key={i} style={{height:8}}/>;
-        if(line.startsWith('- ') || line.startsWith('• ')) return <div key={i} style={{display:"flex",gap:8,marginBottom:4}}><span style={{color:accent,flexShrink:0,marginTop:2}}>·</span><span style={{color:base}}>{line.slice(2)}</span></div>;
-        if(/^\d+\./.test(line)) return <div key={i} style={{marginBottom:4,color:base}}>{line}</div>;
-        return <p key={i} style={{margin:"0 0 8px",color:base}}>{line}</p>;
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.75,color:base}}>
+      {lns.map((line,i)=>{
+        const t = line.trim();
+        if(!t) return <div key={i} style={{height:8}}/>;
+        if(t==="---"||t==="***") return <hr key={i} style={{border:"none",borderTop:"1px solid #E8E0D0",margin:"10px 0"}}/>;
+        if(t.startsWith("- ")||t.startsWith("\u2022 ")||t.startsWith("* ")) return <div key={i} style={{display:"flex",gap:8,marginBottom:5,color:base,alignItems:"flex-start"}}><span style={{color:accent,flexShrink:0,fontSize:16,lineHeight:"1.4"}}>\u00b7</span><span>{t.startsWith("* ")?t.slice(2):t.slice(2)}</span></div>;
+        if(/^\d+\.\s/.test(t)) return <div key={i} style={{marginBottom:5,paddingLeft:10,borderLeft:"2px solid #EDE8FF",color:base}}>{t}</div>;
+        return <p key={i} style={{margin:"0 0 8px",color:base}}>{t}</p>;
       })}
     </div>
   );
@@ -6322,7 +6323,7 @@ Please produce:
                             </div>
                             {note.confidential&&<span style={{fontSize:9,color:"#6B6880",border:"1px solid #E8E0D0",borderRadius:3,padding:"1px 6px",letterSpacing:0.5}}>CONFIDENTIAL</span>}
                           </div>
-                          <div style={{fontSize:13,color:"#3D3560",lineHeight:1.7,marginBottom:10,whiteSpace:"pre-wrap"}}>{note.content}</div>
+                          <div style={{fontSize:13,color:"#3D3560",lineHeight:1.7,marginBottom:10,whiteSpace:"pre-wrap"}}><MDRenderer text={note.content}/></div>
                           {note.supportOffered&&(
                             <div style={{fontSize:11,color:"#6B6880",marginBottom:8}}>
                               <span style={{color:"#6B6375",fontWeight:600}}>Support offered: </span>{note.supportOffered}
