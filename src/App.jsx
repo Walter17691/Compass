@@ -2860,7 +2860,7 @@ Please produce:
 
 
       {/* ── HEADER ── */}
-      <header style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
+      <header style={{display:screen===SCREENS.HOME?"none":"flex",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
         <div style={{maxWidth:1440,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
           
           {/* Logo */}
@@ -2906,7 +2906,7 @@ Please produce:
       </header>
 
       {/* ── Deadline banner ── */}
-      {dueSoon.some(d=>d.overdue)&&screen===SCREENS.HOME&&(
+      {dueSoon.some(d=>d.overdue)&&screen!==SCREENS.HOME&&(
         <div style={{background:"#FEF0EB",borderBottom:"1px solid #E8622A33",padding:"8px 20px"}}>
           <div style={{maxWidth:1440,margin:"0 auto",display:"flex",alignItems:"center",gap:12,fontSize:12}}>
             <span style={{color:"#C84B2F",fontWeight:600}}>Overdue actions:</span>
@@ -2930,14 +2930,14 @@ Please produce:
             </div>
             <nav style={{flex:1,display:"flex",flexDirection:"column",gap:2,padding:"0 12px"}}>
               {[
-                {label:"Dashboard", screen:SCREENS.HOME, active:true},
-                {label:"Active cases", screen:SCREENS.CASES, badge:cases.filter(x=>x.stage!=="closed").length||null},
-                {label:"Policies", screen:SCREENS.SETTINGS},
-                {label:"Templates", screen:SCREENS.SETTINGS},
-                {label:"People", screen:SCREENS.PEOPLE},
-                {label:"HR Reviews", screen:SCREENS.HR_REVIEW},
+                {label:"Dashboard", screen:SCREENS.HOME, active:screen===SCREENS.HOME},
+                {label:"Active cases", screen:SCREENS.CASES, active:screen===SCREENS.CASES, badge:cases.filter(x=>x.stage!=="closed").length||null},
+                {label:"Policies & templates", screen:SCREENS.SETTINGS, active:screen===SCREENS.SETTINGS},
+                {label:"People", screen:SCREENS.PEOPLE, active:screen===SCREENS.PEOPLE},
+                {label:"HR Reviews", screen:SCREENS.HR_REVIEW, active:screen===SCREENS.HR_REVIEW},
+                {label:"Org settings", screen:null, active:false, action:()=>setShowOrgSettings(true)},
               ].map((item,i)=>(
-                <button key={i} onClick={()=>setScreen(item.screen)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:"none",background:item.active?"#2A2535":"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"background 0.15s",width:"100%"}}
+                <button key={i} onClick={()=>item.action?item.action():setScreen(item.screen)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:"none",background:item.active?"#2A2535":"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"background 0.15s",width:"100%"}}
                   onMouseEnter={e=>{if(!item.active)e.currentTarget.style.background="#252030";}}
                   onMouseLeave={e=>{if(!item.active)e.currentTarget.style.background="none";}}>
                   <span style={{fontSize:13,color:item.active?"#FFFFFF":"#9B9098",fontWeight:item.active?600:400}}>{item.label}</span>
@@ -2971,9 +2971,9 @@ Please produce:
             {/* Stat cards */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:28}}>
               {[
-                {label:"Active cases", value:cases.filter(cs=>getCaseStage(cs)!=="closed").length, sub:cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length+" requiring action"},
-                {label:"Actions due", value:cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length, sub:dueSoon.filter(d=>d.overdue).length+" overdue"},
-                {label:"Pending signatures", value:cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0), sub:"Awaiting employee sign-off"},
+                {label:"Active cases", value:cases.filter(cs=>getCaseStage(cs)!=="closed").length, sub:(()=>{const n=cases.filter(cs=>{const d=new Date(cs.updatedAt||cs.createdAt||0);return getCaseStage(cs)!=="closed"&&(Date.now()-d)<7*24*60*60*1000;}).length;return n>0?n+" updated this week":"No updates this week";})()},
+                {label:"Actions due", value:cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length, sub:(()=>{const n=dueSoon.filter(d=>d.overdue).length;return n>0?n+" overdue":"All up to date";})()},
+                {label:"Pending signatures", value:cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0), sub:(()=>{const n=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="signed").length,0);return n>0?n+" signed to date":"None signed yet";})()},
               ].map(s=>(
                 <div key={s.label} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 22px"}}>
                   <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>{s.label}</div>
@@ -3074,13 +3074,15 @@ Please produce:
                     <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Quick links</div>
                   </div>
                   <div style={{padding:"4px 0"}}>
-                    {[
-                      {type:"POLICY",label:"Disciplinary Policy",screen:SCREENS.SETTINGS},
-                      {type:"POLICY",label:"Grievance Policy",screen:SCREENS.SETTINGS},
-                      {type:"GUIDE",label:"ACAS Code of Practice",screen:SCREENS.SETTINGS},
-                      {type:"TEMPLATE",label:"Invitation to hearing",screen:SCREENS.SETTINGS},
-                      {type:"TEMPLATE",label:"Outcome letter",screen:SCREENS.SETTINGS},
-                    ].map((item,i)=>(
+                    {(()=>{
+                      const policyLinks = policies.slice(0,5).map(p=>({type:"POLICY",label:p.name||p.title||"Policy",screen:SCREENS.SETTINGS}));
+                      const fallback = [
+                        {type:"POLICY",label:"Disciplinary Policy",screen:SCREENS.SETTINGS},
+                        {type:"GUIDE",label:"ACAS Code of Practice",screen:SCREENS.SETTINGS},
+                        {type:"TEMPLATE",label:"Invitation to hearing",screen:SCREENS.SETTINGS},
+                      ];
+                      const links = policyLinks.length>0?policyLinks:fallback;
+                      return links.map((item,i)=>(
                       <button key={i} onClick={()=>setScreen(item.screen)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"11px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<4?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
                         onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
                         onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -3093,7 +3095,8 @@ Please produce:
                         </div>
                         <span style={{color:"#C4BAB0",fontSize:14}}>›</span>
                       </button>
-                    ))}
+                    ));
+                    })()}
                   </div>
                 </div>
 
