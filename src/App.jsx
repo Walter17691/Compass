@@ -224,10 +224,10 @@ function CompassLogo({ size = 36 }) {
   const s = size;
   return (
     <svg width={s} height={s} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
-      <circle cx="50" cy="50" r="48" fill="#7C5CFC" />
-      <polygon points="50,20 55,50 50,58 45,50" fill="#FFFFFF" />
-      <polygon points="50,80 45,50 50,42 55,50" fill="rgba(255,255,255,0.35)" />
-      <circle cx="50" cy="50" r="4" fill="#7C5CFC" />
+      <circle cx="50" cy="50" r="48" fill="#7C5CFC"/>
+      <polygon points="50,16 56,50 50,58 44,50" fill="#FDFAF5"/>
+      <polygon points="50,84 44,50 50,42 56,50" fill="rgba(253,250,245,0.28)"/>
+      <circle cx="50" cy="50" r="5" fill="#7C5CFC" stroke="#FDFAF5" stroke-width="2"/>
     </svg>
   );
 }
@@ -3120,7 +3120,10 @@ Please produce:
             <div style={{display:"flex",alignItems:"center",gap:32}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <CompassLogo size={30}/>
-                <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400,letterSpacing:"-0.3px"}}>Compass</span>
+                <div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400,letterSpacing:"-0.3px",lineHeight:1.1}}>Compass</div>
+                  <div style={{fontSize:8,color:"#9B9098",letterSpacing:"1.5px",textTransform:"uppercase",lineHeight:1}}>HR Intelligence</div>
+                </div>
               </div>
               <nav style={{display:"flex",gap:2}}>
                 {[
