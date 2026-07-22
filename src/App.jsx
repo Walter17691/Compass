@@ -981,7 +981,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     const caseContext = cases.length > 0
       ? "Active cases: " + cases.map(ca=>ca.employeeName + " ("+ca.meetings.length+" meetings)").join(", ")
       : "No active cases yet.";
-    const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Be concise and practical. Use ## for section headers and - for bullet points. Never use ** for bold, never use emoji, never use markdown tables. Plain clear English only. " + caseContext;
+    const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Give thorough, practical answers. Use plain numbered lists and bullet points (- ) for structure. Never use ## headers, never use ** for bold, never use emoji, never use markdown tables. Plain clear English only. Separate sections with a blank line. " + caseContext;
     
     let userContent;
     if(homeAttachment?.base64) {
@@ -1001,7 +1001,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           model:"claude-sonnet-4-6",
-          max_tokens:800,
+          max_tokens:3000,
           stream:false,
           system:sys,
           messages:newHistory,
@@ -5632,7 +5632,7 @@ Please produce:
                   const prompt = "You are a senior HR director. Write a concise executive summary of the following HR data for this organisation. Be factual and highlight key risks, patterns and recommendations. Data: Total cases: "+cases.length+". Active: "+activeCases.length+". Closed: "+closedCases.length+". Case types: "+caseTypeList.map(([t,n])=>t+": "+n).join(", ")+". Outcomes: "+outcomeList.map(([o,n])=>o+": "+n).join(", ")+". High risk cases: "+highRisk.length+". Slow investigations (>28 days): "+slowInvestigations.length+". Repeat employees: "+repeatEmployees.length+". Average resolution time: "+(avgResolution?avgResolution+" days":"unknown")+". Write 3-4 paragraphs. No markdown.";
                   setReportNarrative("Generating...");
                   try {
-                    const r = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
+                    const r = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})});
                     const d = await r.json();
                     setReportNarrative(d.content?.[0]?.text||"Unable to generate.");
                   } catch(e) { setReportNarrative("Error generating summary."); }
