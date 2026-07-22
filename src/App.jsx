@@ -524,6 +524,10 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [newCaseLocation, setNewCaseLocation] = useState("");
   const [newCaseType, setNewCaseType] = useState("");
   const [newCaseDescription, setNewCaseDescription] = useState("");
+  const [editingEmployeeRecord, setEditingEmployeeRecord] = useState(false);
+  const [editJobTitle, setEditJobTitle] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editLocation, setEditLocation] = useState("");
   const [dashFilter, setDashFilter] = useState("all");
   const [showOrgSettings, setShowOrgSettings] = useState(false);
 
@@ -3637,10 +3641,8 @@ Please produce:
               {/* Employee details */}
               {(()=>{
                 const rec = getEmployeeRecord(empName)||{};
-                const [editing, setEditing] = React.useState(false);
-                const [editJobTitle, setEditJobTitle] = React.useState(rec.jobTitle||"");
-                const [editStartDate, setEditStartDate] = React.useState(rec.startDate||"");
-                const [editLocation, setEditLocation] = React.useState(rec.location||"");
+                const editing = editingEmployeeRecord;
+                const setEditing = setEditingEmployeeRecord;
                 const tenure = rec.startDate?(()=>{
                   const d = new Date(rec.startDate);
                   const now = new Date();
@@ -3658,7 +3660,7 @@ Please produce:
                         {rec.location&&<div><div style={{fontSize:10,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Location</div><div style={{fontSize:13,color:"#1C1820",fontWeight:500}}>{rec.location}</div></div>}
                         {!rec.jobTitle&&!rec.startDate&&!rec.location&&!editing&&<div style={{fontSize:12,color:"#9B9098"}}>No employee details on file.</div>}
                       </div>
-                      <button onClick={()=>{setEditing(!editing);setEditJobTitle(rec.jobTitle||"");setEditStartDate(rec.startDate||"");setEditLocation(rec.location||"");}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,flexShrink:0}}>{editing?"Cancel":"Edit details"}</button>
+                      <button onClick={()=>{if(!editing){setEditJobTitle(rec.jobTitle||"");setEditStartDate(rec.startDate||"");setEditLocation(rec.location||"");}setEditing(!editing);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,flexShrink:0}}>{editing?"Cancel":"Edit details"}</button>
                     </div>
                     {editing&&(
                       <div>
