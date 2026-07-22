@@ -225,12 +225,9 @@ function CompassLogo({ size = 36 }) {
   return (
     <svg width={s} height={s} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
       <circle cx="50" cy="50" r="48" fill="#7C5CFC" />
-      <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-      <polygon points="50,18 56,50 50,56 44,50" fill="#FFFFFF" opacity="0.95" />
-      <polygon points="50,82 44,50 50,44 56,50" fill="rgba(255,255,255,0.4)" />
-      <polygon points="18,50 50,44 56,50 50,56" fill="rgba(255,255,255,0.4)" />
-      <polygon points="82,50 50,56 44,50 50,44" fill="#FFFFFF" opacity="0.95" />
-      <circle cx="50" cy="50" r="5" fill="#7C5CFC" stroke="#FFFFFF" strokeWidth="2" />
+      <polygon points="50,20 55,50 50,58 45,50" fill="#FFFFFF" />
+      <polygon points="50,80 45,50 50,42 55,50" fill="rgba(255,255,255,0.35)" />
+      <circle cx="50" cy="50" r="4" fill="#7C5CFC" />
     </svg>
   );
 }
@@ -3327,24 +3324,24 @@ Please produce:
                     <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>HR Advisor</div>
                     <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>UK employment law · ACAS · Best practice</div>
                   </div>
-                  <div style={{padding:14,background:"#1C1820"}}>
+                  <div style={{padding:14}}>
                     <div style={{maxHeight:200,overflowY:"auto",marginBottom:10,display:"flex",flexDirection:"column",gap:8}}>
                       {askCompassHistory.length===0&&(
                         <div style={{display:"flex",flexDirection:"column",gap:6}}>
                           {["ACAS disciplinary process?","Dismissal on zero-hours contract?","Reasonable adjustments — what's required?","How long should an investigation take?"].map((q,i)=>(
-                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#9B9098",background:"#252030",border:"1px solid #2A2535",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
+                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
                           ))}
                         </div>
                       )}
                       {askCompassHistory.map((m,i)=>(
                         <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 11px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#252030",color:m.role==="user"?"#fff":"#C4BDAF"}}>{m.content}</div>
+                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 11px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
                         </div>
                       ))}
-                      {askCompassProcessing&&<div style={{fontSize:12,color:"#6B6375",fontStyle:"italic",padding:"4px 0"}}>Thinking…</div>}
+                      {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic",padding:"4px 0"}}>Thinking…</div>}
                     </div>
                     <div style={{display:"flex",gap:6}}>
-                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1px solid #2A2535",borderRadius:7,padding:"8px 10px",background:"#252030",color:"#F2EDE4",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
+                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1.5px solid #E8E0D0",borderRadius:7,padding:"8px 10px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
                       <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700,letterSpacing:"-0.5px"}}>→</button>
                     </div>
                   </div>
