@@ -523,6 +523,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [newCaseDescription, setNewCaseDescription] = useState("");
   const [newCaseLocationOther, setNewCaseLocationOther] = useState("");
   const [editingEmployeeRecord, setEditingEmployeeRecord] = useState(false);
+  const [showOutcomeModal, setShowOutcomeModal] = useState(false);
+  const [outcomeType, setOutcomeType] = useState("");
+  const [outcomeNotes, setOutcomeNotes] = useState("");
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editLocation, setEditLocation] = useState("");
@@ -1216,23 +1219,94 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     audit("Calendar event exported", title);
   };
 
-  // ── Deadline checker ──
+  // ── Deadline checker — UK statutory & ACAS deadlines ──
   useEffect(() => {
     const today = new Date();
+    today.setHours(0,0,0,0);
     const due = [];
-    cases.forEach(c => {
-      c.meetings.forEach(m => {
+
+    const workingDaysFromDate = (dateStr, days) => {
+      let start;
+      if(dateStr && dateStr.includes('/')) { const p=dateStr.split('/'); start=new Date(p[2],p[1]-1,p[0]); }
+      else { start=new Date(dateStr); }
+      if(isNaN(start)) return null;
+      let count=0; let d=new Date(start);
+      while(count<days){ d.setDate(d.getDate()+1); const day=d.getDay(); if(day!==0&&day!==6) count++; }
+      return d;
+    };
+
+    const addDeadline = (employeeName, label, deadlineDate, category) => {
+      if(!deadlineDate||isNaN(deadlineDate)) return;
+      deadlineDate.setHours(0,0,0,0);
+      const diff = Math.ceil((deadlineDate-today)/(1000*60*60*24));
+      if(diff<=14) due.push({employeeName,label,category,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),overdue:diff<0});
+    };
+
+    cases.forEach(cs => {
+      if(getCaseStage(cs)==="closed") return;
+      const meetings = cs.meetings||[];
+      const evidence = cs.evidence||[];
+
+      // Manual next steps
+      meetings.forEach(m => {
         (m.nextSteps||[]).filter(s=>!s.done&&s.deadline).forEach(s => {
-          const dl = new Date(s.deadline.split("/").reverse().join("-"));
-          const diff = Math.ceil((dl-today)/(1000*60*60*24));
-          if(diff <= 7 && diff >= 0) due.push({caseName:c.employeeName, step:s.step, deadline:s.deadline, daysLeft:diff});
-          else if(diff < 0) due.push({caseName:c.employeeName, step:s.step, deadline:s.deadline, daysLeft:diff, overdue:true});
+          const parts=s.deadline.split("/");
+          const dl=parts.length===3?new Date(parts[2],parts[1]-1,parts[0]):new Date(s.deadline);
+          addDeadline(cs.employeeName, s.step||"Next step due", dl, "next_step");
         });
       });
+
+      // Disciplinary outcome — 5 working days from hearing
+      const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary")&&!(m.type||"").toLowerCase().includes("investigation"));
+      discMeetings.forEach(m => {
+        const hasOutcome = cs.outcome||meetings.some(mt=>mt.letterOutput&&(mt.type||"").toLowerCase().includes("outcome"));
+        if(!hasOutcome) {
+          const dl = workingDaysFromDate(m.savedAt||m.date, 5);
+          if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS: 5 working days)", dl, "outcome");
+        }
+      });
+
+      // Appeal window — 5 working days from outcome letter
+      const outcomeLetters = meetings.filter(m=>m.letterOutput&&(m.type||"").toLowerCase().includes("disciplinary"));
+      outcomeLetters.forEach(m => {
+        const dl = workingDaysFromDate(m.savedAt||m.date, 5);
+        if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal");
+      });
+
+      // Investigation overrunning — 28 days
+      if((cs.stage==="investigation"||getCaseStage(cs)==="investigation")&&!cs.investigationReport) {
+        const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
+        if(invMeetings.length>0) {
+          const first = invMeetings[0];
+          const startStr = first.savedAt||first.date;
+          if(startStr) {
+            let start; if(startStr.includes('/')) { const p=startStr.split('/'); start=new Date(p[2],p[1]-1,p[0]); } else start=new Date(startStr);
+            const daysSince = Math.ceil((today-start)/(1000*60*60*24));
+            if(daysSince>21) { const dl=new Date(start); dl.setDate(dl.getDate()+28); addDeadline(cs.employeeName,"Investigation overrunning — consider concluding (ACAS guidance)",dl,"investigation"); }
+          }
+        }
+      }
+
+      // Grievance acknowledgement — 5 working days from receipt
+      if((cs.caseType||"").toLowerCase()==="grievance"&&meetings.length===0&&cs.dateReceived) {
+        const dl = workingDaysFromDate(cs.dateReceived, 5);
+        if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS: 5 working days)", dl, "grievance");
+      }
+
+      // Pending signature chase — 7 days
+      evidence.filter(e=>e.signStatus==="pending"&&e.signId).forEach(e => {
+        const sent=e.sentAt||e.date;
+        if(sent) {
+          const sentDate=new Date(sent);
+          const daysPending=Math.ceil((today-sentDate)/(1000*60*60*24));
+          if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature"); }
+        }
+      });
     });
+
+    due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.daysLeft-b.daysLeft; });
     setDueSoon(due);
   }, [cases]);
-
   // ── Browser notifications ──
   const requestNotifications = async () => {
     if(!("Notification" in window)) return;
@@ -3928,6 +4002,24 @@ Please produce:
                     <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0",marginBottom:16}}>
                       <div style={{fontSize:14,color:"#9B9098",marginBottom:12}}>No {activeStage.label.toLowerCase()} meetings yet</div>
                       <button onClick={()=>{const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start {activeStage.label.toLowerCase()} meeting</button>
+                    </div>
+                  )}
+
+                  {activeStage.id==="disciplinary"&&(
+                    <div style={{marginTop:16}}>
+                      {cs.outcome?(
+                        <div style={{background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:12,padding:"16px 20px"}}>
+                          <div style={{fontSize:11,fontWeight:700,color:"#1A7A4A",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Outcome issued</div>
+                          <div style={{fontSize:14,fontWeight:600,color:"#1C1820",marginBottom:4}}>{cs.outcome}</div>
+                          <div style={{fontSize:12,color:"#6B6375"}}>Issued {fmtDate(cs.outcomeDate)} · Appeal window: 5 working days from issue</div>
+                        </div>
+                      ):(
+                        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px"}}>
+                          <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Issue disciplinary outcome</div>
+                          <div style={{fontSize:12,color:"#6B6375",marginBottom:14}}>Once the hearing is complete, issue the written outcome. ACAS recommends within 5 working days of the hearing. The outcome letter starts the employee's 5-day appeal window.</div>
+                          <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome →</button>
+                        </div>
+                      )}
                     </div>
                   )}
 
