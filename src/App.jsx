@@ -326,7 +326,7 @@ function SignaturePad({ onSave, onClose }) {
   };
 
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <Card style={{width:500,maxWidth:"90vw"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#7C5CFC",fontWeight:600}}>E-signature</span>
@@ -385,7 +385,7 @@ function AdjustmentForm({ onAdd }) {
   const [adj, setAdj] = useState("");
   const [review, setReview] = useState("");
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",marginTop:14,borderTop:"1px solid #E8E0D0",paddingTop:14}}>
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",marginTop:14,borderTop:"1px solid #E8E0D0",paddingTop:14}}>
       <div style={{fontSize:11,color:"#6B6880",marginBottom:8,fontWeight:600}}>Add adjustment</div>
       <input placeholder="e.g. Flexible start time, additional breaks, remote working" value={adj} onChange={e=>setAdj(e.target.value)}
         style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
@@ -2693,10 +2693,10 @@ Please produce:
 
 
   return (
-    <div style={{fontFamily:"Inter,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"Inter,system-ui,sans-serif",color:"#1A1535"}}>
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1A1535"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
-        input,textarea{font-family:Inter,system-ui,sans-serif;color:#F2EDE4;}
+        input,textarea{font-family:DM Sans,system-ui,sans-serif;color:#F2EDE4;}
         input[type="date"]{color-scheme:dark;color:#F2EDE4;cursor:pointer;}
         input[type="date"]::-webkit-calendar-picker-indicator{opacity:0;position:absolute;right:0;width:40px;height:100%;cursor:pointer;}
         .date-wrap{position:relative;display:block;}
@@ -3383,8 +3383,8 @@ Please produce:
                           <div style={{fontSize:12,color:"#9B9098",padding:"6px 0",marginBottom:8}}>No meetings logged today.</div>
                         )}
                         <div style={{display:"flex",gap:8,paddingTop:8,borderTop:"1px solid #F5F1EA"}}>
-                          <button style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Google Calendar</button>
-                          <button style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Outlook</button>
+                          <button onClick={()=>showToast("Google Calendar integration coming soon")} style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Google Calendar</button>
+                          <button onClick={()=>showToast("Outlook integration coming soon")} style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Outlook</button>
                         </div>
                       </div>
                     </div>
@@ -4298,7 +4298,7 @@ Please produce:
           <div style={{textAlign:"left",marginBottom:16}}>
             <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#C84B2F"}}>*</span></label>
             <select value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#F2EDE4":"#555",boxSizing:"border-box"}}>
+              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#1C1820":"#9B9098",boxSizing:"border-box"}}>
               <option value="" disabled>Select meeting type...</option>
               <option disabled style={{color:"#6B6880"}}>── ER Meetings ──</option>
               {MEETING_TYPES.filter(t=>t.mode==="er"&&t.group==="formal").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
@@ -4716,7 +4716,7 @@ Please produce:
             <div style={{maxWidth:1440,margin:"0 auto",padding:"0 20px",display:"flex",gap:2}}>
               {[{id:"outcome",l:"Outcome letter"},{id:"invite",l:"Invitation"},{id:"appeal",l:"Appeal outcome"}].map(lt=>(
                 <button key={lt.id} onClick={()=>handleLetter(lt.id)}
-                  style={{background:"none",border:"none",borderBottom:"2px solid",borderBottomColor:activeLetter===lt.id?"#7C5CFC":"transparent",padding:"12px 16px",fontSize:13,color:activeLetter===lt.id?"#F2EDE4":"#666",fontWeight:activeLetter===lt.id?600:400}}>
+                  style={{background:"none",border:"none",borderBottom:"2px solid",borderBottomColor:activeLetter===lt.id?"#7C5CFC":"transparent",padding:"12px 16px",fontSize:13,color:activeLetter===lt.id?"#FFFFFF":"#9B9098",fontWeight:activeLetter===lt.id?600:400}}>
                   {lt.l}
                 </button>
               ))}
@@ -4806,7 +4806,7 @@ Please produce:
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
                   {[{l:"Total cases",v:cases.length,c:"#7C5CFC"},{l:"Open cases",v:open.length,c:"#7C5CFC"},{l:"Total meetings",v:allM.length,c:"#D4882A"},{l:"High risk",v:rC.HIGH||0,c:"#E8622A"}].map(s=>(
                     <Card key={s.l}>
-                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"Inter,sans-serif"}}>{s.v}</div>
+                      <div style={{fontSize:30,fontWeight:700,color:s.c,fontFamily:"DM Sans,system-ui,sans-serif"}}>{s.v}</div>
                       <div style={{fontSize:11,color:"#6B6880",marginTop:3}}>{s.l}</div>
                     </Card>
                   ))}
@@ -5259,7 +5259,7 @@ Please produce:
                   </Card>
                   <Card style={{background:"#F5F1EA"}}>
                     <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>OUTCOME</div>
-                    <div style={{fontSize:13,color:s.outcome?"#F2EDE4":"#555"}}>{s.outcome||"Not set"}</div>
+                    <div style={{fontSize:13,color:s.outcome?"#1C1820":"#9B9098"}}>{s.outcome||"Not set"}</div>
                     {s.rating&&<div style={{fontSize:12,color:"#7C5CFC",marginTop:6}}>Rating: {s.rating}/5</div>}
                   </Card>
                 </div>
@@ -5484,7 +5484,7 @@ Please produce:
                                 {task.done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
                               </button>
                               <div style={{flex:1}}>
-                                <div style={{fontSize:13,color:task.done?"#555":"#F2EDE4",textDecoration:task.done?"line-through":"none",marginBottom:3}}>{task.task}</div>
+                                <div style={{fontSize:13,color:task.done?"#9B9098":"#1C1820",textDecoration:task.done?"line-through":"none",marginBottom:3}}>{task.task}</div>
                                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                                   <div style={{display:"flex",alignItems:"center",gap:5}}>
                                     <div style={{width:6,height:6,borderRadius:"50%",background:ownerColor}}/>
@@ -5574,7 +5574,7 @@ Please produce:
                     {l:"Avg resolution",v:avgResolution+"d"},
                   ].map(s=>(
                     <Card key={s.l} style={{textAlign:"center",padding:"16px 10px"}}>
-                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif",marginBottom:4}}>{s.v}</div>
+                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:4}}>{s.v}</div>
                       <div style={{fontSize:10,color:"#6B6880"}}>{s.l}</div>
                     </Card>
                   ))}
@@ -5684,7 +5684,7 @@ Please produce:
                       {resolutionTimes.sort((a,b)=>b.days-a.days).map(r=>(
                         <div key={r.name} style={{background:"#FDFAF5",borderRadius:7,padding:"10px 14px",minWidth:140}}>
                           <div style={{fontSize:12,color:"#1A1535",fontWeight:500,marginBottom:3}}>{r.name}</div>
-                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"Inter,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#6B6880",fontWeight:400}}>d</span></div>
+                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"DM Sans,system-ui,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#6B6880",fontWeight:400}}>d</span></div>
                           <div style={{fontSize:10,color:"#5A5570"}}>{r.meetings} meetings</div>
                         </div>
                       ))}
@@ -5901,7 +5901,7 @@ Please produce:
                                   <div style={{fontSize:11,color:"#6B6880"}}>{emp.role}{emp.department?" · "+emp.department:""}</div>
                                 </div>
                                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"Inter,sans-serif"}}>{emp.totalScore||0}</div>
+                                  <div style={{fontSize:18,fontWeight:700,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif"}}>{emp.totalScore||0}</div>
                                   <div style={{fontSize:10,color:"#6B6880"}}>/ 5.0</div>
                                   {emp.selected!==null&&<Badge color={emp.selected?"#E8622A":"#7C5CFC"}>{emp.selected?"At risk":"Retained"}</Badge>}
                                 </div>
@@ -6492,7 +6492,7 @@ Please produce:
                 {dueSoon.slice(0,5).map((d,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
                     <div>
-                      <span style={{color:d.overdue?"#E8622A":"#F2EDE4"}}>{d.caseName}</span>
+                      <span style={{color:d.overdue?"#E8622A":"#1C1820"}}>{d.caseName}</span>
                       <span style={{color:"#6B6880",marginLeft:8}}>{d.step}</span>
                     </div>
                     <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:"JetBrains Mono,monospace"}}>{d.overdue?`${Math.abs(d.daysLeft)}d overdue`:`${d.daysLeft}d`}</span>
@@ -6615,7 +6615,7 @@ Please produce:
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:560,maxHeight:"80vh",overflowY:"auto"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-              <div style={{fontFamily:"DM Serif Display,serif",fontSize:20,color:"#1C1820"}}>Organisation Settings</div>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Organisation Settings</div>
               <button onClick={()=>setShowOrgSettings(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
             </div>
             <div style={{marginBottom:24}}>
@@ -6657,7 +6657,7 @@ Please produce:
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
             <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
-              <div style={{fontFamily:"DM Serif Display,serif",fontSize:20,color:"#1C1820",marginBottom:6}}>Appoint Disciplinary Officer</div>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",marginBottom:6}}>Appoint Disciplinary Officer</div>
               <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The investigation is complete. Appoint an officer to conduct the disciplinary hearing.</div>
               {eligible.length===0?(
                 <div style={{fontSize:13,color:"#C84B2F",background:"#FFF0ED",borderRadius:8,padding:12,marginBottom:16}}>No eligible users found. Add team members with access level {myLevel}+ in Organisation Settings.</div>
@@ -6695,7 +6695,7 @@ Please produce:
             <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
                 <div>
-                  <div style={{fontFamily:"DM Serif Display,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Issue disciplinary outcome</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Issue disciplinary outcome</div>
                   <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>{cs?.employeeName}</div>
                 </div>
                 <button onClick={()=>setShowOutcomeModal(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
