@@ -505,6 +505,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [orgRoles, setOrgRoles] = useState([]);
   const [orgMembers, setOrgMembers] = useState([]);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
+  const [dashSearch, setDashSearch] = useState("");
+  const [dashFilter, setDashFilter] = useState("all");
   const [showOrgSettings, setShowOrgSettings] = useState(false);
 
   const loadOrgRoles = async () => {
@@ -2959,13 +2961,11 @@ Please produce:
               <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
                 {/* Search and filter */}
-                {(() => {
-                  const [search, setSearch] = React.useState("");
-                  const [filter, setFilter] = React.useState("all");
+                {(()=>{
                   const statuses = ["all","open","investigation","disciplinary","closed"];
                   const filtered = cases.filter(cs=>{
-                    const matchStage = filter==="all" || (filter==="closed"?getCaseStage(cs)==="closed":cs.stage===filter||getCaseStage(cs)===filter);
-                    const matchSearch = !search || cs.employeeName?.toLowerCase().includes(search.toLowerCase()) || cs.caseType?.toLowerCase().includes(search.toLowerCase()) || cs.description?.toLowerCase().includes(search.toLowerCase());
+                    const matchStage = dashFilter==="all" || (dashFilter==="closed"?getCaseStage(cs)==="closed":cs.stage===dashFilter||getCaseStage(cs)===dashFilter);
+                    const matchSearch = !dashSearch || cs.employeeName?.toLowerCase().includes(dashSearch.toLowerCase()) || cs.caseType?.toLowerCase().includes(dashSearch.toLowerCase()) || cs.description?.toLowerCase().includes(dashSearch.toLowerCase());
                     return matchStage && matchSearch;
                   });
                   return (
@@ -2975,11 +2975,11 @@ Please produce:
                         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
                           <div style={{flex:1,minWidth:180,position:"relative"}}>
                             <svg style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#9B9098"}} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cases, employees…" style={{width:"100%",paddingLeft:32,paddingRight:12,paddingTop:8,paddingBottom:8,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                            <input value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Search cases, employees…" style={{width:"100%",paddingLeft:32,paddingRight:12,paddingTop:8,paddingBottom:8,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
                           </div>
                           <div style={{display:"flex",gap:4}}>
                             {statuses.map(s=>(
-                              <button key={s} onClick={()=>setFilter(s)} style={{fontSize:11,padding:"6px 12px",borderRadius:6,border:"1px solid",borderColor:filter===s?"#7C5CFC":"#E8E0D0",background:filter===s?"#EDE8FF":"#FFFFFF",color:filter===s?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:filter===s?600:400,textTransform:"capitalize"}}>
+                              <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"6px 12px",borderRadius:6,border:"1px solid",borderColor:dashFilter===s?"#7C5CFC":"#E8E0D0",background:dashFilter===s?"#EDE8FF":"#FFFFFF",color:dashFilter===s?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:dashFilter===s?600:400,textTransform:"capitalize"}}>
                                 {s==="all"?"All cases":s.charAt(0).toUpperCase()+s.slice(1)}
                               </button>
                             ))}
