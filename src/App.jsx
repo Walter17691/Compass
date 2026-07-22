@@ -576,6 +576,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [homeChat, setHomeChat] = useState([]);
   const [askCompassHistory, setAskCompassHistory] = useState([]);
   const [showAskCompass, setShowAskCompass] = useState(false);
+  const [reportNarrative, setReportNarrative] = useState("");
   const [askCompassInput, setAskCompassInput] = useState("");
   const [askCompassProcessing, setAskCompassProcessing] = useState(false);
   const [homeChatInput, setHomeChatInput] = useState("");
@@ -5512,211 +5513,325 @@ Please produce:
 
       {/* ══ ER ANALYTICS ══ */}
       {screen===SCREENS.ERREPORT&&(()=>{
-        const allMeetings = cases.flatMap(c=>c.meetings.map(m=>({...m,employeeName:c.employeeName,email:c.email,caseId:c.id})));
-        const formalMeetings = allMeetings.filter(m=>MEETING_TYPES.find(t=>t.label===m.type&&t.group==="formal"));
-        const rColors = {HIGH:"#E8622A",MEDIUM:"#D4882A",LOW:"#7C5CFC",UNKNOWN:"#555"};
+        // ── Core data calculations ──
+        const activeCases = cases.filter(cs=>getCaseStage(cs)!=="closed");
+        const closedCases = cases.filter(cs=>getCaseStage(cs)==="closed");
+        const allMeetings = cases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,employeeName:cs.employeeName,caseId:cs.id,caseType:cs.caseType})));
+        const employeeRecordsMap = {};
+        (employeeRecords||[]).forEach(r=>{employeeRecordsMap[r.name]=r;});
 
-        // Resolution time (days between first and last meeting per case)
-        const resolutionTimes = cases.filter(c=>c.meetings.length>1).map(c=>{
-          const dates = c.meetings.map(m=>new Date(m.savedAt)).sort((a,b)=>a-b);
-          const days = Math.round((dates[dates.length-1]-dates[0])/(1000*60*60*24));
-          return {name:c.employeeName, days, meetings:c.meetings.length};
+        // Case type breakdown
+        const casesByType = {};
+        cases.forEach(cs=>{const t=cs.caseType||"Other";casesByType[t]=(casesByType[t]||0)+1;});
+        const caseTypeList = Object.entries(casesByType).sort((a,b)=>b[1]-a[1]);
+
+        // Case stage breakdown
+        const byStage = {open:0,investigation:0,disciplinary:0,closed:0,appeal:0};
+        cases.forEach(cs=>{const s=getCaseStage(cs);if(byStage[s]!==undefined)byStage[s]++;});
+
+        // Outcomes
+        const outcomes = cases.filter(cs=>cs.outcome).map(cs=>cs.outcome);
+        const outcomeCounts = {};
+        outcomes.forEach(o=>{outcomeCounts[o]=(outcomeCounts[o]||0)+1;});
+        const outcomeList = Object.entries(outcomeCounts).sort((a,b)=>b[1]-a[1]);
+
+        // Location breakdown
+        const byLocation = {};
+        cases.forEach(cs=>{const l=cs.location||employeeRecordsMap[cs.employeeName]?.location||"Not specified";byLocation[l]=(byLocation[l]||0)+1;});
+        const locationList = Object.entries(byLocation).sort((a,b)=>b[1]-a[1]);
+
+        // Monthly case volume (last 6 months)
+        const monthlyVolume = {};
+        const now = new Date();
+        for(let i=5;i>=0;i--){const d=new Date(now);d.setMonth(d.getMonth()-i);const k=d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"});monthlyVolume[k]=0;}
+        cases.forEach(cs=>{
+          const d=new Date(cs.dateReceived||cs.createdAt||0);
+          const k=d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"});
+          if(monthlyVolume[k]!==undefined) monthlyVolume[k]++;
         });
-        const avgResolution = resolutionTimes.length ? Math.round(resolutionTimes.reduce((t,r)=>t+r.days,0)/resolutionTimes.length) : 0;
+        const monthLabels = Object.keys(monthlyVolume);
+        const monthValues = Object.values(monthlyVolume);
+        const maxMonthVal = Math.max(...monthValues,1);
 
-        // Managers appearing in cases
-        const managerCounts = {};
-        allMeetings.forEach(m=>{ if(m.manager) managerCounts[m.manager]=(managerCounts[m.manager]||0)+1; });
-        const managerList = Object.entries(managerCounts).sort((a,b)=>b[1]-a[1]);
+        // Resolution times
+        const resTimes = closedCases.filter(cs=>(cs.meetings||[]).length>0).map(cs=>{
+          const dates=(cs.meetings||[]).map(m=>new Date(m.savedAt||m.date||0)).filter(d=>!isNaN(d)).sort((a,b)=>a-b);
+          if(dates.length<2) return null;
+          return Math.round((dates[dates.length-1]-dates[0])/(1000*60*60*24));
+        }).filter(Boolean);
+        const avgResolution = resTimes.length?Math.round(resTimes.reduce((a,b)=>a+b,0)/resTimes.length):null;
 
-        // Meeting types breakdown
-        const typeCounts = {};
-        allMeetings.forEach(m=>{ typeCounts[m.type]=(typeCounts[m.type]||0)+1; });
+        // High risk cases
+        const highRisk = cases.filter(cs=>(cs.meetings||[]).some(m=>m.riskScore?.rating==="HIGH"));
 
-        // Risk trends over time (by month)
-        const riskByMonth = {};
-        allMeetings.filter(m=>m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN").forEach(m=>{
-          const month = m.savedAt ? new Date(m.savedAt).toLocaleDateString("en-GB",{month:"short",year:"2-digit"}) : "Unknown";
-          if(!riskByMonth[month]) riskByMonth[month]={HIGH:0,MEDIUM:0,LOW:0};
-          riskByMonth[month][m.riskScore.rating]=(riskByMonth[month][m.riskScore.rating]||0)+1;
+        // ACAS compliance — cases with investigation > 28 days unresolved
+        const slowInvestigations = cases.filter(cs=>{
+          if(getCaseStage(cs)==="closed"||cs.investigationReport) return false;
+          const invMeetings=(cs.meetings||[]).filter(m=>(m.type||"").toLowerCase().includes("investigation"));
+          if(!invMeetings.length) return false;
+          const first=invMeetings[0];
+          const start=new Date(first.savedAt||first.date||0);
+          return (now-start)/(1000*60*60*24)>28;
         });
-        const months = Object.keys(riskByMonth).slice(-6);
 
-        // Repeat cases (employees with 2+ formal meetings)
-        const repeatCases = cases.filter(c=>c.meetings.filter(m=>MEETING_TYPES.find(t=>t.label===m.type&&t.group==="formal")).length>=2);
+        // Pending signatures
+        const pendingSigs = cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
 
-        // Outcome patterns
-        const highRiskMeetings = allMeetings.filter(m=>m.riskScore?.rating==="HIGH");
+        // Repeat cases — employees with 2+ cases
+        const casesByEmployee = {};
+        cases.forEach(cs=>{casesByEmployee[cs.employeeName]=(casesByEmployee[cs.employeeName]||0)+1;});
+        const repeatEmployees = Object.entries(casesByEmployee).filter(([,n])=>n>1).sort((a,b)=>b[1]-a[1]);
+
+        // Manager caseload
+        const managerCases = {};
+        cases.forEach(cs=>{
+          const mgr = cs.manager||(cs.meetings||[])[0]?.manager||"Unassigned";
+          managerCases[mgr]=(managerCases[mgr]||0)+1;
+        });
+        const managerList = Object.entries(managerCases).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+        const StatBox = ({label,value,sub,accent="#7C5CFC"})=>(
+          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{label}</div>
+            <div style={{fontSize:30,fontWeight:700,color:accent,fontFamily:"DM Serif Display,Georgia,serif",marginBottom:4,lineHeight:1}}>{value}</div>
+            {sub&&<div style={{fontSize:11,color:"#9B9098"}}>{sub}</div>}
+          </div>
+        );
+
+        const BarRow = ({label,value,max,color="#7C5CFC",right})=>(
+          <div style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{label}</span>
+              <span style={{fontSize:12,color:"#9B9098"}}>{right||value}</span>
+            </div>
+            <div style={{background:"#F5F1EA",borderRadius:3,height:6}}>
+              <div style={{background:color,borderRadius:3,height:6,width:`${Math.round((value/max)*100)}%`,transition:"width 0.3s"}}/>
+            </div>
+          </div>
+        );
 
         return(
-          <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 20px"}}>
-            <div style={{marginBottom:28}}>
-              <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>ER Analytics</h2>
-              <p style={{fontSize:13,color:"#6B6880",margin:0}}>Employee relations case patterns, trends, and risk intelligence.</p>
-            </div>
+          <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 28px"}}>
 
-            {cases.length<2&&(
-              <Card style={{textAlign:"center",padding:"50px 20px"}}>
-                <div style={{fontSize:15,color:"#6B6880",marginBottom:6}}>Not enough data yet</div>
-                <div style={{fontSize:12,color:"#5A5570"}}>Analytics become meaningful once you have 3+ cases saved. Keep using Compass and check back.</div>
-              </Card>
-            )}
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12}}>
+                <div>
+                  <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>Analytics</div>
+                  <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1C1820",margin:0,letterSpacing:"-0.5px"}}>HR Reports</h1>
+                  <p style={{fontSize:13,color:"#9B9098",margin:"5px 0 0"}}>Organisation-wide employee relations overview · {cases.length} total cases</p>
+                </div>
+                <button onClick={async()=>{
+                  const prompt = "You are a senior HR director. Write a concise executive summary of the following HR data for this organisation. Be factual and highlight key risks, patterns and recommendations. Data: Total cases: "+cases.length+". Active: "+activeCases.length+". Closed: "+closedCases.length+". Case types: "+caseTypeList.map(([t,n])=>t+": "+n).join(", ")+". Outcomes: "+outcomeList.map(([o,n])=>o+": "+n).join(", ")+". High risk cases: "+highRisk.length+". Slow investigations (>28 days): "+slowInvestigations.length+". Repeat employees: "+repeatEmployees.length+". Average resolution time: "+(avgResolution?avgResolution+" days":"unknown")+". Write 3-4 paragraphs. No markdown.";
+                  setReportNarrative("Generating...");
+                  try {
+                    const r = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
+                    const d = await r.json();
+                    setReportNarrative(d.content?.[0]?.text||"Unable to generate.");
+                  } catch(e) { setReportNarrative("Error generating summary."); }
+                }} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>
+                  Generate AI summary
+                </button>
+              </div>
 
-            {cases.length>=2&&(
-              <>
-                {/* Headline stats */}
-                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:20}}>
-                  {[
-                    {l:"Total ER cases",v:cases.length},
-                    {l:"Total meetings",v:allMeetings.length},
-                    {l:"High risk meetings",v:highRiskMeetings.length},
-                    {l:"Repeat cases",v:repeatCases.length},
-                    {l:"Avg resolution",v:avgResolution+"d"},
-                  ].map(s=>(
-                    <Card key={s.l} style={{textAlign:"center",padding:"16px 10px"}}>
-                      <div style={{fontSize:26,fontWeight:700,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:4}}>{s.v}</div>
-                      <div style={{fontSize:10,color:"#6B6880"}}>{s.l}</div>
-                    </Card>
+              {/* AI narrative */}
+              {reportNarrative&&(
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:24}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Executive summary</div>
+                  <div style={{fontSize:13,color:"#1C1820",lineHeight:1.8}}>{reportNarrative==="Generating..."?<span style={{color:"#9B9098",fontStyle:"italic"}}>Generating AI summary…</span>:reportNarrative}</div>
+                </div>
+              )}
+
+              {/* Stat cards */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+                <StatBox label="Total cases" value={cases.length} sub={activeCases.length+" active · "+closedCases.length+" closed"}/>
+                <StatBox label="High risk" value={highRisk.length} sub={highRisk.length>0?"Requires attention":"No high risk cases"} accent="#C84B2F"/>
+                <StatBox label="Avg resolution" value={avgResolution?avgResolution+"d":"—"} sub={resTimes.length+" closed cases measured"} accent="#1A7A4A"/>
+                <StatBox label="Pending signatures" value={pendingSigs} sub={pendingSigs>0?"Awaiting employee sign-off":"All signed"} accent="#E8622A"/>
+              </div>
+
+              {/* ACAS compliance alert */}
+              {(slowInvestigations.length>0||pendingSigs>2)&&(
+                <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A44",borderRadius:12,padding:"14px 20px",marginBottom:24,display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#E8622A",textTransform:"uppercase",letterSpacing:"0.5px"}}>Compliance alerts</div>
+                  {slowInvestigations.map((cs,i)=>(
+                    <button key={i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:"#E8622A",background:"#FFFFFF",border:"1px solid #E8622A44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
+                      {cs.employeeName} — investigation overrunning
+                    </button>
+                  ))}
+                  {pendingSigs>2&&<span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} signatures pending</span>}
+                </div>
+              )}
+
+              {/* Main grid */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
+
+                {/* Case volume by month */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Trend</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases opened per month</div>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:6,height:100}}>
+                    {monthLabels.map((m,i)=>(
+                      <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                        <div style={{width:"100%",background:"#7C5CFC",borderRadius:"3px 3px 0 0",height:`${Math.max(4,Math.round((monthValues[i]/maxMonthVal)*80))}px`,opacity:0.7+0.3*(monthValues[i]/maxMonthVal)}}/>
+                        <div style={{fontSize:9,color:"#9B9098",textAlign:"center"}}>{m}</div>
+                        <div style={{fontSize:10,color:"#7C5CFC",fontWeight:600}}>{monthValues[i]}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Case type breakdown */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Breakdown</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases by type</div>
+                  {caseTypeList.length===0?<div style={{fontSize:13,color:"#9B9098"}}>No data yet</div>:
+                    caseTypeList.map(([type,count],i)=>(
+                      <BarRow key={i} label={type.charAt(0).toUpperCase()+type.slice(1)} value={count} max={caseTypeList[0][1]} color={["#7C5CFC","#E8622A","#1A7A4A","#C84B2F","#B87520"][i%5]}/>
+                    ))
+                  }
+                </div>
+
+                {/* Outcomes */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Results</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Disciplinary outcomes</div>
+                  {outcomeList.length===0?(
+                    <div style={{fontSize:13,color:"#9B9098"}}>No outcomes recorded yet</div>
+                  ):outcomeList.map(([outcome,count],i)=>(
+                    <BarRow key={i} label={outcome} value={count} max={outcomeList[0][1]} color="#1A7A4A"/>
                   ))}
                 </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-                  {/* Case type breakdown */}
-                  <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Case type breakdown</div>
-                    {Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).map(([type,count])=>{
-                      const maxCount = Math.max(...Object.values(typeCounts));
-                      return(
-                        <div key={type} style={{marginBottom:10}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                            <span style={{fontSize:12,color:"#3D3560"}}>{type}</span>
-                            <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600}}>{count}</span>
-                          </div>
-                          <div style={{background:"#FDFAF5",borderRadius:3,height:5}}>
-                            <div style={{background:"#7C5CFC",borderRadius:3,height:5,width:`${Math.round(count/maxCount*100)}%`}}/>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </Card>
-
-                  {/* Managers in cases */}
-                  <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Managers by case involvement</div>
-                    {managerList.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No manager data yet — add manager names when creating meetings</div>}
-                    {managerList.map(([manager,count],i)=>(
-                      <div key={manager} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1a1a1a"}}>
-                        <div>
-                          <div style={{fontSize:12,color:"#1A1535"}}>{manager}</div>
-                          <div style={{fontSize:10,color:"#6B6880"}}>{count} meeting{count!==1?"s":""}</div>
-                        </div>
-                        {count>=3&&<Badge color="#E8622A">High involvement</Badge>}
-                        {count===2&&<Badge color="#D4882A">Repeat</Badge>}
-                      </div>
-                    ))}
-                    {managerList.length>0&&managerList.some(([,c])=>c>=3)&&(
-                      <div style={{marginTop:12,padding:"10px 12px",background:"#FEF0EB",borderRadius:6,border:"1px solid #E8622A33"}}>
-                        <div style={{fontSize:11,color:"#C84B2F",fontWeight:600,marginBottom:3}}>Pattern alert</div>
-                        <div style={{fontSize:11,color:"#6B6375"}}>One or more managers appear in 3+ ER cases. Consider investigating management practice.</div>
-                      </div>
-                    )}
-                  </Card>
+                {/* Stage pipeline */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Pipeline</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases by stage</div>
+                  {[
+                    {label:"Open",value:byStage.open,color:"#9B9098"},
+                    {label:"Investigation",value:byStage.investigation,color:"#7C5CFC"},
+                    {label:"Disciplinary",value:byStage.disciplinary,color:"#C84B2F"},
+                    {label:"Appeal",value:byStage.appeal,color:"#B87520"},
+                    {label:"Closed",value:byStage.closed,color:"#1A7A4A"},
+                  ].filter(s=>s.value>0).map((s,i)=>(
+                    <BarRow key={i} label={s.label} value={s.value} max={Math.max(...[byStage.open,byStage.investigation,byStage.disciplinary,byStage.appeal,byStage.closed],1)} color={s.color}/>
+                  ))}
                 </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-                  {/* Risk trend by month */}
-                  <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:14}}>Risk profile over time</div>
-                    {months.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No risk data yet — complete meeting reviews to see trends</div>}
-                    {months.map(month=>{
-                      const data = riskByMonth[month];
-                      const total = data.HIGH+data.MEDIUM+data.LOW;
-                      return(
-                        <div key={month} style={{marginBottom:12}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                            <span style={{fontSize:11,color:"#6B6375"}}>{month}</span>
-                            <div style={{display:"flex",gap:8}}>
-                              {data.HIGH>0&&<span style={{fontSize:10,color:"#C84B2F"}}>{data.HIGH}H</span>}
-                              {data.MEDIUM>0&&<span style={{fontSize:10,color:"#B87520"}}>{data.MEDIUM}M</span>}
-                              {data.LOW>0&&<span style={{fontSize:10,color:"#7C5CFC"}}>{data.LOW}L</span>}
-                            </div>
-                          </div>
-                          <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",gap:1}}>
-                            {data.HIGH>0&&<div style={{background:"#7C5CFC",flex:data.HIGH}}/>}
-                            {data.MEDIUM>0&&<div style={{background:"#D4882A",flex:data.MEDIUM}}/>}
-                            {data.LOW>0&&<div style={{background:"#7C5CFC",flex:data.LOW}}/>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </Card>
+              </div>
 
-                  {/* Repeat cases */}
-                  <Card>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>Repeat ER cases</div>
-                    <div style={{fontSize:11,color:"#6B6880",marginBottom:14}}>Employees with 2 or more formal meetings</div>
-                    {repeatCases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No repeat cases — a positive sign</div>}
-                    {repeatCases.map(c=>{
-                      const formalCount = c.meetings.filter(m=>MEETING_TYPES.find(t=>t.label===m.type&&t.group==="formal")).length;
-                      const highRisk = c.meetings.some(m=>m.riskScore?.rating==="HIGH");
-                      return(
-                        <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #1a1a1a"}}>
-                          <div>
-                            <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:1}}>{c.employeeName}</div>
-                            <div style={{fontSize:10,color:"#6B6880"}}>{formalCount} formal meetings</div>
-                          </div>
-                          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                            {highRisk&&<Badge color="#E8622A">High risk</Badge>}
-                            <Btn variant="ghost" onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"3px 10px",fontSize:10}}>View</Btn>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </Card>
+              {/* Second row */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginBottom:20}}>
+
+                {/* Location breakdown */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Geography</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases by location</div>
+                  {locationList.length===0?<div style={{fontSize:13,color:"#9B9098"}}>No location data</div>:
+                    locationList.map(([loc,count],i)=>(
+                      <BarRow key={i} label={loc} value={count} max={locationList[0][1]} color="#7C5CFC"/>
+                    ))
+                  }
                 </div>
 
-                {/* Resolution times */}
-                {resolutionTimes.length>0&&(
-                  <Card style={{marginBottom:16}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>Case resolution times</div>
-                    <div style={{fontSize:11,color:"#6B6880",marginBottom:14}}>Days from first to last meeting per case · Average: {avgResolution} days</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
-                      {resolutionTimes.sort((a,b)=>b.days-a.days).map(r=>(
-                        <div key={r.name} style={{background:"#FDFAF5",borderRadius:7,padding:"10px 14px",minWidth:140}}>
-                          <div style={{fontSize:12,color:"#1A1535",fontWeight:500,marginBottom:3}}>{r.name}</div>
-                          <div style={{fontSize:20,color:r.days>avgResolution*1.5?"#E8622A":"#7C5CFC",fontWeight:700,fontFamily:"DM Sans,system-ui,sans-serif"}}>{r.days}<span style={{fontSize:11,color:"#6B6880",fontWeight:400}}>d</span></div>
-                          <div style={{fontSize:10,color:"#5A5570"}}>{r.meetings} meetings</div>
+                {/* Repeat employees */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Patterns</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Repeat cases</div>
+                  {repeatEmployees.length===0?(
+                    <div style={{fontSize:13,color:"#9B9098"}}>No employees with multiple cases</div>
+                  ):repeatEmployees.slice(0,5).map(([name,count],i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:i<repeatEmployees.length-1?"1px solid #F5F1EA":"none"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#7C5CFC",flexShrink:0}}>
+                          {name.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
                         </div>
-                      ))}
+                        <button onClick={()=>{setActivePerson(name);setScreen(SCREENS.PERSON_VIEW);}} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,textAlign:"left"}}>{name}</button>
+                      </div>
+                      <span style={{fontSize:11,color:"#C84B2F",background:"#FFF0ED",borderRadius:10,padding:"2px 8px",fontWeight:600}}>{count} cases</span>
                     </div>
-                  </Card>
-                )}
-
-                {/* Export report */}
-                <div style={{display:"flex",gap:10}}>
-                  <Btn onClick={()=>{
-                    const report = {
-                      generatedAt: new Date().toISOString(),
-                      summary:{ totalCases:cases.length, totalMeetings:allMeetings.length, highRisk:highRiskMeetings.length, repeatCases:repeatCases.length, avgResolutionDays:avgResolution },
-                      caseTypeBreakdown: typeCounts,
-                      managerInvolvement: Object.fromEntries(managerList),
-                      repeatCases: repeatCases.map(c=>c.employeeName),
-                      riskTrend: riskByMonth,
-                    };
-                    const blob = new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href=url; a.download="compass_er_analytics.json"; a.click();
-                    audit("ER analytics report exported");
-                  }}>Export analytics report</Btn>
-                  <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(JSON.stringify({totalCases:cases.length,highRisk:highRiskMeetings.length,repeatCases:repeatCases.length,avgResolution:avgResolution+"d"},null,2))}>Copy summary</Btn>
+                  ))}
                 </div>
-              </>
-            )}
+
+                {/* Manager caseload */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Workload</div>
+                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Manager caseload</div>
+                  {managerList.length===0?<div style={{fontSize:13,color:"#9B9098"}}>No data yet</div>:
+                    managerList.map(([mgr,count],i)=>(
+                      <BarRow key={i} label={mgr} value={count} max={managerList[0][1]} color="#7C5CFC"/>
+                    ))
+                  }
+                </div>
+
+              </div>
+
+              {/* Active cases table */}
+              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:20}}>
+                <div style={{padding:"16px 20px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Detail</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820"}}>Active cases</div>
+                  </div>
+                  <span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:10,padding:"3px 10px",fontWeight:600}}>{activeCases.length} open</span>
+                </div>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead>
+                      <tr style={{background:"#FDFAF5"}}>
+                        {["Employee","Job title","Case type","Stage","Opened","Days open","Next action"].map(h=>(
+                          <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",borderBottom:"1px solid #E8E0D0",whiteSpace:"nowrap"}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeCases.map((cs,i)=>{
+                        const stage=getCaseStage(cs);
+                        const next=getNextStep(cs);
+                        const opened=new Date(cs.dateReceived||cs.createdAt||0);
+                        const daysOpen=Math.ceil((new Date()-opened)/(1000*60*60*24));
+                        const rec=employeeRecordsMap[cs.employeeName]||{};
+                        const stageColors={open:"#9B9098",investigation:"#7C5CFC",disciplinary:"#C84B2F",appeal:"#B87520",closed:"#1A7A4A"};
+                        return (
+                          <tr key={cs.id} style={{borderBottom:i<activeCases.length-1?"1px solid #F5F1EA":"none",cursor:"pointer"}}
+                            onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                            onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
+                            onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                            <td style={{padding:"10px 16px"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <div style={{width:28,height:28,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#7C5CFC",flexShrink:0}}>
+                                  {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
+                                </div>
+                                <span style={{fontWeight:500,color:"#1C1820"}}>{cs.employeeName}</span>
+                              </div>
+                            </td>
+                            <td style={{padding:"10px 16px",color:"#6B6375"}}>{rec.jobTitle||cs.jobTitle||"—"}</td>
+                            <td style={{padding:"10px 16px",color:"#6B6375"}}>{cs.caseType||"HR Matter"}</td>
+                            <td style={{padding:"10px 16px"}}>
+                              <span style={{fontSize:11,fontWeight:600,color:stageColors[stage]||"#9B9098",background:"#F5F1EA",borderRadius:10,padding:"2px 8px"}}>{stage.charAt(0).toUpperCase()+stage.slice(1)}</span>
+                            </td>
+                            <td style={{padding:"10px 16px",color:"#6B6375",whiteSpace:"nowrap"}}>{cs.dateReceived?fmtDate(cs.dateReceived):"—"}</td>
+                            <td style={{padding:"10px 16px"}}>
+                              <span style={{color:daysOpen>28?"#C84B2F":daysOpen>14?"#E8622A":"#1C1820",fontWeight:daysOpen>28?600:400}}>{isNaN(daysOpen)||daysOpen<0?"—":daysOpen+"d"}</span>
+                            </td>
+                            <td style={{padding:"10px 16px",color:"#7C5CFC",fontSize:11}}>{next?.label||"—"}</td>
+                          </tr>
+                        );
+                      })}
+                      {activeCases.length===0&&(
+                        <tr><td colSpan={7} style={{padding:"32px",textAlign:"center",color:"#9B9098"}}>No active cases</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
           </div>
         );
       })()}
 
-      {/* ══ REDUNDANCY & CONSULTATION ══ */}
+            {/* ══ REDUNDANCY & CONSULTATION ══ */}
       {screen===SCREENS.REDUNDANCY&&(()=>{
         const stepLabels = {setup:"Setup",pool:"Selection",consultation:"Consultation",outcome:"Outcome"};
         const steps = ["setup","pool","consultation","outcome"];
