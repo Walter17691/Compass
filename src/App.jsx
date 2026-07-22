@@ -1011,9 +1011,6 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       const reply = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("") || "Sorry, I could not generate a response.";
       setHistory([...displayHistory, {role:"assistant", content:reply}]);
       setHomeAttachment(null);
-      
-      // Show case prompt after first response
-      setShowCasePrompt(true);
     } catch(e) {
       setHistory([...displayHistory, {role:"assistant", content:"Sorry, something went wrong."}]);
     }
@@ -4526,7 +4523,16 @@ Please produce:
                   {liveChatHistory.map((m,i)=>(
                     <div key={i} style={{marginBottom:12}}>
                       <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
-                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.role==="assistant"?m.content.replace(/^#{1,3} /gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/\*(.+?)\*(?!\*)/g,"$1"):m.content}/></div>
+                      <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.role==="assistant"?(()=>{
+                      const txt=m.content.replace(/^#{1,6} /gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/\*(.+?)\*/g,"$1");
+                      return txt.split("\n").map((line,j)=>{
+                        if(!line.trim()) return <div key={j} style={{height:4}}/>;
+                        if(/^\d+\./.test(line.trim())) return <div key={j} style={{marginBottom:3,paddingLeft:6}}>{line.trim()}</div>;
+                        if(line.trim().startsWith("- ")||line.trim().startsWith("• ")) return <div key={j} style={{marginBottom:2,display:"flex",gap:4}}><span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{line.trim().slice(2)}</span></div>;
+                        if(line.trim()==="---") return <hr key={j} style={{border:"none",borderTop:"1px solid #E8E0D0",margin:"6px 0"}}/>;
+                        return <div key={j} style={{marginBottom:3}}>{line.trim()}</div>;
+                      });
+                    })():m.content}/></div>
                     </div>
                   ))}
                   {liveChatProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
@@ -6711,7 +6717,16 @@ Please produce:
                 )}
                 {askCompassHistory.map((m,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                    <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.role==="assistant"?m.content.replace(/^#{1,3} /gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/\*(.+?)\*/g,"$1"):m.content}</div>
+                    <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.role==="assistant"?(()=>{
+                      const txt = m.content.replace(/^#{1,6} /gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/\*(.+?)\*/g,"$1");
+                      return txt.split("\n").map((line,j)=>{
+                        if(!line.trim()) return <div key={j} style={{height:6}}/>;
+                        if(/^\d+\./.test(line.trim())) return <div key={j} style={{marginBottom:4,paddingLeft:8,borderLeft:"2px solid #7C5CFC22"}}>{line.trim()}</div>;
+                        if(line.trim().startsWith("- ")||line.trim().startsWith("• ")) return <div key={j} style={{marginBottom:3,paddingLeft:8,display:"flex",gap:6}}><span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{line.trim().slice(2)}</span></div>;
+                        if(line.trim()==="---") return <hr key={j} style={{border:"none",borderTop:"1px solid #E8E0D0",margin:"8px 0"}}/>;
+                        return <div key={j} style={{marginBottom:4}}>{line.trim()}</div>;
+                      });
+                    })():m.content}</div>
                   </div>
                 ))}
                 {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
