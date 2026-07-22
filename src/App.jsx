@@ -6521,6 +6521,174 @@ Please produce:
           <Btn variant="ghost" onClick={()=>setScreen(SCREENS.HOME)}>← Back to home</Btn>
         </div>
       )}
+
+      {/* ── Ask Compass floating chat ── */}
+      {screen===SCREENS.HOME&&(
+        <>
+          {!showAskCompass&&(
+            <button onClick={()=>setShowAskCompass(true)} style={{position:"fixed",bottom:28,right:28,width:56,height:56,borderRadius:"50%",background:"#7C5CFC",border:"none",cursor:"pointer",boxShadow:"0 4px 20px rgba(124,92,252,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}
+              onMouseEnter={e=>e.currentTarget.style.transform="scale(1.08)"}
+              onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+          )}
+          {showAskCompass&&(
+            <div style={{position:"fixed",bottom:24,right:24,width:360,background:"#FFFFFF",borderRadius:16,boxShadow:"0 8px 40px rgba(0,0,0,0.15)",border:"1px solid #E8E0D0",zIndex:200,display:"flex",flexDirection:"column",overflow:"hidden",maxHeight:"70vh"}}>
+              <div style={{padding:"14px 16px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(135deg,#EDE8FF 0%,#FDFAF5 100%)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",background:"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Ask Compass</div>
+                    <div style={{fontSize:10,color:"#9B9098"}}>UK employment law · ACAS · Best practice</div>
+                  </div>
+                </div>
+                <button onClick={()=>setShowAskCompass(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#9B9098",fontSize:20,lineHeight:1,padding:4}}>×</button>
+              </div>
+              <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:8,minHeight:200}}>
+                {askCompassHistory.length===0&&(
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{fontSize:12,color:"#9B9098",marginBottom:4}}>Ask me anything about UK employment law, ACAS guidance, or HR best practice.</div>
+                    {["ACAS disciplinary process?","Dismissal on zero-hours contract?","Reasonable adjustments?","How long should an investigation take?"].map((q,i)=>(
+                      <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
+                    ))}
+                  </div>
+                )}
+                {askCompassHistory.map((m,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+                    <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
+                  </div>
+                ))}
+                {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
+              </div>
+              <div style={{padding:"10px 14px",borderTop:"1px solid #E8E0D0",display:"flex",gap:8}}>
+                <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"8px 12px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
+                <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600}}>→</button>
+              </div>
+              {askCompassHistory.length>0&&<div style={{padding:"6px 14px 10px",borderTop:"1px solid #F5F1EA",display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setAskCompassHistory([])} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear chat</button></div>}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Org Settings Modal ── */}
+      {showOrgSettings&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:560,maxHeight:"80vh",overflowY:"auto"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+              <div style={{fontFamily:"DM Serif Display,serif",fontSize:20,color:"#1C1820"}}>Organisation Settings</div>
+              <button onClick={()=>setShowOrgSettings(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
+            </div>
+            <div style={{marginBottom:24}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Job Titles & Access Levels</div>
+              <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Define the roles in your organisation. Higher access level = more senior. Users with access level 5+ can appoint disciplinary officers.</div>
+              {orgRoles.map(r=>(
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 12px",background:"#FDFAF5",borderRadius:8,border:"1px solid #E8E0D0"}}>
+                  <div style={{flex:1,fontSize:13,color:"#1C1820"}}>{r.title}</div>
+                  <div style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"2px 8px"}}>Level {r.access_level}</div>
+                  <button onClick={async()=>{await supabase.from("org_roles").delete().eq("id",r.id);loadOrgRoles();}} style={{background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontSize:12}}>Remove</button>
+                </div>
+              ))}
+              <AddRoleForm onAdd={async(title,level)=>{await supabase.from("org_roles").insert({org_id:org.id,title,access_level:parseInt(level)});loadOrgRoles();}}/>
+            </div>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Team Members</div>
+              {orgMembers.map(m=>(
+                <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 12px",background:"#FDFAF5",borderRadius:8,border:"1px solid #E8E0D0"}}>
+                  <div style={{flex:1}}><div style={{fontSize:13,color:"#1C1820"}}>{m.name}</div><div style={{fontSize:11,color:"#9B9098"}}>{m.job_title||m.role}</div></div>
+                  <select defaultValue={m.access_level||5} onChange={async e=>{await supabase.from("org_members").update({access_level:parseInt(e.target.value)}).eq("id",m.id);loadOrgMembers();showToast("Access level updated");}} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px",background:"#fff",color:"#1C1820"}}>
+                    {[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>Level {n}</option>)}
+                  </select>
+                  <select defaultValue={m.job_title||""} onChange={async e=>{await supabase.from("org_members").update({job_title:e.target.value}).eq("id",m.id);loadOrgMembers();showToast("Job title updated");}} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px",background:"#fff",color:"#1C1820"}}>
+                    <option value="">No title</option>
+                    {orgRoles.map(r=><option key={r.id} value={r.title}>{r.title}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Disciplinary Handoff Modal ── */}
+      {showHandoffModal&&(()=>{
+        const cs = cases.find(x=>x.id===activeCaseId);
+        const myLevel = currentUser?.access_level||5;
+        const eligible = orgMembers.filter(m=>(m.access_level||5)>=myLevel&&m.name!==currentUser?.name);
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
+              <div style={{fontFamily:"DM Serif Display,serif",fontSize:20,color:"#1C1820",marginBottom:6}}>Appoint Disciplinary Officer</div>
+              <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The investigation is complete. Appoint an officer to conduct the disciplinary hearing.</div>
+              {eligible.length===0?(
+                <div style={{fontSize:13,color:"#C84B2F",background:"#FFF0ED",borderRadius:8,padding:12,marginBottom:16}}>No eligible users found. Add team members with access level {myLevel}+ in Organisation Settings.</div>
+              ):(
+                <>
+                  <div style={{marginBottom:16}}>
+                    <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Select disciplinary officer</label>
+                    <select value={selectedMemberId||eligible[0]?.id||""} onChange={e=>setSelectedMemberId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820"}}>
+                      {eligible.map(m=><option key={m.id} value={m.id}>{m.name} {m.job_title?"("+m.job_title+")":""} — Level {m.access_level||5}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                    <button onClick={()=>setShowHandoffModal(false)} style={{fontSize:13,padding:"9px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#fff",cursor:"pointer",color:"#6B6375"}}>Cancel</button>
+                    <button onClick={async()=>{
+                      const sel = orgMembers.find(x=>x.id===(selectedMemberId||eligible[0]?.id));
+                      if(!sel) return;
+                      saveCases(cases.map(x=>x.id===cs.id?{...x,disciplinaryOfficer:sel.name,disciplinaryOfficerId:sel.user_id||sel.id,disciplinaryOfficerEmail:sel.email||"",investigatingManager:currentUser?.name,stage:"disciplinary",handoffDate:new Date().toISOString()}:x));
+                      setShowHandoffModal(false);
+                      setActiveCaseStage("disciplinary");
+                      showToast("Case handed off to "+sel.name);
+                    }} style={{fontSize:13,padding:"9px 20px",background:"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600}}>Appoint & hand off</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Issue Outcome Modal ── */}
+      {showOutcomeModal&&(()=>{
+        const cs = cases.find(x=>x.id===activeCaseId);
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+                <div>
+                  <div style={{fontFamily:"DM Serif Display,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Issue disciplinary outcome</div>
+                  <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>{cs?.employeeName}</div>
+                </div>
+                <button onClick={()=>setShowOutcomeModal(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Outcome decision</label>
+                <select value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:outcomeType?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+                  <option value="">Select outcome…</option>
+                  <option value="No further action">No further action</option>
+                  <option value="First written warning">First written warning</option>
+                  <option value="Final written warning">Final written warning</option>
+                  <option value="Demotion">Demotion</option>
+                  <option value="Dismissal with notice">Dismissal with notice</option>
+                  <option value="Summary dismissal (gross misconduct)">Summary dismissal (gross misconduct)</option>
+                </select>
+              </div>
+              <div style={{marginBottom:20}}>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Notes <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+                <textarea value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Any additional notes…" rows={3} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+              </div>
+              <div style={{background:"#FFF8F0",border:"1px solid #E8622A33",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:"#E8622A"}}>
+                Issuing this outcome starts the employee's 5 working day appeal window (ACAS Code).
+              </div>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                <button onClick={()=>setShowOutcomeModal(false)} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+                <button disabled={!outcomeType} onClick={()=>{if(!outcomeType)return;saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast("Outcome recorded");handleLetter("outcome");}} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
