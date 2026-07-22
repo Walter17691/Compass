@@ -222,34 +222,34 @@ function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localSt
 // ─────────────────────────────────────────────
 function CompassLogo({ size = 36 }) {
   const s = size;
-
-
-  const syncNameToRecord = (field, value) => {
-    if(!value) return;
-    setReviewOutput(r => {
-      if(!r) return r;
-      const nl = String.fromCharCode(10);
-      return r.split(nl).map(l => {
-        const lLower = l.toLowerCase();
-        const hasChair = lLower.includes('chair') && l.includes(':');
-        const hasEmp = (lLower.includes('employee') || lLower.includes('attendee')) && l.includes(':');
-        if(field === 'manager' && hasChair) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
-        if(field === 'employee' && hasEmp) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
-        return l;
-      }).join(nl);
-    });
-  };
-
-
   return (
     <svg width={s} height={s} viewBox="0 0 100 100" fill="none" style={{flexShrink:0}}>
-      <circle cx="50" cy="50" r="44" stroke="#7C5CFC" strokeWidth="9" fill="none" />
-      <ellipse cx="50" cy="50" rx="8" ry="30" transform="rotate(-40 50 50)" fill="#7C5CFC" />
-      <circle cx="50" cy="50" r="5.5" fill="#FDFAF5" />
+      <circle cx="50" cy="50" r="48" fill="#7C5CFC" />
+      <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+      <polygon points="50,18 56,50 50,56 44,50" fill="#FFFFFF" opacity="0.95" />
+      <polygon points="50,82 44,50 50,44 56,50" fill="rgba(255,255,255,0.4)" />
+      <polygon points="18,50 50,44 56,50 50,56" fill="rgba(255,255,255,0.4)" />
+      <polygon points="82,50 50,56 44,50 50,44" fill="#FFFFFF" opacity="0.95" />
+      <circle cx="50" cy="50" r="5" fill="#7C5CFC" stroke="#FFFFFF" strokeWidth="2" />
     </svg>
-
   );
 }
+
+const syncNameToRecord = (field, value, setReviewOutput) => {
+  if(!value) return;
+  setReviewOutput(r => {
+    if(!r) return r;
+    const nl = String.fromCharCode(10);
+    return r.split(nl).map(l => {
+      const lLower = l.toLowerCase();
+      const hasChair = lLower.includes('chair') && l.includes(':');
+      const hasEmp = (lLower.includes('employee') || lLower.includes('attendee')) && l.includes(':');
+      if(field === 'manager' && hasChair) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
+      if(field === 'employee' && hasEmp) return l.substring(0, l.indexOf(':') + 1) + ' ' + value;
+      return l;
+    }).join(nl);
+  });
+};
 
 function Badge({ children, color="#7C5CFC" }) {
   return <span style={{fontSize:9, fontWeight:700, letterSpacing:1, color, background:color+"18", border:`1px solid ${color}33`, borderRadius:4, padding:"2px 7px"}}>{children}</span>;
@@ -524,6 +524,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [newCaseLocation, setNewCaseLocation] = useState("");
   const [newCaseType, setNewCaseType] = useState("");
   const [newCaseDescription, setNewCaseDescription] = useState("");
+  const [newCaseLocationOther, setNewCaseLocationOther] = useState("");
   const [editingEmployeeRecord, setEditingEmployeeRecord] = useState(false);
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
@@ -2847,7 +2848,7 @@ Please produce:
               </div>
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Start date</label>
-                <input type="date" value={newCaseStartDate} onChange={e=>setNewCaseStartDate(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/>
+                <input type="date" value={newCaseStartDate} onChange={e=>setNewCaseStartDate(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light"}}/>
               </div>
             </div>
 
@@ -2855,7 +2856,12 @@ Please produce:
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Location</label>
-                <input value={newCaseLocation} onChange={e=>setNewCaseLocation(e.target.value)} placeholder="e.g. London HQ" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/>
+                <select value={newCaseLocation} onChange={e=>setNewCaseLocation(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:newCaseLocation?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+                  <option value="">Select location…</option>
+                  {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
+                  <option value="__other__">Other / not listed</option>
+                </select>
+                {newCaseLocation==="__other__"&&<input value={newCaseLocationOther} onChange={e=>setNewCaseLocationOther(e.target.value)} placeholder="Enter location" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",marginTop:6}}/>}
               </div>
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Case type</label>
@@ -2895,7 +2901,7 @@ Please produce:
                     urgency: "normal",
                     jobTitle: newCaseJobTitle,
                     startDate: newCaseStartDate,
-                    location: newCaseLocation,
+                    location: newCaseLocation==="__other__"?newCaseLocationOther:newCaseLocation,
                   };
                   saveCases([...cases, newCase]);
                   setActiveCaseId(newCase.id);
@@ -2907,6 +2913,7 @@ Please produce:
                   setNewCaseLocation("");
                   setNewCaseType("");
                   setNewCaseDescription("");
+                  setNewCaseLocationOther("");
                   setScreen(SCREENS.CASE_VIEW);
                   showToast("Case created");
                 }}
@@ -2980,7 +2987,7 @@ Please produce:
           
           {/* Logo */}
           <button onClick={()=>setScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:0,cursor:"pointer",flexShrink:0}}>
-            <CompassLogo size={24}/>
+            <CompassLogo size={32}/>
             <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
           </button>
 
@@ -3041,8 +3048,8 @@ Please produce:
           <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8E0D0",padding:"0 32px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
             <div style={{display:"flex",alignItems:"center",gap:32}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <CompassLogo size={22}/>
-                <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1C1820",fontWeight:400}}>Compass</span>
+                <CompassLogo size={30}/>
+                <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400,letterSpacing:"-0.3px"}}>Compass</span>
               </div>
               <nav style={{display:"flex",gap:2}}>
                 {[
@@ -3133,6 +3140,39 @@ Please produce:
                 ));
               })()}
             </div>
+
+            {/* ── Resources strip ── */}
+            <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+              {(()=>{
+                const links = policies.length>0
+                  ? policies.slice(0,4).map(p=>({label:p.name||p.title||"Policy",type:"POLICY"}))
+                  : [{label:"Disciplinary Policy",type:"POLICY"},{label:"Grievance Policy",type:"POLICY"},{label:"ACAS Code of Practice",type:"GUIDE"},{label:"Invitation to hearing",type:"TEMPLATE"}];
+                return links.map((item,i)=>(
+                  <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",transition:"border-color 0.15s"}}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
+                    onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                    <div style={{width:4,height:4,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
+                    <span style={{fontSize:11,color:"#6B6375",fontWeight:500}}>{item.type}</span>
+                    <span style={{fontSize:12,color:"#1C1820",fontWeight:600}}>{item.label}</span>
+                  </button>
+                ));
+              })()}
+              <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"none",border:"1px dashed #E8E0D0",borderRadius:8,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontSize:12,color:"#9B9098"}}>View all →</button>
+            </div>
+
+            {/* ── Deadlines strip ── */}
+            {dueSoon.length>0&&(
+              <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
+                <span style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",flexShrink:0}}>Deadlines</span>
+                {dueSoon.slice(0,4).map((d,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"#FFFFFF",border:"1px solid",borderColor:d.overdue?"#E8622A44":"#E8E0D0",borderRadius:8}}>
+                    <div style={{width:6,height:6,borderRadius:"50%",background:d.overdue?"#C84B2F":d.daysLeft<=3?"#E8622A":"#7C5CFC",flexShrink:0}}/>
+                    <span style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{d.label||d.employeeName}</span>
+                    <span style={{fontSize:11,color:d.overdue?"#C84B2F":"#9B9098"}}>· {d.overdue?"Overdue":d.daysLeft===0?"Today":"In "+d.daysLeft+"d"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* ── Main grid ── */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:20,alignItems:"start"}}>
@@ -3287,77 +3327,32 @@ Please produce:
                     <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>HR Advisor</div>
                     <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>UK employment law · ACAS · Best practice</div>
                   </div>
-                  <div style={{padding:14}}>
+                  <div style={{padding:14,background:"#1C1820"}}>
                     <div style={{maxHeight:200,overflowY:"auto",marginBottom:10,display:"flex",flexDirection:"column",gap:8}}>
                       {askCompassHistory.length===0&&(
                         <div style={{display:"flex",flexDirection:"column",gap:6}}>
                           {["ACAS disciplinary process?","Dismissal on zero-hours contract?","Reasonable adjustments — what's required?","How long should an investigation take?"].map((q,i)=>(
-                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
+                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#9B9098",background:"#252030",border:"1px solid #2A2535",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
                           ))}
                         </div>
                       )}
                       {askCompassHistory.map((m,i)=>(
                         <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.5,padding:"7px 10px",borderRadius:8,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
+                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 11px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#252030",color:m.role==="user"?"#fff":"#C4BDAF"}}>{m.content}</div>
                         </div>
                       ))}
-                      {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic",padding:"4px 0"}}>Thinking…</div>}
+                      {askCompassProcessing&&<div style={{fontSize:12,color:"#6B6375",fontStyle:"italic",padding:"4px 0"}}>Thinking…</div>}
                     </div>
                     <div style={{display:"flex",gap:6}}>
-                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1.5px solid #E8E0D0",borderRadius:7,padding:"7px 10px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
-                      <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600}}>→</button>
+                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1px solid #2A2535",borderRadius:7,padding:"8px 10px",background:"#252030",color:"#F2EDE4",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
+                      <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700,letterSpacing:"-0.5px"}}>→</button>
                     </div>
                   </div>
                 </div>
 
-                {/* Quick links */}
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Resources</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Policies & templates</div>
-                  </div>
-                  <div style={{padding:"4px 0"}}>
-                    {(()=>{
-                      const links=policies.length>0
-                        ?policies.slice(0,5).map(p=>({label:p.name||p.title||"Policy",type:"POLICY"}))
-                        :[{label:"Disciplinary Policy",type:"POLICY"},{label:"Grievance Policy",type:"POLICY"},{label:"ACAS Code of Practice",type:"GUIDE"},{label:"Invitation to hearing",type:"TEMPLATE"},{label:"Outcome letter",type:"TEMPLATE"}];
-                      return links.map((item,i)=>(
-                        <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<links.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
-                          onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                          <div style={{width:6,height:6,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:10,color:"#9B9098",fontWeight:600,letterSpacing:"0.5px"}}>{item.type}</div>
-                            <div style={{fontSize:12,color:"#1C1820",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.label}</div>
-                          </div>
-                          <span style={{color:"#C4BAB0",fontSize:14,flexShrink:0}}>›</span>
-                        </button>
-                      ));
-                    })()}
-                    <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all →</button>
-                  </div>
-                </div>
 
-                {/* Deadlines */}
-                {dueSoon.length>0&&(
-                  <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                    <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Deadlines</div>
-                      {dueSoon.some(d=>d.overdue)&&<span style={{fontSize:11,background:"#FFF0EB",color:"#E8622A",borderRadius:10,padding:"3px 8px",fontWeight:600}}>Overdue</span>}
-                    </div>
-                    <div style={{padding:"4px 0"}}>
-                      {dueSoon.slice(0,5).map((d,i)=>(
-                        <div key={i} style={{padding:"10px 18px",display:"flex",alignItems:"center",gap:10,borderBottom:i<Math.min(dueSoon.length,5)-1?"1px solid #F5F1EA":"none"}}>
-                          <div style={{width:8,height:8,borderRadius:"50%",background:d.overdue?"#C84B2F":d.daysLeft<=3?"#E8622A":"#7C5CFC",flexShrink:0}}/>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{d.label||d.employeeName}</div>
-                            <div style={{fontSize:11,color:d.overdue?"#C84B2F":"#9B9098"}}>{d.overdue?"Overdue":d.daysLeft===0?"Due today":"In "+d.daysLeft+" day"+(d.daysLeft!==1?"s":"")}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+
+
 
               </div>
             </div>
@@ -3370,7 +3365,7 @@ Please produce:
         <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 32px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CompassLogo size={26}/>
+              <CompassLogo size={32}/>
               <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535"}}>Compass</span>
             </div>
             <button onClick={()=>setScreen(SCREENS.HOME)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer"}}>← Back</button>
@@ -3498,7 +3493,7 @@ Please produce:
         <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CompassLogo size={22}/>
+              <CompassLogo size={32}/>
               <div>
                 <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label}</div>
                 <div style={{fontSize:15,fontFamily:"DM Serif Display,Georgia,serif",color:"#1A1535"}}>{caseInfo.employee}</div>
@@ -3667,7 +3662,7 @@ Please produce:
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
                           <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Job title</label><input value={editJobTitle} onChange={e=>setEditJobTitle(e.target.value)} placeholder="e.g. Sales Manager" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
                           <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Start date</label><input type="date" value={editStartDate} onChange={e=>setEditStartDate(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
-                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Location</label><input value={editLocation} onChange={e=>setEditLocation(e.target.value)} placeholder="e.g. London HQ" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
+                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Location</label><select value={editLocation} onChange={e=>setEditLocation(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:editLocation?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}><option value="">Select…</option>{locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}<option value="__other__">Other</option></select></div>
                         </div>
                         <button onClick={()=>{upsertEmployeeRecord(empName,{jobTitle:editJobTitle,startDate:editStartDate,location:editLocation});setEditing(false);showToast("Employee record updated");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 16px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Save</button>
                       </div>
@@ -4032,7 +4027,7 @@ Please produce:
           {/* Header */}
           <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <CompassLogo size={24}/>
+              <CompassLogo size={32}/>
               <div>
                 <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535"}}>New case</div>
                 <div style={{fontSize:12,color:"#9B9098"}}>Log a case before starting any meetings</div>
@@ -4286,7 +4281,7 @@ Please produce:
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 24px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <CompassLogo size={22}/>
+              <CompassLogo size={32}/>
               <div style={{width:1,height:20,background:"#EDE5D8"}}/>
               <div>
                 <span style={{fontSize:12,color:"#7C5CFC",fontWeight:600,letterSpacing:"0.5px",textTransform:"uppercase"}}>{meetingType?.label||"Meeting"}</span>
@@ -4436,7 +4431,7 @@ Please produce:
           {/* Top action bar */}
           <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <CompassLogo size={22}/>
+              <CompassLogo size={32}/>
               <div style={{width:1,height:20,background:"#EDE5D8"}}/>
               <div>
                 <span style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{caseInfo.employee}</span>
