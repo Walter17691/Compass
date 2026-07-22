@@ -19,9 +19,10 @@ const C = {
 function CompassLogo({ size = 44 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="44" stroke={C.accent} strokeWidth="9" fill="none" />
-      <ellipse cx="50" cy="50" rx="8" ry="30" transform="rotate(-40 50 50)" fill={C.accent} />
-      <circle cx="50" cy="50" r="5.5" fill={C.bg} />
+      <circle cx="50" cy="50" r="48" fill={C.accent}/>
+      <polygon points="50,16 56,50 50,58 44,50" fill={C.bg}/>
+      <polygon points="50,84 44,50 50,42 56,50" fill="rgba(253,250,245,0.28)"/>
+      <circle cx="50" cy="50" r="5" fill={C.accent} stroke={C.bg} strokeWidth="2"/>
     </svg>
   )
 }
@@ -117,24 +118,12 @@ export default function Login({ onLogin }) {
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-            <CompassLogo size={52} />
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+            <CompassLogo size={56} />
           </div>
-          <div style={{
-            fontFamily: "DM Serif Display, Georgia, serif",
-            fontSize: 30,
-            color: C.text,
-            fontWeight: 400,
-            letterSpacing: "-0.5px",
-            marginBottom: 4
-          }}>Compass</div>
-          <div style={{
-            fontSize: 12,
-            color: C.subtle,
-            letterSpacing: "1.5px",
-            textTransform: "uppercase",
-            fontWeight: 500
-          }}>UK HR Intelligence</div>
+          <div style={{ fontFamily: "DM Serif Display, Georgia, serif", fontSize: 32, color: C.text, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 6 }}>Compass</div>
+          <div style={{ fontSize: 14, color: C.muted, marginBottom: 6, fontStyle: "italic" }}>Navigate HR with confidence.</div>
+          <div style={{ fontSize: 10, color: C.subtle, letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 500 }}>UK HR Intelligence</div>
         </div>
 
         {/* Card */}

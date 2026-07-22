@@ -575,6 +575,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [briefData, setBriefData] = useState(null);
   const [homeChat, setHomeChat] = useState([]);
   const [askCompassHistory, setAskCompassHistory] = useState([]);
+  const [showAskCompass, setShowAskCompass] = useState(false);
   const [askCompassInput, setAskCompassInput] = useState("");
   const [askCompassProcessing, setAskCompassProcessing] = useState(false);
   const [homeChatInput, setHomeChatInput] = useState("");
@@ -3166,7 +3167,7 @@ Please produce:
                 </p>
               </div>
               <div style={{display:"flex",gap:10,flexShrink:0,marginTop:4}}>
-                <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #1C1820",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
+                <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
                 <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
               </div>
             </div>
@@ -3394,39 +3395,33 @@ Please produce:
               {/* ── Right column ── */}
               <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-                {/* AI HR Advisor — matches main app theme */}
+                {/* Policies & templates */}
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",background:"linear-gradient(135deg,#EDE8FF 0%,#FDFAF5 100%)"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI powered</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>HR Advisor</div>
-                    <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>UK employment law · ACAS · Best practice</div>
+                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Resources</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Policies & templates</div>
                   </div>
-                  <div style={{padding:14}}>
-                    <div style={{maxHeight:200,overflowY:"auto",marginBottom:10,display:"flex",flexDirection:"column",gap:8}}>
-                      {askCompassHistory.length===0&&(
-                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                          {["ACAS disciplinary process?","Dismissal on zero-hours contract?","Reasonable adjustments — what's required?","How long should an investigation take?"].map((q,i)=>(
-                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
-                          ))}
-                        </div>
-                      )}
-                      {askCompassHistory.map((m,i)=>(
-                        <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 11px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
-                        </div>
-                      ))}
-                      {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic",padding:"4px 0"}}>Thinking…</div>}
-                    </div>
-                    <div style={{display:"flex",gap:6}}>
-                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1.5px solid #E8E0D0",borderRadius:7,padding:"8px 10px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
-                      <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700,letterSpacing:"-0.5px"}}>→</button>
-                    </div>
+                  <div style={{padding:"4px 0"}}>
+                    {(()=>{
+                      const links=policies.length>0
+                        ?policies.slice(0,5).map(p=>({label:p.name||p.title||"Policy",type:"POLICY"}))
+                        :[{label:"Disciplinary Policy",type:"POLICY"},{label:"Grievance Policy",type:"POLICY"},{label:"ACAS Code of Practice",type:"GUIDE"},{label:"Invitation to hearing",type:"TEMPLATE"},{label:"Outcome letter",type:"TEMPLATE"}];
+                      return links.map((item,i)=>(
+                        <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<links.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
+                          onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                          <div style={{width:5,height:5,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:10,color:"#9B9098",fontWeight:600,letterSpacing:"0.5px"}}>{item.type}</div>
+                            <div style={{fontSize:12,color:"#1C1820",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
+                          </div>
+                          <span style={{color:"#C4BAB0",fontSize:14}}>›</span>
+                        </button>
+                      ));
+                    })()}
+                    <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all →</button>
                   </div>
                 </div>
-
-
-
-
 
               </div>
             </div>
