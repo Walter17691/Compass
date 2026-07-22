@@ -507,7 +507,23 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [dashSearch, setDashSearch] = useState("");
   const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
+  const [employeeRecords, setEmployeeRecords] = useState(ls("compass_employees", []));
+  const saveEmployeeRecords = u => { setEmployeeRecords(u); lsSet("compass_employees", u); };
+  const getEmployeeRecord = (name) => employeeRecords.find(e=>e.name===name)||null;
+  const upsertEmployeeRecord = (name, fields) => {
+    const existing = employeeRecords.find(e=>e.name===name);
+    if(existing) {
+      saveEmployeeRecords(employeeRecords.map(e=>e.name===name?{...e,...fields}:e));
+    } else {
+      saveEmployeeRecords([...employeeRecords,{name,...fields,createdAt:new Date().toISOString()}]);
+    }
+  };
   const [employmentProfileLoading, setEmploymentProfileLoading] = useState(false);
+  const [newCaseJobTitle, setNewCaseJobTitle] = useState("");
+  const [newCaseStartDate, setNewCaseStartDate] = useState("");
+  const [newCaseLocation, setNewCaseLocation] = useState("");
+  const [newCaseType, setNewCaseType] = useState("");
+  const [newCaseDescription, setNewCaseDescription] = useState("");
   const [dashFilter, setDashFilter] = useState("all");
   const [showOrgSettings, setShowOrgSettings] = useState(false);
 
@@ -2784,27 +2800,120 @@ Please produce:
       {showSigPad && <SignaturePad onSave={handleSaveSignature} onClose={()=>{setShowSigPad(false);setPendingSend(null);}} />}
 
       {/* Case file prompt */}
-      {showCasePrompt&&screen===SCREENS.HOME&&(
-        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",zIndex:1000,background:"#FFFFFF",border:"1px solid #7C5CFC",borderRadius:12,padding:"16px 20px",width:"100%",maxWidth:500,boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-            <div>
-              <div style={{fontSize:13,color:"#7C5CFC",fontWeight:600,marginBottom:3}}>Save to a case file?</div>
-              <div style={{fontSize:11,color:"#6B6880"}}>This looks like it relates to a specific employee situation.</div>
+      {showCasePrompt&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+              <div>
+                <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>New case</div>
+                <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>Log a new HR case and employee details</div>
+              </div>
+              <button onClick={()=>setShowCasePrompt(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1}}>×</button>
             </div>
-            <button onClick={()=>setShowCasePrompt(false)} style={{background:"none",border:"none",color:"#6B6880",fontSize:18,cursor:"pointer",padding:0,marginLeft:12}}>&#10005;</button>
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <input value={casePromptName} onChange={e=>setCasePromptName(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&createCaseFromChat()}
-              placeholder="Employee name..."
-              autoFocus
-              style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#1A1535"}}/>
-            <Btn onClick={createCaseFromChat} disabled={!casePromptName.trim()} style={{padding:"9px 16px",fontSize:12,flexShrink:0}}>Create case</Btn>
+
+            {/* Employee name with lookup */}
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Employee name</label>
+              <input
+                value={casePromptName}
+                onChange={e=>{
+                  setCasePromptName(e.target.value);
+                  const rec = getEmployeeRecord(e.target.value.trim());
+                  if(rec) {
+                    setNewCaseJobTitle(rec.jobTitle||"");
+                    setNewCaseStartDate(rec.startDate||"");
+                    setNewCaseLocation(rec.location||"");
+                  }
+                }}
+                placeholder="Full name"
+                list="employee-suggestions"
+                style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
+              />
+              <datalist id="employee-suggestions">
+                {[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
+              </datalist>
+              {getEmployeeRecord(casePromptName.trim())&&<div style={{fontSize:11,color:"#1A7A4A",marginTop:4}}>Employee record found — details pre-filled</div>}
+            </div>
+
+            {/* Job title + start date */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Job title</label>
+                <input value={newCaseJobTitle} onChange={e=>setNewCaseJobTitle(e.target.value)} placeholder="e.g. Sales Manager" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Start date</label>
+                <input type="date" value={newCaseStartDate} onChange={e=>setNewCaseStartDate(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+            </div>
+
+            {/* Location + case type */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Location</label>
+                <input value={newCaseLocation} onChange={e=>setNewCaseLocation(e.target.value)} placeholder="e.g. London HQ" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Case type</label>
+                <select value={newCaseType} onChange={e=>setNewCaseType(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+                  <option value="">Select type…</option>
+                  {["Misconduct","Grievance","Performance","Absence","Redundancy","Appeal","Other"].map(t=><option key={t} value={t.toLowerCase()}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div style={{marginBottom:20}}>
+              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Brief description <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+              <textarea value={newCaseDescription} onChange={e=>setNewCaseDescription(e.target.value)} placeholder="Brief summary of the issue…" rows={2} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={()=>setShowCasePrompt(false)} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+              <button
+                disabled={!casePromptName.trim()}
+                onClick={()=>{
+                  const name = casePromptName.trim();
+                  if(!name) return;
+                  // Save/update employee record
+                  upsertEmployeeRecord(name,{jobTitle:newCaseJobTitle,startDate:newCaseStartDate,location:newCaseLocation});
+                  // Create case
+                  const newCase = {
+                    id: crypto.randomUUID(),
+                    employeeName: name,
+                    email: "",
+                    caseType: newCaseType,
+                    description: newCaseDescription,
+                    dateReceived: new Date().toISOString().split("T")[0],
+                    stage: "open",
+                    meetings: [],
+                    evidence: [],
+                    urgency: "normal",
+                    jobTitle: newCaseJobTitle,
+                    startDate: newCaseStartDate,
+                    location: newCaseLocation,
+                  };
+                  saveCases([...cases, newCase]);
+                  setActiveCaseId(newCase.id);
+                  setActiveCaseStage("investigation");
+                  setShowCasePrompt(false);
+                  setCasePromptName("");
+                  setNewCaseJobTitle("");
+                  setNewCaseStartDate("");
+                  setNewCaseLocation("");
+                  setNewCaseType("");
+                  setNewCaseDescription("");
+                  setScreen(SCREENS.CASE_VIEW);
+                  showToast("Case created");
+                }}
+                style={{fontSize:13,padding:"10px 20px",background:!casePromptName.trim()?"#B8A9F8":"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:!casePromptName.trim()?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}
+              >Create case</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── Toast notification ── */}
+            {/* ── Toast notification ── */}
       {toast&&(
         <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#FFFFFF",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#E8622A":"#7C5CFC",flexShrink:0}}/>
@@ -2973,7 +3082,7 @@ Please produce:
               </div>
               <div style={{display:"flex",gap:10,flexShrink:0,marginTop:4}}>
                 <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #1C1820",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
-                <button onClick={()=>setShowCaseIntake(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
+                <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
               </div>
             </div>
 
@@ -3056,7 +3165,7 @@ Please produce:
                     if(filtered.length===0) return (
                       <div style={{padding:"40px",textAlign:"center"}}>
                         <div style={{fontSize:14,color:"#9B9098",marginBottom:8}}>{dashSearch?"No cases match your search.":"No active cases."}</div>
-                        {!dashSearch&&<button onClick={()=>setShowCaseIntake(true)} style={{fontSize:13,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Create a case</button>}
+                        {!dashSearch&&<button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Create a case</button>}
                       </div>
                     );
                     const statusMap={
@@ -3525,6 +3634,46 @@ Please produce:
 
             <div style={{maxWidth:820,margin:"0 auto",padding:"28px 24px"}}>
 
+              {/* Employee details */}
+              {(()=>{
+                const rec = getEmployeeRecord(empName)||{};
+                const [editing, setEditing] = React.useState(false);
+                const [editJobTitle, setEditJobTitle] = React.useState(rec.jobTitle||"");
+                const [editStartDate, setEditStartDate] = React.useState(rec.startDate||"");
+                const [editLocation, setEditLocation] = React.useState(rec.location||"");
+                const tenure = rec.startDate?(()=>{
+                  const d = new Date(rec.startDate);
+                  const now = new Date();
+                  const years = now.getFullYear()-d.getFullYear();
+                  const months = now.getMonth()-d.getMonth();
+                  const total = years*12+months;
+                  return total>=12?Math.floor(total/12)+" year"+(Math.floor(total/12)!==1?"s":""):total+" month"+(total!==1?"s":"");
+                })():null;
+                return (
+                  <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px",marginBottom:20}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:editing?14:0}}>
+                      <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
+                        {rec.jobTitle&&<div><div style={{fontSize:10,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Job title</div><div style={{fontSize:13,color:"#1C1820",fontWeight:500}}>{rec.jobTitle}</div></div>}
+                        {rec.startDate&&<div><div style={{fontSize:10,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Start date</div><div style={{fontSize:13,color:"#1C1820",fontWeight:500}}>{fmtDate(rec.startDate)}{tenure?" · "+tenure+" service":""}</div></div>}
+                        {rec.location&&<div><div style={{fontSize:10,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Location</div><div style={{fontSize:13,color:"#1C1820",fontWeight:500}}>{rec.location}</div></div>}
+                        {!rec.jobTitle&&!rec.startDate&&!rec.location&&!editing&&<div style={{fontSize:12,color:"#9B9098"}}>No employee details on file.</div>}
+                      </div>
+                      <button onClick={()=>{setEditing(!editing);setEditJobTitle(rec.jobTitle||"");setEditStartDate(rec.startDate||"");setEditLocation(rec.location||"");}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,flexShrink:0}}>{editing?"Cancel":"Edit details"}</button>
+                    </div>
+                    {editing&&(
+                      <div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Job title</label><input value={editJobTitle} onChange={e=>setEditJobTitle(e.target.value)} placeholder="e.g. Sales Manager" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
+                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Start date</label><input type="date" value={editStartDate} onChange={e=>setEditStartDate(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
+                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Location</label><input value={editLocation} onChange={e=>setEditLocation(e.target.value)} placeholder="e.g. London HQ" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
+                        </div>
+                        <button onClick={()=>{upsertEmployeeRecord(empName,{jobTitle:editJobTitle,startDate:editStartDate,location:editLocation});setEditing(false);showToast("Employee record updated");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 16px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Save</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Active cases */}
               {activeCases.length>0&&(
                 <div style={{marginBottom:24}}>
@@ -3605,7 +3754,9 @@ Please produce:
                             return "Case: "+(cs.caseType||"HR Matter")+" ("+stage+") | Opened: "+(cs.dateReceived||cs.createdAt||"Unknown")+" | Outcome: "+outcome+" | Meetings: "+mtgs+(cs.investigationReport?" | Investigation report on file":"");
                           }).join(" ;; ");
                           const evidence = empCases.flatMap(cs=>(cs.evidence||[]).map(e=>e.name||e.type)).filter(Boolean).join(", ")||"None";
-                          const prompt = "You are a senior UK HR professional. Generate a comprehensive employment profile report for: "+empName+". Total cases: "+empCases.length+". Active: "+activeCases.length+". Total meetings: "+allMeetings.length+". Evidence on file: "+evidence+". Case history: "+caseHistory+". Write a professional employment profile with sections: 1) Employment Summary 2) Case History Overview 3) Pattern Analysis 4) Current Position 5) Risk Assessment 6) Recommended Next Steps. Be factual, objective, ACAS-compliant. Use professional HR language.";
+                          const empRec = getEmployeeRecord(empName)||{};
+                          const tenure = empRec.startDate?(()=>{const d=new Date(empRec.startDate);const now=new Date();const months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());return months>=12?Math.floor(months/12)+" years":months+" months";})():"Unknown";
+                          const prompt = "You are a senior UK HR professional. Generate a comprehensive employment profile report for: "+empName+". Job title: "+(empRec.jobTitle||"Not recorded")+". Start date: "+(empRec.startDate||"Not recorded")+". Length of service: "+tenure+". Location: "+(empRec.location||"Not recorded")+". Total cases: "+empCases.length+". Active: "+activeCases.length+". Total meetings: "+allMeetings.length+". Evidence on file: "+evidence+". Case history: "+caseHistory+". Write a professional employment profile with sections: 1) Employment Summary (include length of service, job title, location) 2) Case History Overview 3) Pattern Analysis 4) Current Position and Outstanding Matters 5) Risk Assessment 6) Recommended Next Steps. Be factual, objective, ACAS-compliant. Reference length of service where it affects statutory rights. Use professional HR language.";
                           const response = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:prompt}]})});
                           const data = await response.json();
                           const text = data.content&&data.content[0]&&data.content[0].text?data.content[0].text:"Unable to generate profile.";
