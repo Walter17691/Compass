@@ -2990,7 +2990,7 @@ Please produce:
                       {/* Cases list */}
                       {filtered.length===0?(
                         <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"32px",textAlign:"center",color:"#9B9098",fontSize:13}}>
-                          {search?"No cases match your search.":"No cases yet. Create your first case to get started."}
+                          {dashSearch?"No cases match your search.":"No cases yet. Create your first case to get started."}
                         </div>
                       ):(
                         <div style={{display:"flex",flexDirection:"column",gap:8}}>
