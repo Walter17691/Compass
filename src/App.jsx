@@ -2920,225 +2920,226 @@ Please produce:
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
-        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-          <div style={{maxWidth:1200,margin:"0 auto",padding:"28px 24px"}}>
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex"}}>
 
-            {/* ── Header row ── */}
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12}}>
+          {/* ── Left sidebar ── */}
+          <div style={{width:220,flexShrink:0,background:"#1C1820",minHeight:"100vh",display:"flex",flexDirection:"column",padding:"28px 0"}}>
+            <div style={{padding:"0 20px",marginBottom:32}}>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#FFFFFF",fontWeight:400,letterSpacing:"-0.3px"}}>Compass</div>
+              <div style={{fontSize:11,color:"#6B6375",letterSpacing:"1px",textTransform:"uppercase",marginTop:2}}>HR Intelligence</div>
+            </div>
+            <nav style={{flex:1,display:"flex",flexDirection:"column",gap:2,padding:"0 12px"}}>
+              {[
+                {label:"Dashboard", screen:SCREENS.HOME, active:true},
+                {label:"Active cases", screen:SCREENS.CASES, badge:cases.filter(x=>x.stage!=="closed").length||null},
+                {label:"Policies", screen:SCREENS.SETTINGS},
+                {label:"Templates", screen:SCREENS.SETTINGS},
+                {label:"People", screen:SCREENS.PEOPLE},
+                {label:"HR Reviews", screen:SCREENS.HR_REVIEW},
+              ].map((item,i)=>(
+                <button key={i} onClick={()=>setScreen(item.screen)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:8,border:"none",background:item.active?"#2A2535":"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"background 0.15s",width:"100%"}}
+                  onMouseEnter={e=>{if(!item.active)e.currentTarget.style.background="#252030";}}
+                  onMouseLeave={e=>{if(!item.active)e.currentTarget.style.background="none";}}>
+                  <span style={{fontSize:13,color:item.active?"#FFFFFF":"#9B9098",fontWeight:item.active?600:400}}>{item.label}</span>
+                  {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"2px 7px",fontWeight:700}}>{item.badge}</span>}
+                </button>
+              ))}
+            </nav>
+            <div style={{padding:"0 20px",borderTop:"1px solid #2A2535",paddingTop:16,marginTop:16}}>
+              <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{width:"100%",fontSize:12,background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 12px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600,textAlign:"center"}}>Start meeting</button>
+              <div style={{fontSize:11,color:"#6B6375",marginTop:12,textAlign:"center"}}>Supporting people.<br/>Empowering workplaces.</div>
+            </div>
+          </div>
+
+          {/* ── Main content ── */}
+          <div style={{flex:1,padding:"32px 36px",overflowY:"auto"}}>
+
+            {/* Header */}
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28}}>
               <div>
-                <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:24,fontWeight:400,color:"#1C1820",margin:"0 0 4px"}}>
+                <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>
+                  {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()} · COMPASS OVERVIEW
+                </div>
+                <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:36,fontWeight:400,color:"#1C1820",margin:0,letterSpacing:"-0.5px"}}>
                   Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
                 </h1>
-                <p style={{fontSize:13,color:"#9B9098",margin:0}}>
-                  {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                </p>
+                <p style={{fontSize:14,color:"#9B9098",margin:"6px 0 0"}}>Here is what needs your attention across HR today.</p>
               </div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 16px",cursor:"pointer",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Prepare for meeting</button>
-                <button onClick={()=>{setShowCaseIntake(true);}} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 16px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
-              </div>
+              <button onClick={()=>setShowCaseIntake(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"11px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600,flexShrink:0,marginTop:8}}>+ Create new case</button>
             </div>
 
-            {/* ── Stat cards ── */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+            {/* Stat cards */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:28}}>
               {[
-                {label:"Active cases", value:cases.filter(cs=>getCaseStage(cs)!=="closed").length, color:"#7C5CFC", bg:"#EDE8FF"},
-                {label:"Awaiting action", value:cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)&&getNextStep(cs).action).length, color:"#E8622A", bg:"#FFF0EB"},
-                {label:"Pending signatures", value:cases.reduce((acc,cs)=>{const ev=(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId);return acc+ev.length;},[]).length||cases.flatMap(cs=>cs.meetings||[]).filter(m=>m.signStatus==="pending"&&m.signId).length, color:"#1A7A4A", bg:"#E8F5EE"},
-                {label:"Closed this month", value:cases.filter(cs=>{const stage=getCaseStage(cs);if(stage!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const now=new Date();return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).length, color:"#6B6375", bg:"#F5F1EA"},
+                {label:"Active cases", value:cases.filter(cs=>getCaseStage(cs)!=="closed").length, sub:cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length+" requiring action"},
+                {label:"Actions due", value:cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length, sub:dueSoon.filter(d=>d.overdue).length+" overdue"},
+                {label:"Pending signatures", value:cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0), sub:"Awaiting employee sign-off"},
               ].map(s=>(
-                <div key={s.label} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 18px"}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{s.label}</div>
-                  <div style={{fontSize:28,fontWeight:700,color:s.color,fontFamily:"DM Serif Display,Georgia,serif"}}>{s.value}</div>
+                <div key={s.label} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 22px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>{s.label}</div>
+                  <div style={{fontSize:32,fontWeight:700,color:"#1C1820",fontFamily:"DM Serif Display,Georgia,serif",marginBottom:4}}>{s.value}</div>
+                  <div style={{fontSize:12,color:"#9B9098"}}>{s.sub}</div>
                 </div>
               ))}
             </div>
 
-            {/* ── Main grid ── */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:20,alignItems:"start"}}>
+            {/* Main grid */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:20,alignItems:"start"}}>
 
-              {/* ── Left column ── */}
-              <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-                {/* Search and filter */}
-                {(()=>{
-                  const statuses = ["all","open","investigation","disciplinary","closed"];
-                  const filtered = cases.filter(cs=>{
-                    const matchStage = dashFilter==="all" || (dashFilter==="closed"?getCaseStage(cs)==="closed":cs.stage===dashFilter||getCaseStage(cs)===dashFilter);
-                    const matchSearch = !dashSearch || cs.employeeName?.toLowerCase().includes(dashSearch.toLowerCase()) || cs.caseType?.toLowerCase().includes(dashSearch.toLowerCase()) || cs.description?.toLowerCase().includes(dashSearch.toLowerCase());
-                    return matchStage && matchSearch;
-                  });
-                  return (
-                    <>
-                      {/* Search + filter bar */}
-                      <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"14px 16px"}}>
-                        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-                          <div style={{flex:1,minWidth:180,position:"relative"}}>
-                            <svg style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#9B9098"}} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            <input value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Search cases, employees…" style={{width:"100%",paddingLeft:32,paddingRight:12,paddingTop:8,paddingBottom:8,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
-                          </div>
-                          <div style={{display:"flex",gap:4}}>
-                            {statuses.map(s=>(
-                              <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"6px 12px",borderRadius:6,border:"1px solid",borderColor:dashFilter===s?"#7C5CFC":"#E8E0D0",background:dashFilter===s?"#EDE8FF":"#FFFFFF",color:dashFilter===s?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:dashFilter===s?600:400,textTransform:"capitalize"}}>
-                                {s==="all"?"All cases":s.charAt(0).toUpperCase()+s.slice(1)}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Cases list */}
-                      {filtered.length===0?(
-                        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"32px",textAlign:"center",color:"#9B9098",fontSize:13}}>
-                          {dashSearch?"No cases match your search.":"No cases yet. Create your first case to get started."}
-                        </div>
-                      ):(
-                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                          {filtered.map(cs=>{
-                            const stage = getCaseStage(cs);
-                            const next = getNextStep(cs);
-                            const statusMap = {
-                              open:{label:"Open",color:"#6B6375",bg:"#F5F1EA"},
-                              investigation:{label:"In progress",color:"#E8622A",bg:"#FFF0EB"},
-                              inv_report:{label:"Awaiting action",color:"#7C5CFC",bg:"#EDE8FF"},
-                              disciplinary:{label:"Disciplinary",color:"#C84B2F",bg:"#FFF0ED"},
-                              closed:{label:"Closed",color:"#1A7A4A",bg:"#E8F5EE"},
-                            };
-                            const st = statusMap[cs.stage||stage]||statusMap.open;
-                            const involvesMe = cs.disciplinaryOfficer===currentUser?.name||cs.investigatingManager===currentUser?.name||cs.assignedTo===user?.id;
-                            return (
-                              <div key={cs.id}
-                                onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                                style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"14px 16px",cursor:"pointer",transition:"border-color 0.15s,box-shadow 0.15s"}}
-                                onMouseEnter={e=>{e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.boxShadow="0 2px 12px rgba(124,92,252,0.08)";}}
-                                onMouseLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.boxShadow="none";}}>
-                                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                                      <span style={{fontSize:14,fontWeight:600,color:"#1C1820"}}>{cs.employeeName}</span>
-                                      <span style={{fontSize:11,fontWeight:600,color:st.color,background:st.bg,borderRadius:4,padding:"2px 8px"}}>{st.label}</span>
-                                      {involvesMe&&<span style={{fontSize:10,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"2px 6px",fontWeight:600}}>Assigned to me</span>}
-                                    </div>
-                                    <div style={{fontSize:12,color:"#6B6375",marginBottom:next?6:0}}>{cs.caseType||"HR Matter"}{cs.description?" · "+cs.description.slice(0,60)+(cs.description.length>60?"…":""):""}</div>
-                                    {next&&<div style={{fontSize:12,color:"#7C5CFC",fontWeight:500}}>→ {next.label}</div>}
-                                  </div>
-                                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
-                                    <span style={{color:"#C4BAB0",fontSize:18}}>›</span>
-                                    {cs.dateReceived&&<span style={{fontSize:10,color:"#9B9098"}}>{fmtDate(cs.dateReceived)}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-
-                {/* Pending signatures */}
-                {(()=>{
-                  const pending = cases.flatMap(cs=>(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).map(e=>({...e,employeeName:cs.employeeName,caseId:cs.id})));
-                  if(pending.length===0) return null;
-                  return (
-                    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                      <div style={{padding:"12px 16px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <div style={{fontSize:12,fontWeight:700,color:"#E8622A",letterSpacing:"0.5px",textTransform:"uppercase"}}>Pending signatures</div>
-                        <span style={{fontSize:11,background:"#FFF0EB",color:"#E8622A",borderRadius:10,padding:"2px 8px",fontWeight:600}}>{pending.length}</span>
-                      </div>
-                      {pending.map((e,i)=>(
-                        <div key={i} style={{padding:"10px 16px",borderBottom:i<pending.length-1?"1px solid #F5F1EA":"none",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                          <div>
-                            <div style={{fontSize:13,color:"#1C1820",fontWeight:500}}>{e.employeeName}</div>
-                            <div style={{fontSize:11,color:"#9B9098"}}>{e.name||"Document"}</div>
-                          </div>
-                          <button onClick={()=>{setActiveCaseId(e.caseId);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View case</button>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-              </div>
-
-              {/* ── Right column ── */}
-              <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-                {/* AI HR Advisor */}
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"12px 16px",borderBottom:"1px solid #E8E0D0",background:"linear-gradient(135deg,#7C5CFC11,#FDFAF5)"}}>
-                    <div style={{fontSize:12,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Ask HR Advisor</div>
-                    <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>UK employment law · ACAS guidance · HR best practice</div>
+              {/* Active cases */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Case management</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Active cases</div>
                   </div>
-                  <div style={{padding:14}}>
-                    <div style={{maxHeight:220,overflowY:"auto",marginBottom:10,display:"flex",flexDirection:"column",gap:8}}>
-                      {askCompassHistory.length===0&&(
-                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                          {["What's the ACAS process for a disciplinary?","Can I dismiss someone on a zero-hours contract?","How long should an investigation take?","What are the rules around reasonable adjustments?"].map((q,i)=>(
-                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
-                          ))}
-                        </div>
-                      )}
-                      {askCompassHistory.map((m,i)=>(
-                        <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.5,padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
-                        </div>
-                      ))}
-                      {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <div style={{position:"relative"}}>
+                      <svg style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#9B9098",pointerEvents:"none"}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      <input value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Search…" style={{paddingLeft:30,paddingRight:10,paddingTop:7,paddingBottom:7,fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",width:160}}/>
                     </div>
-                    <div style={{display:"flex",gap:8}}>
-                      <input
-                        value={askCompassInput}
-                        onChange={e=>setAskCompassInput(e.target.value)}
-                        onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}}
-                        placeholder="Ask an HR question…"
-                        style={{flex:1,fontSize:12,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"8px 10px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}
-                      />
-                      <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 12px",cursor:"pointer",color:"#fff",fontSize:13}}>→</button>
-                    </div>
+                    <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>View all cases →</button>
                   </div>
                 </div>
 
+                {/* Filter pills */}
+                <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+                  {["all","open","investigation","disciplinary","closed"].map(s=>(
+                    <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"5px 12px",borderRadius:20,border:"1px solid",borderColor:dashFilter===s?"#7C5CFC":"#E8E0D0",background:dashFilter===s?"#EDE8FF":"#FFFFFF",color:dashFilter===s?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:dashFilter===s?600:400,textTransform:"capitalize"}}>
+                      {s==="all"?"All":s==="inv_report"?"Awaiting action":s.charAt(0).toUpperCase()+s.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Cases list */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+                  {(()=>{
+                    const filtered = cases.filter(cs=>{
+                      const matchStage = dashFilter==="all"||(dashFilter==="closed"?getCaseStage(cs)==="closed":cs.stage===dashFilter||getCaseStage(cs)===dashFilter);
+                      const matchSearch = !dashSearch||cs.employeeName?.toLowerCase().includes(dashSearch.toLowerCase())||cs.caseType?.toLowerCase().includes(dashSearch.toLowerCase());
+                      return matchStage&&matchSearch;
+                    });
+                    if(filtered.length===0) return (
+                      <div style={{padding:"32px",textAlign:"center",color:"#9B9098",fontSize:13}}>
+                        {dashSearch?"No cases match your search.":"No cases yet. Create your first case to get started."}
+                      </div>
+                    );
+                    const statusMap = {
+                      open:{label:"Open",color:"#6B6375",bg:"#F5F1EA"},
+                      investigation:{label:"In progress",color:"#E8622A",bg:"#FFF0EB"},
+                      inv_report:{label:"Awaiting action",color:"#7C5CFC",bg:"#EDE8FF"},
+                      disciplinary:{label:"Disciplinary",color:"#C84B2F",bg:"#FFF0ED"},
+                      closed:{label:"Closed",color:"#1A7A4A",bg:"#E8F5EE"},
+                    };
+                    return filtered.map((cs,i)=>{
+                      const next = getNextStep(cs);
+                      const st = statusMap[cs.stage||getCaseStage(cs)]||statusMap.open;
+                      const lastUpdated = cs.updatedAt||cs.createdAt;
+                      const daysAgo = lastUpdated?Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24)):null;
+                      return (
+                        <div key={cs.id}
+                          onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                          style={{display:"flex",alignItems:"center",padding:"14px 18px",borderBottom:i<filtered.length-1?"1px solid #F5F1EA":"none",cursor:"pointer",transition:"background 0.1s"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
+                          onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                          <div style={{width:36,height:36,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#7C5CFC",flexShrink:0,marginRight:14}}>
+                            {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:600,color:"#1C1820",marginBottom:2}}>{cs.employeeName}</div>
+                            <div style={{fontSize:12,color:"#9B9098"}}>{cs.caseType||"HR Matter"}</div>
+                          </div>
+                          <div style={{marginRight:20}}>
+                            <span style={{fontSize:11,fontWeight:600,color:st.color,background:st.bg,borderRadius:20,padding:"3px 10px"}}>{st.label}</span>
+                          </div>
+                          <div style={{textAlign:"right",flexShrink:0}}>
+                            <div style={{fontSize:11,color:"#9B9098",marginBottom:2}}>Last updated</div>
+                            <div style={{fontSize:11,color:"#1C1820",fontWeight:500}}>{daysAgo===null?"—":daysAgo===0?"Today":daysAgo===1?"Yesterday":fmtDate(lastUpdated)}</div>
+                          </div>
+                          <div style={{marginLeft:16,color:"#C4BAB0",fontSize:16,flexShrink:0}}>›</div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+
+              {/* Right column */}
+              <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
                 {/* Quick links */}
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"12px 16px",borderBottom:"1px solid #E8E0D0"}}>
-                    <div style={{fontSize:12,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase"}}>Quick access</div>
+                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Document library</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Quick links</div>
                   </div>
-                  <div style={{padding:8}}>
+                  <div style={{padding:"4px 0"}}>
                     {[
-                      {icon:"📋",label:"Policies & templates",screen:SCREENS.SETTINGS,desc:"ACAS letters and HR docs"},
-                      {icon:"👥",label:"People",screen:SCREENS.PEOPLE,desc:"Employee directory"},
-                      {icon:"📊",label:"All cases",screen:SCREENS.CASES,desc:cases.length+" total cases"},
-                      {icon:"🔔",label:"HR reviews",screen:SCREENS.HR_REVIEW,desc:"Pending review requests"},
+                      {type:"POLICY",label:"Disciplinary Policy",screen:SCREENS.SETTINGS},
+                      {type:"POLICY",label:"Grievance Policy",screen:SCREENS.SETTINGS},
+                      {type:"GUIDE",label:"ACAS Code of Practice",screen:SCREENS.SETTINGS},
+                      {type:"TEMPLATE",label:"Invitation to hearing",screen:SCREENS.SETTINGS},
+                      {type:"TEMPLATE",label:"Outcome letter",screen:SCREENS.SETTINGS},
                     ].map((item,i)=>(
-                      <button key={i} onClick={()=>setScreen(item.screen)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 10px",borderRadius:8,border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"background 0.1s"}}
+                      <button key={i} onClick={()=>setScreen(item.screen)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"11px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<4?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
                         onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
                         onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                        <span style={{fontSize:18,flexShrink:0}}>{item.icon}</span>
-                        <div>
-                          <div style={{fontSize:13,fontWeight:500,color:"#1C1820"}}>{item.label}</div>
-                          <div style={{fontSize:11,color:"#9B9098"}}>{item.desc}</div>
+                        <div style={{width:32,height:32,background:"#FFF0EB",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <div style={{width:3,height:18,background:"#E8622A",borderRadius:2}}/>
                         </div>
-                        <span style={{marginLeft:"auto",color:"#C4BAB0",fontSize:16}}>›</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:10,color:"#9B9098",fontWeight:600,letterSpacing:"0.5px"}}>{item.type}</div>
+                          <div style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{item.label}</div>
+                        </div>
+                        <span style={{color:"#C4BAB0",fontSize:14}}>›</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Upcoming deadlines */}
+                {/* AI HR Advisor */}
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI powered</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>HR Advisor</div>
+                  </div>
+                  <div style={{padding:14}}>
+                    <div style={{maxHeight:200,overflowY:"auto",marginBottom:10,display:"flex",flexDirection:"column",gap:8}}>
+                      {askCompassHistory.length===0&&(
+                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          {["ACAS disciplinary process?","Dismissal on zero-hours contract?","How long should an investigation take?"].map((q,i)=>(
+                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
+                          ))}
+                        </div>
+                      )}
+                      {askCompassHistory.map((m,i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+                          <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.5,padding:"7px 10px",borderRadius:8,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
+                        </div>
+                      ))}
+                      {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
+                      <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:600}}>→</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Deadlines */}
                 {dueSoon.length>0&&(
                   <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                    <div style={{padding:"12px 16px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <div style={{fontSize:12,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase"}}>Deadlines</div>
-                      {dueSoon.some(d=>d.overdue)&&<span style={{fontSize:11,background:"#FFF0EB",color:"#E8622A",borderRadius:10,padding:"2px 8px",fontWeight:600}}>Overdue</span>}
+                    <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                      <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Coming up</div>
+                      <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Deadlines</div>
                     </div>
                     <div style={{padding:"4px 0"}}>
-                      {dueSoon.slice(0,5).map((d,i)=>(
-                        <div key={i} style={{padding:"8px 16px",display:"flex",alignItems:"center",gap:10,borderBottom:i<Math.min(dueSoon.length,5)-1?"1px solid #F5F1EA":"none"}}>
+                      {dueSoon.slice(0,4).map((d,i)=>(
+                        <div key={i} style={{padding:"10px 18px",display:"flex",alignItems:"center",gap:10,borderBottom:i<Math.min(dueSoon.length,4)-1?"1px solid #F5F1EA":"none"}}>
                           <div style={{width:8,height:8,borderRadius:"50%",background:d.overdue?"#C84B2F":d.daysLeft<=3?"#E8622A":"#7C5CFC",flexShrink:0}}/>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:12,color:"#1C1820",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label||d.employeeName}</div>
-                            <div style={{fontSize:11,color:d.overdue?"#C84B2F":"#9B9098"}}>{d.overdue?"Overdue":d.daysLeft===0?"Due today":"Due in "+d.daysLeft+" day"+(d.daysLeft!==1?"s":"")}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{d.label||d.employeeName}</div>
+                            <div style={{fontSize:11,color:d.overdue?"#C84B2F":"#9B9098"}}>{d.overdue?"Overdue":d.daysLeft===0?"Due today":"In "+d.daysLeft+" day"+(d.daysLeft!==1?"s":"")}</div>
                           </div>
                         </div>
                       ))}
