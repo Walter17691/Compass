@@ -3395,31 +3395,69 @@ Please produce:
               {/* ── Right column ── */}
               <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-                {/* Policies & templates */}
+                {/* Quick links — context-aware */}
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Resources</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Policies & templates</div>
+                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Suggested for you</div>
+                      <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Quick links</div>
+                    </div>
                   </div>
                   <div style={{padding:"4px 0"}}>
                     {(()=>{
-                      const links=policies.length>0
-                        ?policies.slice(0,5).map(p=>({label:p.name||p.title||"Policy",type:"POLICY"}))
-                        :[{label:"Disciplinary Policy",type:"POLICY"},{label:"Grievance Policy",type:"POLICY"},{label:"ACAS Code of Practice",type:"GUIDE"},{label:"Invitation to hearing",type:"TEMPLATE"},{label:"Outcome letter",type:"TEMPLATE"}];
-                      return links.map((item,i)=>(
-                        <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<links.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
+                      const activeCaseTypes = cases.filter(cs=>getCaseStage(cs)!=="closed").map(cs=>(cs.caseType||"").toLowerCase());
+                      const hasMisconduct = activeCaseTypes.some(t=>t.includes("misconduct")||t.includes("disciplinary"));
+                      const hasGrievance = activeCaseTypes.some(t=>t.includes("grievance"));
+                      const hasInvestigation = cases.some(cs=>getCaseStage(cs)==="investigation");
+                      const hasRedundancy = activeCaseTypes.some(t=>t.includes("redundancy"));
+                      const hasPerformance = activeCaseTypes.some(t=>t.includes("performance"));
+
+                      const suggested = [];
+
+                      if(hasInvestigation) {
+                        suggested.push({label:"Investigation report template",type:"TEMPLATE",reason:"Active investigation"});
+                        suggested.push({label:"Witness statement form",type:"TEMPLATE",reason:"Active investigation"});
+                      }
+                      if(hasMisconduct) {
+                        suggested.push({label:"Disciplinary Policy",type:"POLICY",reason:"Misconduct case open"});
+                        suggested.push({label:"Invitation to disciplinary hearing",type:"TEMPLATE",reason:"Misconduct case open"});
+                        suggested.push({label:"Disciplinary outcome letter",type:"TEMPLATE",reason:"Misconduct case open"});
+                      }
+                      if(hasGrievance) {
+                        suggested.push({label:"Grievance Policy",type:"POLICY",reason:"Grievance case open"});
+                        suggested.push({label:"Grievance hearing invitation",type:"TEMPLATE",reason:"Grievance case open"});
+                      }
+                      if(hasRedundancy) {
+                        suggested.push({label:"Redundancy Policy",type:"POLICY",reason:"Redundancy case open"});
+                        suggested.push({label:"At risk letter",type:"TEMPLATE",reason:"Redundancy case open"});
+                      }
+                      if(hasPerformance) {
+                        suggested.push({label:"Performance Improvement Plan",type:"TEMPLATE",reason:"PIP case open"});
+                        suggested.push({label:"Performance management policy",type:"POLICY",reason:"PIP case open"});
+                      }
+                      if(suggested.length===0) {
+                        suggested.push(
+                          {label:"Disciplinary Policy",type:"POLICY",reason:"Most used"},
+                          {label:"Grievance Policy",type:"POLICY",reason:"Most used"},
+                          {label:"ACAS Code of Practice",type:"GUIDE",reason:"Most used"},
+                          {label:"Invitation to hearing",type:"TEMPLATE",reason:"Most used"},
+                          {label:"Outcome letter",type:"TEMPLATE",reason:"Most used"}
+                        );
+                      }
+
+                      return suggested.slice(0,5).map((item,i)=>(
+                        <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<Math.min(suggested.length,5)-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
                           onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
                           onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                          <div style={{width:5,height:5,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:10,color:"#9B9098",fontWeight:600,letterSpacing:"0.5px"}}>{item.type}</div>
                             <div style={{fontSize:12,color:"#1C1820",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
+                            <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{item.type} · {item.reason}</div>
                           </div>
-                          <span style={{color:"#C4BAB0",fontSize:14}}>›</span>
+                          <span style={{color:"#C4BAB0",fontSize:14,flexShrink:0}}>›</span>
                         </button>
                       ));
                     })()}
-                    <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all →</button>
+                    <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all policies & templates →</button>
                   </div>
                 </div>
 
