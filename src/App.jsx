@@ -506,6 +506,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [orgMembers, setOrgMembers] = useState([]);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [dashSearch, setDashSearch] = useState("");
+  const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
+  const [employmentProfileLoading, setEmploymentProfileLoading] = useState(false);
   const [dashFilter, setDashFilter] = useState("all");
   const [showOrgSettings, setShowOrgSettings] = useState(false);
 
@@ -3575,6 +3577,70 @@ Please produce:
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Employment Profile Report */}
+              <div style={{marginTop:24,marginBottom:24}}>
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"16px 20px",borderBottom:"1px solid #E8E0D0",background:"linear-gradient(135deg,#EDE8FF 0%,#FDFAF5 100%)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI generated</div>
+                      <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Employment Profile</div>
+                      <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>A complete picture of this employee's history in Compass</div>
+                    </div>
+                    <button
+                      disabled={employmentProfileLoading}
+                      onClick={async()=>{
+                        setEmploymentProfileLoading(true);
+                        setEmploymentProfileOutput("");
+                        try {
+                          const caseHistory = empCases.map(cs=>{
+                            const mtgs = (cs.meetings||[]).map(m=>{
+                              const risk = m.riskScore&&m.riskScore.rating?" [Risk: "+m.riskScore.rating+"]":"";
+                              const signed = m.signStatus==="signed"?" [Signed]":"";
+                              return "  - "+(m.type||"Meeting")+" on "+(m.date||"Unknown")+signed+risk;
+                            }).join(", ");
+                            const outcome = cs.outcome||"No outcome recorded";
+                            const stage = getCaseStage(cs);
+                            return "Case: "+(cs.caseType||"HR Matter")+" ("+stage+") | Opened: "+(cs.dateReceived||cs.createdAt||"Unknown")+" | Outcome: "+outcome+" | Meetings: "+mtgs+(cs.investigationReport?" | Investigation report on file":"");
+                          }).join(" ;; ");
+                          const evidence = empCases.flatMap(cs=>(cs.evidence||[]).map(e=>e.name||e.type)).filter(Boolean).join(", ")||"None";
+                          const prompt = "You are a senior UK HR professional. Generate a comprehensive employment profile report for: "+empName+". Total cases: "+empCases.length+". Active: "+activeCases.length+". Total meetings: "+allMeetings.length+". Evidence on file: "+evidence+". Case history: "+caseHistory+". Write a professional employment profile with sections: 1) Employment Summary 2) Case History Overview 3) Pattern Analysis 4) Current Position 5) Risk Assessment 6) Recommended Next Steps. Be factual, objective, ACAS-compliant. Use professional HR language.";
+                          const response = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:prompt}]})});
+                          const data = await response.json();
+                          const text = data.content&&data.content[0]&&data.content[0].text?data.content[0].text:"Unable to generate profile.";
+                          setEmploymentProfileOutput(text);
+                        } catch(e) {
+                          setEmploymentProfileOutput("Error generating profile. Please try again.");
+                        }
+                        setEmploymentProfileLoading(false);
+                      }}
+                      style={{fontSize:13,background:employmentProfileLoading?"#B8A9F8":"#7C5CFC",border:"none",borderRadius:9,padding:"10px 18px",color:"#fff",fontWeight:600,cursor:employmentProfileLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}
+                    >
+                      {employmentProfileLoading?"Generating…":"Generate profile"}
+                    </button>
+                  </div>
+                  {employmentProfileLoading&&(
+                    <div style={{padding:"24px 20px",textAlign:"center"}}>
+                      <div style={{fontSize:13,color:"#9B9098",fontStyle:"italic"}}>Analysing employment history…</div>
+                    </div>
+                  )}
+                  {employmentProfileOutput&&!employmentProfileLoading&&(
+                    <div style={{padding:"20px"}}>
+                      <div style={{fontSize:13,color:"#1C1820",lineHeight:1.8,whiteSpace:"pre-wrap",fontFamily:"DM Sans,system-ui,sans-serif"}}>{employmentProfileOutput.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"")}</div>
+                      <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #E8E0D0",display:"flex",gap:8}}>
+                        <button onClick={()=>{setLetterOutput(employmentProfileOutput);setScreen(SCREENS.LETTER);}} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"7px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View as document</button>
+                        <button onClick={()=>navigator.clipboard.writeText(employmentProfileOutput).then(()=>showToast("Copied to clipboard"))} style={{fontSize:12,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:7,padding:"7px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Copy</button>
+                        <button onClick={()=>setEmploymentProfileOutput("")} style={{fontSize:12,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",marginLeft:"auto"}}>Clear</button>
+                      </div>
+                    </div>
+                  )}
+                  {!employmentProfileOutput&&!employmentProfileLoading&&(
+                    <div style={{padding:"20px",color:"#9B9098",fontSize:13,textAlign:"center"}}>
+                      Click Generate to create a comprehensive employment profile for {empName}. This analyses all cases, meetings, outcomes and patterns on record.
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Closed cases */}
