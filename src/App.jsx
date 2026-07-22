@@ -3072,29 +3072,29 @@ Please produce:
                   </div>
                   <div style={{padding:14}}>
                     <div style={{maxHeight:220,overflowY:"auto",marginBottom:10,display:"flex",flexDirection:"column",gap:8}}>
-                      {liveChatHistory.length===0&&(
+                      {askCompassHistory.length===0&&(
                         <div style={{display:"flex",flexDirection:"column",gap:6}}>
                           {["What's the ACAS process for a disciplinary?","Can I dismiss someone on a zero-hours contract?","How long should an investigation take?","What are the rules around reasonable adjustments?"].map((q,i)=>(
-                            <button key={i} onClick={()=>{setLiveChatHistory([{role:"user",content:q}]);askCompass(q);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
+                            <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
                           ))}
                         </div>
                       )}
-                      {liveChatHistory.map((m,i)=>(
+                      {askCompassHistory.map((m,i)=>(
                         <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
                           <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.5,padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.content}</div>
                         </div>
                       ))}
-                      {liveChatLoading&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
+                      {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
                     </div>
                     <div style={{display:"flex",gap:8}}>
                       <input
-                        value={liveChatInput}
-                        onChange={e=>setLiveChatInput(e.target.value)}
-                        onKeyDown={e=>{if(e.key==="Enter"&&liveChatInput.trim()){const q=liveChatInput.trim();setLiveChatInput("");setLiveChatHistory(h=>[...h,{role:"user",content:q}]);askCompass(q);}}}
+                        value={askCompassInput}
+                        onChange={e=>setAskCompassInput(e.target.value)}
+                        onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}}
                         placeholder="Ask an HR question…"
                         style={{flex:1,fontSize:12,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"8px 10px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}
                       />
-                      <button onClick={()=>{if(liveChatInput.trim()){const q=liveChatInput.trim();setLiveChatInput("");setLiveChatHistory(h=>[...h,{role:"user",content:q}]);askCompass(q);}}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 12px",cursor:"pointer",color:"#fff",fontSize:13}}>→</button>
+                      <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 12px",cursor:"pointer",color:"#fff",fontSize:13}}>→</button>
                     </div>
                   </div>
                 </div>
