@@ -27,31 +27,14 @@ function Root() {
       if(memberData) {
         setOrg(memberData.organisations)
         setMember({ role: memberData.role, name: memberData.name })
-      } else {
-        // Check if user was invited - look up by org_id in user metadata
-        const orgId = u.user_metadata?.org_id
-        if(orgId) {
-          const { data: org } = await supabase
-            .from('organisations')
-            .select('*')
-            .eq('id', orgId)
-            .maybeSingle()
-          
-          if(org) {
-            // Create member record
-            const role = u.user_metadata?.role || 'hr_manager'
-            const name = u.user_metadata?.name || u.email
-            await supabase.from('org_members').insert({
-              org_id: orgId,
-              user_id: u.id,
-              role,
-              name
-            })
-            setOrg(org)
-            setMember({ role, name })
-          }
-        }
       }
+      // No fallback org-join path here: joining always goes through
+      // OrgSetup's invite-code flow (join_org_with_invite_code), which
+      // validates the code server-side. A user_metadata-based path used to
+      // live here, but user_metadata is client-writable via
+      // supabase.auth.updateUser() by design, and nothing ever actually set
+      // org_id on it - so it was a live, unauthenticated-equivalent way to
+      // join any org with any role, never exercised by the app itself.
     } catch(e) { console.error("Load org error:", e) }
     setLoading(false)
   }

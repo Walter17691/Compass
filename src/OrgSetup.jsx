@@ -60,18 +60,20 @@ export default function OrgSetup({ user, onComplete }) {
     if(!inviteCode.trim()||!userName.trim()) return
     setLoading(true); setError(null)
     try {
-      const { data: org, error: orgErr } = await supabase
-        .from('organisations')
-        .select()
-        .eq('invite_code', inviteCode.trim().toUpperCase())
-        .single()
-      if(orgErr||!org) throw new Error('Invalid invite code')
+      // Validating the invite code and inserting the membership row both
+      // happen server-side inside this function - the client never gets a
+      // path to insert itself into an org without a code that actually
+      // matched. See supabase/join_org_by_code_2026-07-23.sql for why.
+      const { data, error: rpcErr } = await supabase.rpc('join_org_with_invite_code', {
+        p_invite_code: inviteCode.trim(),
+        p_name: userName.trim(),
+        p_role: role,
+      })
+      if(rpcErr) throw rpcErr
+      const joined = Array.isArray(data) ? data[0] : data
+      if(!joined) throw new Error('Invalid invite code')
 
-      const { error: memberErr } = await supabase
-        .from('org_members')
-        .insert({ org_id: org.id, user_id: user.id, role, name: userName.trim() })
-      if(memberErr) throw memberErr
-
+      const org = { id: joined.org_id, name: joined.org_name, invite_code: joined.org_invite_code }
       onComplete({ org, member: { role, name: userName.trim() } })
     } catch(e) { setError(e.message) }
     setLoading(false)
