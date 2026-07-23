@@ -3210,7 +3210,7 @@ Please produce:
                 </p>
               </div>
               <div style={{display:"flex",gap:10,flexShrink:0,marginTop:4}}>
-                <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
+                <button onClick={()=>{setMeetingType(null);setCaseInfo(p=>({...p,employee:"",manager:currentUser?.name||"",date:new Date().toISOString().split("T")[0]}));setScreen(SCREENS.BRIEF);}} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
                 <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
               </div>
             </div>
@@ -3391,7 +3391,7 @@ Please produce:
                           <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>This week</div>
                           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Calendar</div>
                         </div>
-                        <button onClick={()=>setScreen(SCREENS.BRIEF)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Schedule meeting</button>
+                        <button onClick={()=>{setMeetingType(null);setCaseInfo(p=>({...p,employee:"",manager:currentUser?.name||"",date:new Date().toISOString().split("T")[0]}));setScreen(SCREENS.BRIEF);}} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Schedule meeting</button>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
                         {weekDays.map((d,i)=>{
@@ -3662,7 +3662,7 @@ Please produce:
                 {MEETING_TYPES.map(mt=>(
                   <button key={mt.id} onClick={()=>setMeetingType(mt)} style={{padding:"10px 14px",borderRadius:9,border:"1.5px solid",borderColor:meetingType?.id===mt.id?"#7C5CFC":"#E8E0D0",background:meetingType?.id===mt.id?"#EDE8FF":"#FDFAF5",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"all 0.15s"}}>
                     <div style={{fontSize:12,fontWeight:600,color:meetingType?.id===mt.id?"#7C5CFC":"#1C1820"}}>{mt.label}</div>
-                    {mt.desc&&<div style={{fontSize:10,color:"#9B9098",marginTop:2}}>{mt.desc}</div>}
+                    {mt.tag&&<div style={{fontSize:10,color:"#9B9098",marginTop:2}}>{mt.tag}</div>}
                   </button>
                 ))}
               </div>
