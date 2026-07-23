@@ -501,14 +501,6 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [templateSearch, setTemplateSearch] = useState("");
 
-  // ── Whistleblower ──
-  const [whistleReports, setWhistleReports] = useState(ls("compass_whistle", []));
-  const [whistleForm, setWhistleForm] = useState({ concern:"", category:"", date:"", anonymous:true });
-  const [whistleSubmitted, setWhistleSubmitted] = useState(false);
-
-  // ── Document vault ──
-  const [vaultDocs, setVaultDocs] = useState(ls("compass_vault", {}));
-
   // ── Developmental meetings ──
   const [devSession, setDevSession] = useState(null);
   const [devStep, setDevStep] = useState("self");
@@ -1181,9 +1173,6 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       }
     }
   };
-  const saveWhistle = u => { setWhistleReports(u); lsSet("compass_whistle", u); };
-  const saveVault = u => { setVaultDocs(u); lsSet("compass_vault", u); };
-
   // ── Audit trail ──
   const audit = (action, detail="") => {
     const entry = {
@@ -1406,7 +1395,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   // ── GDPR helpers ──
   const exportAllData = () => {
-    const data = { cases, policies:policies.map(p=>({...p,content:"[truncated]"})), whistleReports, auditLog, users, adjustments, exportedAt:new Date().toISOString() };
+    const data = { cases, policies:policies.map(p=>({...p,content:"[truncated]"})), auditLog, users, adjustments, exportedAt:new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href=url; a.download="compass_data_export.json"; a.click();
@@ -2017,17 +2006,6 @@ Please produce:
     }
     audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`);
     showToast("Meeting saved to case file");
-  };
-
-  // ── Document vault ──
-  const addToVault = (caseId, file) => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const doc = { id:Date.now().toString(), name:file.name, type:file.type, data:ev.target.result, addedAt:new Date().toISOString() };
-      const updated = { ...vaultDocs, [caseId]:[...(vaultDocs[caseId]||[]), doc] };
-      saveVault(updated);
-    };
-    reader.readAsDataURL(file);
   };
 
   // ── PDF generation ──
@@ -3070,11 +3048,11 @@ Please produce:
           <Card style={{maxWidth:520,width:"100%"}}>
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#7C5CFC",marginBottom:8,fontWeight:600}}>Data &amp; privacy</div>
             <p style={{fontSize:13,color:"#6B6375",lineHeight:1.8,marginBottom:16}}>
-              Compass stores all HR data locally in your browser. No data is sent to external servers except the text you submit to the AI for processing via the Anthropic API.
+              Compass stores case files, employee records and organisation settings in a secure cloud database, shared with your organisation. Uploaded policies, your signature/letterhead and the audit log stay in this browser only. Meeting text is sent to Anthropic's API to generate outputs.
             </p>
             <div style={{background:"#FDFAF5",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
               <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>WHAT IS STORED</div>
-              {["Case files, meeting records, transcripts and letters — in your browser only","Company policies you upload — in your browser only","Your signature and letterhead — in your browser only","Whistleblower reports — in your browser only","AI processing: meeting text is sent to Anthropic's API to generate outputs"].map((item,i)=>(
+              {["Case files, meetings and evidence — stored in the cloud, shared with your organisation","Employee records and organisation settings — stored in the cloud, shared with your organisation","Company policies you upload — in your browser only","Your signature and letterhead — in your browser only","AI processing: meeting text is sent to Anthropic's API to generate outputs"].map((item,i)=>(
                 <div key={i} style={{display:"flex",gap:8,marginBottom:6,fontSize:12,color:"#3D3560"}}>
                   <span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{item}</span>
                 </div>
@@ -6859,13 +6837,12 @@ Please produce:
           {/* GDPR / Data */}
           <Card style={{marginBottom:20}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Data &amp; privacy</h3>
-            <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>All data is stored locally in your browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
+            <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Case files and employee records are stored in the cloud, shared with your organisation. Policies, signature/letterhead and the audit log stay in this browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
             <div style={{background:"#FDFAF5",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
               <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>DATA INVENTORY</div>
               {[
                 {l:"Case files & meetings",v:cases.length+" cases, "+cases.reduce((t,c)=>t+c.meetings.length,0)+" meetings"},
                 {l:"Policies uploaded",v:policies.length+" documents"},
-                {l:"Whistleblower reports",v:whistleReports.length+" reports"},
                 {l:"Audit log entries",v:auditLog.length+" entries"},
                 {l:"Storage used",v:Math.round(JSON.stringify(localStorage).length/1024)+"kb"},
               ].map(({l,v})=>(
