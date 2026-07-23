@@ -371,6 +371,7 @@ function DateInput({ value, onChange, style={} }) {
   return (
     <div className="date-wrap">
       <input type="date" value={value} onChange={onChange}
+        onClick={e=>e.currentTarget.showPicker?.()}
         style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 36px 9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box",...style,colorScheme:"light",cursor:"pointer"}} />
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C5CFC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -414,6 +415,22 @@ function UserAddForm({ onAdd }) {
       <input placeholder="Email (optional)" value={email} onChange={e=>setEmail(e.target.value)}
         style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
       <Btn onClick={()=>{if(name.trim()){onAdd(name.trim(),role,email.trim());}}} disabled={!name.trim()} style={{width:"100%",fontSize:12,padding:"8px"}}>Add user</Btn>
+    </div>
+  );
+}
+
+function AddRoleForm({ onAdd }) {
+  const [title, setTitle] = useState("");
+  const [level, setLevel] = useState(5);
+  return (
+    <div style={{display:"flex",gap:8,marginTop:4}}>
+      <input placeholder="e.g. Sales Manager" value={title} onChange={e=>setTitle(e.target.value)}
+        style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none"}} />
+      <select value={level} onChange={e=>setLevel(e.target.value)}
+        style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none"}}>
+        {[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>Level {n}</option>)}
+      </select>
+      <Btn onClick={()=>{if(title.trim()){onAdd(title.trim(),level);setTitle("");setLevel(5);}}} disabled={!title.trim()} style={{fontSize:12,padding:"8px 14px"}}>Add</Btn>
     </div>
   );
 }
@@ -514,8 +531,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
   const [employeeRecords, setEmployeeRecords] = useState(ls("compass_employees", []));
   const saveEmployeeRecords = u => { setEmployeeRecords(u); lsSet("compass_employees", u); };
-  const getEmployeeRecord = (name) => employeeRecords.find(e=>e.name===name)||null;
+  const getEmployeeRecord = (name) => name ? employeeRecords.find(e=>e.name===name)||null : null;
   const upsertEmployeeRecord = (name, fields) => {
+    if(!name) return;
     const existing = employeeRecords.find(e=>e.name===name);
     if(existing) {
       saveEmployeeRecords(employeeRecords.map(e=>e.name===name?{...e,...fields}:e));
@@ -577,7 +595,6 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       if(data) setOrgMembers(data);
     } catch(e) { console.error('loadOrgMembers', e); }
   };
-  const [showUserSwitch, setShowUserSwitch] = useState(false);
   const [users, setUsers] = useState(ls("compass_users", []));
 
   // ── Letter tracking ──
@@ -595,7 +612,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [onboardStep, setOnboardStep] = useState(0);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [meetingSetup, setMeetingSetup] = useState({employee:"", manager:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null});
+  const [meetingSetup, setMeetingSetup] = useState({employee:"", employeeJobTitle:"", manager:"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null});
   const [liveChatInput, setLiveChatInput] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [shareEmail, setShareEmail] = useState("");
@@ -966,14 +983,6 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [inviteLink, setInviteLink] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
-  const [showHrReviewModal, setShowHrReviewModal] = useState(false);
-  const [pendingReviewStep, setPendingReviewStep] = useState(null);
-  const [pendingReviewCaseId, setPendingReviewCaseId] = useState(null);
-  const [showBundleBuilder, setShowBundleBuilder] = useState(null); // caseId
-  const [bundleChat, setBundleChat] = useState([]);
-  const [bundleChatInput, setBundleChatInput] = useState("");
-  const [bundleProcessing, setBundleProcessing] = useState(false);
-  const [bundleFiles, setBundleFiles] = useState([]);
   const [acasData, setAcasData] = useState({});
   const [redundancyData, setRedundancyData] = useState({});
   const [showEmailLetter, setShowEmailLetter] = useState(false);
@@ -990,6 +999,17 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const meetingEndedRef = useRef(false);
   const [showCasePrompt, setShowCasePrompt] = useState(false);
   const [casePromptName, setCasePromptName] = useState("");
+
+  const closeCasePrompt = () => {
+    setShowCasePrompt(false);
+    setCasePromptName("");
+    setNewCaseJobTitle("");
+    setNewCaseStartDate("");
+    setNewCaseLocation("");
+    setNewCaseType("");
+    setNewCaseDescription("");
+    setNewCaseLocationOther("");
+  };
 
   const createCaseFromChat = () => {
     if(!casePromptName.trim()) return;
@@ -2380,7 +2400,7 @@ Please produce:
       const evidenceList = (caseInfo.evidence||[]).map((e,i)=>(i+1)+". "+e.name+" ("+e.type+", "+e.date+")").join(nl);
       // Pull additional context from active case
       const activeCase = cases.find(x=>x.id===activeCaseId);
-      const empRec = (employeeRecords||[]).find(r=>r.name===caseInfo.employee)||{};
+      const empRec = getEmployeeRecord(caseInfo.employee)||{};
       const prevMeetings = activeCase?(activeCase.meetings||[]).slice(-3).map(m=>m.type+" on "+m.date+(m.record?" — "+m.record.slice(0,100):"")).join("; "):"";
       const context = [
         caseInfo.employee ? "Employee: "+caseInfo.employee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
@@ -2761,7 +2781,7 @@ Please produce:
               <Btn onClick={()=>shareRecord(shareEmail)} disabled={shareProcessing||!shareEmail.trim()} style={{flex:1}}>
                 {shareProcessing?"Sending...":"Send"}
               </Btn>
-              <Btn variant="ghost" onClick={()=>setShowShareModal(false)} style={{flex:1}}>Cancel</Btn>
+              <Btn variant="ghost" onClick={()=>{setShowShareModal(false);setShareEmail("");}} style={{flex:1}}>Cancel</Btn>
             </div>
           </div>
         </div>
@@ -2820,7 +2840,7 @@ Please produce:
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:24}}>How would you like to create the outcome letter?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>{console.log("Generate clicked, pendingLetterTypeRef:", pendingLetterTypeRef.current);setShowLetterModal(false);handleLetter(pendingLetterTypeRef.current||"outcome");}}
+              <button onClick={()=>{setShowLetterModal(false);handleLetter(pendingLetterTypeRef.current||"outcome");}}
                 style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
                 <div style={{fontSize:12,color:"#7C5CFC"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
@@ -2924,7 +2944,7 @@ Please produce:
                 <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>New case</div>
                 <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>Log a new HR case and employee details</div>
               </div>
-              <button onClick={()=>setShowCasePrompt(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1}}>×</button>
+              <button onClick={closeCasePrompt} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1}}>×</button>
             </div>
 
             {/* Employee name with lookup */}
@@ -2959,7 +2979,7 @@ Please produce:
               </div>
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Start date</label>
-                <input type="date" value={newCaseStartDate} onChange={e=>setNewCaseStartDate(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}/>
+                <input type="date" value={newCaseStartDate} onChange={e=>setNewCaseStartDate(e.target.value)} onClick={e=>e.currentTarget.showPicker?.()} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}/>
               </div>
             </div>
 
@@ -2990,7 +3010,7 @@ Please produce:
             </div>
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <button onClick={()=>setShowCasePrompt(false)} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+              <button onClick={closeCasePrompt} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
               <button
                 disabled={!casePromptName.trim()}
                 onClick={()=>{
@@ -3017,14 +3037,7 @@ Please produce:
                   saveCases([...cases, newCase]);
                   setActiveCaseId(newCase.id);
                   setActiveCaseStage("investigation");
-                  setShowCasePrompt(false);
-                  setCasePromptName("");
-                  setNewCaseJobTitle("");
-                  setNewCaseStartDate("");
-                  setNewCaseLocation("");
-                  setNewCaseType("");
-                  setNewCaseDescription("");
-                  setNewCaseLocationOther("");
+                  closeCasePrompt();
                   setScreen(SCREENS.CASE_VIEW);
                   showToast("Case created");
                 }}
@@ -3187,7 +3200,7 @@ Please produce:
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               {org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:6,padding:"3px 8px"}}>{org.name}</span>}
-              <button onClick={()=>setShowOrgSettings(true)} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Settings</button>
+              <button onClick={()=>setShowOrgSettings(true)} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>
               {onSignOut&&<button onClick={onSignOut} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
             </div>
           </div>
@@ -3211,7 +3224,7 @@ Please produce:
                 </p>
               </div>
               <div style={{display:"flex",gap:10,flexShrink:0,marginTop:4}}>
-                <button onClick={()=>{setMeetingType(null);setCaseInfo(p=>({...p,employee:"",manager:currentUser?.name||"",date:new Date().toISOString().split("T")[0]}));setScreen(SCREENS.BRIEF);}} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
+                <button onClick={()=>{setMeetingType(null);setCaseInfo(p=>({...p,employee:"",employeeJobTitle:"",manager:currentUser?.name||"",chairJobTitle:"",date:new Date().toISOString().split("T")[0]}));setScreen(SCREENS.BRIEF);}} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
                 <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
               </div>
             </div>
@@ -3530,7 +3543,21 @@ Please produce:
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Your name (chair)</label>
                 <input autoFocus placeholder="e.g. Tom Norton"
                   value={meetingSetup.manager||""}
-                  onChange={e=>setMeetingSetup(p=>({...p,manager:e.target.value}))}
+                  onChange={e=>{
+                    const val=e.target.value;
+                    const rec=(orgMembers||[]).find(m=>m.name===val.trim());
+                    setMeetingSetup(p=>({...p,manager:val,chairJobTitle:rec?(rec.job_title||""):p.chairJobTitle}));
+                  }}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+              </div>
+
+              <div style={{marginBottom:20}}>
+                <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Chair job title <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+                <input placeholder="e.g. HR Manager"
+                  value={meetingSetup.chairJobTitle||""}
+                  onChange={e=>setMeetingSetup(p=>({...p,chairJobTitle:e.target.value}))}
                   style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
@@ -3546,7 +3573,11 @@ Please produce:
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>{meetingSetup.linkedCaseId?"Witness name":"Employee name"}</label>
                 <input placeholder={meetingSetup.linkedCaseId?"e.g. John Smith (witness)":"e.g. Sarah Johnson"}
                   value={meetingSetup.employee}
-                  onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value}))}
+                  onChange={e=>{
+                    const val=e.target.value;
+                    const rec=getEmployeeRecord(val.trim());
+                    setMeetingSetup(p=>({...p,employee:val,employeeJobTitle:rec?(rec.jobTitle||""):p.employeeJobTitle}));
+                  }}
                   list="employee-list"
                   style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
@@ -3555,6 +3586,18 @@ Please produce:
                   {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
                 </datalist>
               </div>
+
+              {!meetingSetup.linkedCaseId&&(
+                <div style={{marginBottom:20}}>
+                  <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Employee job title <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+                  <input placeholder="e.g. Sales Manager"
+                    value={meetingSetup.employeeJobTitle||""}
+                    onChange={e=>setMeetingSetup(p=>({...p,employeeJobTitle:e.target.value}))}
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                    onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                    onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+                </div>
+              )}
 
               <div style={{marginBottom:20}}>
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Meeting type</label>
@@ -3598,7 +3641,9 @@ Please produce:
                         const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type};
                         setCaseInfo(p=>({...p,
                           employee:meetingSetup.employee.trim()||p.employee,
+                          employeeJobTitle:meetingSetup.employeeJobTitle||p.employeeJobTitle,
                           manager:meetingSetup.manager||p.manager,
+                          chairJobTitle:meetingSetup.chairJobTitle||p.chairJobTitle,
                           date:meetingSetup.date
                         }));
                         setMeetingType(mt);
@@ -3616,6 +3661,7 @@ Please produce:
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Date</label>
                 <input type="date" value={meetingSetup.date}
                   onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
+                  onClick={e=>e.currentTarget.showPicker?.()}
                   style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",colorScheme:"light",cursor:"pointer"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
@@ -3626,7 +3672,7 @@ Please produce:
                 onClick={()=>{
                   const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
                   setMeetingType(mt);
-                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),date:meetingSetup.date,manager:meetingSetup.manager||"",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
+                  setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
                   setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);
                   const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
                   if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
@@ -3675,7 +3721,7 @@ Please produce:
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div>
                   <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Employee name</label>
-                  <input value={caseInfo.employee||""} onChange={e=>{setCaseInfo(p=>({...p,employee:e.target.value}));const rec=(employeeRecords||[]).find(r=>r.name===e.target.value.trim());if(rec){setCaseInfo(p=>({...p,employeeJobTitle:rec.jobTitle||"",employee:e.target.value}));}}} placeholder="Full name" list="employee-list" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
+                  <input value={caseInfo.employee||""} onChange={e=>{setCaseInfo(p=>({...p,employee:e.target.value}));const rec=getEmployeeRecord(e.target.value.trim());if(rec){setCaseInfo(p=>({...p,employeeJobTitle:rec.jobTitle||"",employee:e.target.value}));}}} placeholder="Full name" list="employee-list" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                   <datalist id="employee-list">{[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}</datalist>
                 </div>
@@ -3701,7 +3747,7 @@ Please produce:
                 </div>
                 <div>
                   <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Date</label>
-                  <input type="date" value={caseInfo.date||new Date().toISOString().split("T")[0]} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}
+                  <input type="date" value={caseInfo.date||new Date().toISOString().split("T")[0]} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} onClick={e=>e.currentTarget.showPicker?.()} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                 </div>
                 <div>
@@ -3849,7 +3895,7 @@ Please produce:
                   </div>
                 </div>
               </div>
-              <button onClick={()=>{setMeetingSetup(p=>({...p,employee:empName}));setScreen(SCREENS.HOME+"_meeting");}}
+              <button onClick={()=>{setMeetingSetup(p=>({...p,employee:empName,employeeJobTitle:getEmployeeRecord(empName)?.jobTitle||""}));setScreen(SCREENS.HOME+"_meeting");}}
                 style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                 + New meeting
               </button>
@@ -3885,7 +3931,7 @@ Please produce:
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
                           <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Job title</label><input value={editJobTitle} onChange={e=>setEditJobTitle(e.target.value)} placeholder="e.g. Sales Manager" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
-                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Start date</label><input type="date" value={editStartDate} onChange={e=>setEditStartDate(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}/></div>
+                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Start date</label><input type="date" value={editStartDate} onChange={e=>setEditStartDate(e.target.value)} onClick={e=>e.currentTarget.showPicker?.()} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}/></div>
                           <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Location</label><select value={editLocation} onChange={e=>setEditLocation(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:editLocation?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}><option value="">Select…</option>{locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}<option value="__other__">Other</option></select></div>
                         </div>
                         <button onClick={()=>{upsertEmployeeRecord(empName,{jobTitle:editJobTitle,startDate:editStartDate,location:editLocation});setEditing(false);showToast("Employee record updated");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 16px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Save</button>
@@ -4085,7 +4131,7 @@ Please produce:
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"4px 12px"}}>{getCaseStatus(cs).label}</span>
-                  <button onClick={()=>{const type=activeStage?.id==="investigation"?"investigation":activeStage?.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}}
+                  <button onClick={()=>{const type=activeStage?.id==="investigation"?"investigation":activeStage?.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}}
                     style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>
                 </div>
               </div>
@@ -4108,7 +4154,7 @@ Please produce:
                 <div style={{display:"flex",gap:8}}>
                   {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));handleLetter("no-case-answer");}}} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.secondary.label}</button>}
                   <button onClick={()=>{
-                    if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"){setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type:nextStep.action==="start_investigation"?"investigation":nextStep.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
+                    if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.action==="start_investigation"?"investigation":nextStep.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
                     else if(nextStep.action==="send_signature"){const rel=stage==="investigation"?invMeetings:stage==="appeal"?appealMeetings:discMeetings;const m=rel[0]||meetings[meetings.length-1];if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
                     else if(nextStep.action==="inv_report"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);handleLetter("investigation-report");}
                     else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);handleLetter("invite");}
@@ -4160,7 +4206,7 @@ Please produce:
                     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
                       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{fontSize:11,fontWeight:700,color:activeStage.color,letterSpacing:"0.5px",textTransform:"uppercase"}}>Meetings ({activeStage.meetings.length})</div>
-                        <button onClick={()=>{const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Add meeting</button>
+                        <button onClick={()=>{const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Add meeting</button>
                       </div>
                       <div style={{padding:"0 16px"}}>
                         {activeStage.meetings.map((m,i)=><MeetingRow key={m.id||i} m={m}/>)}
@@ -4169,7 +4215,7 @@ Please produce:
                   ):(
                     <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0",marginBottom:16}}>
                       <div style={{fontSize:14,color:"#9B9098",marginBottom:12}}>No {activeStage.label.toLowerCase()} meetings yet</div>
-                      <button onClick={()=>{const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start {activeStage.label.toLowerCase()} meeting</button>
+                      <button onClick={()=>{const type=activeStage.id==="investigation"?"investigation":activeStage.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start {activeStage.label.toLowerCase()} meeting</button>
                     </div>
                   )}
 
@@ -4223,7 +4269,7 @@ Please produce:
                           </label>
                           <div style={{marginTop:12,padding:"12px",background:"#F5F3FF",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                             <div><div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interview</div><div style={{fontSize:11,color:"#9B9098"}}>Record and save directly to this investigation</div></div>
-                            <button onClick={()=>{setMeetingSetup(p=>({...p,employee:"",manager:cs.manager||"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));setCaseInfo(p=>({...p,_linkedCaseId:cs.id,_linkedCaseName:cs.employeeName}));setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>+ Witness interview</button>
+                            <button onClick={()=>{setMeetingSetup(p=>({...p,employee:"",employeeJobTitle:"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));setCaseInfo(p=>({...p,_linkedCaseId:cs.id,_linkedCaseName:cs.employeeName}));setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>+ Witness interview</button>
                           </div>
                         </div>
                       </div>
@@ -4330,6 +4376,7 @@ Please produce:
                 <div>
                   <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>Date received</label>
                   <input type="date" value={intake.dateReceived} onChange={e=>setIntake(p=>({...p,dateReceived:e.target.value}))}
+                    onClick={e=>e.currentTarget.showPicker?.()}
                     style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}
                     onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
                     onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
@@ -7048,7 +7095,7 @@ Please produce:
                     </select>
                   </div>
                   <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                    <button onClick={()=>setShowHandoffModal(false)} style={{fontSize:13,padding:"9px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#fff",cursor:"pointer",color:"#6B6375"}}>Cancel</button>
+                    <button onClick={()=>{setShowHandoffModal(false);setSelectedMemberId("");}} style={{fontSize:13,padding:"9px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#fff",cursor:"pointer",color:"#6B6375"}}>Cancel</button>
                     <button onClick={async()=>{
                       const sel = orgMembers.find(x=>x.id===(selectedMemberId||eligible[0]?.id));
                       if(!sel) return;
@@ -7066,6 +7113,7 @@ Please produce:
                         } catch(e) { console.error("case_access write failed:", e); }
                       }
                       setShowHandoffModal(false);
+                      setSelectedMemberId("");
                       setActiveCaseStage("disciplinary");
                       showToast("Case handed off to "+sel.name);
                     }} style={{fontSize:13,padding:"9px 20px",background:"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600}}>Appoint & hand off</button>
@@ -7088,7 +7136,7 @@ Please produce:
                   <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Issue disciplinary outcome</div>
                   <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>{cs?.employeeName}</div>
                 </div>
-                <button onClick={()=>setShowOutcomeModal(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
+                <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
               </div>
               <div style={{marginBottom:16}}>
                 <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Outcome decision</label>
@@ -7110,7 +7158,7 @@ Please produce:
                 Issuing this outcome starts the employee's 5 working day appeal window (ACAS Code).
               </div>
               <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-                <button onClick={()=>setShowOutcomeModal(false)} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+                <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
                 <button disabled={!outcomeType} onClick={()=>{if(!outcomeType)return;saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast("Outcome recorded");handleLetter("outcome");}} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
               </div>
             </div>

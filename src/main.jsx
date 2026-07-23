@@ -4,6 +4,7 @@ import './index.css'
 import Compass from './App.jsx'
 import Login from './Login.jsx'
 import OrgSetup from './OrgSetup.jsx'
+import ErrorBoundary from './ErrorBoundary.jsx'
 import { supabase } from './supabase.js'
 
 window.COMPASS_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -79,12 +80,16 @@ function Root() {
 
   if (!org) return <OrgSetup user={user} onComplete={({org, member})=>{setOrg(org);setMember(member);}} />
 
-  return <Compass 
-    user={user} 
-    org={org} 
-    member={member}
-    onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setOrg(null); setMember(null); }} 
-  />
+  return (
+    <ErrorBoundary>
+      <Compass
+        user={user}
+        org={org}
+        member={member}
+        onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setOrg(null); setMember(null); }}
+      />
+    </ErrorBoundary>
+  )
 }
 
 createRoot(document.getElementById('root')).render(
