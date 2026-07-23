@@ -201,7 +201,7 @@ function useFonts() {
   }, []);
 }
 
-function addWorkingDays(date, days) {
+export function addWorkingDays(date, days) {
   if(days === 0) return null;
   const d = new Date(date);
   let added = 0;
@@ -212,10 +212,18 @@ function addWorkingDays(date, days) {
   return d.toLocaleDateString("en-GB");
 }
 
-function ls(key, fallback) {
+export function ls(key, fallback) {
   try { const v = typeof localStorage !== 'undefined' && localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; }
 }
-function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+export function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+
+// Never match a blank/missing name against a record — a stray record with
+// an empty name (e.g. saved mid-entry) must not silently supply its data
+// whenever the name field happens to be empty.
+export function findEmployeeByName(records, name) {
+  if(!name) return null;
+  return (records||[]).find(e=>e.name===name) || null;
+}
 
 // ─────────────────────────────────────────────
 //  UI PRIMITIVES
@@ -248,11 +256,11 @@ const syncNameToRecord = (field, value, setReviewOutput) => {
   });
 };
 
-function Badge({ children, color="#7C5CFC" }) {
+export function Badge({ children, color="#7C5CFC" }) {
   return <span style={{fontSize:9, fontWeight:700, letterSpacing:1, color, background:color+"18", border:`1px solid ${color}33`, borderRadius:4, padding:"2px 7px"}}>{children}</span>;
 }
 
-function Btn({ children, onClick, variant="primary", disabled, style={} }) {
+export function Btn({ children, onClick, variant="primary", disabled, style={} }) {
   const base = { border:"none", borderRadius:8, padding:"10px 20px", fontSize:13, fontWeight:600, cursor:disabled?"not-allowed":"pointer", transition:"all 0.15s", opacity:disabled?0.4:1, letterSpacing:0.2, ...style };
   const vars = {
     primary: { background:"#7C5CFC", color:"#fff", boxShadow:"0 2px 8px rgba(124,92,252,0.3)" },
@@ -261,10 +269,10 @@ function Btn({ children, onClick, variant="primary", disabled, style={} }) {
     danger: { background:"none", border:"1px solid #E8622A33", color:"#C84B2F" },
     blue: { background:"#1C5AA0", color:"#fff" },
   };
-  return <button onClick={disabled ? undefined : onClick} style={{...base,...vars[variant]}}>{children}</button>;
+  return <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{...base,...vars[variant]}}>{children}</button>;
 }
 
-function Card({ children, style={} }) {
+export function Card({ children, style={} }) {
   return <div style={{background:"#FFFFFF", border:"1px solid #E8E0D0", borderRadius:14, padding:24, boxShadow:"0 1px 3px rgba(0,0,0,0.3)", ...style}}>{children}</div>;
 }
 
@@ -367,7 +375,7 @@ function SignaturePad({ onSave, onClose }) {
 // ─────────────────────────────────────────────
 //  MAIN APP
 // ─────────────────────────────────────────────
-function DateInput({ value, onChange, style={} }) {
+export function DateInput({ value, onChange, style={} }) {
   return (
     <div className="date-wrap">
       <input type="date" value={value} onChange={onChange}
@@ -398,7 +406,7 @@ function AdjustmentForm({ onAdd }) {
   );
 }
 
-function UserAddForm({ onAdd }) {
+export function UserAddForm({ onAdd }) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("HR Manager");
   const [email, setEmail] = useState("");
@@ -414,12 +422,12 @@ function UserAddForm({ onAdd }) {
       </div>
       <input placeholder="Email (optional)" value={email} onChange={e=>setEmail(e.target.value)}
         style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:8,boxSizing:"border-box"}} />
-      <Btn onClick={()=>{if(name.trim()){onAdd(name.trim(),role,email.trim());}}} disabled={!name.trim()} style={{width:"100%",fontSize:12,padding:"8px"}}>Add user</Btn>
+      <Btn onClick={()=>{if(name.trim()){onAdd(name.trim(),role,email.trim());setName("");setRole("HR Manager");setEmail("");}}} disabled={!name.trim()} style={{width:"100%",fontSize:12,padding:"8px"}}>Add user</Btn>
     </div>
   );
 }
 
-function AddRoleForm({ onAdd }) {
+export function AddRoleForm({ onAdd }) {
   const [title, setTitle] = useState("");
   const [level, setLevel] = useState(5);
   return (
@@ -531,7 +539,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
   const [employeeRecords, setEmployeeRecords] = useState(ls("compass_employees", []));
   const saveEmployeeRecords = u => { setEmployeeRecords(u); lsSet("compass_employees", u); };
-  const getEmployeeRecord = (name) => name ? employeeRecords.find(e=>e.name===name)||null : null;
+  const getEmployeeRecord = (name) => findEmployeeByName(employeeRecords, name);
   const upsertEmployeeRecord = (name, fields) => {
     if(!name) return;
     const existing = employeeRecords.find(e=>e.name===name);
