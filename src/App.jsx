@@ -2959,7 +2959,7 @@ Please produce:
               </div>
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Start date</label>
-                <input type="date" value={newCaseStartDate} onChange={e=>setNewCaseStartDate(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light"}}/>
+                <input type="date" value={newCaseStartDate} onChange={e=>setNewCaseStartDate(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}/>
               </div>
             </div>
 
@@ -3111,7 +3111,8 @@ Please produce:
                 {s:SCREENS.PEOPLE, l:"People"},
                 {s:SCREENS.ERREPORT, l:"Reports"},
                 ...(isHR?[{s:SCREENS.HR_REVIEW, l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
-                {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"},
+                {s:SCREENS.SEARCH, l:"Search"},
+                {s:SCREENS.SETTINGS, l:"Settings"},
               ].map(({s,l,badge})=>(
                 <button key={s} onClick={()=>setScreen(s)}
                   style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
@@ -3690,7 +3691,7 @@ Please produce:
                 </div>
                 <div>
                   <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Chair job title <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-                  <input value={caseInfo.chairJobTitle||(orgMembers||[]).find(m=>m.name===(caseInfo.manager||currentUser?.name))?.job_title||""} onChange={e=>setCaseInfo(p=>({...p,chairJobTitle:e.target.value}))} placeholder="e.g. HR Manager" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
+                  <input value={caseInfo.chairJobTitle||(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title||""} onChange={e=>setCaseInfo(p=>({...p,chairJobTitle:e.target.value}))} placeholder="e.g. HR Manager" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                 </div>
                 <div>
