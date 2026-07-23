@@ -504,6 +504,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [orgMembers, setOrgMembers] = useState([]);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [adjournments, setAdjournments] = useState([]);
+  const [currentAdjournment, setCurrentAdjournment] = useState(null);
   const [expandedCases, setExpandedCases] = useState({});
   const [casesSearch, setCasesSearch] = useState("");
   const [casesFilter, setCasesFilter] = useState("active");
@@ -1783,7 +1785,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       }
       await streamClaude(
         `You are a senior UK HR documentation specialist. Generate a meeting record with EXACTLY these three sections and NO others: ## Meeting Details (date, type, attendees, purpose), ## Meeting Dialogue (what was said, in concise prose), ## HR Advisor Notes (expert legal guidance in flowing prose from a senior employment lawyer - one paragraph covering ACAS compliance, legal risks and recommended next steps). Do NOT add any other sections like Key Points, Next Steps, Summary, Actions, Risk Assessment or anything else. Three sections only. No bold, no emoji, no tables.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]\n- Chair: [chair name]\n- Employee: [employee name]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker's INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}${(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle?" ("+((employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle)+")":" "}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}${(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title?" ("+((orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title)+")":" "}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}${adjournments.length>0?" Adjournments: "+adjournments.map(a=>a.start+(a.end?" to "+a.end:"- ongoing")+(a.reason?" ("+a.reason+")":"")).join(", "):""}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]${adjournments.length>0?"\n- Adjournments: [list each adjournment with times and reason]":""}\n- Chair: [chair name and job title]\n- Employee: [employee name and job title]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker\'s INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
     } catch(e) { setAiError(e.message); }
@@ -3638,13 +3640,23 @@ Please produce:
               <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:14}}>Participants</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Employee name</label>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>
+                    Employee name
+                    {(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle&&
+                      <span style={{fontWeight:400,color:"#9B9098",marginLeft:6}}>· {(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle}</span>
+                    }
+                  </label>
                   <input value={caseInfo.employee||""} onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))} placeholder="Full name" list="employee-list" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                   <datalist id="employee-list">{[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}</datalist>
                 </div>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Chair / manager</label>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>
+                    Chair / manager
+                    {(orgMembers||[]).find(m=>m.name===(caseInfo.manager||currentUser?.name))?.job_title&&
+                      <span style={{fontWeight:400,color:"#9B9098",marginLeft:6}}>· {(orgMembers||[]).find(m=>m.name===(caseInfo.manager||currentUser?.name))?.job_title}</span>
+                    }
+                  </label>
                   <input value={caseInfo.manager||currentUser?.name||""} onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))} placeholder="Your name" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                 </div>
@@ -3711,6 +3723,8 @@ Please produce:
                 if(!caseInfo.date) setCaseInfo(p=>({...p,date:new Date().toLocaleDateString("en-GB")}));
                 setTranscript([]);
                 setNotes("");
+                setAdjournments([]);
+                setCurrentAdjournment(null);
                 setScreen(SCREENS.RECORD);
               }}
               style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:10,padding:"14px",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",letterSpacing:"-0.2px"}}
@@ -4488,6 +4502,28 @@ Please produce:
                 </div>
               )}
               {meetingStartTime&&<span style={{fontSize:12,color:"#9B9098",fontFamily:"monospace"}}>{meetingStartTime}</span>}
+              {/* Adjourn / Reconvene button */}
+              {currentAdjournment?(
+                <button onClick={()=>{
+                  const reason = window.prompt("Reason for adjournment (optional):",currentAdjournment.reason||"");
+                  const endTime = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+                  setAdjournments(a=>a.map(x=>x.id===currentAdjournment.id?{...x,end:endTime,reason:reason||x.reason}:x));
+                  setCurrentAdjournment(null);
+                  setTranscript(p=>[...p,{id:Date.now(),speaker:"System",text:"[Meeting reconvened at "+endTime+"]",ts:endTime,pending:false}]);
+                }} style={{background:"#1A7A4A",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>
+                  Reconvene
+                </button>
+              ):(
+                <button onClick={()=>{
+                  const startTime = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+                  const newAdj = {id:Date.now(),start:startTime,end:null,reason:""};
+                  setAdjournments(a=>[...a,newAdj]);
+                  setCurrentAdjournment(newAdj);
+                  setTranscript(p=>[...p,{id:Date.now(),speaker:"System",text:"[Meeting adjourned at "+startTime+"]",ts:startTime,pending:false}]);
+                }} style={{background:"#FFFFFF",border:"1px solid #E8622A",borderRadius:8,padding:"8px 16px",fontSize:12,color:"#E8622A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>
+                  Adjourn
+                </button>
+              )}
               <button
                 onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}}
                 disabled={aiProcessing||(transcript.length===0&&!inputText.trim())}
