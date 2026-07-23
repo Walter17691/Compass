@@ -371,7 +371,7 @@ function DateInput({ value, onChange, style={} }) {
   return (
     <div className="date-wrap">
       <input type="date" value={value} onChange={onChange}
-        style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 36px 9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box",...style}} />
+        style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 36px 9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box",...style,colorScheme:"light",cursor:"pointer"}} />
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C5CFC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
         <line x1="16" y1="2" x2="16" y2="6"/>
@@ -3615,7 +3615,7 @@ Please produce:
                 <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Date</label>
                 <input type="date" value={meetingSetup.date}
                   onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
-                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",colorScheme:"light",cursor:"pointer"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
               </div>
@@ -3673,23 +3673,13 @@ Please produce:
               <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:14}}>Participants</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>
-                    Employee name
-                    {(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle&&
-                      <span style={{fontWeight:400,color:"#9B9098",marginLeft:6}}>· {(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle}</span>
-                    }
-                  </label>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Employee name</label>
                   <input value={caseInfo.employee||""} onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))} placeholder="Full name" list="employee-list" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                   <datalist id="employee-list">{[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}</datalist>
                 </div>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>
-                    Chair / manager
-                    {(orgMembers||[]).find(m=>m.name===(caseInfo.manager||currentUser?.name))?.job_title&&
-                      <span style={{fontWeight:400,color:"#9B9098",marginLeft:6}}>· {(orgMembers||[]).find(m=>m.name===(caseInfo.manager||currentUser?.name))?.job_title}</span>
-                    }
-                  </label>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Chair / manager</label>
                   <input value={caseInfo.manager||currentUser?.name||""} onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))} placeholder="Your name" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                 </div>
@@ -3700,7 +3690,7 @@ Please produce:
                 </div>
                 <div>
                   <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Date</label>
-                  <input type="date" value={caseInfo.date||new Date().toISOString().split("T")[0]} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light"}}
+                  <input type="date" value={caseInfo.date||new Date().toISOString().split("T")[0]} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}
                     onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
                 </div>
                 <div>
@@ -3757,8 +3747,9 @@ Please produce:
               onClick={()=>{
                 if(!meetingType){showToast("Please select a meeting type");return;}
                 if(!caseInfo.employee?.trim()){showToast("Please enter the employee name");return;}
-                if(!caseInfo.manager?.trim()) setCaseInfo(p=>({...p,manager:currentUser?.name||"HR Manager"}));
-                if(!caseInfo.date) setCaseInfo(p=>({...p,date:new Date().toLocaleDateString("en-GB")}));
+                const mgr = caseInfo.manager?.trim()||currentUser?.name||"HR Manager";
+                const dt = caseInfo.date||new Date().toISOString().split("T")[0];
+                setCaseInfo(p=>({...p,manager:mgr,date:dt}));
                 setTranscript([]);
                 setNotes("");
                 setAdjournments([]);
@@ -3884,7 +3875,7 @@ Please produce:
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
                           <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Job title</label><input value={editJobTitle} onChange={e=>setEditJobTitle(e.target.value)} placeholder="e.g. Sales Manager" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
-                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Start date</label><input type="date" value={editStartDate} onChange={e=>setEditStartDate(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/></div>
+                          <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Start date</label><input type="date" value={editStartDate} onChange={e=>setEditStartDate(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}/></div>
                           <div><label style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Location</label><select value={editLocation} onChange={e=>setEditLocation(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:editLocation?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}><option value="">Select…</option>{locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}<option value="__other__">Other</option></select></div>
                         </div>
                         <button onClick={()=>{upsertEmployeeRecord(empName,{jobTitle:editJobTitle,startDate:editStartDate,location:editLocation});setEditing(false);showToast("Employee record updated");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 16px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Save</button>
@@ -4329,7 +4320,7 @@ Please produce:
                 <div>
                   <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>Date received</label>
                   <input type="date" value={intake.dateReceived} onChange={e=>setIntake(p=>({...p,dateReceived:e.target.value}))}
-                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",colorScheme:"light",cursor:"pointer"}}
                     onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
                     onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
                 </div>
