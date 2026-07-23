@@ -1695,7 +1695,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setTranscript(p=>[...p,{id:pendingId, speaker:"...", text:raw, ts, pending:true}]);
     try {
       const result = await streamClaude(
-        `UK HR meeting transcription. Attribute speaker. ONLY "HR Manager" or "Employee". Return JSON array only: [{"speaker":"HR Manager","text":"..."}]`,
+        `UK HR meeting transcription. Two speakers: "${caseInfo.manager||"HR Manager"}" (chair) and "${caseInfo.employee||"Employee"}" (employee). Attribute each utterance. Return JSON only: [{"speaker":"NAME","text":"..."}]. Use exact names.`,
         `Meeting: ${meetingType?.label||"HR"}\nEmployee: ${caseInfo.employee}\nRecent:\n${transcript.slice(-5).filter(u=>!u.pending).map(u=>u.speaker+": "+u.text).join("\n")}\nNew: "${raw}"`,
         ()=>{}
       );
@@ -1703,7 +1703,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const items = parsed.map((u,i)=>({id:i===0?pendingId:Date.now()+Math.random(), speaker:u.speaker, text:u.text, ts, aiAttributed:true}));
       setTranscript(p=>{const w=p.filter(u=>u.id!==pendingId); return [...w,...items];});
     } catch(e) {
-      setTranscript(p=>p.map(u=>u.id===pendingId?{...u,speaker:"HR Manager",pending:false}:u));
+      setTranscript(p=>p.map(u=>u.id===pendingId?{...u,speaker:caseInfo.manager||"HR Manager",pending:false}:u));
     }
   };
   const handleKeyDown = e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addUtterance(inputText);} };
@@ -3605,72 +3605,128 @@ Please produce:
 
       {/* ══ BRIEF ══ */}
       {screen===SCREENS.BRIEF&&(
-        <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
+        <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+
+          {/* Header */}
+          <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8E0D0",padding:"14px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CompassLogo size={32}/>
-              <div>
-                <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>{meetingType?.label}</div>
-                <div style={{fontSize:15,fontFamily:"DM Serif Display,Georgia,serif",color:"#1A1535"}}>{caseInfo.employee}</div>
-              </div>
+              <CompassLogo size={28}/>
+              <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1C1820",fontWeight:400}}>Compass</span>
             </div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setScreen(SCREENS.HOME)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>Back</button>
-              <button onClick={()=>setScreen(SCREENS.RECORD)} style={{background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 18px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer"}}>Start meeting</button>
-            </div>
+            <button onClick={()=>setScreen(SCREENS.HOME)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 14px",fontSize:12,color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>← Back</button>
           </div>
-          <div style={{flex:1,maxWidth:660,margin:"0 auto",padding:"40px 24px",width:"100%"}}>
-            <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:24,fontWeight:400,color:"#1A1535",margin:"0 0 4px"}}>Meeting brief</h2>
-            <p style={{fontSize:13,color:"#9B9098",margin:"0 0 28px"}}>Review before starting your meeting with {caseInfo.employee}</p>
-            {briefData&&(
-              <div style={{display:"flex",gap:10,marginBottom:24,flexWrap:"wrap"}}>
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",flex:1}}>
-                  <div style={{fontSize:11,color:"#9B9098",marginBottom:4}}>Previous meetings</div>
-                  <div style={{fontSize:20,fontWeight:600,color:"#1A1535"}}>{briefData.count}</div>
-                </div>
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",flex:1}}>
-                  <div style={{fontSize:11,color:"#9B9098",marginBottom:4}}>Last meeting</div>
-                  <div style={{fontSize:13,color:"#3D3560"}}>{briefData.lastMeeting?.type||"—"}</div>
-                  <div style={{fontSize:11,color:"#9B9098"}}>{briefData.lastMeeting?.date||""}</div>
-                </div>
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",flex:1}}>
-                  <div style={{fontSize:11,color:"#9B9098",marginBottom:4}}>Risk level</div>
-                  <div style={{fontSize:13,fontWeight:600,color:briefData.lastRisk==="HIGH"?"#F04E37":briefData.lastRisk==="MEDIUM"?"#F59E0B":"#22C55E"}}>{briefData.lastRisk}</div>
-                </div>
-              </div>
-            )}
-            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px",marginBottom:20}}>
-              <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>AI Brief</div>
-              {briefLoading&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Preparing your brief...</div>}
-              {briefData?.txt&&<div style={{fontSize:13,color:"#3D3560",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{briefData.txt}</div>}
-              {!briefLoading&&!briefData&&<div style={{fontSize:12,color:"#9B9098"}}>No previous meetings found.</div>}
-            </div>
-            {briefData&&briefData.count>0&&(
-              <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                <div style={{padding:"14px 20px",borderBottom:"1px solid #EDE5D8"}}>
-                  <div style={{fontSize:11,color:"#6B6375",fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Meeting history</div>
-                </div>
-                {cases.filter(cs=>cs.employeeName===caseInfo.employee).flatMap(cs=>cs.meetings||[]).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5).map((m,i)=>(
-                  <div key={i} style={{padding:"11px 20px",borderBottom:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontSize:13,color:"#3D3560"}}>{m.type}</div>
-                      <div style={{fontSize:11,color:"#9B9098"}}>{m.date}</div>
-                    </div>
-                    {m.riskScore?.rating&&<span style={{fontSize:11,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#F04E37":m.riskScore.rating==="MEDIUM"?"#F59E0B":"#22C55E"}}>{m.riskScore.rating}</span>}
-                  </div>
+
+          <div style={{maxWidth:640,margin:"0 auto",padding:"36px 24px"}}>
+            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#1C1820",fontWeight:400,marginBottom:4}}>Set up your meeting</div>
+            <div style={{fontSize:13,color:"#9B9098",marginBottom:32}}>Complete the details below before starting. This ensures accurate notes, correct ACAS guidance, and properly formatted documents.</div>
+
+            {/* Step 1: Meeting type */}
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Meeting type</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {MEETING_TYPES.map(mt=>(
+                  <button key={mt.id} onClick={()=>setMeetingType(mt)} style={{padding:"10px 14px",borderRadius:9,border:"1.5px solid",borderColor:meetingType?.id===mt.id?"#7C5CFC":"#E8E0D0",background:meetingType?.id===mt.id?"#EDE8FF":"#FDFAF5",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",transition:"all 0.15s"}}>
+                    <div style={{fontSize:12,fontWeight:600,color:meetingType?.id===mt.id?"#7C5CFC":"#1C1820"}}>{mt.label}</div>
+                    {mt.desc&&<div style={{fontSize:10,color:"#9B9098",marginTop:2}}>{mt.desc}</div>}
+                  </button>
                 ))}
               </div>
-            )}
-            <div style={{marginTop:24,textAlign:"center"}}>
-              <button onClick={()=>setScreen(SCREENS.RECORD)} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"12px 36px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer"}}>Start meeting</button>
             </div>
+
+            {/* Step 2: Employee & chair */}
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:14}}>Participants</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Employee name</label>
+                  <input value={caseInfo.employee||""} onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))} placeholder="Full name" list="employee-list" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
+                    onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
+                  <datalist id="employee-list">{[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}</datalist>
+                </div>
+                <div>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Chair / manager</label>
+                  <input value={caseInfo.manager||currentUser?.name||""} onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))} placeholder="Your name" style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
+                    onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
+                </div>
+                <div>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Date</label>
+                  <input type="date" value={caseInfo.date||new Date().toISOString().split("T")[0]} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box",colorScheme:"light"}}
+                    onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
+                </div>
+                <div>
+                  <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Link to case <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+                  <select value={activeCaseId||""} onChange={e=>{setActiveCaseId(e.target.value);const cs=cases.find(x=>x.id===e.target.value);if(cs){setCaseInfo(p=>({...p,employee:cs.employeeName}));}}} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+                    <option value="">No case linked</option>
+                    {cases.filter(cs=>getCaseStage(cs)!=="closed").map(cs=><option key={cs.id} value={cs.id}>{cs.employeeName} — {cs.caseType||"HR Matter"}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: ACAS guidance for meeting type */}
+            {meetingType&&(
+              <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px",marginBottom:24}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>ACAS guidance — {meetingType.label}</div>
+                <div style={{fontSize:12,color:"#6B6375",lineHeight:1.7}}>
+                  {meetingType.id==="investigation"&&"Conduct the investigation without unreasonable delay. Keep an open mind — the purpose is to establish facts, not to reach a conclusion. The employee has no statutory right to be accompanied at an investigatory meeting (unless your policy provides for this). Do not pre-judge the outcome."}
+                  {meetingType.id==="disciplinary"&&"The employee has a statutory right to be accompanied. State the nature of the allegation clearly. Give the employee a genuine opportunity to respond before any decision is made. Do not confirm a decision at the hearing — take time to consider and communicate the outcome in writing."}
+                  {meetingType.id==="grievance"&&"Listen carefully and remain neutral. The employee should be given the opportunity to fully explain their grievance. They have the right to be accompanied. You should investigate the grievance and respond in writing within a reasonable timeframe."}
+                  {meetingType.id==="welfare"&&"This is a supportive meeting, not a disciplinary one. Focus on understanding the employee's circumstances. Be mindful of potential disability discrimination. Consider whether reasonable adjustments may be appropriate."}
+                  {meetingType.id==="return"&&"Welcome the employee back. Discuss the nature of their absence sensitively. Identify any support or adjustments needed. This is not a disciplinary meeting."}
+                  {meetingType.id==="performance"&&"Focus on specific, measurable performance concerns. The employee should be given a realistic opportunity to improve. Consider whether training or support is appropriate before moving to formal action."}
+                  {!["investigation","disciplinary","grievance","welfare","return","performance"].includes(meetingType.id)&&"Ensure you have a clear agenda and objective for this meeting. Keep notes and follow up in writing where appropriate."}
+                </div>
+              </div>
+            )}
+
+            {/* Previous meetings context */}
+            {caseInfo.employee&&(()=>{
+              const empCases = cases.filter(cs=>cs.employeeName===caseInfo.employee.trim());
+              const prevMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseType:cs.caseType})));
+              if(prevMeetings.length===0) return null;
+              return (
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px",marginBottom:24}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Previous meetings with {caseInfo.employee}</div>
+                  {prevMeetings.slice(0,3).map((m,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<Math.min(prevMeetings.length,3)-1?"1px solid #F5F1EA":"none"}}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <span style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{m.type}</span>
+                        <span style={{fontSize:11,color:"#9B9098",marginLeft:8}}>{fmtDate(m.date)}</span>
+                      </div>
+                      {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 6px"}}>Signed</span>}
+                    </div>
+                  ))}
+                  {prevMeetings.length>3&&<div style={{fontSize:11,color:"#9B9098",marginTop:8}}>{prevMeetings.length-3} more meetings on record</div>}
+                </div>
+              );
+            })()}
+
+            {/* Start button */}
+            <button
+              onClick={()=>{
+                if(!meetingType){showToast("Please select a meeting type");return;}
+                if(!caseInfo.employee?.trim()){showToast("Please enter the employee name");return;}
+                if(!caseInfo.manager?.trim()) setCaseInfo(p=>({...p,manager:currentUser?.name||"HR Manager"}));
+                if(!caseInfo.date) setCaseInfo(p=>({...p,date:new Date().toLocaleDateString("en-GB")}));
+                setTranscript([]);
+                setNotes("");
+                setScreen(SCREENS.RECORD);
+              }}
+              style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:10,padding:"14px",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",letterSpacing:"-0.2px"}}
+            >
+              Start meeting →
+            </button>
+            {(!meetingType||!caseInfo.employee?.trim())&&(
+              <div style={{textAlign:"center",fontSize:11,color:"#9B9098",marginTop:8}}>
+                {!meetingType?"Select a meeting type to continue":"Enter employee name to continue"}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-
-      {/* ══ PEOPLE ══ */}
-      {screen===SCREENS.PEOPLE&&(
+            {screen===SCREENS.PEOPLE&&(
         <div style={{maxWidth:900,margin:"0 auto",padding:"32px 20px"}}>
           <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>People</h2>
           <p style={{fontSize:13,color:"#9B9098",margin:"0 0 24px"}}>All employees with meeting history</p>
