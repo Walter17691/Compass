@@ -3751,7 +3751,6 @@ Please produce:
                 const dt = caseInfo.date||new Date().toISOString().split("T")[0];
                 setCaseInfo(p=>({...p,manager:mgr,date:dt}));
                 setTranscript([]);
-                setNotes("");
                 setAdjournments([]);
                 setCurrentAdjournment(null);
                 setScreen(SCREENS.RECORD);
