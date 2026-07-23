@@ -3068,7 +3068,10 @@ Please produce:
               {[
                 {s:SCREENS.HOME, l:"Home"},
                 {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
+                {s:SCREENS.PEOPLE, l:"People"},
+                {s:SCREENS.ERREPORT, l:"Reports"},
                 ...(isHR?[{s:SCREENS.HR_REVIEW, l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
+                {s:SCREENS.SETTINGS, l:"Settings"},
               ].map(({s,l,badge})=>(
                 <button key={s} onClick={()=>setScreen(s)}
                   style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
