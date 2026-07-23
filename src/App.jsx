@@ -4097,6 +4097,21 @@ Please produce:
                 </div>
               </div>
             )}
+            {/* Appeal — option to proceed to new disciplinary if appeal upheld/dismissed */}
+            {stage==="appeal"&&(
+              <div style={{background:"#FDFAF5",borderBottom:"1px solid #E8E0D0",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                <div style={{fontSize:12,color:"#9B9098"}}>Appeal in progress · {cs.disciplinaryOfficer?"Officer: "+cs.disciplinaryOfficer:"No officer assigned"}</div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setShowHandoffModal(true)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
+                    {cs.disciplinaryOfficer?"Reassign officer":"Appoint appeal officer"}
+                  </button>
+                  <button onClick={()=>{saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));showToast("Case closed");}} style={{fontSize:12,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
+                    Close case
+                  </button>
+                </div>
+              </div>
+            )}
+
 
             {/* Stage content */}
             <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
@@ -4198,7 +4213,7 @@ Please produce:
                           )
                         }</div>
                       </div>
-                      {cs.investigationReport && !cs.disciplinaryOfficer && (
+                      {(cs.investigationReport || (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("investigation")&&m.signStatus==="signed")) && !cs.disciplinaryOfficer && (
                         <div style={{marginTop:12,padding:"14px 16px",background:"#EDE8FF",borderRadius:12,border:"1px solid #C8BCFF"}}>
                           <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Investigation complete</div>
                           <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Appoint a disciplinary officer to continue the process.</div>
