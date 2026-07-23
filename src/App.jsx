@@ -505,6 +505,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [expandedCases, setExpandedCases] = useState({});
+  const [casesSearch, setCasesSearch] = useState("");
+  const [casesFilter, setCasesFilter] = useState("active");
+  const [casesView, setCasesView] = useState("list");
   const [dashSearch, setDashSearch] = useState("");
   const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
   const [employeeRecords, setEmployeeRecords] = useState(ls("compass_employees", []));
@@ -3255,7 +3258,7 @@ Please produce:
             )}
 
             {/* ── Main grid ── */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:20,alignItems:"start"}}>
+            <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}}>
 
               {/* ── Left ── */}
               <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -5625,7 +5628,7 @@ Please produce:
 
         return(
           <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-            <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 28px"}}>
+            <div style={{maxWidth:1200,margin:"0 auto",padding:"24px 16px"}}>
 
               {/* Header */}
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12}}>
