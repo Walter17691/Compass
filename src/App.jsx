@@ -503,6 +503,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [orgRoles, setOrgRoles] = useState([]);
   const [orgMembers, setOrgMembers] = useState([]);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [expandedCases, setExpandedCases] = useState({});
   const [dashSearch, setDashSearch] = useState("");
   const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
   const [employeeRecords, setEmployeeRecords] = useState(ls("compass_employees", []));
@@ -650,8 +652,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     });
     
     const data = await res.json();
-    console.log("signing response:", JSON.stringify(data));
-    if(data.success) {
+        if(data.success) {
       alert("Signature request sent to "+employeeEmail);
       setShowSignModal(false);
       if(caseInfo._linkedCaseId) {
@@ -705,7 +706,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       if(text) setLiveContext(text);
-    } catch(e) { console.log("liveContext error:", e); }
+    } catch(e) { }
     setLiveContextLoading(false);
   };
   const [homeAttachment, setHomeAttachment] = useState(null);
@@ -1768,8 +1769,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setNextSteps(steps);
     try {
       const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
-    console.log("TX:", tx.slice(0,200));
-      // Appeal detection
+          // Appeal detection
       const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
       if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
         appealDetectedRef.current = true;
