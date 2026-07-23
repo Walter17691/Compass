@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ls, lsSet } from '../App.jsx';
+import { ls, lsSet } from '../lib/storage.js';
 
 describe('ls / lsSet', () => {
   beforeEach(() => {

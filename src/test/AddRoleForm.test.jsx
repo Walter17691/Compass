@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AddRoleForm } from '../App.jsx';
+import { AddRoleForm } from '../components/AddRoleForm.jsx';
 
 // AddRoleForm was referenced in the Org Settings modal but never defined
 // anywhere in the codebase, which crashed the whole app with a

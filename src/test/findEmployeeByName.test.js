@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findEmployeeByName } from '../App.jsx';
+import { findEmployeeByName } from '../lib/employeeRecords.js';
 
 describe('findEmployeeByName', () => {
   // Regression test for a real production bug: a stray employee_records

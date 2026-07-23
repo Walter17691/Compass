@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addWorkingDays } from '../App.jsx';
+import { addWorkingDays } from '../lib/dates.js';
 
 describe('addWorkingDays', () => {
   it('returns null for a 0-day deadline', () => {

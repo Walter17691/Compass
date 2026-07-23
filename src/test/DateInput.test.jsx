@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DateInput } from '../App.jsx';
+import { DateInput } from '../components/DateInput.jsx';
 
 // The native calendar-picker-indicator icon was hidden via CSS and its
 // hit-zone stretched with a hack that no longer reliably opens the picker

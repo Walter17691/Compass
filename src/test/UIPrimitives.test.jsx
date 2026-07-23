@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Btn, Badge, Card } from '../App.jsx';
+import { Btn, Badge, Card } from '../components/Primitives.jsx';
 
 describe('Btn', () => {
   it('fires onClick when enabled', async () => {
