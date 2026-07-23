@@ -7014,6 +7014,18 @@ Please produce:
                       const sel = orgMembers.find(x=>x.id===(selectedMemberId||eligible[0]?.id));
                       if(!sel) return;
                       saveCases(cases.map(x=>x.id===cs.id?{...x,disciplinaryOfficer:sel.name,disciplinaryOfficerId:sel.user_id||sel.id,disciplinaryOfficerEmail:sel.email||"",investigatingManager:currentUser?.name,stage:"disciplinary",handoffDate:new Date().toISOString()}:x));
+                      // Grant case-level access to disciplinary officer
+                      if(sel.user_id) {
+                        try {
+                          await supabase.from("case_access").upsert({
+                            case_id: cs.id,
+                            user_id: sel.user_id,
+                            org_id: org.id,
+                            role: "disciplinary_officer",
+                            granted_by: user?.id,
+                          });
+                        } catch(e) { console.error("case_access write failed:", e); }
+                      }
                       setShowHandoffModal(false);
                       setActiveCaseStage("disciplinary");
                       showToast("Case handed off to "+sel.name);
