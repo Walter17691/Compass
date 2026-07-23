@@ -315,7 +315,14 @@ export default function Login({ onLogin }) {
 
         {/* Footer */}
         <div style={{ textAlign: "center", marginTop: 24, fontSize: 11, color: C.subtle }}>
-          Secure · GDPR compliant · UK employment law aligned
+          <div style={{marginBottom:6}}>Secure · GDPR compliant · UK employment law aligned</div>
+          <div>
+            By signing in you agree to our{' '}
+            <a href="https://compasshr.co.uk/privacy" target="_blank" rel="noopener noreferrer" style={{color:C.accent,textDecoration:"none"}}>Privacy Policy</a>
+            {' '}and{' '}
+            <a href="https://compasshr.co.uk/terms" target="_blank" rel="noopener noreferrer" style={{color:C.accent,textDecoration:"none"}}>Terms of Service</a>.
+            {' '}All HR data is stored securely and processed in accordance with UK GDPR.
+          </div>
         </div>
       </div>
     </div>

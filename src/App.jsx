@@ -522,6 +522,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     } else {
       saveEmployeeRecords([...employeeRecords,{name,...fields,createdAt:new Date().toISOString()}]);
     }
+    saveEmployeeRecordToDB(name, fields);
   };
   const [employmentProfileLoading, setEmploymentProfileLoading] = useState(false);
   const [newCaseJobTitle, setNewCaseJobTitle] = useState("");
@@ -539,6 +540,28 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [editLocation, setEditLocation] = useState("");
   const [dashFilter, setDashFilter] = useState("all");
   const [showOrgSettings, setShowOrgSettings] = useState(false);
+
+  const loadEmployeeRecords = async () => {
+    if(!org?.id) return;
+    try {
+      const {data} = await supabase.from('employee_records').select('*').eq('org_id', org.id);
+      if(data) setEmployeeRecords(data.map(r=>({name:r.name,jobTitle:r.job_title,startDate:r.start_date,location:r.location})));
+    } catch(e) { console.error('loadEmployeeRecords', e); }
+  };
+
+  const saveEmployeeRecordToDB = async (name, fields) => {
+    if(!org?.id) return;
+    try {
+      await supabase.from('employee_records').upsert({
+        org_id: org.id,
+        name,
+        job_title: fields.jobTitle||null,
+        start_date: fields.startDate||null,
+        location: fields.location||null,
+        updated_at: new Date().toISOString(),
+      }, {onConflict: 'org_id,name'});
+    } catch(e) { console.error('saveEmployeeRecord', e); }
+  };
 
   const loadOrgRoles = async () => {
     if(!org?.id) return;
@@ -916,7 +939,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadTeamMembers(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); } }, [org?.id]);
 
   useEffect(()=>{
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
@@ -2355,14 +2378,24 @@ Please produce:
       const nl = String.fromCharCode(10);
       const tx = transcript.map(u=>u.speaker+": "+u.text).join(nl);
       const evidenceList = (caseInfo.evidence||[]).map((e,i)=>(i+1)+". "+e.name+" ("+e.type+", "+e.date+")").join(nl);
+      // Pull additional context from active case
+      const activeCase = cases.find(x=>x.id===activeCaseId);
+      const empRec = (employeeRecords||[]).find(r=>r.name===caseInfo.employee)||{};
+      const prevMeetings = activeCase?(activeCase.meetings||[]).slice(-3).map(m=>m.type+" on "+m.date+(m.record?" — "+m.record.slice(0,100):"")).join("; "):"";
       const context = [
-        caseInfo.employee ? "Employee: "+caseInfo.employee : "",
+        caseInfo.employee ? "Employee: "+caseInfo.employee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
         caseInfo.manager ? "Chair/Manager: "+caseInfo.manager : "",
         caseInfo.date ? "Meeting date: "+caseInfo.date : "",
+        empRec.startDate ? "Employee start date: "+empRec.startDate : "",
+        empRec.location ? "Location: "+empRec.location : "",
+        activeCase?.caseType ? "Case type: "+activeCase.caseType : "",
+        activeCase?.description ? "Case description: "+activeCase.description : "",
+        activeCase?.outcome ? "Outcome decision: "+activeCase.outcome : "",
         meetingType?.label ? "Meeting type: "+meetingType.label : "",
         evidenceList ? "Evidence gathered:"+nl+evidenceList : "",
-        reviewOutput ? "Meeting record:"+nl+reviewOutput.slice(0,800) : "",
-        tx ? "Transcript:"+nl+tx.slice(0,600) : "",
+        prevMeetings ? "Previous meetings: "+prevMeetings : "",
+        reviewOutput ? "Meeting record:"+nl+reviewOutput.slice(0,1200) : "",
+        tx ? "Transcript:"+nl+tx.slice(0,800) : "",
       ].filter(Boolean).join(nl);
 
       const letterInstructions = {
@@ -2381,7 +2414,7 @@ Please produce:
       const userPrompt = "Draft "+instruction+nl+nl+"Available information:"+nl+context+nl+nl+"Important: Use [placeholder] format for any missing details. Today's date for reference: "+new Date().toLocaleDateString("en-GB")+". Always complete the full letter.";
 
       const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,stream:false,
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:3000,stream:false,
           system:systemPrompt,
           messages:[{role:"user",content:userPrompt}]
         })});
@@ -3078,7 +3111,7 @@ Please produce:
                 {s:SCREENS.PEOPLE, l:"People"},
                 {s:SCREENS.ERREPORT, l:"Reports"},
                 ...(isHR?[{s:SCREENS.HR_REVIEW, l:"HR Review"+(hrReviewRequests.filter(r=>r.status==="pending").length>0?" ("+hrReviewRequests.filter(r=>r.status==="pending").length+")":"")}]:[]),
-                {s:SCREENS.SETTINGS, l:"Settings"},
+                {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"},
               ].map(({s,l,badge})=>(
                 <button key={s} onClick={()=>setScreen(s)}
                   style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
