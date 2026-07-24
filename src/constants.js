@@ -31,7 +31,7 @@ export const SCREENS = {
   TEMPLATES:"templates", WHISTLE:"whistle", BRIEF:"brief", PEOPLE:"people", INTAKE:"intake", CASE_VIEW:"case_view", PERSON_VIEW:"person_view",
   DEVELOP:"develop", SEARCH:"search",
   NEWSTARTER:"newstarter", ERREPORT:"erreport",
-  REDUNDANCY:"redundancy", WELLBEING:"wellbeing",
+  REDUNDANCY:"redundancy", WELLBEING:"wellbeing", DSAR:"dsar",
 };
 
 export const SPEAKERS = { HR:"HR Manager", EMP:"Employee", NOTE:"Note" };

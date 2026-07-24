@@ -24,6 +24,8 @@ export function mapCaseRow(row) {
     handoffDate: row.handoff_date || null,
     nextSteps: row.next_steps || [],
     locationId: row.location_id || "",
+    estimatedWeeklyPay: row.estimated_weekly_pay || null,
+    estimatedAgeAtDismissal: row.estimated_age_at_dismissal || null,
     assignedTo: row.assigned_to,
     createdBy: row.created_by,
     createdAt: row.created_at,

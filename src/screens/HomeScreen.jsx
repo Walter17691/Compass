@@ -1,5 +1,6 @@
 import { SCREENS } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
+import { getCurrentRisk } from '../lib/caseStage';
 
 export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSignOut, currentUser, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
   return(
@@ -21,6 +22,7 @@ export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSig
               {label:"Cases", s:SCREENS.CASES, badge:cases.filter(x=>getCaseStage(x)!=="closed").length||null},
               {label:"People", s:SCREENS.PEOPLE},
               {label:"Reports", s:SCREENS.ERREPORT},
+              {label:"DSAR", s:SCREENS.DSAR},
               {label:"Search", s:SCREENS.SEARCH},
               {label:"Settings", s:SCREENS.SETTINGS},
             ].map((item,i)=>(
@@ -67,7 +69,8 @@ export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSig
           const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action);
           const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
           const overdue=dueSoon.filter(d=>d.overdue);
-          if(actions.length===0&&pendingSigs===0&&overdue.length===0) return null;
+          const highRisk=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getCurrentRisk(cs)==="HIGH");
+          if(actions.length===0&&pendingSigs===0&&overdue.length===0&&highRisk.length===0) return null;
           return (
             <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A44",borderRadius:12,padding:"12px 18px",marginBottom:24,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#E8622A",letterSpacing:"0.5px",textTransform:"uppercase",flexShrink:0}}>Needs attention</div>
@@ -78,6 +81,11 @@ export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSig
               ))}
               {pendingSigs>0&&<span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} pending signature{pendingSigs!==1?"s":""}</span>}
               {overdue.length>0&&<span style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{overdue.length} overdue deadline{overdue.length!==1?"s":""}</span>}
+              {highRisk.slice(0,3).map((cs,i)=>(
+                <button key={"risk"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:"#C84B2F",background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
+                  {cs.employeeName} · HIGH risk
+                </button>
+              ))}
             </div>
           );
         })()}

@@ -15,3 +15,16 @@ export function getCaseStage(cs) {
   if(meetings.length>0) return "investigation";
   return "intake";
 }
+
+// "Currently" risk, not "ever was" — the most recent meeting that carries a
+// rating, not just any meeting that ever did. A case rated HIGH early on
+// that later resolved down to LOW should read as LOW here; the org-wide
+// report intentionally uses a separate "ever was HIGH" signal instead
+// (src/screens/ErReportScreen.jsx), since a case that once carried real
+// risk is still worth a historical flag there.
+export function getCurrentRisk(cs) {
+  const rated = (cs.meetings||[])
+    .filter(m=>m.riskScore?.rating && m.riskScore.rating!=="UNKNOWN")
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+  return rated[0]?.riskScore?.rating || null;
+}

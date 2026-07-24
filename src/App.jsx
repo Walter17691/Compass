@@ -2,12 +2,13 @@ import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, ROLE_PERMS } from './constants';
 import { streamClaude } from './lib/streamClaude';
-import { addWorkingDays } from './lib/dates';
+import { addWorkingDays, addCalendarMonth } from './lib/dates';
 import { ls, lsSet } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { getCaseStage } from './lib/caseStage';
+import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { useFonts } from './hooks/useFonts';
 import { CompassLogo } from './components/CompassLogo';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
@@ -37,6 +38,7 @@ import { ErReportScreen } from './screens/ErReportScreen';
 import { RedundancyScreen } from './screens/RedundancyScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { DsarScreen } from './screens/DsarScreen';
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
 import { OrgSettingsModal } from './screens/OrgSettingsModal';
@@ -179,6 +181,67 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         updated_at: new Date().toISOString(),
       }, {onConflict: 'org_id,name'});
     } catch(e) { console.error('saveEmployeeRecord', e); }
+  };
+
+  // ── HRIS/payroll CSV import-export — generic CSV rather than a specific
+  // vendor API, since it works with whatever system (BambooHR, Xero, Sage,
+  // ...) the org actually exports from, without needing live credentials
+  // to a third-party account to build and verify against. ──
+  const handleEmployeeCsvImport = async (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    setEmployeeCsvProcessing(true);
+    try {
+      const text = await file.text();
+      const objs = csvRowsToObjects(parseCsv(text));
+      const valid = objs.filter(o => o.name && o.name.trim());
+      const skipped = objs.length - valid.length;
+      const records = valid.map(o => ({
+        name: o.name.trim(),
+        jobTitle: o['job title']||o.jobtitle||"",
+        startDate: o['start date']||o.startdate||"",
+        location: o.location||"",
+      }));
+
+      const merged = [...employeeRecords];
+      records.forEach(r => {
+        const idx = merged.findIndex(m=>m.name===r.name);
+        if(idx>=0) merged[idx] = {...merged[idx], ...r};
+        else merged.push(r);
+      });
+      saveEmployeeRecords(merged);
+
+      if(org?.id && records.length>0) {
+        const { error } = await supabase.from('employee_records').upsert(
+          records.map(r => ({
+            org_id: org.id,
+            name: r.name,
+            job_title: r.jobTitle||null,
+            start_date: r.startDate||null,
+            location: r.location||null,
+            updated_at: new Date().toISOString(),
+          })),
+          {onConflict: 'org_id,name'}
+        );
+        if(error) throw error;
+      }
+      showToast(`Imported ${records.length} employee${records.length===1?"":"s"}${skipped>0?`, skipped ${skipped} row${skipped===1?"":"s"} with no name`:""}`);
+    } catch(err) {
+      console.error("Employee CSV import error:", err);
+      showToast("Could not import CSV — check the file format", "error");
+    }
+    setEmployeeCsvProcessing(false);
+    e.target.value = "";
+  };
+
+  const exportEmployeesCsv = () => {
+    const rows = [["Name","Job title","Start date","Location"]];
+    employeeRecords.forEach(r => rows.push([r.name||"", r.jobTitle||"", r.startDate||"", r.location||""]));
+    const csv = toCsv(rows);
+    const blob = new Blob([csv],{type:"text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=(org?.name||"Compass")+"_Employees_"+new Date().toLocaleDateString("en-GB").split("/").join("-")+".csv"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const loadOrgRoles = async () => {
@@ -406,6 +469,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         investigating_manager: caseObj.investigatingManager || null,
         handoff_date: caseObj.handoffDate || null,
         next_steps: caseObj.nextSteps || [],
+        estimated_weekly_pay: caseObj.estimatedWeeklyPay || null,
+        estimated_age_at_dismissal: caseObj.estimatedAgeAtDismissal || null,
         location_id: caseObj.locationId || (member?.role==='location_manager'&&member?.location_ids?.[0])||null,
         assigned_to: user?.id || null,
         created_by: user?.id || null,
@@ -531,7 +596,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadDsarRequests(); } }, [org?.id]);
 
   useEffect(()=>{
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
@@ -701,6 +766,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     ],
   }]));
   const [starterInstances, setStarterInstances] = useState(ls("compass_starters", []));
+  const [dsarRequests, setDsarRequests] = useState([]);
   const [activeStarter, setActiveStarter] = useState(null);
   const [starterView, setStarterView] = useState("list");
   const [starterAiProcessing, setStarterAiProcessing] = useState(false);
@@ -735,6 +801,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const letterheadRef = useRef(null);
   const wordTemplateRef = useRef(null);
   const policyFileRef = useRef(null);
+  const employeeCsvFileRef = useRef(null);
+  const [employeeCsvProcessing, setEmployeeCsvProcessing] = useState(false);
   const importFileRef = useRef(null);
   const vaultFileRef = useRef(null);
 
@@ -785,8 +853,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   // Rules live in src/lib/deadlines.js so the digest cron function (server
   // side) can compute the same due-soon set without duplicating them.
   useEffect(() => {
-    setDueSoon(computeDueSoon(cases));
-  }, [cases]);
+    setDueSoon(computeDueSoon(cases, dsarRequests));
+  }, [cases, dsarRequests]);
 
   // ── Calendar integration (Google Calendar) ──
   const [calendarConnected, setCalendarConnected] = useState(false);
@@ -913,6 +981,57 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         updated_at: new Date().toISOString(),
       });
     } catch(e) { console.error('saveStarterInstanceToDB', e); }
+  };
+
+  // ── DSAR (Data Subject Access Request) tracking ──
+  const loadDsarRequests = async () => {
+    if(!org?.id) return;
+    try {
+      const {data} = await supabase.from('dsar_requests').select('*').eq('org_id', org.id);
+      if(data) setDsarRequests(data.map(r=>({
+        id:r.id, employeeName:r.employee_name, requestedBy:r.requested_by,
+        receivedDate:r.received_date, dueDate:r.due_date, status:r.status,
+        completedDate:r.completed_date, notes:r.notes,
+        reviewedFlaggedSections:r.reviewed_flagged_sections, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadDsarRequests', e); }
+  };
+
+  const createDsarRequest = async ({employeeName, requestedBy, receivedDate}) => {
+    if(!org?.id || !employeeName?.trim() || !receivedDate) return;
+    const dueDate = addCalendarMonth(receivedDate);
+    if(!dueDate) { showToast("Invalid received date", "error"); return; }
+    try {
+      const {data, error} = await supabase.from('dsar_requests').insert({
+        org_id: org.id,
+        employee_name: employeeName.trim(),
+        requested_by: requestedBy||null,
+        received_date: receivedDate,
+        due_date: dueDate.toISOString().split("T")[0],
+        created_by: user?.id||null,
+      }).select().single();
+      if(error) throw error;
+      setDsarRequests(p=>[...p, {
+        id:data.id, employeeName:data.employee_name, requestedBy:data.requested_by,
+        receivedDate:data.received_date, dueDate:data.due_date, status:data.status,
+        completedDate:data.completed_date, notes:data.notes,
+        reviewedFlaggedSections:data.reviewed_flagged_sections, createdAt:data.created_at,
+      }]);
+      showToast("DSAR request logged");
+    } catch(e) { console.error('createDsarRequest', e); showToast("Could not log DSAR request", "error"); }
+  };
+
+  const updateDsarRequest = async (id, fields) => {
+    const payload = {};
+    if('status' in fields) payload.status = fields.status;
+    if('notes' in fields) payload.notes = fields.notes;
+    if('reviewedFlaggedSections' in fields) payload.reviewed_flagged_sections = fields.reviewedFlaggedSections;
+    if('completedDate' in fields) payload.completed_date = fields.completedDate;
+    try {
+      const {error} = await supabase.from('dsar_requests').update(payload).eq('id', id);
+      if(error) throw error;
+      setDsarRequests(p=>p.map(r=>r.id===id?{...r,...fields}:r));
+    } catch(e) { console.error('updateDsarRequest', e); showToast("Could not update DSAR request", "error"); }
   };
 
   const createStarterInstance = () => {
@@ -1614,7 +1733,7 @@ Please produce:
         ]);
       });
     });
-    const csv = rows.map(r=>r.map(v=>'"'+String(v).split('"').join('\"\"')+'"').join(",")).join("\n");
+    const csv = toCsv(rows);
     const blob = new Blob([csv],{type:"text/csv"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2563,6 +2682,7 @@ Please produce:
                 {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
                 {s:SCREENS.PEOPLE, l:"People"},
                 {s:SCREENS.ERREPORT, l:"Reports"},
+                {s:SCREENS.DSAR, l:"DSAR"},
                 {s:SCREENS.SEARCH, l:"Search"},
                 {s:SCREENS.SETTINGS, l:"Settings"},
               ].map(({s,l,badge})=>(
@@ -2898,6 +3018,10 @@ Please produce:
           notifGranted={notifGranted}
           emailDigestOptIn={emailDigestOptIn}
           toggleEmailDigest={toggleEmailDigest}
+          employeeCsvFileRef={employeeCsvFileRef}
+          employeeCsvProcessing={employeeCsvProcessing}
+          handleEmployeeCsvImport={handleEmployeeCsvImport}
+          exportEmployeesCsv={exportEmployeesCsv}
           auditLog={auditLog}
           cases={cases}
           exportAllData={exportAllData}
@@ -2906,6 +3030,19 @@ Please produce:
           setShowGdpr={setShowGdpr}
           setOnboardStep={setOnboardStep}
           setShowOnboard={setShowOnboard}
+          setScreen={setScreen}
+        />
+      )}
+
+      {/* ══ DSAR ══ */}
+      {screen===SCREENS.DSAR&&(
+        <DsarScreen
+          dsarRequests={dsarRequests}
+          createDsarRequest={createDsarRequest}
+          updateDsarRequest={updateDsarRequest}
+          cases={cases}
+          employeeRecords={employeeRecords}
+          starterInstances={starterInstances}
           setScreen={setScreen}
         />
       )}

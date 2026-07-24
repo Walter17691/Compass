@@ -3,7 +3,11 @@ import { getCaseStage } from './caseStage.js';
 // UK statutory & ACAS deadline rules. Pure — no React, no I/O — so it can
 // run client-side (App.jsx's dueSoon effect) and server-side (the digest
 // cron function) against the same case data without duplicating the rules.
-export function computeDueSoon(cases, today = new Date()) {
+// dsarRequests (optional): open DSAR requests, each { employeeName,
+// due_date, status }. Fed into the same due-soon array under category
+// "dsar" so the existing overdue banner, Settings list, and digest cron
+// all pick up DSAR deadlines automatically with no changes of their own.
+export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
   const start = new Date(today);
   start.setHours(0,0,0,0);
   const due = [];
@@ -85,6 +89,11 @@ export function computeDueSoon(cases, today = new Date()) {
         if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature",`${cs.id}:signature:${e.id||e.signId}`); }
       }
     });
+  });
+
+  dsarRequests.forEach(req => {
+    if(req.status==="completed") return;
+    addDeadline(req.employeeName||req.employee_name, "DSAR response due (statutory: 1 calendar month)", new Date(req.due_date||req.dueDate), "dsar", `dsar:${req.id}`);
   });
 
   due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.daysLeft-b.daysLeft; });

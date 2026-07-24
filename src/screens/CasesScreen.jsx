@@ -1,4 +1,10 @@
 import { SCREENS } from '../constants';
+import { getCurrentRisk } from '../lib/caseStage';
+
+const RISK_STYLE = {
+  HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
+  MEDIUM: { color:"#B87520", bg:"#FEF5E7" },
+};
 
 export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus }) {
   return (
@@ -42,6 +48,8 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
                 {empCases.map(cs=>{
                   const closed = getCaseStage(cs)==="closed";
                   const next = getNextStep(cs);
+                  const risk = !closed ? getCurrentRisk(cs) : null;
+                  const riskStyle = risk ? RISK_STYLE[risk] : null;
                   return(
                     <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
                       style={{background:closed?"#FDFAF5":"#FFFFFF",border:"1px solid",borderColor:closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:6,marginLeft:48,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
@@ -56,6 +64,7 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
                         {next&&!closed&&<div style={{fontSize:11,color:"#7C5CFC",fontWeight:500,marginTop:4}}>Next: {next.label}</div>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                        {riskStyle&&<span style={{fontSize:10,fontWeight:700,color:riskStyle.color,background:riskStyle.bg,borderRadius:4,padding:"2px 7px"}}>{risk} RISK</span>}
                         <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
                         <span style={{color:"#C4BAB0",fontSize:16}}>›</span>
                       </div>

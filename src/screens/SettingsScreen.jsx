@@ -2,7 +2,7 @@ import { SCREENS, ROLE_PERMS } from '../constants';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { UserAddForm } from '../components/UserAddForm';
 
-export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
+export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
   return(
     <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
@@ -153,6 +153,17 @@ export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, del
           </div>
         </Card>
       )}
+
+      {/* Employee records (CSV import/export) */}
+      <Card style={{marginBottom:12}}>
+        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Employee records</h3>
+        <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Import or export employee names, job titles, start dates and locations as a CSV — works with an export from any HRIS or payroll system (BambooHR, Xero, Sage, etc). Expected columns: Name, Job title, Start date, Location.</p>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn onClick={()=>employeeCsvFileRef.current?.click()} disabled={employeeCsvProcessing}>{employeeCsvProcessing?"Importing...":"Import from CSV"}</Btn>
+          <Btn variant="secondary" onClick={exportEmployeesCsv}>Export to CSV</Btn>
+        </div>
+        <input ref={employeeCsvFileRef} type="file" accept=".csv" onChange={handleEmployeeCsvImport} style={{display:"none"}} />
+      </Card>
 
       {/* Word template */}
       <Card style={{marginBottom:12}}>

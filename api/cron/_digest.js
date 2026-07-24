@@ -54,7 +54,9 @@ export async function runDigest() {
   for (const org of orgs) {
     const casesRes = await supabaseRequest(`cases?org_id=eq.${org.id}&select=*`);
     const rows = await casesRes.json();
-    const dueSoon = computeDueSoon(rows.map(mapCaseRow));
+    const dsarRes = await supabaseRequest(`dsar_requests?org_id=eq.${org.id}&status=neq.completed&select=*`);
+    const dsarRequests = await dsarRes.json();
+    const dueSoon = computeDueSoon(rows.map(mapCaseRow), dsarRequests);
     const urgent = dueSoon.filter(isUrgent);
     if (urgent.length === 0) continue;
 
