@@ -7,10 +7,18 @@ export function HandoffModal({ cases, activeCaseId, currentUser, orgMembers, sel
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
-        <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",marginBottom:6}}>Appoint Disciplinary Officer</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+          <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Appoint Disciplinary Officer</div>
+          <button onClick={()=>{setShowHandoffModal(false);setSelectedMemberId("");}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:0,marginLeft:12}}>×</button>
+        </div>
         <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The investigation is complete. Appoint an officer to conduct the disciplinary hearing.</div>
         {eligible.length===0?(
-          <div style={{fontSize:13,color:"#C84B2F",background:"#FFF0ED",borderRadius:8,padding:12,marginBottom:16}}>No eligible users found. Add team members with access level {myLevel}+ in Organisation Settings.</div>
+          <>
+            <div style={{fontSize:13,color:"#C84B2F",background:"#FFF0ED",borderRadius:8,padding:12,marginBottom:16}}>No eligible users found. Add team members with access level {myLevel}+ in Organisation Settings.</div>
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>{setShowHandoffModal(false);setSelectedMemberId("");}} style={{fontSize:13,padding:"9px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#fff",cursor:"pointer",color:"#6B6375"}}>Close</button>
+            </div>
+          </>
         ):(
           <>
             <div style={{marginBottom:16}}>

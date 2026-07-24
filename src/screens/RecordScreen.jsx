@@ -1,13 +1,20 @@
 import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
+import { SCREENS } from '../constants';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen }) {
+  const cancelMeeting = () => {
+    const hasContent = transcript.length>0 || inputText.trim();
+    if(hasContent && !window.confirm("Leave without saving? This meeting's notes will be lost.")) return;
+    setScreen(SCREENS.HOME);
+  };
   return (
     <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:2000,fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 24px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={cancelMeeting} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0,display:"flex",alignItems:"center"}} title="Leave without saving">←</button>
           <CompassLogo size={32}/>
           <div style={{width:1,height:20,background:"#EDE5D8"}}/>
           <div>
