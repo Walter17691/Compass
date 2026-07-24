@@ -6,7 +6,14 @@ import { runDigest } from './_digest.js';
 export default async function handler(req, res) {
   const auth = req.headers.authorization || '';
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    // Temporary diagnostic — never echoes the secret itself, just enough to
+    // tell "env var missing" apart from "value mismatch" from the outside.
+    return res.status(401).json({
+      error: 'Unauthorized',
+      secretConfigured: !!process.env.CRON_SECRET,
+      secretLength: process.env.CRON_SECRET ? process.env.CRON_SECRET.length : 0,
+      receivedAuthLength: auth.length,
+    });
   }
 
   try {
