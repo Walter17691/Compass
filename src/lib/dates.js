@@ -24,3 +24,14 @@ export function addCalendarMonth(date) {
   target.setDate(Math.min(day, daysInTargetMonth));
   return target;
 }
+
+// Formats a Date's LOCAL calendar date as "YYYY-MM-DD", for storing dates
+// (not instants) in a Postgres `date` column. `date.toISOString()` is the
+// wrong tool for this: it converts to UTC first, so a Date built from
+// local midnight (as addCalendarMonth does) silently rolls back to the
+// previous day for any timezone ahead of UTC (e.g. the UK during BST,
+// UTC+1) — which is exactly the DSAR due-date case this exists for.
+export function toISODateLocal(date) {
+  const pad = n => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+}

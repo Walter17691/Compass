@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, ROLE_PERMS } from './constants';
 import { streamClaude } from './lib/streamClaude';
-import { addWorkingDays, addCalendarMonth } from './lib/dates';
+import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
 import { ls, lsSet } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
@@ -1007,7 +1007,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         employee_name: employeeName.trim(),
         requested_by: requestedBy||null,
         received_date: receivedDate,
-        due_date: dueDate.toISOString().split("T")[0],
+        due_date: toISODateLocal(dueDate),
         created_by: user?.id||null,
       }).select().single();
       if(error) throw error;
