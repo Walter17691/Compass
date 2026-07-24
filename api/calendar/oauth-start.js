@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
     const redirectUri = `${APP_URL}/api/calendar/oauth-callback`;
     const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_id: process.env.GOOGLE_CLIENT_ID.trim(),
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: GOOGLE_SCOPE,
