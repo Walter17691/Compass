@@ -1,0 +1,76 @@
+import { SCREENS } from '../constants';
+import { Card } from '../components/Primitives';
+
+export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchResults, setScreen, setExpandedCases, cases, setViewMeeting, setViewCaseId, dueSoon }) {
+  return (
+    <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
+      <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
+      <input
+        autoFocus
+        placeholder="Search cases, records, letters, transcripts..."
+        value={searchQuery}
+        onChange={e=>{setSearchQuery(e.target.value);runSearch(e.target.value);}}
+        style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 18px",fontSize:15,color:"#1A1535",outline:"none",marginBottom:24,boxSizing:"border-box"}} />
+
+      {searchQuery&&searchResults.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 20px",color:"#5A5570",fontSize:13}}>No results found for "{searchQuery}"</div>
+      )}
+
+      {searchResults.length>0&&(
+        <div>
+          <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>{searchResults.length} result{searchResults.length!==1?"s":""}</div>
+          {searchResults.map((r,i)=>{
+            const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#4A6FA5",transcript:"#888"};
+            return(
+              <button key={i} onClick={()=>{
+                setScreen(SCREENS.CASES);
+                setExpandedCases(e=>({...e,[r.caseId]:true}));
+                if(r.meetingId){
+                  const cs = cases.find(c=>c.id===r.caseId);
+                  const m = cs?.meetings.find(m=>m.id===r.meetingId);
+                  if(m) { setViewMeeting({...m,employeeName:cs.employeeName,caseId:cs.id}); setViewCaseId(cs.id); }
+                }
+              }}
+                style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",marginBottom:8,textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"border-color 0.15s"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
+                onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
+                <div style={{width:40,height:40,borderRadius:6,background:typeColors[r.type]+"22",border:`1px solid ${typeColors[r.type]}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{fontSize:9,fontWeight:700,color:typeColors[r.type],letterSpacing:0.5,textTransform:"uppercase"}}>{r.type}</span>
+                </div>
+                <div>
+                  <div style={{fontSize:14,color:"#1A1535",fontWeight:500,marginBottom:2}}>{r.title}</div>
+                  <div style={{fontSize:11,color:"#6B6880"}}>{r.sub}</div>
+                  {r.type==="transcript"&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4,fontStyle:"italic"}}>Found in transcript</div>}
+                  {r.type==="record"&&<div style={{fontSize:11,color:"#B87520",marginTop:4}}>Found in meeting record</div>}
+                  {r.type==="letter"&&<div style={{fontSize:11,color:"#1A7A4A",marginTop:4}}>Found in letter</div>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {!searchQuery&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Card style={{background:"#F5F1EA"}}>
+            <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Recent cases</div>
+            {cases.slice(-5).reverse().map(c=>(
+              <div key={c.id} onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",cursor:"pointer",fontSize:12,color:"#3D3560"}}>{c.employeeName}</div>
+            ))}
+            {cases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No cases yet</div>}
+          </Card>
+          <Card style={{background:"#F5F1EA"}}>
+            <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Overdue actions</div>
+            {dueSoon.filter(d=>d.overdue).slice(0,5).map((d,i)=>(
+              <div key={i} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
+                <div style={{color:"#C84B2F",marginBottom:1}}>{d.caseName}</div>
+                <div style={{color:"#6B6880",fontSize:10}}>{d.step} · {Math.abs(d.daysLeft)}d overdue</div>
+              </div>
+            ))}
+            {dueSoon.filter(d=>d.overdue).length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No overdue actions</div>}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
