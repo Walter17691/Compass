@@ -40,6 +40,21 @@ function Root() {
   }
 
   useEffect(() => {
+    // Capture ?invite=CODE into localStorage immediately, before the user
+    // signs up/confirms their email/logs in — the URL query string does not
+    // survive the email-confirmation redirect, so the URL alone can't carry
+    // this across signup. OrgSetup reads it from localStorage instead.
+    const params = new URLSearchParams(window.location.search)
+    const invite = params.get('invite')
+    if(invite) {
+      localStorage.setItem('compass_pending_invite', invite.trim())
+      params.delete('invite')
+      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '')
+      window.history.replaceState({}, '', newUrl)
+    }
+  }, [])
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       loadOrg(session?.user ?? null)

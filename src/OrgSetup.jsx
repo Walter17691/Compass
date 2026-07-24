@@ -20,11 +20,12 @@ function CompassLogo({ size=36 }) {
 }
 
 export default function OrgSetup({ user, onComplete }) {
-  const [mode, setMode] = useState(null) // 'create' or 'join'
+  const pendingInvite = localStorage.getItem('compass_pending_invite') || ''
+  const [mode, setMode] = useState(pendingInvite ? 'join' : null) // 'create' or 'join'
   const [orgName, setOrgName] = useState('')
   const [userName, setUserName] = useState(user?.user_metadata?.name || '')
   const [role, setRole] = useState('hr_manager')
-  const [inviteCode, setInviteCode] = useState('')
+  const [inviteCode, setInviteCode] = useState(pendingInvite)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -51,6 +52,7 @@ export default function OrgSetup({ user, onComplete }) {
         .insert({ org_id: org.id, user_id: user.id, role: 'hr_director', name: userName.trim() })
       if(memberErr) throw memberErr
 
+      localStorage.removeItem('compass_pending_invite')
       onComplete({ org, member: { role: 'hr_director', name: userName.trim() } })
     } catch(e) { setError(e.message) }
     setLoading(false)
@@ -74,6 +76,7 @@ export default function OrgSetup({ user, onComplete }) {
       if(!joined) throw new Error('Invalid invite code')
 
       const org = { id: joined.org_id, name: joined.org_name, invite_code: joined.org_invite_code }
+      localStorage.removeItem('compass_pending_invite')
       onComplete({ org, member: { role, name: userName.trim() } })
     } catch(e) { setError(e.message) }
     setLoading(false)
@@ -109,6 +112,12 @@ export default function OrgSetup({ user, onComplete }) {
             </h2>
 
             {error&&<div style={{background:"#2A1008",border:"1px solid #E8622A44",borderRadius:6,padding:"10px 12px",fontSize:12,color:"#E8622A",marginBottom:12}}>{error}</div>}
+
+            {pendingInvite&&mode==='join'&&(
+              <div style={{background:"#1A2A20",border:"1px solid #2E5A3E",borderRadius:6,padding:"10px 12px",fontSize:12,color:"#7FCF9E",marginBottom:12}}>
+                You followed an invite link — your invite code is filled in below.
+              </div>
+            )}
 
             <label style={{display:"block",fontSize:10,fontWeight:600,color:"#666",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
             <input placeholder="e.g. Sarah Jones" value={userName} onChange={e=>setUserName(e.target.value)} style={inp}/>
