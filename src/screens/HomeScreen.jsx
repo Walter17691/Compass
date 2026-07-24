@@ -1,8 +1,23 @@
+import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
 import { getCurrentRisk } from '../lib/caseStage';
 
-export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSignOut, currentUser, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
+export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSignOut, currentUser, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  const goToScreen = (s) => {
+    if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
+    setScreen(s);
+  };
+  const navItems = [
+    {label:"Home", s:SCREENS.HOME},
+    {label:"Cases", s:SCREENS.CASES, badge:cases.filter(x=>getCaseStage(x)!=="closed").length||null},
+    {label:"People", s:SCREENS.PEOPLE},
+    {label:"Reports", s:SCREENS.ERREPORT},
+    {label:"DSAR", s:SCREENS.DSAR},
+    {label:"Search", s:SCREENS.SEARCH},
+    {label:"Settings", s:SCREENS.SETTINGS},
+  ];
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -16,26 +31,34 @@ export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSig
               <div style={{fontSize:8,color:"#9B9098",letterSpacing:"1.5px",textTransform:"uppercase",lineHeight:1}}>HR Intelligence</div>
             </div>
           </div>
-          <nav style={{display:"flex",gap:2}}>
-            {[
-              {label:"Home", s:SCREENS.HOME},
-              {label:"Cases", s:SCREENS.CASES, badge:cases.filter(x=>getCaseStage(x)!=="closed").length||null},
-              {label:"People", s:SCREENS.PEOPLE},
-              {label:"Reports", s:SCREENS.ERREPORT},
-              {label:"DSAR", s:SCREENS.DSAR},
-              {label:"Search", s:SCREENS.SEARCH},
-              {label:"Settings", s:SCREENS.SETTINGS},
-            ].map((item,i)=>(
-              <button key={i} onClick={()=>setScreen(item.s)} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400}}>
-                {item.label}
-                {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
-              </button>
-            ))}
-          </nav>
+          {isMobile?(
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:16,color:"#6B6375"}}>☰</button>
+              {showMobileNav&&(
+                <nav style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",display:"flex",flexDirection:"column",minWidth:180,zIndex:200,overflow:"hidden"}}>
+                  {navItems.map((item,i)=>(
+                    <button key={i} onClick={()=>{goToScreen(item.s);setShowMobileNav(false);}} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"10px 14px",border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400,textAlign:"left"}}>
+                      {item.label}
+                      {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
+                    </button>
+                  ))}
+                </nav>
+              )}
+            </div>
+          ):(
+            <nav style={{display:"flex",gap:2}}>
+              {navItems.map((item,i)=>(
+                <button key={i} onClick={()=>goToScreen(item.s)} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400}}>
+                  {item.label}
+                  {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
+                </button>
+              ))}
+            </nav>
+          )}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:6,padding:"3px 8px"}}>{org.name}</span>}
-          <button onClick={()=>setShowOrgSettings(true)} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>
+          {!isMobile&&org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:6,padding:"3px 8px"}}>{org.name}</span>}
+          {!isMobile&&<button onClick={()=>setShowOrgSettings(true)} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
           {onSignOut&&<button onClick={onSignOut} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
         </div>
       </div>
@@ -91,7 +114,7 @@ export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSig
         })()}
 
         {/* ── Stat cards ── */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:28}}>
           {(()=>{
             const active=cases.filter(cs=>getCaseStage(cs)!=="closed").length;
             const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;

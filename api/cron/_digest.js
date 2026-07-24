@@ -1,4 +1,5 @@
 import { supabaseRequest, getUserEmail } from './_supabase.js';
+import { postWebhook } from './_notify.js';
 import { computeDueSoon } from '../../src/lib/deadlines.js';
 import { mapCaseRow } from '../../src/lib/caseMapping.js';
 
@@ -47,11 +48,16 @@ async function sendDigestEmail(email, items) {
 }
 
 export async function runDigest() {
-  const orgsRes = await supabaseRequest('organisations?select=id,name');
+  const orgsRes = await supabaseRequest('organisations?select=id,name,plan,notification_webhook_url,notification_webhook_type');
   const orgs = await orgsRes.json();
 
   let sent = 0;
+  let webhooksNotified = 0;
   for (const org of orgs) {
+    // The digest is a Pro feature — email_digest_opt_in defaults to true
+    // for every org member regardless of plan, so this check (not the
+    // client-side toggle) is what actually enforces the gate.
+    if (org.plan !== 'pro') continue;
     const casesRes = await supabaseRequest(`cases?org_id=eq.${org.id}&select=*`);
     const rows = await casesRes.json();
     const dsarRes = await supabaseRequest(`dsar_requests?org_id=eq.${org.id}&status=neq.completed&select=*`);
@@ -69,6 +75,11 @@ export async function runDigest() {
       await sendDigestEmail(email, urgent);
       sent++;
     }
+
+    if (org.notification_webhook_url) {
+      const ok = await postWebhook(org.notification_webhook_url, org.notification_webhook_type, urgent);
+      if (ok) webhooksNotified++;
+    }
   }
-  return { orgsChecked: orgs.length, emailsSent: sent };
+  return { orgsChecked: orgs.length, emailsSent: sent, webhooksNotified };
 }

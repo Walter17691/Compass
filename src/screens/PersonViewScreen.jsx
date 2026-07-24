@@ -1,6 +1,6 @@
 import { SCREENS, MEETING_TYPES } from '../constants';
 
-export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user }) {
+export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, requirePro }) {
   const empName = activePerson;
   const empCases = cases.filter(c=>c.employeeName===empName);
   const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseId:cs.id,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -29,6 +29,7 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={async()=>{
+            if(!requirePro('portal', ()=>{})) return;
             const email = window.prompt(`Email address to invite ${empName} to the employee portal:`);
             if(!email||!email.trim()) return;
             try {

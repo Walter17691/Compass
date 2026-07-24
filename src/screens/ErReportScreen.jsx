@@ -1,6 +1,6 @@
 import { SCREENS } from '../constants';
 
-export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate }) {
+export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF }) {
   // ── Core data calculations ──
   const activeCases = cases.filter(cs=>getCaseStage(cs)!=="closed");
   const closedCases = cases.filter(cs=>getCaseStage(cs)==="closed");
@@ -47,6 +47,36 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
     return Math.round((dates[dates.length-1]-dates[0])/(1000*60*60*24));
   }).filter(Boolean);
   const avgResolution = resTimes.length?Math.round(resTimes.reduce((a,b)=>a+b,0)/resTimes.length):null;
+
+  // Month-over-month deltas — only computed where the underlying data
+  // genuinely supports an apples-to-apples comparison (no snapshot/
+  // history table exists, so anything relying on "state as of N days ago"
+  // beyond what a timestamp already tells us would just be fabricated).
+  const DAY_MS = 1000*60*60*24;
+  const openedInWindow = (startDaysAgo, endDaysAgo) => cases.filter(cs=>{
+    const d = new Date(cs.dateReceived||cs.createdAt||0);
+    if(isNaN(d)) return false;
+    const daysAgo = (now-d)/DAY_MS;
+    return daysAgo>=endDaysAgo && daysAgo<startDaysAgo;
+  }).length;
+  const casesOpenedLast30 = openedInWindow(30,0);
+  const casesOpenedPrev30 = openedInWindow(60,30);
+  const casesDelta = casesOpenedPrev30>0 ? casesOpenedLast30-casesOpenedPrev30 : null;
+
+  const resolutionInWindow = (startDaysAgo, endDaysAgo) => {
+    const times = closedCases.filter(cs=>(cs.meetings||[]).length>0).map(cs=>{
+      const dates=(cs.meetings||[]).map(m=>new Date(m.savedAt||m.date||0)).filter(d=>!isNaN(d)).sort((a,b)=>a-b);
+      if(dates.length<2) return null;
+      const closedDate = dates[dates.length-1];
+      const daysAgo = (now-closedDate)/DAY_MS;
+      if(daysAgo<endDaysAgo || daysAgo>=startDaysAgo) return null;
+      return Math.round((closedDate-dates[0])/DAY_MS);
+    }).filter(t=>t!==null);
+    return times.length ? Math.round(times.reduce((a,b)=>a+b,0)/times.length) : null;
+  };
+  const avgResolutionLast30 = resolutionInWindow(30,0);
+  const avgResolutionPrev30 = resolutionInWindow(60,30);
+  const resolutionDelta = (avgResolutionLast30!=null && avgResolutionPrev30!=null) ? avgResolutionLast30-avgResolutionPrev30 : null;
 
   // High risk cases
   const highRisk = cases.filter(cs=>(cs.meetings||[]).some(m=>m.riskScore?.rating==="HIGH"));
@@ -108,6 +138,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
             <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1C1820",margin:0,letterSpacing:"-0.5px"}}>HR Reports</h1>
             <p style={{fontSize:13,color:"#9B9098",margin:"5px 0 0"}}>Organisation-wide employee relations overview · {cases.length} total cases</p>
           </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={async()=>{
             const prompt = "You are a senior HR director. Write a concise executive summary of the following HR data for this organisation. Be factual and highlight key risks, patterns and recommendations. Data: Total cases: "+cases.length+". Active: "+activeCases.length+". Closed: "+closedCases.length+". Case types: "+caseTypeList.map(([t,n])=>t+": "+n).join(", ")+". Outcomes: "+outcomeList.map(([o,n])=>o+": "+n).join(", ")+". High risk cases: "+highRisk.length+". Slow investigations (>28 days): "+slowInvestigations.length+". Repeat employees: "+repeatEmployees.length+". Average resolution time: "+(avgResolution?avgResolution+" days":"unknown")+". Write 3-4 paragraphs. No markdown.";
             setReportNarrative("Generating...");
@@ -119,6 +150,45 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
           }} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>
             Generate AI summary
           </button>
+          <button onClick={async()=>{
+            const jsPDF = await loadJsPDF();
+            const doc = new jsPDF({unit:"mm",format:"a4"});
+            const M=20, W=doc.internal.pageSize.getWidth(), maxW=W-M*2;
+            let y=20;
+            doc.setFontSize(18); doc.setFont("helvetica","bold"); doc.setTextColor(30); doc.text("Compass HR — Board Report",M,y); y+=6;
+            doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(120); doc.text(new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}),M,y); y+=10;
+            doc.setDrawColor(124,92,252); doc.setLineWidth(0.5); doc.line(M,y,W-M,y); y+=10;
+
+            const stat = (label,value) => { doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(30); doc.text(label+": ",M,y); doc.setFont("helvetica","normal"); doc.text(String(value),M+doc.getTextWidth(label+": "),y); y+=7; };
+            stat("Total cases", cases.length+" ("+activeCases.length+" active, "+closedCases.length+" closed)");
+            stat("High risk cases", highRisk.length);
+            stat("Average resolution time", avgResolution?avgResolution+" days":"—");
+            stat("Pending signatures", pendingSigs);
+            y+=4;
+
+            if(caseTypeList.length){
+              doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.text("Cases by type",M,y); y+=6;
+              doc.setFontSize(10); doc.setFont("helvetica","normal");
+              caseTypeList.forEach(([type,count])=>{ doc.text("• "+type.charAt(0).toUpperCase()+type.slice(1)+": "+count,M+2,y); y+=5.5; });
+              y+=4;
+            }
+            if(outcomeList.length){
+              doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.text("Disciplinary outcomes",M,y); y+=6;
+              doc.setFontSize(10); doc.setFont("helvetica","normal");
+              outcomeList.forEach(([outcome,count])=>{ doc.text("• "+outcome+": "+count,M+2,y); y+=5.5; });
+              y+=4;
+            }
+            if(reportNarrative&&reportNarrative!=="Generating..."){
+              doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.text("Executive summary",M,y); y+=6;
+              doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(60);
+              const lines = doc.splitTextToSize(reportNarrative, maxW);
+              lines.forEach(line=>{ if(y>280){doc.addPage();y=20;} doc.text(line,M,y); y+=5.5; });
+            }
+            doc.save("Compass_Board_Report_"+new Date().toLocaleDateString("en-GB").split("/").join("-")+".pdf");
+          }} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:9,padding:"10px 20px",color:"#1A1535",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>
+            Download board report
+          </button>
+          </div>
         </div>
 
         {/* AI narrative */}
@@ -130,10 +200,10 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
         )}
 
         {/* Stat cards */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
-          <StatBox label="Total cases" value={cases.length} sub={activeCases.length+" active · "+closedCases.length+" closed"}/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:24}}>
+          <StatBox label="Total cases" value={cases.length} sub={activeCases.length+" active · "+closedCases.length+" closed"+(casesDelta!=null?" · "+(casesDelta>0?"↑":casesDelta<0?"↓":"→")+Math.abs(casesDelta)+" vs prior 30d":"")}/>
           <StatBox label="High risk" value={highRisk.length} sub={highRisk.length>0?"Requires attention":"No high risk cases"} accent="#C84B2F"/>
-          <StatBox label="Avg resolution" value={avgResolution?avgResolution+"d":"—"} sub={resTimes.length+" closed cases measured"} accent="#1A7A4A"/>
+          <StatBox label="Avg resolution" value={avgResolution?avgResolution+"d":"—"} sub={resTimes.length+" closed cases measured"+(resolutionDelta!=null?" · "+(resolutionDelta>0?"↑":resolutionDelta<0?"↓":"→")+Math.abs(resolutionDelta)+"d vs prior 30d":"")} accent="#1A7A4A"/>
           <StatBox label="Pending signatures" value={pendingSigs} sub={pendingSigs>0?"Awaiting employee sign-off":"All signed"} accent="#E8622A"/>
         </div>
 
@@ -151,7 +221,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
         )}
 
         {/* Main grid */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:20,marginBottom:20}}>
 
           {/* Case volume by month */}
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
@@ -208,7 +278,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
         </div>
 
         {/* Second row */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginBottom:20}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:20,marginBottom:20}}>
 
           {/* Location breakdown */}
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>

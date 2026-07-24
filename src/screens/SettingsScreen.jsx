@@ -1,12 +1,32 @@
+import { useState } from 'react';
 import { SCREENS, ROLE_PERMS } from '../constants';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { UserAddForm } from '../components/UserAddForm';
+import { isPro } from '../lib/plan';
 
-export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
+export function SettingsScreen({ isHR, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
+  const [webhookUrlDraft, setWebhookUrlDraft] = useState(orgWebhookUrl||"");
   return(
     <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
       <p style={{fontSize:13,color:"#6B6375",margin:"0 0 28px"}}>All data saved in your browser.</p>
+
+      {/* Billing */}
+      <Card style={{marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535"}}>Billing</div>
+          <Badge color={isPro(org)?"#1A7A4A":"#9B9098"}>{isPro(org)?"PRO":"FREE"}</Badge>
+        </div>
+        <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>
+          {isPro(org)
+            ? "Unlimited cases plus Portal, Calendar, DSAR tracking and the compliance digest."
+            : "Free plan: 1 active case at a time, no Portal, Calendar, DSAR tracking or compliance digest. Upgrade to unlock the full platform."}
+        </p>
+        {isPro(org)
+          ? <Btn variant="secondary" onClick={()=>{window.location.href=`/api/billing/manage?orgId=${encodeURIComponent(org?.id||"")}&userId=${encodeURIComponent(user?.id||"")}`;}}>Manage subscription</Btn>
+          : <Btn onClick={()=>{window.location.href=`/api/billing/checkout?orgId=${encodeURIComponent(org?.id||"")}&userId=${encodeURIComponent(user?.id||"")}`;}}>Upgrade to Pro</Btn>
+        }
+      </Card>
 
       {/* Data export */}
       {isHR&&(
@@ -284,6 +304,20 @@ export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, del
             Email me a daily compliance digest
           </label>
         </div>
+      </Card>
+
+      {/* Team chat notifications */}
+      <Card style={{marginBottom:12}}>
+        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Team chat notifications</h3>
+        <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Post the same overdue/near-term deadlines from the daily digest into a Slack or Teams channel via an incoming webhook.</p>
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <select value={orgWebhookType} onChange={e=>saveOrgWebhook(webhookUrlDraft, e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",background:"#fff",color:"#1A1535"}}>
+            <option value="slack">Slack</option>
+            <option value="teams">Microsoft Teams</option>
+          </select>
+          <input value={webhookUrlDraft} onChange={e=>setWebhookUrlDraft(e.target.value)} onBlur={()=>saveOrgWebhook(webhookUrlDraft, orgWebhookType)} placeholder="https://hooks.slack.com/services/..." style={{flex:1,minWidth:240,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",color:"#1A1535"}}/>
+        </div>
+        <Btn variant="secondary" onClick={sendTestWebhook} disabled={!webhookUrlDraft}>Send test message</Btn>
       </Card>
 
       {/* Audit trail */}

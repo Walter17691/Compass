@@ -10,6 +10,10 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: './src/test/setup.js',
       globals: true,
+      // tests/e2e/*.spec.js are Playwright specs, run via `npm run test:e2e`
+      // — vitest's default include pattern would otherwise pick them up
+      // and try to run them as unit tests.
+      exclude: ['tests/e2e/**', 'node_modules/**'],
     },
     server: {
       proxy: {

@@ -9,6 +9,7 @@ import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { getCaseStage } from './lib/caseStage';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
+import { canUseFeature, canCreateCase } from './lib/plan';
 import { useFonts } from './hooks/useFonts';
 import { CompassLogo } from './components/CompassLogo';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
@@ -428,6 +429,12 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [toasts, setToasts] = useState([]);
   // ── Supabase case sync ──
   const loadCasesFromDB = async () => {
@@ -715,6 +722,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [notifGranted, setNotifGranted] = useState(false);
   const [emailDigestOptIn, setEmailDigestOptIn] = useState(member?.email_digest_opt_in !== false);
   const toggleEmailDigest = async () => {
+    if(!emailDigestOptIn && !requirePro("digest", ()=>{})) return;
     const next = !emailDigestOptIn;
     setEmailDigestOptIn(next);
     if(member?.id) {
@@ -722,11 +730,44 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       if(error) { setEmailDigestOptIn(!next); showToast("Couldn't update digest setting — please try again"); }
     }
   };
+
+  // ── Team chat notifications (Slack/Teams) ──
+  const [orgWebhookUrl, setOrgWebhookUrl] = useState(org?.notification_webhook_url||"");
+  const [orgWebhookType, setOrgWebhookType] = useState(org?.notification_webhook_type||"slack");
+  const saveOrgWebhook = async (url, type) => {
+    if(!org?.id) return;
+    setOrgWebhookUrl(url); setOrgWebhookType(type);
+    const { error } = await supabase.from('organisations').update({notification_webhook_url: url||null, notification_webhook_type: type}).eq('id', org.id);
+    if(error) showToast("Couldn't save webhook — please try again", "error");
+    else showToast("Notification settings saved");
+  };
+  const sendTestWebhook = async () => {
+    if(!orgWebhookUrl||!org?.id||!user?.id) return;
+    try {
+      const res = await fetch("/api/cron/test-notify", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({orgId: org.id, userId: user.id, url: orgWebhookUrl, type: orgWebhookType}),
+      });
+      showToast(res.ok?"Test message sent":"Webhook responded with an error — check the URL", res.ok?"success":"error");
+    } catch(e) { showToast("Couldn't reach that webhook URL", "error"); }
+  };
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type="success") => {
     setToast({message, type});
     setTimeout(()=>setToast(null), 3000);
+  };
+
+  // ── Plan gating (free = 1 active case, no Portal/Calendar/DSAR/digest) ──
+  const [upgradePromptFeature, setUpgradePromptFeature] = useState(null);
+  const FEATURE_LABEL = {
+    portal: "Employee Portal", calendar: "Calendar integration",
+    dsar: "DSAR tracking", digest: "the compliance digest email", case_limit: "a second active case",
+  };
+  const requirePro = (feature, action) => {
+    if(canUseFeature(org, feature)) { action(); return true; }
+    setUpgradePromptFeature(feature);
+    return false;
   };
 
   // New starter onboarding
@@ -885,7 +926,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   }, [dueSoon, calendarConnected, user?.id]);
   const connectGoogleCalendar = () => {
     if(!user?.id || !org?.id) return;
-    window.location.href = `/api/calendar/oauth-start?userId=${encodeURIComponent(user.id)}&orgId=${encodeURIComponent(org.id)}`;
+    requirePro("calendar", () => {
+      window.location.href = `/api/calendar/oauth-start?userId=${encodeURIComponent(user.id)}&orgId=${encodeURIComponent(org.id)}`;
+    });
   };
   const disconnectGoogleCalendar = async () => {
     if(!user?.id) return;
@@ -2575,6 +2618,8 @@ Please produce:
                 onClick={()=>{
                   const name = casePromptName.trim();
                   if(!name) return;
+                  const activeCaseCount = cases.filter(cs=>getCaseStage(cs)!=="closed").length;
+                  if(!canCreateCase(org, activeCaseCount)) { closeCasePrompt(); setUpgradePromptFeature("case_limit"); return; }
                   // Save/update employee record
                   upsertEmployeeRecord(name,{jobTitle:newCaseJobTitle,startDate:newCaseStartDate,location:newCaseLocation});
                   // Create case
@@ -2612,6 +2657,23 @@ Please produce:
         <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#FFFFFF",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#E8622A":"#7C5CFC",flexShrink:0}}/>
           <span style={{fontSize:14,color:"#1A1535"}}>{toast.message}</span>
+        </div>
+      )}
+
+      {/* ── Upgrade to Pro prompt ── */}
+      {upgradePromptFeature&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setUpgradePromptFeature(null)}>
+          <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:420}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Upgrade to Pro</div>
+              <button onClick={()=>setUpgradePromptFeature(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:0,marginLeft:12}}>×</button>
+            </div>
+            <div style={{fontSize:13,color:"#6B6375",marginBottom:20,lineHeight:1.6}}>{FEATURE_LABEL[upgradePromptFeature]||"This feature"} is a Pro feature. Upgrade to unlock unlimited cases and the full feature set.</div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>setUpgradePromptFeature(null)} style={{fontSize:13,padding:"9px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#fff",cursor:"pointer",color:"#6B6375"}}>Not now</button>
+              <button onClick={()=>{setUpgradePromptFeature(null);setScreen(SCREENS.SETTINGS);}} style={{fontSize:13,padding:"9px 20px",background:"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600}}>View plans</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2674,26 +2736,48 @@ Please produce:
             <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
           </button>
 
-          {/* Nav - always show main nav */}
-          {(
-            <nav style={{display:"flex",alignItems:"center",gap:2}}>
-              {[
-                {s:SCREENS.HOME, l:"Home"},
-                {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
-                {s:SCREENS.PEOPLE, l:"People"},
-                {s:SCREENS.ERREPORT, l:"Reports"},
-                {s:SCREENS.DSAR, l:"DSAR"},
-                {s:SCREENS.SEARCH, l:"Search"},
-                {s:SCREENS.SETTINGS, l:"Settings"},
-              ].map(({s,l,badge})=>(
-                <button key={s} onClick={()=>setScreen(s)}
-                  style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
-                  {l}
-                  {badge&&<span style={{background:"#C84B2F",color:"#fff",borderRadius:"50%",width:17,height:17,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700}}>{badge}</span>}
-                </button>
-              ))}
-            </nav>
-          )}
+          {/* Nav */}
+          {(()=>{
+            const navItems = [
+              {s:SCREENS.HOME, l:"Home"},
+              {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
+              {s:SCREENS.PEOPLE, l:"People"},
+              {s:SCREENS.ERREPORT, l:"Reports"},
+              {s:SCREENS.DSAR, l:"DSAR"},
+              {s:SCREENS.SEARCH, l:"Search"},
+              {s:SCREENS.SETTINGS, l:"Settings"},
+            ];
+            const goToScreen = (s) => {
+              if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
+              setScreen(s);
+            };
+            if(isMobile) return (
+              <div style={{position:"relative"}}>
+                <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:16,color:"#6B6375"}}>☰</button>
+                {showMobileNav&&(
+                  <nav style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",display:"flex",flexDirection:"column",minWidth:180,zIndex:200,overflow:"hidden"}}>
+                    {navItems.map(({s,l})=>(
+                      <button key={s} onClick={()=>{goToScreen(s);setShowMobileNav(false);}}
+                        style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"10px 14px",fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",textAlign:"left"}}>
+                        {l}
+                      </button>
+                    ))}
+                  </nav>
+                )}
+              </div>
+            );
+            return (
+              <nav style={{display:"flex",alignItems:"center",gap:2}}>
+                {navItems.map(({s,l,badge})=>(
+                  <button key={s} onClick={()=>goToScreen(s)}
+                    style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
+                    {l}
+                    {badge&&<span style={{background:"#C84B2F",color:"#fff",borderRadius:"50%",width:17,height:17,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700}}>{badge}</span>}
+                  </button>
+                ))}
+              </nav>
+            );
+          })()}
 
           {/* Meeting indicator */}
           {meetingType&&(
@@ -2705,10 +2789,10 @@ Please produce:
 
           {/* Right side */}
           <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-            {org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
-            {currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
+            {!isMobile&&org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
+            {!isMobile&&currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
             {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
-            <button onClick={()=>setShowOrgSettings(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>
+            {!isMobile&&<button onClick={()=>setShowOrgSettings(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
             <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#F5F3FF":"none",border:"1px solid #E8E0D0",color:"#6B6375",borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer"}}>⚙</button>
           </div>
         </div>
@@ -2754,6 +2838,8 @@ Please produce:
           calendarConnected={calendarConnected}
           connectGoogleCalendar={connectGoogleCalendar}
           disconnectGoogleCalendar={disconnectGoogleCalendar}
+          isMobile={isMobile}
+          requirePro={requirePro}
         />
       )}
 
@@ -2808,6 +2894,7 @@ Please produce:
           setLetterOutput={setLetterOutput}
           org={org}
           user={user}
+          requirePro={requirePro}
         />
       )}
 
@@ -2846,7 +2933,7 @@ Please produce:
       )}
 {/* ══ INTAKE ══ */}
       {screen===SCREENS.INTAKE&&(
-        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} />
+        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} caseLimitReached={!canCreateCase(org, cases.filter(cs=>getCaseStage(cs)!=="closed").length)} onCaseLimitBlocked={()=>setUpgradePromptFeature("case_limit")} />
       )}
 
 {/* ══ PREP ══ */}
@@ -2934,6 +3021,7 @@ Please produce:
           setActivePerson={setActivePerson}
           getNextStep={getNextStep}
           fmtDate={fmtDate}
+          loadJsPDF={loadJsPDF}
         />
       )}
 
@@ -2979,6 +3067,7 @@ Please produce:
           exportCSV={exportCSV}
           exportPDF={exportPDF}
           org={org}
+          user={user}
           locations={locations}
           deleteLocation={deleteLocation}
           addLocation={addLocation}
@@ -3018,6 +3107,10 @@ Please produce:
           notifGranted={notifGranted}
           emailDigestOptIn={emailDigestOptIn}
           toggleEmailDigest={toggleEmailDigest}
+          orgWebhookUrl={orgWebhookUrl}
+          orgWebhookType={orgWebhookType}
+          saveOrgWebhook={saveOrgWebhook}
+          sendTestWebhook={sendTestWebhook}
           employeeCsvFileRef={employeeCsvFileRef}
           employeeCsvProcessing={employeeCsvProcessing}
           handleEmployeeCsvImport={handleEmployeeCsvImport}
