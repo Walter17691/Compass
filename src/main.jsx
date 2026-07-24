@@ -28,8 +28,9 @@ function Root() {
         .maybeSingle()
 
       if(memberData) {
-        setOrg(memberData.organisations)
-        setMember({ role: memberData.role, name: memberData.name })
+        const { organisations, ...memberFields } = memberData
+        setOrg(organisations)
+        setMember(memberFields)
       }
       // No fallback org-join path here: joining always goes through
       // OrgSetup's invite-code flow (join_org_with_invite_code), which
