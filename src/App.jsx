@@ -553,7 +553,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); } }, [org?.id]);
 
   useEffect(()=>{
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
@@ -983,6 +983,33 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const saveStarterInstances = u => { setStarterInstances(u); lsSet("compass_starters", u); };
   const saveStarterTemplates = u => { setStarterTemplates(u); lsSet("compass_starter_templates", u); };
 
+  const loadStarterInstances = async () => {
+    if(!org?.id) return;
+    try {
+      const {data} = await supabase.from('starter_instances').select('*').eq('org_id', org.id);
+      if(data) setStarterInstances(data.map(r=>({
+        id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
+        email:r.email, startDate:r.start_date, templateId:r.template_id, templateName:r.template_name,
+        tasks:r.tasks||[], aiCustomised:r.ai_customised, createdBy:r.created_by, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadStarterInstances', e); }
+  };
+
+  const saveStarterInstanceToDB = async (instance) => {
+    if(!org?.id) return;
+    try {
+      await supabase.from('starter_instances').upsert({
+        id: instance.id,
+        org_id: org.id,
+        name: instance.name, role: instance.role||null, department: instance.department||null,
+        manager: instance.manager||null, email: instance.email||null, start_date: instance.startDate||null,
+        template_id: instance.templateId||null, template_name: instance.templateName||null,
+        tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised, created_by: instance.createdBy||null,
+        updated_at: new Date().toISOString(),
+      });
+    } catch(e) { console.error('saveStarterInstanceToDB', e); }
+  };
+
   const createStarterInstance = () => {
     const f = newStarterForm;
     if(!f.name.trim() || !f.startDate) return;
@@ -1004,6 +1031,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       createdBy: currentUser?.name || "HR Manager",
     };
     saveStarterInstances([...starterInstances, instance]);
+    saveStarterInstanceToDB(instance);
     setActiveStarter(instance);
     setStarterView("instance");
     setNewStarterForm({name:"",role:"",department:"",manager:"",email:"",startDate:"",templateId:"default"});
@@ -1015,7 +1043,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, done:!t.done, doneAt:t.done?null:new Date().toISOString()} : t)
     } : s);
     saveStarterInstances(updated);
-    setActiveStarter(updated.find(s=>s.id===instanceId));
+    const changed = updated.find(s=>s.id===instanceId);
+    saveStarterInstanceToDB(changed);
+    setActiveStarter(changed);
   };
 
   const updateStarterTaskNote = (instanceId, taskId, note) => {
@@ -1023,7 +1053,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, note} : t)
     } : s);
     saveStarterInstances(updated);
-    setActiveStarter(updated.find(s=>s.id===instanceId));
+    const changed = updated.find(s=>s.id===instanceId);
+    saveStarterInstanceToDB(changed);
+    setActiveStarter(changed);
   };
 
   const aiCustomiseChecklist = async (instance) => {
@@ -1052,7 +1084,9 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
       });
       const updated = starterInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
       saveStarterInstances(updated);
-      setActiveStarter(updated.find(s=>s.id===instance.id));
+      const changed = updated.find(s=>s.id===instance.id);
+      saveStarterInstanceToDB(changed);
+      setActiveStarter(changed);
       audit("AI customised checklist", instance.name+" — "+instance.role);
     } catch(e) { alert("Could not customise: "+e.message); }
     setStarterAiProcessing(false);
@@ -2765,6 +2799,8 @@ Please produce:
           setEmploymentProfileOutput={setEmploymentProfileOutput}
           getCaseStage={getCaseStage}
           setLetterOutput={setLetterOutput}
+          org={org}
+          user={user}
         />
       )}
 

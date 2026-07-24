@@ -1,6 +1,6 @@
 import { SCREENS, MEETING_TYPES } from '../constants';
 
-export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput }) {
+export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user }) {
   const empName = activePerson;
   const empCases = cases.filter(c=>c.employeeName===empName);
   const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseId:cs.id,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -27,10 +27,28 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
             </div>
           </div>
         </div>
-        <button onClick={()=>{setMeetingSetup(p=>({...p,employee:empName,employeeJobTitle:getEmployeeRecord(empName)?.jobTitle||""}));setScreen(SCREENS.HOME+"_meeting");}}
-          style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-          + New meeting
-        </button>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={async()=>{
+            const email = window.prompt(`Email address to invite ${empName} to the employee portal:`);
+            if(!email||!email.trim()) return;
+            try {
+              const res = await fetch('/api/portal/invite', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ orgId: org?.id, orgName: org?.name, employeeName: empName, email: email.trim(), createdBy: user?.id }),
+              });
+              const data = await res.json();
+              if(!res.ok||data.error) { showToast(data.error||"Couldn't send invite"); return; }
+              showToast(`Portal invite sent to ${email.trim()}`);
+            } catch(e) { showToast("Couldn't send invite — please try again"); }
+          }}
+            style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            Invite to portal
+          </button>
+          <button onClick={()=>{setMeetingSetup(p=>({...p,employee:empName,employeeJobTitle:getEmployeeRecord(empName)?.jobTitle||""}));setScreen(SCREENS.HOME+"_meeting");}}
+            style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            + New meeting
+          </button>
+        </div>
       </div>
 
       <div style={{maxWidth:820,margin:"0 auto",padding:"28px 24px"}}>
