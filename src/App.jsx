@@ -5,6 +5,9 @@ import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays } from './lib/dates';
 import { ls, lsSet } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
+import { computeDueSoon } from './lib/deadlines';
+import { mapCaseRow } from './lib/caseMapping';
+import { getCaseStage } from './lib/caseStage';
 import { useFonts } from './hooks/useFonts';
 import { CompassLogo } from './components/CompassLogo';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
@@ -374,32 +377,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       }
       const { data, error } = await query;
   if(!error && data) {
-        const mapped = data.map(row => ({
-          id: row.id,
-          employeeName: row.employee_name,
-          email: row.employee_email || row.email || "",
-          meetings: row.meetings || [],
-          evidence: row.evidence || [],
-          stage: row.stage || "open",
-          caseType: row.case_type || "",
-          description: row.description || "",
-          dateReceived: row.date_received || "",
-          urgency: row.urgency || "normal",
-          outcome: row.outcome || "",
-          investigationReport: row.investigation_report || null,
-          investigationReportDate: row.investigation_report_date || null,
-          disciplinaryOfficer: row.disciplinary_officer || null,
-          disciplinaryOfficerId: row.disciplinary_officer_id || null,
-          disciplinaryOfficerEmail: row.disciplinary_officer_email || null,
-          investigatingManager: row.investigating_manager || null,
-          handoffDate: row.handoff_date || null,
-          nextSteps: row.next_steps || [],
-          locationId: row.location_id || "",
-          assignedTo: row.assigned_to,
-          createdBy: row.created_by,
-          createdAt: row.created_at,
-        }));
-        setCases(mapped);
+        setCases(data.map(mapCaseRow));
       }
     } catch(e) { console.error("Load cases error:", e); }
   };
@@ -670,6 +648,15 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   // ── Deadline reminders ──
   const [dueSoon, setDueSoon] = useState([]);
   const [notifGranted, setNotifGranted] = useState(false);
+  const [emailDigestOptIn, setEmailDigestOptIn] = useState(member?.email_digest_opt_in !== false);
+  const toggleEmailDigest = async () => {
+    const next = !emailDigestOptIn;
+    setEmailDigestOptIn(next);
+    if(member?.id) {
+      const { error } = await supabase.from('org_members').update({email_digest_opt_in: next}).eq('id', member.id);
+      if(error) { setEmailDigestOptIn(!next); showToast("Couldn't update digest setting — please try again"); }
+    }
+  };
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type="success") => {
@@ -795,92 +782,10 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     return u;
   };
   // ── Deadline checker — UK statutory & ACAS deadlines ──
+  // Rules live in src/lib/deadlines.js so the digest cron function (server
+  // side) can compute the same due-soon set without duplicating them.
   useEffect(() => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const due = [];
-
-    const workingDaysFromDate = (dateStr, days) => {
-      let start;
-      if(dateStr && dateStr.includes('/')) { const p=dateStr.split('/'); start=new Date(p[2],p[1]-1,p[0]); }
-      else { start=new Date(dateStr); }
-      if(isNaN(start)) return null;
-      let count=0; let d=new Date(start);
-      while(count<days){ d.setDate(d.getDate()+1); const day=d.getDay(); if(day!==0&&day!==6) count++; }
-      return d;
-    };
-
-    const addDeadline = (employeeName, label, deadlineDate, category, key) => {
-      if(!deadlineDate||isNaN(deadlineDate)) return;
-      deadlineDate.setHours(0,0,0,0);
-      const diff = Math.ceil((deadlineDate-today)/(1000*60*60*24));
-      if(diff<=14) due.push({employeeName,label,category,key,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),overdue:diff<0});
-    };
-
-    cases.forEach(cs => {
-      if(getCaseStage(cs)==="closed") return;
-      const meetings = cs.meetings||[];
-      const evidence = cs.evidence||[];
-
-      // Manual next steps
-      meetings.forEach(m => {
-        (m.nextSteps||[]).filter(s=>!s.done&&s.deadline).forEach(s => {
-          const parts=s.deadline.split("/");
-          const dl=parts.length===3?new Date(parts[2],parts[1]-1,parts[0]):new Date(s.deadline);
-          addDeadline(cs.employeeName, s.step||"Next step due", dl, "next_step", `${cs.id}:nextstep:${m.id}:${s.step}`);
-        });
-      });
-
-      // Disciplinary outcome — 5 working days from hearing
-      const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary")&&!(m.type||"").toLowerCase().includes("investigation"));
-      discMeetings.forEach(m => {
-        const hasOutcome = cs.outcome||meetings.some(mt=>mt.letterOutput&&(mt.type||"").toLowerCase().includes("outcome"));
-        if(!hasOutcome) {
-          const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-          if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS: 5 working days)", dl, "outcome", `${cs.id}:outcome`);
-        }
-      });
-
-      // Appeal window — 5 working days from outcome letter
-      const outcomeLetters = meetings.filter(m=>m.letterOutput&&(m.type||"").toLowerCase().includes("disciplinary"));
-      outcomeLetters.forEach(m => {
-        const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-        if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`);
-      });
-
-      // Investigation overrunning — 28 days
-      if((cs.stage==="investigation"||getCaseStage(cs)==="investigation")&&!cs.investigationReport) {
-        const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
-        if(invMeetings.length>0) {
-          const first = invMeetings[0];
-          const startStr = first.savedAt||first.date;
-          if(startStr) {
-            let start; if(startStr.includes('/')) { const p=startStr.split('/'); start=new Date(p[2],p[1]-1,p[0]); } else start=new Date(startStr);
-            const daysSince = Math.ceil((today-start)/(1000*60*60*24));
-            if(daysSince>21) { const dl=new Date(start); dl.setDate(dl.getDate()+28); addDeadline(cs.employeeName,"Investigation overrunning — consider concluding (ACAS guidance)",dl,"investigation",`${cs.id}:investigation`); }
-          }
-        }
-      }
-
-      // Grievance acknowledgement — 5 working days from receipt
-      if((cs.caseType||"").toLowerCase()==="grievance"&&meetings.length===0&&cs.dateReceived) {
-        const dl = workingDaysFromDate(cs.dateReceived, 5);
-        if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS: 5 working days)", dl, "grievance", `${cs.id}:grievance`);
-      }
-
-      // Pending signature chase — 7 days
-      evidence.filter(e=>e.signStatus==="pending"&&e.signId).forEach(e => {
-        const sent=e.sentAt||e.date;
-        if(sent) {
-          const sentDate=new Date(sent);
-          const daysPending=Math.ceil((today-sentDate)/(1000*60*60*24));
-          if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature",`${cs.id}:signature:${e.id||e.signId}`); }
-        }
-      });
-    });
-
-    due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.daysLeft-b.daysLeft; });
-    setDueSoon(due);
+    setDueSoon(computeDueSoon(cases));
   }, [cases]);
 
   // ── Calendar integration (Google Calendar) ──
@@ -934,7 +839,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       setNotifGranted(true);
       dueSoon.filter(d=>d.daysLeft<=1).forEach(d => {
         new Notification("Compass HR — Deadline", {
-          body: `${d.caseName}: "${d.step}" due ${d.daysLeft===0?"today":"tomorrow"}`,
+          body: `${d.employeeName}: "${d.label}" due ${d.daysLeft===0?"today":"tomorrow"}`,
           icon: "/favicon.ico",
         });
       });
@@ -2213,24 +2118,6 @@ Please produce:
     {id:"closed",        label:"Closed",                 icon:"✓"},
   ];
 
-  const getCaseStage = (cs) => {
-    const meetings = cs.meetings||[];
-    const types = meetings.map(m=>(m.type||"").toLowerCase());
-    const hasOutcome = meetings.some(m=>m.letterOutput);
-    const hasSigned = meetings.some(m=>m.signStatus==="signed");
-    const hasInvReport = cs.investigationReport;
-    if(cs.stage==="closed") return "closed";
-    if(hasSigned&&hasOutcome) return "closed";
-    if(cs.stage) return cs.stage;
-    if(types.some(t=>t.includes("appeal"))) return "appeal";
-    if(hasOutcome) return "outcome";
-    if(types.some(t=>t.includes("disciplinary"))) return "disciplinary";
-    if(hasInvReport) return "inv_report";
-    if(types.some(t=>t.includes("investigation"))) return "investigation";
-    if(meetings.length>0) return "investigation";
-    return "intake";
-  };
-
   const getNextStep = (cs) => {
     if(getCaseStage(cs)==="closed") return null;
     const stage = getCaseStage(cs);
@@ -2713,7 +2600,7 @@ Please produce:
           <div style={{maxWidth:1440,margin:"0 auto",display:"flex",alignItems:"center",gap:12,fontSize:12}}>
             <span style={{color:"#C84B2F",fontWeight:600}}>Overdue actions:</span>
             {dueSoon.filter(d=>d.overdue).slice(0,3).map((d,i)=>(
-              <span key={i} style={{color:"#3D3560"}}>{d.caseName} — {d.step} <span style={{color:"#C84B2F"}}>({Math.abs(d.daysLeft)}d overdue)</span></span>
+              <span key={i} style={{color:"#3D3560"}}>{d.employeeName} — {d.label} <span style={{color:"#C84B2F"}}>({Math.abs(d.daysLeft)}d overdue)</span></span>
             ))}
             <button onClick={()=>setScreen(SCREENS.DASHBOARD)} style={{background:"none",border:"none",color:"#C84B2F",fontSize:11,cursor:"pointer",marginLeft:"auto",textDecoration:"underline"}}>View all</button>
           </div>
@@ -3009,6 +2896,8 @@ Please produce:
           dueSoon={dueSoon}
           requestNotifications={requestNotifications}
           notifGranted={notifGranted}
+          emailDigestOptIn={emailDigestOptIn}
+          toggleEmailDigest={toggleEmailDigest}
           auditLog={auditLog}
           cases={cases}
           exportAllData={exportAllData}

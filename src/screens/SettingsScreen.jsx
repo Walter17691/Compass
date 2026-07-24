@@ -2,7 +2,7 @@ import { SCREENS, ROLE_PERMS } from '../constants';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { UserAddForm } from '../components/UserAddForm';
 
-export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
+export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
   return(
     <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
@@ -258,15 +258,21 @@ export function SettingsScreen({ isHR, exportCSV, exportPDF, org, locations, del
             {dueSoon.slice(0,5).map((d,i)=>(
               <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
                 <div>
-                  <span style={{color:d.overdue?"#E8622A":"#1C1820"}}>{d.caseName}</span>
-                  <span style={{color:"#6B6880",marginLeft:8}}>{d.step}</span>
+                  <span style={{color:d.overdue?"#E8622A":"#1C1820"}}>{d.employeeName}</span>
+                  <span style={{color:"#6B6880",marginLeft:8}}>{d.label}</span>
                 </div>
                 <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:"JetBrains Mono,monospace"}}>{d.overdue?`${Math.abs(d.daysLeft)}d overdue`:`${d.daysLeft}d`}</span>
               </div>
             ))}
           </div>
         ):<div style={{fontSize:12,color:"#5A5570",marginBottom:14}}>No upcoming deadlines in the next 7 days</div>}
-        <Btn onClick={requestNotifications} disabled={notifGranted}>{notifGranted?"Notifications enabled":"Enable browser notifications"}</Btn>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <Btn onClick={requestNotifications} disabled={notifGranted}>{notifGranted?"Notifications enabled":"Enable browser notifications"}</Btn>
+          <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#6B6375",cursor:"pointer",marginLeft:4}}>
+            <input type="checkbox" checked={!!emailDigestOptIn} onChange={toggleEmailDigest} style={{cursor:"pointer"}}/>
+            Email me a daily compliance digest
+          </label>
+        </div>
       </Card>
 
       {/* Audit trail */}
