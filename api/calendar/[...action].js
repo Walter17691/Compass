@@ -13,8 +13,14 @@ import { status } from './_status.js';
 // treats as routes on their own), and every existing URL
 // (/api/calendar/oauth-start, /api/calendar/sync, etc.) keeps working
 // exactly as before, so nothing else in the app needed to change.
+//
+// Parses the action from req.url directly rather than req.query.action —
+// relying on Vercel populating a catch-all route param into req.query
+// turned out to be unreliable for a plain (non-Next.js) Serverless
+// Function, and req.url is always accurate regardless of routing quirks.
 export default async function handler(req, res) {
-  const action = Array.isArray(req.query.action) ? req.query.action[0] : req.query.action;
+  const path = (req.url || '').split('?')[0];
+  const action = path.split('/').filter(Boolean).pop();
   switch (action) {
     case 'oauth-start': return oauthStart(req, res);
     case 'oauth-callback': return oauthCallback(req, res);
