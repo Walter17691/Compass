@@ -8,10 +8,10 @@ export default async function handler(req, res) {
 
   if (error) return res.redirect(302, `${APP_URL}/?calendar=error`);
 
-  const payload = verifyState(state);
-  if (!payload) return res.redirect(302, `${APP_URL}/?calendar=error`);
-
   try {
+    const payload = verifyState(state);
+    if (!payload) return res.redirect(302, `${APP_URL}/?calendar=error`);
+
     const redirectUri = `${APP_URL}/api/calendar/oauth-callback`;
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
