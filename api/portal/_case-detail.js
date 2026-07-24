@@ -8,7 +8,7 @@ function toSafeMeeting(m) {
   return { type: m.type, date: m.date, letterOutput: m.letterOutput };
 }
 
-export default async function handler(req, res) {
+export async function caseDetail(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { userId, caseId } = req.query;

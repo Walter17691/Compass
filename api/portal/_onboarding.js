@@ -1,6 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 
-export default async function handler(req, res) {
+export async function onboarding(req, res) {
   try {
     const userId = req.method === 'GET' ? req.query.userId : req.body.userId;
     if (!userId) return res.status(400).json({ error: 'userId is required' });

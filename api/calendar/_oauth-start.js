@@ -4,7 +4,7 @@ import { signState } from './_state.js';
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
-export default async function handler(req, res) {
+export async function oauthStart(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { userId, orgId } = req.query;

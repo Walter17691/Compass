@@ -4,7 +4,7 @@ import { supabaseRequest } from './_supabase.js';
 // without ever granting the client direct read access to
 // employee_portal_accounts — that table has zero client-facing RLS
 // policies by design (see supabase/employee_portal_2026-07-25.sql).
-export default async function handler(req, res) {
+export async function status(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { userId } = req.query;

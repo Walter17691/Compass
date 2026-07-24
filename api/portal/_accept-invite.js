@@ -2,7 +2,7 @@ import { supabaseRequest } from './_supabase.js';
 
 const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
 
-export default async function handler(req, res) {
+export async function acceptInvite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { token, userId } = req.body;

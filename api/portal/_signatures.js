@@ -1,6 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 
-export default async function handler(req, res) {
+export async function signatures(req, res) {
   try {
     const accountUserId = req.method === 'GET' ? req.query.userId : req.body.userId;
     if (!accountUserId) return res.status(400).json({ error: 'userId is required' });

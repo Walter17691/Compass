@@ -3,7 +3,7 @@ import { supabaseRequest } from './_supabase.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
-export default async function handler(req, res) {
+export async function oauthCallback(req, res) {
   const { code, state, error } = req.query;
 
   if (error) return res.redirect(302, `${APP_URL}/?calendar=error`);

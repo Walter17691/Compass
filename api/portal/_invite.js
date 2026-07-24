@@ -3,7 +3,7 @@ import { supabaseRequest } from './_supabase.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
-export default async function handler(req, res) {
+export async function invite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { orgId, orgName, employeeName, email, createdBy } = req.body;

@@ -1,7 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { getValidAccessToken, googleCalendarRequest, deadlineToGoogleEvent } from './_google.js';
 
-export default async function handler(req, res) {
+export async function sync(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { userId, deadlines } = req.body;
