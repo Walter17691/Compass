@@ -810,11 +810,11 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       return d;
     };
 
-    const addDeadline = (employeeName, label, deadlineDate, category) => {
+    const addDeadline = (employeeName, label, deadlineDate, category, key) => {
       if(!deadlineDate||isNaN(deadlineDate)) return;
       deadlineDate.setHours(0,0,0,0);
       const diff = Math.ceil((deadlineDate-today)/(1000*60*60*24));
-      if(diff<=14) due.push({employeeName,label,category,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),overdue:diff<0});
+      if(diff<=14) due.push({employeeName,label,category,key,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),overdue:diff<0});
     };
 
     cases.forEach(cs => {
@@ -827,7 +827,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         (m.nextSteps||[]).filter(s=>!s.done&&s.deadline).forEach(s => {
           const parts=s.deadline.split("/");
           const dl=parts.length===3?new Date(parts[2],parts[1]-1,parts[0]):new Date(s.deadline);
-          addDeadline(cs.employeeName, s.step||"Next step due", dl, "next_step");
+          addDeadline(cs.employeeName, s.step||"Next step due", dl, "next_step", `${cs.id}:nextstep:${m.id}:${s.step}`);
         });
       });
 
@@ -837,7 +837,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         const hasOutcome = cs.outcome||meetings.some(mt=>mt.letterOutput&&(mt.type||"").toLowerCase().includes("outcome"));
         if(!hasOutcome) {
           const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-          if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS: 5 working days)", dl, "outcome");
+          if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS: 5 working days)", dl, "outcome", `${cs.id}:outcome`);
         }
       });
 
@@ -845,7 +845,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       const outcomeLetters = meetings.filter(m=>m.letterOutput&&(m.type||"").toLowerCase().includes("disciplinary"));
       outcomeLetters.forEach(m => {
         const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-        if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal");
+        if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`);
       });
 
       // Investigation overrunning — 28 days
@@ -857,7 +857,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
           if(startStr) {
             let start; if(startStr.includes('/')) { const p=startStr.split('/'); start=new Date(p[2],p[1]-1,p[0]); } else start=new Date(startStr);
             const daysSince = Math.ceil((today-start)/(1000*60*60*24));
-            if(daysSince>21) { const dl=new Date(start); dl.setDate(dl.getDate()+28); addDeadline(cs.employeeName,"Investigation overrunning — consider concluding (ACAS guidance)",dl,"investigation"); }
+            if(daysSince>21) { const dl=new Date(start); dl.setDate(dl.getDate()+28); addDeadline(cs.employeeName,"Investigation overrunning — consider concluding (ACAS guidance)",dl,"investigation",`${cs.id}:investigation`); }
           }
         }
       }
@@ -865,7 +865,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       // Grievance acknowledgement — 5 working days from receipt
       if((cs.caseType||"").toLowerCase()==="grievance"&&meetings.length===0&&cs.dateReceived) {
         const dl = workingDaysFromDate(cs.dateReceived, 5);
-        if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS: 5 working days)", dl, "grievance");
+        if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS: 5 working days)", dl, "grievance", `${cs.id}:grievance`);
       }
 
       // Pending signature chase — 7 days
@@ -874,7 +874,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         if(sent) {
           const sentDate=new Date(sent);
           const daysPending=Math.ceil((today-sentDate)/(1000*60*60*24));
-          if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature"); }
+          if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature",`${cs.id}:signature:${e.id||e.signId}`); }
         }
       });
     });
@@ -882,6 +882,50 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.daysLeft-b.daysLeft; });
     setDueSoon(due);
   }, [cases]);
+
+  // ── Calendar integration (Google Calendar) ──
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  useEffect(() => {
+    if(!user?.id) return;
+    fetch(`/api/calendar/status?userId=${encodeURIComponent(user.id)}`)
+      .then(r=>r.json()).then(d=>setCalendarConnected(!!d.connected)).catch(()=>{});
+  }, [user?.id]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const calendarParam = params.get("calendar");
+    if(!calendarParam) return;
+    if(calendarParam==="connected") { setCalendarConnected(true); showToast("Google Calendar connected"); }
+    else if(calendarParam==="error") { showToast("Couldn't connect Google Calendar — please try again"); }
+    params.delete("calendar");
+    const newUrl = window.location.pathname + (params.toString()?"?"+params.toString():"");
+    window.history.replaceState({}, "", newUrl);
+  }, []);
+  useEffect(() => {
+    if(!calendarConnected || !user?.id) return;
+    const timeout = setTimeout(() => {
+      fetch("/api/calendar/sync", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ userId: user.id, deadlines: dueSoon }),
+      }).catch(e => console.error("Calendar sync failed:", e));
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [dueSoon, calendarConnected, user?.id]);
+  const connectGoogleCalendar = () => {
+    if(!user?.id || !org?.id) return;
+    window.location.href = `/api/calendar/oauth-start?userId=${encodeURIComponent(user.id)}&orgId=${encodeURIComponent(org.id)}`;
+  };
+  const disconnectGoogleCalendar = async () => {
+    if(!user?.id) return;
+    try {
+      await fetch("/api/calendar/disconnect", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ userId: user.id }),
+      });
+      setCalendarConnected(false);
+      showToast("Google Calendar disconnected");
+    } catch(e) { showToast("Couldn't disconnect — please try again"); }
+  };
+
   // ── Browser notifications ──
   const requestNotifications = async () => {
     if(!("Notification" in window)) return;
@@ -2666,6 +2710,9 @@ Please produce:
           setActiveCaseStage={setActiveCaseStage}
           fmtDate={fmtDate}
           showToast={showToast}
+          calendarConnected={calendarConnected}
+          connectGoogleCalendar={connectGoogleCalendar}
+          disconnectGoogleCalendar={disconnectGoogleCalendar}
         />
       )}
 
