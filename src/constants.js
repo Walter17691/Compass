@@ -36,6 +36,24 @@ export const SCREENS = {
 
 export const SPEAKERS = { HR:"HR Manager", EMP:"Employee", NOTE:"Note" };
 
+export const WELLBEING_RESOURCES = [
+  { name:"Samaritans", contact:"116 123", note:"24/7 emotional support" },
+  { name:"Mind", contact:"0300 123 3393", note:"Mental health support" },
+  { name:"NHS Crisis line", contact:"111 (option 2)", note:"Mental health crisis" },
+  { name:"Shout", contact:"Text SHOUT to 85258", note:"Crisis text line 24/7" },
+  { name:"Employee Assistance Programme", contact:"See company handbook", note:"Confidential counselling" },
+  { name:"Occupational Health", contact:"Via HR", note:"Workplace health support" },
+];
+
+export const WELLBEING_TYPES = {
+  "chat": { label:"Wellbeing conversation", desc:"Informal check-in or wellbeing discussion" },
+  "eap": { label:"EAP referral", desc:"Employee Assistance Programme referral" },
+  "adjustment": { label:"Reasonable adjustment", desc:"Mental health-related workplace adjustment" },
+  "crisis": { label:"Crisis support", desc:"Immediate mental health crisis support provided" },
+  "return": { label:"Return from MH absence", desc:"Return to work following mental health absence" },
+  "checkin": { label:"Follow-up check-in", desc:"Scheduled wellbeing follow-up" },
+};
+
 export const NEXT_STEPS_MAP = {
   "Investigation":   [{ step:"Issue investigation outcome letter", days:5 },{ step:"Invite to disciplinary (if evidence found)", days:5 },{ step:"Allow employee to review evidence", days:2 },{ step:"Hold disciplinary hearing", days:14 }],
   "Disciplinary":    [{ step:"Issue outcome letter", days:5 },{ step:"Inform employee of right to appeal", days:5 },{ step:"Process appeal if requested", days:15 },{ step:"Note warning on HR record", days:0 }],
