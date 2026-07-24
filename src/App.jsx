@@ -34,6 +34,11 @@ import { ErReportScreen } from './screens/ErReportScreen';
 import { RedundancyScreen } from './screens/RedundancyScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { OnboardingWizard } from './screens/OnboardingWizard';
+import { AskCompassWidget } from './screens/AskCompassWidget';
+import { OrgSettingsModal } from './screens/OrgSettingsModal';
+import { HandoffModal } from './screens/HandoffModal';
+import { OutcomeModal } from './screens/OutcomeModal';
 
 export default function Compass({ user=null, org=null, member=null, onSignOut=null }) {
   useFonts();
@@ -2935,285 +2940,79 @@ Please produce:
 
       {/* ── Onboarding wizard ── */}
       {showOnboarding&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",borderRadius:20,width:"100%",maxWidth:520,overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.2)"}}>
-            {/* Progress bar */}
-            <div style={{height:4,background:"#F5F1EA"}}>
-              <div style={{height:4,background:"#7C5CFC",width:`${((onboardingStep+1)/4)*100}%`,transition:"width 0.3s"}}/>
-            </div>
-            <div style={{padding:36}}>
-              {onboardingStep===0&&(
-                <>
-                  <div style={{width:56,height:56,borderRadius:"50%",background:"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20}}>
-                    <CompassLogo size={32}/>
-                  </div>
-                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#1C1820",marginBottom:8,fontWeight:400}}>Welcome to Compass</div>
-                  <div style={{fontSize:14,color:"#6B6375",lineHeight:1.7,marginBottom:28}}>Compass helps you manage HR cases, run ACAS-compliant meetings, generate documents, and track every step of the process — all in one place.</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
-                    {[
-                      {icon:"",title:"Log cases",desc:"Track every HR proceeding from first meeting to outcome"},
-                      {icon:"",title:"AI meeting notes",desc:"Record meetings with live AI notes and HR guidance"},
-                      {icon:"",title:"Generate documents",desc:"ACAS-compliant letters, reports and outcome documents"},
-                      {icon:"",title:"Reports & analytics",desc:"Organisation-wide HR insights at a glance"},
-                    ].map((item,i)=>(
-                      <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"10px 14px",background:"#FDFAF5",borderRadius:10}}>
-                        <div><div style={{fontSize:13,fontWeight:600,color:"#1C1820"}}>{item.title}</div><div style={{fontSize:12,color:"#9B9098"}}>{item.desc}</div></div>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={()=>setOnboardingStep(1)} style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:10,padding:"14px",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Get started →</button>
-                </>
-              )}
-              {onboardingStep===1&&(
-                <>
-                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1C1820",marginBottom:8,fontWeight:400}}>Set up your organisation</div>
-                  <div style={{fontSize:13,color:"#6B6375",marginBottom:24}}>Tell us about your organisation so Compass can personalise your experience.</div>
-                  <div style={{marginBottom:16}}>
-                    <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Organisation name</label>
-                    <div style={{fontSize:13,color:"#1C1820",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px"}}>{org?.name||"Your organisation"}</div>
-                  </div>
-                  <div style={{marginBottom:24}}>
-                    <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Your role</label>
-                    <div style={{fontSize:13,color:"#1C1820",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px"}}>{currentUser?.name||"HR Manager"}</div>
-                  </div>
-                  <div style={{background:"#EDE8FF",borderRadius:10,padding:"14px 16px",marginBottom:24,fontSize:12,color:"#7C5CFC"}}>
-                    Compass is pre-configured with UK employment law, ACAS codes of practice and HR best practice. No additional setup required.
-                  </div>
-                  <div style={{display:"flex",gap:10}}>
-                    <button onClick={()=>setOnboardingStep(0)} style={{flex:1,background:"#F5F1EA",border:"none",borderRadius:10,padding:"12px",color:"#6B6375",fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>← Back</button>
-                    <button onClick={()=>setOnboardingStep(2)} style={{flex:2,background:"#7C5CFC",border:"none",borderRadius:10,padding:"12px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Continue →</button>
-                  </div>
-                </>
-              )}
-              {onboardingStep===2&&(
-                <>
-                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1C1820",marginBottom:8,fontWeight:400}}>Log your first case</div>
-                  <div style={{fontSize:13,color:"#6B6375",marginBottom:24}}>Cases are the heart of Compass. Each case tracks an employee relations matter from start to resolution.</div>
-                  <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:12,padding:20,marginBottom:24}}>
-                    <div style={{fontSize:13,fontWeight:600,color:"#1C1820",marginBottom:12}}>To create your first case:</div>
-                    {["Click the New case button on the home screen","Enter the employee name and case details","Select the case type (misconduct, grievance, etc.)","Start logging meetings from the case view"].map((step,i)=>(
-                      <div key={i} style={{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}>
-                        <div style={{width:20,height:20,borderRadius:"50%",background:"#7C5CFC",color:"#fff",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{i+1}</div>
-                        <div style={{fontSize:13,color:"#6B6375"}}>{step}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{display:"flex",gap:10}}>
-                    <button onClick={()=>setOnboardingStep(1)} style={{flex:1,background:"#F5F1EA",border:"none",borderRadius:10,padding:"12px",color:"#6B6375",fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>← Back</button>
-                    <button onClick={()=>setOnboardingStep(3)} style={{flex:2,background:"#7C5CFC",border:"none",borderRadius:10,padding:"12px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Continue →</button>
-                  </div>
-                </>
-              )}
-              {onboardingStep===3&&(
-                <>
-                  <div style={{textAlign:"center",marginBottom:24}}>
-                    <div style={{width:64,height:64,borderRadius:"50%",background:"#E8F5EE",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1A7A4A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:24,color:"#1C1820",marginBottom:8,fontWeight:400}}>You're ready</div>
-                    <div style={{fontSize:13,color:"#6B6375",lineHeight:1.7}}>Compass is set up and ready to use. Start by creating your first case, or ask the HR Advisor a question.</div>
-                  </div>
-                  <div style={{display:"flex",gap:10,marginBottom:12}}>
-                    <button onClick={()=>{lsSet("compass_onboarded",true);setShowOnboarding(false);setShowCasePrompt(true);}} style={{flex:1,background:"#7C5CFC",border:"none",borderRadius:10,padding:"13px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Create first case</button>
-                    <button onClick={()=>{lsSet("compass_onboarded",true);setShowOnboarding(false);setShowAskCompass(true);}} style={{flex:1,background:"#F5F1EA",border:"none",borderRadius:10,padding:"13px",color:"#1C1820",fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask HR Advisor</button>
-                  </div>
-                  <button onClick={()=>{lsSet("compass_onboarded",true);setShowOnboarding(false);}} style={{width:"100%",background:"none",border:"none",color:"#9B9098",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Skip and explore on my own</button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        <OnboardingWizard
+          onboardingStep={onboardingStep}
+          setOnboardingStep={setOnboardingStep}
+          org={org}
+          currentUser={currentUser}
+          lsSet={lsSet}
+          setShowOnboarding={setShowOnboarding}
+          setShowCasePrompt={setShowCasePrompt}
+          setShowAskCompass={setShowAskCompass}
+        />
       )}
 
       {/* ── Ask Compass floating chat ── */}
       {screen===SCREENS.HOME&&(
-        <>
-          {!showAskCompass&&(
-            <button onClick={()=>setShowAskCompass(true)} style={{position:"fixed",bottom:28,right:28,width:56,height:56,borderRadius:"50%",background:"#7C5CFC",border:"none",cursor:"pointer",boxShadow:"0 4px 20px rgba(124,92,252,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}
-              onMouseEnter={e=>e.currentTarget.style.transform="scale(1.08)"}
-              onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-          )}
-          {showAskCompass&&(
-            <div style={{position:"fixed",bottom:24,right:24,width:360,background:"#FFFFFF",borderRadius:16,boxShadow:"0 8px 40px rgba(0,0,0,0.15)",border:"1px solid #E8E0D0",zIndex:200,display:"flex",flexDirection:"column",overflow:"hidden",maxHeight:"70vh"}}>
-              <div style={{padding:"14px 16px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(135deg,#EDE8FF 0%,#FDFAF5 100%)"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:32,height:32,borderRadius:"50%",background:"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </div>
-                  <div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Ask Compass</div>
-                    <div style={{fontSize:10,color:"#9B9098"}}>UK employment law · ACAS · Best practice</div>
-                  </div>
-                </div>
-                <button onClick={()=>setShowAskCompass(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#9B9098",fontSize:20,lineHeight:1,padding:4}}>×</button>
-              </div>
-              <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:8,minHeight:200}}>
-                {askCompassHistory.length===0&&(
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    <div style={{fontSize:12,color:"#9B9098",marginBottom:4}}>Ask me anything about UK employment law, ACAS guidance, or HR best practice.</div>
-                    {["ACAS disciplinary process?","Dismissal on zero-hours contract?","Reasonable adjustments?","How long should an investigation take?"].map((q,i)=>(
-                      <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
-                    ))}
-                  </div>
-                )}
-                {askCompassHistory.map((m,i)=>(
-                  <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                    <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.role==="assistant"?(()=>{
-                      const txt = m.content.replace(/^#{1,6} /gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/\*(.+?)\*/g,"$1");
-                      return txt.split("\n").map((line,j)=>{
-                        if(!line.trim()) return <div key={j} style={{height:6}}/>;
-                        if(/^\d+\./.test(line.trim())) return <div key={j} style={{marginBottom:4,paddingLeft:8,borderLeft:"2px solid #7C5CFC22"}}>{line.trim()}</div>;
-                        if(line.trim().startsWith("- ")||line.trim().startsWith("• ")) return <div key={j} style={{marginBottom:3,paddingLeft:8,display:"flex",gap:6}}><span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{line.trim().slice(2)}</span></div>;
-                        if(line.trim()==="---") return <hr key={j} style={{border:"none",borderTop:"1px solid #E8E0D0",margin:"8px 0"}}/>;
-                        return <div key={j} style={{marginBottom:4}}>{line.trim()}</div>;
-                      });
-                    })():m.content}</div>
-                  </div>
-                ))}
-                {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
-              </div>
-              <div style={{padding:"10px 14px",borderTop:"1px solid #E8E0D0",display:"flex",gap:8}}>
-                <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"8px 12px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
-                <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600}}>→</button>
-              </div>
-              {askCompassHistory.length>0&&<div style={{padding:"6px 14px 10px",borderTop:"1px solid #F5F1EA",display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setAskCompassHistory([])} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear chat</button></div>}
-            </div>
-          )}
-        </>
+        <AskCompassWidget
+          showAskCompass={showAskCompass}
+          setShowAskCompass={setShowAskCompass}
+          askCompassHistory={askCompassHistory}
+          setAskCompassHistory={setAskCompassHistory}
+          askCompass={askCompass}
+          askCompassProcessing={askCompassProcessing}
+          setAskCompassProcessing={setAskCompassProcessing}
+          askCompassInput={askCompassInput}
+          setAskCompassInput={setAskCompassInput}
+        />
       )}
 
       {/* ── Org Settings Modal ── */}
       {showOrgSettings&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:560,maxHeight:"80vh",overflowY:"auto"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Organisation Settings</div>
-              <button onClick={()=>setShowOrgSettings(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
-            </div>
-            <div style={{marginBottom:24}}>
-              <div style={{fontSize:12,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Job Titles & Access Levels</div>
-              <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Define the roles in your organisation. Higher access level = more senior. Users with access level 5+ can appoint disciplinary officers.</div>
-              {orgRoles.map(r=>(
-                <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 12px",background:"#FDFAF5",borderRadius:8,border:"1px solid #E8E0D0"}}>
-                  <div style={{flex:1,fontSize:13,color:"#1C1820"}}>{r.title}</div>
-                  <div style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"2px 8px"}}>Level {r.access_level}</div>
-                  <button onClick={async()=>{await supabase.from("org_roles").delete().eq("id",r.id);loadOrgRoles();}} style={{background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontSize:12}}>Remove</button>
-                </div>
-              ))}
-              <AddRoleForm onAdd={async(title,level)=>{await supabase.from("org_roles").insert({org_id:org.id,title,access_level:parseInt(level)});loadOrgRoles();}}/>
-            </div>
-            <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Team Members</div>
-              {orgMembers.map(m=>(
-                <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 12px",background:"#FDFAF5",borderRadius:8,border:"1px solid #E8E0D0"}}>
-                  <div style={{flex:1}}><div style={{fontSize:13,color:"#1C1820"}}>{m.name}</div><div style={{fontSize:11,color:"#9B9098"}}>{m.job_title||m.role}</div></div>
-                  <select defaultValue={m.access_level||5} onChange={async e=>{await supabase.from("org_members").update({access_level:parseInt(e.target.value)}).eq("id",m.id);loadOrgMembers();showToast("Access level updated");}} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px",background:"#fff",color:"#1C1820"}}>
-                    {[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>Level {n}</option>)}
-                  </select>
-                  <select defaultValue={m.job_title||""} onChange={async e=>{await supabase.from("org_members").update({job_title:e.target.value}).eq("id",m.id);loadOrgMembers();showToast("Job title updated");}} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px",background:"#fff",color:"#1C1820"}}>
-                    <option value="">No title</option>
-                    {orgRoles.map(r=><option key={r.id} value={r.title}>{r.title}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <OrgSettingsModal
+          setShowOrgSettings={setShowOrgSettings}
+          orgRoles={orgRoles}
+          loadOrgRoles={loadOrgRoles}
+          org={org}
+          orgMembers={orgMembers}
+          loadOrgMembers={loadOrgMembers}
+          showToast={showToast}
+        />
       )}
 
       {/* ── Disciplinary Handoff Modal ── */}
-      {showHandoffModal&&(()=>{
-        const cs = cases.find(x=>x.id===activeCaseId);
-        const myLevel = currentUser?.access_level||5;
-        const eligible = orgMembers.filter(m=>(m.access_level||5)>=myLevel&&m.name!==currentUser?.name);
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-            <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",marginBottom:6}}>Appoint Disciplinary Officer</div>
-              <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The investigation is complete. Appoint an officer to conduct the disciplinary hearing.</div>
-              {eligible.length===0?(
-                <div style={{fontSize:13,color:"#C84B2F",background:"#FFF0ED",borderRadius:8,padding:12,marginBottom:16}}>No eligible users found. Add team members with access level {myLevel}+ in Organisation Settings.</div>
-              ):(
-                <>
-                  <div style={{marginBottom:16}}>
-                    <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Select disciplinary officer</label>
-                    <select value={selectedMemberId||eligible[0]?.id||""} onChange={e=>setSelectedMemberId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820"}}>
-                      {eligible.map(m=><option key={m.id} value={m.id}>{m.name} {m.job_title?"("+m.job_title+")":""} — Level {m.access_level||5}</option>)}
-                    </select>
-                  </div>
-                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                    <button onClick={()=>{setShowHandoffModal(false);setSelectedMemberId("");}} style={{fontSize:13,padding:"9px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#fff",cursor:"pointer",color:"#6B6375"}}>Cancel</button>
-                    <button onClick={async()=>{
-                      const sel = orgMembers.find(x=>x.id===(selectedMemberId||eligible[0]?.id));
-                      if(!sel) return;
-                      saveCases(cases.map(x=>x.id===cs.id?{...x,disciplinaryOfficer:sel.name,disciplinaryOfficerId:sel.user_id||sel.id,disciplinaryOfficerEmail:sel.email||"",investigatingManager:currentUser?.name,stage:"disciplinary",handoffDate:new Date().toISOString()}:x));
-                      // Grant case-level access to disciplinary officer
-                      if(sel.user_id) {
-                        try {
-                          await supabase.from("case_access").upsert({
-                            case_id: cs.id,
-                            user_id: sel.user_id,
-                            org_id: org.id,
-                            role: "disciplinary_officer",
-                            granted_by: user?.id,
-                          });
-                        } catch(e) { console.error("case_access write failed:", e); }
-                      }
-                      setShowHandoffModal(false);
-                      setSelectedMemberId("");
-                      setActiveCaseStage("disciplinary");
-                      showToast("Case handed off to "+sel.name);
-                    }} style={{fontSize:13,padding:"9px 20px",background:"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600}}>Appoint & hand off</button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      {showHandoffModal&&(
+        <HandoffModal
+          cases={cases}
+          activeCaseId={activeCaseId}
+          currentUser={currentUser}
+          orgMembers={orgMembers}
+          selectedMemberId={selectedMemberId}
+          setSelectedMemberId={setSelectedMemberId}
+          setShowHandoffModal={setShowHandoffModal}
+          saveCases={saveCases}
+          org={org}
+          user={user}
+          setActiveCaseStage={setActiveCaseStage}
+          showToast={showToast}
+        />
+      )}
 
       {/* ── Issue Outcome Modal ── */}
-      {showOutcomeModal&&(()=>{
-        const cs = cases.find(x=>x.id===activeCaseId);
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-            <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-                <div>
-                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Issue disciplinary outcome</div>
-                  <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>{cs?.employeeName}</div>
-                </div>
-                <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
-              </div>
-              <div style={{marginBottom:16}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Outcome decision</label>
-                <select value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:outcomeType?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
-                  <option value="">Select outcome…</option>
-                  <option value="No further action">No further action</option>
-                  <option value="First written warning">First written warning</option>
-                  <option value="Final written warning">Final written warning</option>
-                  <option value="Demotion">Demotion</option>
-                  <option value="Dismissal with notice">Dismissal with notice</option>
-                  <option value="Summary dismissal (gross misconduct)">Summary dismissal (gross misconduct)</option>
-                </select>
-              </div>
-              <div style={{marginBottom:20}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Notes <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-                <textarea value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Any additional notes…" rows={3} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
-              </div>
-              <div style={{background:"#FFF8F0",border:"1px solid #E8622A33",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:"#E8622A"}}>
-                Issuing this outcome starts the employee's 5 working day appeal window (ACAS Code).
-              </div>
-              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-                <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
-                <button disabled={!outcomeType} onClick={()=>{if(!outcomeType)return;saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast("Outcome recorded");handleLetter("outcome");}} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {showOutcomeModal&&(
+        <OutcomeModal
+          cases={cases}
+          activeCaseId={activeCaseId}
+          setShowOutcomeModal={setShowOutcomeModal}
+          outcomeType={outcomeType}
+          setOutcomeType={setOutcomeType}
+          outcomeNotes={outcomeNotes}
+          setOutcomeNotes={setOutcomeNotes}
+          saveCases={saveCases}
+          showToast={showToast}
+          handleLetter={handleLetter}
+        />
+      )}
     </div>
   );
 }
