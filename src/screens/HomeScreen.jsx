@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
 import { ActivityBell } from '../components/ActivityBell';
+import { OrgSwitcher } from '../components/OrgSwitcher';
 import { getCurrentRisk } from '../lib/caseStage';
 
-export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
+export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, setShowOrgSettings, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const goToScreen = (s) => {
     if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
@@ -58,7 +59,7 @@ export function HomeScreen({ cases, getCaseStage, org, setShowOrgSettings, onSig
           )}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {!isMobile&&org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:6,padding:"3px 8px"}}>{org.name}</span>}
+          {!isMobile&&<OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/>}
           <ActivityBell auditLog={auditLog}/>
           {!isMobile&&<button onClick={()=>setShowOrgSettings(true)} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
           {onSignOut&&<button onClick={onSignOut} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}

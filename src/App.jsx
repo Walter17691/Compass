@@ -22,6 +22,7 @@ import { UserAddForm } from './components/UserAddForm';
 import { AddRoleForm } from './components/AddRoleForm';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ActivityBell } from './components/ActivityBell';
+import { OrgSwitcher } from './components/OrgSwitcher';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { LetterScreen } from './screens/LetterScreen';
@@ -51,7 +52,7 @@ import { OrgSettingsModal } from './screens/OrgSettingsModal';
 import { HandoffModal } from './screens/HandoffModal';
 import { OutcomeModal } from './screens/OutcomeModal';
 
-export default function Compass({ user=null, org=null, member=null, onSignOut=null }) {
+export default function Compass({ user=null, org=null, member=null, availableOrgs=[], switchOrg=()=>{}, onJoinAnotherOrg=()=>{}, onSignOut=null }) {
   useFonts();
 
   // ── Navigation ──
@@ -264,6 +265,55 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href=url; a.download=(org?.name||"Compass")+"_Employees_"+new Date().toLocaleDateString("en-GB").split("/").join("-")+".csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Lets a prospect switching from spreadsheets or another system bring
+  // in existing case history instead of only starting fresh — imported
+  // rows have no meeting/transcript data (that's not something a CSV can
+  // carry), just the case-level facts: who, what, when, current status.
+  const handleCaseCsvImport = async (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    setCaseCsvProcessing(true);
+    try {
+      const text = await file.text();
+      const objs = csvRowsToObjects(parseCsv(text));
+      const valid = objs.filter(o => o['employee name']?.trim());
+      const skipped = objs.length - valid.length;
+      const imported = valid.map(o => ({
+        id: crypto.randomUUID(),
+        employeeName: o['employee name'].trim(),
+        email: "",
+        caseType: (o['case type']||"").trim().toLowerCase(),
+        description: o['description']||"",
+        dateReceived: o['date received']||new Date().toISOString().split("T")[0],
+        stage: (o['stage']||"").trim().toLowerCase()==="closed" ? "closed" : "open",
+        outcome: o['outcome']||"",
+        meetings: [],
+        evidence: [],
+        urgency: "normal",
+      }));
+      if(imported.length>0) saveCases([...cases, ...imported]);
+      audit("Case history imported", `${imported.length} case${imported.length===1?"":"s"}`);
+      showToast(`Imported ${imported.length} case${imported.length===1?"":"s"}${skipped>0?`, skipped ${skipped} row${skipped===1?"":"s"} with no employee name`:""}`);
+    } catch(err) {
+      console.error("Case CSV import error:", err);
+      showToast("Could not import CSV — check the file format", "error");
+    }
+    setCaseCsvProcessing(false);
+    e.target.value = "";
+  };
+
+  const downloadCaseCsvTemplate = () => {
+    const rows = [
+      ["Employee name","Case type","Stage","Date received","Description","Outcome"],
+      ["Jane Smith","misconduct","closed","2025-03-10","Repeated lateness following two informal warnings","First written warning issued"],
+    ];
+    const csv = toCsv(rows);
+    const blob = new Blob([csv],{type:"text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download="Compass_Case_Import_Template.csv"; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -877,6 +927,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const policyFileRef = useRef(null);
   const employeeCsvFileRef = useRef(null);
   const [employeeCsvProcessing, setEmployeeCsvProcessing] = useState(false);
+  const caseCsvFileRef = useRef(null);
+  const [caseCsvProcessing, setCaseCsvProcessing] = useState(false);
   const importFileRef = useRef(null);
   const vaultFileRef = useRef(null);
 
@@ -1360,10 +1412,13 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     { title:"Upload your policies", body:"Go to Settings → Company policies and upload your HR policies (.docx or .txt). Compass will reference them in every AI output — so advice is tailored to your organisation.", action:"Get started" },
   ];
 
-  // First use — show onboarding and GDPR
+  // First use — GDPR consent is mandatory. The deeper feature-walkthrough
+  // tour (showOnboard) is no longer auto-triggered: OnboardingWizard
+  // already covers first-run welcome, and forcing both back-to-back added
+  // up to 11+ screens before a brand-new signup ever reached the app. The
+  // tour stays available on demand via "Restart tour" in Settings.
   useEffect(() => {
     if(!gdprAccepted) setShowGdpr(true);
-    else if(!onboardDone) { setShowOnboard(true); setOnboardStep(0); }
   }, []);
 
   // Audit session starts
@@ -2779,7 +2834,7 @@ Please produce:
               <div style={{fontSize:12,color:"#6B6375",lineHeight:1.7}}>You can export all your data or delete it at any time from Settings. Data is retained until you delete it. You are responsible for compliance with UK GDPR when processing employee data using this tool.</div>
             </div>
             <div style={{display:"flex",gap:10}}>
-              <Btn onClick={()=>{setGdprAccepted(true);lsSet("compass_gdpr",true);setShowGdpr(false);if(!onboardDone){setShowOnboard(true);setOnboardStep(0);}}}>I understand — continue</Btn>
+              <Btn onClick={()=>{setGdprAccepted(true);lsSet("compass_gdpr",true);setShowGdpr(false);}}>I understand — continue</Btn>
             </div>
           </Card>
         </div>
@@ -2870,7 +2925,7 @@ Please produce:
 
           {/* Right side */}
           <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-            {!isMobile&&org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
+            {!isMobile&&<OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/>}
             {!isMobile&&currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
             <ActivityBell auditLog={auditLog}/>
             {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
@@ -2898,6 +2953,9 @@ Please produce:
           cases={cases}
           getCaseStage={getCaseStage}
           org={org}
+          availableOrgs={availableOrgs}
+          switchOrg={switchOrg}
+          onJoinAnotherOrg={onJoinAnotherOrg}
           setShowOrgSettings={setShowOrgSettings}
           onSignOut={onSignOut}
           currentUser={currentUser}
@@ -3204,6 +3262,10 @@ Please produce:
           employeeCsvProcessing={employeeCsvProcessing}
           handleEmployeeCsvImport={handleEmployeeCsvImport}
           exportEmployeesCsv={exportEmployeesCsv}
+          caseCsvFileRef={caseCsvFileRef}
+          caseCsvProcessing={caseCsvProcessing}
+          handleCaseCsvImport={handleCaseCsvImport}
+          downloadCaseCsvTemplate={downloadCaseCsvTemplate}
           auditLog={auditLog}
           cases={cases}
           exportAllData={exportAllData}

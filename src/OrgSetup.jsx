@@ -19,7 +19,7 @@ function CompassLogo({ size=36 }) {
   )
 }
 
-export default function OrgSetup({ user, onComplete }) {
+export default function OrgSetup({ user, onComplete, onCancel }) {
   const pendingInvite = localStorage.getItem('compass_pending_invite') || ''
   const [mode, setMode] = useState(pendingInvite ? 'join' : null) // 'create' or 'join'
   const [orgName, setOrgName] = useState('')
@@ -85,10 +85,13 @@ export default function OrgSetup({ user, onComplete }) {
   return (
     <div style={{minHeight:"100vh",background:BG,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{width:"100%",maxWidth:440}}>
+        {onCancel&&(
+          <button onClick={onCancel} style={{background:"none",border:"none",color:"#555",fontSize:13,cursor:"pointer",marginBottom:16,padding:0}}>← Back to Compass</button>
+        )}
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{display:"flex",justifyContent:"center",marginBottom:16}}><CompassLogo size={48}/></div>
-          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,color:TEXT,margin:"0 0 8px",fontWeight:400}}>Welcome to Compass</h1>
-          <p style={{fontSize:13,color:"#555",margin:0}}>Set up your team workspace to get started</p>
+          <h1 style={{fontFamily:"Playfair Display,Georgia,serif",fontSize:28,color:TEXT,margin:"0 0 8px",fontWeight:400}}>{onCancel?"Add another organisation":"Welcome to Compass"}</h1>
+          <p style={{fontSize:13,color:"#555",margin:0}}>{onCancel?"Create a new workspace or join one with an invite code":"Set up your team workspace to get started"}</p>
         </div>
 
         {!mode?(

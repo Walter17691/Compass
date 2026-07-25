@@ -5,7 +5,7 @@ import { UserAddForm } from '../components/UserAddForm';
 import { isPro } from '../lib/plan';
 import { authedFetch } from '../lib/authedFetch';
 
-export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
+export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
   const [webhookUrlDraft, setWebhookUrlDraft] = useState(orgWebhookUrl||"");
   const goToBillingUrl = async (action) => {
     try {
@@ -192,6 +192,17 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
           <Btn variant="secondary" onClick={exportEmployeesCsv}>Export to CSV</Btn>
         </div>
         <input ref={employeeCsvFileRef} type="file" accept=".csv" onChange={handleEmployeeCsvImport} style={{display:"none"}} />
+      </Card>
+
+      {/* Case history (CSV import) */}
+      <Card style={{marginBottom:12}}>
+        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Case history</h3>
+        <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Bring in existing case records when switching from spreadsheets or another system — meeting transcripts and letters aren't importable this way, but the case-level record (who, what, when, status) is. Expected columns: Employee name, Case type, Stage (open/closed), Date received, Description, Outcome.</p>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn onClick={()=>caseCsvFileRef.current?.click()} disabled={caseCsvProcessing}>{caseCsvProcessing?"Importing...":"Import from CSV"}</Btn>
+          <Btn variant="ghost" onClick={downloadCaseCsvTemplate}>Download template</Btn>
+        </div>
+        <input ref={caseCsvFileRef} type="file" accept=".csv" onChange={handleCaseCsvImport} style={{display:"none"}} />
       </Card>
 
       {/* Word template */}

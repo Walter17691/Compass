@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import Login from './Login.jsx'
+import SecurityPage from './SecurityPage.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
@@ -24,25 +25,36 @@ window.COMPASS_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
 function Root() {
   const [user, setUser] = useState(null)
-  const [org, setOrg] = useState(null)
-  const [member, setMember] = useState(null)
+  // One user can belong to more than one org (e.g. an HR consultancy
+  // running cases for several clients from one login) — memberships holds
+  // every org_members row for this user, each paired with its org.
+  // activeOrgId picks which one is "current"; org/member below are just
+  // that membership's fields, so the rest of the app (which only ever
+  // needs the single active org) doesn't need to change at all.
+  const [memberships, setMemberships] = useState([])
+  const [activeOrgId, setActiveOrgId] = useState(() => localStorage.getItem('compass_active_org'))
   const [portalAccount, setPortalAccount] = useState(null) // null = not checked/not a portal user, { employeeName } = is one
   const [loading, setLoading] = useState(true)
+  const [addingOrg, setAddingOrg] = useState(false) // true while an existing user is joining/creating an additional org via the switcher
+
+  const active = memberships.find(m => m.organisations.id === activeOrgId) || memberships[0] || null
+  const org = active?.organisations ?? null
+  const member = active ? (({ organisations, ...rest }) => rest)(active) : null
+
+  const switchOrg = (orgId) => {
+    setActiveOrgId(orgId)
+    localStorage.setItem('compass_active_org', orgId)
+  }
 
   const loadOrg = async (u) => {
-    if(!u) { setOrg(null); setMember(null); return; }
+    if(!u) { setMemberships([]); return; }
     try {
-      const { data: memberData } = await supabase
+      const { data } = await supabase
         .from('org_members')
         .select('*, organisations(*)')
         .eq('user_id', u.id)
-        .maybeSingle()
 
-      if(memberData) {
-        const { organisations, ...memberFields } = memberData
-        setOrg(organisations)
-        setMember(memberFields)
-      }
+      setMemberships(data || [])
       // No fallback org-join path here: joining always goes through
       // OrgSetup's invite-code flow (join_org_with_invite_code), which
       // validates the code server-side. A user_metadata-based path used to
@@ -118,13 +130,17 @@ function Root() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Public — reachable without logging in, for a prospect evaluating the
+  // product (or a link from the marketing site) to see it.
+  if (window.location.pathname === '/security') return <SecurityPage/>
+
   if (loading) return (
     <div style={{minHeight:"100vh",background:"#0D0D0F",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{color:"#7C5CFC",fontSize:13}}>Loading...</div>
     </div>
   )
 
-  const signOut = async () => { await supabase.auth.signOut(); setUser(null); setOrg(null); setMember(null); setPortalAccount(null) }
+  const signOut = async () => { await supabase.auth.signOut(); setUser(null); setMemberships([]); setPortalAccount(null) }
 
   if (!user) {
     // A pending portal invite means this person followed an employee
@@ -136,7 +152,19 @@ function Root() {
 
   if (portalAccount) return <Suspense fallback={<LoadingFallback/>}><PortalApp user={user} employeeName={portalAccount.employeeName} onSignOut={signOut} /></Suspense>
 
-  if (!org) return <Suspense fallback={<LoadingFallback/>}><OrgSetup user={user} onComplete={({org, member})=>{setOrg(org);setMember(member);}} /></Suspense>
+  // Joining/creating an org always goes through OrgSetup, whether this is
+  // the user's first org or a second one added later via "Join another
+  // organisation" (see the org switcher in App.jsx) — re-loading
+  // memberships afterward picks up the new row and switchOrg makes it active.
+  if (!org || addingOrg) return (
+    <Suspense fallback={<LoadingFallback/>}>
+      <OrgSetup
+        user={user}
+        onComplete={({org})=>{ setAddingOrg(false); loadOrg(user).then(()=>switchOrg(org.id)) }}
+        onCancel={org ? () => setAddingOrg(false) : undefined}
+      />
+    </Suspense>
+  )
 
   return (
     <ErrorBoundary>
@@ -145,6 +173,9 @@ function Root() {
           user={user}
           org={org}
           member={member}
+          availableOrgs={memberships.map(m => m.organisations)}
+          switchOrg={switchOrg}
+          onJoinAnotherOrg={() => setAddingOrg(true)}
           onSignOut={signOut}
         />
       </Suspense>
