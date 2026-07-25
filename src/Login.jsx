@@ -320,9 +320,9 @@ export default function Login({ onLogin }) {
           </div>
           <div>
             By signing in you agree to our{' '}
-            <a href="https://compasshr.co.uk/privacy" target="_blank" rel="noopener noreferrer" style={{color:C.accent,textDecoration:"none"}}>Privacy Policy</a>
+            <a href="/privacy" style={{color:C.accent,textDecoration:"none"}}>Privacy Policy</a>
             {' '}and{' '}
-            <a href="https://compasshr.co.uk/terms" target="_blank" rel="noopener noreferrer" style={{color:C.accent,textDecoration:"none"}}>Terms of Service</a>.
+            <a href="/terms" style={{color:C.accent,textDecoration:"none"}}>Terms of Service</a>.
             {' '}All HR data is stored securely and processed in accordance with UK GDPR.
           </div>
         </div>

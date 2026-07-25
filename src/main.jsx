@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import Login from './Login.jsx'
 import SecurityPage from './SecurityPage.jsx'
+import LegalPage from './LegalPage.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
@@ -133,6 +134,8 @@ function Root() {
   // Public — reachable without logging in, for a prospect evaluating the
   // product (or a link from the marketing site) to see it.
   if (window.location.pathname === '/security') return <SecurityPage/>
+  if (window.location.pathname === '/privacy') return <LegalPage page="privacy"/>
+  if (window.location.pathname === '/terms') return <LegalPage page="terms"/>
 
   if (loading) return (
     <div style={{minHeight:"100vh",background:"#0D0D0F",display:"flex",alignItems:"center",justifyContent:"center"}}>
