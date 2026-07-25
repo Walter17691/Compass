@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "node --env-file=.env node_modules/.bin/playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",

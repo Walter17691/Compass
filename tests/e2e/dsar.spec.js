@@ -17,6 +17,6 @@ test('DSAR due date is exactly receivedDate + 1 calendar month', async ({ page }
   await page.locator('input[type="date"]').fill('2020-01-15');
   await page.getByRole('button', { name: 'Log request' }).click();
 
-  await expect(page.getByText(employeeName)).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText('Due 2020-02-15')).toBeVisible();
+  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Due 2020-02-15').first()).toBeVisible();
 });

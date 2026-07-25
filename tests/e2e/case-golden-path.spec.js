@@ -14,9 +14,9 @@ test('creates a case and it appears in the case list', async ({ page }) => {
   await page.getByRole('button', { name: '+ New case' }).click();
 
   await page.getByPlaceholder('Full name').fill(employeeName);
-  await page.getByRole('button', { name: 'Misconduct', exact: false }).first().click();
-  await page.getByPlaceholder('Describe the issue in a few sentences. What happened? When? Who is involved?').fill('E2E test case — safe to delete.');
-  await page.getByRole('button', { name: 'Create case file' }).click();
+  await page.getByRole('combobox').nth(2).selectOption('misconduct'); // combobox 0 is the employee-name input (has a datalist), 1 is Location, 2 is Case type
+  await page.getByPlaceholder('Brief summary of the issue…').fill('E2E test case — safe to delete.');
+  await page.getByRole('button', { name: 'Create case', exact: true }).click();
 
   await expect(page.getByText(employeeName)).toBeVisible({ timeout: 10000 });
 });

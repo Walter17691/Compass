@@ -7,8 +7,8 @@ test('entering weekly pay shows an indicative exposure estimate with the disclai
   await login(page);
   await page.getByRole('button', { name: '+ New case' }).click();
   await page.getByPlaceholder('Full name').fill(employeeName);
-  await page.getByRole('button', { name: 'Misconduct', exact: false }).first().click();
-  await page.getByRole('button', { name: 'Create case file' }).click();
+  await page.getByRole('combobox').nth(2).selectOption('misconduct'); // combobox 0 is the employee-name input (has a datalist), 1 is Location, 2 is Case type
+  await page.getByRole('button', { name: 'Create case', exact: true }).click();
 
   await page.getByText(employeeName).click();
   await expect(page.getByText('RISK & TRIBUNAL EXPOSURE')).toBeVisible({ timeout: 10000 });

@@ -3231,7 +3231,7 @@ Please produce:
       </Suspense>
 
       {/* ── Onboarding wizard ── */}
-      {showOnboarding&&(
+      {showOnboarding&&!showGdpr&&!showOnboard&&(
         <OnboardingWizard
           onboardingStep={onboardingStep}
           setOnboardingStep={setOnboardingStep}

@@ -15,4 +15,34 @@ export async function login(page) {
   await page.getByPlaceholder('••••••••').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByText(/^Good (morning|afternoon|evening)/)).toBeVisible({ timeout: 15000 });
+
+  // A brand-new org hits three possible first-run overlays in sequence,
+  // each blocking clicks until dismissed: the mandatory GDPR consent
+  // modal, an inline "1/7" onboarding tour (App.jsx's ONBOARD_STEPS,
+  // triggered by accepting GDPR), and OnboardingWizard.jsx (a second,
+  // separate onboarding tour, gated to only show once both of the above
+  // are clear — it opens on step 1 of 4, where its only exit is the ×
+  // "Close" button; "Skip and explore on my own" only exists on the
+  // final step). Each only mounts once the previous one is dismissed, so
+  // each wait is independent rather than a single fixed delay. Playwright
+  // doesn't persist localStorage across spec files (each gets its own
+  // browser context), so this account hits all three again on every spec
+  // file's first login, not once overall.
+  //
+  // getByRole name matching is substring by default — 'Close' would also
+  // match the "Closed" case-status filter chip on Home, so exact:true is
+  // required here (it isn't needed for the other two, which have no
+  // similar collision).
+  const dismissDialog = async (name) => {
+    const button = page.getByRole('button', { name, exact: true });
+    try {
+      await button.waitFor({ state: 'visible', timeout: 4000 });
+      await button.click();
+    } catch {
+      // Not shown this time — fine, move on.
+    }
+  };
+  await dismissDialog('I understand — continue');
+  await dismissDialog('Skip');
+  await dismissDialog('Close');
 }
