@@ -1,9 +1,32 @@
+import { verifyCaller } from './_auth.js';
+
+const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+async function supabaseRequest(path, options = {}) {
+  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+
   const { email, name, role, orgId, orgName, inviteCode, locationIds } = req.body;
+  if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
+    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=role`);
+    const [callerMember] = await memberRes.json();
+    if (!callerMember) return res.status(403).json({ error: 'Not a member of this organisation' });
+    if (callerMember.role !== 'hr_director' && callerMember.role !== 'hr_manager') {
+      return res.status(403).json({ error: 'Only HR Directors and HR Managers can invite team members' });
+    }
+
     const appUrl = 'https://compass-lemon-iota.vercel.app';
     const inviteLink = `${appUrl}?invite=${inviteCode}`;
 

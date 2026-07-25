@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authedFetch } from '../lib/authedFetch';
 
 export function PortalOnboarding({ userId }) {
   const [loading, setLoading] = useState(true);
@@ -6,7 +7,7 @@ export function PortalOnboarding({ userId }) {
   const [error, setError] = useState(null);
 
   const load = () => {
-    fetch(`/api/portal/onboarding?userId=${encodeURIComponent(userId)}`)
+    authedFetch(`/api/portal/onboarding`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setStarter(d.starter); setLoading(false); })
       .catch(() => { setError("Couldn't load your onboarding checklist — please try again."); setLoading(false); });
@@ -18,9 +19,9 @@ export function PortalOnboarding({ userId }) {
     // Optimistic update so the checkbox feels instant.
     setStarter(s => ({ ...s, tasks: s.tasks.map(t => t.id === taskId ? { ...t, done: !currentlyDone } : t) }));
     try {
-      const res = await fetch('/api/portal/onboarding', {
+      const res = await authedFetch('/api/portal/onboarding', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, taskId, done: !currentlyDone }),
+        body: JSON.stringify({ taskId, done: !currentlyDone }),
       });
       const d = await res.json();
       if (d.error) { setError(d.error); load(); }

@@ -8,6 +8,7 @@ import PortalSignup from './PortalSignup.jsx'
 import { PortalApp } from './portal/PortalApp.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
 import { supabase } from './supabase.js'
+import { authedFetch } from './lib/authedFetch.js'
 
 window.COMPASS_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
@@ -54,9 +55,9 @@ function Root() {
     try {
       const pendingToken = localStorage.getItem('compass_pending_portal_invite')
       if(pendingToken) {
-        const res = await fetch('/api/portal/accept-invite', {
+        const res = await authedFetch('/api/portal/accept-invite', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: pendingToken, userId: u.id }),
+          body: JSON.stringify({ token: pendingToken }),
         })
         const data = await res.json()
         localStorage.removeItem('compass_pending_portal_invite')
@@ -65,7 +66,7 @@ function Root() {
         // (expired/wrong-email/etc) — the user may still be an existing
         // portal account from before, or just a normal HR-staff user.
       }
-      const statusRes = await fetch(`/api/portal/status?userId=${encodeURIComponent(u.id)}`)
+      const statusRes = await authedFetch(`/api/portal/status`)
       const status = await statusRes.json()
       setPortalAccount(status.isPortalUser ? { employeeName: status.employeeName } : null)
     } catch(e) { console.error("Load portal status error:", e) }

@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     try {
       if (signature) {
         // Save signature
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${signId}`, {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${encodeURIComponent(signId)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
           body: JSON.stringify({ signature, signed_at: signedAt, status: 'signed' })
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { signId } = req.query;
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${signId}&select=*`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`, {
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
       });
       const data = await r.json();

@@ -1,4 +1,5 @@
 import { supabaseRequest } from './_supabase.js';
+import { verifyCaller } from '../_auth.js';
 
 // Lets the client ask "is this authenticated user a portal employee?"
 // without ever granting the client direct read access to
@@ -7,11 +8,11 @@ import { supabaseRequest } from './_supabase.js';
 export async function status(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const accountRes = await supabaseRequest(`employee_portal_accounts?user_id=eq.${userId}&select=employee_name`);
+    const accountRes = await supabaseRequest(`employee_portal_accounts?user_id=eq.${caller.id}&select=employee_name`);
     const accounts = await accountRes.json();
     if (accounts.length === 0) return res.status(200).json({ isPortalUser: false });
     res.status(200).json({ isPortalUser: true, employeeName: accounts[0].employee_name });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authedFetch } from '../lib/authedFetch';
 
 export function PortalSignatures({ userId }) {
   const [pending, setPending] = useState(null);
@@ -8,7 +9,7 @@ export function PortalSignatures({ userId }) {
   const [submitting, setSubmitting] = useState(false);
 
   const load = () => {
-    fetch(`/api/portal/signatures?userId=${encodeURIComponent(userId)}`)
+    authedFetch(`/api/portal/signatures`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setPending(d.pending || []); })
       .catch(() => setError("Couldn't load your documents — please try again."));
@@ -20,9 +21,9 @@ export function PortalSignatures({ userId }) {
     if (!typedName.trim()) return;
     setSubmitting(true);
     try {
-      const res = await fetch('/api/portal/signatures', {
+      const res = await authedFetch('/api/portal/signatures', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, signId, signature: typedName.trim() }),
+        body: JSON.stringify({ signId, signature: typedName.trim() }),
       });
       const d = await res.json();
       if (d.error) { setError(d.error); setSubmitting(false); return; }

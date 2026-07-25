@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authedFetch } from '../lib/authedFetch';
 
 export function PortalCaseDetail({ userId, caseId, onBack }) {
   const [data, setData] = useState(null);
@@ -6,7 +7,7 @@ export function PortalCaseDetail({ userId, caseId, onBack }) {
 
   useEffect(() => {
     if (!caseId) return;
-    fetch(`/api/portal/case-detail?userId=${encodeURIComponent(userId)}&caseId=${encodeURIComponent(caseId)}`)
+    authedFetch(`/api/portal/case-detail?caseId=${encodeURIComponent(caseId)}`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setData(d); })
       .catch(() => setError("Couldn't load this case — please try again."));

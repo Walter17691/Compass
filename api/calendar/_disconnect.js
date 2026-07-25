@@ -1,11 +1,13 @@
 import { supabaseRequest } from './_supabase.js';
 import { getValidAccessToken, googleCalendarRequest } from './_google.js';
+import { verifyCaller } from '../_auth.js';
 
 export async function disconnect(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = caller.id;
 
   try {
     const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&provider=eq.google&select=*`);

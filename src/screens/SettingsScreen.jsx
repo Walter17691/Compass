@@ -3,9 +3,18 @@ import { SCREENS, ROLE_PERMS } from '../constants';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { UserAddForm } from '../components/UserAddForm';
 import { isPro } from '../lib/plan';
+import { authedFetch } from '../lib/authedFetch';
 
 export function SettingsScreen({ isHR, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
   const [webhookUrlDraft, setWebhookUrlDraft] = useState(orgWebhookUrl||"");
+  const goToBillingUrl = async (action) => {
+    try {
+      const res = await authedFetch(`/api/billing/${action}?orgId=${encodeURIComponent(org?.id||"")}`);
+      const data = await res.json();
+      if(data.url) window.location.href = data.url;
+      else alert(data.error||"Couldn't open billing — please try again");
+    } catch(e) { alert("Couldn't open billing — please try again"); }
+  };
   return(
     <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
@@ -23,8 +32,8 @@ export function SettingsScreen({ isHR, exportCSV, exportPDF, org, user, location
             : "Free plan: 1 active case at a time, no Portal, Calendar, DSAR tracking or compliance digest. Upgrade to unlock the full platform."}
         </p>
         {isPro(org)
-          ? <Btn variant="secondary" onClick={()=>{window.location.href=`/api/billing/manage?orgId=${encodeURIComponent(org?.id||"")}&userId=${encodeURIComponent(user?.id||"")}`;}}>Manage subscription</Btn>
-          : <Btn onClick={()=>{window.location.href=`/api/billing/checkout?orgId=${encodeURIComponent(org?.id||"")}&userId=${encodeURIComponent(user?.id||"")}`;}}>Upgrade to Pro</Btn>
+          ? <Btn variant="secondary" onClick={()=>goToBillingUrl("manage")}>Manage subscription</Btn>
+          : <Btn onClick={()=>goToBillingUrl("checkout")}>Upgrade to Pro</Btn>
         }
       </Card>
 

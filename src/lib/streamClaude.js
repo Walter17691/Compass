@@ -1,7 +1,9 @@
+import { authedFetch } from './authedFetch';
+
 export async function streamClaude(system, user, onChunk) {
   let apiKey = "";
   try { apiKey = window.COMPASS_API_KEY || ""; } catch(e) {}
-  const res = await fetch("/api/chat", {
+  const res = await authedFetch("/api/chat", {
     method:"POST",
     headers:{
       "Content-Type":"application/json",

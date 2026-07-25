@@ -1,4 +1,5 @@
 import { SCREENS, MEETING_TYPES } from '../constants';
+import { authedFetch } from '../lib/authedFetch';
 
 export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, requirePro }) {
   const empName = activePerson;
@@ -33,9 +34,9 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
             const email = window.prompt(`Email address to invite ${empName} to the employee portal:`);
             if(!email||!email.trim()) return;
             try {
-              const res = await fetch('/api/portal/invite', {
+              const res = await authedFetch('/api/portal/invite', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ orgId: org?.id, orgName: org?.name, employeeName: empName, email: email.trim(), createdBy: user?.id }),
+                body: JSON.stringify({ orgId: org?.id, orgName: org?.name, employeeName: empName, email: email.trim() }),
               });
               const data = await res.json();
               if(!res.ok||data.error) { showToast(data.error||"Couldn't send invite"); return; }
@@ -175,7 +176,7 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
                     const empRec = getEmployeeRecord(empName)||{};
                     const tenure = empRec.startDate?(()=>{const d=new Date(empRec.startDate);const now=new Date();const months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());return months>=12?Math.floor(months/12)+" years":months+" months";})():"Unknown";
                     const prompt = "You are a senior UK HR professional. Generate a comprehensive employment profile report for: "+empName+". Job title: "+(empRec.jobTitle||"Not recorded")+". Start date: "+(empRec.startDate||"Not recorded")+". Length of service: "+tenure+". Location: "+(empRec.location||"Not recorded")+". Total cases: "+empCases.length+". Active: "+activeCases.length+". Total meetings: "+allMeetings.length+". Evidence on file: "+evidence+". Case history: "+caseHistory+". Write a professional employment profile with sections: 1) Employment Summary (include length of service, job title, location) 2) Case History Overview 3) Pattern Analysis 4) Current Position and Outstanding Matters 5) Risk Assessment 6) Recommended Next Steps. Be factual, objective, ACAS-compliant. Reference length of service where it affects statutory rights. Use professional HR language.";
-                    const response = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:prompt}]})});
+                    const response = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:prompt}]})});
                     const data = await response.json();
                     const text = data.content&&data.content[0]&&data.content[0].text?data.content[0].text:"Unable to generate profile.";
                     setEmploymentProfileOutput(text);

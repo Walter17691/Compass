@@ -1,10 +1,12 @@
 import { supabaseRequest } from './_supabase.js';
+import { verifyCaller } from '../_auth.js';
 
 export async function status(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = caller.id;
 
   try {
     const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&select=provider`);

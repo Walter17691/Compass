@@ -1,18 +1,22 @@
 import Stripe from 'stripe';
 import { supabaseRequest } from './_supabase.js';
+import { verifyCaller } from '../_auth.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
 export async function manage(req, res) {
-  const { orgId, userId } = req.query;
-  if (!orgId || !userId) return res.status(400).json({ error: 'orgId and userId are required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { orgId } = req.query;
+  if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${orgId}&user_id=eq.${userId}&select=id`);
+    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=id`);
     const members = await memberRes.json();
     if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
 
-    const orgRes = await supabaseRequest(`organisations?id=eq.${orgId}&select=stripe_customer_id`);
+    const orgRes = await supabaseRequest(`organisations?id=eq.${encodeURIComponent(orgId)}&select=stripe_customer_id`);
     const [org] = await orgRes.json();
     if (!org?.stripe_customer_id) return res.status(400).json({ error: 'No Stripe customer on file for this organisation' });
 
@@ -22,8 +26,7 @@ export async function manage(req, res) {
       return_url: `${APP_URL}/?screen=settings`,
     });
 
-    res.writeHead(302, { Location: session.url });
-    res.end();
+    res.status(200).json({ url: session.url });
   } catch (e) {
     console.error('Billing manage error:', e.message);
     res.status(500).json({ error: e.message });

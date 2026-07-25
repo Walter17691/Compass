@@ -1,4 +1,5 @@
 import { SCREENS } from '../constants';
+import { authedFetch } from '../lib/authedFetch';
 
 export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF }) {
   // ── Core data calculations ──
@@ -143,7 +144,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
             const prompt = "You are a senior HR director. Write a concise executive summary of the following HR data for this organisation. Be factual and highlight key risks, patterns and recommendations. Data: Total cases: "+cases.length+". Active: "+activeCases.length+". Closed: "+closedCases.length+". Case types: "+caseTypeList.map(([t,n])=>t+": "+n).join(", ")+". Outcomes: "+outcomeList.map(([o,n])=>o+": "+n).join(", ")+". High risk cases: "+highRisk.length+". Slow investigations (>28 days): "+slowInvestigations.length+". Repeat employees: "+repeatEmployees.length+". Average resolution time: "+(avgResolution?avgResolution+" days":"unknown")+". Write 3-4 paragraphs. No markdown.";
             setReportNarrative("Generating...");
             try {
-              const r = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})});
+              const r = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})});
               const d = await r.json();
               setReportNarrative(d.content?.[0]?.text||"Unable to generate.");
             } catch(e) { setReportNarrative("Error generating summary."); }

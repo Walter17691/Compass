@@ -1,4 +1,5 @@
 import { supabaseRequest } from './_supabase.js';
+import { verifyCaller } from '../_auth.js';
 
 // Only ever return these fields for a meeting — never record/transcript/
 // signDocument/riskScore/prediction/nextSteps, which are HR's private
@@ -11,16 +12,18 @@ function toSafeMeeting(m) {
 export async function caseDetail(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId, caseId } = req.query;
-  if (!userId || !caseId) return res.status(400).json({ error: 'userId and caseId are required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { caseId } = req.query;
+  if (!caseId) return res.status(400).json({ error: 'caseId is required' });
 
   try {
-    const accountRes = await supabaseRequest(`employee_portal_accounts?user_id=eq.${userId}&select=*`);
+    const accountRes = await supabaseRequest(`employee_portal_accounts?user_id=eq.${encodeURIComponent(caller.id)}&select=*`);
     const accounts = await accountRes.json();
     const account = accounts[0];
     if (!account) return res.status(404).json({ error: 'No portal account for this user' });
 
-    const caseRes = await supabaseRequest(`cases?id=eq.${caseId}&select=*`);
+    const caseRes = await supabaseRequest(`cases?id=eq.${encodeURIComponent(caseId)}&select=*`);
     const cases = await caseRes.json();
     const cs = cases[0];
     if (!cs) return res.status(404).json({ error: 'Case not found' });

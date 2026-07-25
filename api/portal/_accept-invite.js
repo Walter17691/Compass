@@ -1,12 +1,17 @@
 import { supabaseRequest } from './_supabase.js';
+import { verifyCaller } from '../_auth.js';
 
 const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
 
 export async function acceptInvite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { token, userId } = req.body;
-  if (!token || !userId) return res.status(400).json({ error: 'token and userId are required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = caller.id;
+
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'token is required' });
 
   try {
     const inviteRes = await supabaseRequest(`employee_portal_invites?token=eq.${encodeURIComponent(token)}&select=*`);

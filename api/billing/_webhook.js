@@ -35,7 +35,7 @@ export async function webhook(req, res) {
       const session = event.data.object;
       const orgId = session.client_reference_id || session.metadata?.orgId;
       if (orgId) {
-        await supabaseRequest(`organisations?id=eq.${orgId}`, {
+        await supabaseRequest(`organisations?id=eq.${encodeURIComponent(orgId)}`, {
           method: 'PATCH',
           body: JSON.stringify({
             plan: 'pro',
@@ -48,7 +48,7 @@ export async function webhook(req, res) {
     } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
       const sub = event.data.object;
       const plan = (event.type === 'customer.subscription.deleted' || sub.status === 'canceled') ? 'free' : 'pro';
-      await supabaseRequest(`organisations?stripe_subscription_id=eq.${sub.id}`, {
+      await supabaseRequest(`organisations?stripe_subscription_id=eq.${encodeURIComponent(sub.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ plan, stripe_subscription_status: sub.status }),
       });

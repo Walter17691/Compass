@@ -1,12 +1,17 @@
 import { supabaseRequest } from './_supabase.js';
 import { getValidAccessToken, googleCalendarRequest, deadlineToGoogleEvent } from './_google.js';
+import { verifyCaller } from '../_auth.js';
 
 export async function sync(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId, deadlines } = req.body;
-  if (!userId || !Array.isArray(deadlines)) {
-    return res.status(400).json({ error: 'userId and deadlines[] are required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = caller.id;
+
+  const { deadlines } = req.body;
+  if (!Array.isArray(deadlines)) {
+    return res.status(400).json({ error: 'deadlines[] is required' });
   }
 
   try {

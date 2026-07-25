@@ -1,16 +1,22 @@
 import Stripe from 'stripe';
 import { supabaseRequest } from './_supabase.js';
+import { verifyCaller } from '../_auth.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
+// Returns the Stripe Checkout URL as JSON rather than redirecting directly
+// — a top-level window.location.href navigation can't carry a custom
+// Authorization header, so the client fetches this (with its Supabase
+// access token attached) and navigates to the URL it gets back.
 export async function checkout(req, res) {
-  const { orgId, userId } = req.query;
-  if (!orgId || !userId) return res.status(400).json({ error: 'orgId and userId are required' });
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { orgId } = req.query;
+  if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
-    // Verify the caller actually belongs to this org before creating a
-    // Checkout session that would upgrade it.
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${orgId}&user_id=eq.${userId}&select=id`);
+    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=id`);
     const members = await memberRes.json();
     if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
 
@@ -24,8 +30,7 @@ export async function checkout(req, res) {
       metadata: { orgId },
     });
 
-    res.writeHead(302, { Location: session.url });
-    res.end();
+    res.status(200).json({ url: session.url });
   } catch (e) {
     console.error('Billing checkout error:', e.message);
     res.status(500).json({ error: e.message });

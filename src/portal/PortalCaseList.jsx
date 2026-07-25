@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authedFetch } from '../lib/authedFetch';
 
 const stageLabel = stage => {
   const labels = { open: "Open", investigation: "Investigation", inv_report: "Awaiting next step", disciplinary: "Disciplinary", outcome: "Outcome issued", appeal: "Appeal", closed: "Closed" };
@@ -10,7 +11,7 @@ export function PortalCaseList({ userId, onOpenCase }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`/api/portal/case-list?userId=${encodeURIComponent(userId)}`)
+    authedFetch(`/api/portal/case-list`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setCases(d.cases || []); })
       .catch(() => setError("Couldn't load your cases — please try again."));

@@ -10,6 +10,7 @@ import { mapCaseRow } from './lib/caseMapping';
 import { getCaseStage } from './lib/caseStage';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { canUseFeature, canCreateCase } from './lib/plan';
+import { authedFetch } from './lib/authedFetch';
 import { useFonts } from './hooks/useFonts';
 import { CompassLogo } from './components/CompassLogo';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
@@ -316,7 +317,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
 
   const sendForSignature = async (employeeEmail) => {
     if(!employeeEmail||!reviewOutput) return;
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const id = crypto.randomUUID();
     setSignId(id);
     setSignStatus("pending");
     const signId = id;
@@ -348,7 +349,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     });
 
     // Send email via Resend
-    const res = await fetch("/api/send-for-signature", {
+    const res = await authedFetch("/api/send-for-signature", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
@@ -387,7 +388,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     setLiveChatProcessing(true);
     try {
       const tx = transcript.map(u=>u.text).join(String.fromCharCode(10))||inputText;
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-6",
           max_tokens:300,
@@ -410,7 +411,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     if(notes.trim().split(/\s+/).length < 10) return;
     setLiveContextLoading(true);
     try {
-      const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:250, stream:false,
           system:"You are an HR advisor listening to a live meeting. In 2-3 short sentences, summarise the key points covered so far and flag any immediate legal or procedural risks. No questions. No bullet points. Plain prose only. Be specific to what was said.",
           messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nNotes:\n"+notes.slice(-2000)}]})});
@@ -506,10 +507,10 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const removeMember = async (member) => {
     if(!window.confirm("Remove "+member.name+" from the team?")) return;
     try {
-      const r = await fetch("/api/delete-member", {
+      const r = await authedFetch("/api/delete-member", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ userId: member.user_id, orgMemberId: member.id, locationIds: member.location_ids||[] })
+        body: JSON.stringify({ orgMemberId: member.id })
       });
       const d = await r.json();
       if(d.success) setTeamMembers(m=>m.filter(x=>x.id!==member.id));
@@ -697,7 +698,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     setHistory(displayHistory);
     
     try {
-      const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           model:"claude-sonnet-4-6",
           max_tokens:3000,
@@ -744,9 +745,9 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const sendTestWebhook = async () => {
     if(!orgWebhookUrl||!org?.id||!user?.id) return;
     try {
-      const res = await fetch("/api/cron/test-notify", {
+      const res = await authedFetch("/api/cron/test-notify", {
         method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({orgId: org.id, userId: user.id, url: orgWebhookUrl, type: orgWebhookType}),
+        body: JSON.stringify({orgId: org.id, url: orgWebhookUrl, type: orgWebhookType}),
       });
       showToast(res.ok?"Test message sent":"Webhook responded with an error — check the URL", res.ok?"success":"error");
     } catch(e) { showToast("Couldn't reach that webhook URL", "error"); }
@@ -901,7 +902,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [calendarConnected, setCalendarConnected] = useState(false);
   useEffect(() => {
     if(!user?.id) return;
-    fetch(`/api/calendar/status?userId=${encodeURIComponent(user.id)}`)
+    authedFetch(`/api/calendar/status`)
       .then(r=>r.json()).then(d=>setCalendarConnected(!!d.connected)).catch(()=>{});
   }, [user?.id]);
   useEffect(() => {
@@ -917,25 +918,29 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   useEffect(() => {
     if(!calendarConnected || !user?.id) return;
     const timeout = setTimeout(() => {
-      fetch("/api/calendar/sync", {
+      authedFetch("/api/calendar/sync", {
         method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ userId: user.id, deadlines: dueSoon }),
+        body: JSON.stringify({ deadlines: dueSoon }),
       }).catch(e => console.error("Calendar sync failed:", e));
     }, 3000);
     return () => clearTimeout(timeout);
   }, [dueSoon, calendarConnected, user?.id]);
   const connectGoogleCalendar = () => {
     if(!user?.id || !org?.id) return;
-    requirePro("calendar", () => {
-      window.location.href = `/api/calendar/oauth-start?userId=${encodeURIComponent(user.id)}&orgId=${encodeURIComponent(org.id)}`;
+    requirePro("calendar", async () => {
+      try {
+        const res = await authedFetch(`/api/calendar/oauth-start?orgId=${encodeURIComponent(org.id)}`);
+        const data = await res.json();
+        if(data.url) window.location.href = data.url;
+        else showToast(data.error||"Couldn't start Calendar connection", "error");
+      } catch(e) { showToast("Couldn't start Calendar connection", "error"); }
     });
   };
   const disconnectGoogleCalendar = async () => {
     if(!user?.id) return;
     try {
-      await fetch("/api/calendar/disconnect", {
+      await authedFetch("/api/calendar/disconnect", {
         method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ userId: user.id }),
       });
       setCalendarConnected(false);
       showToast("Google Calendar disconnected");
@@ -1509,7 +1514,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setRiskProcessing(true);
     try {
       const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
-      const res = await fetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:300, stream:false,
           system:'UK employment law risk specialist. Respond ONLY with valid JSON, no other text: {"rating":"HIGH","summary":"two or three plain English sentences"} Rating must be HIGH, MEDIUM or LOW.',
           messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+"\nContent:\n"+tx.slice(0,3000)}]})});
@@ -2073,7 +2078,7 @@ Please produce:
 
       const userPrompt = "Draft "+instruction+nl+nl+"Available information:"+nl+context+nl+nl+"Important: Use [placeholder] format for any missing details. Today's date for reference: "+new Date().toLocaleDateString("en-GB")+". Always complete the full letter.";
 
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:3000,stream:false,
           system:systemPrompt,
           messages:[{role:"user",content:userPrompt}]
@@ -2163,7 +2168,7 @@ Please produce:
     const nl = String.fromCharCode(10);
     const history = meetings.slice(0,5).map(m=>m.date+": "+m.type+" - "+(m.record||"").slice(0,150)).join(nl);
     try {
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:350,stream:false,
           system:"You are a UK HR advisor. Write in plain prose only. No markdown, no asterisks, no hashes, no emojis, no horizontal rules, no bold. Use clean numbered sections with short bullet points using a simple dash character.",
           messages:[{role:"user",content:"Prepare a brief for a "+mtLabel+" meeting with "+empName+"."+nl+"Previous meetings: "+history+nl+"Risk level: "+lastRisk+nl+nl+"Write three sections:"+nl+"1. Key context from previous meetings (2-3 bullets)"+nl+"2. Procedural or legal risks to watch for today (2-3 bullets)"+nl+"3. Specific questions the chair should ask (3 bullets)"+nl+nl+"Plain text only. Short bullet points with a dash. No markdown, no asterisks."}]
@@ -2179,7 +2184,7 @@ Please produce:
     if(!instruction.trim()||!reviewOutput) return;
     setEditProcessing(true);
     try {
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,stream:false,
           system:"You are a UK HR documentation specialist. Edit the meeting record exactly as instructed. Keep the same format and sections. Output only the complete updated record with no preamble or explanation.",
           messages:[{role:"user",content:"Current record:"+String.fromCharCode(10)+reviewOutput+String.fromCharCode(10)+String.fromCharCode(10)+"Instruction: "+instruction+String.fromCharCode(10)+String.fromCharCode(10)+"Output the complete updated record only."}]
@@ -2209,7 +2214,7 @@ Please produce:
     if(!email||!reviewOutput) return;
     setShareProcessing(true);
     try {
-      await fetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
+      await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           to:email,
           subject:(meetingType?.label||"Meeting")+" Record - "+caseInfo.employee,
@@ -2230,7 +2235,7 @@ Please produce:
     setHomeChat(h=>[...h,{role:"user",content:question}]);
     setHomeChatLoading(true);
     try {
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-6",max_tokens:600,stream:false,
           system:"You are Compass, a senior UK HR advisor and employment lawyer. Answer questions directly and practically, as a trusted senior colleague would. Reference ACAS Code of Practice, ERA 1996, EqA 2010 and other relevant legislation where appropriate. Be concise, warm and human — never robotic or overly formal. No markdown headers or asterisks. Use plain prose or short bullet points.",
@@ -2479,7 +2484,7 @@ Please produce:
               <Btn onClick={async()=>{
                 if(!emailLetterTo.includes("@")) return;
                 try {
-                  const r = await fetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
+                  const r = await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
                     body:JSON.stringify({
                       to: emailLetterTo,
                       subject: (meetingType?.label||"Meeting")+" Outcome Letter - "+(caseInfo.employee||"Employee"),

@@ -1,17 +1,27 @@
 import crypto from 'crypto';
 import { supabaseRequest } from './_supabase.js';
+import { verifyCaller } from '../_auth.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
 export async function invite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { orgId, orgName, employeeName, email, createdBy } = req.body;
+  const caller = await verifyCaller(req);
+  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { orgId, orgName, employeeName, email } = req.body;
   if (!orgId || !employeeName || !email) {
     return res.status(400).json({ error: 'orgId, employeeName and email are required' });
   }
 
   try {
+    // The caller must actually be HR staff in this org — otherwise anyone
+    // could invite any email into any org's employee portal.
+    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=id`);
+    const members = await memberRes.json();
+    if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
+
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
@@ -22,7 +32,7 @@ export async function invite(req, res) {
         employee_name: employeeName,
         email,
         token,
-        created_by: createdBy || null,
+        created_by: caller.id,
         expires_at: expiresAt,
       }),
     });
