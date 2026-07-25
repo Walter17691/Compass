@@ -156,6 +156,12 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 <span style={{fontSize:12,color:"#9B9098"}}>tribunal risk</span>
               </div>
               {riskScore.summary&&<div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}><MDRenderer text={riskScore.summary}/></div>}
+              {riskScore.historyContext&&(
+                <div style={{marginTop:12,padding:"10px 12px",background:"#F5F3FF",borderRadius:8,borderLeft:"2px solid #7C5CFC"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"#7C5CFC",letterSpacing:0.5,textTransform:"uppercase",marginBottom:4}}>Informed by this organisation's history</div>
+                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6}}>{riskScore.historyContext}</div>
+                </div>
+              )}
             </div>
           )}
 

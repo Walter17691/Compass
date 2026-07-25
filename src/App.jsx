@@ -1610,18 +1610,49 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     });
   };
 
+  // Deterministic, not AI-generated — this is the organisation's own track
+  // record (same case type's past outcomes, this employee's case count),
+  // computed directly from existing case data rather than trusting the LLM
+  // to remember or reference it. Fed into the risk-scoring prompt below,
+  // and shown as-is in the UI so the value of accumulated history is
+  // visible, not just silently folded into the AI's summary.
+  const getCaseHistoryContext = () => {
+    const activeCase = cases.find(c => c.id === activeCaseId);
+    const excludeId = activeCase?.id;
+    const parts = [];
+
+    if(activeCase?.caseType) {
+      const sameType = cases.filter(c => c.id !== excludeId && c.caseType === activeCase.caseType && getCaseStage(c) === "closed");
+      if(sameType.length > 0) {
+        const outcomes = sameType.map(c => c.outcome).filter(Boolean);
+        parts.push(`This organisation has closed ${sameType.length} previous ${activeCase.caseType} case${sameType.length === 1 ? "" : "s"}${outcomes.length ? ", with outcomes: " + outcomes.join("; ") : ""}.`);
+      }
+    }
+
+    const employeeName = caseInfo.employee?.trim();
+    if(employeeName) {
+      const sameEmployee = cases.filter(c => c.id !== excludeId && c.employeeName === employeeName);
+      if(sameEmployee.length > 0) {
+        parts.push(`This is case ${sameEmployee.length + 1} for this employee — ${sameEmployee.length} previous case${sameEmployee.length === 1 ? "" : "s"} on file.`);
+      }
+    }
+
+    return parts.length ? parts.join(" ") : null;
+  };
+
   const runRiskScore = async () => {
     if(!reviewOutput && !transcript.length) return;
     setRiskProcessing(true);
     try {
       const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
+      const historyContext = getCaseHistoryContext();
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:300, stream:false,
-          system:'UK employment law risk specialist. Respond ONLY with valid JSON, no other text: {"rating":"HIGH","summary":"two or three plain English sentences"} Rating must be HIGH, MEDIUM or LOW.',
-          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+"\nContent:\n"+tx.slice(0,3000)}]})});
+          system:'UK employment law risk specialist. Respond ONLY with valid JSON, no other text: {"rating":"HIGH","summary":"two or three plain English sentences"} Rating must be HIGH, MEDIUM or LOW.'+(historyContext?' If organisational history is provided, factor it into your rating — a pattern of similar past cases or repeat issues with the same employee can raise risk — and briefly note why in the summary.':''),
+          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+"\nContent:\n"+tx.slice(0,3000)+(historyContext?"\n\nOrganisational history: "+historyContext:"")}]})});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      setRiskScore(JSON.parse(text.replace(/```json|```/g,"").trim()));
+      setRiskScore({...JSON.parse(text.replace(/```json|```/g,"").trim()), historyContext});
     } catch(e) { setRiskScore({rating:"UNKNOWN",summary:"Could not assess.",flags:[]}); }
     setRiskProcessing(false);
   };
