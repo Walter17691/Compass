@@ -182,7 +182,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editLocation, setEditLocation] = useState("");
-  const [dashFilter, setDashFilter] = useState("all");
+  // Default must be one of the actual filter chips ("active", "investigation",
+  // "disciplinary", "closed") — there's no "all" chip, and the matching logic
+  // in HomeScreen has no case for it either, so "all" silently matched zero
+  // cases and the dashboard's case list showed nothing until a user manually
+  // clicked a filter, on every single fresh page load.
+  const [dashFilter, setDashFilter] = useState("active");
   const [showOrgSettings, setShowOrgSettings] = useState(false);
 
   const loadEmployeeRecords = async () => {
