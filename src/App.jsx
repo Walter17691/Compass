@@ -2031,9 +2031,9 @@ Please produce:
     return fn ? fn(emp, chair, dt, mt) : null;
   };
 
-  const handleLetter = async type => {
+  const handleLetter = async (type, {inline}={}) => {
     const t = type||"outcome"; setActiveLetter(t); setAiError("");
-    setAiProcessing(true); setScreen(SCREENS.LETTER); setLetterOutput("");
+    setAiProcessing(true); if(!inline) setScreen(SCREENS.LETTER); setLetterOutput("");
     try {
       const nl = String.fromCharCode(10);
       const tx = transcript.map(u=>u.speaker+": "+u.text).join(nl);
@@ -2296,25 +2296,25 @@ Please produce:
 
     switch(stage) {
       case "intake":
-        return {label:"Schedule investigation meeting", action:"start_investigation", primary:true};
+        return {label:"Schedule investigation meeting", action:"start_investigation", primary:true, reason:"No fact-finding has started yet — ACAS recommends investigating without unreasonable delay."};
       case "investigation":
-        if(!lastInv?.record) return {label:"Start investigation meeting", action:"start_investigation", primary:true};
-        if(lastInv?.signStatus!=="signed") return {label:"Send investigation record for signature", action:"send_signature", primary:true};
-        return {label:"Generate investigation report", action:"inv_report", primary:true};
+        if(!lastInv?.record) return {label:"Start investigation meeting", action:"start_investigation", primary:true, reason:"No investigation meeting recorded yet."};
+        if(lastInv?.signStatus!=="signed") return {label:"Send investigation record for signature", action:"send_signature", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
+        return {label:"Generate investigation report", action:"inv_report", primary:true, reason:"Investigation meetings are complete — summarise findings before deciding next steps."};
       case "inv_report":
-        return {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", primary:true, secondary:{label:"No case to answer — close", action:"close_no_case"}};
+        return {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", primary:true, reason:"ACAS Code: give the employee written notice of the allegations and evidence in good time before any hearing.", secondary:{label:"No case to answer — close", action:"close_no_case"}};
       case "disciplinary":
-        if(!lastDisc?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true};
-        if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", primary:true};
-        if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true};
-        return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true};
+        if(!lastDisc?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true, reason:"Invitation sent — the hearing hasn't been held yet."};
+        if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", primary:true, reason:"The employee should confirm the hearing record is accurate."};
+        if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true, reason:"ACAS Code: confirm the decision in writing, normally within 5 working days of the hearing."};
+        return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
       case "outcome":
-        return {label:"Close case", action:"close_case", primary:true};
+        return {label:"Close case", action:"close_case", primary:true, reason:"Outcome has been issued and no appeal is in progress."};
       case "appeal":
-        if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true};
-        if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", primary:true};
-        if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", primary:true};
-        return {label:"Appeal outcome issued — close case", action:"close_case", primary:true};
+        if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true, reason:"An appeal has been raised but not yet heard."};
+        if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
+        if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
+        return {label:"Appeal outcome issued — close case", action:"close_case", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
       case "closed":
         return null;
       case "outcome":
@@ -2324,6 +2324,14 @@ Please produce:
     }
   };
 
+  // Toggles a single item in a meeting's deterministic nextSteps checklist
+  // (NEXT_STEPS_MAP-derived, App.jsx:1468-1470) — the same array
+  // computeDueSoon already reads via the "next_step" category, so ticking
+  // an item off here removes it from the overdue banner/Settings list/
+  // digest email with no changes needed to any of those.
+  const toggleNextStepDone = (caseId, meetingId, stepIndex) => {
+    saveCases(cases.map(x=>x.id===caseId?{...x,meetings:x.meetings.map(m=>m.id===meetingId?{...m,nextSteps:(m.nextSteps||[]).map((s,i)=>i===stepIndex?{...s,done:!s.done}:s)}:m)}:x), caseId);
+  };
 
   const fmtDate = (d) => {
     if(!d) return "";
@@ -2929,6 +2937,10 @@ Please produce:
           setLetterOutput={setLetterOutput}
           setShowSignModal={setShowSignModal}
           handleLetter={handleLetter}
+          letterOutput={letterOutput}
+          aiProcessing={aiProcessing}
+          aiError={aiError}
+          toggleNextStepDone={toggleNextStepDone}
         />
       )}
 {/* ══ INTAKE ══ */}
