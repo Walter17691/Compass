@@ -3,11 +3,11 @@ import { AddRoleForm } from '../components/AddRoleForm';
 
 export function OrgSettingsModal({ setShowOrgSettings, orgRoles, loadOrgRoles, org, orgMembers, loadOrgMembers, showToast }) {
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowOrgSettings(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:560,maxHeight:"80vh",overflowY:"auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Organisation Settings</div>
-          <button onClick={()=>setShowOrgSettings(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
+          <button onClick={()=>setShowOrgSettings(false)} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
         </div>
         <div style={{marginBottom:24}}>
           <div style={{fontSize:12,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Job Titles & Access Levels</div>

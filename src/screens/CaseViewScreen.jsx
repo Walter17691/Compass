@@ -13,7 +13,7 @@ const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -346,7 +346,12 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, getCaseStage, g
             )}
             <div style={{marginTop:20,padding:"12px 0",borderTop:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontSize:11,color:"#9B9098"}}>{cs.description&&<span style={{fontStyle:"italic"}}>"{cs.description.slice(0,60)}{cs.description.length>60?"...":""}"</span>}{cs.referredBy&&<span style={{marginLeft:8}}>Referred by: {cs.referredBy}</span>}</div>
-              <button onClick={()=>{if(window.confirm("Delete this case?"))saveCases(cases.filter(x=>x.id!==cs.id));setScreen(SCREENS.CASES);}} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Delete case</button>
+              <button onClick={async()=>{
+                const ok = await confirmDialog({title:"Delete case", message:"This will permanently delete this case and all its meeting records. This cannot be undone.", confirmLabel:"Delete", danger:true});
+                if(!ok) return;
+                saveCases(cases.filter(x=>x.id!==cs.id));
+                setScreen(SCREENS.CASES);
+              }} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Delete case</button>
             </div>
           </div>
         )}

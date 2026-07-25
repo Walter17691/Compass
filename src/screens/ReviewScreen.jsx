@@ -65,13 +65,16 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
 
 
           {/* Meeting record card */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,boxShadow:"0 1px 3px rgba(26,21,53,0.06)",overflow:"hidden",marginBottom:16}}>
+          <div className="print-area" style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,boxShadow:"0 1px 3px rgba(26,21,53,0.06)",overflow:"hidden",marginBottom:16}}>
             <div style={{padding:"12px 20px",borderBottom:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5"}}>
               <span style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Meeting record</span>
-              <button onClick={()=>setEditingRecord(r=>!r)}
-                style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                {editingRecord?"Done editing":"Edit record"}
-              </button>
+              <div style={{display:"flex",gap:14,alignItems:"center"}}>
+                <button onClick={()=>window.print()} style={{fontSize:11,color:"#6B6375",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>Print</button>
+                <button onClick={()=>setEditingRecord(r=>!r)}
+                  style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  {editingRecord?"Done editing":"Edit record"}
+                </button>
+              </div>
             </div>
             <div style={{padding:"28px 32px"}}>
               {aiProcessing&&!reviewOutput&&(

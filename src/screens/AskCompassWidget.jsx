@@ -20,7 +20,7 @@ export function AskCompassWidget({ showAskCompass, setShowAskCompass, askCompass
                 <div style={{fontSize:10,color:"#9B9098"}}>UK employment law · ACAS · Best practice</div>
               </div>
             </div>
-            <button onClick={()=>setShowAskCompass(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#9B9098",fontSize:20,lineHeight:1,padding:4}}>×</button>
+            <button onClick={()=>setShowAskCompass(false)} aria-label="Close" style={{background:"none",border:"none",cursor:"pointer",color:"#9B9098",fontSize:20,lineHeight:1,padding:4}}>×</button>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:8,minHeight:200}}>
             {askCompassHistory.length===0&&(
@@ -48,8 +48,8 @@ export function AskCompassWidget({ showAskCompass, setShowAskCompass, askCompass
             {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
           </div>
           <div style={{padding:"10px 14px",borderTop:"1px solid #E8E0D0",display:"flex",gap:8}}>
-            <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" style={{flex:1,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"8px 12px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
-            <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600}}>→</button>
+            <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" aria-label="Ask an HR question" style={{flex:1,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"8px 12px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none"}}/>
+            <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} aria-label="Send" style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600}}>→</button>
           </div>
           {askCompassHistory.length>0&&<div style={{padding:"6px 14px 10px",borderTop:"1px solid #F5F1EA",display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setAskCompassHistory([])} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear chat</button></div>}
         </div>

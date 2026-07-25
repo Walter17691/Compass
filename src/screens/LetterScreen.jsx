@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { lsSet } from '../lib/storage';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen }) {
+  const [showHistory, setShowHistory] = useState(false);
   return (
     <div>
       <div style={{borderBottom:"1px solid #E8E0D0"}}>
@@ -45,7 +47,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               </div>
             </div>
 
-            <div style={{background:"#FDFAF5",borderRadius:12,padding:"36px 44px",marginBottom:16,textAlign:"left"}}>
+            <div className="print-area" style={{background:"#FDFAF5",borderRadius:12,padding:"36px 44px",marginBottom:16,textAlign:"left"}}>
               <MDRenderer text={letterOutput} light/>
               {signature&&(
                 <div style={{marginTop:20,paddingTop:18,borderTop:"1px solid #E0DDD8"}}>
@@ -62,10 +64,31 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
               <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating}>Send via Gmail</Btn>
               <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating}>Send via Outlook</Btn>
+              <Btn variant="ghost" onClick={()=>window.print()}>Print</Btn>
               <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)}>Copy text</Btn>
               <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
               <Btn variant="ghost" onClick={()=>setScreen(SCREENS.REVIEW)}>← Back</Btn>
             </div>
+
+            {letterHistory.length>0&&(
+              <div style={{marginTop:20}}>
+                <button onClick={()=>setShowHistory(v=>!v)} style={{background:"none",border:"none",color:"#9B9098",fontSize:12,cursor:"pointer",padding:0}}>
+                  {showHistory?"▾":"▸"} Previous versions ({letterHistory.length})
+                </button>
+                {showHistory&&(
+                  <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:8}}>
+                    {letterHistory.map((v,i)=>(
+                      <div key={i} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                        <div style={{fontSize:11,color:"#6B6375",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {new Date(v.ts).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})} — {v.text.slice(0,80)}...
+                        </div>
+                        <Btn variant="ghost" onClick={()=>restoreLetterVersion(v)} style={{flexShrink:0,padding:"4px 12px",fontSize:11}}>Restore</Btn>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

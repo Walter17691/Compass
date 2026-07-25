@@ -1,14 +1,24 @@
-import { StrictMode, useState, useEffect } from 'react'
+import { StrictMode, Suspense, lazy, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import Compass from './App.jsx'
 import Login from './Login.jsx'
-import OrgSetup from './OrgSetup.jsx'
-import PortalSignup from './PortalSignup.jsx'
-import { PortalApp } from './portal/PortalApp.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
+
+// These are mutually exclusive top-level views — a session only ever
+// renders one of them, so splitting them out keeps (say) an HR user's
+// initial load from paying for the employee portal's code, and vice versa.
+const Compass = lazy(() => import('./App.jsx'))
+const OrgSetup = lazy(() => import('./OrgSetup.jsx'))
+const PortalSignup = lazy(() => import('./PortalSignup.jsx'))
+const PortalApp = lazy(() => import('./portal/PortalApp.jsx').then(m => ({ default: m.PortalApp })))
+
+const LoadingFallback = () => (
+  <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#FDFAF5'}}>
+    <span className="pu" style={{color:'#7C5CFC',fontSize:24}}>●</span>
+  </div>
+)
 
 window.COMPASS_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
@@ -120,22 +130,24 @@ function Root() {
     // A pending portal invite means this person followed an employee
     // invite link — show PortalSignup, never OrgSetup's "create or join
     // a team" picker, which is for HR-staff org membership only.
-    if(localStorage.getItem('compass_pending_portal_invite')) return <PortalSignup onLogin={setUser} />
+    if(localStorage.getItem('compass_pending_portal_invite')) return <Suspense fallback={<LoadingFallback/>}><PortalSignup onLogin={setUser} /></Suspense>
     return <Login onLogin={setUser} />
   }
 
-  if (portalAccount) return <PortalApp user={user} employeeName={portalAccount.employeeName} onSignOut={signOut} />
+  if (portalAccount) return <Suspense fallback={<LoadingFallback/>}><PortalApp user={user} employeeName={portalAccount.employeeName} onSignOut={signOut} /></Suspense>
 
-  if (!org) return <OrgSetup user={user} onComplete={({org, member})=>{setOrg(org);setMember(member);}} />
+  if (!org) return <Suspense fallback={<LoadingFallback/>}><OrgSetup user={user} onComplete={({org, member})=>{setOrg(org);setMember(member);}} /></Suspense>
 
   return (
     <ErrorBoundary>
-      <Compass
-        user={user}
-        org={org}
-        member={member}
-        onSignOut={signOut}
-      />
+      <Suspense fallback={<LoadingFallback/>}>
+        <Compass
+          user={user}
+          org={org}
+          member={member}
+          onSignOut={signOut}
+        />
+      </Suspense>
     </ErrorBoundary>
   )
 }

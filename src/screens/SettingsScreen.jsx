@@ -5,20 +5,20 @@ import { UserAddForm } from '../components/UserAddForm';
 import { isPro } from '../lib/plan';
 import { authedFetch } from '../lib/authedFetch';
 
-export function SettingsScreen({ isHR, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
+export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
   const [webhookUrlDraft, setWebhookUrlDraft] = useState(orgWebhookUrl||"");
   const goToBillingUrl = async (action) => {
     try {
       const res = await authedFetch(`/api/billing/${action}?orgId=${encodeURIComponent(org?.id||"")}`);
       const data = await res.json();
       if(data.url) window.location.href = data.url;
-      else alert(data.error||"Couldn't open billing — please try again");
-    } catch(e) { alert("Couldn't open billing — please try again"); }
+      else showToast(data.error||"Couldn't open billing — please try again", "error");
+    } catch(e) { showToast("Couldn't open billing — please try again", "error"); }
   };
   return(
     <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
-      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 28px"}}>All data saved in your browser.</p>
+      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 28px"}}>Case files and employee records are stored securely in the cloud, shared with your organisation.</p>
 
       {/* Billing */}
       <Card style={{marginBottom:20}}>
@@ -353,7 +353,7 @@ export function SettingsScreen({ isHR, exportCSV, exportPDF, org, user, location
       {/* GDPR / Data */}
       <Card style={{marginBottom:20}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Data &amp; privacy</h3>
-        <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Case files and employee records are stored in the cloud, shared with your organisation. Policies, signature/letterhead and the audit log stay in this browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
+        <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Case files, employee records and the audit trail are stored in the cloud, shared with your organisation. Policies and signature/letterhead stay in this browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
         <div style={{background:"#FDFAF5",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
           <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:8}}>DATA INVENTORY</div>
           {[

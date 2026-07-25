@@ -2,10 +2,13 @@ import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
 import { SCREENS } from '../constants';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen }) {
-  const cancelMeeting = () => {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog }) {
+  const cancelMeeting = async () => {
     const hasContent = transcript.length>0 || inputText.trim();
-    if(hasContent && !window.confirm("Leave without saving? This meeting's notes will be lost.")) return;
+    if(hasContent) {
+      const ok = await confirmDialog({title:"Leave without saving?", message:"This meeting's notes will be lost.", confirmLabel:"Leave", danger:true});
+      if(!ok) return;
+    }
     setScreen(SCREENS.HOME);
   };
   return (
@@ -14,7 +17,7 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 24px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <button onClick={cancelMeeting} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0,display:"flex",alignItems:"center"}} title="Leave without saving">←</button>
+          <button onClick={cancelMeeting} aria-label="Leave without saving" style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0,display:"flex",alignItems:"center"}} title="Leave without saving">←</button>
           <CompassLogo size={32}/>
           <div style={{width:1,height:20,background:"#EDE5D8"}}/>
           <div>
@@ -174,8 +177,9 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
                 <input value={liveChatInput} onChange={e=>setLiveChatInput(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&sendLiveChat()}
                   placeholder="Ask about this meeting..."
+                  aria-label="Ask about this meeting"
                   style={{flex:1,background:"none",border:"none",outline:"none",fontSize:12,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-                <button onClick={sendLiveChat} disabled={liveChatProcessing||!liveChatInput.trim()}
+                <button onClick={sendLiveChat} disabled={liveChatProcessing||!liveChatInput.trim()} aria-label="Send"
                   style={{background:"#7C5CFC",border:"none",borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:liveChatProcessing||!liveChatInput.trim()?0.4:1,flexShrink:0}}>
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                     <path d="M6 10V2M6 2L3 5M6 2L9 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>

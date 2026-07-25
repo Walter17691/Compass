@@ -144,7 +144,7 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
                     {obj.measure&&<div style={{fontSize:10,color:"#5A5570",marginTop:2}}>Measure: {obj.measure}</div>}
                   </div>
                   <button onClick={()=>setDevSession(ds=>({...ds,objectives:ds.objectives.filter((_,j)=>j!==i)}))}
-                    style={{background:"none",border:"none",color:"#6B6880",fontSize:14,cursor:"pointer",marginLeft:8}}>✕</button>
+                    aria-label="Remove" style={{background:"none",border:"none",color:"#6B6880",fontSize:14,cursor:"pointer",marginLeft:8}}>✕</button>
                 </div>
                 {/* Rating */}
                 <div style={{display:"flex",gap:4,marginBottom:8}}>

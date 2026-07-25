@@ -3,13 +3,13 @@ import { CompassLogo } from '../components/CompassLogo';
 export function OnboardingWizard({ onboardingStep, setOnboardingStep, org, currentUser, lsSet, setShowOnboarding, setShowCasePrompt, setShowAskCompass }) {
   const dismiss = () => { lsSet("compass_onboarded",true); setShowOnboarding(false); };
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")dismiss();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#FFFFFF",borderRadius:20,width:"100%",maxWidth:520,overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.2)",position:"relative"}}>
         {/* Progress bar */}
         <div style={{height:4,background:"#F5F1EA"}}>
           <div style={{height:4,background:"#7C5CFC",width:`${((onboardingStep+1)/4)*100}%`,transition:"width 0.3s"}}/>
         </div>
-        <button onClick={dismiss} style={{position:"absolute",top:16,right:16,background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:4,zIndex:1}}>×</button>
+        <button onClick={dismiss} aria-label="Close" style={{position:"absolute",top:16,right:16,background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:4,zIndex:1}}>×</button>
         <div style={{padding:36}}>
           {onboardingStep===0&&(
             <>

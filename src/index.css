@@ -77,3 +77,12 @@ button { font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer; }
 
 input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
 ::selection { background: var(--accent-dim); color: var(--text-1); }
+
+/* Printing a letter or meeting record should print just that document,
+   not the app chrome around it. Elements opt in with .print-area; only
+   they (and their children) stay visible. */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; border: none !important; }
+}

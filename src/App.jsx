@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, ROLE_PERMS } from './constants';
 import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
@@ -20,6 +20,8 @@ import { DateInput } from './components/DateInput';
 import { AdjustmentForm } from './components/AdjustmentForm';
 import { UserAddForm } from './components/UserAddForm';
 import { AddRoleForm } from './components/AddRoleForm';
+import { ConfirmModal } from './components/ConfirmModal';
+import { ActivityBell } from './components/ActivityBell';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { LetterScreen } from './screens/LetterScreen';
@@ -31,16 +33,18 @@ import { IntakeScreen } from './screens/IntakeScreen';
 import { HomeMeetingScreen } from './screens/HomeMeetingScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { RecordScreen } from './screens/RecordScreen';
-import { WellbeingScreen } from './screens/WellbeingScreen';
-import { NewStarterScreen } from './screens/NewStarterScreen';
 import { PersonViewScreen } from './screens/PersonViewScreen';
 import { CaseViewScreen } from './screens/CaseViewScreen';
-import { DevelopScreen } from './screens/DevelopScreen';
-import { ErReportScreen } from './screens/ErReportScreen';
-import { RedundancyScreen } from './screens/RedundancyScreen';
 import { HomeScreen } from './screens/HomeScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
-import { DsarScreen } from './screens/DsarScreen';
+// Lazy: less-common screens, split out of the main bundle so the common
+// login -> Home -> Cases path doesn't pay to download them upfront.
+const WellbeingScreen = lazy(() => import('./screens/WellbeingScreen').then(m => ({default: m.WellbeingScreen})));
+const NewStarterScreen = lazy(() => import('./screens/NewStarterScreen').then(m => ({default: m.NewStarterScreen})));
+const DevelopScreen = lazy(() => import('./screens/DevelopScreen').then(m => ({default: m.DevelopScreen})));
+const ErReportScreen = lazy(() => import('./screens/ErReportScreen').then(m => ({default: m.ErReportScreen})));
+const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
+const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
 import { OrgSettingsModal } from './screens/OrgSettingsModal';
@@ -73,6 +77,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [prepNotes, setPrepNotes] = useState("");
   const [reviewOutput, setReviewOutput] = useState("");
   const [letterOutput, setLetterOutput] = useState("");
+  const [letterHistory, setLetterHistory] = useState([]); // previous drafts from this session, most recent first
   const [activeLetter, setActiveLetter] = useState("outcome");
   const [riskScore, setRiskScore] = useState(null);
   const [riskProcessing, setRiskProcessing] = useState(false);
@@ -112,8 +117,24 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   const [devSummary, setDevSummary] = useState("");
   const [devLetter, setDevLetter] = useState("");
 
-  // ── Audit trail ──
-  const [auditLog, setAuditLog] = useState(ls("compass_audit", []));
+  // ── Audit trail (cloud-synced — see audit_log_cloud_sync_2026-07-25.sql) ──
+  const [auditLog, setAuditLog] = useState([]);
+
+  const loadAuditLog = async () => {
+    if(!org?.id) return;
+    try {
+      const { data, error } = await supabase.from('audit_log').select('*').eq('org_id', org.id).order('created_at',{ascending:false}).limit(500);
+      if(!error && data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||""})));
+    } catch(e) { console.error("Load audit log error:", e); }
+  };
+  useEffect(() => { if(org?.id) loadAuditLog(); }, [org?.id]);
+  // Pick up entries other team members logged while this tab was in the
+  // background — cheap alternative to a realtime subscription.
+  useEffect(() => {
+    const onFocus = () => { if(org?.id) loadAuditLog(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [org?.id]);
 
   // ── Search ──
   const [searchQuery, setSearchQuery] = useState("");
@@ -365,7 +386,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     
     const data = await res.json();
         if(data.success) {
-      alert("Signature request sent to "+employeeEmail);
+      showToast("Signature request sent to "+employeeEmail);
       setShowSignModal(false);
       if(caseInfo._linkedCaseId) {
         saveMeetingToCase();
@@ -376,7 +397,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         else setScreen(SCREENS.CASES);
       }
     } else {
-      alert("Failed to send: "+JSON.stringify(data));
+      showToast("Failed to send: "+(data.error||JSON.stringify(data)), "error");
     }
   };
 
@@ -505,7 +526,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   };
 
   const removeMember = async (member) => {
-    if(!window.confirm("Remove "+member.name+" from the team?")) return;
+    const ok = await confirmDialog({title:"Remove team member", message:`Remove ${member.name} from the team? They will lose access to Compass immediately.`, confirmLabel:"Remove", danger:true});
+    if(!ok) return;
     try {
       const r = await authedFetch("/api/delete-member", {
         method:"POST",
@@ -514,8 +536,8 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
       });
       const d = await r.json();
       if(d.success) setTeamMembers(m=>m.filter(x=>x.id!==member.id));
-      else alert("Error: "+d.error);
-    } catch(e) { alert("Error: "+e.message); }
+      else showToast("Error: "+d.error, "error");
+    } catch(e) { showToast("Error: "+e.message, "error"); }
   };
 
   const updateMemberRole = async (memberId, role) => {
@@ -540,7 +562,7 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
         code: org.invite_code
       });
       setInviteForm({name:"",email:"",role:"hr_manager",locationIds:[]});
-    } catch(e) { alert("Error: "+e.message); }
+    } catch(e) { showToast("Error: "+e.message, "error"); }
     setInviting(false);
   };
 
@@ -754,9 +776,19 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   };
   const [toast, setToast] = useState(null);
 
-  const showToast = (message, type="success") => {
+  const showToast = (message, type="success", duration=3000) => {
     setToast({message, type});
-    setTimeout(()=>setToast(null), 3000);
+    setTimeout(()=>setToast(null), duration);
+  };
+
+  // In-app replacement for window.confirm — returns a Promise<boolean> so
+  // call sites can `if(!await confirmDialog({...})) return;` the same way
+  // they used to with the blocking native dialog.
+  const [confirmState, setConfirmState] = useState(null);
+  const confirmDialog = ({title, message, confirmLabel, cancelLabel, danger}) => {
+    return new Promise(resolve => {
+      setConfirmState({title, message, confirmLabel, cancelLabel, danger, resolve});
+    });
   };
 
   // ── Plan gating (free = 1 active case, no Portal/Calendar/DSAR/digest) ──
@@ -869,18 +901,19 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
   };
   // ── Audit trail ──
   const audit = (action, detail="") => {
+    const userName = currentUser?.name || "HR Manager";
     const entry = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       ts: new Date().toISOString(),
-      user: currentUser?.name || "HR Manager",
+      user: userName,
       action,
       detail,
     };
-    setAuditLog(p => {
-      const updated = [entry, ...p].slice(0, 500); // keep last 500
-      lsSet("compass_audit", updated);
-      return updated;
-    });
+    setAuditLog(p => [entry, ...p].slice(0, 500)); // optimistic — cloud is the source of truth on next load
+    if(org?.id && user?.id) {
+      supabase.from('audit_log').insert({ org_id: org.id, user_id: user.id, user_name: userName, action, detail })
+        .then(({error}) => { if(error) console.error('Audit log sync failed:', error.message); });
+    }
   };
 
   // ── Users ──
@@ -994,9 +1027,22 @@ export default function Compass({ user=null, org=null, member=null, onSignOut=nu
     URL.revokeObjectURL(url);
     audit("Data exported (GDPR)");
   };
-  const deleteAllData = () => {
-    if(!window.confirm("This will permanently delete ALL Compass data. This cannot be undone.")) return;
-    ["compass_cases","compass_policies","compass_whistle","compass_audit","compass_users","compass_user","compass_vault","compass_adjustments","compass_signature","compass_letterhead","compass_word_template","compass_starters","compass_starter_templates"].forEach(k=>localStorage.removeItem(k));
+  const deleteAllData = async () => {
+    const ok = await confirmDialog({
+      title: "Delete all data",
+      message: "This will permanently delete all case files, meeting records, DSAR requests, HR review requests and the audit trail for this organisation. This cannot be undone.",
+      confirmLabel: "Delete everything",
+      danger: true,
+    });
+    if(!ok) return;
+    if(org?.id) {
+      try {
+        const r = await authedFetch("/api/delete-org-data", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({orgId: org.id})});
+        const d = await r.json();
+        if(!r.ok) { showToast("Couldn't delete organisation data: "+(d.error||"unknown error"), "error"); return; }
+      } catch(e) { showToast("Couldn't delete organisation data: "+e.message, "error"); return; }
+    }
+    ["compass_cases","compass_policies","compass_whistle","compass_users","compass_user","compass_vault","compass_adjustments","compass_signature","compass_letterhead","compass_word_template","compass_starters","compass_starter_templates"].forEach(k=>localStorage.removeItem(k));
     try { window.location.reload(); } catch(e) {}
   };
 
@@ -1160,7 +1206,7 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
       saveStarterInstanceToDB(changed);
       setActiveStarter(changed);
       audit("AI customised checklist", instance.name+" — "+instance.role);
-    } catch(e) { alert("Could not customise: "+e.message); }
+    } catch(e) { showToast("Could not customise: "+e.message, "error"); }
     setStarterAiProcessing(false);
   };
 
@@ -1417,7 +1463,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setShowLinkCase(false);
     setMeetingStartTime(null);
     setMeetingEndTime(null);
-    setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setLetterOutput("");
+    setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setLetterOutput(""); setLetterHistory([]);
     setRiskScore(null); setPrediction(""); setNextSteps([]); setParticipants([]);
     if(type && type.group === "dev") {
       const config = DEV_MEETING_CONFIG[type.label];
@@ -1719,7 +1765,7 @@ Please produce:
 
     if(action==="download") {
       setPdfGenerating(true);
-      try { const d=await generatePDF(sig); d.save(fileName); } catch(e){alert(e.message);}
+      try { const d=await generatePDF(sig); d.save(fileName); } catch(e){showToast(e.message, "error");}
       setPdfGenerating(false);
     } else {
       setPdfGenerating(true);
@@ -1730,9 +1776,9 @@ Please produce:
           : `https://outlook.office.com/mail/deeplink/compose?to=${to}&subject=${subj}&body=${encodeURIComponent(bodyText)}`;
         setTimeout(()=>{
           window.open(url,"_blank");
-          alert(`The letter has been downloaded as "${fileName}".\n\nPlease attach it to the email that just opened.`);
+          showToast(`Letter downloaded as "${fileName}" — please attach it to the email that just opened.`, "success", 6000);
         },1000);
-      } catch(e){alert(e.message);}
+      } catch(e){showToast(e.message, "error");}
       setPdfGenerating(false);
     }
   };
@@ -1752,7 +1798,7 @@ Please produce:
         } else { content=await file.text(); }
         const pol={id:Date.now().toString()+Math.random(),name:file.name.replace(/\.[^.]+$/,""),fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k"};
         setPolicies(p=>{const u=[...p,pol];lsSet("compass_policies",u);return u;});
-      } catch(err){alert("Could not read "+file.name);}
+      } catch(err){showToast("Could not read "+file.name, "error");}
     }
     setPolicyProcessing(false); e.target.value="";
   };
@@ -2037,7 +2083,11 @@ Please produce:
   };
 
   const handleLetter = async (type, {inline}={}) => {
-    const t = type||"outcome"; setActiveLetter(t); setAiError("");
+    const t = type||"outcome"; setAiError("");
+    // Regenerating overwrites letterOutput — keep the draft being replaced
+    // so it's not just silently gone.
+    if(letterOutput) setLetterHistory(h => [{type: activeLetter, text: letterOutput, ts: new Date().toISOString()}, ...h].slice(0, 10));
+    setActiveLetter(t);
     setAiProcessing(true); if(!inline) setScreen(SCREENS.LETTER); setLetterOutput("");
     try {
       const nl = String.fromCharCode(10);
@@ -2091,6 +2141,12 @@ Please produce:
     setAiProcessing(false);
   };
 
+  const restoreLetterVersion = (entry) => {
+    if(letterOutput) setLetterHistory(h => [{type: activeLetter, text: letterOutput, ts: new Date().toISOString()}, ...h.filter(x=>x!==entry)].slice(0, 10));
+    else setLetterHistory(h => h.filter(x=>x!==entry));
+    setActiveLetter(entry.type);
+    setLetterOutput(entry.text);
+  };
 
   const MEETING_QUESTIONS = {
     "investigation": [
@@ -2383,7 +2439,7 @@ Please produce:
       `}</style>
 
       {showShareModal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowShareModal(false);setShareEmail("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:420}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share meeting record</h3>
             <p style={{fontSize:13,color:"#9B9098",marginBottom:20}}>Send the meeting record to an email address</p>
@@ -2403,7 +2459,7 @@ Please produce:
       )}
 
       {showLinkCase&&appealDetected&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowLinkCase(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
             <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Appeal detected</div>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Link to an existing case?</h3>
@@ -2450,7 +2506,7 @@ Please produce:
       )}
 
       {showLetterModal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowLetterModal(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:24}}>How would you like to create the outcome letter?</p>
@@ -2472,7 +2528,7 @@ Please produce:
       )}
 
       {showEmailLetter&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowEmailLetter(false);setEmailLetterTo("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Email letter</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The letter will be sent as email body and also available to download as PDF.</p>
@@ -2496,8 +2552,8 @@ Please produce:
                     })});
                   const d = await r.json();
                   if(d.success){ showToast("Letter sent to "+emailLetterTo); setShowEmailLetter(false); setEmailLetterTo(""); }
-                  else alert("Failed: "+d.error);
-                } catch(e){ alert("Error: "+e.message); }
+                  else showToast("Failed: "+d.error, "error");
+                } catch(e){ showToast("Error: "+e.message, "error"); }
               }} disabled={!emailLetterTo.includes("@")} style={{flex:1}}>Send email</Btn>
               <Btn variant="ghost" onClick={()=>{setShowEmailLetter(false);setEmailLetterTo("");}} style={{flex:1}}>Cancel</Btn>
             </div>
@@ -2506,7 +2562,7 @@ Please produce:
       )}
 
       {inviteLink&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setInviteLink(null);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share invite with {inviteLink.name}</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>Share this link or invite code with {inviteLink.name} ({inviteLink.email}):</p>
@@ -2527,7 +2583,7 @@ Please produce:
       )}
 
       {showSignModal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowSignModal(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Send for signature</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The employee will receive an email with a link to read and sign the meeting record.</p>
@@ -2552,14 +2608,14 @@ Please produce:
 
       {/* Case file prompt */}
       {showCasePrompt&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")closeCasePrompt();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
                 <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>New case</div>
                 <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>Log a new HR case and employee details</div>
               </div>
-              <button onClick={closeCasePrompt} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1}}>×</button>
+              <button onClick={closeCasePrompt} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1}}>×</button>
             </div>
 
             {/* Employee name with lookup */}
@@ -2673,13 +2729,25 @@ Please produce:
         </div>
       )}
 
+      {confirmState&&(
+        <ConfirmModal
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          cancelLabel={confirmState.cancelLabel}
+          danger={confirmState.danger}
+          onConfirm={()=>{ confirmState.resolve(true); setConfirmState(null); }}
+          onCancel={()=>{ confirmState.resolve(false); setConfirmState(null); }}
+        />
+      )}
+
       {/* ── Upgrade to Pro prompt ── */}
       {upgradePromptFeature&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setUpgradePromptFeature(null)}>
           <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:420}} onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
               <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Upgrade to Pro</div>
-              <button onClick={()=>setUpgradePromptFeature(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:0,marginLeft:12}}>×</button>
+              <button onClick={()=>setUpgradePromptFeature(null)} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:0,marginLeft:12}}>×</button>
             </div>
             <div style={{fontSize:13,color:"#6B6375",marginBottom:20,lineHeight:1.6}}>{FEATURE_LABEL[upgradePromptFeature]||"This feature"} is a Pro feature. Upgrade to unlock unlimited cases and the full feature set.</div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
@@ -2696,7 +2764,7 @@ Please produce:
           <Card style={{maxWidth:520,width:"100%"}}>
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#7C5CFC",marginBottom:8,fontWeight:600}}>Data &amp; privacy</div>
             <p style={{fontSize:13,color:"#6B6375",lineHeight:1.8,marginBottom:16}}>
-              Compass stores case files, employee records and organisation settings in a secure cloud database, shared with your organisation. Uploaded policies, your signature/letterhead and the audit log stay in this browser only. Meeting text is sent to Anthropic's API to generate outputs.
+              Compass stores case files, employee records, organisation settings and the audit trail in a secure cloud database, shared with your organisation. Uploaded policies and your signature/letterhead stay in this browser only. Meeting text is sent to Anthropic's API to generate outputs.
             </p>
             <div style={{background:"#FDFAF5",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
               <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>WHAT IS STORED</div>
@@ -2719,7 +2787,7 @@ Please produce:
 
       {/* ── Onboarding overlay ── */}
       {showOnboard && !showGdpr && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1900,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowOnboard(false);setOnboardDone(true);lsSet("compass_onboard",true);}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1900,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <Card style={{maxWidth:480,width:"100%"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
               <div style={{fontSize:10,color:"#6B6880",letterSpacing:1}}>{onboardStep+1} / {ONBOARD_STEPS.length}</div>
@@ -2741,7 +2809,7 @@ Please produce:
 
       {/* ── HEADER ── */}
       <header style={{display:screen===SCREENS.HOME?"none":"flex",display:screen===SCREENS.HOME?"none":"flex",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
-        <div style={{maxWidth:1440,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
+        <div style={{maxWidth:1440,margin:"0 auto",padding:"8px 24px",minHeight:52,display:"flex",flexWrap:"wrap",rowGap:6,alignItems:"center",justifyContent:"space-between"}}>
           
           {/* Logo */}
           <button onClick={()=>setScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:0,cursor:"pointer",flexShrink:0}}>
@@ -2804,9 +2872,9 @@ Please produce:
           <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
             {!isMobile&&org?.name&&<span style={{fontSize:11,color:"#9B9098",background:"#F5F1EA",borderRadius:4,padding:"3px 8px"}}>{org.name}</span>}
             {!isMobile&&currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
+            <ActivityBell auditLog={auditLog}/>
             {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
             {!isMobile&&<button onClick={()=>setShowOrgSettings(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
-            <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{background:screen===SCREENS.SETTINGS?"#F5F3FF":"none",border:"1px solid #E8E0D0",color:"#6B6375",borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer"}}>⚙</button>
           </div>
         </div>
       </header>
@@ -2833,6 +2901,7 @@ Please produce:
           setShowOrgSettings={setShowOrgSettings}
           onSignOut={onSignOut}
           currentUser={currentUser}
+          auditLog={auditLog}
           getNextStep={getNextStep}
           setMeetingType={setMeetingType}
           setCaseInfo={setCaseInfo}
@@ -2917,6 +2986,7 @@ Please produce:
           cases={cases}
           activeCaseId={activeCaseId}
           setScreen={setScreen}
+          confirmDialog={confirmDialog}
           getCaseStage={getCaseStage}
           getNextStep={getNextStep}
           fmtDate={fmtDate}
@@ -2960,7 +3030,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} />
       )}
 
       {/* ══ REVIEW ══ */}
@@ -2970,7 +3040,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} />
       )}
 
       {/* ══ DASHBOARD ══ */}
@@ -2987,6 +3057,7 @@ Please produce:
         <SearchScreen searchQuery={searchQuery} setSearchQuery={setSearchQuery} runSearch={runSearch} searchResults={searchResults} setScreen={setScreen} setExpandedCases={setExpandedCases} cases={cases} setViewMeeting={setViewMeeting} setViewCaseId={setViewCaseId} dueSoon={dueSoon} />
       )}
 
+      <Suspense fallback={<div style={{textAlign:"center",padding:80}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span></div>}>
       {/* ══ DEVELOP ══ */}
       {screen===SCREENS.DEVELOP&&devSession&&(
         <DevelopScreen
@@ -3081,6 +3152,7 @@ Please produce:
       {screen===SCREENS.SETTINGS&&(
         <SettingsScreen
           isHR={isHR}
+          showToast={showToast}
           exportCSV={exportCSV}
           exportPDF={exportPDF}
           org={org}
@@ -3156,6 +3228,7 @@ Please produce:
           setScreen={setScreen}
         />
       )}
+      </Suspense>
 
       {/* ── Onboarding wizard ── */}
       {showOnboarding&&(
