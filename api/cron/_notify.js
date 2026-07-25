@@ -1,3 +1,5 @@
+import { isAllowedWebhookUrl } from './_webhookGuard.js';
+
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
 function slackPayload(urgent) {
@@ -28,6 +30,10 @@ export function payloadFor(type, urgent) {
 }
 
 export async function postWebhook(url, type, urgent) {
+  if (!isAllowedWebhookUrl(url, type)) {
+    console.error('Webhook notify blocked — URL is not an allowed Slack/Teams host:', url);
+    return false;
+  }
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

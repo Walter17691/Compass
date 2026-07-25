@@ -1,4 +1,5 @@
 import { verifyCaller } from './_auth.js';
+import { checkRateLimit } from './_rateLimit.js';
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -16,6 +17,11 @@ export default async function handler(req, res) {
 
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+
+  const withinLimit = await checkRateLimit(`chat:${caller.id}`, 30, 300);
+  if (!withinLimit) {
+    return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
+  }
 
   try {
     const body = req.body;

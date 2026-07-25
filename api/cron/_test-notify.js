@@ -1,5 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 import { postWebhook } from './_notify.js';
+import { isAllowedWebhookUrl } from './_webhookGuard.js';
 import { verifyCaller } from '../_auth.js';
 
 // The client can't POST to a Slack/Teams webhook directly — those
@@ -15,6 +16,9 @@ export async function testNotify(req, res) {
 
   const { orgId, url, type } = req.body;
   if (!orgId || !url) return res.status(400).json({ error: 'orgId and url are required' });
+  if (!isAllowedWebhookUrl(url, type)) {
+    return res.status(400).json({ error: `That doesn't look like a valid ${type === 'teams' ? 'Teams' : 'Slack'} webhook URL` });
+  }
 
   try {
     // Verify the caller actually belongs to this org before using it to
