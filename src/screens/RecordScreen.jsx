@@ -2,13 +2,14 @@ import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
 import { SCREENS } from '../constants';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft }) {
   const cancelMeeting = async () => {
     const hasContent = transcript.length>0 || inputText.trim();
     if(hasContent) {
       const ok = await confirmDialog({title:"Leave without saving?", message:"This meeting's notes will be lost.", confirmLabel:"Leave", danger:true});
       if(!ok) return;
     }
+    clearMeetingDraft?.();
     setScreen(SCREENS.HOME);
   };
   return (

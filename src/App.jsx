@@ -77,6 +77,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [aiError, setAiError] = useState("");
   const [prepNotes, setPrepNotes] = useState("");
   const [reviewOutput, setReviewOutput] = useState("");
+  const [reviewOutputOriginal, setReviewOutputOriginal] = useState(""); // the AI's un-edited draft, kept so hand-edits can be reverted
   const [letterOutput, setLetterOutput] = useState("");
   const [letterHistory, setLetterHistory] = useState([]); // previous drafts from this session, most recent first
   const [activeLetter, setActiveLetter] = useState("outcome");
@@ -353,7 +354,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [onboardStep, setOnboardStep] = useState(0);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [meetingSetup, setMeetingSetup] = useState({employee:"", employeeJobTitle:"", manager:"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null});
+  const [meetingSetup, setMeetingSetup] = useState({employee:"", employeeJobTitle:"", manager:"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   const [liveChatInput, setLiveChatInput] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [shareEmail, setShareEmail] = useState("");
@@ -1426,6 +1427,66 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!gdprAccepted) setShowGdpr(true);
   }, []);
 
+  // Autosave the in-progress meeting to localStorage — transcript/inputText
+  // were plain React state with zero persistence, meaning a crashed tab or
+  // dead laptop 40 minutes into a real disciplinary hearing lost everything
+  // typed, with no warning. This writes on every change while the meeting
+  // is actually in progress, and is cleared once handleReview() picks the
+  // transcript up (see there) or the meeting is explicitly discarded (see
+  // cancelMeeting in RecordScreen.jsx).
+  useEffect(() => {
+    if(screen !== SCREENS.RECORD) return;
+    const hasContent = transcript.length > 0 || inputText.trim();
+    if(!hasContent) { lsSet("compass_meeting_draft", null); return; }
+    lsSet("compass_meeting_draft", {
+      transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes,
+      savedAt: new Date().toISOString(),
+    });
+  }, [screen, transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes]);
+
+  // Warn on accidental tab close/refresh mid-meeting — the in-app "← Back"
+  // button already confirms via cancelMeeting, but that doesn't cover
+  // closing the tab or browser directly.
+  useEffect(() => {
+    const handler = (e) => {
+      if(screen === SCREENS.RECORD && (transcript.length > 0 || inputText.trim())) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [screen, transcript, inputText]);
+
+  // Once, on load: offer to resume a meeting that never made it past the
+  // crash-recovery window above.
+  useEffect(() => {
+    const draft = ls("compass_meeting_draft", null);
+    if(!draft) return;
+    (async () => {
+      const ok = await confirmDialog({
+        title: "Resume unsaved meeting?",
+        message: `Compass found meeting notes for ${draft.caseInfo?.employee || "an employee"} that never got saved (from ${draft.savedAt ? new Date(draft.savedAt).toLocaleString("en-GB") : "earlier"}). Resume where you left off, or discard them?`,
+        confirmLabel: "Resume",
+        cancelLabel: "Discard",
+      });
+      if(ok) {
+        setTranscript(draft.transcript || []);
+        setInputText(draft.inputText || "");
+        if(draft.meetingType) setMeetingType(draft.meetingType);
+        if(draft.caseInfo) setCaseInfo(draft.caseInfo);
+        setMeetingStartTime(draft.meetingStartTime || null);
+        setMeetingEndTime(draft.meetingEndTime || null);
+        setAdjournments(draft.adjournments || []);
+        setParticipants(draft.participants || []);
+        setPrepNotes(draft.prepNotes || "");
+        setScreen(SCREENS.RECORD);
+      } else {
+        lsSet("compass_meeting_draft", null);
+      }
+    })();
+  }, []);
+
   // Audit session starts
   useEffect(() => {
     if(currentUser) audit("Session started", `User: ${currentUser.name} (${currentUser.role})`);
@@ -1523,7 +1584,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setShowLinkCase(false);
     setMeetingStartTime(null);
     setMeetingEndTime(null);
-    setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setLetterOutput(""); setLetterHistory([]);
+    setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setReviewOutputOriginal(""); setLetterOutput(""); setLetterHistory([]);
     setRiskScore(null); setPrediction(""); setNextSteps([]); setParticipants([]);
     if(type && type.group === "dev") {
       const config = DEV_MEETING_CONFIG[type.label];
@@ -1573,9 +1634,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const allNotes = [...transcript, ...extra];
     if(!allNotes.length) return;
     if(extra.length) { setTranscript(allNotes); setInputText(""); }
-    setScreen(SCREENS.REVIEW); setReviewOutput(""); setAiError(""); setRiskScore(null); setPrediction("");
+    setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setAiError(""); setRiskScore(null); setPrediction("");
     setAiProcessing(true);
     // Generate next steps deadlines
+    lsSet("compass_meeting_draft", null); // transcript is now captured in the AI call in flight — the crash-recovery window has passed
     const baseDate = caseInfo.date ? new Date(caseInfo.date.split("/").reverse().join("-")) : new Date();
     const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days), done:false }));
     setNextSteps(steps);
@@ -1588,11 +1650,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         setAppealDetected(true);
         setShowLinkCase(true);
       }
-      await streamClaude(
+      const fullRecord = await streamClaude(
         `You are a senior UK HR documentation specialist. Generate a meeting record with EXACTLY these three sections and NO others: ## Meeting Details (date, type, attendees, purpose), ## Meeting Dialogue (what was said, in concise prose), ## HR Advisor Notes (expert legal guidance in flowing prose from a senior employment lawyer - one paragraph covering ACAS compliance, legal risks and recommended next steps). Do NOT add any other sections like Key Points, Next Steps, Summary, Actions, Risk Assessment or anything else. Three sections only. No bold, no emoji, no tables.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}${caseInfo.employeeJobTitle?" ("+caseInfo.employeeJobTitle+")":(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle?" ("+((employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle)+")":" "}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}${caseInfo.chairJobTitle?" ("+caseInfo.chairJobTitle+")":(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title?" ("+((orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title)+")":" "}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}${adjournments.length>0?" Adjournments: "+adjournments.map(a=>a.start+(a.end?" to "+a.end:"- ongoing")+(a.reason?" ("+a.reason+")":"")).join(", "):""}. Notetaker: ${caseInfo.notetaker||"Not specified"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]${adjournments.length>0?"\n- Adjournments: [list each adjournment with times and reason]":""}\n- Chair: [chair name and job title]\n- Notetaker: [notetaker name or "Not specified"]\n- Employee: [employee name and job title]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker\'s INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}${caseInfo.employeeJobTitle?" ("+caseInfo.employeeJobTitle+")":(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle?" ("+((employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle)+")":" "}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}${caseInfo.chairJobTitle?" ("+caseInfo.chairJobTitle+")":(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title?" ("+((orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title)+")":" "}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}${adjournments.length>0?" Adjournments: "+adjournments.map(a=>a.start+(a.end?" to "+a.end:"- ongoing")+(a.reason?" ("+a.reason+")":"")).join(", "):""}. Notetaker: ${caseInfo.notetaker||"Not specified"}. Representative/companion: ${caseInfo.representative?caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")":"None present"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]${adjournments.length>0?"\n- Adjournments: [list each adjournment with times and reason]":""}\n- Chair: [chair name and job title]\n- Notetaker: [notetaker name or "Not specified"]\n- Employee: [employee name and job title]\n- Representative/companion: [name and role, or "None present"]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker\'s INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
+      setReviewOutputOriginal(fullRecord);
     } catch(e) { setAiError(e.message); }
     setAiProcessing(false);
     // Auto risk score
@@ -2191,6 +2254,7 @@ Please produce:
       const context = [
         caseInfo.employee ? "Employee: "+caseInfo.employee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
         caseInfo.manager ? "Chair/Manager: "+caseInfo.manager : "",
+        caseInfo.representative ? "Representative/companion: "+caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")" : "",
         caseInfo.date ? "Meeting date: "+caseInfo.date : "",
         empRec.startDate ? "Employee start date: "+empRec.startDate : "",
         empRec.location ? "Location: "+empRec.location : "",
@@ -3021,12 +3085,12 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setReviewOutput={setReviewOutput} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} generateBrief={generateBrief} />
+        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} generateBrief={generateBrief} />
       )}
 
       {/* ══ BRIEF ══ */}
       {screen===SCREENS.BRIEF&&(
-        <BriefScreen setScreen={setScreen} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} cases={cases} currentUser={currentUser} orgMembers={orgMembers} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} getCaseStage={getCaseStage} fmtDate={fmtDate} showToast={showToast} setTranscript={setTranscript} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} />
+        <BriefScreen setScreen={setScreen} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} cases={cases} currentUser={currentUser} orgMembers={orgMembers} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} getCaseStage={getCaseStage} fmtDate={fmtDate} showToast={showToast} setTranscript={setTranscript} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setParticipants={setParticipants} />
       )}
 
             {screen===SCREENS.PEOPLE&&(
@@ -3124,12 +3188,12 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} />
       )}
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} riskScore={riskScore} />
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} riskScore={riskScore} />
       )}
 
       {/* ══ LETTERS ══ */}

@@ -3,7 +3,7 @@ import { Btn } from '../components/Primitives';
 import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore }) {
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore }) {
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -69,6 +69,12 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
             <div style={{padding:"12px 20px",borderBottom:"1px solid #EDE5D8",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5"}}>
               <span style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Meeting record</span>
               <div style={{display:"flex",gap:14,alignItems:"center"}}>
+                {reviewOutputOriginal&&reviewOutput!==reviewOutputOriginal&&(
+                  <button onClick={async()=>{
+                    const ok = await confirmDialog({title:"Restore original AI draft", message:"This replaces your edits with the record as Compass first generated it. This can't be undone.", confirmLabel:"Restore", danger:true});
+                    if(ok) setReviewOutput(reviewOutputOriginal);
+                  }} style={{fontSize:11,color:"#B87520",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>Restore original</button>
+                )}
                 <button onClick={()=>window.print()} style={{fontSize:11,color:"#6B6375",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>Print</button>
                 <button onClick={()=>setEditingRecord(r=>!r)}
                   style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>

@@ -1,7 +1,19 @@
+import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
 
-export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, setCaseInfo, getEmployeeRecord, cases, currentUser, orgMembers, activeCaseId, setActiveCaseId, getCaseStage, fmtDate, showToast, setTranscript, setAdjournments, setCurrentAdjournment }) {
+const NEEDS_INVITATION = ["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"];
+
+export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, setCaseInfo, getEmployeeRecord, cases, currentUser, orgMembers, activeCaseId, setActiveCaseId, getCaseStage, fmtDate, showToast, setTranscript, setAdjournments, setCurrentAdjournment, setParticipants }) {
+  const isGroupMeeting = meetingType?.id === "redundancy-atrisk";
+  const [participantDraft, setParticipantDraft] = useState([]);
+  const [newParticipantName, setNewParticipantName] = useState("");
+  const [newParticipantRole, setNewParticipantRole] = useState("Affected employee");
+  const addParticipant = () => {
+    if(!newParticipantName.trim()) return;
+    setParticipantDraft(p=>[...p, {name:newParticipantName.trim(), role:newParticipantRole}]);
+    setNewParticipantName("");
+  };
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -76,6 +88,54 @@ export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, 
           </div>
         </div>
 
+        {meetingType&&NEEDS_INVITATION.includes(meetingType.id)&&(
+          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Representative / companion <span style={{fontWeight:400,color:"#9B9098",textTransform:"none",letterSpacing:0}}>(optional — right to be accompanied, ERA 1999 s.10)</span></div>
+            <div style={{display:"flex",gap:8}}>
+              <input placeholder="e.g. Jo Bloggs (if present)" value={caseInfo.representative||""}
+                onChange={e=>setCaseInfo(p=>({...p,representative:e.target.value}))}
+                style={{flex:2,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
+                onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
+              <select value={caseInfo.representativeRole||"colleague"} onChange={e=>setCaseInfo(p=>({...p,representativeRole:e.target.value}))}
+                style={{flex:1,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 8px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+                <option value="colleague">Colleague</option>
+                <option value="trade union representative">Trade union rep</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={{fontWeight:400,color:"#9B9098",textTransform:"none",letterSpacing:0}}>(optional)</span></div>
+          {isGroupMeeting&&<p style={{fontSize:12,color:"#9B9098",margin:"0 0 8px"}}>For a group consultation, list everyone else affected here — each can still get their own individual case afterwards.</p>}
+          {participantDraft.length>0&&(
+            <div style={{marginBottom:8}}>
+              {participantDraft.map((p,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 12px",marginBottom:6}}>
+                  <span style={{fontSize:13,color:"#1A1535"}}>{p.name} <span style={{color:"#9B9098"}}>— {p.role}</span></span>
+                  <button onClick={()=>setParticipantDraft(prev=>prev.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#C84B2F",fontSize:12,cursor:"pointer"}}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}>
+            <input placeholder="Name" value={newParticipantName}
+              onChange={e=>setNewParticipantName(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addParticipant())}
+              style={{flex:2,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
+              onFocus={e=>e.target.style.borderColor="#7C5CFC"} onBlur={e=>e.target.style.borderColor="#E8E0D0"}/>
+            <select value={newParticipantRole} onChange={e=>setNewParticipantRole(e.target.value)}
+              style={{flex:1,fontSize:12,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"9px 6px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+              <option value="Affected employee">Affected employee</option>
+              <option value="Witness">Witness</option>
+              <option value="Notetaker">Notetaker</option>
+              <option value="Observer">Observer</option>
+              <option value="Other">Other</option>
+            </select>
+            <button onClick={addParticipant} style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"0 14px",fontSize:12,color:"#1A1535",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
+          </div>
+        </div>
+
         {/* Step 3: ACAS guidance for meeting type */}
         {meetingType&&(
           <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px",marginBottom:24}}>
@@ -126,6 +186,7 @@ export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, 
             setTranscript([]);
             setAdjournments([]);
             setCurrentAdjournment(null);
+            setParticipants(participantDraft);
             setScreen(SCREENS.RECORD);
           }}
           style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:10,padding:"14px",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",letterSpacing:"-0.2px"}}

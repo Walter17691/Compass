@@ -1,7 +1,16 @@
+import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
 
-export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setLetterOutput, setRiskScore, setLiveChatHistory, generateBrief }) {
+export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, generateBrief }) {
+  const isGroupMeeting = meetingSetup.type === "redundancy-atrisk";
+  const [newParticipantName, setNewParticipantName] = useState("");
+  const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
+  const addParticipant = () => {
+    if(!newParticipantName.trim()) return;
+    setMeetingSetup(p=>({...p, participants:[...(p.participants||[]), {name:newParticipantName.trim(), role:newParticipantRole}]}));
+    setNewParticipantName("");
+  };
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 32px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8"}}>
@@ -73,6 +82,60 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
                 style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
                 onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
                 onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+            </div>
+          )}
+
+          {!meetingSetup.linkedCaseId&&meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
+            <div style={{marginBottom:20}}>
+              <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Representative / companion <span style={{fontWeight:400,color:"#9B9098"}}>(optional — right to be accompanied, ERA 1999 s.10)</span></label>
+              <div style={{display:"flex",gap:8}}>
+                <input placeholder="e.g. Jo Bloggs (if present)"
+                  value={meetingSetup.representative||""}
+                  onChange={e=>setMeetingSetup(p=>({...p,representative:e.target.value}))}
+                  style={{flex:2,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+                <select value={meetingSetup.representativeRole||"colleague"}
+                  onChange={e=>setMeetingSetup(p=>({...p,representativeRole:e.target.value}))}
+                  style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 10px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
+                  <option value="colleague">Colleague</option>
+                  <option value="trade union representative">Trade union rep</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {!meetingSetup.linkedCaseId&&(
+            <div style={{marginBottom:20}}>
+              <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+              {isGroupMeeting&&<p style={{fontSize:12,color:"#9B9098",margin:"0 0 8px"}}>For a group consultation, list everyone else affected here — each can still get their own individual case afterwards.</p>}
+              {(meetingSetup.participants||[]).length>0&&(
+                <div style={{marginBottom:8}}>
+                  {meetingSetup.participants.map((p,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+                      <span style={{fontSize:13,color:"#1A1535"}}>{p.name} <span style={{color:"#9B9098"}}>— {p.role}</span></span>
+                      <button onClick={()=>setMeetingSetup(prev=>({...prev, participants: prev.participants.filter((_,j)=>j!==i)}))} style={{background:"none",border:"none",color:"#C84B2F",fontSize:12,cursor:"pointer"}}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{display:"flex",gap:8}}>
+                <input placeholder="Name" value={newParticipantName}
+                  onChange={e=>setNewParticipantName(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addParticipant())}
+                  style={{flex:2,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+                <select value={newParticipantRole} onChange={e=>setNewParticipantRole(e.target.value)}
+                  style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 6px",fontSize:13,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
+                  <option value="Affected employee">Affected employee</option>
+                  <option value="Witness">Witness</option>
+                  <option value="Notetaker">Notetaker</option>
+                  <option value="Observer">Observer</option>
+                  <option value="Other">Other</option>
+                </select>
+                <button onClick={addParticipant} style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:10,padding:"0 16px",fontSize:13,color:"#1A1535",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
+              </div>
             </div>
           )}
 
@@ -149,8 +212,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             onClick={()=>{
               const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
-              setTranscript([]);setPrepNotes("");setReviewOutput("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
+              setTranscript([]);setPrepNotes("");setReviewOutput("");setReviewOutputOriginal("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);
               const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
               if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
             }}
