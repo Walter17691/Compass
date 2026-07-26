@@ -1,13 +1,13 @@
 import { SCREENS } from '../constants';
 import { Card } from '../components/Primitives';
 
-export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchResults, setScreen, setExpandedCases, cases, setViewMeeting, setViewCaseId, dueSoon }) {
+export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchResults, setScreen, setExpandedCases, cases, setViewMeeting, setViewCaseId, dueSoon, setActivePerson }) {
   return (
     <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
       <input
         autoFocus
-        placeholder="Search cases, records, letters, transcripts..."
+        placeholder="Search cases, records, letters, employees, evidence, DSARs..."
         value={searchQuery}
         onChange={e=>{setSearchQuery(e.target.value);runSearch(e.target.value);}}
         style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 18px",fontSize:15,color:"#1A1535",outline:"none",marginBottom:24,boxSizing:"border-box"}} />
@@ -20,9 +20,11 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
         <div>
           <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>{searchResults.length} result{searchResults.length!==1?"s":""}</div>
           {searchResults.map((r,i)=>{
-            const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#4A6FA5",transcript:"#888"};
+            const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#4A6FA5",transcript:"#888",evidence:"#1A7A4A",employee:"#B87520",dsar:"#C84B2F"};
             return(
               <button key={i} onClick={()=>{
+                if(r.type==="employee") { setActivePerson(r.title); setScreen(SCREENS.PERSON_VIEW); return; }
+                if(r.type==="dsar") { setScreen(SCREENS.DSAR); return; }
                 setScreen(SCREENS.CASES);
                 setExpandedCases(e=>({...e,[r.caseId]:true}));
                 if(r.meetingId){
@@ -43,6 +45,9 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
                   {r.type==="transcript"&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4,fontStyle:"italic"}}>Found in transcript</div>}
                   {r.type==="record"&&<div style={{fontSize:11,color:"#B87520",marginTop:4}}>Found in meeting record</div>}
                   {r.type==="letter"&&<div style={{fontSize:11,color:"#1A7A4A",marginTop:4}}>Found in letter</div>}
+                  {r.type==="evidence"&&<div style={{fontSize:11,color:"#1A7A4A",marginTop:4}}>Evidence file</div>}
+                  {r.type==="employee"&&<div style={{fontSize:11,color:"#B87520",marginTop:4}}>Employee record</div>}
+                  {r.type==="dsar"&&<div style={{fontSize:11,color:"#C84B2F",marginTop:4}}>DSAR request</div>}
                 </div>
               </button>
             );

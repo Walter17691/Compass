@@ -1,5 +1,6 @@
 import { runDigest } from './_digest.js';
 import { testNotify } from './_test-notify.js';
+import { reassignNotify } from './_reassign-notify.js';
 
 // Single catch-all route for /api/cron/* — same convention as
 // api/calendar/[...action].js and api/portal/[...action].js, keeping the
@@ -28,6 +29,8 @@ export default async function handler(req, res) {
     }
     case 'test-notify':
       return testNotify(req, res);
+    case 'reassign-notify':
+      return reassignNotify(req, res);
     default:
       return res.status(404).json({ error: 'Not found' });
   }

@@ -29,5 +29,6 @@ export function mapCaseRow(row) {
     assignedTo: row.assigned_to,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    confidential: row.confidential || false,
   };
 }

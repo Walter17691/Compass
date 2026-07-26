@@ -50,6 +50,7 @@ import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
 import { OrgSettingsModal } from './screens/OrgSettingsModal';
 import { HandoffModal } from './screens/HandoffModal';
+import { ReassignCaseModal } from './screens/ReassignCaseModal';
 import { OutcomeModal } from './screens/OutcomeModal';
 
 export default function Compass({ user=null, org=null, member=null, availableOrgs=[], switchOrg=()=>{}, onJoinAnotherOrg=()=>{}, onSignOut=null }) {
@@ -147,6 +148,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [orgRoles, setOrgRoles] = useState([]);
   const [orgMembers, setOrgMembers] = useState([]);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [adjournments, setAdjournments] = useState([]);
   const [currentAdjournment, setCurrentAdjournment] = useState(null);
@@ -558,7 +560,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         estimated_age_at_dismissal: caseObj.estimatedAgeAtDismissal || null,
         location_id: caseObj.locationId || (member?.role==='location_manager'&&member?.location_ids?.[0])||null,
         assigned_to: user?.id || null,
-        created_by: user?.id || null,
+        created_by: caseObj.createdBy || user?.id || null, // preserve the original creator across edits by other staff — the confidential-case RLS policy grants them access by this field
+        confidential: caseObj.confidential || false,
         updated_at: new Date().toISOString(),
       };
       const { data, error } = await supabase.from('cases').upsert(payload).select();
@@ -1072,6 +1075,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
             results.push({type:"transcript", title:`"${u.text.slice(0,60)}..."`, sub:`${c.employeeName} · ${m.type} · ${m.date}`, caseId:c.id, meetingId:m.id});
         });
       });
+      (c.evidence||[]).forEach(ev => {
+        if((ev.name||"").toLowerCase().includes(ql))
+          results.push({type:"evidence", title:ev.name, sub:`${c.employeeName} · ${ev.type||"Document"} · ${ev.date||""}`, caseId:c.id});
+      });
+    });
+    employeeRecords.forEach(r => {
+      if((r.name||"").toLowerCase().includes(ql) && !cases.some(c=>c.employeeName===r.name))
+        results.push({type:"employee", title:r.name, sub:[r.jobTitle,r.department].filter(Boolean).join(" · ")||"Employee record, no case yet"});
+    });
+    dsarRequests.forEach(req => {
+      if((req.employeeName||"").toLowerCase().includes(ql))
+        results.push({type:"dsar", title:`${req.employeeName} — DSAR request`, sub:`Received ${req.receivedDate} · Due ${req.dueDate}`, dsarId:req.id});
     });
     setSearchResults(results.slice(0, 30));
   };
@@ -1871,6 +1886,12 @@ Please produce:
     }
     audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`);
     showToast("Meeting saved to case file");
+    if(letterOutput && org?.id) {
+      authedFetch("/api/portal/notify-document", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ orgId: org.id, orgName: org.name, employeeName, documentType: meetingType?.label }),
+      }).catch(e=>console.error("Portal notify failed:", e));
+    }
   };
 
   // ── PDF generation ──
@@ -3170,6 +3191,7 @@ Please produce:
           appealText={appealText}
           setAppealText={setAppealText}
           setShowHandoffModal={setShowHandoffModal}
+          setShowReassignModal={setShowReassignModal}
           setShowOutcomeModal={setShowOutcomeModal}
           showToast={showToast}
           currentUser={currentUser}
@@ -3214,11 +3236,11 @@ Please produce:
 
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
-        <CasesScreen cases={cases} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} />
+        <CasesScreen cases={cases} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} />
       )}
 
       {screen===SCREENS.SEARCH&&(
-        <SearchScreen searchQuery={searchQuery} setSearchQuery={setSearchQuery} runSearch={runSearch} searchResults={searchResults} setScreen={setScreen} setExpandedCases={setExpandedCases} cases={cases} setViewMeeting={setViewMeeting} setViewCaseId={setViewCaseId} dueSoon={dueSoon} />
+        <SearchScreen searchQuery={searchQuery} setSearchQuery={setSearchQuery} runSearch={runSearch} searchResults={searchResults} setScreen={setScreen} setExpandedCases={setExpandedCases} cases={cases} setViewMeeting={setViewMeeting} setViewCaseId={setViewCaseId} dueSoon={dueSoon} setActivePerson={setActivePerson} />
       )}
 
       <Suspense fallback={<div style={{textAlign:"center",padding:80}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span></div>}>
@@ -3455,6 +3477,24 @@ Please produce:
           user={user}
           setActiveCaseStage={setActiveCaseStage}
           showToast={showToast}
+        />
+      )}
+
+      {/* ── General Case Reassignment Modal ── */}
+      {showReassignModal&&(
+        <ReassignCaseModal
+          cases={cases}
+          activeCaseId={activeCaseId}
+          currentUser={currentUser}
+          orgMembers={orgMembers}
+          selectedMemberId={selectedMemberId}
+          setSelectedMemberId={setSelectedMemberId}
+          setShowReassignModal={setShowReassignModal}
+          saveCases={saveCases}
+          org={org}
+          user={user}
+          showToast={showToast}
+          audit={audit}
         />
       )}
 

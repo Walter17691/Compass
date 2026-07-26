@@ -13,7 +13,11 @@ const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone }) {
+const MAX_EVIDENCE_SIZE = 15*1024*1024; // 15MB — dataUrl storage in a jsonb column, keep well under row/memory limits
+const ALLOWED_EVIDENCE_TYPES = ["image/jpeg","image/png","image/gif","image/webp","image/heic","application/pdf","video/mp4","video/quicktime","video/webm","text/plain","text/csv","message/rfc822","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
+const fmtBytes = n => n<1024*1024 ? Math.round(n/1024)+"KB" : (n/(1024*1024)).toFixed(1)+"MB";
+
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -41,6 +45,18 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   // it from the overdue banner/Settings list/digest with no changes
   // needed to any of those three.
   const openChecklist = meetings.flatMap(m=>(m.nextSteps||[]).map((s,idx)=>({...s, meetingId:m.id, idx})).filter(s=>!s.done));
+  const addEvidenceFiles = files => {
+    Array.from(files).forEach(f=>{
+      if(f.size>MAX_EVIDENCE_SIZE) { showToast?.(`${f.name} is too large (max 15MB) — link to it externally instead`, "error"); return; }
+      if(f.type && !ALLOWED_EVIDENCE_TYPES.includes(f.type)) { showToast?.(`${f.name}: file type not supported`, "error"); return; }
+      const r = new FileReader();
+      r.onload = ev => {
+        const nv = {name:f.name, type:f.type||"Document", size:f.size, date:new Date().toLocaleDateString("en-GB"), addedBy:currentUser?.name||"HR Manager", dataUrl:ev.target.result};
+        saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:[...(x.evidence||[]), nv]}:x));
+      };
+      r.readAsDataURL(f);
+    });
+  };
   const repeatCount = cases.filter(c=>c.employeeName===cs.employeeName).length;
   const allStages = [
     {id:"investigation",label:"Investigation",meetings:invMeetings,color:"#7C5CFC"},
@@ -81,6 +97,14 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <span style={{fontSize:12,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"4px 12px"}}>{getCaseStatus(cs).label}</span>
+            <button onClick={async()=>{
+              const turningOn = !cs.confidential;
+              const ok = await confirmDialog(turningOn?{title:"Mark case confidential?",message:"Only you, the case creator, and HR Directors will be able to see this case. Other HR managers will lose access unless explicitly granted."}:{title:"Remove confidentiality?",message:"This case will become visible to every HR manager in the organisation again."});
+              if(!ok) return;
+              saveCases(cases.map(x=>x.id===cs.id?{...x,confidential:turningOn}:x));
+              showToast(turningOn?"Case marked confidential":"Case no longer confidential");
+            }} title={cs.confidential?"Visible only to authorised staff":"Visible to all HR staff in the org"} style={{background:cs.confidential?"#FEF5E7":"none",border:"1px solid",borderColor:cs.confidential?"#E8C88A":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:cs.confidential?"#B87520":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{cs.confidential?"🔒 Confidential":"Mark confidential"}</button>
+            <button onClick={()=>setShowReassignModal(true)} title={`Currently run by ${cs.manager||"unassigned"}`} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Reassign</button>
             <button onClick={()=>{const type=activeStage?.id==="investigation"?"investigation":activeStage?.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}}
               style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>
           </div>
@@ -279,7 +303,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:13,color:"#1A1535",fontWeight:500}}>{ev.name}</div>
                           <div style={{display:"flex",gap:6,marginTop:2,alignItems:"center",flexWrap:"wrap"}}>
-                            <span style={{fontSize:11,color:"#9B9098"}}>{ev.type} · {fmtDate(ev.date)}</span>
+                            <span style={{fontSize:11,color:"#9B9098"}}>{ev.type}{ev.size?" · "+fmtBytes(ev.size):""} · {fmtDate(ev.date)}</span>
                             {ev.type==="Witness statement"&&(ev.signStatus==="signed"?<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"1px 6px",fontWeight:600}}>Signed</span>:<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"1px 6px"}}>Pending signature</span>)}
                           </div>
                         </div>
@@ -294,9 +318,9 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
                     <label style={{display:"flex",alignItems:"center",justifyContent:"center",border:"2px dashed #E8E0D0",borderRadius:8,padding:"16px",cursor:"pointer",background:"#FDFAF5",marginTop:12,transition:"all 0.15s"}}
                       onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#F5F3FF";}}
                       onDragLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FDFAF5";}}
-                      onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FDFAF5";Array.from(e.dataTransfer.files).forEach(f=>{const r=new FileReader();r.onload=ev=>{const nv={name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),nv]}:x));};r.readAsDataURL(f);});}}>
-                      <input type="file" multiple onChange={e=>{Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>{const nv={name:f.name,type:f.type||"Document",size:f.size,date:new Date().toLocaleDateString("en-GB"),addedBy:currentUser?.name||"HR Manager",dataUrl:ev.target.result};saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:[...(x.evidence||[]),nv]}:x));};r.readAsDataURL(f);});}} style={{display:"none"}}/>
-                      <div style={{textAlign:"center"}}><div style={{fontSize:13,color:"#6B6375",fontWeight:500}}>Drop files or click to upload</div><div style={{fontSize:11,color:"#9B9098",marginTop:2}}>CCTV, emails, screenshots, documents</div></div>
+                      onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FDFAF5";addEvidenceFiles(e.dataTransfer.files);}}>
+                      <input type="file" multiple onChange={e=>addEvidenceFiles(e.target.files)} style={{display:"none"}}/>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:13,color:"#6B6375",fontWeight:500}}>Drop files or click to upload</div><div style={{fontSize:11,color:"#9B9098",marginTop:2}}>Images, PDFs, docs, video — max 15MB each</div></div>
                     </label>
                     <div style={{marginTop:12,padding:"12px",background:"#F5F3FF",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                       <div><div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interview</div><div style={{fontSize:11,color:"#9B9098"}}>Record and save directly to this investigation</div></div>

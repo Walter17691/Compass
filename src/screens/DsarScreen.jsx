@@ -67,9 +67,20 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, updateDs
           ):(
             <div style={{fontSize:12,color:"#1A7A4A",marginBottom:10}}>No other named individuals detected in the compiled records.</div>
           )}
+          {compiled.evidenceRequiringReview.length>0&&(
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#B87520",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Evidence files — not included automatically</div>
+              {compiled.evidenceRequiringReview.map((ev,i)=>(
+                <div key={i} style={{fontSize:12,color:"#6B6375",padding:"6px 0",borderBottom:"1px solid #EDE5D8"}}>
+                  <strong style={{color:"#1A1535"}}>{ev.name}</strong> ({ev.type}, {ev.date})
+                </div>
+              ))}
+              <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>Compass can't scan file content (photos, PDFs, CCTV, witness statements) for other people's data the way it scans text. Open each file, check it only concerns {req.employeeName} (or redact/exclude what doesn't), then attach it to the response manually.</div>
+            </div>
+          )}
           <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#1A1535",cursor:"pointer"}}>
             <input type="checkbox" checked={!!req.reviewedFlaggedSections} onChange={e=>updateDsarRequest(req.id, {reviewedFlaggedSections:e.target.checked})} style={{cursor:"pointer"}}/>
-            I have reviewed the flagged sections (required before marking as completed)
+            I have reviewed the flagged sections{compiled.evidenceRequiringReview.length>0?" and evidence files":""} (required before marking as completed)
           </label>
         </div>
       )}

@@ -36,12 +36,27 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     });
   });
 
+  // Evidence files (photos, PDFs, CCTV, witness statements) are binary/opaque
+  // content that can't be text-scanned for third-party mentions the way
+  // meeting records/transcripts are above. Rather than silently bundling raw
+  // file bytes into the response package unreviewed, list them as metadata
+  // only — a human must open each file, check it for other people's data,
+  // and attach it to the response manually.
+  const evidenceRequiringReview = [];
+  subjectCases.forEach(c => {
+    (c.evidence || []).forEach(ev => {
+      evidenceRequiringReview.push({ caseId: c.id, name: ev.name, type: ev.type, date: ev.date, size: ev.size });
+    });
+  });
+  const casesForExport = subjectCases.map(c => ({ ...c, evidence: (c.evidence || []).map(({ dataUrl, ...meta }) => meta) }));
+
   return {
     employeeName,
     employeeRecord,
-    cases: subjectCases,
+    cases: casesForExport,
     onboarding,
     flaggedThirdPartyMentions: flagged,
+    evidenceRequiringReview,
     compiledAt: new Date().toISOString(),
   };
 }

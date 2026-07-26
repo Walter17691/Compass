@@ -5,6 +5,7 @@ import { caseDetail } from './_case-detail.js';
 import { signatures } from './_signatures.js';
 import { onboarding } from './_onboarding.js';
 import { status } from './_status.js';
+import { notifyDocument } from './_notify-document.js';
 
 // Single catch-all route for every /api/portal/* endpoint — see
 // api/calendar/[...action].js for why (Vercel Hobby plan's 12-function
@@ -26,6 +27,7 @@ export default async function handler(req, res) {
     case 'signatures': return signatures(req, res);
     case 'onboarding': return onboarding(req, res);
     case 'status': return status(req, res);
+    case 'notify-document': return notifyDocument(req, res);
     default: return res.status(404).json({ error: 'Not found' });
   }
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 
@@ -6,7 +7,29 @@ const RISK_STYLE = {
   MEDIUM: { color:"#B87520", bg:"#FEF5E7" },
 };
 
-export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus }) {
+function downloadJson(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
+  const [selected, setSelected] = useState(new Set());
+  const toggleSelected = id => setSelected(s=>{const n=new Set(s); n.has(id)?n.delete(id):n.add(id); return n;});
+  const bulkClose = async () => {
+    const ok = await confirmDialog({title:`Close ${selected.size} case${selected.size!==1?"s":""}?`, message:"These will be marked closed. You can still view them, and reopen individually if needed.", confirmLabel:"Close", danger:true});
+    if(!ok) return;
+    saveCases(cases.map(c=>selected.has(c.id)?{...c,stage:"closed",closedReason:"bulk_closed"}:c));
+    showToast(`${selected.size} case${selected.size!==1?"s":""} closed`);
+    setSelected(new Set());
+  };
+  const bulkExport = () => {
+    const chosen = cases.filter(c=>selected.has(c.id));
+    downloadJson(chosen, `compass_cases_export_${new Date().toISOString().split("T")[0]}.json`);
+    showToast(`Exported ${chosen.length} case${chosen.length!==1?"s":""}`);
+  };
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
       <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -22,6 +45,14 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
         </div>
       </div>
       <div style={{maxWidth:860,margin:"0 auto",padding:"28px 24px"}}>
+        {selected.size>0&&(
+          <div style={{position:"sticky",top:0,zIndex:10,display:"flex",alignItems:"center",gap:12,background:"#1A1535",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+            <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{selected.size} selected</span>
+            <button onClick={bulkExport} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Export</button>
+            <button onClick={bulkClose} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Close</button>
+            <button onClick={()=>setSelected(new Set())} style={{fontSize:12,background:"none",border:"none",color:"#C4BAB0",cursor:"pointer",marginLeft:"auto",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear</button>
+          </div>
+        )}
         {cases.length===0&&(
           <div style={{textAlign:"center",padding:"80px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",marginBottom:8}}>No cases yet</div>
@@ -55,11 +86,13 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
                       style={{background:closed?"#FDFAF5":"#FFFFFF",border:"1px solid",borderColor:closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:6,marginLeft:48,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
                       onMouseEnter={e=>{if(!closed){e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0";e.currentTarget.style.background=closed?"#FDFAF5":"#FFFFFF";}}>
+                      <input type="checkbox" checked={selected.has(cs.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(cs.id)} style={{cursor:"pointer",flexShrink:0}}/>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:closed?400:600,color:closed?"#9B9098":"#1A1535",marginBottom:3}}>{getProceedingTitle(cs)}</div>
                         <div style={{fontSize:11,color:"#9B9098",display:"flex",gap:8}}>
                           <span>{(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</span>
                           {cs.urgent&&<span style={{color:"#C84B2F",fontWeight:600}}>· URGENT</span>}
+                          {cs.confidential&&<span style={{color:"#B87520",fontWeight:600}}>· 🔒 Confidential</span>}
                         </div>
                         {next&&!closed&&<div style={{fontSize:11,color:"#7C5CFC",fontWeight:500,marginTop:4}}>Next: {next.label}</div>}
                       </div>
