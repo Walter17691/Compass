@@ -3,9 +3,11 @@ import { SCREENS, MEETING_TYPES } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
 
 export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, generateBrief }) {
-  const isGroupMeeting = meetingSetup.type === "redundancy-atrisk";
+  const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
+  const [showAttendees, setShowAttendees] = useState(false);
+  const attendeesExpanded = isGroupMeeting || (meetingSetup.participants||[]).length>0 || showAttendees;
   const addParticipant = () => {
     if(!newParticipantName.trim()) return;
     setMeetingSetup(p=>({...p, participants:[...(p.participants||[]), {name:newParticipantName.trim(), role:newParticipantRole}]}));
@@ -105,7 +107,15 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             </div>
           )}
 
-          {!meetingSetup.linkedCaseId&&(
+          {!meetingSetup.linkedCaseId&&!attendeesExpanded&&(
+            <div style={{marginBottom:20}}>
+              <button onClick={()=>setShowAttendees(true)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:13,fontWeight:500,cursor:"pointer",padding:0}}>
+                + Add another attendee <span style={{fontWeight:400,color:"#9B9098"}}>(witness, observer — rare, optional)</span>
+              </button>
+            </div>
+          )}
+
+          {!meetingSetup.linkedCaseId&&attendeesExpanded&&(
             <div style={{marginBottom:20}}>
               <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
               {isGroupMeeting&&<p style={{fontSize:12,color:"#9B9098",margin:"0 0 8px"}}>For a group consultation, list everyone else affected here — each can still get their own individual case afterwards.</p>}

@@ -5,10 +5,12 @@ import { CompassLogo } from '../components/CompassLogo';
 const NEEDS_INVITATION = ["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"];
 
 export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, setCaseInfo, getEmployeeRecord, cases, currentUser, orgMembers, activeCaseId, setActiveCaseId, getCaseStage, fmtDate, showToast, setTranscript, setAdjournments, setCurrentAdjournment, setParticipants }) {
-  const isGroupMeeting = meetingType?.id === "redundancy-atrisk";
+  const isGroupMeeting = meetingType?.id === "redundancy-atrisk" || meetingType?.id === "redundancy-consult";
   const [participantDraft, setParticipantDraft] = useState([]);
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState("Affected employee");
+  const [showAttendees, setShowAttendees] = useState(false);
+  const attendeesExpanded = isGroupMeeting || participantDraft.length>0 || showAttendees;
   const addParticipant = () => {
     if(!newParticipantName.trim()) return;
     setParticipantDraft(p=>[...p, {name:newParticipantName.trim(), role:newParticipantRole}]);
@@ -105,6 +107,15 @@ export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, 
           </div>
         )}
 
+        {!attendeesExpanded&&(
+          <div style={{marginBottom:16}}>
+            <button onClick={()=>setShowAttendees(true)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:13,fontWeight:500,cursor:"pointer",padding:0,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+              + Add another attendee <span style={{fontWeight:400,color:"#9B9098"}}>(witness, observer — rare, optional)</span>
+            </button>
+          </div>
+        )}
+
+        {attendeesExpanded&&(
         <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={{fontWeight:400,color:"#9B9098",textTransform:"none",letterSpacing:0}}>(optional)</span></div>
           {isGroupMeeting&&<p style={{fontSize:12,color:"#9B9098",margin:"0 0 8px"}}>For a group consultation, list everyone else affected here — each can still get their own individual case afterwards.</p>}
@@ -135,6 +146,7 @@ export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, 
             <button onClick={addParticipant} style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"0 14px",fontSize:12,color:"#1A1535",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
           </div>
         </div>
+        )}
 
         {/* Step 3: ACAS guidance for meeting type */}
         {meetingType&&(
