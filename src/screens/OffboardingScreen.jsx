@@ -10,7 +10,8 @@ const REASON_LABELS = {
   other: "Other",
 };
 
-export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, setLeaverView, newLeaverForm, setNewLeaverForm, leaverTemplates, createLeaverInstance, leaverInstances, aiCustomiseLeaverChecklist, leaverAiProcessing, toggleLeaverTask, updateLeaverTaskNote, updateLeaverExitInterview }) {
+export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, setLeaverView, newLeaverForm, setNewLeaverForm, leaverTemplates, createLeaverInstance, leaverInstances, aiCustomiseLeaverChecklist, leaverAiProcessing, toggleLeaverTask, updateLeaverTaskNote, updateLeaverExitInterview, portalAccounts, revokePortalAccess }) {
+  const hasPortalAccess = activeLeaver && (portalAccounts||[]).some(a=>a.employee_name===activeLeaver.name);
   const phases = activeLeaver
     ? [...new Set(activeLeaver.tasks.map(t=>t.phaseLabel))].map(pl=>({
         label:pl,
@@ -159,6 +160,15 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
                 rows={5}
                 style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535",boxSizing:"border-box"}} ></textarea>
             </Card>
+
+            {/* Employee Portal access */}
+            {hasPortalAccess&&(
+              <Card style={{marginBottom:12}}>
+                <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,marginBottom:8,textTransform:"uppercase"}}>Employee Portal</div>
+                <div style={{fontSize:12,color:"#6B6880",marginBottom:10,lineHeight:1.6}}>{activeLeaver.name} still has active Portal access — they can view their case status and documents.</div>
+                <Btn variant="danger" onClick={()=>revokePortalAccess(activeLeaver.name)} style={{width:"100%",fontSize:12,padding:"9px"}}>Revoke portal access</Btn>
+              </Card>
+            )}
 
             {/* Owner legend */}
             <Card style={{background:"#F5F1EA",padding:14}}>

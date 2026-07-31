@@ -5,7 +5,7 @@ import { UserAddForm } from '../components/UserAddForm';
 import { isPro } from '../lib/plan';
 import { authedFetch } from '../lib/authedFetch';
 
-export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen }) {
+export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess }) {
   const [webhookUrlDraft, setWebhookUrlDraft] = useState(orgWebhookUrl||"");
   const goToBillingUrl = async (action) => {
     try {
@@ -180,6 +180,24 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
               {inviting?"Sending invite...":"Send invite"}
             </Btn>
           </div>
+        </Card>
+      )}
+
+      {/* Employee Portal access */}
+      {isHR&&(
+        <Card style={{marginBottom:12}}>
+          <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Employee Portal access</h3>
+          <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Everyone with an active Portal account, where they can view case status, sign documents and complete onboarding tasks. Revoke access immediately when someone leaves.</p>
+          {portalAccounts.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No employees have Portal access yet</div>}
+          {portalAccounts.map(a=>(
+            <div key={a.employee_name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
+              <div>
+                <div style={{fontSize:14,color:"#1A1535"}}>{a.employee_name}</div>
+                <div style={{fontSize:11,color:"#6B6880"}}>Access granted {new Date(a.created_at).toLocaleDateString("en-GB")}</div>
+              </div>
+              <button onClick={()=>revokePortalAccess(a.employee_name)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,color:"#C84B2F",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Revoke access</button>
+            </div>
+          ))}
         </Card>
       )}
 

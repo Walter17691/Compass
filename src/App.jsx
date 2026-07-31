@@ -109,6 +109,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── Portal ──
   const [portalCaseId, setPortalCaseId] = useState(null);
+  const [portalAccounts, setPortalAccounts] = useState([]);
 
   // ── Templates ──
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -686,7 +687,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); } }, [org?.id]);
 
   useEffect(()=>{
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
@@ -1221,6 +1222,31 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         updated_at: new Date().toISOString(),
       });
     } catch(e) { console.error('saveLeaverInstanceToDB', e); }
+  };
+
+  // ── Employee Portal access management ──
+  const loadPortalAccounts = async () => {
+    if(!org?.id) return;
+    try {
+      const r = await authedFetch(`/api/portal/accounts?orgId=${encodeURIComponent(org.id)}`);
+      const d = await r.json();
+      if(r.ok) setPortalAccounts(d.accounts||[]);
+    } catch(e) { console.error('loadPortalAccounts', e); }
+  };
+
+  const revokePortalAccess = async (employeeName) => {
+    if(!org?.id) return;
+    const ok = await confirmDialog({title:"Revoke portal access?", message:`${employeeName} will immediately lose access to view their case status, sign documents, or complete onboarding tasks in the portal.`, confirmLabel:"Revoke access", danger:true});
+    if(!ok) return;
+    try {
+      const r = await authedFetch("/api/portal/revoke-access", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ orgId: org.id, employeeName }),
+      });
+      const d = await r.json();
+      if(d.success) { showToast("Portal access revoked"); loadPortalAccounts(); }
+      else showToast("Couldn't revoke access: "+(d.error||"unknown error"), "error");
+    } catch(e) { showToast("Couldn't revoke access: "+e.message, "error"); }
   };
 
   // ── DSAR (Data Subject Access Request) tracking ──
@@ -3537,6 +3563,8 @@ Please produce:
           toggleLeaverTask={toggleLeaverTask}
           updateLeaverTaskNote={updateLeaverTaskNote}
           updateLeaverExitInterview={updateLeaverExitInterview}
+          portalAccounts={portalAccounts}
+          revokePortalAccess={revokePortalAccess}
         />
       )}
 
@@ -3663,6 +3691,8 @@ Please produce:
           setOnboardStep={setOnboardStep}
           setShowOnboard={setShowOnboard}
           setScreen={setScreen}
+          portalAccounts={portalAccounts}
+          revokePortalAccess={revokePortalAccess}
         />
       )}
 
