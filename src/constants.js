@@ -30,7 +30,7 @@ export const SCREENS = {
   DASHBOARD:"dashboard",
   TEMPLATES:"templates", WHISTLE:"whistle", BRIEF:"brief", PEOPLE:"people", INTAKE:"intake", CASE_VIEW:"case_view", PERSON_VIEW:"person_view",
   DEVELOP:"develop", SEARCH:"search",
-  NEWSTARTER:"newstarter", ERREPORT:"erreport",
+  NEWSTARTER:"newstarter", OFFBOARDING:"offboarding", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing", DSAR:"dsar",
 };
 

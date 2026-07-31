@@ -41,6 +41,7 @@ import { HomeScreen } from './screens/HomeScreen';
 // login -> Home -> Cases path doesn't pay to download them upfront.
 const WellbeingScreen = lazy(() => import('./screens/WellbeingScreen').then(m => ({default: m.WellbeingScreen})));
 const NewStarterScreen = lazy(() => import('./screens/NewStarterScreen').then(m => ({default: m.NewStarterScreen})));
+const OffboardingScreen = lazy(() => import('./screens/OffboardingScreen').then(m => ({default: m.OffboardingScreen})));
 const DevelopScreen = lazy(() => import('./screens/DevelopScreen').then(m => ({default: m.DevelopScreen})));
 const ErReportScreen = lazy(() => import('./screens/ErReportScreen').then(m => ({default: m.ErReportScreen})));
 const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
@@ -685,7 +686,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadDsarRequests(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); } }, [org?.id]);
 
   useEffect(()=>{
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
@@ -905,6 +906,41 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [starterAiProcessing, setStarterAiProcessing] = useState(false);
   const [newStarterForm, setNewStarterForm] = useState({name:"",role:"",department:"",manager:"",email:"",startDate:"",templateId:"default"});
 
+  // ── Leaver offboarding ──
+  const [leaverTemplates, setLeaverTemplates] = useState(ls("compass_leaver_templates", [{
+    id:"default", name:"Standard Employee Offboarding", createdAt:new Date().toISOString(),
+    phases:[
+      { id:"notice", label:"On notice received", tasks:[
+        { id:"l1", task:"Acknowledge resignation/notice in writing", owner:"HR", day:0 },
+        { id:"l2", task:"Confirm last working day and notice period", owner:"HR", day:0 },
+        { id:"l3", task:"Update HR system and notify payroll", owner:"HR", day:1 },
+        { id:"l4", task:"Inform line manager and team", owner:"Line Manager", day:1 },
+      ]},
+      { id:"before", label:"Before last day", tasks:[
+        { id:"l5", task:"Schedule exit interview", owner:"HR", day:-7 },
+        { id:"l6", task:"Agree handover plan and knowledge transfer", owner:"Line Manager", day:-7 },
+        { id:"l7", task:"Confirm outstanding holiday balance", owner:"Payroll", day:-5 },
+        { id:"l8", task:"Schedule access revocation and equipment return", owner:"IT", day:-1 },
+      ]},
+      { id:"lastday", label:"Last day", tasks:[
+        { id:"l9", task:"Conduct exit interview", owner:"HR", day:0 },
+        { id:"l10", task:"Collect keys, passes and equipment", owner:"Facilities", day:0 },
+        { id:"l11", task:"Revoke system and building access", owner:"IT", day:0 },
+      ]},
+      { id:"after", label:"After leaving", tasks:[
+        { id:"l12", task:"Process final pay including outstanding holiday", owner:"Payroll", day:1 },
+        { id:"l13", task:"Issue P45", owner:"Payroll", day:7 },
+        { id:"l14", task:"Remove from distribution lists and directories", owner:"IT", day:1 },
+        { id:"l15", task:"Redistribute responsibilities", owner:"Line Manager", day:1 },
+      ]},
+    ],
+  }]));
+  const [leaverInstances, setLeaverInstances] = useState(ls("compass_leavers", []));
+  const [activeLeaver, setActiveLeaver] = useState(null);
+  const [leaverView, setLeaverView] = useState("list");
+  const [leaverAiProcessing, setLeaverAiProcessing] = useState(false);
+  const [newLeaverForm, setNewLeaverForm] = useState({name:"",role:"",department:"",manager:"",email:"",lastWorkingDay:"",reason:"resignation",templateId:"default"});
+
   // ── Redundancy / consultation ──
   const [redundancyCases, setRedundancyCases] = useState(ls("compass_redundancy", []));
   // case: {id, type:"individual"|"collective", reason, poolDescription, selectionCriteria:[{criterion,weight}],
@@ -1115,7 +1151,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         if(!r.ok) { showToast("Couldn't delete organisation data: "+(d.error||"unknown error"), "error"); return; }
       } catch(e) { showToast("Couldn't delete organisation data: "+e.message, "error"); return; }
     }
-    ["compass_cases","compass_policies","compass_whistle","compass_users","compass_user","compass_vault","compass_adjustments","compass_signature","compass_letterhead","compass_word_template","compass_starters","compass_starter_templates"].forEach(k=>localStorage.removeItem(k));
+    ["compass_cases","compass_policies","compass_whistle","compass_users","compass_user","compass_vault","compass_adjustments","compass_signature","compass_letterhead","compass_word_template","compass_starters","compass_starter_templates","compass_leavers","compass_leaver_templates"].forEach(k=>localStorage.removeItem(k));
     try { window.location.reload(); } catch(e) {}
   };
 
@@ -1148,6 +1184,43 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         updated_at: new Date().toISOString(),
       });
     } catch(e) { console.error('saveStarterInstanceToDB', e); }
+  };
+
+  // ── Leaver offboarding helpers ──
+  const saveLeaverInstances = u => { setLeaverInstances(u); lsSet("compass_leavers", u); };
+  const saveLeaverTemplates = u => { setLeaverTemplates(u); lsSet("compass_leaver_templates", u); };
+
+  const loadLeaverInstances = async () => {
+    if(!org?.id) return;
+    try {
+      const {data} = await supabase.from('leaver_instances').select('*').eq('org_id', org.id);
+      if(data) setLeaverInstances(data.map(r=>({
+        id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
+        email:r.email, lastWorkingDay:r.last_working_day, reason:r.reason,
+        templateId:r.template_id, templateName:r.template_name,
+        tasks:r.tasks||[], aiCustomised:r.ai_customised,
+        exitInterviewNotes:r.exit_interview_notes, exitInterviewDate:r.exit_interview_date,
+        createdBy:r.created_by, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadLeaverInstances', e); }
+  };
+
+  const saveLeaverInstanceToDB = async (instance) => {
+    if(!org?.id) return;
+    try {
+      await supabase.from('leaver_instances').upsert({
+        id: instance.id,
+        org_id: org.id,
+        name: instance.name, role: instance.role||null, department: instance.department||null,
+        manager: instance.manager||null, email: instance.email||null, last_working_day: instance.lastWorkingDay||null,
+        reason: instance.reason||null,
+        template_id: instance.templateId||null, template_name: instance.templateName||null,
+        tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised,
+        exit_interview_notes: instance.exitInterviewNotes||null, exit_interview_date: instance.exitInterviewDate||null,
+        created_by: instance.createdBy||null,
+        updated_at: new Date().toISOString(),
+      });
+    } catch(e) { console.error('saveLeaverInstanceToDB', e); }
   };
 
   // ── DSAR (Data Subject Access Request) tracking ──
@@ -1199,6 +1272,96 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       if(error) throw error;
       setDsarRequests(p=>p.map(r=>r.id===id?{...r,...fields}:r));
     } catch(e) { console.error('updateDsarRequest', e); showToast("Could not update DSAR request", "error"); }
+  };
+
+  const createLeaverInstance = () => {
+    const f = newLeaverForm;
+    if(!f.name.trim() || !f.lastWorkingDay) return;
+    const template = leaverTemplates.find(t=>t.id===f.templateId) || leaverTemplates[0];
+    const lastDay = new Date(f.lastWorkingDay);
+    const tasks = template.phases.flatMap(phase =>
+      phase.tasks.map(t => {
+        const due = new Date(lastDay);
+        due.setDate(due.getDate() + t.day);
+        return { ...t, id:t.id+"_"+Date.now(), phaseId:phase.id, phaseLabel:phase.label, dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
+      })
+    );
+    const instance = {
+      id: Date.now().toString(),
+      name: f.name, role: f.role, department: f.department,
+      manager: f.manager, email: f.email, lastWorkingDay: f.lastWorkingDay, reason: f.reason,
+      templateId: f.templateId, templateName: template.name,
+      tasks, createdAt: new Date().toISOString(),
+      createdBy: currentUser?.name || "HR Manager",
+    };
+    saveLeaverInstances([...leaverInstances, instance]);
+    saveLeaverInstanceToDB(instance);
+    setActiveLeaver(instance);
+    setLeaverView("instance");
+    setNewLeaverForm({name:"",role:"",department:"",manager:"",email:"",lastWorkingDay:"",reason:"resignation",templateId:"default"});
+    audit("Leaver offboarding started", f.name+" — "+f.role);
+  };
+
+  const toggleLeaverTask = (instanceId, taskId) => {
+    const updated = leaverInstances.map(s => s.id===instanceId ? {
+      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, done:!t.done, doneAt:t.done?null:new Date().toISOString()} : t)
+    } : s);
+    saveLeaverInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveLeaverInstanceToDB(changed);
+    setActiveLeaver(changed);
+  };
+
+  const updateLeaverTaskNote = (instanceId, taskId, note) => {
+    const updated = leaverInstances.map(s => s.id===instanceId ? {
+      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, note} : t)
+    } : s);
+    saveLeaverInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveLeaverInstanceToDB(changed);
+    setActiveLeaver(changed);
+  };
+
+  const updateLeaverExitInterview = (instanceId, fields) => {
+    const updated = leaverInstances.map(s => s.id===instanceId ? {...s, ...fields} : s);
+    saveLeaverInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveLeaverInstanceToDB(changed);
+    setActiveLeaver(changed);
+  };
+
+  const aiCustomiseLeaverChecklist = async (instance) => {
+    if(!instance) return;
+    setLeaverAiProcessing(true);
+    try {
+      const result = await streamClaude(
+        `You are a UK HR offboarding specialist. Generate a customised leaver checklist.
+Respond ONLY with a JSON array of task objects, no markdown:
+[{"task":"...","owner":"HR|Line Manager|IT|Facilities|Payroll","day":1,"phase":"Before last day"}]
+Day is number of days relative to the last working day (negative = before, positive = after). Phases: "On notice received","Before last day","Last day","After leaving".
+Maximum 20 tasks total. Be specific to the role, department, and reason for leaving.`,
+        `Role: ${instance.role||"General"}
+Department: ${instance.department||"General"}
+Reason for leaving: ${(instance.reason||"").replace(/_/g," ")||"Not specified"}
+Manager: ${instance.manager||"Unknown"}
+Generate a tailored offboarding checklist for this role, considering any role-specific access, equipment, or handover needs.`,
+        ()=>{}
+      );
+      const parsed = JSON.parse(result.replace(/```json|```/g,"").trim());
+      const lastDay = new Date(instance.lastWorkingDay);
+      const newTasks = parsed.map((t,i) => {
+        const due = new Date(lastDay);
+        due.setDate(due.getDate() + (t.day||0));
+        return { ...t, id:"ai_"+Date.now()+i, phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"before", phaseLabel:t.phase||"Before last day", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
+      });
+      const updated = leaverInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
+      saveLeaverInstances(updated);
+      const changed = updated.find(s=>s.id===instance.id);
+      saveLeaverInstanceToDB(changed);
+      setActiveLeaver(changed);
+      audit("AI customised leaver checklist", instance.name+" — "+instance.role);
+    } catch(e) { showToast("Could not customise: "+e.message, "error"); }
+    setLeaverAiProcessing(false);
   };
 
   const createStarterInstance = () => {
@@ -3054,6 +3217,7 @@ Please produce:
               {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
               {s:SCREENS.PEOPLE, l:"People"},
               {s:SCREENS.NEWSTARTER, l:"Onboarding"},
+              {s:SCREENS.OFFBOARDING, l:"Offboarding"},
               {s:SCREENS.REDUNDANCY, l:"Redundancy"},
               {s:SCREENS.WELLBEING, l:"Wellbeing"},
               {s:SCREENS.ERREPORT, l:"Reports"},
@@ -3332,6 +3496,26 @@ Please produce:
         />
       )}
 
+      {/* ══ LEAVER OFFBOARDING ══ */}
+      {screen===SCREENS.OFFBOARDING&&(
+        <OffboardingScreen
+          activeLeaver={activeLeaver}
+          setActiveLeaver={setActiveLeaver}
+          leaverView={leaverView}
+          setLeaverView={setLeaverView}
+          newLeaverForm={newLeaverForm}
+          setNewLeaverForm={setNewLeaverForm}
+          leaverTemplates={leaverTemplates}
+          createLeaverInstance={createLeaverInstance}
+          leaverInstances={leaverInstances}
+          aiCustomiseLeaverChecklist={aiCustomiseLeaverChecklist}
+          leaverAiProcessing={leaverAiProcessing}
+          toggleLeaverTask={toggleLeaverTask}
+          updateLeaverTaskNote={updateLeaverTaskNote}
+          updateLeaverExitInterview={updateLeaverExitInterview}
+        />
+      )}
+
       {/* ══ ER ANALYTICS ══ */}
       {screen===SCREENS.ERREPORT&&(
         <ErReportScreen
@@ -3466,6 +3650,7 @@ Please produce:
           cases={cases}
           employeeRecords={employeeRecords}
           starterInstances={starterInstances}
+          leaverInstances={leaverInstances}
           setScreen={setScreen}
         />
       )}

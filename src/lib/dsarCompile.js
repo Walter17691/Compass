@@ -9,10 +9,11 @@
 // (over-redacting). A human has to look at each flagged line before the
 // response goes out — see reviewed_flagged_sections in
 // supabase/dsar_2026-07-24.sql, which gates the DSAR request's status.
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [] } = {}) {
+export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [] } = {}) {
   const employeeRecord = employeeRecords.find(r => r.name === employeeName) || null;
   const subjectCases = cases.filter(c => c.employeeName === employeeName);
   const onboarding = starterInstances.filter(s => s.name === employeeName);
+  const offboarding = leaverInstances.filter(s => s.name === employeeName);
 
   const otherNames = new Set();
   employeeRecords.forEach(r => { if (r.name && r.name !== employeeName) otherNames.add(r.name); });
@@ -55,6 +56,7 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     employeeRecord,
     cases: casesForExport,
     onboarding,
+    offboarding,
     flaggedThirdPartyMentions: flagged,
     evidenceRequiringReview,
     compiledAt: new Date().toISOString(),

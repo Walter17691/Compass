@@ -20,10 +20,10 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-function RequestDetail({ req, cases, employeeRecords, starterInstances, updateDsarRequest }) {
+function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, updateDsarRequest }) {
   const [compiled, setCompiled] = useState(null);
 
-  const compile = () => setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances }));
+  const compile = () => setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances }));
 
   const days = daysUntil(req.dueDate);
   const overdue = days < 0;
@@ -52,7 +52,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, updateDs
       {compiled&&(
         <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px"}}>
           <div style={{fontSize:12,color:"#1A1535",marginBottom:8}}>
-            {compiled.cases.length} case{compiled.cases.length!==1?"s":""} · {compiled.onboarding.length} onboarding record{compiled.onboarding.length!==1?"s":""} · {compiled.employeeRecord?"employee record found":"no employee record on file"}
+            {compiled.cases.length} case{compiled.cases.length!==1?"s":""} · {compiled.onboarding.length} onboarding record{compiled.onboarding.length!==1?"s":""} · {compiled.offboarding.length} offboarding record{compiled.offboarding.length!==1?"s":""} · {compiled.employeeRecord?"employee record found":"no employee record on file"}
           </div>
           {compiled.flaggedThirdPartyMentions.length>0?(
             <div style={{marginBottom:10}}>
@@ -88,7 +88,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, updateDs
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, cases, employeeRecords, starterInstances, setScreen }) {
+export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, cases, employeeRecords, starterInstances, leaverInstances, setScreen }) {
   const [form, setForm] = useState({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   const [showForm, setShowForm] = useState(false);
 
@@ -141,7 +141,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
         ):sorted.map(req=>(
-          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} updateDsarRequest={updateDsarRequest}/>
+          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} updateDsarRequest={updateDsarRequest}/>
         ))}
       </div>
     </div>
