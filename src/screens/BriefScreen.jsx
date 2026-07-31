@@ -4,7 +4,7 @@ import { CompassLogo } from '../components/CompassLogo';
 
 const NEEDS_INVITATION = ["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"];
 
-export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, setCaseInfo, getEmployeeRecord, cases, currentUser, orgMembers, activeCaseId, setActiveCaseId, getCaseStage, fmtDate, showToast, setTranscript, setAdjournments, setCurrentAdjournment, setParticipants }) {
+export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, setCaseInfo, getEmployeeRecord, cases, currentUser, orgMembers, activeCaseId, setActiveCaseId, getCaseStage, fmtDate, showToast, setTranscript, setAdjournments, setCurrentAdjournment, setParticipants, startSession }) {
   const isGroupMeeting = meetingType?.id === "redundancy-atrisk" || meetingType?.id === "redundancy-consult";
   const [participantDraft, setParticipantDraft] = useState([]);
   const [newParticipantName, setNewParticipantName] = useState("");
@@ -191,6 +191,7 @@ export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, 
         <button
           onClick={()=>{
             if(!meetingType){showToast("Please select a meeting type");return;}
+            if(meetingType.group==="dev"){ startSession(meetingType); return; }
             if(!caseInfo.employee?.trim()){showToast("Please enter the employee name");return;}
             const mgr = caseInfo.manager?.trim()||currentUser?.name||"HR Manager";
             const dt = caseInfo.date||new Date().toISOString().split("T")[0];
@@ -205,7 +206,7 @@ export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, 
         >
           Start meeting →
         </button>
-        {(!meetingType||!caseInfo.employee?.trim())&&(
+        {(!meetingType||(meetingType.group!=="dev"&&!caseInfo.employee?.trim()))&&(
           <div style={{textAlign:"center",fontSize:11,color:"#9B9098",marginTop:8}}>
             {!meetingType?"Select a meeting type to continue":"Enter employee name to continue"}
           </div>

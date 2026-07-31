@@ -1817,15 +1817,63 @@ Please produce:
     try {
       await streamClaude(
         "You are a UK HR letter writer.",
-        (()=>{
-          const tmpl = getLetterTemplate(t);
-          if(tmpl) return "Fill in ONLY the placeholders in [brackets] in this template using the meeting information. Keep the exact structure. Output only the completed letter.\n\nTEMPLATE:\n" + tmpl + "\n\nMEETING INFO:\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\nType: " + (meetingType?.label||"") + "\nSummary:\n" + (tx||reviewOutput||"");
-          return (prompts[t]||prompts.outcome) + "\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||"") + "\nParticipants: " + (participants.map(p=>p.name+" ("+p.role+")").join(", ")||"N/A") + (getPolicyCtx()) + "\n\nMeeting summary:\n" + (tx||reviewOutput||"");
-        })(),
+        (letterConfig[meetingType?.label] || letterConfig["PDP / 1-2-1"]) + "\nEmployee: " + (caseInfo.employee||"") + "\nChair: " + (caseInfo.manager||"") + "\nDate: " + (caseInfo.date||""),
         t2=>setLetterOutput(t2)
       );
     } catch(e) { setAiError(e.message); }
-    setAiProcessing(false);
+    setDevAiProcessing(false);
+  };
+
+  const generateSmartObjectives = async (period) => {
+    if(!devSession) return;
+    setDevAiProcessing(true);
+    const s = devSession;
+    try {
+      const result = await streamClaude(
+        "UK HR performance management. Suggest 3-4 SMART objectives (Specific, Measurable, Achievable, Relevant, Time-bound). Return JSON only: [{\"label\":\"...\",\"desc\":\"...\",\"measure\":\"...\"}]. No markdown, no commentary.",
+        `Employee: ${s.caseInfo.employee||"Employee"}${s.caseInfo.role?" ("+s.caseInfo.role+")":""}. Department: ${s.caseInfo.department||"Not specified"}. Review period: ${period||"Not specified"}. Meeting type: ${s.type}.`,
+        ()=>{}
+      );
+      const parsed = JSON.parse(result.replace(/```json|```/g,"").trim());
+      setDevSession(ds=>({...ds, objectives:[...ds.objectives, ...parsed.map(o=>({...o, rating:3, progress:"", note:""}))]}));
+    } catch(e) { setAiError(e.message); }
+    setDevAiProcessing(false);
+  };
+
+  const saveDevMeetingToCase = () => {
+    if(!devSession) return;
+    const s = devSession;
+    const employeeName = (s.caseInfo.employee||"").trim() || "Unknown Employee";
+    const meeting = {
+      id: Date.now().toString(),
+      type: s.type,
+      date: s.caseInfo.date || new Date().toLocaleDateString("en-GB"),
+      manager: s.caseInfo.manager,
+      record: devSummary || "",
+      letterOutput: devLetter || "",
+      objectives: s.objectives,
+      outcome: s.outcome,
+      rating: s.rating,
+      devPlan: s.devPlan,
+      selfAssessment: s.selfAssessment,
+      managerAssessment: s.managerAssessment,
+      savedAt: new Date().toISOString(),
+      savedBy: currentUser?.name || "HR Manager",
+    };
+    const existing = cases.find(c=>c.employeeName.toLowerCase()===employeeName.toLowerCase());
+    if(existing) {
+      saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
+    } else {
+      saveCases([...cases,{id:Date.now().toString(), employeeName, email:s.caseInfo.email||"", createdAt:new Date().toISOString(), meetings:[meeting]}]);
+    }
+    audit("Development meeting saved", `${employeeName} — ${s.type}`);
+    showToast("Meeting saved to case file");
+    if(devLetter && org?.id) {
+      authedFetch("/api/portal/notify-document", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ orgId: org.id, orgName: org.name, employeeName, documentType: s.type }),
+      }).catch(e=>console.error("Portal notify failed:", e));
+    }
   };
 
   // ── Save to case ──
@@ -2605,10 +2653,10 @@ Please produce:
 
 
   return (
-    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1A1535"}}>
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",color:"#1A1535"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
-        input,textarea{font-family:DM Sans,system-ui,sans-serif;color:#F2EDE4;}
+        input,textarea{font-family:DM Sans,system-ui,sans-serif;color:#1A1535;}
         input[type="date"]{color-scheme:light;cursor:pointer;}
         input[type="date"]::-webkit-calendar-picker-indicator{opacity:0;position:absolute;right:0;width:40px;height:100%;cursor:pointer;}
         .date-wrap{position:relative;display:block;}
@@ -2990,7 +3038,7 @@ Please produce:
 
 
       {/* ── HEADER ── */}
-      <header style={{display:screen===SCREENS.HOME?"none":"flex",display:screen===SCREENS.HOME?"none":"flex",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
+      <header style={{display:screen===SCREENS.HOME?"none":"flex",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
         <div style={{maxWidth:1440,margin:"0 auto",padding:"8px 24px",minHeight:52,display:"flex",flexWrap:"wrap",rowGap:6,alignItems:"center",justifyContent:"space-between"}}>
           
           {/* Logo */}
@@ -3112,12 +3160,12 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} generateBrief={generateBrief} />
+        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} generateBrief={generateBrief} startSession={startSession} />
       )}
 
       {/* ══ BRIEF ══ */}
       {screen===SCREENS.BRIEF&&(
-        <BriefScreen setScreen={setScreen} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} cases={cases} currentUser={currentUser} orgMembers={orgMembers} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} getCaseStage={getCaseStage} fmtDate={fmtDate} showToast={showToast} setTranscript={setTranscript} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setParticipants={setParticipants} />
+        <BriefScreen setScreen={setScreen} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} cases={cases} currentUser={currentUser} orgMembers={orgMembers} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} getCaseStage={getCaseStage} fmtDate={fmtDate} showToast={showToast} setTranscript={setTranscript} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setParticipants={setParticipants} startSession={startSession} />
       )}
 
             {screen===SCREENS.PEOPLE&&(
@@ -3252,10 +3300,10 @@ Please produce:
           devStep={devStep}
           setDevStep={setDevStep}
           devAiProcessing={devAiProcessing}
-          generateSmartObjectives={(period)=>generateSmartObjectives(period)}
+          generateSmartObjectives={generateSmartObjectives}
           generateDevSummary={generateDevSummary}
           devSummary={devSummary}
-          saveDevMeetingToCase={()=>saveDevMeetingToCase()}
+          saveDevMeetingToCase={saveDevMeetingToCase}
           setScreen={setScreen}
           generateDevLetter={generateDevLetter}
           devLetter={devLetter}

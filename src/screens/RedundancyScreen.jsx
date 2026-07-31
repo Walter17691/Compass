@@ -85,7 +85,7 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
             ))}
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start",gridTemplateColumns:isMobile?"1fr":"1fr 380px"}}>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 380px",gap:20,alignItems:"start"}}>
             <div>
               {/* SETUP STEP */}
               {redundancyStep==="setup"&&(

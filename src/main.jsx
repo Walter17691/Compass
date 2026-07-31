@@ -138,8 +138,8 @@ function Root() {
   if (window.location.pathname === '/terms') return <LegalPage page="terms"/>
 
   if (loading) return (
-    <div style={{minHeight:"100vh",background:"#0D0D0F",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{color:"#7C5CFC",fontSize:13}}>Loading...</div>
+    <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span>
     </div>
   )
 
