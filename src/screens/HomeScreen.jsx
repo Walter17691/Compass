@@ -15,6 +15,10 @@ export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg,
     {label:"Home", s:SCREENS.HOME},
     {label:"Cases", s:SCREENS.CASES, badge:cases.filter(x=>getCaseStage(x)!=="closed").length||null},
     {label:"People", s:SCREENS.PEOPLE},
+    {label:"Onboarding", s:SCREENS.NEWSTARTER},
+    {label:"Offboarding", s:SCREENS.OFFBOARDING},
+    {label:"Redundancy", s:SCREENS.REDUNDANCY},
+    {label:"Wellbeing", s:SCREENS.WELLBEING},
     {label:"Reports", s:SCREENS.ERREPORT},
     {label:"DSAR", s:SCREENS.DSAR},
     {label:"Search", s:SCREENS.SEARCH},
@@ -48,7 +52,7 @@ export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg,
               )}
             </div>
           ):(
-            <nav style={{display:"flex",gap:2}}>
+            <nav style={{display:"flex",gap:2,flexWrap:"wrap",rowGap:4}}>
               {navItems.map((item,i)=>(
                 <button key={i} onClick={()=>goToScreen(item.s)} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400}}>
                   {item.label}
