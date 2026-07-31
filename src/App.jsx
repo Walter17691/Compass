@@ -3053,6 +3053,9 @@ Please produce:
               {s:SCREENS.HOME, l:"Home"},
               {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
               {s:SCREENS.PEOPLE, l:"People"},
+              {s:SCREENS.NEWSTARTER, l:"Onboarding"},
+              {s:SCREENS.REDUNDANCY, l:"Redundancy"},
+              {s:SCREENS.WELLBEING, l:"Wellbeing"},
               {s:SCREENS.ERREPORT, l:"Reports"},
               {s:SCREENS.DSAR, l:"DSAR"},
               {s:SCREENS.SEARCH, l:"Search"},
@@ -3078,7 +3081,7 @@ Please produce:
               </div>
             );
             return (
-              <nav style={{display:"flex",alignItems:"center",gap:2}}>
+              <nav style={{display:"flex",alignItems:"center",gap:2,flexWrap:"wrap",rowGap:4}}>
                 {navItems.map(({s,l,badge})=>(
                   <button key={s} onClick={()=>goToScreen(s)}
                     style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
