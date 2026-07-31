@@ -1,4 +1,6 @@
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter }) {
+const DISMISSAL_OUTCOMES = ["Dismissal with notice", "Summary dismissal (gross misconduct)"];
+
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, startOffboarding }) {
   const cs = cases.find(x=>x.id===activeCaseId);
   return (
     <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -31,7 +33,15 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
         </div>
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
-          <button disabled={!outcomeType} onClick={()=>{if(!outcomeType)return;saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast("Outcome recorded");handleLetter("outcome");}} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
+          <button disabled={!outcomeType} onClick={()=>{
+            if(!outcomeType)return;
+            const wasDismissal = DISMISSAL_OUTCOMES.includes(outcomeType);
+            const employeeName = cs?.employeeName;
+            const employeeManager = cs?.manager;
+            saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));
+            setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast("Outcome recorded");handleLetter("outcome");
+            if(wasDismissal) startOffboarding({name:employeeName, manager:employeeManager, reason:"dismissal"});
+          }} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
         </div>
       </div>
     </div>

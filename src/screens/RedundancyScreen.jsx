@@ -1,7 +1,7 @@
 import { Badge, Btn, Card, SectionTitle } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 
-export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redundancyStep, setRedundancyStep, redundancyAiOutput, setRedundancyAiOutput, redundancyCases, createRedundancyCase, updateRedundancyCase, scoreEmployee, generateRedundancyLetter, isMobile, getRedundancyAiAdvice, redundancyAiProcessing }) {
+export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redundancyStep, setRedundancyStep, redundancyAiOutput, setRedundancyAiOutput, redundancyCases, createRedundancyCase, updateRedundancyCase, scoreEmployee, generateRedundancyLetter, isMobile, getRedundancyAiAdvice, redundancyAiProcessing, startOffboarding }) {
   const stepLabels = {setup:"Setup",pool:"Selection",consultation:"Consultation",outcome:"Outcome"};
   const steps = ["setup","pool","consultation","outcome"];
 
@@ -274,6 +274,8 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                           style={{background:"#7C5CFC",border:"none",borderRadius:5,padding:"6px 14px",fontSize:12,color:"#fff",fontWeight:600,cursor:"pointer"}}>Redundancy letter</button>
                         <button onClick={()=>generateRedundancyLetter("appeal-invite",emp)}
                           style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"6px 12px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>Appeal invite</button>
+                        <button onClick={()=>startOffboarding({name:emp.name, role:emp.role, department:emp.department, reason:"redundancy"}, {confirm:false})}
+                          style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"6px 12px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>Start offboarding</button>
                       </div>
                     </div>
                   ))}

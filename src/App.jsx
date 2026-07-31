@@ -1364,6 +1364,30 @@ Generate a tailored offboarding checklist for this role, considering any role-sp
     setLeaverAiProcessing(false);
   };
 
+  // Bridges a dismissal outcome or redundancy confirmation straight into a
+  // pre-filled offboarding checklist — those were previously two dead ends
+  // with no link to each other, despite the leaver checklist being exactly
+  // what's needed at that moment (access revocation, equipment, final pay).
+  // confirm:true (default) is for automatic/implicit offers riding an
+  // unrelated primary action (e.g. issuing a dismissal outcome); explicit
+  // "Start offboarding" buttons the user already chose to click pass
+  // confirm:false to skip the extra prompt.
+  const startOffboarding = async ({name, role, department, manager, email, reason}, {confirm=true}={}) => {
+    if(confirm) {
+      const ok = await confirmDialog({
+        title: "Start offboarding checklist?",
+        message: `Set up an offboarding checklist for ${name} now — access revocation, equipment return, final pay and exit interview.`,
+        confirmLabel: "Start checklist",
+        cancelLabel: "Not now",
+      });
+      if(!ok) return;
+    }
+    setNewLeaverForm({name, role:role||"", department:department||"", manager:manager||"", email:email||"", lastWorkingDay:"", reason:reason||"other", templateId:"default"});
+    setLeaverView("new");
+    setActiveLeaver(null);
+    setScreen(SCREENS.OFFBOARDING);
+  };
+
   const createStarterInstance = () => {
     const f = newStarterForm;
     if(!f.name.trim() || !f.startDate) return;
@@ -3551,6 +3575,7 @@ Please produce:
           isMobile={isMobile}
           getRedundancyAiAdvice={getRedundancyAiAdvice}
           redundancyAiProcessing={redundancyAiProcessing}
+          startOffboarding={startOffboarding}
         />
       )}
 
@@ -3747,6 +3772,7 @@ Please produce:
           saveCases={saveCases}
           showToast={showToast}
           handleLetter={handleLetter}
+          startOffboarding={startOffboarding}
         />
       )}
     </div>
