@@ -2953,9 +2953,9 @@ Please produce:
 
             {/* ── Toast notification ── */}
       {toast&&(
-        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#FFFFFF",border:`1px solid ${toast.type==="error"?"#E8622A44":"#7C5CFC44"}`,borderRadius:10,padding:"14px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",animation:"slideIn 0.2s ease"}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#E8622A":"#7C5CFC",flexShrink:0}}/>
-          <span style={{fontSize:14,color:"#1A1535"}}>{toast.message}</span>
+        <div style={{position:"fixed",bottom:isMobile?16:24,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#E8F5EE",border:`1px solid ${toast.type==="error"?"#C84B2F44":"#1A7A4A44"}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",animation:"slideIn 0.2s ease",maxWidth:isMobile?"none":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#C84B2F":"#1A7A4A",flexShrink:0}}/>
+          <span style={{fontSize:14,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}>{toast.message}</span>
         </div>
       )}
 
