@@ -20,13 +20,24 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, updateDsarRequest }) {
+function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, updateDsarRequest, extendDsarRequest, promptDialog }) {
   const [compiled, setCompiled] = useState(null);
 
   const compile = () => setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances }));
 
   const days = daysUntil(req.dueDate);
   const overdue = days < 0;
+
+  const handleExtend = async () => {
+    const values = await promptDialog({
+      title:"Extend DSAR deadline",
+      message:"UK GDPR allows extending the response deadline by up to 2 further months for complex or numerous requests — but the individual must be told within the original 1-month window, with reasons. This sets the new due date 2 months later and records why.",
+      fields:[{key:"reason", label:"Reason (e.g. complex/numerous requests)", placeholder:"e.g. request spans multiple systems and 3 years of records", required:true}],
+      confirmLabel:"Extend by 2 months",
+    });
+    if(!values) return;
+    extendDsarRequest(req, values.reason);
+  };
 
   return (
     <Card style={{marginBottom:12}}>
@@ -38,6 +49,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
         <div style={{textAlign:"right"}}>
           <span style={{fontSize:11,fontWeight:600,color:overdue?"#C84B2F":"#7C5CFC",background:overdue?"#FEF0EB":"#EDE8FF",borderRadius:20,padding:"3px 10px"}}>{STATUS_LABEL[req.status]}</span>
           <div style={{fontSize:11,color:overdue?"#C84B2F":"#9B9098",marginTop:4}}>Due {req.dueDate}{overdue?` · ${Math.abs(days)}d overdue`:` · ${days}d left`}</div>
+          {req.extended&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4}}>Extended — {req.extensionReason||"complex request"}</div>}
         </div>
       </div>
 
@@ -47,6 +59,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
         </select>
         <Btn variant="secondary" onClick={compile}>{compiled?"Recompile data":"Compile data"}</Btn>
         {compiled&&<Btn variant="secondary" onClick={()=>downloadJson(compiled, `DSAR_${req.employeeName.replace(/\s+/g,"_")}_${req.receivedDate}.json`)}>Download response package</Btn>}
+        {!req.extended&&req.status!=="completed"&&<Btn variant="ghost" onClick={handleExtend}>Extend deadline</Btn>}
       </div>
 
       {compiled&&(
@@ -88,7 +101,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, cases, employeeRecords, starterInstances, leaverInstances, setScreen }) {
+export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, setScreen }) {
   const [form, setForm] = useState({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   const [showForm, setShowForm] = useState(false);
 
@@ -141,7 +154,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
         ):sorted.map(req=>(
-          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} updateDsarRequest={updateDsarRequest}/>
+          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
         ))}
       </div>
     </div>

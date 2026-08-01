@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { DateInput } from '../components/DateInput';
 
@@ -10,7 +11,8 @@ const REASON_LABELS = {
   other: "Other",
 };
 
-export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, setLeaverView, newLeaverForm, setNewLeaverForm, leaverTemplates, createLeaverInstance, leaverInstances, aiCustomiseLeaverChecklist, leaverAiProcessing, toggleLeaverTask, updateLeaverTaskNote, updateLeaverExitInterview, portalAccounts, revokePortalAccess }) {
+export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, setLeaverView, newLeaverForm, setNewLeaverForm, leaverTemplates, createLeaverInstance, leaverInstances, aiCustomiseLeaverChecklist, leaverAiProcessing, toggleLeaverTask, updateLeaverTaskNote, addLeaverTask, removeLeaverTask, reassignLeaverTaskOwner, updateLeaverExitInterview, portalAccounts, revokePortalAccess }) {
+  const [newTaskText, setNewTaskText] = useState({});
   const hasPortalAccess = activeLeaver && (portalAccounts||[]).some(a=>a.employee_name===activeLeaver.name);
   const phases = activeLeaver
     ? [...new Set(activeLeaver.tasks.map(t=>t.phaseLabel))].map(pl=>({
@@ -129,7 +131,7 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
       {activeLeaver&&(
         <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:20,alignItems:"start"}}>
           {/* Sidebar */}
-          <div>
+          <div style={{position:"sticky",top:90}}>
             <Card style={{marginBottom:12}}>
               <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",fontWeight:600,marginBottom:4}}>{activeLeaver.name}</div>
               <div style={{fontSize:12,color:"#6B6880",marginBottom:12}}>{activeLeaver.role}{activeLeaver.department?" · "+activeLeaver.department:""}</div>
@@ -170,6 +172,20 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
               </Card>
             )}
 
+            {/* Phase jump nav */}
+            <Card style={{marginBottom:12,padding:14}}>
+              <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,marginBottom:10,textTransform:"uppercase"}}>Jump to phase</div>
+              {phases.map(phase=>{
+                const phaseDone = phase.tasks.filter(t=>t.done).length;
+                return (
+                  <button key={phase.label} onClick={()=>document.getElementById("phase-"+phase.label.toLowerCase().replace(/\s+/g,"-"))?.scrollIntoView({behavior:"smooth",block:"start"})}
+                    style={{display:"flex",justifyContent:"space-between",width:"100%",background:"none",border:"none",padding:"5px 0",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    <span style={{fontSize:12,color:"#1A1535"}}>{phase.label}</span>
+                    <span style={{fontSize:11,color:phaseDone===phase.tasks.length?"#7C5CFC":"#6B6880"}}>{phaseDone}/{phase.tasks.length}</span>
+                  </button>
+                );
+              })}
+            </Card>
             {/* Owner legend */}
             <Card style={{background:"#F5F1EA",padding:14}}>
               <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,marginBottom:10,textTransform:"uppercase"}}>Task owners</div>
@@ -188,7 +204,7 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
               const phaseDone = phase.tasks.filter(t=>t.done).length;
               const phaseOverdue = phase.tasks.filter(t=>!t.done&&t.dueDate&&new Date(t.dueDate.split("/").reverse().join("-"))<new Date());
               return(
-                <Card key={phase.label} style={{marginBottom:12}}>
+                <Card key={phase.label} id={"phase-"+phase.label.toLowerCase().replace(/\s+/g,"-")} style={{marginBottom:12,scrollMarginTop:90}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <div style={{display:"flex",alignItems:"center",gap:10}}>
                       <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1A1535",fontWeight:600}}>{phase.label}</span>
@@ -209,9 +225,13 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
                           <div style={{fontSize:13,color:task.done?"#9B9098":"#1C1820",textDecoration:task.done?"line-through":"none",marginBottom:3}}>{task.task}</div>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
                             <div style={{display:"flex",alignItems:"center",gap:5}}>
-                              <div style={{width:6,height:6,borderRadius:"50%",background:ownerColor}}/>
-                              <span style={{fontSize:10,color:"#6B6880"}}>{task.owner}</span>
+                              <div style={{width:6,height:6,borderRadius:"50%",background:ownerColor,flexShrink:0}}/>
+                              <select value={task.owner} onChange={e=>reassignLeaverTaskOwner(activeLeaver.id,task.id,e.target.value)}
+                                style={{fontSize:10,color:"#6B6880",background:"none",border:"none",outline:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>
+                                {Object.keys(ownerColors).map(o=><option key={o} value={o}>{o}</option>)}
+                              </select>
                             </div>
+                            {task.source==="ai"&&<Badge color="#7C5CFC">AI</Badge>}
                             {task.dueDate&&<span style={{fontSize:10,color:isOverdue?"#E8622A":"#444",fontFamily:"JetBrains Mono,monospace"}}>{task.dueDate}{isOverdue?" (overdue)":""}</span>}
                             {task.done&&task.doneAt&&<span style={{fontSize:10,color:"#7C5CFC"}}>Done {new Date(task.doneAt).toLocaleDateString("en-GB")}</span>}
                           </div>
@@ -219,9 +239,18 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
                         </div>
                         <input placeholder="Add note..." value={task.note||""} onChange={e=>updateLeaverTaskNote(activeLeaver.id,task.id,e.target.value)}
                           style={{background:"none",border:"none",borderBottom:"1px solid #E8E0D0",color:"#6B6880",fontSize:11,outline:"none",width:140,padding:"2px 4px"}}/>
+                        <button onClick={()=>removeLeaverTask(activeLeaver.id,task.id)} title="Remove task"
+                          style={{background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontSize:14,padding:"0 2px",flexShrink:0,marginTop:2}}>×</button>
                       </div>
                     );
                   })}
+                  <div style={{display:"flex",gap:8,paddingTop:10,alignItems:"center"}}>
+                    <input placeholder="+ Add task..." value={newTaskText[phase.label]||""}
+                      onChange={e=>setNewTaskText(p=>({...p,[phase.label]:e.target.value}))}
+                      onKeyDown={e=>{ if(e.key==="Enter"&&newTaskText[phase.label]?.trim()){ addLeaverTask(activeLeaver.id,phase.label,newTaskText[phase.label]); setNewTaskText(p=>({...p,[phase.label]:""})); } }}
+                      style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 10px",fontSize:12,outline:"none",color:"#1A1535"}}/>
+                    <Btn variant="ghost" style={{fontSize:11,padding:"6px 12px"}} onClick={()=>{ if(newTaskText[phase.label]?.trim()){ addLeaverTask(activeLeaver.id,phase.label,newTaskText[phase.label]); setNewTaskText(p=>({...p,[phase.label]:""})); } }}>Add</Btn>
+                  </div>
                 </Card>
               );
             })}

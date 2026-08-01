@@ -204,6 +204,20 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error('loadEmployeeRecords', e); }
   };
 
+  // Only removes the profile row (job title/start date/location) — case
+  // files and meeting records are a separate legal record with their own
+  // retention obligations (ACAS/tribunal limitation periods) and aren't
+  // touched here, so this is safe to offer without a GDPR erasure review.
+  const deleteEmployeeRecord = async (name) => {
+    if(!name) return;
+    saveEmployeeRecords(employeeRecords.filter(e=>e.name!==name));
+    if(org?.id) {
+      try { await supabase.from('employee_records').delete().eq('org_id', org.id).eq('name', name); }
+      catch(e) { console.error('deleteEmployeeRecord', e); }
+    }
+    audit("Employee record deleted", name);
+  };
+
   const saveEmployeeRecordToDB = async (name, fields) => {
     if(!org?.id) return;
     try {
@@ -1270,6 +1284,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         receivedDate:r.received_date, dueDate:r.due_date, status:r.status,
         completedDate:r.completed_date, notes:r.notes,
         reviewedFlaggedSections:r.reviewed_flagged_sections, createdAt:r.created_at,
+        extended:r.extended, extensionReason:r.extension_reason, extendedAt:r.extended_at,
       })));
     } catch(e) { console.error('loadDsarRequests', e); }
   };
@@ -1293,6 +1308,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         receivedDate:data.received_date, dueDate:data.due_date, status:data.status,
         completedDate:data.completed_date, notes:data.notes,
         reviewedFlaggedSections:data.reviewed_flagged_sections, createdAt:data.created_at,
+        extended:data.extended, extensionReason:data.extension_reason, extendedAt:data.extended_at,
       }]);
       showToast("DSAR request logged");
     } catch(e) { console.error('createDsarRequest', e); showToast("Could not log DSAR request", "error"); }
@@ -1304,11 +1320,34 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if('notes' in fields) payload.notes = fields.notes;
     if('reviewedFlaggedSections' in fields) payload.reviewed_flagged_sections = fields.reviewedFlaggedSections;
     if('completedDate' in fields) payload.completed_date = fields.completedDate;
+    if('dueDate' in fields) payload.due_date = fields.dueDate;
+    if('extended' in fields) payload.extended = fields.extended;
+    if('extensionReason' in fields) payload.extension_reason = fields.extensionReason;
+    if('extendedAt' in fields) payload.extended_at = fields.extendedAt;
     try {
       const {error} = await supabase.from('dsar_requests').update(payload).eq('id', id);
       if(error) throw error;
       setDsarRequests(p=>p.map(r=>r.id===id?{...r,...fields}:r));
-    } catch(e) { console.error('updateDsarRequest', e); showToast("Could not update DSAR request", "error"); }
+      return true;
+    } catch(e) { console.error('updateDsarRequest', e); showToast("Could not update DSAR request", "error"); return false; }
+  };
+
+  // UK GDPR allows extending the 1-month DSAR deadline by a further 2
+  // months for complex or numerous requests (Art. 12(3)) — the individual
+  // must be told within the original month, with reasons. Fixed 2-month
+  // extension (not an arbitrary date) to stay within the statutory limit;
+  // the reason is kept for the audit trail.
+  const extendDsarRequest = async (req, reason) => {
+    if(!req || req.extended) return;
+    const extended = addCalendarMonth(addCalendarMonth(req.dueDate));
+    if(!extended) { showToast("Invalid due date", "error"); return; }
+    const ok = await updateDsarRequest(req.id, {
+      dueDate: toISODateLocal(extended), extended:true,
+      extensionReason: reason||"", extendedAt: new Date().toISOString(),
+    });
+    if(!ok) return;
+    audit("DSAR deadline extended", req.employeeName+" — "+(reason||"complex request"));
+    showToast("Deadline extended to "+extended.toLocaleDateString("en-GB"));
   };
 
   const createLeaverInstance = () => {
@@ -1359,6 +1398,34 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setActiveLeaver(changed);
   };
 
+  const addLeaverTask = (instanceId, phaseLabel, taskText, owner) => {
+    if(!taskText?.trim()) return;
+    const newTask = {id:"manual_"+Date.now(), task:taskText.trim(), owner:owner||"HR", phaseId:phaseLabel.toLowerCase().replace(/\s+/g,"_"), phaseLabel, dueDate:"", done:false, doneAt:null, note:"", source:"manual"};
+    const updated = leaverInstances.map(s => s.id===instanceId ? {...s, tasks:[...s.tasks, newTask]} : s);
+    saveLeaverInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveLeaverInstanceToDB(changed);
+    setActiveLeaver(changed);
+  };
+
+  const removeLeaverTask = (instanceId, taskId) => {
+    const updated = leaverInstances.map(s => s.id===instanceId ? {...s, tasks: s.tasks.filter(t=>t.id!==taskId)} : s);
+    saveLeaverInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveLeaverInstanceToDB(changed);
+    setActiveLeaver(changed);
+  };
+
+  const reassignLeaverTaskOwner = (instanceId, taskId, owner) => {
+    const updated = leaverInstances.map(s => s.id===instanceId ? {
+      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, owner} : t)
+    } : s);
+    saveLeaverInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveLeaverInstanceToDB(changed);
+    setActiveLeaver(changed);
+  };
+
   const updateLeaverExitInterview = (instanceId, fields) => {
     const updated = leaverInstances.map(s => s.id===instanceId ? {...s, ...fields} : s);
     saveLeaverInstances(updated);
@@ -1389,7 +1456,7 @@ Generate a tailored offboarding checklist for this role, considering any role-sp
       const newTasks = parsed.map((t,i) => {
         const due = new Date(lastDay);
         due.setDate(due.getDate() + (t.day||0));
-        return { ...t, id:"ai_"+Date.now()+i, phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"before", phaseLabel:t.phase||"Before last day", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
+        return { ...t, id:"ai_"+Date.now()+i, phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"before", phaseLabel:t.phase||"Before last day", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
       });
       const updated = leaverInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
       saveLeaverInstances(updated);
@@ -1473,6 +1540,34 @@ Generate a tailored offboarding checklist for this role, considering any role-sp
     setActiveStarter(changed);
   };
 
+  const addStarterTask = (instanceId, phaseLabel, taskText, owner) => {
+    if(!taskText?.trim()) return;
+    const newTask = {id:"manual_"+Date.now(), task:taskText.trim(), owner:owner||"HR", phaseId:phaseLabel.toLowerCase().replace(/\s+/g,"_"), phaseLabel, dueDate:"", done:false, doneAt:null, note:"", source:"manual"};
+    const updated = starterInstances.map(s => s.id===instanceId ? {...s, tasks:[...s.tasks, newTask]} : s);
+    saveStarterInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveStarterInstanceToDB(changed);
+    setActiveStarter(changed);
+  };
+
+  const removeStarterTask = (instanceId, taskId) => {
+    const updated = starterInstances.map(s => s.id===instanceId ? {...s, tasks: s.tasks.filter(t=>t.id!==taskId)} : s);
+    saveStarterInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveStarterInstanceToDB(changed);
+    setActiveStarter(changed);
+  };
+
+  const reassignStarterTaskOwner = (instanceId, taskId, owner) => {
+    const updated = starterInstances.map(s => s.id===instanceId ? {
+      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, owner} : t)
+    } : s);
+    saveStarterInstances(updated);
+    const changed = updated.find(s=>s.id===instanceId);
+    saveStarterInstanceToDB(changed);
+    setActiveStarter(changed);
+  };
+
   const aiCustomiseChecklist = async (instance) => {
     if(!instance) return;
     setStarterAiProcessing(true);
@@ -1495,7 +1590,7 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
       const newTasks = parsed.map((t,i) => {
         const due = new Date(startDate);
         due.setDate(due.getDate() + (t.day||1));
-        return { ...t, id:"ai_"+Date.now()+i, phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"w1", phaseLabel:t.phase||"Week 1", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
+        return { ...t, id:"ai_"+Date.now()+i, phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"w1", phaseLabel:t.phase||"Week 1", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
       });
       const updated = starterInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
       saveStarterInstances(updated);
@@ -3433,6 +3528,8 @@ Please produce:
           setEditLocation={setEditLocation}
           locations={locations}
           upsertEmployeeRecord={upsertEmployeeRecord}
+          deleteEmployeeRecord={deleteEmployeeRecord}
+          confirmDialog={confirmDialog}
           showToast={showToast}
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
@@ -3567,6 +3664,9 @@ Please produce:
           starterAiProcessing={starterAiProcessing}
           toggleStarterTask={toggleStarterTask}
           updateStarterTaskNote={updateStarterTaskNote}
+          addStarterTask={addStarterTask}
+          removeStarterTask={removeStarterTask}
+          reassignStarterTaskOwner={reassignStarterTaskOwner}
         />
       )}
 
@@ -3586,6 +3686,9 @@ Please produce:
           leaverAiProcessing={leaverAiProcessing}
           toggleLeaverTask={toggleLeaverTask}
           updateLeaverTaskNote={updateLeaverTaskNote}
+          addLeaverTask={addLeaverTask}
+          removeLeaverTask={removeLeaverTask}
+          reassignLeaverTaskOwner={reassignLeaverTaskOwner}
           updateLeaverExitInterview={updateLeaverExitInterview}
           portalAccounts={portalAccounts}
           revokePortalAccess={revokePortalAccess}
@@ -3727,6 +3830,8 @@ Please produce:
           dsarRequests={dsarRequests}
           createDsarRequest={createDsarRequest}
           updateDsarRequest={updateDsarRequest}
+          extendDsarRequest={extendDsarRequest}
+          promptDialog={promptDialog}
           cases={cases}
           employeeRecords={employeeRecords}
           starterInstances={starterInstances}
