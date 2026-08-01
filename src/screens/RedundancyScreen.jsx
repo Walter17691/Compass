@@ -1,7 +1,7 @@
 import { Badge, Btn, Card, SectionTitle } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 
-export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redundancyStep, setRedundancyStep, redundancyAiOutput, setRedundancyAiOutput, redundancyCases, createRedundancyCase, updateRedundancyCase, scoreEmployee, generateRedundancyLetter, isMobile, getRedundancyAiAdvice, redundancyAiProcessing, startOffboarding }) {
+export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redundancyStep, setRedundancyStep, redundancyAiOutput, setRedundancyAiOutput, redundancyCases, createRedundancyCase, updateRedundancyCase, scoreEmployee, generateRedundancyLetter, isMobile, getRedundancyAiAdvice, redundancyAiProcessing, startOffboarding, promptDialog }) {
   const stepLabels = {setup:"Setup",pool:"Selection",consultation:"Consultation",outcome:"Outcome"};
   const steps = ["setup","pool","consultation","outcome"];
 
@@ -52,12 +52,17 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                   {type:"individual",title:"Individual redundancy",sub:"Fewer than 20 redundancies · No minimum consultation period · ACAS Early Conciliation recommended"},
                   {type:"collective",title:"Collective redundancy",sub:"20+ redundancies · 30 days (20-99) or 45 days (100+) consultation · HR1 form required · Employee representatives"},
                 ].map(opt=>(
-                  <button key={opt.type} onClick={()=>{
-                    const reason = window.prompt("Brief reason for redundancy (e.g. restructure, site closure, role no longer required):");
-                    if(!reason) return;
-                    const pool = window.prompt("Describe the selection pool (e.g. all Marketing Executives, all staff in Leeds office):");
-                    if(pool===null) return;
-                    createRedundancyCase(opt.type, reason, pool||"Not specified");
+                  <button key={opt.type} onClick={async ()=>{
+                    const values = await promptDialog({
+                      title:`Start ${opt.title.toLowerCase()}`,
+                      fields:[
+                        {key:"reason", label:"Reason for redundancy", placeholder:"e.g. restructure, site closure, role no longer required", required:true},
+                        {key:"pool", label:"Selection pool", placeholder:"e.g. all Marketing Executives, all staff in Leeds office"},
+                      ],
+                      confirmLabel:"Start process",
+                    });
+                    if(!values) return;
+                    createRedundancyCase(opt.type, values.reason, values.pool||"Not specified");
                   }}
                     style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"16px",textAlign:"left",cursor:"pointer",transition:"border-color 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
@@ -167,12 +172,18 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                   <Card>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                       <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>At-risk employees</h3>
-                      <Btn onClick={()=>{
-                        const name=window.prompt("Employee name:");
-                        if(!name) return;
-                        const role=window.prompt("Job title:");
-                        const dept=window.prompt("Department:");
-                        const emp={id:Date.now().toString(),name,role:role||"",department:dept||"",scores:{},totalScore:0,selected:null,consultationMeetings:[],outcome:"",redundancyPay:""};
+                      <Btn onClick={async ()=>{
+                        const values = await promptDialog({
+                          title:"Add employee to selection pool",
+                          fields:[
+                            {key:"name", label:"Employee name", placeholder:"e.g. James Wilson", required:true},
+                            {key:"role", label:"Job title", placeholder:"e.g. Marketing Executive"},
+                            {key:"dept", label:"Department", placeholder:"e.g. Marketing"},
+                          ],
+                          confirmLabel:"Add employee",
+                        });
+                        if(!values) return;
+                        const emp={id:Date.now().toString(),name:values.name,role:values.role||"",department:values.dept||"",scores:{},totalScore:0,selected:null,consultationMeetings:[],outcome:"",redundancyPay:""};
                         updateRedundancyCase({atRiskEmployees:[...activeRedundancy.atRiskEmployees,emp]});
                       }} style={{padding:"6px 14px",fontSize:12}}>+ Add employee</Btn>
                     </div>

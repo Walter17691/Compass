@@ -1,7 +1,7 @@
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
 
-export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, requirePro }) {
+export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, requirePro, promptDialog }) {
   const empName = activePerson;
   const empCases = cases.filter(c=>c.employeeName===empName);
   const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseId:cs.id,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -31,16 +31,22 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
         <div style={{display:"flex",gap:8}}>
           <button onClick={async()=>{
             if(!requirePro('portal', ()=>{})) return;
-            const email = window.prompt(`Email address to invite ${empName} to the employee portal:`);
-            if(!email||!email.trim()) return;
+            const values = await promptDialog({
+              title:"Invite to employee portal",
+              message:`Send ${empName} an invite to view their case status, sign documents and complete onboarding tasks.`,
+              fields:[{key:"email", label:"Email address", type:"email", placeholder:"name@company.com", required:true}],
+              confirmLabel:"Send invite",
+            });
+            if(!values) return;
+            const email = values.email.trim();
             try {
               const res = await authedFetch('/api/portal/invite', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ orgId: org?.id, orgName: org?.name, employeeName: empName, email: email.trim() }),
+                body: JSON.stringify({ orgId: org?.id, orgName: org?.name, employeeName: empName, email }),
               });
               const data = await res.json();
               if(!res.ok||data.error) { showToast(data.error||"Couldn't send invite"); return; }
-              showToast(`Portal invite sent to ${email.trim()}`);
+              showToast(`Portal invite sent to ${email}`);
             } catch(e) { showToast("Couldn't send invite — please try again"); }
           }}
             style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>

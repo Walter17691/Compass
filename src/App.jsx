@@ -21,6 +21,7 @@ import { AdjustmentForm } from './components/AdjustmentForm';
 import { UserAddForm } from './components/UserAddForm';
 import { AddRoleForm } from './components/AddRoleForm';
 import { ConfirmModal } from './components/ConfirmModal';
+import { PromptModal } from './components/PromptModal';
 import { ActivityBell } from './components/ActivityBell';
 import { OrgSwitcher } from './components/OrgSwitcher';
 import { PeopleScreen } from './screens/PeopleScreen';
@@ -849,6 +850,16 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const confirmDialog = ({title, message, confirmLabel, cancelLabel, danger}) => {
     return new Promise(resolve => {
       setConfirmState({title, message, confirmLabel, cancelLabel, danger, resolve});
+    });
+  };
+
+  // In-app replacement for window.prompt() — returns a Promise<object|null>
+  // (null if cancelled) so call sites that used to chain several sequential
+  // prompt() calls can collect all fields in one styled form instead.
+  const [promptState, setPromptState] = useState(null);
+  const promptDialog = ({title, message, fields, confirmLabel, cancelLabel}) => {
+    return new Promise(resolve => {
+      setPromptState({title, message, fields, confirmLabel, cancelLabel, resolve});
     });
   };
 
@@ -3184,6 +3195,18 @@ Please produce:
         />
       )}
 
+      {promptState&&(
+        <PromptModal
+          title={promptState.title}
+          message={promptState.message}
+          fields={promptState.fields}
+          confirmLabel={promptState.confirmLabel}
+          cancelLabel={promptState.cancelLabel}
+          onConfirm={(values)=>{ promptState.resolve(values); setPromptState(null); }}
+          onCancel={()=>{ promptState.resolve(null); setPromptState(null); }}
+        />
+      )}
+
       {/* ── Upgrade to Pro prompt ── */}
       {upgradePromptFeature&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setUpgradePromptFeature(null)}>
@@ -3332,7 +3355,7 @@ Please produce:
           <div style={{maxWidth:1440,margin:"0 auto",display:"flex",alignItems:"center",gap:12,fontSize:12}}>
             <span style={{color:"#C84B2F",fontWeight:600}}>Overdue actions:</span>
             {dueSoon.filter(d=>d.overdue).slice(0,3).map((d,i)=>(
-              <span key={i} style={{color:"#3D3560"}}>{d.employeeName} — {d.label} <span style={{color:"#C84B2F"}}>({Math.abs(d.daysLeft)}d overdue)</span></span>
+              <span key={i} style={{color:"#3D3560"}}>{d.employeeName} — {d.label} <span style={{color:"#C84B2F"}}>({d.daysOverdue}d overdue)</span></span>
             ))}
             <button onClick={()=>setScreen(SCREENS.DASHBOARD)} style={{background:"none",border:"none",color:"#C84B2F",fontSize:11,cursor:"pointer",marginLeft:"auto",textDecoration:"underline"}}>View all</button>
           </div>
@@ -3427,6 +3450,7 @@ Please produce:
           org={org}
           user={user}
           requirePro={requirePro}
+          promptDialog={promptDialog}
         />
       )}
 
@@ -3481,7 +3505,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} />
       )}
 
       {/* ══ REVIEW ══ */}
@@ -3604,6 +3628,7 @@ Please produce:
           getRedundancyAiAdvice={getRedundancyAiAdvice}
           redundancyAiProcessing={redundancyAiProcessing}
           startOffboarding={startOffboarding}
+          promptDialog={promptDialog}
         />
       )}
 

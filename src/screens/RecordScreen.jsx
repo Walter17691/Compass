@@ -2,7 +2,7 @@ import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
 import { SCREENS } from '../constants';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog }) {
   const cancelMeeting = async () => {
     const hasContent = transcript.length>0 || inputText.trim();
     if(hasContent) {
@@ -39,10 +39,15 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
           {meetingStartTime&&<span style={{fontSize:12,color:"#9B9098",fontFamily:"monospace"}}>{meetingStartTime}</span>}
           {/* Adjourn / Reconvene button */}
           {currentAdjournment?(
-            <button onClick={()=>{
-              const reason = window.prompt("Reason for adjournment (optional):",currentAdjournment.reason||"");
+            <button onClick={async ()=>{
+              const values = await promptDialog({
+                title:"Reconvene meeting",
+                fields:[{key:"reason", label:"Reason for adjournment (optional)", defaultValue:currentAdjournment.reason||""}],
+                confirmLabel:"Reconvene",
+              });
+              if(!values) return;
               const endTime = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
-              setAdjournments(a=>a.map(x=>x.id===currentAdjournment.id?{...x,end:endTime,reason:reason||x.reason}:x));
+              setAdjournments(a=>a.map(x=>x.id===currentAdjournment.id?{...x,end:endTime,reason:values.reason||x.reason}:x));
               setCurrentAdjournment(null);
               setTranscript(p=>[...p,{id:Date.now(),speaker:"System",text:"[Meeting reconvened at "+endTime+"]",ts:endTime,pending:false}]);
             }} style={{background:"#1A7A4A",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>
