@@ -5,6 +5,22 @@ import { UserAddForm } from '../components/UserAddForm';
 import { isPro } from '../lib/plan';
 import { authedFetch } from '../lib/authedFetch';
 
+const SETTINGS_SECTIONS = [
+  {id:"billing", label:"Billing"},
+  {id:"data-export", label:"Data export"},
+  {id:"locations", label:"Locations"},
+  {id:"team-access", label:"Team & access"},
+  {id:"portal-access", label:"Portal access"},
+  {id:"employee-records", label:"Employee records"},
+  {id:"case-history", label:"Case history"},
+  {id:"branding", label:"Branding & letters"},
+  {id:"policies", label:"Policies"},
+  {id:"notifications", label:"Notifications"},
+  {id:"audit-trail", label:"Audit trail"},
+  {id:"data-privacy", label:"Data & privacy"},
+  {id:"help", label:"Help"},
+];
+
 export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, user, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, users, currentUser, saveUsers, addUser, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess }) {
   const [webhookUrlDraft, setWebhookUrlDraft] = useState(orgWebhookUrl||"");
   const goToBillingUrl = async (action) => {
@@ -18,10 +34,19 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
   return(
     <div style={{maxWidth:680,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
-      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 28px"}}>Case files and employee records are stored securely in the cloud, shared with your organisation.</p>
+      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 20px"}}>Case files and employee records are stored securely in the cloud, shared with your organisation.</p>
+
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:24,paddingBottom:20,borderBottom:"1px solid #E8E0D0"}}>
+        {SETTINGS_SECTIONS.map(s=>(
+          <button key={s.id} onClick={()=>document.getElementById(s.id)?.scrollIntoView({behavior:"smooth",block:"start"})}
+            style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",fontSize:11,color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",whiteSpace:"nowrap"}}>
+            {s.label}
+          </button>
+        ))}
+      </div>
 
       {/* Billing */}
-      <Card style={{marginBottom:20}}>
+      <Card id="billing" style={{marginBottom:20,scrollMarginTop:90}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535"}}>Billing</div>
           <Badge color={isPro(org)?"#1A7A4A":"#9B9098"}>{isPro(org)?"PRO":"FREE"}</Badge>
@@ -39,7 +64,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
 
       {/* Data export */}
       {isHR&&(
-        <Card style={{marginBottom:20}}>
+        <Card id="data-export" style={{marginBottom:20,scrollMarginTop:90}}>
           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Data export</div>
           <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Export all cases and meeting records for reporting or backup.</p>
           <div style={{display:"flex",gap:10}}>
@@ -64,7 +89,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
 
       {/* Locations */}
       {isHR&&(
-        <Card style={{marginBottom:20}}>
+        <Card id="locations" style={{marginBottom:20,scrollMarginTop:90}}>
           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Locations</div>
           <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Add office locations. Managers will be assigned to a location and will only see cases from their location.</p>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
@@ -89,7 +114,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
 
       {/* Team members */}
       {isHR&&(
-        <Card style={{marginBottom:20}}>
+        <Card id="team-access" style={{marginBottom:20,scrollMarginTop:90}}>
           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Team members</div>
           <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Invite team members to your workspace. They will receive an email invite.</p>
 
@@ -185,7 +210,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
 
       {/* Employee Portal access */}
       {isHR&&(
-        <Card style={{marginBottom:12}}>
+        <Card id="portal-access" style={{marginBottom:12,scrollMarginTop:90}}>
           <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Employee Portal access</h3>
           <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Everyone with an active Portal account, where they can view case status, sign documents and complete onboarding tasks. Revoke access immediately when someone leaves.</p>
           {portalAccounts.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No employees have Portal access yet</div>}
@@ -202,7 +227,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       )}
 
       {/* Employee records (CSV import/export) */}
-      <Card style={{marginBottom:12}}>
+      <Card id="employee-records" style={{marginBottom:12,scrollMarginTop:90}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Employee records</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Import or export employee names, job titles, start dates and locations as a CSV — works with an export from any HRIS or payroll system (BambooHR, Xero, Sage, etc). Expected columns: Name, Job title, Start date, Location.</p>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -213,7 +238,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       </Card>
 
       {/* Case history (CSV import) */}
-      <Card style={{marginBottom:12}}>
+      <Card id="case-history" style={{marginBottom:12,scrollMarginTop:90}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Case history</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Bring in existing case records when switching from spreadsheets or another system — meeting transcripts and letters aren't importable this way, but the case-level record (who, what, when, status) is. Expected columns: Employee name, Case type, Stage (open/closed), Date received, Description, Outcome.</p>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -224,7 +249,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       </Card>
 
       {/* Word template */}
-      <Card style={{marginBottom:12}}>
+      <Card id="branding" style={{marginBottom:12,scrollMarginTop:90}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Word letter template</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Upload your .docx with header/footer. Enables Word export on letters.</p></div>
           <Badge color="#1C5AA0">WORD</Badge>
@@ -258,7 +283,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       </Card>
 
       {/* Policies */}
-      <Card style={{marginBottom:20}}>
+      <Card id="policies" style={{marginBottom:20,scrollMarginTop:90}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Company policies</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Upload HR policies (.docx, .txt). Compass references them in all AI outputs.</p></div>
           <Badge color="#7C5CFC">AI</Badge>
@@ -319,7 +344,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       </Card>
 
       {/* Notifications */}
-      <Card style={{marginBottom:12}}>
+      <Card id="notifications" style={{marginBottom:12,scrollMarginTop:90}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Deadline reminders</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Get browser notifications for upcoming and overdue deadlines.</p>
         {dueSoon.length>0?(
@@ -359,7 +384,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       </Card>
 
       {/* Audit trail */}
-      <Card style={{marginBottom:12}}>
+      <Card id="audit-trail" style={{marginBottom:12,scrollMarginTop:90}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Audit trail</h3><p style={{fontSize:12,color:"#6B6375",margin:0}}>Every action timestamped and logged.</p></div>
           <span style={{fontSize:11,color:"#6B6880"}}>{auditLog.length} entries</span>
@@ -380,7 +405,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       </Card>
 
       {/* GDPR / Data */}
-      <Card style={{marginBottom:20}}>
+      <Card id="data-privacy" style={{marginBottom:20,scrollMarginTop:90}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Data &amp; privacy</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Case files, employee records and the audit trail are stored in the cloud, shared with your organisation. Policies and signature/letterhead stay in this browser. You are responsible for UK GDPR compliance when processing employee personal data.</p>
         <div style={{background:"#FDFAF5",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
@@ -404,7 +429,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
       </Card>
 
       {/* Help / Onboarding */}
-      <Card style={{marginBottom:20}}>
+      <Card id="help" style={{marginBottom:20,scrollMarginTop:90}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px"}}>Rewatch the getting started guide.</p>
         <Btn onClick={()=>{setOnboardStep(0);setShowOnboard(true);}}>Restart tour</Btn>

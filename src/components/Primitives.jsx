@@ -14,8 +14,8 @@ export function Btn({ children, onClick, variant="primary", disabled, style={} }
   return <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{...base,...vars[variant]}}>{children}</button>;
 }
 
-export function Card({ children, style={} }) {
-  return <div style={{background:"#FFFFFF", border:"1px solid #E8E0D0", borderRadius:14, padding:24, boxShadow:"0 1px 3px rgba(0,0,0,0.3)", ...style}}>{children}</div>;
+export function Card({ children, style={}, ...rest }) {
+  return <div style={{background:"#FFFFFF", border:"1px solid #E8E0D0", borderRadius:14, padding:24, boxShadow:"0 1px 3px rgba(0,0,0,0.3)", ...style}} {...rest}>{children}</div>;
 }
 
 export function SectionTitle({ children }) {
