@@ -126,14 +126,16 @@ export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg,
             const active=cases.filter(cs=>getCaseStage(cs)!=="closed").length;
             const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
             const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
-            const closedMonth=cases.filter(cs=>{if(getCaseStage(cs)!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
+            const closedInMonth=(monthsAgo)=>cases.filter(cs=>{if(getCaseStage(cs)!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const n=new Date();n.setMonth(n.getMonth()-monthsAgo);return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
+            const closedMonth=closedInMonth(0);
+            const closedLastMonth=closedInMonth(1);
+            const closedDelta=closedMonth-closedLastMonth;
             const updatedWeek=cases.filter(cs=>{const d=new Date(cs.updatedAt||cs.createdAt||0);return getCaseStage(cs)!=="closed"&&(Date.now()-d)<7*24*60*60*1000;}).length;
-            const overdueCount=dueSoon.filter(d=>d.overdue).length;
             return [
               {label:"Active cases",value:active,sub:updatedWeek>0?updatedWeek+" updated this week":"No updates this week",accent:"#7C5CFC"},
               {label:"Awaiting action",value:actions,sub:actions>0?"Review next steps below":"All up to date",accent:"#E8622A"},
               {label:"Pending signatures",value:pendingSigs,sub:pendingSigs>0?"Awaiting employee sign-off":"None outstanding",accent:"#1A7A4A"},
-              {label:"Closed this month",value:closedMonth,sub:overdueCount>0?overdueCount+" deadline"+(overdueCount!==1?"s":"")+" overdue":"No overdue deadlines",accent:"#6B6375"},
+              {label:"Closed this month",value:closedMonth,sub:closedLastMonth>0?(closedDelta>0?"↑":closedDelta<0?"↓":"→")+Math.abs(closedDelta)+" vs last month":"No closures last month",accent:"#6B6375"},
             ].map(s=>(
               <div key={s.label} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
                 <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>{s.label}</div>
