@@ -3,7 +3,7 @@ import { isAllowedWebhookUrl } from './_webhookGuard.js';
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
 function slackPayload(urgent) {
-  const lines = urgent.map(d => `• *${d.employeeName}* — ${d.label} (${d.overdue ? `${Math.abs(d.daysLeft)}d overdue` : `${d.daysLeft}d left`})`);
+  const lines = urgent.map(d => `• *${d.employeeName}* — ${d.label} (${d.overdue ? `${d.daysOverdue}d overdue` : `${d.daysLeft}d left`})`);
   return {
     text: `Compass HR: ${urgent.length} compliance deadline${urgent.length === 1 ? '' : 's'} need${urgent.length === 1 ? 's' : ''} attention`,
     blocks: [
@@ -14,7 +14,7 @@ function slackPayload(urgent) {
 }
 
 function teamsPayload(urgent) {
-  const lines = urgent.map(d => `- **${d.employeeName}** — ${d.label} (${d.overdue ? `${Math.abs(d.daysLeft)}d overdue` : `${d.daysLeft}d left`})`).join('\n\n');
+  const lines = urgent.map(d => `- **${d.employeeName}** — ${d.label} (${d.overdue ? `${d.daysOverdue}d overdue` : `${d.daysLeft}d left`})`).join('\n\n');
   return {
     '@type': 'MessageCard',
     '@context': 'http://schema.org/extensions',

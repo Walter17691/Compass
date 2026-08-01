@@ -330,7 +330,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, use
                   <span style={{color:d.overdue?"#E8622A":"#1C1820"}}>{d.employeeName}</span>
                   <span style={{color:"#6B6880",marginLeft:8}}>{d.label}</span>
                 </div>
-                <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:"JetBrains Mono,monospace"}}>{d.overdue?`${Math.abs(d.daysLeft)}d overdue`:`${d.daysLeft}d`}</span>
+                <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:"JetBrains Mono,monospace"}}>{d.overdue?`${d.daysOverdue}d overdue`:`${d.daysLeft}d`}</span>
               </div>
             ))}
           </div>

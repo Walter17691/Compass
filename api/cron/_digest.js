@@ -18,7 +18,7 @@ function digestHtml(items) {
   const rows = items.map(d => `
     <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;font-size:13px">
       <div><strong>${d.employeeName}</strong><span style="color:#666;margin-left:8px">${d.label}</span></div>
-      <span style="color:${d.overdue ? '#C84B2F' : '#7C5CFC'};white-space:nowrap;margin-left:12px">${d.overdue ? `${Math.abs(d.daysLeft)}d overdue` : `${d.daysLeft}d left`}</span>
+      <span style="color:${d.overdue ? '#C84B2F' : '#7C5CFC'};white-space:nowrap;margin-left:12px">${d.overdue ? `${d.daysOverdue}d overdue` : `${d.daysLeft}d left`}</span>
     </div>`).join('');
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">
     <h2 style="color:#7C5CFC">Compass HR — Deadline digest</h2>

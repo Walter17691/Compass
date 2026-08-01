@@ -68,8 +68,8 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
             <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Overdue actions</div>
             {dueSoon.filter(d=>d.overdue).slice(0,5).map((d,i)=>(
               <div key={i} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",fontSize:12}}>
-                <div style={{color:"#C84B2F",marginBottom:1}}>{d.caseName}</div>
-                <div style={{color:"#6B6880",fontSize:10}}>{d.step} · {Math.abs(d.daysLeft)}d overdue</div>
+                <div style={{color:"#C84B2F",marginBottom:1}}>{d.employeeName}</div>
+                <div style={{color:"#6B6880",fontSize:10}}>{d.label} · {d.daysOverdue}d overdue</div>
               </div>
             ))}
             {dueSoon.filter(d=>d.overdue).length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No overdue actions</div>}

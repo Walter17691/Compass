@@ -26,7 +26,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
     if(!deadlineDate||isNaN(deadlineDate)) return;
     deadlineDate.setHours(0,0,0,0);
     const diff = Math.ceil((deadlineDate-start)/(1000*60*60*24));
-    if(diff<=14) due.push({employeeName,label,category,key,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),overdue:diff<0});
+    if(diff<=14) due.push({employeeName,label,category,key,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),daysOverdue:diff<0?Math.abs(diff):0,overdue:diff<0});
   };
 
   cases.forEach(cs => {
@@ -96,6 +96,6 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
     addDeadline(req.employeeName||req.employee_name, "DSAR response due (statutory: 1 calendar month)", new Date(req.due_date||req.dueDate), "dsar", `dsar:${req.id}`);
   });
 
-  due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.daysLeft-b.daysLeft; });
+  due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.overdue?b.daysOverdue-a.daysOverdue:a.daysLeft-b.daysLeft; });
   return due;
 }
