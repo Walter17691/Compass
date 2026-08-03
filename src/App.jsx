@@ -8,6 +8,8 @@ import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { getCaseStage } from './lib/caseStage';
+import { getNextStep } from './lib/nextStep';
+import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { canUseFeature, canCreateCase } from './lib/plan';
 import { authedFetch } from './lib/authedFetch';
@@ -1643,14 +1645,7 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
     const updated = {
       ...activeRedundancy,
       atRiskEmployees: activeRedundancy.atRiskEmployees.map(e =>
-        e.id===empId ? {
-          ...e,
-          scores: {...(e.scores||{}), [criterionId]:score},
-          totalScore: activeRedundancy.selectionCriteria.reduce((total,c) => {
-            const s = c.id===criterionId ? score : ((e.scores||{})[c.id]||0);
-            return total + (s * c.weight/100);
-          }, 0).toFixed(1)
-        } : e
+        e.id===empId ? {...e, ...computeSelectionScore(e.scores, criterionId, score, activeRedundancy.selectionCriteria)} : e
       )
     };
     updateRedundancyCase(updated);
@@ -2889,50 +2884,6 @@ Please produce:
     {id:"appeal",        label:"Appeal",                 icon:"🔄"},
     {id:"closed",        label:"Closed",                 icon:"✓"},
   ];
-
-  const getNextStep = (cs) => {
-    if(getCaseStage(cs)==="closed") return null;
-    const stage = getCaseStage(cs);
-    const meetings = cs.meetings||[];
-    const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
-    const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary"));
-    const appealMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal"));
-    const lastInv = invMeetings[invMeetings.length-1];
-    const lastDisc = discMeetings[discMeetings.length-1];
-    const lastAppeal = appealMeetings[appealMeetings.length-1];
-    const hasDiscOutcome = discMeetings.some(m=>m.letterOutput);
-    const hasAppealOutcome = appealMeetings.some(m=>m.letterOutput);
-    const hasOutcome = hasDiscOutcome;
-
-    switch(stage) {
-      case "intake":
-        return {label:"Schedule investigation meeting", action:"start_investigation", primary:true, reason:"No fact-finding has started yet — ACAS recommends investigating without unreasonable delay."};
-      case "investigation":
-        if(!lastInv?.record) return {label:"Start investigation meeting", action:"start_investigation", primary:true, reason:"No investigation meeting recorded yet."};
-        if(lastInv?.signStatus!=="signed") return {label:"Send investigation record for signature", action:"send_signature", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
-        return {label:"Generate investigation report", action:"inv_report", primary:true, reason:"Investigation meetings are complete — summarise findings before deciding next steps."};
-      case "inv_report":
-        return {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", primary:true, reason:"ACAS Code: give the employee written notice of the allegations and evidence in good time before any hearing.", secondary:{label:"No case to answer — close", action:"close_no_case"}};
-      case "disciplinary":
-        if(!lastDisc?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", primary:true, reason:"Invitation sent — the hearing hasn't been held yet."};
-        if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", primary:true, reason:"The employee should confirm the hearing record is accurate."};
-        if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", primary:true, reason:"ACAS Code: confirm the decision in writing, normally within 5 working days of the hearing."};
-        return {label:"Outcome issued — close or appeal", action:"post_outcome", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
-      case "outcome":
-        return {label:"Close case", action:"close_case", primary:true, reason:"Outcome has been issued and no appeal is in progress."};
-      case "appeal":
-        if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", primary:true, reason:"An appeal has been raised but not yet heard."};
-        if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
-        if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
-        return {label:"Appeal outcome issued — close case", action:"close_case", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
-      case "closed":
-        return null;
-      case "outcome":
-        return null;
-      default:
-        return null;
-    }
-  };
 
   // Toggles a single item in a meeting's deterministic nextSteps checklist
   // (NEXT_STEPS_MAP-derived, App.jsx:1468-1470) — the same array
