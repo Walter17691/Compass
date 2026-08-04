@@ -36,7 +36,7 @@ export async function reassignNotify(req, res) {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Compass HR <onboarding@resend.dev>',
+        from: 'Compass HR <notifications@mail.compasshruk.com>',
         to: [newOwnerEmail],
         subject: `A case has been reassigned to you on Compass HR`,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">

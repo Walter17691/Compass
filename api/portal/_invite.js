@@ -50,7 +50,7 @@ export async function invite(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Compass HR <onboarding@resend.dev>',
+        from: 'Compass HR <notifications@mail.compasshruk.com>',
         to: [email],
         subject: `${orgName || 'Your employer'} has invited you to Compass HR`,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">

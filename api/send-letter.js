@@ -16,7 +16,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'Compass HR <onboarding@resend.dev>',
+        from: 'Compass HR <notifications@mail.compasshruk.com>',
         to: [to],
         subject: subject || `${meetingType} Outcome Letter - ${employeeName}`,
         html: `

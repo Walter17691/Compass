@@ -38,7 +38,7 @@ async function sendDigestEmail(email, items) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Compass HR <onboarding@resend.dev>',
+      from: 'Compass HR <notifications@mail.compasshruk.com>',
       to: [email],
       subject: `${items.length} compliance deadline${items.length === 1 ? '' : 's'} need${items.length === 1 ? 's' : ''} attention`,
       html: digestHtml(items),
