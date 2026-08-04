@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Fast checks — build, unit tests, lint. No browser, no secrets needed,
+  # so these run on every push and PR including from forks.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run
+      # Non-blocking: ~180 pre-existing findings (mostly react-hooks/purity
+      # on Date.now() calls during render, an established pattern across
+      # the app) predate this workflow. Fixing those is separate, real
+      # work, not something to silently absorb into setting up CI. This
+      # still surfaces the output for visibility without turning every
+      # future PR red for unrelated pre-existing debt.
+      - run: npm run lint
+        continue-on-error: true
+
+  # E2E — runs against a real, throwaway Supabase-backed test org (see
+  # tests/e2e/README.md). Needs E2E_TEST_EMAIL/E2E_TEST_PASSWORD as repo
+  # secrets; skipped entirely on PRs from forks, which can't see secrets,
+  # so it only runs on pushes to main and PRs from within this repo.
+  e2e:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Write .env for the dev server
+        env:
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
+        run: |
+          echo "E2E_TEST_EMAIL=$E2E_TEST_EMAIL" >> .env
+          echo "E2E_TEST_PASSWORD=$E2E_TEST_PASSWORD" >> .env
+          echo "VITE_ANTHROPIC_API_KEY=$VITE_ANTHROPIC_API_KEY" >> .env
+      - run: npm run test:e2e
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
