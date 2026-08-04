@@ -1,21 +1,37 @@
+import { supabaseRequest } from './_supabase.js';
+
+// signing_requests has zero client-facing RLS policies by design (same
+// pattern as employee_portal_accounts) — the signer isn't a logged-in
+// Compass user, so there's no session to scope RLS against. The security
+// boundary here is entirely the unguessable sign_id (crypto.randomUUID(),
+// set in App.jsx's sendForSignature) plus the checks below, not RLS —
+// this endpoint must use the service-role key. A previous RLS cleanup
+// pass dropped this table's "Allow all" policy believing it was unused,
+// which silently broke every "send for signature" action (writes/reads
+// started failing with 42501) until this was reworked to bypass RLS
+// entirely via the service role, the way api/portal/* already does.
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
-
   if (req.method === 'POST') {
     const { signId, document, employeeName, managerName, managerEmail, meetingType, meetingDate, signature, signedAt } = req.body;
 
     try {
       if (signature) {
+        // Refuse to overwrite an already-signed record — without this, a
+        // leaked or reused sign_id could silently replace a genuine
+        // signature with a different one.
+        const existingRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=status`);
+        const [existing] = await existingRes.json();
+        if (!existing) return res.status(404).json({ error: 'Signing request not found' });
+        if (existing.status === 'signed') return res.status(409).json({ error: 'This document has already been signed' });
+
         // Save signature
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${encodeURIComponent(signId)}`, {
+        const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
           body: JSON.stringify({ signature, signed_at: signedAt, status: 'signed' })
         });
         const text = await r.text();
@@ -44,9 +60,9 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true });
       } else {
         // Create signing request
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests`, {
+        const r = await supabaseRequest('signing_requests', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
+          headers: { 'Prefer': 'return=minimal' },
           body: JSON.stringify({ sign_id: signId, document, employee_name: employeeName, manager_name: managerName, manager_email: managerEmail||'', meeting_type: meetingType, meeting_date: meetingDate, status: 'pending', created_at: new Date().toISOString() })
         });
         const text = await r.text();
@@ -61,9 +77,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { signId } = req.query;
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`, {
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-      });
+      const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`);
       const data = await r.json();
       if (!data.length) return res.status(404).json({ error: 'Not found' });
       return res.status(200).json(data[0]);

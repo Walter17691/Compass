@@ -425,7 +425,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const appUrl = window.location.origin;
     
     // Store document in Supabase via API
-    await fetch("/api/signing", {
+    const storeRes = await fetch("/api/signing", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
@@ -445,6 +445,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB")
       })
     });
+    if(!storeRes.ok) {
+      showToast("Couldn't prepare the document for signing — please try again", "error");
+      setSignStatus(null);
+      return;
+    }
 
     // Send email via Resend
     const res = await authedFetch("/api/send-for-signature", {
