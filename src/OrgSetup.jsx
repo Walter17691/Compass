@@ -25,7 +25,6 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
   const [mode, setMode] = useState(pendingInvite ? 'join' : null) // 'create' or 'join'
   const [orgName, setOrgName] = useState('')
   const [userName, setUserName] = useState(user?.user_metadata?.name || '')
-  const [role, setRole] = useState('hr_manager')
   const [inviteCode, setInviteCode] = useState(pendingInvite)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -67,10 +66,13 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
       // happen server-side inside this function - the client never gets a
       // path to insert itself into an org without a code that actually
       // matched. See supabase/join_org_by_code_2026-07-23.sql for why.
+      // Always joins as location_manager (the RPC no longer accepts a
+      // caller-supplied role — see org_members_privilege_escalation_fix
+      // _2026-08-04.sql) — an existing HR Director/Manager grants more
+      // afterward via Settings' "Edit access".
       const { data, error: rpcErr } = await supabase.rpc('join_org_with_invite_code', {
         p_invite_code: inviteCode.trim(),
         p_name: userName.trim(),
-        p_role: role,
       })
       if(rpcErr) throw rpcErr
       const joined = Array.isArray(data) ? data[0] : data
@@ -78,7 +80,7 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
 
       const org = { id: joined.org_id, name: joined.org_name, invite_code: joined.org_invite_code }
       localStorage.removeItem('compass_pending_invite')
-      onComplete({ org, member: { role, name: userName.trim() } })
+      onComplete({ org, member: { role: 'location_manager', name: userName.trim() } })
     } catch(e) { setError(e.message) }
     setLoading(false)
   }
@@ -133,14 +135,9 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
               </>
             ):(
               <>
-                <label style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Role</label>
-                <select value={role} onChange={e=>setRole(e.target.value)} style={{...inp,marginBottom:12}}>
-                  <option value="hr_manager">HR Manager</option>
-                  <option value="hr_director">HR Director</option>
-                  <option value="location_manager">Location Manager (Business/General Manager)</option>
-                </select>
                 <label style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Invite code</label>
                 <input placeholder="e.g. ABC123" value={inviteCode} onChange={e=>setInviteCode(e.target.value)} style={{...inp,textTransform:"uppercase",letterSpacing:2}}/>
+                <div style={{fontSize:11,color:MUTED,margin:"-6px 0 12px"}}>You'll join as a Location Manager — an HR Director can grant broader access afterward from Settings.</div>
               </>
             )}
 
