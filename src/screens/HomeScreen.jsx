@@ -6,11 +6,10 @@ import { OrgSwitcher } from '../components/OrgSwitcher';
 import { NavModulesMenu } from '../components/NavModulesMenu';
 import { getCurrentRisk } from '../lib/caseStage';
 
-export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, goToSettings, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
+export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const goToScreen = (s) => {
     if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
-    if(s===SCREENS.SETTINGS) { goToSettings("billing"); return; }
     setScreen(s);
   };
   // Same primary/module split as the shared header (App.jsx) — the four
@@ -76,7 +75,6 @@ export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg,
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           {!isMobile&&<OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/>}
           <ActivityBell auditLog={auditLog}/>
-          {!isMobile&&<button onClick={()=>goToSettings("organisation")} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
           {onSignOut&&<button onClick={onSignOut} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
         </div>
       </div>

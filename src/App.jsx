@@ -196,12 +196,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // cases and the dashboard's case list showed nothing until a user manually
   // clicked a filter, on every single fresh page load.
   const [dashFilter, setDashFilter] = useState("active");
-  // Which Settings tab to land on — "organisation" when arriving via the
-  // header's "Org Settings" button (that button used to open a separate
-  // popup, OrgSettingsModal; it's now just a section within Settings, same
-  // screen as everything else), "billing" from the plain Settings link.
-  const [settingsInitialSection, setSettingsInitialSection] = useState("billing");
-  const goToSettings = (section="billing") => { setSettingsInitialSection(section); setScreen(SCREENS.SETTINGS); };
 
   const loadEmployeeRecords = async () => {
     if(!org?.id) return;
@@ -3363,7 +3357,6 @@ Please produce:
             const navItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];
             const goToScreen = (s) => {
               if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
-              if(s===SCREENS.SETTINGS) { goToSettings("billing"); return; }
               setScreen(s);
             };
             if(isMobile) return (
@@ -3413,7 +3406,6 @@ Please produce:
             {!isMobile&&currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
             <ActivityBell auditLog={auditLog}/>
             {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
-            {!isMobile&&<button onClick={()=>goToSettings("organisation")} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
           </div>
         </div>
       </header>
@@ -3440,7 +3432,6 @@ Please produce:
           availableOrgs={availableOrgs}
           switchOrg={switchOrg}
           onJoinAnotherOrg={onJoinAnotherOrg}
-          goToSettings={goToSettings}
           onSignOut={onSignOut}
           currentUser={currentUser}
           auditLog={auditLog}
@@ -3800,7 +3791,6 @@ Please produce:
           orgMembers={orgMembers}
           loadOrgMembers={loadOrgMembers}
           isMobile={isMobile}
-          initialSection={settingsInitialSection}
         />
       )}
 
