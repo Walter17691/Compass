@@ -3,27 +3,34 @@ import { SCREENS } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
 import { ActivityBell } from '../components/ActivityBell';
 import { OrgSwitcher } from '../components/OrgSwitcher';
+import { NavModulesMenu } from '../components/NavModulesMenu';
 import { getCurrentRisk } from '../lib/caseStage';
 
-export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, setShowOrgSettings, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
+export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, goToSettings, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const goToScreen = (s) => {
     if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
+    if(s===SCREENS.SETTINGS) { goToSettings("billing"); return; }
     setScreen(s);
   };
-  const navItems = [
+  // Same primary/module split as the shared header (App.jsx) — the four
+  // situational HR-process screens collapse into one dropdown so the row
+  // reads as ~6 everyday items instead of 10 flat links. Mobile keeps the
+  // full flat list since there's no room for a nested dropdown there.
+  const primaryItems = [
     {label:"Home", s:SCREENS.HOME},
     {label:"Cases", s:SCREENS.CASES, badge:cases.filter(x=>getCaseStage(x)!=="closed").length||null},
     {label:"People", s:SCREENS.PEOPLE},
-    {label:"Onboarding", s:SCREENS.NEWSTARTER},
-    {label:"Offboarding", s:SCREENS.OFFBOARDING},
-    {label:"Redundancy", s:SCREENS.REDUNDANCY},
-    {label:"Wellbeing", s:SCREENS.WELLBEING},
     {label:"Reports", s:SCREENS.ERREPORT},
-    {label:"DSAR", s:SCREENS.DSAR},
-    {label:"Search", s:SCREENS.SEARCH},
-    {label:"Settings", s:SCREENS.SETTINGS},
   ];
+  const moduleItems = [
+    {s:SCREENS.NEWSTARTER, l:"Onboarding"},
+    {s:SCREENS.OFFBOARDING, l:"Offboarding"},
+    {s:SCREENS.REDUNDANCY, l:"Redundancy"},
+    {s:SCREENS.WELLBEING, l:"Wellbeing"},
+    {s:SCREENS.DSAR, l:"DSAR"},
+  ];
+  const navItems = [...primaryItems, ...moduleItems.map(({s,l})=>({s,label:l})), {label:"Search", s:SCREENS.SEARCH}, {label:"Settings", s:SCREENS.SETTINGS}];
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -52,20 +59,24 @@ export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg,
               )}
             </div>
           ):(
-            <nav style={{display:"flex",gap:2,flexWrap:"wrap",rowGap:4}}>
-              {navItems.map((item,i)=>(
+            <nav style={{display:"flex",alignItems:"center",gap:2,flexWrap:"wrap",rowGap:4}}>
+              {primaryItems.map((item,i)=>(
                 <button key={i} onClick={()=>goToScreen(item.s)} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400}}>
                   {item.label}
                   {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
                 </button>
               ))}
+              <NavModulesMenu items={moduleItems} activeScreen={SCREENS.HOME} goToScreen={goToScreen}/>
+              <button onClick={()=>goToScreen(SCREENS.SEARCH)} aria-label="Search" title="Search"
+                style={{background:"none",border:"none",color:"#6B6375",padding:"6px 10px",borderRadius:7,fontSize:14,cursor:"pointer"}}>🔍</button>
+              <button onClick={()=>goToScreen(SCREENS.SETTINGS)} style={{fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:"none",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Settings</button>
             </nav>
           )}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           {!isMobile&&<OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/>}
           <ActivityBell auditLog={auditLog}/>
-          {!isMobile&&<button onClick={()=>setShowOrgSettings(true)} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
+          {!isMobile&&<button onClick={()=>goToSettings("organisation")} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
           {onSignOut&&<button onClick={onSignOut} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
         </div>
       </div>

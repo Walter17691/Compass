@@ -26,6 +26,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { PromptModal } from './components/PromptModal';
 import { ActivityBell } from './components/ActivityBell';
 import { OrgSwitcher } from './components/OrgSwitcher';
+import { NavModulesMenu } from './components/NavModulesMenu';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { LetterScreen } from './screens/LetterScreen';
@@ -52,7 +53,6 @@ const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => (
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
-import { OrgSettingsModal } from './screens/OrgSettingsModal';
 import { HandoffModal } from './screens/HandoffModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
 import { OutcomeModal } from './screens/OutcomeModal';
@@ -196,7 +196,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // cases and the dashboard's case list showed nothing until a user manually
   // clicked a filter, on every single fresh page load.
   const [dashFilter, setDashFilter] = useState("active");
-  const [showOrgSettings, setShowOrgSettings] = useState(false);
+  // Which Settings tab to land on — "organisation" when arriving via the
+  // header's "Org Settings" button (that button used to open a separate
+  // popup, OrgSettingsModal; it's now just a section within Settings, same
+  // screen as everything else), "billing" from the plain Settings link.
+  const [settingsInitialSection, setSettingsInitialSection] = useState("billing");
+  const goToSettings = (section="billing") => { setSettingsInitialSection(section); setScreen(SCREENS.SETTINGS); };
 
   const loadEmployeeRecords = async () => {
     if(!org?.id) return;
@@ -3336,21 +3341,29 @@ Please produce:
 
           {/* Nav */}
           {(()=>{
-            const navItems = [
+            // Everyday screens stay flat; the five situational HR-process
+            // screens (opened while actively running that one process, not
+            // every session) collapse into the "HR Processes" dropdown —
+            // cuts the top row from 10 flat links down to 6-7. Mobile keeps
+            // the full flat list in its hamburger menu since there's no
+            // room for a nested dropdown-within-a-dropdown there.
+            const primaryItems = [
               {s:SCREENS.HOME, l:"Home"},
               {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
               {s:SCREENS.PEOPLE, l:"People"},
+              {s:SCREENS.ERREPORT, l:"Reports"},
+            ];
+            const moduleItems = [
               {s:SCREENS.NEWSTARTER, l:"Onboarding"},
               {s:SCREENS.OFFBOARDING, l:"Offboarding"},
               {s:SCREENS.REDUNDANCY, l:"Redundancy"},
               {s:SCREENS.WELLBEING, l:"Wellbeing"},
-              {s:SCREENS.ERREPORT, l:"Reports"},
               {s:SCREENS.DSAR, l:"DSAR"},
-              {s:SCREENS.SEARCH, l:"Search"},
-              {s:SCREENS.SETTINGS, l:"Settings"},
             ];
+            const navItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];
             const goToScreen = (s) => {
               if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
+              if(s===SCREENS.SETTINGS) { goToSettings("billing"); return; }
               setScreen(s);
             };
             if(isMobile) return (
@@ -3370,13 +3383,18 @@ Please produce:
             );
             return (
               <nav style={{display:"flex",alignItems:"center",gap:2,flexWrap:"wrap",rowGap:4}}>
-                {navItems.map(({s,l,badge})=>(
+                {primaryItems.map(({s,l,badge})=>(
                   <button key={s} onClick={()=>goToScreen(s)}
                     style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
                     {l}
                     {badge&&<span style={{background:"#C84B2F",color:"#fff",borderRadius:"50%",width:17,height:17,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700}}>{badge}</span>}
                   </button>
                 ))}
+                <NavModulesMenu items={moduleItems} activeScreen={screen} goToScreen={goToScreen}/>
+                <button onClick={()=>goToScreen(SCREENS.SEARCH)} aria-label="Search" title="Search"
+                  style={{background:screen===SCREENS.SEARCH?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SEARCH?"#7C5CFC":"#6B6375",padding:"6px 10px",borderRadius:6,fontSize:14,cursor:"pointer"}}>🔍</button>
+                <button onClick={()=>goToScreen(SCREENS.SETTINGS)}
+                  style={{background:screen===SCREENS.SETTINGS?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SETTINGS?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===SCREENS.SETTINGS?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Settings</button>
               </nav>
             );
           })()}
@@ -3395,7 +3413,7 @@ Please produce:
             {!isMobile&&currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
             <ActivityBell auditLog={auditLog}/>
             {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
-            {!isMobile&&<button onClick={()=>setShowOrgSettings(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
+            {!isMobile&&<button onClick={()=>goToSettings("organisation")} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Org Settings</button>}
           </div>
         </div>
       </header>
@@ -3422,7 +3440,7 @@ Please produce:
           availableOrgs={availableOrgs}
           switchOrg={switchOrg}
           onJoinAnotherOrg={onJoinAnotherOrg}
-          setShowOrgSettings={setShowOrgSettings}
+          goToSettings={goToSettings}
           onSignOut={onSignOut}
           currentUser={currentUser}
           auditLog={auditLog}
@@ -3777,6 +3795,12 @@ Please produce:
           setScreen={setScreen}
           portalAccounts={portalAccounts}
           revokePortalAccess={revokePortalAccess}
+          orgRoles={orgRoles}
+          loadOrgRoles={loadOrgRoles}
+          orgMembers={orgMembers}
+          loadOrgMembers={loadOrgMembers}
+          isMobile={isMobile}
+          initialSection={settingsInitialSection}
         />
       )}
 
@@ -3823,19 +3847,6 @@ Please produce:
           setAskCompassProcessing={setAskCompassProcessing}
           askCompassInput={askCompassInput}
           setAskCompassInput={setAskCompassInput}
-        />
-      )}
-
-      {/* ── Org Settings Modal ── */}
-      {showOrgSettings&&(
-        <OrgSettingsModal
-          setShowOrgSettings={setShowOrgSettings}
-          orgRoles={orgRoles}
-          loadOrgRoles={loadOrgRoles}
-          org={org}
-          orgMembers={orgMembers}
-          loadOrgMembers={loadOrgMembers}
-          showToast={showToast}
         />
       )}
 
