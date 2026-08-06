@@ -42,6 +42,7 @@ export async function acceptInvite(req, res) {
         org_id: invite.org_id,
         user_id: userId,
         employee_name: invite.employee_name,
+        employee_email: invitedEmail || null,
       }),
     });
     if (!acceptRes.ok) {

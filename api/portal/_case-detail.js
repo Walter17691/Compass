@@ -29,9 +29,16 @@ export async function caseDetail(req, res) {
     if (!cs) return res.status(404).json({ error: 'Case not found' });
 
     // Ownership check — this case must actually belong to this portal
-    // account's org and employee_name, not just any case id the caller
-    // happens to pass in.
-    if (cs.org_id !== account.org_id || cs.employee_name !== account.employee_name) {
+    // account's org and employee, not just any case id the caller happens
+    // to pass in. Name alone can collide between two employees in the same
+    // org, so also require the emails to match whenever both are on file
+    // (see _case-list.js for why a missing email on either side doesn't
+    // block the match).
+    const sameEmployee = cs.employee_name === account.employee_name && (
+      !account.employee_email || !cs.employee_email ||
+      cs.employee_email.trim().toLowerCase() === account.employee_email.trim().toLowerCase()
+    );
+    if (cs.org_id !== account.org_id || !sameEmployee) {
       return res.status(403).json({ error: 'You do not have access to this case' });
     }
 

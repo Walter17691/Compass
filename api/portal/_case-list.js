@@ -14,9 +14,19 @@ export async function caseList(req, res) {
     if (!account) return res.status(404).json({ error: 'No portal account for this user' });
 
     const casesRes = await supabaseRequest(
-      `cases?org_id=eq.${account.org_id}&employee_name=eq.${encodeURIComponent(account.employee_name)}&select=id,case_type,stage,date_received`
+      `cases?org_id=eq.${account.org_id}&employee_name=eq.${encodeURIComponent(account.employee_name)}&select=id,case_type,stage,date_received,employee_email`
     );
-    const cases = await casesRes.json();
+    let cases = await casesRes.json();
+
+    // Name alone isn't a reliable identity key — two employees can share a
+    // name within one org. Disambiguate by email when we have one on both
+    // sides (the account's email was verified against the invite at accept
+    // time); a case with no email on file is left in rather than dropped,
+    // since omitting it silently would hide real cases from the employee.
+    if (account.employee_email) {
+      const accountEmail = account.employee_email.trim().toLowerCase();
+      cases = cases.filter(c => !c.employee_email || c.employee_email.trim().toLowerCase() === accountEmail);
+    }
 
     // Curated response only — no meetings/evidence/notes leave this endpoint.
     const curated = cases.map(c => ({
