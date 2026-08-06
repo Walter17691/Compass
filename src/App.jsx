@@ -213,24 +213,23 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!name) return;
     saveEmployeeRecords(employeeRecords.filter(e=>e.name!==name));
     if(org?.id) {
-      try { await supabase.from('employee_records').delete().eq('org_id', org.id).eq('name', name); }
-      catch(e) { console.error('deleteEmployeeRecord', e); }
+      const { error } = await supabase.from('employee_records').delete().eq('org_id', org.id).eq('name', name);
+      if(error) { console.error('deleteEmployeeRecord', error); showToast("Couldn't delete the employee record — "+error.message, "error"); return; }
     }
     audit("Employee record deleted", name);
   };
 
   const saveEmployeeRecordToDB = async (name, fields) => {
     if(!org?.id) return;
-    try {
-      await supabase.from('employee_records').upsert({
-        org_id: org.id,
-        name,
-        job_title: fields.jobTitle||null,
-        start_date: fields.startDate||null,
-        location: fields.location||null,
-        updated_at: new Date().toISOString(),
-      }, {onConflict: 'org_id,name'});
-    } catch(e) { console.error('saveEmployeeRecord', e); }
+    const { error } = await supabase.from('employee_records').upsert({
+      org_id: org.id,
+      name,
+      job_title: fields.jobTitle||null,
+      start_date: fields.startDate||null,
+      location: fields.location||null,
+      updated_at: new Date().toISOString(),
+    }, {onConflict: 'org_id,name'});
+    if(error) { console.error('saveEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
   };
 
   // ── HRIS/payroll CSV import-export — generic CSV rather than a specific
@@ -414,21 +413,20 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const sendForSignature = async (employeeEmail) => {
     if(!employeeEmail||!reviewOutput) return;
-    const id = crypto.randomUUID();
-    setSignId(id);
     setSignStatus("pending");
-    const signId = id;
 
     // Note: saveMeetingToCase() is called after signature success
     // so we don't auto-save here (avoids duplicate / wrong case allocation)
     const appUrl = window.location.origin;
-    
-    // Store document in Supabase via API
-    const storeRes = await fetch("/api/signing", {
+
+    // Store document in Supabase via API. Authenticated — this step creates
+    // the signing request and mints its sign_id server-side, unlike the
+    // signer's later PATCH, which is intentionally reachable without a
+    // session (see api/signing.js).
+    const storeRes = await authedFetch("/api/signing", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
-        signId,
         document: (()=>{
         const full = reviewOutput;
         const start = full.indexOf("## Meeting Details");
@@ -449,6 +447,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       setSignStatus(null);
       return;
     }
+    const { signId } = await storeRes.json();
+    setSignId(signId);
 
     // Send email via Resend
     const res = await authedFetch("/api/send-for-signature", {
@@ -543,7 +543,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadCasesFromDB = async () => {
     if(!org?.id) return;
     try {
-      let query = supabase.from('cases').select('*').eq('org_id', org.id);
+      // vault_docs is excluded — it's fetched but never read (mapCaseRow
+      // doesn't map it), so it was pure dead weight on every case load.
+      // meetings/evidence stay in: runSearch does full-text search over
+      // transcripts client-side, so dropping them would silently break
+      // search rather than just trimming payload.
+      let query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential').eq('org_id', org.id);
       // Location managers only see their location cases
       if(member?.role==='location_manager' && member?.location_ids?.length>0) {
         query = query.in('location_id', member.location_ids);
@@ -557,9 +562,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const saveCaseToDB = async (caseObj) => {
     if(!org?.id) return;
+    const nowIso = new Date().toISOString();
     try {
       const payload = {
-        id: caseObj.id.includes('-') ? caseObj.id : crypto.randomUUID(),
+        id: caseObj.id,
         org_id: org.id,
         employee_name: caseObj.employeeName,
         employee_email: caseObj.email || "",
@@ -585,20 +591,46 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         assigned_to: user?.id || null,
         created_by: caseObj.createdBy || user?.id || null, // preserve the original creator across edits by other staff — the confidential-case RLS policy grants them access by this field
         confidential: caseObj.confidential || false,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       };
-      const { data, error } = await supabase.from('cases').upsert(payload).select();
-    } catch(e) { console.error("Save case error:", e); }
+
+      if(caseObj.updatedAt) {
+        // Conditional update — only succeeds if nobody else has saved this
+        // case since we last loaded it. A blind upsert here would silently
+        // overwrite a teammate's concurrent edit with our full local copy,
+        // including their changes to meetings/evidence we never saw.
+        const { data, error } = await supabase.from('cases').update(payload).eq('id', caseObj.id).eq('updated_at', caseObj.updatedAt).select();
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return; }
+        if(!data || data.length===0) {
+          showToast("This case was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
+          loadCasesFromDB();
+          return;
+        }
+      } else {
+        const { error } = await supabase.from('cases').upsert(payload).select();
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return; }
+      }
+      setCases(prev => prev.map(c => c.id===caseObj.id ? {...c, updatedAt: nowIso} : c));
+    } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); }
   };
 
   const deleteCaseFromDB = async (caseId) => {
     if(!org?.id) return;
-    try {
-      await supabase.from('cases').delete().eq('id', caseId);
-    } catch(e) {}
+    const { error } = await supabase.from('cases').delete().eq('id', caseId);
+    if(error) { console.error("Delete case error:", error); showToast("Couldn't delete the case — "+error.message, "error"); }
   };
 
   useEffect(() => { if(org?.id) loadCasesFromDB(); }, [org?.id]);
+  // Pick up cases a teammate created/edited while this tab was in the
+  // background — same cheap approach as the audit log, above. Without this,
+  // a tab left open all day never sees anyone else's changes and a later
+  // save from it can overwrite them (see the updated_at guard in
+  // saveCaseToDB, which is the other half of that problem).
+  useEffect(() => {
+    const onFocus = () => { if(org?.id) loadCasesFromDB(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [org?.id]);
 
   // ── Team members ──
   const loadTeamMembers = async () => {
@@ -623,12 +655,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const updateMemberRole = async (memberId, role) => {
-    await supabase.from("org_members").update({role}).eq("id", memberId);
+    const { error } = await supabase.from("org_members").update({role}).eq("id", memberId);
+    if(error) { console.error("updateMemberRole", error); showToast("Couldn't update role — "+error.message, "error"); return; }
     setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,role}:x));
   };
 
   const assignLocations = async (memberId, locationIds) => {
-    await supabase.from("org_members").update({location_ids: locationIds}).eq("id", memberId);
+    const { error } = await supabase.from("org_members").update({location_ids: locationIds}).eq("id", memberId);
+    if(error) { console.error("assignLocations", error); showToast("Couldn't update locations — "+error.message, "error"); return; }
     setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,location_ids:locationIds}:x));
   };
 
@@ -657,12 +691,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const addLocation = async (name) => {
     if(!org?.id||!name.trim()) return;
-    const { data } = await supabase.from('locations').insert({ org_id: org.id, name: name.trim() }).select().single();
+    const { data, error } = await supabase.from('locations').insert({ org_id: org.id, name: name.trim() }).select().single();
+    if(error) { console.error("addLocation", error); showToast("Couldn't add location — "+error.message, "error"); return; }
     if(data) setLocations(l=>[...l, data]);
   };
 
   const deleteLocation = async (id) => {
-    await supabase.from('locations').delete().eq('id', id);
+    const { error } = await supabase.from('locations').delete().eq('id', id);
+    if(error) { console.error("deleteLocation", error); showToast("Couldn't delete location — "+error.message, "error"); return; }
     setLocations(l=>l.filter(x=>x.id!==id));
   };
 
@@ -677,7 +713,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     const cs = cases.find(x=>x.id===caseId);
     const meeting = cs?.meetings.find(m=>m.id===meetingId);
-    const { data } = await supabase.from('hr_review_requests').insert({
+    const { data, error } = await supabase.from('hr_review_requests').insert({
       org_id: org.id,
       case_id: caseId,
       meeting_id: meetingId,
@@ -692,11 +728,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(data) {
       setHrReviewRequests(r=>[data,...r]);
       showToast("HR review requested");
+    } else {
+      console.error("requestHrReview", error);
+      showToast("Couldn't request HR review — "+error?.message, "error");
     }
   };
 
   const respondToReview = async (reviewId, status, comments) => {
-    const { data } = await supabase.from('hr_review_requests').update({
+    const { data, error } = await supabase.from('hr_review_requests').update({
       status,
       comments,
       reviewed_by: user?.id,
@@ -704,6 +743,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       reviewed_at: new Date().toISOString()
     }).eq('id', reviewId).select().single();
     if(data) setHrReviewRequests(r=>r.map(x=>x.id===reviewId?data:x));
+    else { console.error("respondToReview", error); showToast("Couldn't submit your response — "+error?.message, "error"); }
   };
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
@@ -773,7 +813,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const createCaseFromChat = () => {
     if(!casePromptName.trim()) return;
     const newCase = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       employeeName: casePromptName.trim(),
       employeeEmail: "",
       createdAt: new Date().toISOString(),
@@ -1212,17 +1252,16 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const saveStarterInstanceToDB = async (instance) => {
     if(!org?.id) return;
-    try {
-      await supabase.from('starter_instances').upsert({
-        id: instance.id,
-        org_id: org.id,
-        name: instance.name, role: instance.role||null, department: instance.department||null,
-        manager: instance.manager||null, email: instance.email||null, start_date: instance.startDate||null,
-        template_id: instance.templateId||null, template_name: instance.templateName||null,
-        tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised, created_by: instance.createdBy||null,
-        updated_at: new Date().toISOString(),
-      });
-    } catch(e) { console.error('saveStarterInstanceToDB', e); }
+    const { error } = await supabase.from('starter_instances').upsert({
+      id: instance.id,
+      org_id: org.id,
+      name: instance.name, role: instance.role||null, department: instance.department||null,
+      manager: instance.manager||null, email: instance.email||null, start_date: instance.startDate||null,
+      template_id: instance.templateId||null, template_name: instance.templateName||null,
+      tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised, created_by: instance.createdBy||null,
+      updated_at: new Date().toISOString(),
+    });
+    if(error) { console.error('saveStarterInstanceToDB', error); showToast("Couldn't save onboarding record — "+error.message, "error"); }
   };
 
   // ── Leaver offboarding helpers ──
@@ -1246,20 +1285,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const saveLeaverInstanceToDB = async (instance) => {
     if(!org?.id) return;
-    try {
-      await supabase.from('leaver_instances').upsert({
-        id: instance.id,
-        org_id: org.id,
-        name: instance.name, role: instance.role||null, department: instance.department||null,
-        manager: instance.manager||null, email: instance.email||null, last_working_day: instance.lastWorkingDay||null,
-        reason: instance.reason||null,
-        template_id: instance.templateId||null, template_name: instance.templateName||null,
-        tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised,
-        exit_interview_notes: instance.exitInterviewNotes||null, exit_interview_date: instance.exitInterviewDate||null,
-        created_by: instance.createdBy||null,
-        updated_at: new Date().toISOString(),
-      });
-    } catch(e) { console.error('saveLeaverInstanceToDB', e); }
+    const { error } = await supabase.from('leaver_instances').upsert({
+      id: instance.id,
+      org_id: org.id,
+      name: instance.name, role: instance.role||null, department: instance.department||null,
+      manager: instance.manager||null, email: instance.email||null, last_working_day: instance.lastWorkingDay||null,
+      reason: instance.reason||null,
+      template_id: instance.templateId||null, template_name: instance.templateName||null,
+      tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised,
+      exit_interview_notes: instance.exitInterviewNotes||null, exit_interview_date: instance.exitInterviewDate||null,
+      created_by: instance.createdBy||null,
+      updated_at: new Date().toISOString(),
+    });
+    if(error) { console.error('saveLeaverInstanceToDB', error); showToast("Couldn't save offboarding record — "+error.message, "error"); }
   };
 
   // ── Employee Portal access management ──
@@ -2189,7 +2227,7 @@ Please produce:
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     } else {
-      saveCases([...cases,{id:Date.now().toString(), employeeName, email:s.caseInfo.email||"", createdAt:new Date().toISOString(), meetings:[meeting]}]);
+      saveCases([...cases,{id:crypto.randomUUID(), employeeName, email:s.caseInfo.email||"", createdAt:new Date().toISOString(), meetings:[meeting]}]);
     }
     audit("Development meeting saved", `${employeeName} — ${s.type}`);
     showToast("Meeting saved to case file");
@@ -2255,7 +2293,7 @@ Please produce:
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     } else {
-      saveCases([...cases,{id:Date.now().toString(), employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting]}]);
+      saveCases([...cases,{id:crypto.randomUUID(), employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting]}]);
     }
     audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`);
     showToast("Meeting saved to case file");
