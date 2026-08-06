@@ -1,14 +1,11 @@
 import { authedFetch } from './authedFetch';
 
 export async function streamClaude(system, user, onChunk) {
-  let apiKey = "";
-  try { apiKey = window.COMPASS_API_KEY || ""; } catch(e) {}
   const res = await authedFetch("/api/chat", {
     method:"POST",
     headers:{
       "Content-Type":"application/json",
       "anthropic-version":"2023-06-01",
-      ...(apiKey ? { "x-api-key": apiKey } : {})
     },
     body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:2048, stream:true, system, messages:[{ role:"user", content:user }] })
   });

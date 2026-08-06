@@ -48,11 +48,11 @@ jobs:
         env:
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           echo "E2E_TEST_EMAIL=$E2E_TEST_EMAIL" >> .env
           echo "E2E_TEST_PASSWORD=$E2E_TEST_PASSWORD" >> .env
-          echo "VITE_ANTHROPIC_API_KEY=$VITE_ANTHROPIC_API_KEY" >> .env
+          echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> .env
       - run: npm run test:e2e
       - name: Upload traces on failure
         if: failure()

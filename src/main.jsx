@@ -22,8 +22,6 @@ const LoadingFallback = () => (
   </div>
 )
 
-window.COMPASS_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
-
 function Root() {
   const [user, setUser] = useState(null)
   // One user can belong to more than one org (e.g. an HR consultancy

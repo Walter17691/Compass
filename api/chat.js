@@ -33,7 +33,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'anthropic-version': '2023-06-01',
         'anthropic-beta': 'web-search-2025-03-05',
-        'x-api-key': process.env.VITE_ANTHROPIC_API_KEY,
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
       },
       body: JSON.stringify(body),
     });
