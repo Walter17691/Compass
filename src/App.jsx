@@ -7,6 +7,7 @@ import { ls, lsSet } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
+import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeChecklistTask, reassignChecklistTaskOwner, updateChecklistInstanceFields } from './lib/checklistTasks';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -1429,61 +1430,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     audit("Leaver offboarding started", f.name+" — "+f.role);
   };
 
-  const toggleLeaverTask = (instanceId, taskId) => {
-    const updated = leaverInstances.map(s => s.id===instanceId ? {
-      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, done:!t.done, doneAt:t.done?null:new Date().toISOString()} : t)
-    } : s);
+  // Task-level mutations are shared with onboarding's starter_instances —
+  // see src/lib/checklistTasks.js. Persistence (localStorage/Supabase) and
+  // which instance is "active" stay here since they're wired to this flow's
+  // own state.
+  const applyLeaverUpdate = (updated, instanceId) => {
     saveLeaverInstances(updated);
     const changed = updated.find(s=>s.id===instanceId);
     saveLeaverInstanceToDB(changed);
     setActiveLeaver(changed);
   };
-
-  const updateLeaverTaskNote = (instanceId, taskId, note) => {
-    const updated = leaverInstances.map(s => s.id===instanceId ? {
-      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, note} : t)
-    } : s);
-    saveLeaverInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveLeaverInstanceToDB(changed);
-    setActiveLeaver(changed);
-  };
-
-  const addLeaverTask = (instanceId, phaseLabel, taskText, owner) => {
-    if(!taskText?.trim()) return;
-    const newTask = {id:"manual_"+Date.now(), task:taskText.trim(), owner:owner||"HR", phaseId:phaseLabel.toLowerCase().replace(/\s+/g,"_"), phaseLabel, dueDate:"", done:false, doneAt:null, note:"", source:"manual"};
-    const updated = leaverInstances.map(s => s.id===instanceId ? {...s, tasks:[...s.tasks, newTask]} : s);
-    saveLeaverInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveLeaverInstanceToDB(changed);
-    setActiveLeaver(changed);
-  };
-
-  const removeLeaverTask = (instanceId, taskId) => {
-    const updated = leaverInstances.map(s => s.id===instanceId ? {...s, tasks: s.tasks.filter(t=>t.id!==taskId)} : s);
-    saveLeaverInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveLeaverInstanceToDB(changed);
-    setActiveLeaver(changed);
-  };
-
-  const reassignLeaverTaskOwner = (instanceId, taskId, owner) => {
-    const updated = leaverInstances.map(s => s.id===instanceId ? {
-      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, owner} : t)
-    } : s);
-    saveLeaverInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveLeaverInstanceToDB(changed);
-    setActiveLeaver(changed);
-  };
-
-  const updateLeaverExitInterview = (instanceId, fields) => {
-    const updated = leaverInstances.map(s => s.id===instanceId ? {...s, ...fields} : s);
-    saveLeaverInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveLeaverInstanceToDB(changed);
-    setActiveLeaver(changed);
-  };
+  const toggleLeaverTask = (instanceId, taskId) => applyLeaverUpdate(toggleChecklistTask(leaverInstances, instanceId, taskId), instanceId);
+  const updateLeaverTaskNote = (instanceId, taskId, note) => applyLeaverUpdate(updateChecklistTaskNote(leaverInstances, instanceId, taskId, note), instanceId);
+  const addLeaverTask = (instanceId, phaseLabel, taskText, owner) => applyLeaverUpdate(addChecklistTask(leaverInstances, instanceId, phaseLabel, taskText, owner), instanceId);
+  const removeLeaverTask = (instanceId, taskId) => applyLeaverUpdate(removeChecklistTask(leaverInstances, instanceId, taskId), instanceId);
+  const reassignLeaverTaskOwner = (instanceId, taskId, owner) => applyLeaverUpdate(reassignChecklistTaskOwner(leaverInstances, instanceId, taskId, owner), instanceId);
+  const updateLeaverExitInterview = (instanceId, fields) => applyLeaverUpdate(updateChecklistInstanceFields(leaverInstances, instanceId, fields), instanceId);
 
   const aiCustomiseLeaverChecklist = async (instance) => {
     if(!instance) return;
@@ -1571,53 +1533,19 @@ Generate a tailored offboarding checklist for this role, considering any role-sp
     audit("New starter created", f.name+" — "+f.role);
   };
 
-  const toggleStarterTask = (instanceId, taskId) => {
-    const updated = starterInstances.map(s => s.id===instanceId ? {
-      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, done:!t.done, doneAt:t.done?null:new Date().toISOString()} : t)
-    } : s);
+  // See applyLeaverUpdate above — same shared task-mutation logic, this
+  // flow's own persistence/active-instance wiring.
+  const applyStarterUpdate = (updated, instanceId) => {
     saveStarterInstances(updated);
     const changed = updated.find(s=>s.id===instanceId);
     saveStarterInstanceToDB(changed);
     setActiveStarter(changed);
   };
-
-  const updateStarterTaskNote = (instanceId, taskId, note) => {
-    const updated = starterInstances.map(s => s.id===instanceId ? {
-      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, note} : t)
-    } : s);
-    saveStarterInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveStarterInstanceToDB(changed);
-    setActiveStarter(changed);
-  };
-
-  const addStarterTask = (instanceId, phaseLabel, taskText, owner) => {
-    if(!taskText?.trim()) return;
-    const newTask = {id:"manual_"+Date.now(), task:taskText.trim(), owner:owner||"HR", phaseId:phaseLabel.toLowerCase().replace(/\s+/g,"_"), phaseLabel, dueDate:"", done:false, doneAt:null, note:"", source:"manual"};
-    const updated = starterInstances.map(s => s.id===instanceId ? {...s, tasks:[...s.tasks, newTask]} : s);
-    saveStarterInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveStarterInstanceToDB(changed);
-    setActiveStarter(changed);
-  };
-
-  const removeStarterTask = (instanceId, taskId) => {
-    const updated = starterInstances.map(s => s.id===instanceId ? {...s, tasks: s.tasks.filter(t=>t.id!==taskId)} : s);
-    saveStarterInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveStarterInstanceToDB(changed);
-    setActiveStarter(changed);
-  };
-
-  const reassignStarterTaskOwner = (instanceId, taskId, owner) => {
-    const updated = starterInstances.map(s => s.id===instanceId ? {
-      ...s, tasks: s.tasks.map(t => t.id===taskId ? {...t, owner} : t)
-    } : s);
-    saveStarterInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveStarterInstanceToDB(changed);
-    setActiveStarter(changed);
-  };
+  const toggleStarterTask = (instanceId, taskId) => applyStarterUpdate(toggleChecklistTask(starterInstances, instanceId, taskId), instanceId);
+  const updateStarterTaskNote = (instanceId, taskId, note) => applyStarterUpdate(updateChecklistTaskNote(starterInstances, instanceId, taskId, note), instanceId);
+  const addStarterTask = (instanceId, phaseLabel, taskText, owner) => applyStarterUpdate(addChecklistTask(starterInstances, instanceId, phaseLabel, taskText, owner), instanceId);
+  const removeStarterTask = (instanceId, taskId) => applyStarterUpdate(removeChecklistTask(starterInstances, instanceId, taskId), instanceId);
+  const reassignStarterTaskOwner = (instanceId, taskId, owner) => applyStarterUpdate(reassignChecklistTaskOwner(starterInstances, instanceId, taskId, owner), instanceId);
 
   const aiCustomiseChecklist = async (instance) => {
     if(!instance) return;
