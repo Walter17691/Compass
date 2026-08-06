@@ -710,11 +710,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); } }, [org?.id]);
 
+  // Deliberately keyed only on transcript.length: this throttles the context
+  // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
+  // are read from the same render that this effect fires in (React re-creates the
+  // closure every render, only skips invoking it), so they're never stale here —
+  // adding them as deps would instead re-fire this on every screen change, e.g.
+  // re-triggering an API call just from navigating back into Record.
   useEffect(()=>{
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
       const notes = transcript.map(u=>u.text).join(" ");
       updateLiveContext(notes);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript.length]);
 
 
