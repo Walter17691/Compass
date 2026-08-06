@@ -40,7 +40,11 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
     if(!orgName.trim()||!userName.trim()) return
     setLoading(true); setError(null)
     try {
-      const inviteCode = Math.random().toString(36).slice(2,8).toUpperCase()
+      // crypto.getRandomValues, not Math.random — invite codes are a bearer
+      // credential for joining an org, so they need CSPRNG-quality entropy.
+      const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no 0/O/1/I — avoids transcription errors
+      const inviteCode = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+        .map(b => ALPHABET[b % ALPHABET.length]).join("")
       const { data: org, error: orgErr } = await supabase
         .from('organisations')
         .insert({ name: orgName.trim(), invite_code: inviteCode, created_by: user.id })
