@@ -8,6 +8,7 @@ import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeChecklistTask, reassignChecklistTaskOwner, updateChecklistInstanceFields } from './lib/checklistTasks';
+import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -87,6 +88,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [letterOutput, setLetterOutput] = useState("");
   const [letterHistory, setLetterHistory] = useState([]); // previous drafts from this session, most recent first
   const [activeLetter, setActiveLetter] = useState("outcome");
+  // AI-approval gate — see src/lib/letterApproval.js. Tied to the exact
+  // letter text, not a bare flag, so editing/regenerating after approving
+  // silently requires re-approval rather than letting stale sign-off cover
+  // different content.
+  const [letterApproval, setLetterApproval] = useState(null);
+  const letterIsApproved = isLetterApproved(letterOutput, letterApproval);
+  const approveLetter = () => {
+    if(!letterOutput) return;
+    const approval = createLetterApproval(letterOutput, { by: currentUser?.name || member?.name, type: activeLetter });
+    setLetterApproval(approval);
+    audit("AI-drafted letter approved for sending", `${caseInfo.employee||"Employee"} — ${meetingType?.label||""} (${activeLetter})`);
+  };
   const [riskScore, setRiskScore] = useState(null);
   const [riskProcessing, setRiskProcessing] = useState(false);
   const [prediction, setPrediction] = useState("");
@@ -2208,6 +2221,8 @@ Please produce:
         return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
       })(),
       letterOutput,
+      letterApprovedBy: letterIsApproved ? letterApproval.by : null,
+      letterApprovedAt: letterIsApproved ? letterApproval.at : null,
       riskScore,
       nextSteps,
       prediction,
@@ -2272,6 +2287,10 @@ Please produce:
   };
 
   const triggerWithSig = action => {
+    // Defense in depth — LetterScreen already disables these buttons until
+    // the letter is approved, but a letter is never sent from here without
+    // that gate passing, even if some future caller skips the UI.
+    if(!letterIsApproved) { showToast("Approve the letter before sending it — see the approval bar above the letter.", "error"); return; }
     if(signature) { doSend(action, signature); }
     else { setPendingSend(action); setShowSigPad(true); }
   };
@@ -2954,6 +2973,8 @@ Please produce:
                       transcript: transcript.filter(u=>!u.pending),
                       record: reviewOutput,
                       letterOutput,
+                      letterApprovedBy: letterIsApproved ? letterApproval.by : null,
+                      letterApprovedAt: letterIsApproved ? letterApproval.at : null,
                       riskScore,
                       nextSteps,
                       prediction,
@@ -3550,7 +3571,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} />
       )}
 
       {/* ══ DASHBOARD ══ */}

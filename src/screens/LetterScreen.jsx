@@ -4,7 +4,7 @@ import { lsSet } from '../lib/storage';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter }) {
   const [showHistory, setShowHistory] = useState(false);
   return (
     <div>
@@ -60,12 +60,45 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               )}
             </div>
 
+            {/* AI-approval gate — this letter was drafted by AI and carries
+                real legal/financial weight once it reaches the employee, so
+                sending it requires an explicit human sign-off tied to this
+                exact text, not just having looked at the screen. Editing or
+                regenerating the letter silently invalidates approval (see
+                src/lib/letterApproval.js). */}
+            <div style={{
+              background: letterIsApproved ? "#EDF7F0" : "#FDF3E8",
+              border: "1px solid",
+              borderColor: letterIsApproved ? "#7CC49A" : "#E8C088",
+              borderRadius: 8,
+              padding: "12px 14px",
+              marginBottom: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}>
+              {letterIsApproved ? (
+                <div style={{fontSize:12,color:"#2E6B47"}}>
+                  ✓ Approved for sending by <strong>{letterApproval.by}</strong> on {new Date(letterApproval.at).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+                </div>
+              ) : (
+                <div style={{fontSize:12,color:"#8A5A1E"}}>
+                  This letter was drafted by AI. Review it above, then approve it before it can be downloaded, printed or sent.
+                </div>
+              )}
+              <Btn variant={letterIsApproved?"ghost":"primary"} onClick={approveLetter} style={{fontSize:12,padding:"6px 14px",flexShrink:0}}>
+                {letterIsApproved?"Re-confirm approval":"Approve for sending"}
+              </Btn>
+            </div>
+
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating}>Send via Gmail</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating}>Send via Outlook</Btn>
-              <Btn variant="ghost" onClick={()=>window.print()}>Print</Btn>
-              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)}>Copy text</Btn>
+              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
+              <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send via Gmail</Btn>
+              <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send via Outlook</Btn>
+              <Btn variant="ghost" onClick={()=>window.print()} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Print</Btn>
+              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Copy text</Btn>
               <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
               <Btn variant="ghost" onClick={()=>setScreen(SCREENS.REVIEW)}>← Back</Btn>
             </div>
