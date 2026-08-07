@@ -62,7 +62,9 @@ export function AppHeader({ screen, setScreen, cases, getCaseStage, isMobile, sh
             ))}
             <NavModulesMenu items={moduleItems} activeScreen={screen} goToScreen={goToScreen}/>
             <button onClick={()=>goToScreen(SCREENS.SEARCH)} aria-label="Search" title="Search"
-              style={{background:screen===SCREENS.SEARCH?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SEARCH?"#7C5CFC":"#6B6375",padding:"6px 10px",borderRadius:6,fontSize:14,cursor:"pointer"}}>🔍</button>
+              style={{background:screen===SCREENS.SEARCH?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SEARCH?"#7C5CFC":"#6B6375",padding:"6px 10px",borderRadius:6,cursor:"pointer",display:"flex",alignItems:"center"}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
             <button onClick={()=>goToScreen(SCREENS.SETTINGS)}
               style={{background:screen===SCREENS.SETTINGS?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SETTINGS?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===SCREENS.SETTINGS?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Settings</button>
           </nav>

@@ -3337,7 +3337,6 @@ Please produce:
           setScreen={setScreen}
           setShowCasePrompt={setShowCasePrompt}
           dueSoon={dueSoon}
-          policies={policies}
           dashSearch={dashSearch}
           setDashSearch={setDashSearch}
           dashFilter={dashFilter}

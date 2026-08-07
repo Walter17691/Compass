@@ -6,7 +6,7 @@ import { getCurrentRisk } from '../lib/caseStage';
 // render its own separate copy here, which had drifted out of sync with
 // the shared one (different height, padding, logo size) and caused a
 // visible layout jump on every navigation away from Home.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -50,7 +50,11 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                 </button>
               ))}
               {pendingSigs>0&&<span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} pending signature{pendingSigs!==1?"s":""}</span>}
-              {overdue.length>0&&<span style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{overdue.length} overdue deadline{overdue.length!==1?"s":""}</span>}
+              {overdue.slice(0,3).map((d,i)=>(
+                <span key={"od"+i} style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
+                  {d.label||d.employeeName} · Overdue
+                </span>
+              ))}
               {highRisk.slice(0,3).map((cs,i)=>(
                 <button key={"risk"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:"#C84B2F",background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
                   {cs.employeeName} · HIGH risk
@@ -85,39 +89,6 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
             ));
           })()}
         </div>
-
-        {/* ── Resources strip ── */}
-        <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
-          {(()=>{
-            const links = policies.length>0
-              ? policies.slice(0,4).map(p=>({label:p.name||p.title||"Policy",type:"POLICY"}))
-              : [{label:"Disciplinary Policy",type:"POLICY"},{label:"Grievance Policy",type:"POLICY"},{label:"ACAS Code of Practice",type:"GUIDE"},{label:"Invitation to hearing",type:"TEMPLATE"}];
-            return links.map((item,i)=>(
-              <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",transition:"border-color 0.15s"}}
-                onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
-                <div style={{width:4,height:4,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
-                <span style={{fontSize:11,color:"#6B6375",fontWeight:500}}>{item.type}</span>
-                <span style={{fontSize:12,color:"#1C1820",fontWeight:600}}>{item.label}</span>
-              </button>
-            ));
-          })()}
-          <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"none",border:"1px dashed #E8E0D0",borderRadius:8,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontSize:12,color:"#9B9098"}}>View all →</button>
-        </div>
-
-        {/* ── Deadlines strip ── */}
-        {dueSoon.length>0&&(
-          <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
-            <span style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",flexShrink:0}}>Deadlines</span>
-            {dueSoon.slice(0,4).map((d,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"#FFFFFF",border:"1px solid",borderColor:d.overdue?"#E8622A44":"#E8E0D0",borderRadius:8}}>
-                <div style={{width:6,height:6,borderRadius:"50%",background:d.overdue?"#C84B2F":d.daysLeft<=3?"#E8622A":"#7C5CFC",flexShrink:0}}/>
-                <span style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{d.label||d.employeeName}</span>
-                <span style={{fontSize:11,color:d.overdue?"#C84B2F":"#9B9098"}}>· {d.overdue?"Overdue":d.daysLeft===0?"Today":"In "+d.daysLeft+"d"}</span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* ── Main grid ── */}
         <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}}>
