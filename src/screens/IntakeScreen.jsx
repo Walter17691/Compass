@@ -1,27 +1,22 @@
 import { SCREENS } from '../constants';
-import { CompassLogo } from '../components/CompassLogo';
 import { InfoIcon } from '../components/Icons';
 
 export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases }) {
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
-      {/* Header */}
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <CompassLogo size={32}/>
-          <div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535"}}>New case</div>
-            <div style={{fontSize:12,color:"#9B9098"}}>Log a case before starting any meetings</div>
-          </div>
-        </div>
-        <button onClick={()=>setScreen(SCREENS.CASES)}
-          style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-          ← Back to cases
-        </button>
-      </div>
-
       <div style={{maxWidth:620,margin:"0 auto",padding:"40px 24px"}}>
+
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,marginBottom:20}}>
+          <div>
+            <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>New case</h2>
+            <p style={{fontSize:13,color:"#6B6375",margin:0}}>Log a case before starting any meetings</p>
+          </div>
+          <button onClick={()=>setScreen(SCREENS.CASES)}
+            style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>
+            ← Back to cases
+          </button>
+        </div>
 
         <div style={{background:"#EDE8FF",border:"1px solid #D4C9F5",borderRadius:10,padding:"14px 18px",marginBottom:28,display:"flex",gap:10,alignItems:"flex-start"}}>
           <InfoIcon size={16} color="#5B3FD4" style={{flexShrink:0,marginTop:1}} />

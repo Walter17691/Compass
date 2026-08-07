@@ -1,17 +1,16 @@
 import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
-import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
 
 export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore }) {
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
-      {/* Top action bar */}
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+      {/* Top action bar — sits below the shared AppHeader; not a second
+          header since it carries screen-specific actions (Save to case,
+          Share, Request HR review) that AppHeader has no equivalent for. */}
+      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:53,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <CompassLogo size={32}/>
-          <div style={{width:1,height:20,background:"#EDE5D8"}}/>
           <div>
             <span style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{caseInfo.employee}</span>
             <span style={{fontSize:13,color:"#9B9098",margin:"0 6px"}}>—</span>

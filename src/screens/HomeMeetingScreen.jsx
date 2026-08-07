@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
-import { CompassLogo } from '../components/CompassLogo';
 import { CheckIcon, WarningIcon } from '../components/Icons';
 
 export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, generateBrief, startSession }) {
@@ -16,13 +15,6 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
   };
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 32px",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <CompassLogo size={32}/>
-          <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535"}}>Compass</span>
-        </div>
-        <button onClick={()=>setScreen(SCREENS.HOME)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer"}}>← Back</button>
-      </div>
       <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"48px 24px"}}>
         <div style={{width:"100%",maxWidth:480}}>
           <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"0 0 6px",letterSpacing:"-0.3px"}}>New meeting</h2>

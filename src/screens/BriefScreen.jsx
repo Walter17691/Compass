@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
-import { CompassLogo } from '../components/CompassLogo';
 
 const NEEDS_INVITATION = ["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"];
 
@@ -18,15 +17,6 @@ export function BriefScreen({ setScreen, meetingType, setMeetingType, caseInfo, 
   };
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-
-      {/* Header */}
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8E0D0",padding:"14px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <CompassLogo size={28}/>
-          <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1C1820",fontWeight:400}}>Compass</span>
-        </div>
-        <button onClick={()=>setScreen(SCREENS.HOME)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 14px",fontSize:12,color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>← Back</button>
-      </div>
 
       <div style={{maxWidth:640,margin:"0 auto",padding:"36px 24px"}}>
         <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#1C1820",fontWeight:400,marginBottom:4}}>Set up your meeting</div>
