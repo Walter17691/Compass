@@ -16,13 +16,34 @@ const inputStyle = {
   fontFamily:"DM Sans, system-ui, sans-serif", marginBottom:12,
 }
 
+const TierTable = () => (
+  <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:24,marginBottom:20}}>
+    {LOCATION_PRICE_TIERS.map((t, i) => (
+      <div key={t.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:i>0?`1px solid ${BORDER}`:"none"}}>
+        <span style={{fontSize:13,color:TEXT}}>{t.label}</span>
+        <span style={{fontSize:13,color:V,fontWeight:600}}>£{t.pricePerLocation}/location/mo</span>
+      </div>
+    ))}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${BORDER}`}}>
+      <span style={{fontSize:13,color:TEXT}}>51+ locations</span>
+      <span style={{fontSize:13,color:MUTED}}>Custom</span>
+    </div>
+  </div>
+)
+
 // Compass has no free plan, no trial, and — per how comparable UK HR/
-// compliance software (BrightHR, Citation, Peninsula) actually sells —
-// no self-serve card checkout either. main.jsx renders this instead of
-// <Compass/> whenever isSubscribed(org) is false. Two different org
-// states land here, and get two different screens:
-//   - Never been a Stripe customer (org.stripe_customer_id is null): a
-//     brand-new org straight out of OrgSetup — show the lead-capture form.
+// compliance software (BrightHR, Citation, Peninsula) actually sells — no
+// self-serve card checkout for a first-time org either. main.jsx renders
+// this instead of <Compass/> whenever isSubscribed(org) is false. Three
+// different org states land here, and get three different screens:
+//   - Never been a Stripe customer, not yet sales-approved: a brand-new
+//     org straight out of OrgSetup — show the lead-capture form.
+//   - Never been a Stripe customer, but sales_approved_at is set: a deal
+//     was agreed on the call — show real checkout, same as before the
+//     move to sales-assisted. sales_approved_at is only ever set directly
+//     in the database when a deal closes (see the migration that added
+//     it) — there's no in-app "approve" action, deliberately, since
+//     there's no admin UI and none is needed yet at this volume.
 //   - Was a paying customer, subscription has since lapsed (payment
 //     failed, cancelled): there's already a relationship and a Stripe
 //     customer on file, so send them straight to the billing portal to
@@ -36,6 +57,7 @@ export default function SubscribeGate({ org, syncing, onCancel, onSignOut }) {
   const [notes, setNotes] = useState("")
 
   const isLapsed = !!org?.stripe_customer_id
+  const isApproved = !!org?.sales_approved_at
 
   const manageBilling = async () => {
     setLoading(true); setError(null)
@@ -44,6 +66,16 @@ export default function SubscribeGate({ org, syncing, onCancel, onSignOut }) {
       const data = await res.json()
       if (data.url) window.location.href = data.url
       else { setError(data.error || "Couldn't open billing — please try again"); setLoading(false) }
+    } catch (e) { setError(e.message); setLoading(false) }
+  }
+
+  const subscribe = async () => {
+    setLoading(true); setError(null)
+    try {
+      const res = await authedFetch(`/api/billing/checkout?orgId=${encodeURIComponent(org.id)}`)
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+      else { setError(data.error || "Couldn't start checkout — please try again"); setLoading(false) }
     } catch (e) { setError(e.message); setLoading(false) }
   }
 
@@ -84,6 +116,19 @@ export default function SubscribeGate({ org, syncing, onCancel, onSignOut }) {
               {loading ? "Opening billing…" : "Manage subscription"}
             </button>
           </>
+        ) : isApproved ? (
+          <>
+            <div style={{textAlign:"center",marginBottom:28}}>
+              <h1 style={{fontFamily:"DM Serif Display, Georgia, serif",fontSize:24,color:TEXT,margin:"0 0 6px"}}>You're all set — subscribe to activate {org?.name || "your organisation"}</h1>
+              <p style={{fontSize:13,color:MUTED,margin:0}}>Priced per active location — add or remove locations any time and your subscription adjusts automatically.</p>
+            </div>
+            <TierTable/>
+            {error && <div style={{background:"#FDF0ED",border:"1px solid #F0C9BE",borderRadius:8,padding:"10px 14px",color:"#B0392A",fontSize:13,marginBottom:16}}>{error}</div>}
+            <button onClick={subscribe} disabled={loading}
+              style={{width:"100%",background:V,color:"#fff",border:"none",borderRadius:10,padding:"14px",fontSize:15,fontWeight:600,cursor:loading?"default":"pointer",opacity:loading?0.7:1,marginBottom:10}}>
+              {loading ? "Redirecting to checkout…" : "Subscribe with Stripe"}
+            </button>
+          </>
         ) : submitted ? (
           <div style={{textAlign:"center"}}>
             <h1 style={{fontFamily:"DM Serif Display, Georgia, serif",fontSize:24,color:TEXT,margin:"0 0 10px"}}>Thanks — we'll be in touch</h1>
@@ -96,18 +141,7 @@ export default function SubscribeGate({ org, syncing, onCancel, onSignOut }) {
               <p style={{fontSize:13,color:MUTED,margin:0}}>Compass is set up with a short call rather than self-serve checkout — priced per active location, so we can make sure you're on the right plan from the start.</p>
             </div>
 
-            <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:24,marginBottom:20}}>
-              {LOCATION_PRICE_TIERS.map((t, i) => (
-                <div key={t.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:i>0?`1px solid ${BORDER}`:"none"}}>
-                  <span style={{fontSize:13,color:TEXT}}>{t.label}</span>
-                  <span style={{fontSize:13,color:V,fontWeight:600}}>£{t.pricePerLocation}/location/mo</span>
-                </div>
-              ))}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${BORDER}`}}>
-                <span style={{fontSize:13,color:TEXT}}>51+ locations</span>
-                <span style={{fontSize:13,color:MUTED}}>Custom</span>
-              </div>
-            </div>
+            <TierTable/>
 
             <input style={inputStyle} placeholder="Phone number (optional)" value={phone} onChange={e=>setPhone(e.target.value)} />
             <input style={inputStyle} placeholder="Best time to call (optional)" value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} />

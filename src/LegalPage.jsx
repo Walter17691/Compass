@@ -45,13 +45,13 @@ export default function LegalPage({ page }) {
         </div>
 
         <div style={{background: C.warnBg, border: `1px solid ${C.warnBorder}`, borderRadius: 12, padding: "16px 20px", marginBottom: 24, fontSize: 12.5, color: C.warnText, lineHeight: 1.7}}>
-          <strong>This is a working draft, not a finished legal document.</strong> It's written to accurately describe what Compass actually does today, but it has not yet been reviewed by a solicitor and should not be treated as final until it has{isDpa?" — a DPA is a contract both parties rely on, so this one especially shouldn't be signed or relied upon before proper legal review":""}. Bracketed fields like [Company legal name] are placeholders — fill them in with your registered details before relying on this.
+          <strong>This is a working draft, not a finished legal document.</strong> It's written to accurately describe what Compass actually does today, but it has not yet been reviewed by a solicitor and should not be treated as final until it has{isDpa?" — a DPA is a contract both parties rely on, so this one especially shouldn't be signed or relied upon before proper legal review":""}. Bracketed fields like [30] are placeholders for decisions you still need to make (e.g. your exact post-termination data retention period) — fill them in before relying on this.
         </div>
 
         <div style={{background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32}}>
           {isDpa ? (
             <>
-              <P>This Data Processing Agreement ("DPA") forms part of the agreement between <strong>[Company legal name]</strong> ("Compass", "Processor") and the organisation that has signed up to use Compass ("Customer", "Controller"), and applies whenever Compass processes personal data on the Customer's behalf in the course of providing the Service. Where anything in this DPA conflicts with the main Terms of Service, this DPA controls for matters of data protection.</P>
+              <P>This Data Processing Agreement ("DPA") forms part of the agreement between <strong>THE COMPASS CONSULTANCY WC LTD</strong> ("Compass", "Processor") and the organisation that has signed up to use Compass ("Customer", "Controller"), and applies whenever Compass processes personal data on the Customer's behalf in the course of providing the Service. Where anything in this DPA conflicts with the main Terms of Service, this DPA controls for matters of data protection.</P>
 
               <H>1. Definitions</H>
               <P>"UK GDPR", "personal data", "processing", "controller", "processor", "data subject", "personal data breach", and "special category data" have the meanings given in the UK GDPR and the Data Protection Act 2018. "Sub-processor" means any processor engaged by Compass to process personal data on the Customer's behalf in connection with this DPA.</P>
@@ -107,7 +107,7 @@ export default function LegalPage({ page }) {
             </>
           ) : isPrivacy ? (
             <>
-              <P>This policy explains what personal data Compass HR ("Compass", "we") processes, why, and what rights you and your organisation have over it. Compass is provided by <strong>[Company legal name]</strong>, a company registered in England and Wales (company number <strong>[00000000]</strong>), registered office <strong>[Registered address]</strong>. Contact us at <strong>privacy@compasshruk.com</strong>.</P>
+              <P>This policy explains what personal data Compass HR ("Compass", "we") processes, why, and what rights you and your organisation have over it. Compass is provided by <strong>THE COMPASS CONSULTANCY WC LTD</strong>, a company registered in England and Wales (company number <strong>16269414</strong>), registered office <strong>8 Greenstead Road, 8 Oakland Mews, Ongar, England, CM5 9QU</strong>. Contact us at <strong>privacy@compasshruk.com</strong>.</P>
 
               <H>Who this applies to, and who's the data controller</H>
               <P>Compass is used by organisations ("Customers") to manage HR case files — disciplinary, grievance, and related employee relations matters. Where your employer or an organisation you work for uses Compass to manage your case, that organisation is the <strong>data controller</strong> for your personal data, and Compass acts as their <strong>data processor</strong> — we process it on their instructions, not our own. If you're an HR user signed up with your own organisation, the same applies to your employees' data.</P>
@@ -142,7 +142,7 @@ export default function LegalPage({ page }) {
             </>
           ) : (
             <>
-              <P>These terms govern use of Compass HR (the "Service"), provided by <strong>[Company legal name]</strong>, a company registered in England and Wales (company number <strong>[00000000]</strong>). By creating an account or using the Service, your organisation agrees to these terms.</P>
+              <P>These terms govern use of Compass HR (the "Service"), provided by <strong>THE COMPASS CONSULTANCY WC LTD</strong>, a company registered in England and Wales (company number <strong>16269414</strong>). By creating an account or using the Service, your organisation agrees to these terms.</P>
 
               <H>What Compass is</H>
               <P>Compass is a case-management platform for HR employee relations work — disciplinary, grievance, redundancy, and related processes — including AI-assisted drafting of meeting records, letters, and risk assessments. It's intended for business use by organisations managing their own employees, not for consumer use.</P>
