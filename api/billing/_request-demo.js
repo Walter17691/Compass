@@ -1,5 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
+import { escapeHtml as esc } from '../_html.js';
 
 // Comparable UK HR/compliance software (BrightHR, Citation, Peninsula) is
 // sold through a sales conversation and a signed contract, not self-serve
@@ -16,13 +17,6 @@ function readRawBody(req) {
     req.on('error', reject);
   });
 }
-
-// phone/preferredTime/notes are free text from an authenticated org member
-// — not sanitised anywhere upstream — and org/member names are themselves
-// user-editable. All of it lands in an HTML email, so it needs escaping
-// same as it would in a browser: unescaped, this is a stored-injection
-// vector into whatever renders this email (most mail clients render HTML).
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 export async function requestDemo(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

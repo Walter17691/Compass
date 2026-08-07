@@ -1,4 +1,5 @@
 import { verifyCaller } from './_auth.js';
+import { escapeHtml as esc } from './_html.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -22,10 +23,10 @@ export default async function handler(req, res) {
         subject: `Please sign your meeting record - ${meetingType}`,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
           <h2 style="color:#7C5CFC">Compass HR</h2>
-          <p>Dear ${employeeName},</p>
-          <p>Your meeting record from <strong>${meetingType}</strong> on <strong>${meetingDate}</strong> is ready for your review and signature.</p>
-          <a href="${signingUrl}" style="display:inline-block;background:#7C5CFC;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0">Review and Sign</a>
-          <p style="color:#666;font-size:12px">This link expires in 7 days. Questions? Contact ${managerName}.</p>
+          <p>Dear ${esc(employeeName)},</p>
+          <p>Your meeting record from <strong>${esc(meetingType)}</strong> on <strong>${esc(meetingDate)}</strong> is ready for your review and signature.</p>
+          <a href="${esc(signingUrl)}" style="display:inline-block;background:#7C5CFC;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0">Review and Sign</a>
+          <p style="color:#666;font-size:12px">This link expires in 7 days. Questions? Contact ${esc(managerName)}.</p>
         </div>`
       })
     });

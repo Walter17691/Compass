@@ -1,5 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from './_auth.js';
+import { escapeHtml as esc } from './_html.js';
 
 // signing_requests has zero client-facing RLS policies by design (same
 // pattern as employee_portal_accounts) — the signer isn't a logged-in
@@ -55,8 +56,8 @@ export default async function handler(req, res) {
               subject: `${existing.employee_name} has signed the meeting record`,
               html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
                 <h2 style="color:#7C5CFC">Compass HR</h2>
-                <p>Dear ${existing.manager_name},</p>
-                <p><strong>${existing.employee_name}</strong> has signed the meeting record for the <strong>${existing.meeting_type}</strong> on <strong>${existing.meeting_date}</strong>.</p>
+                <p>Dear ${esc(existing.manager_name)},</p>
+                <p><strong>${esc(existing.employee_name)}</strong> has signed the meeting record for the <strong>${esc(existing.meeting_type)}</strong> on <strong>${esc(existing.meeting_date)}</strong>.</p>
                 <p>The signed document is now stored in the case file in Compass.</p>
                 <p style="color:#666;font-size:12px">Powered by Compass HR</p>
               </div>`

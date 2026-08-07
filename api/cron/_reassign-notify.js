@@ -1,4 +1,5 @@
 import { verifyCaller } from '../_auth.js';
+import { escapeHtml as esc } from '../_html.js';
 
 const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -41,8 +42,8 @@ export async function reassignNotify(req, res) {
         subject: `A case has been reassigned to you on Compass HR`,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">
           <h2 style="color:#7C5CFC">Compass HR</h2>
-          <p>Hi ${newOwnerName || 'there'},</p>
-          <p><strong>${callerMember.name}</strong> has handed you the ${caseType || 'HR'} case for <strong>${employeeName}</strong> at ${orgName || 'your organisation'}.</p>
+          <p>Hi ${esc(newOwnerName) || 'there'},</p>
+          <p><strong>${esc(callerMember.name)}</strong> has handed you the ${esc(caseType) || 'HR'} case for <strong>${esc(employeeName)}</strong> at ${esc(orgName) || 'your organisation'}.</p>
           <p>You now have access to it in Compass.</p>
           <div style="text-align:center;margin:32px 0">
             <a href="${appUrl}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open Compass</a>

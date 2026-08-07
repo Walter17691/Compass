@@ -1,4 +1,5 @@
 import { verifyCaller } from './_auth.js';
+import { escapeHtml as esc } from './_html.js';
 
 const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -42,13 +43,13 @@ export default async function handler(req, res) {
         subject: `You've been invited to join ${orgName} on Compass HR`,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">
           <h2 style="color:#7C5CFC">Compass HR</h2>
-          <p>Hi ${name},</p>
-          <p>You have been invited to join <strong>${orgName}</strong> on Compass HR as <strong>${role==="hr_director"?"HR Director":role==="hr_manager"?"HR Manager":"Location Manager"}</strong>.</p>
+          <p>Hi ${esc(name)},</p>
+          <p>You have been invited to join <strong>${esc(orgName)}</strong> on Compass HR as <strong>${role==="hr_director"?"HR Director":role==="hr_manager"?"HR Manager":"Location Manager"}</strong>.</p>
           <p>Click below to create your account and get started:</p>
           <div style="text-align:center;margin:32px 0">
-            <a href="${inviteLink}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Accept invitation</a>
+            <a href="${esc(inviteLink)}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Accept invitation</a>
           </div>
-          <p style="color:#666;font-size:12px">Or go to ${appUrl} and use invite code: <strong>${inviteCode}</strong></p>
+          <p style="color:#666;font-size:12px">Or go to ${esc(appUrl)} and use invite code: <strong>${esc(inviteCode)}</strong></p>
         </div>`
       })
     });
