@@ -59,7 +59,20 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   useFonts();
 
   // ── Navigation ──
-  const [screen, setScreen] = useState(SCREENS.HOME);
+  // Screen (and, for case view, the case id) sync to the URL as query
+  // params — previously "screen" was pure in-memory state with the whole
+  // app living at "/", so the browser Back button had nothing to go back
+  // to within the app (it exited straight to whatever was open before
+  // Compass) and refreshing silently dropped you back on Home. syncSource
+  // distinguishes a change driven by clicking around the app (push a new
+  // history entry) from one driven by popstate/back-forward (don't
+  // push again, or Back would immediately re-push Forward).
+  const readNavFromUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    return { screen: params.get('screen') || SCREENS.HOME, caseId: params.get('case') || null };
+  };
+  const [screen, setScreen] = useState(() => readNavFromUrl().screen);
+  const navSyncSourceRef = useRef('init');
 
   // ── Session ──
   const [meetingType, setMeetingType] = useState(null);
@@ -404,7 +417,42 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [homeChatLoading, setHomeChatLoading] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
-  const [activeCaseId, setActiveCaseId] = useState(null);
+  const [activeCaseId, setActiveCaseId] = useState(() => readNavFromUrl().caseId);
+
+  // Respond to Back/Forward: read the URL the browser just navigated to
+  // and mirror it into state, tagging the source so the effect below
+  // doesn't turn right around and push a duplicate history entry for it.
+  useEffect(() => {
+    const onPopState = () => {
+      const next = readNavFromUrl();
+      navSyncSourceRef.current = 'popstate';
+      setScreen(next.screen);
+      setActiveCaseId(next.caseId);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // Mirror in-app navigation into the URL so Back/Forward and refresh
+  // actually work. Skips the very first render (URL already matches what
+  // was just read from it) and skips runs caused by a popstate we just
+  // handled above (the URL already matches — pushing again would break
+  // Back by immediately re-adding what the user just went back from).
+  useEffect(() => {
+    if (navSyncSourceRef.current === 'init') { navSyncSourceRef.current = 'app'; return; }
+    if (navSyncSourceRef.current === 'popstate') { navSyncSourceRef.current = 'app'; return; }
+    const params = new URLSearchParams();
+    params.set('screen', screen);
+    if (screen === SCREENS.CASE_VIEW && activeCaseId) params.set('case', activeCaseId);
+    const nextSearch = `?${params.toString()}`;
+    // activeCaseId can change without the screen changing (e.g. linking a
+    // meeting to a case from a dropdown) — only push when the URL this
+    // would produce actually differs, so that doesn't add a dead history
+    // entry that just makes Back need an extra press for no visible change.
+    if (nextSearch === window.location.search) return;
+    window.history.pushState(null, '', `${window.location.pathname}${nextSearch}`);
+  }, [screen, activeCaseId]);
+
   const [activePerson, setActivePerson] = useState(null);
   const [activeCaseStage, setActiveCaseStage] = useState("investigation");
   const [showAppealInput, setShowAppealInput] = useState({});
@@ -1249,7 +1297,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadStarterInstances = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('starter_instances').select('*').eq('org_id', org.id);
+      const {data} = await supabase.from('starter_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
       if(data) setStarterInstances(data.map(r=>({
         id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
         email:r.email, startDate:r.start_date, templateId:r.template_id, templateName:r.template_name,
@@ -1279,7 +1327,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadLeaverInstances = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('leaver_instances').select('*').eq('org_id', org.id);
+      const {data} = await supabase.from('leaver_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
       if(data) setLeaverInstances(data.map(r=>({
         id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
         email:r.email, lastWorkingDay:r.last_working_day, reason:r.reason,
@@ -1429,7 +1477,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       tasks, createdAt: new Date().toISOString(),
       createdBy: currentUser?.name || "HR Manager",
     };
-    saveLeaverInstances([...leaverInstances, instance]);
+    saveLeaverInstances([instance, ...leaverInstances]);
     saveLeaverInstanceToDB(instance);
     setActiveLeaver(instance);
     setLeaverView("instance");
@@ -1532,7 +1580,7 @@ Generate a tailored offboarding checklist for this role, considering any role-sp
       tasks, createdAt: new Date().toISOString(),
       createdBy: currentUser?.name || "HR Manager",
     };
-    saveStarterInstances([...starterInstances, instance]);
+    saveStarterInstances([instance, ...starterInstances]);
     saveStarterInstanceToDB(instance);
     setActiveStarter(instance);
     setStarterView("instance");
