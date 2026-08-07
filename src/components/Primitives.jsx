@@ -6,7 +6,7 @@ export function Btn({ children, onClick, variant="primary", disabled, style={} }
   const base = { border:"none", borderRadius:8, padding:"10px 20px", fontSize:13, fontWeight:600, cursor:disabled?"not-allowed":"pointer", transition:"all 0.15s", opacity:disabled?0.4:1, letterSpacing:0.2, ...style };
   const vars = {
     primary: { background:"#7C5CFC", color:"#fff", boxShadow:"0 2px 8px rgba(124,92,252,0.3)" },
-    secondary: { background:"#FFFFFF", border:"1px solid #E8E0D0", color:"#C8C3D8" },
+    secondary: { background:"#FFFFFF", border:"1px solid #E8E0D0", color:"#6B6375" },
     ghost: { background:"none", border:"1px solid #E8E0D0", color:"#6B6375" },
     danger: { background:"none", border:"1px solid #E8622A33", color:"#C84B2F" },
     blue: { background:"#1C5AA0", color:"#fff" },
