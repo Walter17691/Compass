@@ -162,6 +162,7 @@ function Root() {
   if (window.location.pathname === '/security') return <SecurityPage/>
   if (window.location.pathname === '/privacy') return <LegalPage page="privacy"/>
   if (window.location.pathname === '/terms') return <LegalPage page="terms"/>
+  if (window.location.pathname === '/dpa') return <LegalPage page="dpa"/>
 
   if (loading) return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",alignItems:"center",justifyContent:"center"}}>
