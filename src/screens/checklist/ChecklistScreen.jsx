@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Btn, Card, Badge } from '../../components/Primitives';
 import { DateInput } from '../../components/DateInput';
 import { CheckIcon } from '../../components/Icons';
+import { useLoadMore } from '../../hooks/useLoadMore';
 
 // Shared by NewStarterScreen (onboarding) and OffboardingScreen (used to be
 // two ~230-line hand-copied files that had already drifted — offboarding
@@ -27,6 +28,7 @@ export function ChecklistScreen({
   renderExtraSidebar,
 }) {
   const [newTaskText, setNewTaskText] = useState({});
+  const { visible: visibleInstances, hasMore, loadMore, total } = useLoadMore(instances, 18);
   const phases = active
     ? [...new Set(active.tasks.map(t=>t.phaseLabel))].map(pl=>({
         label:pl,
@@ -99,7 +101,7 @@ export function ChecklistScreen({
             </Card>
           )}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:12}}>
-            {instances.map(s=>{
+            {visibleInstances.map(s=>{
               const done = s.tasks.filter(t=>t.done).length;
               const total = s.tasks.length;
               const pct = total ? Math.round(done/total*100) : 0;
@@ -128,6 +130,11 @@ export function ChecklistScreen({
               );
             })}
           </div>
+          {hasMore&&(
+            <Btn variant="secondary" onClick={loadMore} style={{width:"100%",marginTop:12}}>
+              Load more ({visibleInstances.length} of {total})
+            </Btn>
+          )}
         </>
       )}
 

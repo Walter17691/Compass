@@ -1,7 +1,9 @@
 import { SCREENS } from '../constants';
 import { Card } from '../components/Primitives';
+import { useLoadMore } from '../hooks/useLoadMore';
 
 export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchResults, setScreen, setExpandedCases, cases, setViewMeeting, setViewCaseId, dueSoon, setActivePerson }) {
+  const { visible: visibleResults, hasMore, loadMore, total } = useLoadMore(searchResults, 20);
   return (
     <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
@@ -19,7 +21,7 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
       {searchResults.length>0&&(
         <div>
           <div style={{fontSize:11,color:"#6B6880",marginBottom:12}}>{searchResults.length} result{searchResults.length!==1?"s":""}</div>
-          {searchResults.map((r,i)=>{
+          {visibleResults.map((r,i)=>{
             const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#4A6FA5",transcript:"#888",evidence:"#1A7A4A",employee:"#B87520",dsar:"#C84B2F"};
             return(
               <button key={i} onClick={()=>{
@@ -52,6 +54,11 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
               </button>
             );
           })}
+          {hasMore&&(
+            <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+              Load more ({visibleResults.length} of {total})
+            </button>
+          )}
         </div>
       )}
 

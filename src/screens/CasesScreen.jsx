@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 import { LockIcon } from '../components/Icons';
+import { useLoadMore } from '../hooks/useLoadMore';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -31,6 +32,8 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
     downloadJson(chosen, `compass_cases_export_${new Date().toISOString().split("T")[0]}.json`);
     showToast(`Exported ${chosen.length} case${chosen.length!==1?"s":""}`);
   };
+  const allEmployees = [...new Set(cases.map(cs=>cs.employeeName))];
+  const { visible: employees, hasMore, loadMore, total } = useLoadMore(allEmployees, 15);
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
       <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -47,7 +50,7 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
       </div>
       <div style={{maxWidth:860,margin:"0 auto",padding:"28px 24px"}}>
         {selected.size>0&&(
-          <div style={{position:"sticky",top:0,zIndex:10,display:"flex",alignItems:"center",gap:12,background:"#1A1535",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+          <div style={{position:"sticky",top:53,zIndex:10,display:"flex",alignItems:"center",gap:12,background:"#1A1535",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
             <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{selected.size} selected</span>
             <button onClick={bulkExport} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Export</button>
             <button onClick={bulkClose} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Close</button>
@@ -62,7 +65,6 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
           </div>
         )}
         {(()=>{
-          const employees = [...new Set(cases.map(cs=>cs.employeeName))];
           return employees.map(emp=>{
             const empCases = cases.filter(cs=>cs.employeeName===emp);
             const activeCount = empCases.filter(cs=>getCaseStage(cs)!=="closed").length;
@@ -109,6 +111,11 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
             );
           });
         })()}
+        {hasMore&&(
+          <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            Load more ({employees.length} of {total})
+          </button>
+        )}
       </div>
     </div>
   );

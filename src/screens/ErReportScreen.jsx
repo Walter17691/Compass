@@ -1,9 +1,11 @@
 import { SCREENS } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
+import { useLoadMore } from '../hooks/useLoadMore';
 
 export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF }) {
   // ── Core data calculations ──
   const activeCases = cases.filter(cs=>getCaseStage(cs)!=="closed");
+  const activeCasesTable = useLoadMore(activeCases, 20);
   const closedCases = cases.filter(cs=>getCaseStage(cs)==="closed");
   const employeeRecordsMap = {};
   (employeeRecords||[]).forEach(r=>{employeeRecordsMap[r.name]=r;});
@@ -343,7 +345,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
                 </tr>
               </thead>
               <tbody>
-                {activeCases.map((cs,i)=>{
+                {activeCasesTable.visible.map((cs,i)=>{
                   const stage=getCaseStage(cs);
                   const next=getNextStep(cs);
                   const opened=new Date(cs.dateReceived||cs.createdAt||0);
@@ -351,7 +353,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
                   const rec=employeeRecordsMap[cs.employeeName]||{};
                   const stageColors={open:"#9B9098",investigation:"#7C5CFC",disciplinary:"#C84B2F",appeal:"#B87520",closed:"#1A7A4A"};
                   return (
-                    <tr key={cs.id} style={{borderBottom:i<activeCases.length-1?"1px solid #F5F1EA":"none",cursor:"pointer"}}
+                    <tr key={cs.id} style={{borderBottom:i<activeCasesTable.visible.length-1||activeCasesTable.hasMore?"1px solid #F5F1EA":"none",cursor:"pointer"}}
                       onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
                       onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
                       onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -382,6 +384,11 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
               </tbody>
             </table>
           </div>
+          {activeCasesTable.hasMore&&(
+            <button onClick={activeCasesTable.loadMore} style={{width:"100%",padding:"12px",background:"#FDFAF5",border:"none",borderTop:"1px solid #E8E0D0",cursor:"pointer",fontSize:12,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+              Load more ({activeCasesTable.visible.length} of {activeCasesTable.total})
+            </button>
+          )}
         </div>
 
       </div>

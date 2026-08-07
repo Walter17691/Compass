@@ -3,6 +3,7 @@ import { SCREENS } from '../constants';
 import { DateInput } from '../components/DateInput';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { compileSubjectData } from '../lib/dsarCompile';
+import { useLoadMore } from '../hooks/useLoadMore';
 
 const STATUS_LABEL = { received:"Received", in_progress:"In progress", ready_to_send:"Ready to send", completed:"Completed" };
 
@@ -109,6 +110,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
     if((a.status==="completed")!==(b.status==="completed")) return a.status==="completed"?1:-1;
     return new Date(a.dueDate)-new Date(b.dueDate);
   });
+  const { visible: visibleRequests, hasMore, loadMore, total } = useLoadMore(sorted, 15);
 
   const submit = () => {
     if(!form.employeeName.trim()||!form.receivedDate) return;
@@ -153,9 +155,14 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1A1535",marginBottom:8}}>No DSAR requests logged</div>
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
-        ):sorted.map(req=>(
+        ):visibleRequests.map(req=>(
           <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
         ))}
+        {hasMore&&(
+          <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            Load more ({visibleRequests.length} of {total})
+          </button>
+        )}
       </div>
     </div>
   );
