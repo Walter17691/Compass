@@ -1,80 +1,14 @@
-import { useState } from 'react';
 import { SCREENS } from '../constants';
-import { CompassLogo } from '../components/CompassLogo';
-import { ActivityBell } from '../components/ActivityBell';
-import { OrgSwitcher } from '../components/OrgSwitcher';
-import { NavModulesMenu } from '../components/NavModulesMenu';
 import { getCurrentRisk } from '../lib/caseStage';
 
-export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile }) {
-  const [showMobileNav, setShowMobileNav] = useState(false);
-  const goToScreen = (s) => setScreen(s);
-  // Same primary/module split as the shared header (App.jsx) — the four
-  // situational HR-process screens collapse into one dropdown so the row
-  // reads as ~6 everyday items instead of 10 flat links. Mobile keeps the
-  // full flat list since there's no room for a nested dropdown there.
-  const primaryItems = [
-    {label:"Home", s:SCREENS.HOME},
-    {label:"Cases", s:SCREENS.CASES, badge:cases.filter(x=>getCaseStage(x)!=="closed").length||null},
-    {label:"People", s:SCREENS.PEOPLE},
-    {label:"Reports", s:SCREENS.ERREPORT},
-  ];
-  const moduleItems = [
-    {s:SCREENS.NEWSTARTER, l:"Onboarding"},
-    {s:SCREENS.OFFBOARDING, l:"Offboarding"},
-    {s:SCREENS.REDUNDANCY, l:"Redundancy"},
-    {s:SCREENS.WELLBEING, l:"Wellbeing"},
-    {s:SCREENS.DSAR, l:"DSAR"},
-  ];
-  const navItems = [...primaryItems, ...moduleItems.map(({s,l})=>({s,label:l})), {label:"Search", s:SCREENS.SEARCH}, {label:"Settings", s:SCREENS.SETTINGS}];
+// The nav/logo header is rendered once by AppHeader (App.jsx), mounted
+// unconditionally above every screen including this one — Home used to
+// render its own separate copy here, which had drifted out of sync with
+// the shared one (different height, padding, logo size) and caused a
+// visible layout jump on every navigation away from Home.
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-
-      {/* ── Top bar (home-specific, replaces main header) ── */}
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8E0D0",padding:"10px 32px",minHeight:56,display:"flex",flexWrap:"wrap",rowGap:8,alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",gap:32}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <CompassLogo size={30}/>
-            <div>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400,letterSpacing:"-0.3px",lineHeight:1.1}}>Compass</div>
-              <div style={{fontSize:8,color:"#9B9098",letterSpacing:"1.5px",textTransform:"uppercase",lineHeight:1}}>HR Intelligence</div>
-            </div>
-          </div>
-          {isMobile?(
-            <div style={{position:"relative"}}>
-              <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:16,color:"#6B6375"}}>☰</button>
-              {showMobileNav&&(
-                <nav style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",display:"flex",flexDirection:"column",minWidth:180,zIndex:200,overflow:"hidden"}}>
-                  {navItems.map((item,i)=>(
-                    <button key={i} onClick={()=>{goToScreen(item.s);setShowMobileNav(false);}} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"10px 14px",border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400,textAlign:"left"}}>
-                      {item.label}
-                      {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
-                    </button>
-                  ))}
-                </nav>
-              )}
-            </div>
-          ):(
-            <nav style={{display:"flex",alignItems:"center",gap:2,flexWrap:"wrap",rowGap:4}}>
-              {primaryItems.map((item,i)=>(
-                <button key={i} onClick={()=>goToScreen(item.s)} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:item.s===SCREENS.HOME?"#EDE8FF":"none",color:item.s===SCREENS.HOME?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:item.s===SCREENS.HOME?600:400}}>
-                  {item.label}
-                  {item.badge>0&&<span style={{fontSize:10,background:"#7C5CFC",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
-                </button>
-              ))}
-              <NavModulesMenu items={moduleItems} activeScreen={SCREENS.HOME} goToScreen={goToScreen}/>
-              <button onClick={()=>goToScreen(SCREENS.SEARCH)} aria-label="Search" title="Search"
-                style={{background:"none",border:"none",color:"#6B6375",padding:"6px 10px",borderRadius:7,fontSize:14,cursor:"pointer"}}>🔍</button>
-              <button onClick={()=>goToScreen(SCREENS.SETTINGS)} style={{fontSize:13,padding:"6px 12px",borderRadius:7,border:"none",background:"none",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Settings</button>
-            </nav>
-          )}
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {!isMobile&&<OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/>}
-          <ActivityBell auditLog={auditLog}/>
-          {onSignOut&&<button onClick={onSignOut} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
-        </div>
-      </div>
 
       <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 32px"}}>
 

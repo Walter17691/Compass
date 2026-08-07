@@ -15,7 +15,7 @@ import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
 import { useFonts } from './hooks/useFonts';
-import { CompassLogo } from './components/CompassLogo';
+import { AppHeader } from './components/AppHeader';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
 import { MDRenderer } from './components/MDRenderer';
 import { SignaturePad } from './components/SignaturePad';
@@ -25,9 +25,6 @@ import { UserAddForm } from './components/UserAddForm';
 import { AddRoleForm } from './components/AddRoleForm';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PromptModal } from './components/PromptModal';
-import { ActivityBell } from './components/ActivityBell';
-import { OrgSwitcher } from './components/OrgSwitcher';
-import { NavModulesMenu } from './components/NavModulesMenu';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { LetterScreen } from './screens/LetterScreen';
@@ -3296,88 +3293,24 @@ Please produce:
 
 
       {/* ── HEADER ── */}
-      <header style={{display:screen===SCREENS.HOME?"none":"flex",background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
-        <div style={{maxWidth:1440,margin:"0 auto",padding:"8px 24px",minHeight:52,display:"flex",flexWrap:"wrap",rowGap:6,alignItems:"center",justifyContent:"space-between"}}>
-          
-          {/* Logo */}
-          <button onClick={()=>setScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:0,cursor:"pointer",flexShrink:0}}>
-            <CompassLogo size={32}/>
-            <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
-          </button>
-
-          {/* Nav */}
-          {(()=>{
-            // Everyday screens stay flat; the five situational HR-process
-            // screens (opened while actively running that one process, not
-            // every session) collapse into the "HR Processes" dropdown —
-            // cuts the top row from 10 flat links down to 6-7. Mobile keeps
-            // the full flat list in its hamburger menu since there's no
-            // room for a nested dropdown-within-a-dropdown there.
-            const primaryItems = [
-              {s:SCREENS.HOME, l:"Home"},
-              {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>x.stage!=="closed").length>0?" ("+cases.filter(x=>x.stage!=="closed").length+")":"")},
-              {s:SCREENS.PEOPLE, l:"People"},
-              {s:SCREENS.ERREPORT, l:"Reports"},
-            ];
-            const moduleItems = [
-              {s:SCREENS.NEWSTARTER, l:"Onboarding"},
-              {s:SCREENS.OFFBOARDING, l:"Offboarding"},
-              {s:SCREENS.REDUNDANCY, l:"Redundancy"},
-              {s:SCREENS.WELLBEING, l:"Wellbeing"},
-              {s:SCREENS.DSAR, l:"DSAR"},
-            ];
-            const navItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];
-            const goToScreen = (s) => setScreen(s);
-            if(isMobile) return (
-              <div style={{position:"relative"}}>
-                <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:16,color:"#6B6375"}}>☰</button>
-                {showMobileNav&&(
-                  <nav style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",display:"flex",flexDirection:"column",minWidth:180,zIndex:200,overflow:"hidden"}}>
-                    {navItems.map(({s,l})=>(
-                      <button key={s} onClick={()=>{goToScreen(s);setShowMobileNav(false);}}
-                        style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"10px 14px",fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",textAlign:"left"}}>
-                        {l}
-                      </button>
-                    ))}
-                  </nav>
-                )}
-              </div>
-            );
-            return (
-              <nav style={{display:"flex",alignItems:"center",gap:2,flexWrap:"wrap",rowGap:4}}>
-                {primaryItems.map(({s,l,badge})=>(
-                  <button key={s} onClick={()=>goToScreen(s)}
-                    style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
-                    {l}
-                    {badge&&<span style={{background:"#C84B2F",color:"#fff",borderRadius:"50%",width:17,height:17,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700}}>{badge}</span>}
-                  </button>
-                ))}
-                <NavModulesMenu items={moduleItems} activeScreen={screen} goToScreen={goToScreen}/>
-                <button onClick={()=>goToScreen(SCREENS.SEARCH)} aria-label="Search" title="Search"
-                  style={{background:screen===SCREENS.SEARCH?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SEARCH?"#7C5CFC":"#6B6375",padding:"6px 10px",borderRadius:6,fontSize:14,cursor:"pointer"}}>🔍</button>
-                <button onClick={()=>goToScreen(SCREENS.SETTINGS)}
-                  style={{background:screen===SCREENS.SETTINGS?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SETTINGS?"#7C5CFC":"#6B6375",padding:"6px 14px",borderRadius:6,fontSize:13,fontWeight:screen===SCREENS.SETTINGS?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Settings</button>
-              </nav>
-            );
-          })()}
-
-          {/* Meeting indicator */}
-          {meetingType&&(
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:12,color:"#9B9098"}}>{meetingType.label}</span>
-              {caseInfo.employee&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo.employee}</span>}
-            </div>
-          )}
-
-          {/* Right side */}
-          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-            {!isMobile&&<OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/>}
-            {!isMobile&&currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
-            <ActivityBell auditLog={auditLog}/>
-            {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        screen={screen}
+        setScreen={setScreen}
+        cases={cases}
+        getCaseStage={getCaseStage}
+        isMobile={isMobile}
+        showMobileNav={showMobileNav}
+        setShowMobileNav={setShowMobileNav}
+        meetingType={meetingType}
+        caseInfo={caseInfo}
+        org={org}
+        availableOrgs={availableOrgs}
+        switchOrg={switchOrg}
+        onJoinAnotherOrg={onJoinAnotherOrg}
+        currentUser={currentUser}
+        auditLog={auditLog}
+        onSignOut={onSignOut}
+      />
 
       {/* ── Deadline banner ── */}
       {dueSoon.some(d=>d.overdue)&&screen!==SCREENS.HOME&&(
@@ -3397,13 +3330,7 @@ Please produce:
         <HomeScreen
           cases={cases}
           getCaseStage={getCaseStage}
-          org={org}
-          availableOrgs={availableOrgs}
-          switchOrg={switchOrg}
-          onJoinAnotherOrg={onJoinAnotherOrg}
-          onSignOut={onSignOut}
           currentUser={currentUser}
-          auditLog={auditLog}
           getNextStep={getNextStep}
           setMeetingType={setMeetingType}
           setCaseInfo={setCaseInfo}
@@ -3422,7 +3349,6 @@ Please produce:
           calendarConnected={calendarConnected}
           connectGoogleCalendar={connectGoogleCalendar}
           disconnectGoogleCalendar={disconnectGoogleCalendar}
-          isMobile={isMobile}
         />
       )}
 
