@@ -5,8 +5,10 @@ import Login from './Login.jsx'
 import SecurityPage from './SecurityPage.jsx'
 import LegalPage from './LegalPage.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
+import SubscribeGate from './SubscribeGate.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
+import { isSubscribed } from './lib/plan.js'
 
 // These are mutually exclusive top-level views — a session only ever
 // renders one of them, so splitting them out keeps (say) an HR user's
@@ -129,6 +131,32 @@ function Root() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Stripe redirects back here after checkout, but the webhook that
+  // actually marks the org subscribed can lag the redirect by a second or
+  // two — poll briefly rather than showing SubscribeGate again right after
+  // someone just paid. Each successful loadOrg re-renders with fresh
+  // memberships regardless of whether this loop "knows" it succeeded, so
+  // this only controls how long the "confirming payment" state shows.
+  const [billingSyncing, setBillingSyncing] = useState(false)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('billing') !== 'success' || !user) return
+    params.delete('billing')
+    const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '')
+    window.history.replaceState({}, '', newUrl)
+
+    setBillingSyncing(true)
+    let cancelled = false
+    const poll = async (attempt) => {
+      await loadOrg(user)
+      if (cancelled) return
+      if (attempt >= 5) { setBillingSyncing(false); return }
+      setTimeout(() => poll(attempt + 1), 1500)
+    }
+    poll(1)
+    return () => { cancelled = true }
+  }, [user])
+
   // Public — reachable without logging in, for a prospect evaluating the
   // product (or a link from the marketing site) to see it.
   if (window.location.pathname === '/security') return <SecurityPage/>
@@ -165,6 +193,13 @@ function Root() {
         onCancel={org ? () => setAddingOrg(false) : undefined}
       />
     </Suspense>
+  )
+
+  // No free plan, no trial — every org needs an active Stripe subscription
+  // before it can use Compass at all. Catches both a brand-new org that
+  // just finished OrgSetup and an existing one whose subscription lapsed.
+  if (!isSubscribed(org)) return (
+    <SubscribeGate org={org} syncing={billingSyncing} onSignOut={signOut} />
   )
 
   return (

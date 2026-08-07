@@ -13,7 +13,6 @@ import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
-import { canUseFeature, canCreateCase } from './lib/plan';
 import { authedFetch } from './lib/authedFetch';
 import { useFonts } from './hooks/useFonts';
 import { CompassLogo } from './components/CompassLogo';
@@ -703,17 +702,30 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(data) setLocations(data);
   };
 
+  // Billing is priced per location — every add/remove needs to reach
+  // Stripe too, not just the locations table, or the subscription quietly
+  // drifts from what the org is actually using. Failing to sync isn't
+  // treated as an error the user needs to see: the location change itself
+  // already succeeded, and the next successful sync (or the webhook on
+  // renewal) will catch up.
+  const syncBillingQuantity = () => {
+    if(!org?.id) return;
+    authedFetch(`/api/billing/sync-quantity?orgId=${encodeURIComponent(org.id)}`, {method:"POST"})
+      .catch(e=>console.error("Billing quantity sync failed:", e));
+  };
+
   const addLocation = async (name) => {
     if(!org?.id||!name.trim()) return;
     const { data, error } = await supabase.from('locations').insert({ org_id: org.id, name: name.trim() }).select().single();
     if(error) { console.error("addLocation", error); showToast("Couldn't add location — "+error.message, "error"); return; }
-    if(data) setLocations(l=>[...l, data]);
+    if(data) { setLocations(l=>[...l, data]); syncBillingQuantity(); }
   };
 
   const deleteLocation = async (id) => {
     const { error } = await supabase.from('locations').delete().eq('id', id);
     if(error) { console.error("deleteLocation", error); showToast("Couldn't delete location — "+error.message, "error"); return; }
     setLocations(l=>l.filter(x=>x.id!==id));
+    syncBillingQuantity();
   };
 
   // ── HR Review Requests ──
@@ -888,7 +900,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [notifGranted, setNotifGranted] = useState(false);
   const [emailDigestOptIn, setEmailDigestOptIn] = useState(member?.email_digest_opt_in !== false);
   const toggleEmailDigest = async () => {
-    if(!emailDigestOptIn && !requirePro("digest", ()=>{})) return;
     const next = !emailDigestOptIn;
     setEmailDigestOptIn(next);
     if(member?.id) {
@@ -942,18 +953,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     return new Promise(resolve => {
       setPromptState({title, message, fields, confirmLabel, cancelLabel, resolve});
     });
-  };
-
-  // ── Plan gating (free = 1 active case, no Portal/Calendar/DSAR/digest) ──
-  const [upgradePromptFeature, setUpgradePromptFeature] = useState(null);
-  const FEATURE_LABEL = {
-    portal: "Employee Portal", calendar: "Calendar integration",
-    dsar: "DSAR tracking", digest: "the compliance digest email", case_limit: "a second active case",
-  };
-  const requirePro = (feature, action) => {
-    if(canUseFeature(org, feature)) { action(); return true; }
-    setUpgradePromptFeature(feature);
-    return false;
   };
 
   // New starter onboarding
@@ -1148,16 +1147,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }, 3000);
     return () => clearTimeout(timeout);
   }, [dueSoon, calendarConnected, user?.id]);
-  const connectGoogleCalendar = () => {
+  const connectGoogleCalendar = async () => {
     if(!user?.id || !org?.id) return;
-    requirePro("calendar", async () => {
-      try {
-        const res = await authedFetch(`/api/calendar/oauth-start?orgId=${encodeURIComponent(org.id)}`);
-        const data = await res.json();
-        if(data.url) window.location.href = data.url;
-        else showToast(data.error||"Couldn't start Calendar connection", "error");
-      } catch(e) { showToast("Couldn't start Calendar connection", "error"); }
-    });
+    try {
+      const res = await authedFetch(`/api/calendar/oauth-start?orgId=${encodeURIComponent(org.id)}`);
+      const data = await res.json();
+      if(data.url) window.location.href = data.url;
+      else showToast(data.error||"Couldn't start Calendar connection", "error");
+    } catch(e) { showToast("Couldn't start Calendar connection", "error"); }
   };
   const disconnectGoogleCalendar = async () => {
     if(!user?.id) return;
@@ -3185,8 +3182,6 @@ Please produce:
                 onClick={()=>{
                   const name = casePromptName.trim();
                   if(!name) return;
-                  const activeCaseCount = cases.filter(cs=>getCaseStage(cs)!=="closed").length;
-                  if(!canCreateCase(org, activeCaseCount)) { closeCasePrompt(); setUpgradePromptFeature("case_limit"); return; }
                   // Save/update employee record
                   upsertEmployeeRecord(name,{jobTitle:newCaseJobTitle,startDate:newCaseStartDate,location:newCaseLocation});
                   // Create case
@@ -3249,23 +3244,6 @@ Please produce:
           onConfirm={(values)=>{ promptState.resolve(values); setPromptState(null); }}
           onCancel={()=>{ promptState.resolve(null); setPromptState(null); }}
         />
-      )}
-
-      {/* ── Upgrade to Pro prompt ── */}
-      {upgradePromptFeature&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setUpgradePromptFeature(null)}>
-          <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:420}} onClick={e=>e.stopPropagation()}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Upgrade to Pro</div>
-              <button onClick={()=>setUpgradePromptFeature(null)} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:0,marginLeft:12}}>×</button>
-            </div>
-            <div style={{fontSize:13,color:"#6B6375",marginBottom:20,lineHeight:1.6}}>{FEATURE_LABEL[upgradePromptFeature]||"This feature"} is a Pro feature. Upgrade to unlock unlimited cases and the full feature set.</div>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              <button onClick={()=>setUpgradePromptFeature(null)} style={{fontSize:13,padding:"9px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#fff",cursor:"pointer",color:"#6B6375"}}>Not now</button>
-              <button onClick={()=>{setUpgradePromptFeature(null);setScreen(SCREENS.SETTINGS);}} style={{fontSize:13,padding:"9px 20px",background:"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600}}>View plans</button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── GDPR consent modal ── */}
@@ -3349,10 +3327,7 @@ Please produce:
               {s:SCREENS.DSAR, l:"DSAR"},
             ];
             const navItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];
-            const goToScreen = (s) => {
-              if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
-              setScreen(s);
-            };
+            const goToScreen = (s) => setScreen(s);
             if(isMobile) return (
               <div style={{position:"relative"}}>
                 <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:16,color:"#6B6375"}}>☰</button>
@@ -3448,7 +3423,6 @@ Please produce:
           connectGoogleCalendar={connectGoogleCalendar}
           disconnectGoogleCalendar={disconnectGoogleCalendar}
           isMobile={isMobile}
-          requirePro={requirePro}
         />
       )}
 
@@ -3505,7 +3479,6 @@ Please produce:
           setLetterOutput={setLetterOutput}
           org={org}
           user={user}
-          requirePro={requirePro}
           promptDialog={promptDialog}
         />
       )}
@@ -3551,7 +3524,7 @@ Please produce:
       )}
 {/* ══ INTAKE ══ */}
       {screen===SCREENS.INTAKE&&(
-        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} caseLimitReached={!canCreateCase(org, cases.filter(cs=>getCaseStage(cs)!=="closed").length)} onCaseLimitBlocked={()=>setUpgradePromptFeature("case_limit")} />
+        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} />
       )}
 
 {/* ══ PREP ══ */}

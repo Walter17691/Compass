@@ -1,7 +1,7 @@
 import { SCREENS } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
 
-export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases, caseLimitReached, onCaseLimitBlocked }) {
+export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases }) {
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -119,7 +119,6 @@ export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases, c
         <button
           disabled={!intake.employee.trim()||!intake.type}
           onClick={()=>{
-            if(caseLimitReached) { onCaseLimitBlocked?.(); return; }
             const newCase = {
               id: crypto.randomUUID(),
               employeeName: intake.employee.trim(),

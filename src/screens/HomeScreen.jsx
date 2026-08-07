@@ -6,12 +6,9 @@ import { OrgSwitcher } from '../components/OrgSwitcher';
 import { NavModulesMenu } from '../components/NavModulesMenu';
 import { getCurrentRisk } from '../lib/caseStage';
 
-export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile, requirePro }) {
+export function HomeScreen({ cases, getCaseStage, org, availableOrgs, switchOrg, onJoinAnotherOrg, onSignOut, currentUser, auditLog, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, policies, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, isMobile }) {
   const [showMobileNav, setShowMobileNav] = useState(false);
-  const goToScreen = (s) => {
-    if(s===SCREENS.DSAR) { requirePro('dsar', ()=>setScreen(s)); return; }
-    setScreen(s);
-  };
+  const goToScreen = (s) => setScreen(s);
   // Same primary/module split as the shared header (App.jsx) — the four
   // situational HR-process screens collapse into one dropdown so the row
   // reads as ~6 everyday items instead of 10 flat links. Mobile keeps the

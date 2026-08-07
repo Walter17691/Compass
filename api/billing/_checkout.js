@@ -20,10 +20,18 @@ export async function checkout(req, res) {
     const members = await memberRes.json();
     if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
 
+    // Priced per active location (volume-tiered on STRIPE_PRICE_ID — see
+    // src/lib/plan.js for the tier bands). At least 1: an org with zero
+    // locations recorded yet still needs a subscription to unlock the app
+    // in the first place.
+    const locationsRes = await supabaseRequest(`locations?org_id=eq.${encodeURIComponent(orgId)}&select=id`);
+    const locations = await locationsRes.json();
+    const quantity = Math.max(1, locations.length);
+
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity }],
       success_url: `${APP_URL}/?billing=success`,
       cancel_url: `${APP_URL}/?billing=cancelled`,
       client_reference_id: orgId,

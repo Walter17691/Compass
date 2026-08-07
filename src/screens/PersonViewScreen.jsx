@@ -1,7 +1,7 @@
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
 
-export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, deleteEmployeeRecord, confirmDialog, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, requirePro, promptDialog }) {
+export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, deleteEmployeeRecord, confirmDialog, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, promptDialog }) {
   const empName = activePerson;
   const empCases = cases.filter(c=>c.employeeName===empName);
   const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseId:cs.id,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -30,7 +30,6 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={async()=>{
-            if(!requirePro('portal', ()=>{})) return;
             const values = await promptDialog({
               title:"Invite to employee portal",
               message:`Send ${empName} an invite to view their case status, sign documents and complete onboarding tasks.`,

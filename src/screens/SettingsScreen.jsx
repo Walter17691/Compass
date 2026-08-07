@@ -47,7 +47,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, loc
         <SettingsNav sections={sections} active={active} onChange={setActive} isMobile={isMobile}/>
 
         <div style={{flex:1,minWidth:0}}>
-          {active==="billing"&&<BillingSection org={org} showToast={showToast}/>}
+          {active==="billing"&&<BillingSection org={org} locations={locations} showToast={showToast}/>}
           {active==="team-access"&&<TeamAccessSection isHR={isHR} org={org} locations={locations} teamMembers={teamMembers} editingMember={editingMember} setEditingMember={setEditingMember} removeMember={removeMember} updateMemberRole={updateMemberRole} assignLocations={assignLocations} inviteForm={inviteForm} setInviteForm={setInviteForm} inviting={inviting} inviteMember={inviteMember} users={users} currentUser={currentUser} saveUsers={saveUsers} addUser={addUser}/>}
           {active==="organisation"&&<OrganisationSection org={org} orgRoles={orgRoles} loadOrgRoles={loadOrgRoles} orgMembers={orgMembers} loadOrgMembers={loadOrgMembers} showToast={showToast}/>}
           {active==="locations"&&<LocationsSection isHR={isHR} locations={locations} deleteLocation={deleteLocation} addLocation={addLocation}/>}

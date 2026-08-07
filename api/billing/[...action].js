@@ -1,6 +1,7 @@
 import { checkout } from './_checkout.js';
 import { webhook } from './_webhook.js';
 import { manage } from './_manage.js';
+import { syncQuantity } from './_sync-quantity.js';
 
 // Same catch-all convention as calendar/portal/cron — one function slot
 // for the whole billing group.
@@ -19,6 +20,7 @@ export default async function handler(req, res) {
     case 'checkout': return checkout(req, res);
     case 'webhook': return webhook(req, res);
     case 'manage': return manage(req, res);
+    case 'sync-quantity': return syncQuantity(req, res);
     default: return res.status(404).json({ error: 'Not found' });
   }
 }
