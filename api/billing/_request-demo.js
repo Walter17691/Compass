@@ -17,6 +17,13 @@ function readRawBody(req) {
   });
 }
 
+// phone/preferredTime/notes are free text from an authenticated org member
+// — not sanitised anywhere upstream — and org/member names are themselves
+// user-editable. All of it lands in an HTML email, so it needs escaping
+// same as it would in a browser: unescaped, this is a stored-injection
+// vector into whatever renders this email (most mail clients render HTML).
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
 export async function requestDemo(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -55,16 +62,16 @@ export async function requestDemo(req, res) {
         from: 'Compass HR <notifications@mail.compasshruk.com>',
         to: ['hello@compasshruk.com'],
         reply_to: caller.email,
-        subject: `New demo request — ${org?.name || 'Unknown org'}`,
+        subject: `New demo request — ${esc(org?.name) || 'Unknown org'}`,
         html: `
           <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
             <h2 style="color:#7C5CFC">New Compass demo request</h2>
-            <p><strong>Organisation:</strong> ${org?.name || '—'} (org_id: ${orgId})</p>
-            <p><strong>Contact:</strong> ${member.name || '—'} — ${caller.email}</p>
+            <p><strong>Organisation:</strong> ${esc(org?.name) || '—'} (org_id: ${esc(orgId)})</p>
+            <p><strong>Contact:</strong> ${esc(member.name) || '—'} — ${esc(caller.email)}</p>
             <p><strong>Locations recorded:</strong> ${locations.length || 'None yet'}</p>
-            <p><strong>Phone:</strong> ${phone || 'Not given'}</p>
-            <p><strong>Preferred time to call:</strong> ${preferredTime || 'Not given'}</p>
-            <p><strong>Notes:</strong> ${notes || '—'}</p>
+            <p><strong>Phone:</strong> ${esc(phone) || 'Not given'}</p>
+            <p><strong>Preferred time to call:</strong> ${esc(preferredTime) || 'Not given'}</p>
+            <p><strong>Notes:</strong> ${esc(notes) || '—'}</p>
           </div>
         `,
       }),
