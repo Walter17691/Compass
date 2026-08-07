@@ -1,5 +1,6 @@
 import { Badge, Btn, Card, SectionTitle } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
+import { CheckIcon } from '../components/Icons';
 
 export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redundancyStep, setRedundancyStep, redundancyAiOutput, setRedundancyAiOutput, redundancyCases, createRedundancyCase, updateRedundancyCase, scoreEmployee, generateRedundancyLetter, isMobile, getRedundancyAiAdvice, redundancyAiProcessing, startOffboarding, promptDialog }) {
   const stepLabels = {setup:"Setup",pool:"Selection",consultation:"Consultation",outcome:"Outcome"};
@@ -144,8 +145,8 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                   <Card style={{marginBottom:14}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                       <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#7C5CFC",margin:0,fontWeight:600}}>Selection criteria</h3>
-                      <span style={{fontSize:11,color:Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)<1?"#7C5CFC":"#E8622A",fontWeight:600}}>
-                        Total: {activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)}% {Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)>1?"(must equal 100%)":"✓"}
+                      <span style={{fontSize:11,color:Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)<1?"#7C5CFC":"#E8622A",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+                        Total: {activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)}% {Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)>1?"(must equal 100%)":<CheckIcon size={11} />}
                       </span>
                     </div>
                     {activeRedundancy.selectionCriteria.map(c=>(

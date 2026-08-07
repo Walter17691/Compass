@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { CheckIcon } from './Icons';
 
 // The org-name badge doubles as a switcher — always clickable, even with
 // just one org, so "Join another organisation" has one consistent entry
@@ -27,8 +28,8 @@ export function OrgSwitcher({ org, availableOrgs=[], switchOrg, onJoinAnotherOrg
       {show&&(
         <div role="menu" aria-label="Organisations" style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",minWidth:220,overflow:"hidden",zIndex:250}}>
           {availableOrgs.map(o=>(
-            <button key={o.id} onClick={()=>{switchOrg(o.id);setShow(false);}} style={{width:"100%",textAlign:"left",background:o.id===org.id?"#F5F3FF":"none",border:"none",borderBottom:"1px solid #F5F1EA",padding:"10px 14px",fontSize:13,color:o.id===org.id?"#7C5CFC":"#1A1535",fontWeight:o.id===org.id?600:400,cursor:"pointer"}}>
-              {o.name}{o.id===org.id&&" ✓"}
+            <button key={o.id} onClick={()=>{switchOrg(o.id);setShow(false);}} style={{width:"100%",textAlign:"left",background:o.id===org.id?"#F5F3FF":"none",border:"none",borderBottom:"1px solid #F5F1EA",padding:"10px 14px",fontSize:13,color:o.id===org.id?"#7C5CFC":"#1A1535",fontWeight:o.id===org.id?600:400,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              {o.name}{o.id===org.id&&<CheckIcon size={11} />}
             </button>
           ))}
           <button onClick={()=>{setShow(false);onJoinAnotherOrg();}} style={{width:"100%",textAlign:"left",background:"none",border:"none",padding:"10px 14px",fontSize:12,color:"#6B6375",cursor:"pointer"}}>

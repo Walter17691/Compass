@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { authedFetch } from '../lib/authedFetch';
+import { CheckIcon } from '../components/Icons';
 
 export function PortalOnboarding({ userId }) {
   const [loading, setLoading] = useState(true);
@@ -48,7 +49,7 @@ export function PortalOnboarding({ userId }) {
             <div key={t.id} style={{ display: "flex", gap: 12, padding: "14px 18px", borderBottom: i < starter.tasks.length - 1 ? "1px solid #F5F1EA" : "none", alignItems: "flex-start" }}>
               <button onClick={() => toggleTask(t.id, t.done)}
                 style={{ width: 18, height: 18, borderRadius: 4, border: "1px solid", borderColor: t.done ? "#7C5CFC" : "#E8E0D0", background: t.done ? "#7C5CFC" : "none", flexShrink: 0, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                {t.done && <span style={{ color: "#fff", fontSize: 10 }}>✓</span>}
+                {t.done && <CheckIcon size={10} color="#fff" />}
               </button>
               <div>
                 <div style={{ fontSize: 13, color: t.done ? "#9B9098" : "#1C1820", textDecoration: t.done ? "line-through" : "none" }}>{t.task}</div>

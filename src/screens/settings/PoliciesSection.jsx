@@ -1,4 +1,5 @@
 import { Btn, Card, Badge } from '../../components/Primitives';
+import { CheckIcon } from '../../components/Icons';
 
 export function PoliciesSection({ policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, lsSet }) {
   return (
@@ -23,7 +24,7 @@ export function PoliciesSection({ policies, setPolicies, policyFileRef, handlePo
       {policies.length===0&&<div style={{background:"#FDFAF5",border:"2px dashed #E8E0D0",borderRadius:7,padding:"20px",textAlign:"center",marginBottom:14,fontSize:12,color:"#5A5570"}}>No policies uploaded</div>}
       <input ref={policyFileRef} type="file" multiple accept=".txt,.md,.docx" onChange={handlePolicyUpload} style={{display:"none"}} />
       <Btn onClick={()=>policyFileRef.current?.click()} disabled={policyProcessing}>{policyProcessing?"Processing...":"+ Upload policies →"}</Btn>
-      {policies.length>0&&<div style={{marginTop:12,fontSize:11,color:"#7C5CFC"}}>✓ Active in: prep, note structuring, letter drafting, risk scoring</div>}
+      {policies.length>0&&<div style={{marginTop:12,fontSize:11,color:"#7C5CFC",display:"flex",alignItems:"center",gap:5}}><CheckIcon size={11} />Active in: prep, note structuring, letter drafting, risk scoring</div>}
     </Card>
   );
 }

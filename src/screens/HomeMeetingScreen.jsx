@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
+import { CheckIcon, WarningIcon } from '../components/Icons';
 
 export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, generateBrief, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
@@ -168,7 +169,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
                     <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:400,color:meetingSetup.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
                     <div style={{fontSize:12,color:"#9B9098",marginTop:1}}>{t.desc}</div>
                   </div>
-                  {meetingSetup.type===t.id&&<span style={{color:"#7C5CFC",fontSize:14,marginLeft:8}}>✓</span>}
+                  {meetingSetup.type===t.id&&<CheckIcon size={14} color="#7C5CFC" style={{marginLeft:8}} />}
                 </button>
               ))}
             </div>
@@ -177,7 +178,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           {/* Invitation warning */}
           {meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
             <div style={{background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:10,padding:"14px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:15,flexShrink:0}}>⚠️</span>
+              <WarningIcon size={15} color="#B87520" style={{flexShrink:0}} />
               <div>
                 <div style={{fontSize:13,fontWeight:600,color:"#B87520",marginBottom:3}}>Formal invitation required</div>
                 <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>

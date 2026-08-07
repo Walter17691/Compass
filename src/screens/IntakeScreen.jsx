@@ -1,5 +1,6 @@
 import { SCREENS } from '../constants';
 import { CompassLogo } from '../components/CompassLogo';
+import { InfoIcon } from '../components/Icons';
 
 export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases }) {
   return (
@@ -23,7 +24,7 @@ export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases })
       <div style={{maxWidth:620,margin:"0 auto",padding:"40px 24px"}}>
 
         <div style={{background:"#EDE8FF",border:"1px solid #D4C9F5",borderRadius:10,padding:"14px 18px",marginBottom:28,display:"flex",gap:10,alignItems:"flex-start"}}>
-          <span style={{fontSize:16}}>💡</span>
+          <InfoIcon size={16} color="#5B3FD4" style={{flexShrink:0,marginTop:1}} />
           <div style={{fontSize:13,color:"#5B3FD4",lineHeight:1.6}}>Log the case first — even before any meetings take place. This creates the case file and helps Compass track ACAS timelines and next steps from day one.</div>
         </div>
 

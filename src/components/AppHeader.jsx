@@ -3,6 +3,7 @@ import { CompassLogo } from './CompassLogo';
 import { ActivityBell } from './ActivityBell';
 import { OrgSwitcher } from './OrgSwitcher';
 import { NavModulesMenu } from './NavModulesMenu';
+import { MenuIcon } from './Icons';
 
 // Single header used on every screen, including Home — previously Home
 // rendered its own separate copy (App.jsx's <header> was display:none
@@ -40,7 +41,7 @@ export function AppHeader({ screen, setScreen, cases, getCaseStage, isMobile, sh
         {/* Nav */}
         {isMobile ? (
           <div style={{position:"relative"}}>
-            <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:16,color:"#6B6375"}}>☰</button>
+            <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16} /></button>
             {showMobileNav&&(
               <nav style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",display:"flex",flexDirection:"column",minWidth:180,zIndex:200,overflow:"hidden"}}>
                 {navItems.map(({s,l})=>(

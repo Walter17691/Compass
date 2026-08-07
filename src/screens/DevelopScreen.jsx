@@ -2,6 +2,7 @@ import { SCREENS, DEV_TEMPLATES } from '../constants';
 import { Btn, Card } from '../components/Primitives';
 import { DateInput } from '../components/DateInput';
 import { MDRenderer } from '../components/MDRenderer';
+import { CheckIcon, CrossIcon } from '../components/Icons';
 
 export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, devAiProcessing, generateSmartObjectives, generateDevSummary, devSummary, saveDevMeetingToCase, setScreen, generateDevLetter, devLetter }) {
   const s = devSession;
@@ -20,7 +21,7 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
                 borderColor:devStep===k?"#7C5CFC":["self","manager","summary","output"].indexOf(devStep)>i?"#7C5CFC44":"#E8E0D0",
                 background:devStep===k?"#7C5CFC22":"none",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:4}}>
                 {["self","manager","summary","output"].indexOf(devStep)>i
-                  ?<span style={{color:"#7C5CFC",fontSize:14}}>✓</span>
+                  ?<CheckIcon size={14} color="#7C5CFC" />
                   :<span style={{fontSize:11,color:devStep===k?"#7C5CFC":"#555",fontWeight:600}}>{i+1}</span>}
               </div>
               <div style={{fontSize:10,color:devStep===k?"#7C5CFC":"#444",fontWeight:devStep===k?600:400,textAlign:"center"}}>{l}</div>
@@ -144,7 +145,7 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
                     {obj.measure&&<div style={{fontSize:10,color:"#5A5570",marginTop:2}}>Measure: {obj.measure}</div>}
                   </div>
                   <button onClick={()=>setDevSession(ds=>({...ds,objectives:ds.objectives.filter((_,j)=>j!==i)}))}
-                    aria-label="Remove" style={{background:"none",border:"none",color:"#6B6880",fontSize:14,cursor:"pointer",marginLeft:8}}>✕</button>
+                    aria-label="Remove" style={{background:"none",border:"none",color:"#6B6880",cursor:"pointer",marginLeft:8,display:"flex",alignItems:"center"}}><CrossIcon size={13} /></button>
                 </div>
                 {/* Rating */}
                 <div style={{display:"flex",gap:4,marginBottom:8}}>

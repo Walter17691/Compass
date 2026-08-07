@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Btn, Card, Badge } from '../../components/Primitives';
 import { DateInput } from '../../components/DateInput';
+import { CheckIcon } from '../../components/Icons';
 
 // Shared by NewStarterScreen (onboarding) and OffboardingScreen (used to be
 // two ~230-line hand-copied files that had already drifted — offboarding
@@ -202,7 +203,7 @@ export function ChecklistScreen({
                       <div key={task.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid #1a1a1a",alignItems:"flex-start"}}>
                         <button onClick={()=>toggleTask(active.id,task.id)}
                           style={{width:18,height:18,borderRadius:4,border:"1px solid",borderColor:task.done?"#7C5CFC":"#E8E0D0",background:task.done?"#7C5CFC":"none",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-                          {task.done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
+                          {task.done&&<CheckIcon size={10} color="#fff" />}
                         </button>
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,color:task.done?"#9B9098":"#1C1820",textDecoration:task.done?"line-through":"none",marginBottom:3}}>{task.task}</div>

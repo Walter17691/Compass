@@ -2865,16 +2865,6 @@ Please produce:
   };
 
 
-  const CASE_STAGES = [
-    {id:"intake",        label:"Case opened",           icon:"📋"},
-    {id:"investigation", label:"Investigation",          icon:"🔍"},
-    {id:"inv_report",    label:"Investigation report",   icon:"📄"},
-    {id:"disciplinary",  label:"Disciplinary hearing",   icon:"⚖️"},
-    {id:"outcome",       label:"Outcome letter",         icon:"✉️"},
-    {id:"appeal",        label:"Appeal",                 icon:"🔄"},
-    {id:"closed",        label:"Closed",                 icon:"✓"},
-  ];
-
   // Toggles a single item in a meeting's deterministic nextSteps checklist
   // (NEXT_STEPS_MAP-derived, App.jsx:1468-1470) — the same array
   // computeDueSoon already reads via the "next_step" category, so ticking

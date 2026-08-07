@@ -243,7 +243,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                     )}
                     <div style={{display:"flex",gap:8,paddingTop:8,borderTop:"1px solid #F5F1EA"}}>
                       {calendarConnected?(
-                        <button onClick={disconnectGoogleCalendar} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Google Calendar connected ✓ — Disconnect</button>
+                        <button onClick={disconnectGoogleCalendar} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Google Calendar connected — Disconnect</button>
                       ):(
                         <button onClick={connectGoogleCalendar} style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Google Calendar</button>
                       )}

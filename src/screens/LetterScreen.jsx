@@ -3,6 +3,7 @@ import { SCREENS } from '../constants';
 import { lsSet } from '../lib/storage';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
+import { CheckIcon } from '../components/Icons';
 
 export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter }) {
   const [showHistory, setShowHistory] = useState(false);
@@ -38,7 +39,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:11,color:"#6B6375"}}>E-signature:</span>
                 {signature
-                  ?<span style={{fontSize:11,color:"#7C5CFC",fontWeight:600}}>✓ {signature.type==="typed"?`"${signature.data}"`:"Drawn"}</span>
+                  ?<span style={{fontSize:11,color:"#7C5CFC",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}><CheckIcon size={11} />{signature.type==="typed"?`"${signature.data}"`:"Drawn"}</span>
                   :<span style={{fontSize:11,color:"#6B6880"}}>Not added — will prompt on send</span>}
               </div>
               <div style={{display:"flex",gap:6}}>
@@ -80,8 +81,8 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               flexWrap: "wrap",
             }}>
               {letterIsApproved ? (
-                <div style={{fontSize:12,color:"#2E6B47"}}>
-                  ✓ Approved for sending by <strong>{letterApproval.by}</strong> on {new Date(letterApproval.at).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+                <div style={{fontSize:12,color:"#2E6B47",display:"flex",alignItems:"center",gap:6}}>
+                  <CheckIcon size={12} />Approved for sending by <strong>{letterApproval.by}</strong> on {new Date(letterApproval.at).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
                 </div>
               ) : (
                 <div style={{fontSize:12,color:"#8A5A1E"}}>

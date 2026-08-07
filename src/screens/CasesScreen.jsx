@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
+import { LockIcon } from '../components/Icons';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -92,7 +93,7 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
                         <div style={{fontSize:11,color:"#9B9098",display:"flex",gap:8}}>
                           <span>{(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</span>
                           {cs.urgent&&<span style={{color:"#C84B2F",fontWeight:600}}>· URGENT</span>}
-                          {cs.confidential&&<span style={{color:"#B87520",fontWeight:600}}>· 🔒 Confidential</span>}
+                          {cs.confidential&&<span style={{color:"#B87520",fontWeight:600,display:"inline-flex",alignItems:"center",gap:3}}>· <LockIcon size={10} />Confidential</span>}
                         </div>
                         {next&&!closed&&<div style={{fontSize:11,color:"#7C5CFC",fontWeight:500,marginTop:4}}>Next: {next.label}</div>}
                       </div>
