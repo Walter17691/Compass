@@ -135,36 +135,54 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                   disciplinary:{label:"Disciplinary",color:"#C84B2F",bg:"#FFF0ED"},
                   closed:{label:"Closed",color:"#1A7A4A",bg:"#E8F5EE"},
                 };
-                return filtered.map((cs,i)=>{
-                  const next=getNextStep(cs);
-                  const stage=getCaseStage(cs);
-                  const st=statusMap[cs.stage||stage]||statusMap.open;
-                  const lastUpdated=cs.updatedAt||cs.createdAt;
-                  const daysAgo=lastUpdated?Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24)):null;
-                  return (
-                    <div key={cs.id}
-                      onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                      style={{display:"flex",alignItems:"center",padding:"13px 18px",borderBottom:i<filtered.length-1?"1px solid #F5F1EA":"none",cursor:"pointer",transition:"background 0.1s"}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
-                      onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                      <div style={{width:36,height:36,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#7C5CFC",flexShrink:0,marginRight:14}}>
-                        {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:"#1C1820",marginBottom:1}}>{cs.employeeName}</div>
-                        <div style={{fontSize:12,color:"#9B9098"}}>{cs.caseType||"HR Matter"}{next?" · "+next.label:""}</div>
-                      </div>
-                      <div style={{marginRight:16}}>
-                        <span style={{fontSize:11,fontWeight:600,color:st.color,background:st.bg,borderRadius:20,padding:"3px 10px",whiteSpace:"nowrap"}}>{st.label}</span>
-                      </div>
-                      <div style={{textAlign:"right",flexShrink:0,minWidth:80}}>
-                        <div style={{fontSize:11,color:"#9B9098",marginBottom:1}}>Last updated</div>
-                        <div style={{fontSize:11,color:"#1C1820",fontWeight:500}}>{daysAgo===null?"—":daysAgo===0?"Today":daysAgo===1?"Yesterday":fmtDate(lastUpdated)}</div>
-                      </div>
-                      <div style={{marginLeft:12,color:"#C4BAB0",fontSize:16,flexShrink:0}}>›</div>
-                    </div>
-                  );
-                });
+                // Home is a daily-glance dashboard, not the full case list —
+                // every other section here caps itself (top 3 actions, top 5
+                // quick links, 4 stat cards); this one used to render every
+                // matching case with no limit, which is what made the page
+                // balloon to 20+ screens tall for orgs with many cases. The
+                // full, unlimited list already lives one click away via
+                // "View all" (both above the list and here at the bottom).
+                const CASE_PREVIEW_LIMIT = 6;
+                const visible = filtered.slice(0, CASE_PREVIEW_LIMIT);
+                return (
+                  <>
+                    {visible.map((cs,i)=>{
+                      const next=getNextStep(cs);
+                      const stage=getCaseStage(cs);
+                      const st=statusMap[cs.stage||stage]||statusMap.open;
+                      const lastUpdated=cs.updatedAt||cs.createdAt;
+                      const daysAgo=lastUpdated?Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24)):null;
+                      return (
+                        <div key={cs.id}
+                          onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                          style={{display:"flex",alignItems:"center",padding:"13px 18px",borderBottom:i<visible.length-1||filtered.length>CASE_PREVIEW_LIMIT?"1px solid #F5F1EA":"none",cursor:"pointer",transition:"background 0.1s"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
+                          onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                          <div style={{width:36,height:36,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#7C5CFC",flexShrink:0,marginRight:14}}>
+                            {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:600,color:"#1C1820",marginBottom:1}}>{cs.employeeName}</div>
+                            <div style={{fontSize:12,color:"#9B9098"}}>{cs.caseType||"HR Matter"}{next?" · "+next.label:""}</div>
+                          </div>
+                          <div style={{marginRight:16}}>
+                            <span style={{fontSize:11,fontWeight:600,color:st.color,background:st.bg,borderRadius:20,padding:"3px 10px",whiteSpace:"nowrap"}}>{st.label}</span>
+                          </div>
+                          <div style={{textAlign:"right",flexShrink:0,minWidth:80}}>
+                            <div style={{fontSize:11,color:"#9B9098",marginBottom:1}}>Last updated</div>
+                            <div style={{fontSize:11,color:"#1C1820",fontWeight:500}}>{daysAgo===null?"—":daysAgo===0?"Today":daysAgo===1?"Yesterday":fmtDate(lastUpdated)}</div>
+                          </div>
+                          <div style={{marginLeft:12,color:"#C4BAB0",fontSize:16,flexShrink:0}}>›</div>
+                        </div>
+                      );
+                    })}
+                    {filtered.length>CASE_PREVIEW_LIMIT&&(
+                      <button onClick={()=>setScreen(SCREENS.CASES)} style={{width:"100%",padding:"12px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
+                        View all {filtered.length} cases →
+                      </button>
+                    )}
+                  </>
+                );
               })()}
             </div>
 
