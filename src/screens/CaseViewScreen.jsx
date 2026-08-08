@@ -18,7 +18,7 @@ const MAX_EVIDENCE_SIZE = 15*1024*1024; // 15MB — dataUrl storage in a jsonb c
 const ALLOWED_EVIDENCE_TYPES = ["image/jpeg","image/png","image/gif","image/webp","image/heic","application/pdf","video/mp4","video/quicktime","video/webm","text/plain","text/csv","message/rfc822","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
 const fmtBytes = n => n<1024*1024 ? Math.round(n/1024)+"KB" : (n/(1024*1024)).toFixed(1)+"MB";
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -136,11 +136,11 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
               <button onClick={()=>{
                 if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.action==="start_investigation"?"investigation":nextStep.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
                 else if(nextStep.action==="send_signature"){const rel=stage==="investigation"?invMeetings:stage==="appeal"?appealMeetings:discMeetings;const m=rel[0]||meetings[meetings.length-1];if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
-                else if(nextStep.action==="inv_report"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"inv_report"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="investigation")||null);setShowDraft(true);setDraftedType("investigation-report");handleLetter("investigation-report",{inline:true});}
+                else if(nextStep.action==="inv_report"){concludeInvestigation(cs.id);}
                 else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true});}
                 else if(nextStep.action==="outcome_letter"||nextStep.action==="appeal_letter"){const m=discMeetings[0]||meetings[meetings.length-1];if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});}
                 else if(nextStep.action==="close_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));}
-              }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.label} →</button>
+              }} disabled={nextStep.action==="inv_report"&&concludingInvestigation} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:(nextStep.action==="inv_report"&&concludingInvestigation)?"not-allowed":"pointer",opacity:(nextStep.action==="inv_report"&&concludingInvestigation)?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
             </div>
           </div>
 
@@ -340,13 +340,9 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
                     ):invMeetings.some(m=>m.record)?(
                       <div>
                         <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to conclude.</div>
-                        <button onClick={()=>{
-                          const rpt = invMeetings.filter(m=>m.record).map(m=>"Meeting: "+m.type+" — "+m.date+"\n\n"+(m.record||"")).join("\n\n---\n\n");
-                          const fullRpt = "Investigation Report\n\nEmployee: "+cs.employeeName+"\nCase: "+(cs.caseType||"HR Matter")+"\nDate concluded: "+new Date().toLocaleDateString("en-GB")+"\n\n"+rpt;
-                          saveCases(cases.map(x=>x.id===cs.id?{...x,investigationReport:fullRpt,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x));
-                          showToast("Investigation concluded");
-                        }} style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                          Conclude investigation &amp; generate report
+                        <button disabled={concludingInvestigation} onClick={()=>concludeInvestigation(cs.id)}
+                          style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:concludingInvestigation?"not-allowed":"pointer",opacity:concludingInvestigation?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                          {concludingInvestigation?"Generating report...":"Conclude investigation & generate report"}
                         </button>
                       </div>
                     ):(

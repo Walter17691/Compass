@@ -90,6 +90,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── AI outputs ──
   const [aiProcessing, setAiProcessing] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [concludingInvestigation, setConcludingInvestigation] = useState(false);
   const [prepNotes, setPrepNotes] = useState("");
   const [reviewOutput, setReviewOutput] = useState("");
   const [reviewOutputOriginal, setReviewOutputOriginal] = useState(""); // the AI's un-edited draft, kept so hand-edits can be reverted
@@ -2720,6 +2721,56 @@ Please produce:
     setAiProcessing(false);
   };
 
+  // "Conclude investigation" used to just concatenate each investigation
+  // meeting's raw record (itself a 3-section AI output including a literal
+  // "## Meeting Dialogue" section) under an "Investigation Report" heading
+  // — no synthesis, no findings, no recommendation, just meeting notes
+  // wearing a report's name. This generates the report handleLetter's
+  // "investigation-report" prompt was already designed to produce
+  // elsewhere (background, allegations investigated, findings per
+  // allegation, recommendation) — but feeds it the FULL text of every
+  // investigation meeting rather than handleLetter's generic ~100-char-
+  // per-meeting context summary, since a real investigation report has to
+  // reflect actual findings, not truncated paraphrase.
+  const concludeInvestigation = async (caseId) => {
+    const cs = cases.find(x=>x.id===caseId);
+    if(!cs) return;
+    const invMeetings = (cs.meetings||[]).filter(m=>(m.type||"").toLowerCase().includes("investigation")&&m.record);
+    if(!invMeetings.length) return;
+    setConcludingInvestigation(true);
+    try {
+      const nl = String.fromCharCode(10);
+      const meetingContent = invMeetings.map((m,i)=>"Investigation meeting "+(i+1)+" — "+m.date+nl+m.record).join(nl+nl+"---"+nl+nl);
+      const evidenceList = (cs.evidence||[]).map((e,i)=>(i+1)+". "+e.name+" ("+e.type+", "+e.date+")").join(nl);
+      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR documents that are legally sound and follow ACAS Code of Practice and relevant UK employment legislation. Always produce a complete document — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets. Output only the document itself with no preamble, explanation or sign-off instructions.";
+      const userPrompt = "Draft a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed, findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections."+nl+nl
+        +"Employee: "+cs.employeeName+nl
+        +"Case type: "+(cs.caseType||"HR Matter")+nl
+        +(cs.description?"Case description: "+cs.description+nl:"")
+        +(evidenceList?"Evidence gathered:"+nl+evidenceList+nl:"")
+        +nl+"Investigation meeting records (full):"+nl+meetingContent+nl+nl
+        +"Today's date for reference: "+new Date().toLocaleDateString("en-GB")+". Always complete the full report.";
+      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:3000,stream:false,
+          system:systemPrompt,
+          messages:[{role:"user",content:userPrompt}]
+        })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text) {
+        saveCases(cases.map(x=>x.id===caseId?{...x,investigationReport:text,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x));
+        audit("Investigation report generated", cs.employeeName);
+        showToast("Investigation report generated");
+      } else {
+        showToast("Failed to generate investigation report", "error");
+      }
+    } catch(e) {
+      console.error("concludeInvestigation error:", e);
+      showToast("Error generating investigation report", "error");
+    }
+    setConcludingInvestigation(false);
+  };
+
   const restoreLetterVersion = (entry) => {
     if(letterOutput) setLetterHistory(h => [{type: activeLetter, text: letterOutput, ts: new Date().toISOString()}, ...h.filter(x=>x!==entry)].slice(0, 10));
     else setLetterHistory(h => h.filter(x=>x!==entry));
@@ -3453,6 +3504,8 @@ Please produce:
           aiProcessing={aiProcessing}
           aiError={aiError}
           toggleNextStepDone={toggleNextStepDone}
+          concludeInvestigation={concludeInvestigation}
+          concludingInvestigation={concludingInvestigation}
         />
       )}
 {/* ══ INTAKE ══ */}
