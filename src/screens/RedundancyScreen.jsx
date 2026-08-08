@@ -1,6 +1,6 @@
 import { Badge, Btn, Card, SectionTitle } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
-import { CheckIcon } from '../components/Icons';
+import { CheckIcon, CrossIcon } from '../components/Icons';
 
 export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redundancyStep, setRedundancyStep, redundancyAiOutput, setRedundancyAiOutput, redundancyCases, createRedundancyCase, updateRedundancyCase, scoreEmployee, generateRedundancyLetter, isMobile, getRedundancyAiAdvice, redundancyAiProcessing, startOffboarding, promptDialog }) {
   const stepLabels = {setup:"Setup",pool:"Selection",consultation:"Consultation",outcome:"Outcome"};
@@ -151,21 +151,44 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                     </div>
                     {activeRedundancy.selectionCriteria.map(c=>(
                       <div key={c.id} style={{background:"#FDFAF5",borderRadius:7,padding:"12px 14px",marginBottom:8}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                          <div style={{fontSize:14,color:"#1A1535",fontWeight:500}}>{c.criterion}</div>
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,gap:8}}>
+                          <input value={c.criterion} placeholder="Criterion name"
+                            onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,criterion:e.target.value}:x)})}
+                            style={{flex:1,background:"none",border:"none",fontSize:14,color:"#1A1535",fontWeight:500,outline:"none",padding:"2px 0"}} />
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                             <input type="number" min="0" max="100" value={c.weight}
                               onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,weight:parseInt(e.target.value)||0}:x)})}
                               style={{width:56,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 8px",fontSize:12,color:"#1A1535",outline:"none",textAlign:"center"}} />
                             <span style={{fontSize:11,color:"#6B6880"}}>%</span>
+                            <button onClick={()=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.filter(x=>x.id!==c.id)})}
+                              aria-label="Remove criterion" style={{background:"none",border:"none",color:"#9B9098",cursor:"pointer",display:"flex",alignItems:"center",padding:2}}>
+                              <CrossIcon size={12} />
+                            </button>
                           </div>
                         </div>
-                        <div style={{fontSize:11,color:"#6B6880"}}>{c.description}</div>
+                        <input value={c.description||""} placeholder="Description (what this measures, how it's assessed)"
+                          onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,description:e.target.value}:x)})}
+                          style={{width:"100%",background:"none",border:"none",fontSize:11,color:"#6B6880",outline:"none",padding:"2px 0",boxSizing:"border-box"}} />
                       </div>
                     ))}
+                    <Btn variant="ghost" style={{width:"100%",marginBottom:8}} onClick={async()=>{
+                      const values = await promptDialog({
+                        title:"Add selection criterion",
+                        message:"Criteria must be objective, measurable, and relevant to the roles in this pool.",
+                        fields:[
+                          {key:"criterion", label:"Criterion name", placeholder:"e.g. Technical certification", required:true},
+                          {key:"description", label:"Description", placeholder:"What this measures and how it's assessed"},
+                          {key:"weight", label:"Weight %", placeholder:"e.g. 10", required:true},
+                        ],
+                        confirmLabel:"Add criterion",
+                      });
+                      if(!values) return;
+                      const criterion = {id:"sc"+Date.now(), criterion:values.criterion, weight:parseInt(values.weight)||0, description:values.description||""};
+                      updateRedundancyCase({selectionCriteria:[...activeRedundancy.selectionCriteria, criterion]});
+                    }}>+ Add criterion</Btn>
                     <div style={{background:"#FDFAF5",borderRadius:7,padding:"10px 12px",border:"1px solid #E8E0D0",marginTop:8}}>
                       <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:4}}>LEGAL NOTE</div>
-                      <div style={{fontSize:11,color:"#6B6880",lineHeight:1.6}}>Criteria must be objective and measurable. Avoid criteria that could be indirectly discriminatory (e.g. part-time working, recent maternity leave). Disability-related absences must be excluded from attendance scoring.</div>
+                      <div style={{fontSize:11,color:"#6B6880",lineHeight:1.6}}>Criteria must be objective and measurable. Avoid criteria that could be indirectly discriminatory (e.g. part-time working, recent maternity leave). Disability-related absences must be excluded from attendance scoring. Length of service can only be used as a tie-breaker, never the sole or primary criterion, to avoid age discrimination.</div>
                     </div>
                   </Card>
 

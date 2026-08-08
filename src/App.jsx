@@ -3714,6 +3714,12 @@ Please produce:
           policyFileRef={policyFileRef}
           handlePolicyUpload={handlePolicyUpload}
           policyProcessing={policyProcessing}
+          starterTemplates={starterTemplates}
+          saveStarterTemplates={saveStarterTemplates}
+          leaverTemplates={leaverTemplates}
+          saveLeaverTemplates={saveLeaverTemplates}
+          promptDialog={promptDialog}
+          confirmDialog={confirmDialog}
           users={users}
           currentUser={currentUser}
           saveUsers={saveUsers}
