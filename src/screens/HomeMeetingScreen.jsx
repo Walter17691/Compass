@@ -20,6 +20,15 @@ import { CheckIcon, WarningIcon } from '../components/Icons';
 // wired up: a real feature is worth building deliberately, not smuggled
 // into a cleanup pass.
 const FORMAL_MEETING_TYPES = MEETING_TYPES.filter(t => t.group !== "dev");
+// Appraisal/Probation Review/PDP route to DevelopScreen's own structured
+// flow (self-assessment, manager assessment, objectives, outcome letter)
+// instead of the plain live-notes Record screen — and DevelopScreen
+// collects employee name/role/department/date itself in its first step,
+// so these skip straight there on click rather than joining the
+// fill-in-the-form-then-submit flow below, which doesn't apply to them.
+// Previously these had no way to be started anywhere in the product at
+// all — DevelopScreen was fully built and completely unreachable.
+const DEV_MEETING_TYPES = MEETING_TYPES.filter(t => t.group === "dev");
 
 export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
@@ -189,14 +198,27 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           <div style={{marginBottom:20}}>
             <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Meeting type</label>
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",maxHeight:340,overflowY:"auto"}}>
-              {FORMAL_MEETING_TYPES.map((t,i,arr)=>(
+              {FORMAL_MEETING_TYPES.map((t)=>(
                 <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",border:"none",borderBottom:i<arr.length-1?"1px solid #F5F1EA":"none",borderLeft:`3px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,cursor:"pointer",textAlign:"left",transition:"all 0.1s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",border:"none",borderBottom:"1px solid #F5F1EA",borderLeft:`3px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,cursor:"pointer",textAlign:"left",transition:"all 0.1s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                   <div>
                     <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:400,color:meetingSetup.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
                     {t.tag&&<div style={{fontSize:11,color:"#9B9098",marginTop:1}}>{t.tag}</div>}
                   </div>
                   {meetingSetup.type===t.id&&<CheckIcon size={14} color="#7C5CFC" style={{marginLeft:8}} />}
+                </button>
+              ))}
+              <div style={{padding:"8px 16px",background:"#FDFAF5",fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase"}}>Development — goes straight to its own guided flow</div>
+              {DEV_MEETING_TYPES.map((t,i,arr)=>(
+                <button key={t.id} onClick={()=>startSession(t)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",background:"#FFFFFF",border:"none",borderBottom:i<arr.length-1?"1px solid #F5F1EA":"none",cursor:"pointer",textAlign:"left",transition:"all 0.1s",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
+                  onMouseLeave={e=>e.currentTarget.style.background="#FFFFFF"}>
+                  <div>
+                    <div style={{fontSize:13,color:"#1A1535"}}>{t.label}</div>
+                    {t.tag&&<div style={{fontSize:11,color:"#9B9098",marginTop:1}}>{t.tag}</div>}
+                  </div>
+                  <span style={{color:"#C4BAB0",fontSize:16}}>›</span>
                 </button>
               ))}
             </div>

@@ -18,9 +18,8 @@ test('start meeting from Home offers every meeting type and reaches the live-mee
   // Spot-check formal (non-"dev"-group) types that only existed in the
   // now-deleted BriefScreen — if these are missing, the consolidation
   // dropped real functionality. Dev-group types (Appraisal, Probation
-  // Review, PDP/1-2-1) are deliberately not offered here — they route to
-  // DevelopScreen's separate structured flow, which has no entry point
-  // anywhere in the product yet, a pre-existing gap outside this cleanup.
+  // Review, PDP/1-2-1) are covered separately below — they route straight
+  // to DevelopScreen's own structured flow rather than joining this form.
   // The type list scrolls (maxHeight+overflowY:auto), so scroll each into
   // view first rather than asserting visibility from the initial scroll
   // position.
@@ -41,4 +40,23 @@ test('start meeting from Home offers every meeting type and reaches the live-mee
   // second setup form.
   await expect(page.getByPlaceholder(/Type or speak your meeting notes here/)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(employeeName).first()).toBeVisible();
+});
+
+// DevelopScreen (self-assessment, manager assessment, objectives, outcome
+// letter — a real, fully-built flow) had no way to be reached anywhere in
+// the product: Appraisal/Probation Review/PDP were excluded from both of
+// the old duplicate meeting-setup screens' type lists, and nothing else
+// called startSession with a dev-group type either. Clicking one now
+// skips the ER-oriented form fields (DevelopScreen collects employee
+// name/role/date itself in its own first step) and jumps straight there.
+test('starting an Appraisal from the meeting-type list reaches DevelopScreen', async ({ page }) => {
+  await login(page);
+  await page.getByRole('button', { name: 'Start meeting' }).click();
+
+  const appraisal = page.getByText('Appraisal', { exact: true });
+  await appraisal.scrollIntoViewIfNeeded();
+  await appraisal.click();
+
+  await expect(page.getByText('Employee self-assessment').first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByPlaceholder('e.g. Sarah Johnson')).toBeVisible();
 });
