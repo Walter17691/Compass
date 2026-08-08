@@ -525,14 +525,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         if(data.success) {
       showToast("Signature request sent to "+employeeEmail);
       setShowSignModal(false);
-      if(caseInfo._linkedCaseId) {
-        saveMeetingToCase();
-      } else {
-        saveMeetingToCase();
-        const cs = cases.find(x=>x.employeeName===caseInfo.employee?.trim());
-        if(cs) { setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW); }
-        else setScreen(SCREENS.CASES);
-      }
+      // saveMeetingToCase() navigates to the saved case itself now (both
+      // branches — witness interviews to the linked case, regular meetings
+      // to the found-or-just-created one), so this no longer needs its own
+      // duplicate lookup-and-navigate logic.
+      saveMeetingToCase();
     } else {
       showToast("Failed to send: "+(data.error||JSON.stringify(data)), "error");
     }
@@ -2273,13 +2270,23 @@ Please produce:
       signStatus: signStatus,
     };
     const existing = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
+    const caseId = existing ? existing.id : crypto.randomUUID();
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     } else {
-      saveCases([...cases,{id:crypto.randomUUID(), employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting]}]);
+      saveCases([...cases,{id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting]}]);
     }
     audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`);
     showToast("Meeting saved to case file");
+    // The button that triggers this is labelled "Save and go to case →" —
+    // it used to only save, never navigate, silently stranding the user on
+    // the Review screen. Callers that want the general Cases list instead
+    // (ReviewScreen's/LetterScreen's plain "Save to case" buttons) already
+    // call setScreen(SCREENS.CASES) right after this returns, which wins
+    // over this since it runs later in the same handler.
+    setActiveCaseId(caseId);
+    setActiveCaseStage("investigation");
+    setScreen(SCREENS.CASE_VIEW);
     if(letterOutput && org?.id) {
       authedFetch("/api/portal/notify-document", {
         method:"POST", headers:{"Content-Type":"application/json"},
