@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
-import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, ROLE_PERMS } from './constants';
+import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
 import { ls, lsSet } from './lib/storage';
@@ -21,7 +21,6 @@ import { MDRenderer } from './components/MDRenderer';
 import { SignaturePad } from './components/SignaturePad';
 import { DateInput } from './components/DateInput';
 import { AdjustmentForm } from './components/AdjustmentForm';
-import { UserAddForm } from './components/UserAddForm';
 import { AddRoleForm } from './components/AddRoleForm';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PromptModal } from './components/PromptModal';
@@ -379,8 +378,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       if(data) setOrgMembers(data);
     } catch(e) { console.error('loadOrgMembers', e); }
   };
-  const [users, setUsers] = useState(ls("compass_users", []));
-
   // ── Letter tracking ──
   // Stored per meeting as letterTracking: [{letterId, sentAt, deliveredAt, acknowledgedAt}]
 
@@ -1146,13 +1143,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   // ── Users ──
-  const saveUsers = u => { setUsers(u); lsSet("compass_users", u); };
-  const addUser = (name, role, email) => {
-    const u = {id:Date.now().toString(), name, role, email, createdAt:new Date().toISOString()};
-    const updated = [...users, u];
-    saveUsers(updated);
-    return u;
-  };
   // ── Deadline checker — UK statutory & ACAS deadlines ──
   // Rules live in src/lib/deadlines.js so the digest cron function (server
   // side) can compute the same due-soon set without duplicating them.
@@ -1259,7 +1249,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── GDPR helpers ──
   const exportAllData = () => {
-    const data = { cases, policies:policies.map(p=>({...p,content:"[truncated]"})), auditLog, users, adjustments, exportedAt:new Date().toISOString() };
+    const data = { cases, policies:policies.map(p=>({...p,content:"[truncated]"})), auditLog, adjustments, exportedAt:new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href=url; a.download="compass_data_export.json"; a.click();
@@ -3720,10 +3710,6 @@ Please produce:
           saveLeaverTemplates={saveLeaverTemplates}
           promptDialog={promptDialog}
           confirmDialog={confirmDialog}
-          users={users}
-          currentUser={currentUser}
-          saveUsers={saveUsers}
-          addUser={addUser}
           dueSoon={dueSoon}
           requestNotifications={requestNotifications}
           notifGranted={notifGranted}

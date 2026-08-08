@@ -1,8 +1,6 @@
 import { Btn, Card } from '../../components/Primitives';
-import { UserAddForm } from '../../components/UserAddForm';
-import { ROLE_PERMS } from '../../constants';
 
-export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, users, currentUser, saveUsers, addUser }) {
+export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember }) {
   if(!isHR) return null;
   return (
     <>
@@ -105,41 +103,6 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
           <Btn onClick={inviteMember} disabled={inviting||!inviteForm.name.trim()||!inviteForm.email.trim()} style={{width:"100%"}}>
             {inviting?"Sending invite...":"Send invite"}
           </Btn>
-        </div>
-      </Card>
-
-      <Card style={{marginBottom:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-          <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Users & permissions</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Manage who can access Compass. Each user has role-based permissions.</p></div>
-        </div>
-        {users.length>0&&(
-          <div style={{marginBottom:14}}>
-            {users.map(u=>(
-              <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
-                <div>
-                  <div style={{fontSize:14,color:"#1A1535",fontWeight:currentUser?.id===u.id?600:400}}>{u.name}{currentUser?.id===u.id&&" (you)"}</div>
-                  <div style={{fontSize:11,color:"#6B6880",marginTop:1}}>{u.role} {u.email?"· "+u.email:""}</div>
-                </div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <div style={{fontSize:10,color:"#5A5570"}}>
-                    {ROLE_PERMS[u.role]?.viewAll?"All cases":"Assigned only"} ·{" "}
-                    {ROLE_PERMS[u.role]?.edit?"Can edit":"Read only"}
-                  </div>
-                  <button onClick={()=>saveUsers(users.filter(x=>x.id!==u.id))} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <UserAddForm onAdd={(name,role,email)=>addUser(name,role,email)} />
-        <div style={{marginTop:12,background:"#FDFAF5",borderRadius:7,padding:"10px 14px"}}>
-          <div style={{fontSize:10,color:"#7C5CFC",fontWeight:700,letterSpacing:1,marginBottom:6}}>PERMISSIONS</div>
-          {Object.entries(ROLE_PERMS).map(([role,p])=>(
-            <div key={role} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B6880",padding:"3px 0"}}>
-              <span style={{color:"#6B6375",fontWeight:500}}>{role}</span>
-              <span>{p.viewAll?"All cases":"Assigned"} · {p.edit?"Edit":"Read"} · {p.delete?"Delete":"No delete"} · {p.viewRisk?"Risk":"No risk"}</span>
-            </div>
-          ))}
         </div>
       </Card>
     </>

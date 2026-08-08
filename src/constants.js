@@ -45,13 +45,6 @@ export const WELLBEING_RESOURCES = [
   { name:"Occupational Health", contact:"Via HR", note:"Workplace health support" },
 ];
 
-export const ROLE_PERMS = {
-  "HR Director":   { viewAll:true,  edit:true,  delete:true,  viewRisk:true  },
-  "HR Manager":    { viewAll:true,  edit:true,  delete:false, viewRisk:true  },
-  "Line Manager":  { viewAll:false, edit:false, delete:false, viewRisk:false },
-  "HR Administrator":{ viewAll:true, edit:false, delete:false, viewRisk:true },
-};
-
 export const WELLBEING_TYPES = {
   "chat": { label:"Wellbeing conversation", desc:"Informal check-in or wellbeing discussion" },
   "eap": { label:"EAP referral", desc:"Employee Assistance Programme referral" },
