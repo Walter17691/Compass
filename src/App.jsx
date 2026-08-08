@@ -31,7 +31,6 @@ import { LetterScreen } from './screens/LetterScreen';
 import { SearchScreen } from './screens/SearchScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { PrepScreen } from './screens/PrepScreen';
-import { BriefScreen } from './screens/BriefScreen';
 import { IntakeScreen } from './screens/IntakeScreen';
 import { HomeMeetingScreen } from './screens/HomeMeetingScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
@@ -404,7 +403,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [showShareModal, setShowShareModal] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [editProcessing, setEditProcessing] = useState(false);
-  const [briefData, setBriefData] = useState(null);
   const [homeChat, setHomeChat] = useState([]);
   const [askCompassHistory, setAskCompassHistory] = useState([]);
   const [showAskCompass, setShowAskCompass] = useState(false);
@@ -415,7 +413,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [askCompassProcessing, setAskCompassProcessing] = useState(false);
   const [homeChatInput, setHomeChatInput] = useState("");
   const [homeChatLoading, setHomeChatLoading] = useState(false);
-  const [briefLoading, setBriefLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
   const [activeCaseId, setActiveCaseId] = useState(() => readNavFromUrl().caseId);
 
@@ -2797,27 +2794,6 @@ Please produce:
   };
 
 
-  const generateBrief = async (empName, mtLabel) => {
-    setBriefLoading(true);
-    setBriefData(null);
-    const empCases = cases.filter(x=>x.employeeName===empName);
-    const meetings = empCases.flatMap(x=>x.meetings||[]).sort((a,b)=>new Date(b.date)-new Date(a.date));
-    const lastRisk = meetings.find(m=>m.riskScore?.rating)?.riskScore?.rating||"Unknown";
-    const nl = String.fromCharCode(10);
-    const history = meetings.slice(0,5).map(m=>m.date+": "+m.type+" - "+(m.record||"").slice(0,150)).join(nl);
-    try {
-      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:350,stream:false,
-          system:"You are a UK HR advisor. Write in plain prose only. No markdown, no asterisks, no hashes, no emojis, no horizontal rules, no bold. Use clean numbered sections with short bullet points using a simple dash character.",
-          messages:[{role:"user",content:"Prepare a brief for a "+mtLabel+" meeting with "+empName+"."+nl+"Previous meetings: "+history+nl+"Risk level: "+lastRisk+nl+nl+"Write three sections:"+nl+"1. Key context from previous meetings (2-3 bullets)"+nl+"2. Procedural or legal risks to watch for today (2-3 bullets)"+nl+"3. Specific questions the chair should ask (3 bullets)"+nl+nl+"Plain text only. Short bullet points with a dash. No markdown, no asterisks."}]
-        })});
-      const d = await res.json();
-      const txt = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      setBriefData({txt,empName,mtLabel,lastMeeting:meetings[0],count:meetings.length,lastRisk});
-    } catch(e){}
-    setBriefLoading(false);
-  };
-
   const editRecord = async (instruction) => {
     if(!instruction.trim()||!reviewOutput) return;
     setEditProcessing(true);
@@ -3370,8 +3346,7 @@ Please produce:
           getCaseStage={getCaseStage}
           currentUser={currentUser}
           getNextStep={getNextStep}
-          setMeetingType={setMeetingType}
-          setCaseInfo={setCaseInfo}
+          setMeetingSetup={setMeetingSetup}
           setScreen={setScreen}
           setShowCasePrompt={setShowCasePrompt}
           dueSoon={dueSoon}
@@ -3391,12 +3366,7 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} generateBrief={generateBrief} startSession={startSession} />
-      )}
-
-      {/* ══ BRIEF ══ */}
-      {screen===SCREENS.BRIEF&&(
-        <BriefScreen setScreen={setScreen} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} cases={cases} currentUser={currentUser} orgMembers={orgMembers} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} getCaseStage={getCaseStage} fmtDate={fmtDate} showToast={showToast} setTranscript={setTranscript} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setParticipants={setParticipants} startSession={startSession} />
+        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} fmtDate={fmtDate} startSession={startSession} />
       )}
 
             {screen===SCREENS.PEOPLE&&(

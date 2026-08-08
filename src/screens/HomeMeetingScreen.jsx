@@ -2,7 +2,26 @@ import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { CheckIcon, WarningIcon } from '../components/Icons';
 
-export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, generateBrief, startSession }) {
+// The one meeting-setup form — reached both from contextual entry points
+// (a case's "Start meeting", "+ Witness interview", PersonViewScreen's
+// "New meeting", which pre-fill meetingSetup before navigating here) and
+// from Home's generic "Start meeting"/"Schedule meeting" buttons (blank
+// slate). Those used to be two separately hand-built forms — this one and
+// BriefScreen — which had drifted: this one's meeting-type list was a
+// hardcoded 8 of the 17 real types (missing Formal Meeting, PDP/1-2-1,
+// both Grievance/Dismissal Appeal, and 3 of the 4 redundancy stages —
+// selectable in BriefScreen but not here), while BriefScreen was missing
+// this screen's invitation-letter drafting and witness-interview handling.
+// BriefScreen also duplicated every field HomeMeetingScreen had already
+// collected (reachable as a "second step" for employees with case
+// history) and was meant to show an AI-generated meeting brief there
+// (generateBrief/briefData in App.jsx) but never actually rendered it —
+// the API call fired and the result was discarded. Removed rather than
+// wired up: a real feature is worth building deliberately, not smuggled
+// into a cleanup pass.
+const FORMAL_MEETING_TYPES = MEETING_TYPES.filter(t => t.group !== "dev");
+
+export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
@@ -13,6 +32,10 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
     setMeetingSetup(p=>({...p, participants:[...(p.participants||[]), {name:newParticipantName.trim(), role:newParticipantRole}]}));
     setNewParticipantName("");
   };
+  const selectedType = MEETING_TYPES.find(t=>t.id===meetingSetup.type);
+  const prevMeetings = meetingSetup.employee
+    ? cases.filter(cs=>cs.employeeName===meetingSetup.employee.trim()).flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date))
+    : [];
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
       <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"48px 24px"}}>
@@ -39,6 +62,16 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             <input placeholder="e.g. HR Manager"
               value={meetingSetup.chairJobTitle||""}
               onChange={e=>setMeetingSetup(p=>({...p,chairJobTitle:e.target.value}))}
+              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+              onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+              onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+          </div>
+
+          <div style={{marginBottom:20}}>
+            <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Notetaker <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+            <input placeholder="Name of notetaker"
+              value={meetingSetup.notetaker||""}
+              onChange={e=>setMeetingSetup(p=>({...p,notetaker:e.target.value}))}
               style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
               onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
               onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
@@ -77,6 +110,17 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
                 style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
                 onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
                 onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+            </div>
+          )}
+
+          {!meetingSetup.linkedCaseId&&(
+            <div style={{marginBottom:20}}>
+              <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Link to case <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+              <select value={activeCaseId||""} onChange={e=>{setActiveCaseId(e.target.value);const cs=cases.find(x=>x.id===e.target.value);if(cs){setMeetingSetup(p=>({...p,employee:cs.employeeName}));}}}
+                style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
+                <option value="">No case linked</option>
+                {cases.filter(cs=>getCaseStage(cs)!=="closed").map(cs=><option key={cs.id} value={cs.id}>{cs.employeeName} — {cs.caseType||"HR Matter"}</option>)}
+              </select>
             </div>
           )}
 
@@ -144,28 +188,34 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
 
           <div style={{marginBottom:20}}>
             <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Meeting type</label>
-            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
-              {[
-                {id:"investigation",label:"Investigation",desc:"Fact-finding before formal action"},
-                {id:"disciplinary",label:"Disciplinary hearing",desc:"Formal disciplinary process"},
-                {id:"grievance",label:"Grievance",desc:"Employee raised a concern"},
-                {id:"redundancy-atrisk",label:"Redundancy consultation",desc:"At risk or confirmed redundancy"},
-                {id:"return",label:"Return to work",desc:"After sickness absence"},
-                {id:"informal",label:"Informal / 1-1",desc:"General check-in"},
-                {id:"appeal-disciplinary",label:"Appeal",desc:"Appeal against a decision"},
-                {id:"pip-review",label:"Performance review",desc:"PIP or performance discussion"},
-              ].map((t,i,arr)=>(
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",maxHeight:340,overflowY:"auto"}}>
+              {FORMAL_MEETING_TYPES.map((t,i,arr)=>(
                 <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
                   style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",border:"none",borderBottom:i<arr.length-1?"1px solid #F5F1EA":"none",borderLeft:`3px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,cursor:"pointer",textAlign:"left",transition:"all 0.1s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                   <div>
                     <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:400,color:meetingSetup.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
-                    <div style={{fontSize:12,color:"#9B9098",marginTop:1}}>{t.desc}</div>
+                    {t.tag&&<div style={{fontSize:11,color:"#9B9098",marginTop:1}}>{t.tag}</div>}
                   </div>
                   {meetingSetup.type===t.id&&<CheckIcon size={14} color="#7C5CFC" style={{marginLeft:8}} />}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* ACAS guidance for the selected type */}
+          {selectedType&&(
+            <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>ACAS guidance — {selectedType.label}</div>
+              <div style={{fontSize:12,color:"#6B6375",lineHeight:1.7}}>
+                {selectedType.id==="investigation"&&"Conduct the investigation without unreasonable delay. Keep an open mind — the purpose is to establish facts, not to reach a conclusion. The employee has no statutory right to be accompanied at an investigatory meeting (unless your policy provides for this). Do not pre-judge the outcome."}
+                {selectedType.id==="disciplinary"&&"The employee has a statutory right to be accompanied. State the nature of the allegation clearly. Give the employee a genuine opportunity to respond before any decision is made. Do not confirm a decision at the hearing — take time to consider and communicate the outcome in writing."}
+                {selectedType.id==="grievance"&&"Listen carefully and remain neutral. The employee should be given the opportunity to fully explain their grievance. They have the right to be accompanied. You should investigate the grievance and respond in writing within a reasonable timeframe."}
+                {selectedType.id==="return"&&"Welcome the employee back. Discuss the nature of their absence sensitively. Identify any support or adjustments needed. This is not a disciplinary meeting."}
+                {selectedType.id==="pip-review"&&"Focus on specific, measurable performance concerns. The employee should be given a realistic opportunity to improve. Consider whether training or support is appropriate before moving to formal action."}
+                {!["investigation","disciplinary","grievance","return","pip-review"].includes(selectedType.id)&&"Ensure you have a clear agenda and objective for this meeting. Keep notes and follow up in writing where appropriate."}
+              </div>
+            </div>
+          )}
 
           {/* Invitation warning */}
           {meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
@@ -200,6 +250,24 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             </div>
           )}
 
+          {/* Previous meetings with this employee */}
+          {prevMeetings.length>0&&(
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Previous meetings with {meetingSetup.employee}</div>
+              {prevMeetings.slice(0,3).map((m,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<Math.min(prevMeetings.length,3)-1?"1px solid #F5F1EA":"none"}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:"#7C5CFC",flexShrink:0}}/>
+                  <div style={{flex:1}}>
+                    <span style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{m.type}</span>
+                    <span style={{fontSize:11,color:"#9B9098",marginLeft:8}}>{fmtDate(m.date)}</span>
+                  </div>
+                  {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 6px"}}>Signed</span>}
+                </div>
+              ))}
+              {prevMeetings.length>3&&<div style={{fontSize:11,color:"#9B9098",marginTop:8}}>{prevMeetings.length-3} more meetings on record</div>}
+            </div>
+          )}
+
           <div style={{marginBottom:28}}>
             <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Date</label>
             <input type="date" value={meetingSetup.date}
@@ -216,10 +284,9 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               if(mt.group==="dev"){ startSession(mt); return; }
               setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
               setTranscript([]);setPrepNotes("");setReviewOutput("");setReviewOutputOriginal("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);
-              const hasPrev=cases.some(cs=>cs.employeeName===meetingSetup.employee.trim());
-              if(hasPrev){generateBrief(meetingSetup.employee.trim(),mt.label);setScreen(SCREENS.BRIEF);}else{setScreen(SCREENS.RECORD);}
+              setScreen(SCREENS.RECORD);
             }}
             style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9B9098":"#FFFFFF",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
             Start meeting

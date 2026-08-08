@@ -6,7 +6,8 @@ import { getCurrentRisk } from '../lib/caseStage';
 // render its own separate copy here, which had drifted out of sync with
 // the shared one (different height, padding, logo size) and caused a
 // visible layout jump on every navigation away from Home.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingType, setCaseInfo, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
+  const freshMeetingSetup = () => ({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -29,7 +30,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
             </p>
           </div>
           <div style={{display:"flex",gap:10,flexShrink:0,marginTop:4}}>
-            <button onClick={()=>{setMeetingType(null);setCaseInfo(p=>({...p,employee:"",employeeJobTitle:"",manager:currentUser?.name||"",chairJobTitle:"",date:new Date().toISOString().split("T")[0]}));setScreen(SCREENS.BRIEF);}} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
+            <button onClick={()=>{setMeetingSetup(freshMeetingSetup());setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
             <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
           </div>
         </div>
@@ -207,7 +208,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                       <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>This week</div>
                       <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Calendar</div>
                     </div>
-                    <button onClick={()=>{setMeetingType(null);setCaseInfo(p=>({...p,employee:"",manager:currentUser?.name||"",date:new Date().toISOString().split("T")[0]}));setScreen(SCREENS.BRIEF);}} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Schedule meeting</button>
+                    <button onClick={()=>{setMeetingSetup(freshMeetingSetup());setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Schedule meeting</button>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
                     {weekDays.map((d,i)=>{
