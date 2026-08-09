@@ -18,7 +18,7 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-const STAGE_LABEL = { intake:"Intake", investigation:"Investigation", inv_report:"Investigation report", disciplinary:"Disciplinary", outcome:"Outcome", appeal:"Appeal", closed:"Closed" };
+const STAGE_LABEL = { intake:"Intake", investigation:"Investigation", inv_report:"Investigation report", disciplinary:"Disciplinary", hearing:"Grievance hearing", outcome:"Outcome", appeal:"Appeal", closed:"Closed" };
 
 // Owner/priority filters only have real data to filter on for cases
 // created since the "+ New case" modal started writing cases.ownerId/

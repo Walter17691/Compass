@@ -16,7 +16,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
   const caseTypeList = Object.entries(casesByType).sort((a,b)=>b[1]-a[1]);
 
   // Case stage breakdown
-  const byStage = {open:0,investigation:0,disciplinary:0,closed:0,appeal:0};
+  const byStage = {open:0,investigation:0,disciplinary:0,hearing:0,closed:0,appeal:0};
   cases.forEach(cs=>{const s=getCaseStage(cs);if(byStage[s]!==undefined)byStage[s]++;});
 
   // Outcomes
@@ -271,10 +271,11 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
               {label:"Open",value:byStage.open,color:"#9B9098"},
               {label:"Investigation",value:byStage.investigation,color:"#7C5CFC"},
               {label:"Disciplinary",value:byStage.disciplinary,color:"#C84B2F"},
+              {label:"Grievance hearing",value:byStage.hearing,color:"#7C5CFC"},
               {label:"Appeal",value:byStage.appeal,color:"#B87520"},
               {label:"Closed",value:byStage.closed,color:"#1A7A4A"},
             ].filter(s=>s.value>0).map((s,i)=>(
-              <BarRow key={i} label={s.label} value={s.value} max={Math.max(...[byStage.open,byStage.investigation,byStage.disciplinary,byStage.appeal,byStage.closed],1)} color={s.color}/>
+              <BarRow key={i} label={s.label} value={s.value} max={Math.max(...[byStage.open,byStage.investigation,byStage.disciplinary,byStage.hearing,byStage.appeal,byStage.closed],1)} color={s.color}/>
             ))}
           </div>
 

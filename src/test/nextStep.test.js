@@ -133,4 +133,65 @@ describe('getNextStep', () => {
   it('returns null for an unrecognised stage', () => {
     expect(getNextStep({ stage: 'some_future_stage', meetings: [] })).toBeNull();
   });
+
+  it('every branch carries a meetingType so consumers never re-derive it from the action name', () => {
+    const step = getNextStep({ stage: 'investigation', meetings: [] });
+    expect(step.meetingType).toBe('investigation');
+  });
+});
+
+describe('getNextStep — grievance-shaped cases', () => {
+  const grievanceCase = (stage, meetings = []) => ({ caseType: 'grievance', stage, meetings });
+
+  it('recommends scheduling a grievance meeting from intake, not an investigation', () => {
+    const step = getNextStep(grievanceCase('intake'));
+    expect(step.action).toBe('start_hearing');
+    expect(step.meetingType).toBe('grievance');
+  });
+
+  describe('hearing stage', () => {
+    it('recommends starting the meeting when none has been recorded', () => {
+      const step = getNextStep(grievanceCase('hearing'));
+      expect(step.action).toBe('start_hearing');
+    });
+
+    it('recommends signature once a record exists but is unsigned', () => {
+      const step = getNextStep(grievanceCase('hearing', [{ type: 'Grievance', record: 'notes', signStatus: 'pending' }]));
+      expect(step.action).toBe('send_signature');
+      expect(step.meetingType).toBe('grievance');
+    });
+
+    it('recommends drafting the outcome letter once signed with no outcome yet — not the disciplinary inv_report branch', () => {
+      const step = getNextStep(grievanceCase('hearing', [{ type: 'Grievance', record: 'notes', signStatus: 'signed' }]));
+      expect(step.action).toBe('outcome_letter');
+    });
+
+    it('reaches post_outcome once signed with an outcome letter present, same appeal-window protection as disciplinary', () => {
+      const step = getNextStep(grievanceCase('hearing', [{ type: 'Grievance', record: 'notes', signStatus: 'signed', letterOutput: '...' }]));
+      expect(step.action).toBe('post_outcome');
+    });
+  });
+
+  it('recommends closing at the outcome stage', () => {
+    expect(getNextStep(grievanceCase('outcome')).action).toBe('close_case');
+  });
+
+  describe('appeal stage', () => {
+    it('recommends starting the grievance appeal hearing, with the grievance-appeal meetingType', () => {
+      const step = getNextStep(grievanceCase('appeal'));
+      expect(step.action).toBe('start_appeal_meeting');
+      expect(step.meetingType).toBe('appeal-grievance');
+    });
+
+    it('recommends closing once the appeal outcome is issued', () => {
+      const step = getNextStep(grievanceCase('appeal', [{ type: 'Grievance Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }]));
+      expect(step.action).toBe('close_case');
+    });
+  });
+
+  it('never returns a disciplinary-only action like inv_report or disciplinary_invite', () => {
+    const allActions = ['intake','hearing','outcome','appeal'].map(stage => getNextStep(grievanceCase(stage))?.action);
+    expect(allActions).not.toContain('inv_report');
+    expect(allActions).not.toContain('disciplinary_invite');
+  });
 });

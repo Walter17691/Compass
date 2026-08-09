@@ -1,17 +1,29 @@
-// Absorbs the case view's former top-level "stage tabs" (Investigation /
-// Disciplinary / Appeal / Other) as an internal sub-filter now that
-// they're specifically about which meetings to show, not which workspace
-// tab is active. The investigation-report and disciplinary-officer-
-// handoff blocks stay grouped with the Investigation meetings list
-// (their natural narrative position) rather than moving to Outcome,
-// which is specifically about the disciplinary decision itself.
+import { isGrievanceCase } from '../../lib/caseStage';
+
+// Absorbs the case view's former top-level "stage tabs" as an internal
+// sub-filter now that they're specifically about which meetings to show,
+// not which workspace tab is active. Grievance-typed cases get a single
+// "Grievance" pill instead of the disciplinary shape's Investigation +
+// Disciplinary split — ACAS S6 has no equivalent separation, one meeting
+// type ("Grievance") covers the hearing itself. The investigation-report
+// and disciplinary-officer-handoff blocks stay grouped with the
+// Investigation meetings list (their natural narrative position, and
+// disciplinary-only — a grievance case never shows them) rather than
+// moving to Outcome, which is specifically about the decision itself.
 export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, concludeInvestigation, concludingInvestigation, setShowHandoffModal, setLetterOutput }) {
+  const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary")).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const grievanceMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("grievance")&&!(m.type||"").toLowerCase().includes("appeal")).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const appealMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal")).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const otherMeetings = meetings.filter(m=>!["investigation","disciplinary","appeal"].some(t=>(m.type||"").toLowerCase().includes(t))).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const allStages = [
+  const knownTerms = grievance ? ["grievance","appeal"] : ["investigation","disciplinary","appeal"];
+  const otherMeetings = meetings.filter(m=>!knownTerms.some(t=>(m.type||"").toLowerCase().includes(t))).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const allStages = grievance ? [
+    {id:"hearing",label:"Grievance",meetings:grievanceMeetings,color:"#7C5CFC"},
+    {id:"appeal",label:"Appeal",meetings:appealMeetings,color:"#B87520"},
+    ...(otherMeetings.length>0?[{id:"other",label:"Other",meetings:otherMeetings,color:"#6B6375"}]:[]),
+  ].filter(s=>s.meetings.length>0||s.id==="hearing") : [
     {id:"investigation",label:"Investigation",meetings:invMeetings,color:"#7C5CFC"},
     {id:"disciplinary",label:"Disciplinary",meetings:discMeetings,color:"#C84B2F"},
     {id:"appeal",label:"Appeal",meetings:appealMeetings,color:"#B87520"},
@@ -24,7 +36,12 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
     setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
     setScreen(screens.HOME+"_meeting");
   };
-  const typeFor = stageId => stageId==="investigation"?"investigation":stageId==="appeal"?"appeal-disciplinary":"disciplinary";
+  const typeFor = stageId => {
+    if(stageId==="appeal") return grievance ? "appeal-grievance" : "appeal-disciplinary";
+    if(stageId==="hearing") return "grievance";
+    if(stageId==="investigation") return "investigation";
+    return "disciplinary";
+  };
 
   const MeetingRow = ({m}) => (
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid #F5F1EA",gap:12}}>

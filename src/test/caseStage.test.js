@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCurrentRisk, getCaseStage } from '../lib/caseStage.js';
+import { getCurrentRisk, getCaseStage, isGrievanceCase } from '../lib/caseStage.js';
 
 describe('getCaseStage', () => {
   it('an explicitly-tracked stage wins over the signed+outcome heuristic', () => {
@@ -44,6 +44,49 @@ describe('getCaseStage', () => {
 
   it('defaults to "intake" for a brand-new case with no meetings and no tracked stage', () => {
     expect(getCaseStage({ meetings: [] })).toBe('intake');
+  });
+});
+
+describe('getCaseStage — grievance-shaped cases', () => {
+  it('infers "hearing" (not "investigation") for a grievance case with a grievance meeting, since ACAS S6 has no separate investigation split', () => {
+    const cs = { caseType: 'grievance', meetings: [{ type: 'Grievance', record: 'notes' }] };
+    expect(getCaseStage(cs)).toBe('hearing');
+  });
+
+  it('is case-insensitive on caseType', () => {
+    expect(isGrievanceCase({ caseType: 'Grievance' })).toBe(true);
+    expect(isGrievanceCase({ caseType: 'misconduct' })).toBe(false);
+  });
+
+  it('defaults a grievance case with no meetings to "intake", not "investigation"', () => {
+    expect(getCaseStage({ caseType: 'grievance', meetings: [] })).toBe('intake');
+  });
+
+  it('infers "appeal" for a grievance case with a grievance appeal meeting', () => {
+    const cs = { caseType: 'grievance', meetings: [{ type: 'Grievance', letterOutput: 'x' }, { type: 'Grievance Appeal', record: 'notes' }] };
+    expect(getCaseStage(cs)).toBe('appeal');
+  });
+
+  it('infers "outcome" once a grievance meeting has a letter, before any appeal', () => {
+    const cs = { caseType: 'grievance', meetings: [{ type: 'Grievance', letterOutput: 'the outcome letter' }] };
+    expect(getCaseStage(cs)).toBe('outcome');
+  });
+
+  it('infers "closed" once signed and outcome-lettered, same protection as disciplinary', () => {
+    const cs = { caseType: 'grievance', meetings: [{ type: 'Grievance', signStatus: 'signed', letterOutput: 'the outcome letter' }] };
+    expect(getCaseStage(cs)).toBe('closed');
+  });
+
+  it('an explicitly-tracked stage still wins over the grievance heuristic', () => {
+    const cs = { caseType: 'grievance', stage: 'outcome', meetings: [{ type: 'Grievance', signStatus: 'signed', letterOutput: 'x' }] };
+    expect(getCaseStage(cs)).toBe('outcome');
+  });
+
+  it('a non-grievance case type still uses the disciplinary-shaped heuristic', () => {
+    const cs = { caseType: 'misconduct', meetings: [{ type: 'Grievance', record: 'notes' }] };
+    // "Grievance" meeting type text doesn't match any disciplinary-shape
+    // keyword, so this falls through to the generic "has meetings" case.
+    expect(getCaseStage(cs)).toBe('investigation');
   });
 });
 

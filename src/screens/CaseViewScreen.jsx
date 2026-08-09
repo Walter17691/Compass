@@ -55,7 +55,10 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const screens = SCREENS;
 
   const startMeetingFromHeader = () => {
-    const type = stage==="investigation"?"investigation":stage==="appeal"?"appeal-disciplinary":"disciplinary";
+    // nextStep already carries the type-aware meetingType for wherever
+    // this case actually is (disciplinary vs grievance shaped); only a
+    // closed case (nextStep null) falls back to the old default.
+    const type = nextStep?.meetingType || (stage==="investigation"?"investigation":stage==="appeal"?"appeal-disciplinary":"disciplinary");
     setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));
     setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
     setScreen(SCREENS.HOME+"_meeting");
@@ -113,11 +116,28 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             <div style={{display:"flex",gap:8,flexShrink:0}}>
               {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true});}}} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.secondary.label}</button>}
               <button onClick={()=>{
-                if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.action==="start_investigation"?"investigation":nextStep.action==="start_appeal_meeting"?"appeal-disciplinary":"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
-                else if(nextStep.action==="send_signature"){const rel=meetings.filter(m=>(m.type||"").toLowerCase().includes(stage==="appeal"?"appeal":stage==="investigation"?"investigation":"disciplinary"));const m=rel[0]||meetings[meetings.length-1];if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
+                // meetingType-derived search term for finding "the meeting
+                // this step is about" among cs.meetings — meeting records
+                // store the human label (e.g. "Disciplinary Appeal",
+                // "Grievance"), not the MEETING_TYPES id, so an
+                // "appeal-*" meetingType searches generically for
+                // "appeal" rather than the id's own hyphenated form.
+                const searchTerm = nextStep.meetingType?.startsWith("appeal-") ? "appeal" : nextStep.meetingType;
+                const relevantMeeting = () => meetings.filter(m=>(m.type||"").toLowerCase().includes(searchTerm||""))[0]||meetings[meetings.length-1];
+                if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.meetingType||"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
+                else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
                 else if(nextStep.action==="inv_report"){concludeInvestigation(cs.id);}
                 else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true});}
-                else if(nextStep.action==="outcome_letter"||nextStep.action==="appeal_letter"){const m=meetings.filter(mt=>(mt.type||"").toLowerCase().includes("disciplinary"))[0]||meetings[meetings.length-1];if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});}
+                else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});}
+                else if(nextStep.action==="appeal_letter"){
+                  // Was previously handled identically to outcome_letter —
+                  // drafted an "outcome" letter and regressed stage from
+                  // "appeal" back to "outcome", even though the case had
+                  // already progressed past that point. The appeal is the
+                  // final stage (ACAS Code); this only closes on an
+                  // explicit close_case, never silently un-does progress.
+                  const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true});
+                }
                 else if(nextStep.action==="close_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));}
               }} disabled={nextStep.action==="inv_report"&&concludingInvestigation} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:(nextStep.action==="inv_report"&&concludingInvestigation)?"not-allowed":"pointer",opacity:(nextStep.action==="inv_report"&&concludingInvestigation)?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
             </div>

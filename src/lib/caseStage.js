@@ -1,9 +1,46 @@
-export function getCaseStage(cs) {
+// Stage-inference heuristics, one per case-type "shape". Disciplinary
+// (investigation -> inv_report -> disciplinary -> outcome -> appeal ->
+// closed) is the default and covers misconduct/capability/attendance/etc
+// — anything without its own table below. Grievance (ACAS S6) has no
+// separate investigation-vs-hearing split the way disciplinary does, so
+// it collapses to intake -> hearing -> outcome -> appeal -> closed.
+// Probation/appraisal/PDP stay on DevelopScreen's own separate, working
+// flow (confirmed decision, not folded in here) — cs.caseType never
+// matches those, so they always fall through to the disciplinary default,
+// same as before this file had per-type tables at all.
+function inferDisciplinaryStage(cs) {
   const meetings = cs.meetings||[];
   const types = meetings.map(m=>(m.type||"").toLowerCase());
   const hasOutcome = meetings.some(m=>m.letterOutput);
   const hasSigned = meetings.some(m=>m.signStatus==="signed");
   const hasInvReport = cs.investigationReport;
+  if(hasSigned&&hasOutcome) return "closed";
+  if(types.some(t=>t.includes("appeal"))) return "appeal";
+  if(hasOutcome) return "outcome";
+  if(types.some(t=>t.includes("disciplinary"))) return "disciplinary";
+  if(hasInvReport) return "inv_report";
+  if(types.some(t=>t.includes("investigation"))) return "investigation";
+  if(meetings.length>0) return "investigation";
+  return "intake";
+}
+
+function inferGrievanceStage(cs) {
+  const meetings = cs.meetings||[];
+  const types = meetings.map(m=>(m.type||"").toLowerCase());
+  const hasOutcome = meetings.some(m=>m.letterOutput);
+  const hasSigned = meetings.some(m=>m.signStatus==="signed");
+  if(hasSigned&&hasOutcome) return "closed";
+  if(types.some(t=>t.includes("appeal"))) return "appeal";
+  if(hasOutcome) return "outcome";
+  if(types.some(t=>t.includes("grievance"))) return "hearing";
+  return "intake";
+}
+
+export function isGrievanceCase(cs) {
+  return (cs?.caseType||"").toLowerCase()==="grievance";
+}
+
+export function getCaseStage(cs) {
   if(cs.stage==="closed") return "closed";
   // An explicitly-tracked stage always wins over the heuristic below. The
   // guided flow sets cs.stage at every real transition (disciplinary,
@@ -19,14 +56,7 @@ export function getCaseStage(cs) {
   // Moved here, the heuristic only ever fires for cases with no tracked
   // stage at all — meeting-only data added outside the guided flow.
   if(cs.stage) return cs.stage;
-  if(hasSigned&&hasOutcome) return "closed";
-  if(types.some(t=>t.includes("appeal"))) return "appeal";
-  if(hasOutcome) return "outcome";
-  if(types.some(t=>t.includes("disciplinary"))) return "disciplinary";
-  if(hasInvReport) return "inv_report";
-  if(types.some(t=>t.includes("investigation"))) return "investigation";
-  if(meetings.length>0) return "investigation";
-  return "intake";
+  return isGrievanceCase(cs) ? inferGrievanceStage(cs) : inferDisciplinaryStage(cs);
 }
 
 // "Currently" risk, not "ever was" — the most recent meeting that carries a
