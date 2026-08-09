@@ -6,20 +6,14 @@ import { getCaseStage } from './caseStage.js';
 // the disciplinary/appeal lifecycle needs a correct, ACAS-Code-grounded
 // recommendation here.
 //
-// KNOWN GAP: the disciplinary "post_outcome" and appeal's final
-// "close_case" branches below are effectively unreachable in real usage.
-// getCaseStage() (./caseStage.js) auto-classifies a case as "closed" the
-// moment ANY meeting is signed AND ANY meeting carries a letter output —
-// checked across the whole meetings array, not scoped to one meeting —
-// which is exactly the combination a signed hearing + saved outcome
-// letter produces (each saveMeetingToCase call appends a new meeting
-// entry, so they're usually two different entries). That happens before
-// the appeal window has necessarily run. Net effect: cases can be
-// silently marked closed while an appeal is still legally live, which
-// also suppresses the appeal-window deadline in deadlines.js (it skips
-// closed cases outright). See src/test/nextStep.test.js for the tests
-// that caught this — left unfixed here since changing getCaseStage's
-// classification affects every screen that reads case stage.
+// The disciplinary "post_outcome" and appeal's final "close_case"
+// branches below used to be effectively unreachable: getCaseStage()
+// auto-classified a case as "closed" the moment any meeting was signed
+// and any meeting carried a letter output, checked across the whole
+// meetings array — exactly the combination a signed hearing + its saved
+// outcome letter produces — before the appeal window had necessarily
+// run. Fixed in caseStage.js by making an explicitly-tracked cs.stage
+// win over that heuristic, so these branches are now reachable.
 export function getNextStep(cs) {
   if(getCaseStage(cs)==="closed") return null;
   const stage = getCaseStage(cs);

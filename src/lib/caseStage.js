@@ -5,8 +5,21 @@ export function getCaseStage(cs) {
   const hasSigned = meetings.some(m=>m.signStatus==="signed");
   const hasInvReport = cs.investigationReport;
   if(cs.stage==="closed") return "closed";
-  if(hasSigned&&hasOutcome) return "closed";
+  // An explicitly-tracked stage always wins over the heuristic below. The
+  // guided flow sets cs.stage at every real transition (disciplinary,
+  // outcome, appeal, closed), including the moment an outcome letter is
+  // drafted — so a case correctly sitting at "outcome" almost immediately
+  // satisfies hasSigned&&hasOutcome too (the hearing gets signed, then the
+  // outcome letter is saved as a separate meeting entry). Checking the
+  // heuristic first used to silently reclassify that case as "closed"
+  // while its 5-working-day ACAS appeal window was still legally live —
+  // which also suppressed the appeal-window deadline in deadlines.js
+  // (skips closed cases) and returned null from getNextStep, showing no
+  // guidance at all during a window HR actually needs to be watching.
+  // Moved here, the heuristic only ever fires for cases with no tracked
+  // stage at all — meeting-only data added outside the guided flow.
   if(cs.stage) return cs.stage;
+  if(hasSigned&&hasOutcome) return "closed";
   if(types.some(t=>t.includes("appeal"))) return "appeal";
   if(hasOutcome) return "outcome";
   if(types.some(t=>t.includes("disciplinary"))) return "disciplinary";

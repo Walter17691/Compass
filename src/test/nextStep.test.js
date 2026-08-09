@@ -75,24 +75,19 @@ describe('getNextStep', () => {
       expect(step.reason).toMatch(/5 working days/);
     });
 
-    // NOTE: this does NOT reach getNextStep's "post_outcome" branch. Once
-    // any meeting in the case is signed AND any meeting carries a letter
-    // output, getCaseStage()'s blanket closed-detection classifies the
-    // whole case as "closed" first — regardless of appeal status — so
-    // getNextStep short-circuits to null before the switch runs. In real
-    // usage this is exactly what happens once a signed disciplinary
-    // hearing has its outcome letter saved (a separate meeting entry via
-    // saveMeetingToCase), which also means the 5-working-day appeal-window
-    // deadline in deadlines.js never fires for it, since computeDueSoon
-    // skips closed cases too. Asserting the current (surprising) behavior
-    // here rather than the unreachable intent — see conversation for the
-    // getCaseStage fix this points at.
-    it('is short-circuited to null once the case is auto-classified "closed" (signed + outcome letter present anywhere)', () => {
+    // getCaseStage() used to auto-classify a case as "closed" the moment
+    // any meeting was signed and any meeting carried a letter output —
+    // exactly what a signed hearing + saved outcome letter produces —
+    // which pre-empted this "outcome issued, appeal window may still be
+    // open" recommendation before it could ever be reached. Fixed by
+    // making the explicitly-tracked stage ('disciplinary' here) win over
+    // that heuristic.
+    it('reaches post_outcome once signed with an outcome letter present, rather than being short-circuited to a false "closed"', () => {
       const step = getNextStep({
         stage: 'disciplinary',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: '...' }],
       });
-      expect(step).toBeNull();
+      expect(step.action).toBe('post_outcome');
     });
   });
 
@@ -123,15 +118,15 @@ describe('getNextStep', () => {
       expect(step.action).toBe('appeal_letter');
     });
 
-    // Same getCaseStage interaction as the disciplinary case above — a
-    // signed appeal meeting with its outcome letter attached auto-closes
-    // the case before this branch is ever reached.
-    it('is short-circuited to null once the case is auto-classified "closed" (signed + appeal outcome present anywhere)', () => {
+    // Same getCaseStage fix as the disciplinary case above — a signed
+    // appeal meeting with its outcome letter attached no longer
+    // auto-closes the case before this final branch is reached.
+    it('recommends closing once the appeal outcome is issued, rather than being short-circuited to a false "closed"', () => {
       const step = getNextStep({
         stage: 'appeal',
         meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }],
       });
-      expect(step).toBeNull();
+      expect(step.action).toBe('close_case');
     });
   });
 
