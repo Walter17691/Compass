@@ -3335,7 +3335,19 @@ Please produce:
                     caseType: newCaseType,
                     description: newCaseDescription,
                     dateReceived: new Date().toISOString().split("T")[0],
-                    stage: "open",
+                    // No explicit stage — same as a case created by starting
+                    // a meeting first. getCaseStage() infers "intake" for a
+                    // fresh case with no meetings, which is the one stage
+                    // getNextStep() actually has a recommendation for
+                    // ("Schedule investigation meeting"). Hardcoding
+                    // stage:"open" here used to permanently stick every
+                    // case created via this form at a stage getNextStep's
+                    // switch doesn't recognise (it falls to the default
+                    // null branch), so Case Copilot never showed any
+                    // guidance for it at all, from creation onward — the
+                    // most prominent "create a case" entry point on Home
+                    // silently produced cases with no next-step guidance,
+                    // ever, unlike cases created by starting a meeting first.
                     meetings: [],
                     evidence: [],
                     urgency: "normal",
