@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
+import { matchesCaseFilters } from '../lib/caseFilters';
 import { LockIcon } from '../components/Icons';
 import { useLoadMore } from '../hooks/useLoadMore';
 
@@ -17,8 +18,26 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
+const STAGE_LABEL = { intake:"Intake", investigation:"Investigation", inv_report:"Investigation report", disciplinary:"Disciplinary", outcome:"Outcome", appeal:"Appeal", closed:"Closed" };
+
+// Type/stage/status/location/date-opened are filterable now because every
+// case already carries real data for them. Owner and priority (also
+// listed in the gap-analysis audit) aren't yet — cases.manager/owner_id/
+// priority exist as columns (supabase/case_structure_2026-08-09.sql) but
+// nothing writes them until the case-creation form gets those fields
+// (a later phase), so a filter over them today would just be an "All"
+// dropdown with nothing else in it.
+export function CasesScreen({ cases, locations, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
   const [selected, setSelected] = useState(new Set());
+  const [filters, setFilters] = useState({ type:"", stage:"", status:"", locationId:"", from:"", to:"" });
+  const setFilter = (key, value) => setFilters(f=>({...f, [key]:value}));
+  const clearFilters = () => setFilters({ type:"", stage:"", status:"", locationId:"", from:"", to:"" });
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
+  const caseTypes = [...new Set(cases.map(cs=>cs.caseType).filter(Boolean))].sort();
+  const stages = [...new Set(cases.map(cs=>getCaseStage(cs)))].filter(Boolean);
+
+  const filteredCases = cases.filter(cs => matchesCaseFilters(cs, filters, getCaseStage));
   const toggleSelected = id => setSelected(s=>{const n=new Set(s); n.has(id)?n.delete(id):n.add(id); return n;});
   const bulkClose = async () => {
     const ok = await confirmDialog({title:`Close ${selected.size} case${selected.size!==1?"s":""}?`, message:"These will be marked closed. You can still view them, and reopen individually if needed.", confirmLabel:"Close", danger:true});
@@ -32,7 +51,7 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
     downloadJson(chosen, `compass_cases_export_${new Date().toISOString().split("T")[0]}.json`);
     showToast(`Exported ${chosen.length} case${chosen.length!==1?"s":""}`);
   };
-  const allEmployees = [...new Set(cases.map(cs=>cs.employeeName))];
+  const allEmployees = [...new Set(filteredCases.map(cs=>cs.employeeName))];
   const { visible: employees, hasMore, loadMore, total } = useLoadMore(allEmployees, 15);
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
@@ -64,9 +83,45 @@ export function CasesScreen({ cases, setIntake, setScreen, getCaseStage, setActi
             <button onClick={()=>setScreen(SCREENS.INTAKE)} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"12px 28px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Create first case →</button>
           </div>
         )}
+        {cases.length>0&&(
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+            <select value={filters.type} onChange={e=>setFilter("type", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+              <option value="">All types</option>
+              {caseTypes.map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={filters.stage} onChange={e=>setFilter("stage", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+              <option value="">All stages</option>
+              {stages.map(s=><option key={s} value={s}>{STAGE_LABEL[s]||s}</option>)}
+            </select>
+            <select value={filters.status} onChange={e=>setFilter("status", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="closed">Closed</option>
+            </select>
+            {locations?.length>0&&(
+              <select value={filters.locationId} onChange={e=>setFilter("locationId", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+                <option value="">All locations</option>
+                {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            )}
+            <label style={{fontSize:12,color:"#6B6375",display:"flex",alignItems:"center",gap:4}}>
+              From <input type="date" value={filters.from} onChange={e=>setFilter("from", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 8px",color:"#1A1535"}}/>
+            </label>
+            <label style={{fontSize:12,color:"#6B6375",display:"flex",alignItems:"center",gap:4}}>
+              To <input type="date" value={filters.to} onChange={e=>setFilter("to", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 8px",color:"#1A1535"}}/>
+            </label>
+            {activeFilterCount>0&&<button onClick={clearFilters} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear filters ({activeFilterCount})</button>}
+          </div>
+        )}
+        {cases.length>0&&filteredCases.length===0&&(
+          <div style={{textAlign:"center",padding:"60px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
+            <div style={{fontSize:14,color:"#9B9098",marginBottom:12}}>No cases match these filters</div>
+            <button onClick={clearFilters} style={{fontSize:13,color:"#7C5CFC",background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear filters</button>
+          </div>
+        )}
         {(()=>{
           return employees.map(emp=>{
-            const empCases = cases.filter(cs=>cs.employeeName===emp);
+            const empCases = filteredCases.filter(cs=>cs.employeeName===emp);
             const activeCount = empCases.filter(cs=>getCaseStage(cs)!=="closed").length;
             return(
               <div key={emp} style={{marginBottom:28}}>
