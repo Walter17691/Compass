@@ -3,7 +3,7 @@ import { matchesCaseFilters } from '../lib/caseFilters';
 
 const getCaseStage = cs => cs.stage || "intake";
 const noFilters = { type:"", stage:"", status:"", locationId:"", from:"", to:"" };
-const cs = { caseType:"misconduct", stage:"investigation", locationId:"loc1", dateReceived:"2026-08-05" };
+const cs = { caseType:"misconduct", stage:"investigation", locationId:"loc1", dateReceived:"2026-08-05", ownerId:"user1", priority:"high" };
 
 describe('matchesCaseFilters', () => {
   it('matches everything when no filters are set', () => {
@@ -40,6 +40,17 @@ describe('matchesCaseFilters', () => {
     expect(matchesCaseFilters(cs, { ...noFilters, to:"2026-08-10" }, getCaseStage)).toBe(true);
     expect(matchesCaseFilters(cs, { ...noFilters, to:"2026-08-01" }, getCaseStage)).toBe(false);
     expect(matchesCaseFilters({ ...cs, dateReceived:null }, { ...noFilters, from:"2026-08-01" }, getCaseStage)).toBe(false);
+  });
+
+  it('filters by owner', () => {
+    expect(matchesCaseFilters(cs, { ...noFilters, ownerId:"user1" }, getCaseStage)).toBe(true);
+    expect(matchesCaseFilters(cs, { ...noFilters, ownerId:"user2" }, getCaseStage)).toBe(false);
+  });
+
+  it('filters by priority, treating a missing priority as normal', () => {
+    expect(matchesCaseFilters(cs, { ...noFilters, priority:"high" }, getCaseStage)).toBe(true);
+    expect(matchesCaseFilters(cs, { ...noFilters, priority:"low" }, getCaseStage)).toBe(false);
+    expect(matchesCaseFilters({ ...cs, priority:undefined }, { ...noFilters, priority:"normal" }, getCaseStage)).toBe(true);
   });
 
   it('combines multiple active filters with AND', () => {

@@ -20,22 +20,20 @@ function downloadJson(data, filename) {
 
 const STAGE_LABEL = { intake:"Intake", investigation:"Investigation", inv_report:"Investigation report", disciplinary:"Disciplinary", outcome:"Outcome", appeal:"Appeal", closed:"Closed" };
 
-// Type/stage/status/location/date-opened are filterable now because every
-// case already carries real data for them. Owner and priority (also
-// listed in the gap-analysis audit) aren't yet — cases.manager/owner_id/
-// priority exist as columns (supabase/case_structure_2026-08-09.sql) but
-// nothing writes them until the case-creation form gets those fields
-// (a later phase), so a filter over them today would just be an "All"
-// dropdown with nothing else in it.
-export function CasesScreen({ cases, locations, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
+// Owner/priority filters only have real data to filter on for cases
+// created since the "+ New case" modal started writing cases.ownerId/
+// priority — older cases won't match either filter, same as any
+// additive-migration field.
+export function CasesScreen({ cases, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
   const [selected, setSelected] = useState(new Set());
-  const [filters, setFilters] = useState({ type:"", stage:"", status:"", locationId:"", from:"", to:"" });
+  const [filters, setFilters] = useState({ type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" });
   const setFilter = (key, value) => setFilters(f=>({...f, [key]:value}));
-  const clearFilters = () => setFilters({ type:"", stage:"", status:"", locationId:"", from:"", to:"" });
+  const clearFilters = () => setFilters({ type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" });
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const caseTypes = [...new Set(cases.map(cs=>cs.caseType).filter(Boolean))].sort();
   const stages = [...new Set(cases.map(cs=>getCaseStage(cs)))].filter(Boolean);
+  const owners = [...new Set(cases.map(cs=>cs.ownerId).filter(Boolean))];
 
   const filteredCases = cases.filter(cs => matchesCaseFilters(cs, filters, getCaseStage));
   const toggleSelected = id => setSelected(s=>{const n=new Set(s); n.has(id)?n.delete(id):n.add(id); return n;});
@@ -104,6 +102,18 @@ export function CasesScreen({ cases, locations, setIntake, setScreen, getCaseSta
                 {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             )}
+            {owners.length>0&&(
+              <select value={filters.ownerId} onChange={e=>setFilter("ownerId", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+                <option value="">All owners</option>
+                {owners.map(id=><option key={id} value={id}>{(orgMembers||[]).find(m=>m.user_id===id)?.name || "Unknown"}</option>)}
+              </select>
+            )}
+            <select value={filters.priority} onChange={e=>setFilter("priority", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+              <option value="">All priorities</option>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+            </select>
             <label style={{fontSize:12,color:"#6B6375",display:"flex",alignItems:"center",gap:4}}>
               From <input type="date" value={filters.from} onChange={e=>setFilter("from", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 8px",color:"#1A1535"}}/>
             </label>

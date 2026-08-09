@@ -31,5 +31,8 @@ export function mapCaseRow(row) {
     createdAt: row.created_at,
     confidential: row.confidential || false,
     updatedAt: row.updated_at || null,
+    manager: row.manager || "",
+    ownerId: row.owner_id || null,
+    priority: row.priority || "normal",
   };
 }

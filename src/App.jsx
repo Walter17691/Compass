@@ -14,6 +14,8 @@ import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta } from './lib/allegations';
 import { addTask, toggleTaskDone, removeTask } from './lib/caseTasks';
 import { withFkRetry } from './lib/retryOnFkRace';
+import { readEvidenceFiles } from './lib/evidenceUpload';
+import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
@@ -209,6 +211,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [newCaseType, setNewCaseType] = useState("");
   const [newCaseDescription, setNewCaseDescription] = useState("");
   const [newCaseLocationOther, setNewCaseLocationOther] = useState("");
+  const [newCaseOwnerId, setNewCaseOwnerId] = useState("");
+  const [newCasePriority, setNewCasePriority] = useState("normal");
+  const [newCaseEvidence, setNewCaseEvidence] = useState([]);
   const [editingEmployeeRecord, setEditingEmployeeRecord] = useState(false);
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [outcomeType, setOutcomeType] = useState("");
@@ -681,6 +686,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         assigned_to: user?.id || null,
         created_by: caseObj.createdBy || user?.id || null, // preserve the original creator across edits by other staff — the confidential-case RLS policy grants them access by this field
         confidential: caseObj.confidential || false,
+        // manager/owner_id/priority: added in supabase/case_structure_2026-08-09.sql.
+        // manager was previously read/displayed/reassigned throughout the app
+        // (ReassignCaseModal, meeting setup) but never actually included in
+        // this payload — there was no column to persist it to before that
+        // migration, so every reassignment silently only ever updated local
+        // state, never the database.
+        manager: caseObj.manager || null,
+        owner_id: caseObj.ownerId || null,
+        priority: caseObj.priority || null,
         updated_at: nowIso,
       };
 
@@ -911,6 +925,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setNewCaseType("");
     setNewCaseDescription("");
     setNewCaseLocationOther("");
+    setNewCaseOwnerId("");
+    setNewCasePriority("normal");
+    setNewCaseEvidence([]);
   };
 
   const createCaseFromChat = () => {
@@ -3443,15 +3460,51 @@ Please produce:
                 <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Case type</label>
                 <select value={newCaseType} onChange={e=>setNewCaseType(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
                   <option value="">Select type…</option>
-                  {["Misconduct","Grievance","Performance","Absence","Redundancy","Appeal","Other"].map(t=><option key={t} value={t.toLowerCase()}>{t}</option>)}
+                  {["Misconduct","Grievance","Performance","Absence","Attendance/sickness","Redundancy","Appeal","Investigation","Disciplinary","Probation","Capability","Flexible working","Other"].map(t=><option key={t} value={t.toLowerCase()}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Owner + priority */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Case owner</label>
+                <select value={newCaseOwnerId} onChange={e=>setNewCaseOwnerId(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+                  <option value="">{currentUser?.name||"Me"} (default)</option>
+                  {orgMembers.filter(m=>m.user_id!==user?.id).map(m=><option key={m.id} value={m.user_id}>{m.name}{m.job_title?" ("+m.job_title+")":""}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Priority</label>
+                <select value={newCasePriority} onChange={e=>setNewCasePriority(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
                 </select>
               </div>
             </div>
 
             {/* Description */}
-            <div style={{marginBottom:20}}>
+            <div style={{marginBottom:14}}>
               <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Brief description <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
               <textarea value={newCaseDescription} onChange={e=>setNewCaseDescription(e.target.value)} placeholder="Brief summary of the issue…" rows={2} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
+
+            {/* Evidence — staged locally and attached once the case is created below */}
+            <div style={{marginBottom:20}}>
+              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Evidence <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+              {newCaseEvidence.map((ev,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F5F1EA"}}>
+                  <span style={{fontSize:12,color:"#1A1535"}}>{ev.name}</span>
+                  <button onClick={()=>setNewCaseEvidence(list=>list.filter((_,j)=>j!==i))} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
+                </div>
+              ))}
+              <div style={{marginTop:newCaseEvidence.length>0?8:0}}>
+                <EvidenceDropzone onFilesSelected={async files=>{
+                  const items = await readEvidenceFiles(files, { addedBy: currentUser?.name||"HR Manager", onReject: msg=>showToast(msg,"error") });
+                  if(items.length) setNewCaseEvidence(list=>[...list, ...items]);
+                }}/>
+              </div>
             </div>
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -3485,13 +3538,29 @@ Please produce:
                     // silently produced cases with no next-step guidance,
                     // ever, unlike cases created by starting a meeting first.
                     meetings: [],
-                    evidence: [],
+                    evidence: newCaseEvidence,
                     urgency: "normal",
                     jobTitle: newCaseJobTitle,
                     startDate: newCaseStartDate,
                     location: newCaseLocation==="__other__"?newCaseLocationOther:newCaseLocation,
+                    // The location select's value is the location's name
+                    // (kept as-is — it also feeds upsertEmployeeRecord and
+                    // the case's own display text below, both of which
+                    // expect text, not a uuid), so the real FK the Cases
+                    // list's location filter reads is looked up separately
+                    // rather than by changing what the select stores.
+                    locationId: locations.find(l=>l.name===newCaseLocation)?.id || null,
+                    manager: newCaseOwnerId ? (orgMembers.find(m=>m.user_id===newCaseOwnerId)?.name || "") : (currentUser?.name || ""),
+                    ownerId: newCaseOwnerId || user?.id || null,
+                    priority: newCasePriority,
                   };
                   saveCases([...cases, newCase]);
+                  if(newCaseOwnerId && org?.id) {
+                    supabase.from("case_access").upsert({
+                      case_id: newCase.id, user_id: newCaseOwnerId, org_id: org.id,
+                      role: "case_owner", granted_by: user?.id,
+                    }).then(({error})=>{ if(error) console.error("case_access write failed:", error); });
+                  }
                   setActiveCaseId(newCase.id);
                   setActiveCaseStage("investigation");
                   closeCasePrompt();
@@ -3781,7 +3850,7 @@ Please produce:
 
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
-        <CasesScreen cases={cases} locations={locations} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} />
+        <CasesScreen cases={cases} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} />
       )}
 
       {screen===SCREENS.SEARCH&&(

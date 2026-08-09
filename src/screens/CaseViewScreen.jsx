@@ -7,8 +7,10 @@ import { LockIcon } from '../components/Icons';
 import { AllegationsPanel } from '../components/AllegationsPanel';
 import { TimelinePanel } from '../components/TimelinePanel';
 import { CaseTasksPanel } from '../components/CaseTasksPanel';
+import { EvidenceDropzone } from '../components/EvidenceDropzone';
 import { allegationsForCase } from '../lib/allegations';
 import { tasksForCase } from '../lib/caseTasks';
+import { readEvidenceFiles, fmtBytes } from '../lib/evidenceUpload';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -19,9 +21,6 @@ const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
-const MAX_EVIDENCE_SIZE = 15*1024*1024; // 15MB — dataUrl storage in a jsonb column, keep well under row/memory limits
-const ALLOWED_EVIDENCE_TYPES = ["image/jpeg","image/png","image/gif","image/webp","image/heic","application/pdf","video/mp4","video/quicktime","video/webm","text/plain","text/csv","message/rfc822","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
-const fmtBytes = n => n<1024*1024 ? Math.round(n/1024)+"KB" : (n/(1024*1024)).toFixed(1)+"MB";
 
 export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask }) {
   const [showDraft, setShowDraft] = useState(false);
@@ -52,17 +51,9 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   // it from the overdue banner/Settings list/digest with no changes
   // needed to any of those three.
   const openChecklist = meetings.flatMap(m=>(m.nextSteps||[]).map((s,idx)=>({...s, meetingId:m.id, idx})).filter(s=>!s.done));
-  const addEvidenceFiles = files => {
-    Array.from(files).forEach(f=>{
-      if(f.size>MAX_EVIDENCE_SIZE) { showToast?.(`${f.name} is too large (max 15MB) — link to it externally instead`, "error"); return; }
-      if(f.type && !ALLOWED_EVIDENCE_TYPES.includes(f.type)) { showToast?.(`${f.name}: file type not supported`, "error"); return; }
-      const r = new FileReader();
-      r.onload = ev => {
-        const nv = {name:f.name, type:f.type||"Document", size:f.size, date:new Date().toLocaleDateString("en-GB"), addedBy:currentUser?.name||"HR Manager", dataUrl:ev.target.result};
-        saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:[...(x.evidence||[]), nv]}:x));
-      };
-      r.readAsDataURL(f);
-    });
+  const addEvidenceFiles = async files => {
+    const newItems = await readEvidenceFiles(files, { addedBy: currentUser?.name||"HR Manager", onReject: msg => showToast?.(msg, "error") });
+    if(newItems.length) saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:[...(x.evidence||[]), ...newItems]}:x));
   };
   const repeatCount = cases.filter(c=>c.employeeName===cs.employeeName).length;
   const allStages = [
@@ -344,13 +335,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
                         </div>
                       </div>
                     ))}
-                    <label style={{display:"flex",alignItems:"center",justifyContent:"center",border:"2px dashed #E8E0D0",borderRadius:8,padding:"16px",cursor:"pointer",background:"#FDFAF5",marginTop:12,transition:"all 0.15s"}}
-                      onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#F5F3FF";}}
-                      onDragLeave={e=>{e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FDFAF5";}}
-                      onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="#E8E0D0";e.currentTarget.style.background="#FDFAF5";addEvidenceFiles(e.dataTransfer.files);}}>
-                      <input type="file" multiple onChange={e=>addEvidenceFiles(e.target.files)} style={{display:"none"}}/>
-                      <div style={{textAlign:"center"}}><div style={{fontSize:13,color:"#6B6375",fontWeight:500}}>Drop files or click to upload</div><div style={{fontSize:11,color:"#9B9098",marginTop:2}}>Images, PDFs, docs, video — max 15MB each</div></div>
-                    </label>
+                    <div style={{marginTop:12}}><EvidenceDropzone onFilesSelected={addEvidenceFiles}/></div>
                     <div style={{marginTop:12,padding:"12px",background:"#F5F3FF",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                       <div><div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interview</div><div style={{fontSize:11,color:"#9B9098"}}>Record and save directly to this investigation</div></div>
                       <button onClick={()=>{setMeetingSetup(p=>({...p,employee:"",employeeJobTitle:"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));setCaseInfo(p=>({...p,_linkedCaseId:cs.id,_linkedCaseName:cs.employeeName}));setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>+ Witness interview</button>
