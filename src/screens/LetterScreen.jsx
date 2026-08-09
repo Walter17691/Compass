@@ -11,7 +11,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
     <div>
       <div style={{borderBottom:"1px solid #E8E0D0"}}>
         <div style={{maxWidth:1440,margin:"0 auto",padding:"0 20px",display:"flex",gap:2}}>
-          {[{id:"outcome",l:"Outcome letter"},{id:"invite",l:"Invitation"},{id:"appeal",l:"Appeal outcome"}].map(lt=>(
+          {[{id:"outcome",l:"Outcome letter"},{id:"invite",l:"Invitation"},{id:"appeal",l:"Appeal outcome"},{id:"suspension",l:"Suspension"},{id:"meeting-confirmation",l:"Meeting confirmation"}].map(lt=>(
             <button key={lt.id} onClick={()=>handleLetter(lt.id)}
               style={{background:"none",border:"none",borderBottom:"2px solid",borderBottomColor:activeLetter===lt.id?"#7C5CFC":"transparent",padding:"12px 16px",fontSize:13,color:activeLetter===lt.id?"#FFFFFF":"#9B9098",fontWeight:activeLetter===lt.id?600:400}}>
               {lt.l}
