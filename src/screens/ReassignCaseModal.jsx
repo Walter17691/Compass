@@ -49,12 +49,12 @@ export function ReassignCaseModal({ cases, activeCaseId, currentUser, orgMembers
                     });
                   } catch(e) { console.error("case_access write failed:", e); }
                 }
-                if(sel.email) {
+                if(sel.user_id) {
                   try {
                     await authedFetch("/api/cron/reassign-notify", {
                       method:"POST",
                       headers:{"Content-Type":"application/json"},
-                      body: JSON.stringify({ orgId: org.id, orgName: org.name, newOwnerEmail: sel.email, newOwnerName: sel.name, employeeName: cs.employeeName, caseType: cs.caseType }),
+                      body: JSON.stringify({ orgId: org.id, orgName: org.name, newOwnerId: sel.user_id, newOwnerName: sel.name, employeeName: cs.employeeName, caseType: cs.caseType }),
                     });
                   } catch(e) { console.error("Reassign notify failed:", e); }
                 }

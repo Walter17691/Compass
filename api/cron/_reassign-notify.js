@@ -1,36 +1,39 @@
 import { verifyCaller } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
-
-const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
-
-async function supabaseRequest(path) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  });
-  return res.json();
-}
+import { supabaseRequest, getUserEmail } from './_supabase.js';
 
 // Emails the new case owner when a case is reassigned to them — the only
 // step of a reassignment that needs a server (RESEND_API_KEY is server-only).
 // The actual ownership change and case_access grant happen client-side via
 // Supabase RLS, same as the existing disciplinary-officer handoff; this just
 // sends the notification so the new owner doesn't have to stumble onto it.
+//
+// Takes newOwnerId (org_members.user_id), not an email — org_members has no
+// email column at all, so the caller (ReassignCaseModal.jsx) could never
+// have had one to send: its `if(sel.email)` guard was always false, and
+// this endpoint was never actually reachable in practice. The email itself
+// is resolved server-side via the Admin API, same as the digest cron
+// already does for the same reason.
 export async function reassignNotify(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { orgId, orgName, newOwnerEmail, newOwnerName, employeeName, caseType } = req.body || {};
-  if (!orgId || !newOwnerEmail || !employeeName) return res.status(400).json({ error: 'orgId, newOwnerEmail and employeeName are required' });
+  const { orgId, orgName, newOwnerId, newOwnerName, employeeName, caseType } = req.body || {};
+  if (!orgId || !newOwnerId || !employeeName) return res.status(400).json({ error: 'orgId, newOwnerId and employeeName are required' });
 
   try {
-    const [callerMember] = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=name`);
+    const callerMemberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=name`);
+    const [callerMember] = await callerMemberRes.json();
     if (!callerMember) return res.status(403).json({ error: 'Not a member of this organisation' });
 
-    const [recipientMember] = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&email=eq.${encodeURIComponent(newOwnerEmail)}&select=name`);
+    const recipientMemberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(newOwnerId)}&select=name`);
+    const [recipientMember] = await recipientMemberRes.json();
     if (!recipientMember) return res.status(403).json({ error: 'Recipient is not a member of this organisation' });
+
+    const newOwnerEmail = await getUserEmail(newOwnerId);
+    if (!newOwnerEmail) return res.status(404).json({ error: 'Could not resolve an email address for the new owner' });
 
     const appUrl = 'https://compass-lemon-iota.vercel.app';
     const emailRes = await fetch('https://api.resend.com/emails', {
