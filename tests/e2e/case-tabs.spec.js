@@ -43,7 +43,10 @@ test('People, Documents, Outcome, Meetings, and AI Assistant tabs each render di
   await page.getByRole('button', { name: 'Meetings', exact: true }).click();
   await expect(page.getByText('No investigation meetings yet')).toBeVisible({ timeout: 10000 });
 
-  // AI Assistant — honest placeholder, not a broken/missing tab.
+  // AI Assistant — real feature as of Phase 8 (see ai-assistant.spec.js
+  // for the full generate/chat round-trip against the real API); this
+  // just confirms the tab itself renders its two sections.
   await page.getByRole('button', { name: 'AI Assistant', exact: true }).click();
-  await expect(page.getByText('Coming in a future update')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('AI case overview')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(`Ask Compass about ${employeeName}'s case`)).toBeVisible();
 });

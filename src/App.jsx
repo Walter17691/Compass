@@ -11,11 +11,12 @@ import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeC
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
-import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta } from './lib/allegations';
-import { addTask, toggleTaskDone, removeTask } from './lib/caseTasks';
+import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase } from './lib/allegations';
+import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
+import { buildCaseContext } from './lib/caseContext';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
@@ -1990,6 +1991,63 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(target) audit("Task removed", target.name, target.caseId);
   };
 
+  // ── AI Case Assistant + AI Case Overview ──
+  // Both read-only over buildCaseContext() (src/lib/caseContext.js) — no
+  // new source of truth. Keyed by case id, same {[caseId]: value} pattern
+  // as adjustments/showAppealInput, so state survives switching case tabs
+  // without leaking between cases.
+  const [caseChatHistory, setCaseChatHistory] = useState({});
+  const [caseChatInput, setCaseChatInput] = useState("");
+  const [caseChatProcessing, setCaseChatProcessing] = useState(false);
+  const [caseOverview, setCaseOverview] = useState({});
+  const [caseOverviewLoading, setCaseOverviewLoading] = useState({});
+
+  const sendCaseChat = async (cs) => {
+    const question = caseChatInput.trim();
+    if(!question || caseChatProcessing) return;
+    setCaseChatInput("");
+    const history = caseChatHistory[cs.id]||[];
+    const updated = [...history, {role:"user", content:question}];
+    setCaseChatHistory(h=>({...h, [cs.id]:updated}));
+    setCaseChatProcessing(true);
+    try {
+      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:500,
+        stream:false,
+        system:"You are Compass, an AI assistant helping an HR professional work through a specific employee relations case. Answer only using the case record and company policies provided below — if the answer isn't in the record, say so rather than guessing or inventing detail. Never tell the user what the final decision, sanction, or disciplinary outcome should be; you may explain relevant UK employment law or ACAS guidance and help them think through the process, but the decision itself is theirs to make. Plain text only — no asterisks, no markdown headers."+getPolicyCtx(),
+        messages:[
+          ...updated.map(m=>({role:m.role, content:m.content})).slice(0,-1),
+          {role:"user", content:"CASE RECORD:\n"+context+"\n\nQuestion: "+question},
+        ],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text) setCaseChatHistory(h=>({...h, [cs.id]:[...updated, {role:"assistant", content:text}]}));
+    } catch(e) { console.error("sendCaseChat", e); showToast("Couldn't reach Compass — "+e.message, "error"); }
+    setCaseChatProcessing(false);
+  };
+
+  const generateCaseOverview = async (cs) => {
+    setCaseOverviewLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:1200,
+        stream:false,
+        system:"You are an HR case-review assistant. Read the case record provided and produce a structured, strictly neutral overview for the HR professional running the case. You must NEVER present something as an established fact unless the case record explicitly supports it — distinguish clearly between what's agreed, what's disputed, and what's simply unknown. You must NEVER recommend a sanction, disciplinary outcome, or final decision on any allegation — that is solely for the responsible manager to decide; you may only recommend the next *procedural* step (e.g. \"hold the investigation meeting\", \"obtain a written witness statement\"), never an outcome. Where evidence conflicts or is missing, say so explicitly rather than resolving it yourself."+getPolicyCtx(),
+        messages:[{role:"user", content:"CASE RECORD:\n"+context+"\n\nProduce the overview using exactly these markdown headers, in this order: ## Established facts, ## Disputed facts, ## Evidence for and against each allegation, ## Outstanding questions, ## Procedural risk, ## Recommended next procedural step. If a section has nothing to report, write \"Nothing recorded yet.\" under it rather than omitting it."}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text) setCaseOverview(o=>({...o, [cs.id]:text}));
+      else showToast("Couldn't generate the case overview", "error");
+    } catch(e) { console.error("generateCaseOverview", e); showToast("Couldn't generate the case overview — "+e.message, "error"); }
+    setCaseOverviewLoading(l=>({...l, [cs.id]:false}));
+  };
+
   // ── Onboarding steps ──
   const ONBOARD_STEPS = [
     { title:"Welcome to Compass", body:"Compass is your AI-powered HR meeting platform. It handles every stage of an HR meeting — from preparation through to outcome letters and case management.", action:"Next" },
@@ -3818,6 +3876,14 @@ Please produce:
           createCaseTask={createCaseTask}
           toggleCaseTaskDone={toggleCaseTaskDone}
           deleteCaseTask={deleteCaseTask}
+          caseChatHistory={caseChatHistory}
+          caseChatInput={caseChatInput}
+          setCaseChatInput={setCaseChatInput}
+          caseChatProcessing={caseChatProcessing}
+          sendCaseChat={sendCaseChat}
+          caseOverview={caseOverview}
+          caseOverviewLoading={caseOverviewLoading}
+          generateCaseOverview={generateCaseOverview}
         />
       )}
 {/* ══ INTAKE ══ */}
