@@ -6,9 +6,9 @@ import { login } from './helpers.js';
 // despite the screen calling itself "confidential... restricted to HR
 // only" — implying a shared org record the way cases/onboarding/offboarding
 // are. A second HR user, or the same one on a different device, would see
-// none of it. This proves the fix: clearing localStorage (simulating a
-// different device/browser) must NOT lose the note — it now has to come
-// back from wellbeing_notes in Supabase.
+// none of it. This proves the fix: wiping just the local wellbeing cache
+// (simulating a different device/browser that never had it) must NOT lose
+// the note — it now has to come back from wellbeing_notes in Supabase.
 test('a wellbeing note survives clearing localStorage, proving it is cloud-synced not local-only', async ({ page }) => {
   const employeeName = `E2E Wellbeing ${Date.now()}`;
 
@@ -20,11 +20,21 @@ test('a wellbeing note survives clearing localStorage, proving it is cloud-synce
   await page.getByRole('button', { name: '+ Add note' }).click();
   await page.getByPlaceholder('e.g. James Wilson').fill(employeeName);
   await page.getByPlaceholder(/What was discussed/).fill('E2E test wellbeing conversation notes.');
+  // saveWellbeingNoteToDB is fire-and-forget (same pattern as every other
+  // cloud-synced entity in this app — cases, starter/leaver instances):
+  // the UI updates from local state immediately, and the Supabase write
+  // happens in the background. Wait for that write to actually land before
+  // reloading, or the reload aborts the in-flight request.
+  const saveResponse = page.waitForResponse(r => r.url().includes('/rest/v1/wellbeing_notes') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Save note' }).click();
   await expect(page.getByText('E2E test wellbeing conversation notes.')).toBeVisible({ timeout: 10000 });
+  await saveResponse;
 
-  // Simulate a different device: wipe local storage entirely, then reload.
-  await page.evaluate(() => localStorage.clear());
+  // Simulate a different device: wipe only the local wellbeing cache, not
+  // the whole of localStorage — that also holds the Supabase auth session,
+  // and clearing it would just log the test out rather than test anything
+  // about wellbeing notes specifically.
+  await page.evaluate(() => localStorage.removeItem('compass_wellbeing'));
   await page.reload();
 
   await page.getByRole('button', { name: 'HR Processes' }).click();

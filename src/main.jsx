@@ -17,7 +17,6 @@ const Compass = lazy(() => import('./App.jsx'))
 const OrgSetup = lazy(() => import('./OrgSetup.jsx'))
 const PortalSignup = lazy(() => import('./PortalSignup.jsx'))
 const PortalApp = lazy(() => import('./portal/PortalApp.jsx').then(m => ({ default: m.PortalApp })))
-const SignPage = lazy(() => import('./SignPage.jsx'))
 
 const LoadingFallback = () => (
   <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#FDFAF5'}}>
@@ -164,16 +163,6 @@ function Root() {
   if (window.location.pathname === '/privacy') return <LegalPage page="privacy"/>
   if (window.location.pathname === '/terms') return <LegalPage page="terms"/>
   if (window.location.pathname === '/dpa') return <LegalPage page="dpa"/>
-
-  // Public — the "Review and Sign" link api/send-for-signature.js emails
-  // to an external employee/manager. That recipient has no Compass login
-  // at all, so this must be reachable before any of the auth/org/loading
-  // checks below (must also come before the `loading` check further down,
-  // since loading only ever resolves for a real session).
-  if (window.location.pathname.startsWith('/sign/')) {
-    const signId = window.location.pathname.slice('/sign/'.length)
-    return <Suspense fallback={<LoadingFallback/>}><SignPage signId={signId}/></Suspense>
-  }
 
   if (loading) return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",alignItems:"center",justifyContent:"center"}}>
