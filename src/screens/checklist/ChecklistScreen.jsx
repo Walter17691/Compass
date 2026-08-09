@@ -141,8 +141,9 @@ export function ChecklistScreen({
       {/* Active instance */}
       {active&&(
         <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:20,alignItems:"start"}}>
-          {/* Sidebar */}
-          <div style={{position:"sticky",top:90}}>
+          {/* Sidebar. 90 -> 37: was calibrated to sit below the old global
+              AppHeader (53px); the left nav no longer adds that on desktop. */}
+          <div style={{position:"sticky",top:37}}>
             <Card style={{marginBottom:12}}>
               <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",fontWeight:600,marginBottom:4}}>{active.name}</div>
               <div style={{fontSize:12,color:"#6B6880",marginBottom:12}}>{active.role}{active.department?" · "+active.department:""}</div>

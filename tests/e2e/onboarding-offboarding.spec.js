@@ -10,8 +10,7 @@ test('onboarding: create a starter, add a task, mutate it', async ({ page }) => 
   const starterName = `E2E Starter ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'HR Processes' }).click();
-  await page.getByRole('menuitem', { name: 'Onboarding', exact: true }).click();
+  await page.getByRole('button', { name: 'Onboarding', exact: true }).click();
   await expect(page.getByText('New starter onboarding')).toBeVisible();
 
   await page.getByRole('button', { name: '+ Add starter' }).click();
@@ -32,8 +31,7 @@ test('offboarding: create a leaver, see reason + exit interview, add a task', as
   const leaverName = `E2E Leaver ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'HR Processes' }).click();
-  await page.getByRole('menuitem', { name: 'Offboarding', exact: true }).click();
+  await page.getByRole('button', { name: 'Offboarding', exact: true }).click();
   await expect(page.getByText('Employee offboarding')).toBeVisible();
 
   await page.getByRole('button', { name: '+ Add leaver' }).click();

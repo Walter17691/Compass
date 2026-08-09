@@ -6,10 +6,12 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
-      {/* Top action bar — sits below the shared AppHeader; not a second
-          header since it carries screen-specific actions (Save to case,
-          Share, Request HR review) that AppHeader has no equivalent for. */}
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:53,zIndex:10}}>
+      {/* Top action bar — not a second header, carries screen-specific
+          actions (Save to case, Share, Request HR review) the sidebar has
+          no equivalent for. Sticks to the very top of the content column
+          — the left sidebar (App.jsx) no longer occupies vertical space
+          above this like the old horizontal AppHeader did. */}
+      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div>
             <span style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{caseInfo.employee}</span>
@@ -149,7 +151,10 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
         </div>
 
         {/* Right sidebar */}
-        <div style={{display:"flex",flexDirection:"column",gap:16,position:"sticky",top:80}}>
+        {/* 80 -> 27: was calibrated to sit below the old global AppHeader
+            (53px) plus the action bar above; the sidebar no longer adds
+            that 53px on desktop. */}
+        <div style={{display:"flex",flexDirection:"column",gap:16,position:"sticky",top:27}}>
 
           {/* Risk score */}
           {riskScore&&(

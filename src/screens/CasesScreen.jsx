@@ -67,7 +67,7 @@ export function CasesScreen({ cases, locations, orgMembers, setIntake, setScreen
       </div>
       <div style={{maxWidth:860,margin:"0 auto",padding:"28px 24px"}}>
         {selected.size>0&&(
-          <div style={{position:"sticky",top:53,zIndex:10,display:"flex",alignItems:"center",gap:12,background:"#1A1535",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+          <div style={{position:"sticky",top:0,zIndex:10,display:"flex",alignItems:"center",gap:12,background:"#1A1535",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
             <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{selected.size} selected</span>
             <button onClick={bulkExport} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Export</button>
             <button onClick={bulkClose} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Close</button>

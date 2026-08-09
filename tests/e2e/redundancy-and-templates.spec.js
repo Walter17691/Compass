@@ -8,8 +8,7 @@ import { login } from './helpers.js';
 // relevant to the specific pool, not a one-size-fits-all fixed set.
 test('redundancy selection criteria can be renamed, added to, and removed', async ({ page }) => {
   await login(page);
-  await page.getByRole('button', { name: 'HR Processes' }).click();
-  await page.getByRole('menuitem', { name: 'Redundancy', exact: true }).click();
+  await page.getByRole('button', { name: 'Redundancy', exact: true }).click();
 
   // Redundancy cases persist server-side per org, so a case from an
   // earlier run (this one, or a prior one) may already be active, in
@@ -70,8 +69,9 @@ test('a new onboarding template can be created and edited, then offered on the s
   await page.locator('input[placeholder="Task"]').first().fill('Issue forklift safety induction');
 
   // The new template should now be selectable when creating a starter.
-  await page.getByRole('button', { name: 'HR Processes' }).click();
-  await page.getByRole('menuitem', { name: 'Onboarding', exact: true }).click();
+  // Scoped to the sidebar nav — Settings' Checklist templates section has
+  // its own "Onboarding" tab-style button with the same accessible name.
+  await page.locator('aside, header').getByRole('button', { name: 'Onboarding', exact: true }).click();
   await page.getByRole('button', { name: '+ Add starter' }).click();
   const templateSelect = page.locator('select').last();
   await expect(templateSelect.locator(`option`, { hasText: templateName })).toHaveCount(1);

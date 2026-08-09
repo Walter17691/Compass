@@ -23,7 +23,7 @@ import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
 import { useFonts } from './hooks/useFonts';
-import { AppHeader } from './components/AppHeader';
+import { AppSidebar } from './components/AppSidebar';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
 import { MDRenderer } from './components/MDRenderer';
 import { SignaturePad } from './components/SignaturePad';
@@ -3279,7 +3279,7 @@ Please produce:
 
 
   return (
-    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",color:"#1A1535"}}>
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",color:"#1A1535",display:"flex"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:DM Sans,system-ui,sans-serif;color:#1A1535;}
@@ -3729,8 +3729,8 @@ Please produce:
       )}
 
 
-      {/* ── HEADER ── */}
-      <AppHeader
+      {/* ── SIDEBAR ── */}
+      <AppSidebar
         screen={screen}
         setScreen={setScreen}
         cases={cases}
@@ -3749,6 +3749,11 @@ Please produce:
         onSignOut={onSignOut}
         isHR={isHR}
       />
+
+      {/* ── Content column — everything else (deadline banner through every
+          screen and modal below) lives in this flex column beside the
+          sidebar. Closes at the very end of this component's return. ── */}
+      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
 
       {/* ── Deadline banner ── */}
       {dueSoon.some(d=>d.overdue)&&screen!==SCREENS.HOME&&(
@@ -4254,6 +4259,7 @@ Please produce:
           startOffboarding={startOffboarding}
         />
       )}
+      </div>
     </div>
   );
 }

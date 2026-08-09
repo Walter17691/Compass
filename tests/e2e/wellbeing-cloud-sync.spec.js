@@ -13,8 +13,7 @@ test('a wellbeing note survives clearing localStorage, proving it is cloud-synce
   const employeeName = `E2E Wellbeing ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'HR Processes' }).click();
-  await page.getByRole('menuitem', { name: 'Wellbeing', exact: true }).click();
+  await page.getByRole('button', { name: 'Wellbeing', exact: true }).click();
   await expect(page.getByText('Mental health & wellbeing')).toBeVisible();
 
   await page.getByRole('button', { name: '+ Add note' }).click();
@@ -37,8 +36,7 @@ test('a wellbeing note survives clearing localStorage, proving it is cloud-synce
   await page.evaluate(() => localStorage.removeItem('compass_wellbeing'));
   await page.reload();
 
-  await page.getByRole('button', { name: 'HR Processes' }).click();
-  await page.getByRole('menuitem', { name: 'Wellbeing', exact: true }).click();
+  await page.getByRole('button', { name: 'Wellbeing', exact: true }).click();
   await page.getByText(employeeName, { exact: true }).click();
   await expect(page.getByText('E2E test wellbeing conversation notes.')).toBeVisible({ timeout: 10000 });
 });

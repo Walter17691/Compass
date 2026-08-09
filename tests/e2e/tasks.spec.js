@@ -37,7 +37,7 @@ test('a task added on a case appears on the cross-case Tasks screen and can be c
   await expect(page.getByText(/^Tasks \(1 open\)$/)).toBeVisible();
 
   // Same task shows up on the cross-case Tasks screen (top-nav destination).
-  await page.locator('header').getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.locator('aside, header').getByRole('button', { name: 'Tasks', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible({ timeout: 10000 });
   const findTaskRow = () => page.locator('div')
     .filter({ hasText: taskName })

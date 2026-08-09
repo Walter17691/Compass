@@ -319,8 +319,10 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
               )}
             </div>
 
-            {/* AI advice panel */}
-            <Card style={{background:"#F5F1EA",position:"sticky",top:70}}>
+            {/* AI advice panel. 70 -> 17: was calibrated to sit below the
+                old global AppHeader (53px); the left nav no longer adds
+                that on desktop. */}
+            <Card style={{background:"#F5F1EA",position:"sticky",top:17}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                 <SectionTitle>LEGAL GUIDANCE</SectionTitle>
                 <Btn onClick={getRedundancyAiAdvice} disabled={redundancyAiProcessing} style={{padding:"4px 12px",fontSize:11}}>

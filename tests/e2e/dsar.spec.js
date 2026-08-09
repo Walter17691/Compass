@@ -10,10 +10,9 @@ test('DSAR due date is exactly receivedDate + 1 calendar month', async ({ page }
   const employeeName = `E2E DSAR ${Date.now()}`;
 
   await login(page);
-  // DSAR lives inside the "HR Processes" dropdown, not a top-level nav
-  // button — open the dropdown first, then click the menu item.
-  await page.getByRole('button', { name: 'HR Processes' }).click();
-  await page.getByRole('menuitem', { name: 'DSAR', exact: true }).click();
+  // DSAR lives inside the "HR Processes" sidebar group, not a top-level
+  // nav button — the group is expanded by default, so no need to open it.
+  await page.getByRole('button', { name: 'DSAR', exact: true }).click();
   await page.getByRole('button', { name: '+ Log new request' }).click();
 
   await page.getByPlaceholder('e.g. Ada Lovelace').fill(employeeName);

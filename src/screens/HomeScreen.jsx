@@ -1,7 +1,7 @@
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 
-// The nav/logo header is rendered once by AppHeader (App.jsx), mounted
+// The nav/logo shell is rendered once by AppSidebar (App.jsx), mounted
 // unconditionally above every screen including this one — Home used to
 // render its own separate copy here, which had drifted out of sync with
 // the shared one (different height, padding, logo size) and caused a
