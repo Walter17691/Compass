@@ -44,6 +44,10 @@ test('a meeting shows Signed automatically once the real signature lands, withou
   page.off('response', captureSignId);
 
   await page.getByRole('button', { name: /Save and go to case/ }).click();
+  // Informal/1-1 meetings don't map to the Investigation/Disciplinary/
+  // Appeal stage tabs — they land under "Other", which isn't the default
+  // active tab.
+  await page.getByRole('button', { name: /^Other/ }).click();
   await expect(page.getByText('Pending signature', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('button', { name: 'Mark signed' })).toBeVisible();
 
@@ -55,16 +59,13 @@ test('a meeting shows Signed automatically once the real signature lands, withou
   });
   expect(signResult.ok()).toBeTruthy();
 
-  // Leave and come back to the case — this is what triggers the sync
-  // check. No "Mark signed" click anywhere in this test.
-  await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await page.waitForTimeout(300);
-  await page.getByText(employeeName).first().click().catch(() => {});
-  if (!(await page.getByText('Signed', { exact: true }).isVisible({ timeout: 2000 }).catch(() => false))) {
-    // Fall back to Cases if the Home dashboard doesn't surface this case directly.
-    await page.getByRole('button', { name: 'Cases', exact: false }).first().click();
-    await page.getByText(employeeName).first().click();
-  }
+  // Reload the same case-view page — this is what triggers the sync
+  // check (it runs on mount/case-open, not continuously), and doubles as
+  // a check that the URL-routing fix from earlier this session correctly
+  // restores the same case on refresh rather than resetting to Home. No
+  // "Mark signed" click anywhere in this test.
+  await page.reload();
+  await page.getByRole('button', { name: /^Other/ }).click();
 
   await expect(page.getByText('Signed', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('button', { name: 'Mark signed' })).not.toBeVisible();
