@@ -11,6 +11,8 @@ import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeC
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
+import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta } from './lib/allegations';
+import { withFkRetry } from './lib/retryOnFkRace';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
@@ -847,7 +849,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1126,6 +1128,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [wellbeingForm, setWellbeingForm] = useState({employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
   const [wellbeingView, setWellbeingView] = useState("list"); // list|new|employee
 
+  // ── Allegations (case-scoped issues under investigation) ──
+  const [allegations, setAllegations] = useState([]);
+
   // Refs
   const feedRef = useRef(null);
   const inputRef = useRef(null);
@@ -1162,7 +1167,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }
   };
   // ── Audit trail ──
-  const audit = (action, detail="") => {
+  const audit = (action, detail="", caseId=null) => {
     const userName = currentUser?.name || "HR Manager";
     const entry = {
       id: crypto.randomUUID(),
@@ -1173,7 +1178,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     };
     setAuditLog(p => [entry, ...p].slice(0, 500)); // optimistic — cloud is the source of truth on next load
     if(org?.id && user?.id) {
-      supabase.from('audit_log').insert({ org_id: org.id, user_id: user.id, user_name: userName, action, detail })
+      withFkRetry(() => supabase.from('audit_log').insert({ org_id: org.id, user_id: user.id, user_name: userName, action, detail, case_id: caseId }))
         .then(({error}) => { if(error) console.error('Audit log sync failed:', error.message); });
     }
   };
@@ -1835,6 +1840,74 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     saveWellbeingNotes(updated);
     const changed = updated.find(n=>n.id===noteId);
     if(changed) saveWellbeingNoteToDB(changed);
+  };
+
+  // ── Allegations ──
+  // Own table (not nested on cases) so they can be listed cross-case later
+  // (Reports/Insights) without scanning every case's JSONB — same reasoning
+  // as wellbeing_notes/dsar_requests. RLS inherits case access rules via an
+  // EXISTS join (see supabase/case_structure_2026-08-09.sql), so this loads
+  // straight by org_id like every other org-scoped table.
+  const loadAllegations = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('allegations').select('*').eq('org_id', org.id).order('created_at', {ascending:true});
+      if(error) { console.error('loadAllegations', error); return; }
+      if(data) setAllegations(data.map(r=>({
+        id:r.id, caseId:r.case_id, title:r.title, description:r.description||"",
+        period:r.period||"", peopleInvolved:r.people_involved||"", status:r.status,
+        employeeResponse:r.employee_response||"", witnessEvidence:r.witness_evidence||"",
+        createdBy:r.created_by, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadAllegations', e); }
+  };
+
+  const saveAllegationToDB = async (allegation) => {
+    if(!org?.id) return;
+    const { error } = await withFkRetry(() => supabase.from('allegations').upsert({
+      id: allegation.id, case_id: allegation.caseId, org_id: org.id,
+      title: allegation.title, description: allegation.description||null,
+      period: allegation.period||null, people_involved: allegation.peopleInvolved||null,
+      status: allegation.status||'unreviewed', employee_response: allegation.employeeResponse||null,
+      witness_evidence: allegation.witnessEvidence||null, created_by: allegation.createdBy||user?.id||null,
+      updated_at: new Date().toISOString(),
+    }));
+    if(error) { console.error('saveAllegationToDB', error); showToast("Couldn't save allegation to the cloud — "+error.message, "error"); }
+  };
+
+  const deleteAllegationFromDB = async (allegationId) => {
+    const { error } = await supabase.from('allegations').delete().eq('id', allegationId);
+    if(error) { console.error('deleteAllegationFromDB', error); showToast("Couldn't delete allegation — "+error.message, "error"); }
+  };
+
+  const createAllegation = (caseId, fields) => {
+    const updated = addAllegation(allegations, caseId, fields);
+    if(updated===allegations) return;
+    setAllegations(updated);
+    const created = updated[updated.length-1];
+    saveAllegationToDB({...created, createdBy:user?.id});
+    audit("Allegation added", created.title, caseId);
+  };
+
+  const patchAllegation = (allegationId, fields) => {
+    const updated = updateAllegation(allegations, allegationId, fields);
+    setAllegations(updated);
+    const changed = updated.find(a=>a.id===allegationId);
+    if(changed) saveAllegationToDB(changed);
+  };
+
+  const changeAllegationStatus = (allegationId, status) => {
+    const updated = setAllegationStatus(allegations, allegationId, status);
+    setAllegations(updated);
+    const changed = updated.find(a=>a.id===allegationId);
+    if(changed) { saveAllegationToDB(changed); audit("Allegation status changed", `${changed.title} → ${allegationStatusMeta(status).label}`, changed.caseId); }
+  };
+
+  const deleteAllegation = (allegationId) => {
+    const target = allegations.find(a=>a.id===allegationId);
+    setAllegations(removeAllegation(allegations, allegationId));
+    deleteAllegationFromDB(allegationId);
+    if(target) audit("Allegation removed", target.title, target.caseId);
   };
 
   // ── Onboarding steps ──
@@ -3601,6 +3674,11 @@ Please produce:
           toggleNextStepDone={toggleNextStepDone}
           concludeInvestigation={concludeInvestigation}
           concludingInvestigation={concludingInvestigation}
+          allegations={allegations}
+          createAllegation={createAllegation}
+          patchAllegation={patchAllegation}
+          changeAllegationStatus={changeAllegationStatus}
+          deleteAllegation={deleteAllegation}
         />
       )}
 {/* ══ INTAKE ══ */}
