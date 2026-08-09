@@ -17,6 +17,7 @@ import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext } from './lib/caseContext';
+import { appealLinkCandidates } from './lib/appealLink';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
@@ -3215,7 +3216,12 @@ Please produce:
     const hasSigned = meetings.some(m => m.signStatus === "signed");
     const hasPending = meetings.some(m => m.signStatus === "pending");
 
-    if(cs.status === "closed") return {label:"Closed", color:"#6B6375", bg:"#F5F1EA"};
+    // cs.status was never set anywhere — every closed-case transition in
+    // this app (bulk close, appeal-window close, "Close case" buttons)
+    // writes cs.stage, not cs.status — so this check never matched and a
+    // closed case fell through to whatever heuristic below happened to
+    // fire instead, sometimes as misleading as "Open — no meetings yet".
+    if(getCaseStage(cs) === "closed") return {label:"Closed", color:"#6B6375", bg:"#F5F1EA"};
     if(hasSigned) return {label:"Signed & closed", color:"#1A7A4A", bg:"#E8F5EE"};
     if(hasOutcomeLetter && hasPending) return {label:"Outcome — awaiting signature", color:"#B87520", bg:"#FEF5E7"};
     if(hasOutcomeLetter) return {label:"Outcome issued", color:"#1A7A4A", bg:"#E8F5EE"};
@@ -3313,9 +3319,9 @@ Please produce:
             <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Appeal detected</div>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Link to an existing case?</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>This looks like an appeal. Would you like to link it to an existing case so the full proceeding is tracked together?</p>
-            {cases.length>0?(
+            {(() => { const linkCandidates = appealLinkCandidates(cases, caseInfo.employee); return linkCandidates.length>0?(
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-                {cases.map(cs=>(
+                {linkCandidates.map(cs=>(
                   <button key={cs.id} onClick={()=>{
                     const meeting = {
                       id: Date.now().toString(),
@@ -3336,7 +3342,14 @@ Please produce:
                       savedBy: currentUser?.name||"HR Manager",
                       signId, signStatus,
                     };
-                    saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:[...x.meetings,meeting]}:x));
+                    // Explicitly move the case to the appeal stage — the
+                    // most common real case here is appealing a case
+                    // that's already closed, and getCaseStage() returns
+                    // "closed" unconditionally for cs.stage==="closed"
+                    // before any heuristic ever runs, so without this the
+                    // case would silently stay shown as closed even with
+                    // a live appeal meeting now on file.
+                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",meetings:[...x.meetings,meeting]}:x));
                     setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""}));
                     setShowLinkCase(false);
                     setAppealDetected(false);
@@ -3349,8 +3362,8 @@ Please produce:
                 ))}
               </div>
             ):(
-              <div style={{fontSize:13,color:"#6B6880",marginBottom:16}}>No existing cases found.</div>
-            )}
+              <div style={{fontSize:13,color:"#6B6880",marginBottom:16}}>No existing case found for {caseInfo.employee||"this employee"}.</div>
+            ); })()}
             <Btn variant="ghost" onClick={()=>{setShowLinkCase(false);setAppealDetected(false);appealDetectedRef.current=false;}} style={{width:"100%"}}>Skip</Btn>
           </div>
         </div>

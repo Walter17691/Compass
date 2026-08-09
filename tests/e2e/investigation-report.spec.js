@@ -43,8 +43,11 @@ test('investigation meeting saves straight into the case, and the generated repo
 
   // Bug 1: this used to leave the user stranded on the Review screen.
   await page.getByRole('button', { name: /Save and go to case/ }).click();
+  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
+  // "Conclude investigation" lives on the Meetings tab (case workspace
+  // tab restructure) — not the default landing tab (Overview).
+  await page.getByRole('button', { name: 'Meetings', exact: true }).click();
   await expect(page.getByRole('button', { name: /Conclude investigation/ })).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText(employeeName).first()).toBeVisible();
 
   // Bug 2: generate the report and check it's a synthesis, not a dialogue dump.
   await page.getByRole('button', { name: /Conclude investigation/ }).click();
