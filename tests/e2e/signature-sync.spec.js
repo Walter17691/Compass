@@ -11,11 +11,12 @@ test.use({ baseURL: 'https://compass-lemon-iota.vercel.app' });
 // ever read that back into the case. A meeting showed "Pending
 // signature" forever unless HR remembered to click the manual "Mark
 // signed" button themselves, with no verification a signature had
-// actually been captured. This simulates the employee's side (a raw
-// POST to /api/signing, the same call the portal's sign page makes)
-// and confirms the case picks up "Signed" automatically on next view,
-// with no manual button ever clicked.
-test('a meeting shows Signed automatically once the real signature lands, without the manual Mark signed button', async ({ page }) => {
+// actually been captured. This drives the real /sign/{signId} page (the
+// same page the "Review and Sign" email link points to — that route did
+// not exist at all until this fix; the email link previously dead-ended
+// at the login screen) and confirms the case picks up "Signed"
+// automatically on next view, with no manual button ever clicked.
+test('a meeting shows Signed automatically once the real signature lands, without the manual Mark signed button', async ({ page, browser }) => {
   test.setTimeout(60000);
   const employeeName = `E2E SignSync ${Date.now()}`;
 
@@ -51,13 +52,18 @@ test('a meeting shows Signed automatically once the real signature lands, withou
   await expect(page.getByText('Pending signature', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('button', { name: 'Mark signed' })).toBeVisible();
 
-  // Simulate the employee actually signing — the same call the portal's
-  // sign page makes, bypassing the UI since that flow needs a separate
-  // portal-account login this test doesn't set up.
-  const signResult = await page.request.post('/api/signing', {
-    data: { signId, signature: 'data:image/png;base64,fakeSignatureDataForE2ETest', signedAt: new Date().toISOString() },
-  });
-  expect(signResult.ok()).toBeTruthy();
+  // The employee actually signs via the real, unauthenticated /sign/{signId}
+  // page — a brand-new browser context, not the HR user's logged-in `page`,
+  // since that's exactly who this link goes to (an external recipient with
+  // no Compass session).
+  const signerContext = await browser.newContext();
+  const signerPage = await signerContext.newPage();
+  await signerPage.goto(`/sign/${signId}`);
+  await expect(signerPage.getByText('Informal / 1-1')).toBeVisible({ timeout: 10000 });
+  await signerPage.getByPlaceholder('Full name').fill(employeeName);
+  await signerPage.getByRole('button', { name: 'Confirm signature' }).click();
+  await expect(signerPage.getByText('Signed by', { exact: false })).toBeVisible({ timeout: 10000 });
+  await signerContext.close();
 
   // Reload the same case-view page — this is what triggers the sync
   // check (it runs on mount/case-open, not continuously), and doubles as
