@@ -2148,8 +2148,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const historyContext = getCaseHistoryContext();
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:300, stream:false,
-          system:'UK employment law risk specialist. Respond ONLY with valid JSON, no other text: {"rating":"HIGH","summary":"two or three plain English sentences"} Rating must be HIGH, MEDIUM or LOW.'+(historyContext?' If organisational history is provided, factor it into your rating — a pattern of similar past cases or repeat issues with the same employee can raise risk — and briefly note why in the summary.':''),
-          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+"\nContent:\n"+tx.slice(0,3000)+(historyContext?"\n\nOrganisational history: "+historyContext:"")}]})});
+          system:'UK employment law risk specialist. Respond ONLY with valid JSON, no other text: {"rating":"HIGH","summary":"two or three plain English sentences"} Rating must be HIGH, MEDIUM or LOW.'+(historyContext?' If organisational history is provided, factor it into your rating — a pattern of similar past cases or repeat issues with the same employee can raise risk — and briefly note why in the summary.':'')+(policies.length?' If company policies are provided, factor any deviation from them into your rating too.':''),
+          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+"\nContent:\n"+tx.slice(0,3000)+(historyContext?"\n\nOrganisational history: "+historyContext:"")+getPolicyCtx()}]})});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       setRiskScore({...JSON.parse(text.replace(/```json|```/g,"").trim()), historyContext});
@@ -2768,7 +2768,7 @@ Please produce:
         prevMeetings ? "Previous meetings: "+prevMeetings : "",
         reviewOutput ? "Meeting record:"+nl+reviewOutput.slice(0,1200) : "",
         tx ? "Transcript:"+nl+tx.slice(0,800) : "",
-      ].filter(Boolean).join(nl);
+      ].filter(Boolean).join(nl) + getPolicyCtx();
 
       const letterInstructions = {
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. Follow ACAS Code of Practice.",
@@ -2781,7 +2781,7 @@ Please produce:
 
       const instruction = letterInstructions[t] || letterInstructions["outcome"];
 
-      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR correspondence that is legally sound and follows ACAS Code of Practice and relevant UK employment legislation. Always produce a complete letter — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets such as [Employee Address], [Date of Hearing], [Appeal Officer Name and Job Title], [Company Name]. The letter should read naturally and professionally. Output only the letter itself with no preamble, explanation or sign-off instructions.";
+      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR correspondence that is legally sound and follows ACAS Code of Practice and relevant UK employment legislation. Always produce a complete letter — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets such as [Employee Address], [Date of Hearing], [Appeal Officer Name and Job Title], [Company Name]. The letter should read naturally and professionally. Output only the letter itself with no preamble, explanation or sign-off instructions."+(policies.length?" Reference company policies by name where relevant — e.g. match sanction lengths, appeal windows or procedural steps to what the uploaded policy actually specifies rather than a generic default.":"");
 
       const userPrompt = "Draft "+instruction+nl+nl+"Available information:"+nl+context+nl+nl+"Important: Use [placeholder] format for any missing details. Today's date for reference: "+new Date().toLocaleDateString("en-GB")+". Always complete the full letter.";
 
