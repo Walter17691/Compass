@@ -1,4 +1,5 @@
 import { Btn, Card } from '../../components/Primitives';
+import { ROLES, roleLabel } from '../../lib/roles';
 
 export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember }) {
   if(!isHR) return null;
@@ -26,7 +27,7 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
                 <div>
                   <div style={{fontSize:14,color:"#1A1535"}}>{m.name||"Unknown"}</div>
                   <div style={{fontSize:11,color:"#6B6880"}}>
-                    {m.role==="hr_director"?"HR Director":m.role==="hr_manager"?"HR Manager":"Location Manager"}
+                    {roleLabel(m.role)}
                     {(m.location_ids||[]).length>0&&" · "+locations.filter(l=>(m.location_ids||[]).includes(l.id)).map(l=>l.name).join(", ")}
                   </div>
                 </div>
@@ -44,9 +45,7 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
                   <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
                   <select value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
                     style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:12}}>
-                    <option value="hr_director">HR Director</option>
-                    <option value="hr_manager">HR Manager</option>
-                    <option value="location_manager">Location Manager</option>
+                    {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
                   <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
@@ -79,9 +78,7 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
           <select value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value}))}
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:12}}>
-            <option value="hr_manager">HR Manager</option>
-            <option value="hr_director">HR Director</option>
-            <option value="location_manager">Location Manager</option>
+            {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
           {locations.length>0&&(
             <div style={{marginBottom:12}}>

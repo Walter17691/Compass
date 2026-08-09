@@ -18,6 +18,7 @@ import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext } from './lib/caseContext';
 import { appealLinkCandidates } from './lib/appealLink';
+import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
@@ -865,7 +866,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     else { console.error("respondToReview", error); showToast("Couldn't submit your response — "+error?.message, "error"); }
   };
 
-  const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
+  const isHR = isHrRole(member?.role);
 
   useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
 

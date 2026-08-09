@@ -1,6 +1,15 @@
 import { verifyCaller } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
 
+// Mirrors src/lib/roles.js's ROLE_LABELS — kept inline rather than
+// imported since api/ functions are a separate deployment bundle from
+// the frontend build and don't currently share modules with src/.
+const ROLE_LABELS = {
+  hr_manager: 'HR Manager', hr_director: 'HR Director', location_manager: 'Location Manager',
+  line_manager: 'Line Manager', investigator: 'Investigator',
+  legal_reviewer: 'Legal/Compliance Reviewer', auditor: 'Auditor',
+};
+
 const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -44,7 +53,7 @@ export default async function handler(req, res) {
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">
           <h2 style="color:#7C5CFC">Compass HR</h2>
           <p>Hi ${esc(name)},</p>
-          <p>You have been invited to join <strong>${esc(orgName)}</strong> on Compass HR as <strong>${role==="hr_director"?"HR Director":role==="hr_manager"?"HR Manager":"Location Manager"}</strong>.</p>
+          <p>You have been invited to join <strong>${esc(orgName)}</strong> on Compass HR as <strong>${esc(ROLE_LABELS[role]||"Location Manager")}</strong>.</p>
           <p>Click below to create your account and get started:</p>
           <div style="text-align:center;margin:32px 0">
             <a href="${esc(inviteLink)}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Accept invitation</a>
