@@ -1186,6 +1186,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setDueSoon(computeDueSoon(cases, dsarRequests));
   }, [cases, dsarRequests]);
 
+  // Lets a deep link (Home's "Suggested for you" quick links) land
+  // directly on a specific Settings section instead of always Billing.
+  const [settingsSection, setSettingsSection] = useState(null);
+
   // ── Calendar integration (Google Calendar) ──
   const [calendarConnected, setCalendarConnected] = useState(false);
   useEffect(() => {
@@ -3490,6 +3494,7 @@ Please produce:
           calendarConnected={calendarConnected}
           connectGoogleCalendar={connectGoogleCalendar}
           disconnectGoogleCalendar={disconnectGoogleCalendar}
+          setSettingsSection={setSettingsSection}
         />
       )}
 
@@ -3753,6 +3758,8 @@ Please produce:
           showToast={showToast}
           exportCSV={exportCSV}
           exportPDF={exportPDF}
+          initialSection={settingsSection}
+          clearInitialSection={()=>setSettingsSection(null)}
           org={org}
           user={user}
           locations={locations}

@@ -6,7 +6,7 @@ import { getCurrentRisk } from '../lib/caseStage';
 // render its own separate copy here, which had drifted out of sync with
 // the shared one (different height, padding, logo size) and caused a
 // visible layout jump on every navigation away from Home.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, setSettingsSection }) {
   const freshMeetingSetup = () => ({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
@@ -269,48 +269,55 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
               </div>
               <div style={{padding:"4px 0"}}>
                 {(()=>{
-                  const activeCaseTypes = cases.filter(cs=>getCaseStage(cs)!=="closed").map(cs=>(cs.caseType||"").toLowerCase());
-                  const hasMisconduct = activeCaseTypes.some(t=>t.includes("misconduct")||t.includes("disciplinary"));
-                  const hasGrievance = activeCaseTypes.some(t=>t.includes("grievance"));
-                  const hasInvestigation = cases.some(cs=>getCaseStage(cs)==="investigation");
-                  const hasRedundancy = activeCaseTypes.some(t=>t.includes("redundancy"));
-                  const hasPerformance = activeCaseTypes.some(t=>t.includes("performance"));
+                  // Every suggestion below used to route to setScreen(SETTINGS)
+                  // regardless of which one was clicked — landing on the
+                  // Billing tab no matter what, whether you clicked "Disciplinary
+                  // outcome letter" or "ACAS Code of Practice" (which had no
+                  // real content behind it at all). Each suggestion now carries
+                  // the actual case it's about, so clicking it opens that case
+                  // — where Case Copilot's own next-step banner already
+                  // recommends the exact matching action — instead of a
+                  // disconnected settings page.
+                  const activeCases = cases.filter(cs=>getCaseStage(cs)!=="closed");
+                  const findCase = (...needles) => activeCases.find(cs=>{
+                    const t = (cs.caseType||"").toLowerCase();
+                    return needles.some(n=>t.includes(n));
+                  });
+                  const investigationCase = activeCases.find(cs=>getCaseStage(cs)==="investigation");
+                  const misconductCase = findCase("misconduct","disciplinary");
+                  const grievanceCase = findCase("grievance");
+                  const redundancyCase = findCase("redundancy");
+                  const performanceCase = findCase("performance");
 
                   const suggested = [];
+                  const addCase = (cs, label, type, reason) => cs && suggested.push({label, type, reason, caseId:cs.id});
 
-                  if(hasInvestigation) {
-                    suggested.push({label:"Investigation report template",type:"TEMPLATE",reason:"Active investigation"});
-                    suggested.push({label:"Witness statement form",type:"TEMPLATE",reason:"Active investigation"});
-                  }
-                  if(hasMisconduct) {
-                    suggested.push({label:"Disciplinary Policy",type:"POLICY",reason:"Misconduct case open"});
-                    suggested.push({label:"Invitation to disciplinary hearing",type:"TEMPLATE",reason:"Misconduct case open"});
-                    suggested.push({label:"Disciplinary outcome letter",type:"TEMPLATE",reason:"Misconduct case open"});
-                  }
-                  if(hasGrievance) {
-                    suggested.push({label:"Grievance Policy",type:"POLICY",reason:"Grievance case open"});
-                    suggested.push({label:"Grievance hearing invitation",type:"TEMPLATE",reason:"Grievance case open"});
-                  }
-                  if(hasRedundancy) {
-                    suggested.push({label:"Redundancy Policy",type:"POLICY",reason:"Redundancy case open"});
-                    suggested.push({label:"At risk letter",type:"TEMPLATE",reason:"Redundancy case open"});
-                  }
-                  if(hasPerformance) {
-                    suggested.push({label:"Performance Improvement Plan",type:"TEMPLATE",reason:"PIP case open"});
-                    suggested.push({label:"Performance management policy",type:"POLICY",reason:"PIP case open"});
-                  }
+                  addCase(investigationCase, "Continue investigation", "CASE", "Active investigation");
+                  addCase(misconductCase, "Disciplinary Policy", "POLICY", "Misconduct case open");
+                  addCase(misconductCase, "Continue disciplinary case", "CASE", "Misconduct case open");
+                  addCase(grievanceCase, "Grievance Policy", "POLICY", "Grievance case open");
+                  addCase(grievanceCase, "Continue grievance case", "CASE", "Grievance case open");
+                  addCase(redundancyCase, "Redundancy Policy", "POLICY", "Redundancy case open");
+                  addCase(performanceCase, "Performance management policy", "POLICY", "PIP case open");
+                  addCase(performanceCase, "Continue performance case", "CASE", "PIP case open");
+
                   if(suggested.length===0) {
+                    // No active case to point at — the only honest destination
+                    // is the policy library itself, not a specific action.
                     suggested.push(
-                      {label:"Disciplinary Policy",type:"POLICY",reason:"Most used"},
-                      {label:"Grievance Policy",type:"POLICY",reason:"Most used"},
-                      {label:"ACAS Code of Practice",type:"GUIDE",reason:"Most used"},
-                      {label:"Invitation to hearing",type:"TEMPLATE",reason:"Most used"},
-                      {label:"Outcome letter",type:"TEMPLATE",reason:"Most used"}
+                      {label:"Disciplinary Policy",type:"POLICY",reason:"Set up your policy library",caseId:null},
+                      {label:"Grievance Policy",type:"POLICY",reason:"Set up your policy library",caseId:null},
+                      {label:"Redundancy Policy",type:"POLICY",reason:"Set up your policy library",caseId:null},
                     );
                   }
 
+                  const openSuggestion = (item) => {
+                    if(item.caseId) { setActiveCaseId(item.caseId); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW); }
+                    else { setSettingsSection("policies"); setScreen(SCREENS.SETTINGS); }
+                  };
+
                   return suggested.slice(0,5).map((item,i)=>(
-                    <button key={i} onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<Math.min(suggested.length,5)-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
+                    <button key={i} onClick={()=>openSuggestion(item)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<Math.min(suggested.length,5)-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
                       onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
                       onMouseLeave={e=>e.currentTarget.style.background="none"}>
                       <div style={{flex:1,minWidth:0}}>
@@ -321,7 +328,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                     </button>
                   ));
                 })()}
-                <button onClick={()=>setScreen(SCREENS.SETTINGS)} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all policies & templates →</button>
+                <button onClick={()=>{setSettingsSection("policies");setScreen(SCREENS.SETTINGS);}} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all policies & templates →</button>
               </div>
             </div>
 

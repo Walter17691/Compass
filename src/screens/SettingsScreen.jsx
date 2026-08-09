@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
 import { SettingsNav } from './settings/SettingsNav';
@@ -22,7 +22,7 @@ import { HelpSection } from './settings/HelpSection';
 // (OrgSettingsModal, reached only from its own header button); it's now
 // just another section here, alongside everything else that configures
 // the org.
-export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, starterTemplates, saveStarterTemplates, leaverTemplates, saveLeaverTemplates, promptDialog, confirmDialog, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers, isMobile }) {
+export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, starterTemplates, saveStarterTemplates, leaverTemplates, saveLeaverTemplates, promptDialog, confirmDialog, dueSoon, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers, isMobile, initialSection, clearInitialSection }) {
   const sections = [
     {id:"billing", label:"Billing"},
     ...(isHR?[{id:"team-access", label:"Team & access"}]:[]),
@@ -38,7 +38,17 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, loc
     {id:"data-privacy", label:"Data & privacy"},
     {id:"help", label:"Help"},
   ];
-  const [active, setActive] = useState("billing");
+  // Lets a deep link (Home's "Suggested for you" / "View all policies &
+  // templates") land directly on the relevant section instead of always
+  // Billing. Cleared on unmount so a later, ordinary nav-bar click into
+  // Settings still defaults to Billing rather than getting stuck wherever
+  // the last deep link pointed.
+  const [active, setActive] = useState(initialSection || "billing");
+  // Deliberately runs only on unmount, not whenever clearInitialSection
+  // changes identity — this should fire exactly once, when the user
+  // leaves Settings, not on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => clearInitialSection?.(), []);
 
   return(
     <div style={{maxWidth:920,margin:"0 auto",padding:"40px 20px"}}>
