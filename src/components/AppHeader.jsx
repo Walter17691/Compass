@@ -11,7 +11,7 @@ import { MenuIcon } from './Icons';
 // logo size, nav pill radius, active-tab colour), which is what caused a
 // visible layout jump on every navigation away from Home. One component
 // mounted unconditionally means there's nothing left to drift.
-export function AppHeader({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut }) {
+export function AppHeader({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR }) {
   const goToScreen = (s) => setScreen(s);
   const primaryItems = [
     {s:SCREENS.HOME, l:"Home"},
@@ -23,7 +23,10 @@ export function AppHeader({ screen, setScreen, cases, getCaseStage, isMobile, sh
     {s:SCREENS.NEWSTARTER, l:"Onboarding"},
     {s:SCREENS.OFFBOARDING, l:"Offboarding"},
     {s:SCREENS.REDUNDANCY, l:"Redundancy"},
-    {s:SCREENS.WELLBEING, l:"Wellbeing"},
+    // Wellbeing notes are confidential and RLS-restricted to HR staff (see
+    // supabase/wellbeing_notes_2026-08-09.sql) — a location_manager org
+    // member has no database access to them, so don't even show the tab.
+    ...(isHR ? [{s:SCREENS.WELLBEING, l:"Wellbeing"}] : []),
     {s:SCREENS.DSAR, l:"DSAR"},
   ];
   const navItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];

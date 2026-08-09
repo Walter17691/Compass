@@ -847,7 +847,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); } }, [org?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1765,7 +1765,41 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   // ── Wellbeing helpers ──
+  // Cloud-synced like cases/starter_instances/leaver_instances, but RLS on
+  // wellbeing_notes restricts every operation to hr_manager/hr_director org
+  // members (see supabase/wellbeing_notes_2026-08-09.sql) — these notes were
+  // previously localStorage-only, meaning they never actually reached other
+  // HR staff or devices despite the screen's own "confidential... restricted
+  // to HR only" copy implying a shared record.
   const saveWellbeingNotes = u => { setWellbeingNotes(u); lsSet("compass_wellbeing", u); };
+
+  const loadWellbeingNotes = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('wellbeing_notes').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      if(error) { console.error('loadWellbeingNotes', error); return; }
+      if(data) saveWellbeingNotes(data.map(r=>({
+        id:r.id, employeeName:r.employee_name, type:r.type, date:r.date, manager:r.manager,
+        content:r.content, supportOffered:r.support_offered, followUpDate:r.follow_up_date,
+        followUpDone:r.follow_up_done, confidential:r.confidential,
+        createdBy:r.created_by, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadWellbeingNotes', e); }
+  };
+
+  const saveWellbeingNoteToDB = async (note) => {
+    if(!org?.id) return;
+    const { error } = await supabase.from('wellbeing_notes').upsert({
+      id: note.id,
+      org_id: org.id,
+      employee_name: note.employeeName, type: note.type||'chat', date: note.date||null,
+      manager: note.manager||null, content: note.content, support_offered: note.supportOffered||null,
+      follow_up_date: note.followUpDate||null, follow_up_done: !!note.followUpDone,
+      confidential: note.confidential!==false, created_by: note.createdBy||null,
+      updated_at: new Date().toISOString(),
+    });
+    if(error) { console.error('saveWellbeingNoteToDB', error); showToast("Couldn't save wellbeing note to the cloud — "+error.message, "error"); }
+  };
 
   const addWellbeingNote = () => {
     const f = wellbeingForm;
@@ -1779,6 +1813,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       followUpDone: false,
     };
     saveWellbeingNotes([...wellbeingNotes, note]);
+    saveWellbeingNoteToDB(note);
     setWellbeingForm({employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
     setWellbeingView("employee");
     setActiveWellbeing(f.employeeName);
@@ -1786,7 +1821,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   const toggleFollowUpDone = (noteId) => {
-    saveWellbeingNotes(wellbeingNotes.map(n => n.id===noteId ? {...n,followUpDone:!n.followUpDone} : n));
+    const updated = wellbeingNotes.map(n => n.id===noteId ? {...n,followUpDone:!n.followUpDone} : n);
+    saveWellbeingNotes(updated);
+    const changed = updated.find(n=>n.id===noteId);
+    if(changed) saveWellbeingNoteToDB(changed);
   };
 
   // ── Onboarding steps ──
@@ -3408,6 +3446,7 @@ Please produce:
         currentUser={currentUser}
         auditLog={auditLog}
         onSignOut={onSignOut}
+        isHR={isHR}
       />
 
       {/* ── Deadline banner ── */}
@@ -3687,7 +3726,7 @@ Please produce:
       )}
 
       {/* ══ MENTAL HEALTH & WELLBEING ══ */}
-      {screen===SCREENS.WELLBEING&&(
+      {screen===SCREENS.WELLBEING&&isHR&&(
         <WellbeingScreen
           wellbeingNotes={wellbeingNotes}
           activeWellbeing={activeWellbeing}
