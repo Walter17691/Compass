@@ -225,3 +225,35 @@ describe('computeDueSoon — confidential/caseId/createdBy threading', () => {
     expect(item.createdBy).toBe(null);
   });
 });
+
+describe('computeDueSoon — case tasks', () => {
+  const today = new Date('2025-06-16');
+  const cases = [{ id: 'c1', employeeName: 'Priya', stage: 'investigation', confidential: true, createdBy: 'user-1', meetings: [] }];
+
+  it('surfaces an open task with a due date within the window, carrying the parent case metadata', () => {
+    const caseTasks = [{ id: 't1', caseId: 'c1', name: 'Chase signed witness statement', dueDate: '2025-06-20', status: 'open' }];
+    const items = computeDueSoon(cases, [], today, caseTasks).filter(d => d.category === 'task');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ employeeName: 'Priya', label: 'Task due: Chase signed witness statement', confidential: true, caseId: 'c1', createdBy: 'user-1' });
+  });
+
+  it('ignores a task marked done', () => {
+    const caseTasks = [{ id: 't1', caseId: 'c1', name: 'x', dueDate: '2025-06-20', status: 'done' }];
+    expect(computeDueSoon(cases, [], today, caseTasks).filter(d => d.category === 'task')).toHaveLength(0);
+  });
+
+  it('ignores a task with no due date', () => {
+    const caseTasks = [{ id: 't1', caseId: 'c1', name: 'x', dueDate: '', status: 'open' }];
+    expect(computeDueSoon(cases, [], today, caseTasks).filter(d => d.category === 'task')).toHaveLength(0);
+  });
+
+  it('ignores a task on a closed case', () => {
+    const closedCases = [{ ...cases[0], stage: 'closed' }];
+    const caseTasks = [{ id: 't1', caseId: 'c1', name: 'x', dueDate: '2025-06-20', status: 'open' }];
+    expect(computeDueSoon(closedCases, [], today, caseTasks).filter(d => d.category === 'task')).toHaveLength(0);
+  });
+
+  it('existing call sites that omit caseTasks are unaffected', () => {
+    expect(computeDueSoon(cases, [], today)).toHaveLength(0);
+  });
+});

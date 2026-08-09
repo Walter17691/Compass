@@ -6,7 +6,9 @@ import { MDRenderer } from '../components/MDRenderer';
 import { LockIcon } from '../components/Icons';
 import { AllegationsPanel } from '../components/AllegationsPanel';
 import { TimelinePanel } from '../components/TimelinePanel';
+import { CaseTasksPanel } from '../components/CaseTasksPanel';
 import { allegationsForCase } from '../lib/allegations';
+import { tasksForCase } from '../lib/caseTasks';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -21,11 +23,11 @@ const MAX_EVIDENCE_SIZE = 15*1024*1024; // 15MB — dataUrl storage in a jsonb c
 const ALLOWED_EVIDENCE_TYPES = ["image/jpeg","image/png","image/gif","image/webp","image/heic","application/pdf","video/mp4","video/quicktime","video/webm","text/plain","text/csv","message/rfc822","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
 const fmtBytes = n => n<1024*1024 ? Math.round(n/1024)+"KB" : (n/(1024*1024)).toFixed(1)+"MB";
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showTimeline, setShowTimeline] = useState(false);
+  const [viewMode, setViewMode] = useState(null); // null | "timeline" | "tasks"
   const cs = cases.find(x=>x.id===activeCaseId);
   if(!cs) return <div style={{padding:40,color:"#9B9098",fontFamily:"DM Sans,system-ui,sans-serif"}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7C5CFC",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
   const meetings = cs.meetings||[];
@@ -110,7 +112,8 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
               showToast(turningOn?"Case marked confidential":"Case no longer confidential");
             }} title={cs.confidential?"Visible only to authorised staff":"Visible to all HR staff in the org"} style={{background:cs.confidential?"#FEF5E7":"none",border:"1px solid",borderColor:cs.confidential?"#E8C88A":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:cs.confidential?"#B87520":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6}}>{cs.confidential?<><LockIcon size={11} />Confidential</>:"Mark confidential"}</button>
             <button onClick={()=>setShowReassignModal(true)} title={`Currently run by ${cs.manager||"unassigned"}`} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Reassign</button>
-            <button onClick={()=>setShowTimeline(v=>!v)} style={{background:showTimeline?"#F5F3FF":"none",border:"1px solid",borderColor:showTimeline?"#DDD9F5":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:showTimeline?"#5B3FD4":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{showTimeline?"← Back to case":"Timeline"}</button>
+            <button onClick={()=>setViewMode(v=>v==="tasks"?null:"tasks")} style={{background:viewMode==="tasks"?"#F5F3FF":"none",border:"1px solid",borderColor:viewMode==="tasks"?"#DDD9F5":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:viewMode==="tasks"?"#5B3FD4":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{viewMode==="tasks"?"← Back to case":"Case tasks"}</button>
+            <button onClick={()=>setViewMode(v=>v==="timeline"?null:"timeline")} style={{background:viewMode==="timeline"?"#F5F3FF":"none",border:"1px solid",borderColor:viewMode==="timeline"?"#DDD9F5":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:viewMode==="timeline"?"#5B3FD4":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{viewMode==="timeline"?"← Back to case":"Timeline"}</button>
             <button onClick={()=>{const type=activeStage?.id==="investigation"?"investigation":activeStage?.id==="appeal"?"appeal-disciplinary":"disciplinary";setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}}
               style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>
           </div>
@@ -233,9 +236,13 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
 
       {/* Stage content */}
       <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
-        {showTimeline?(
+        {viewMode==="timeline"?(
           <div style={{maxWidth:800,margin:"0 auto"}}>
             <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate}/>
+          </div>
+        ):viewMode==="tasks"?(
+          <div style={{maxWidth:800,margin:"0 auto"}}>
+            <CaseTasksPanel cs={cs} tasks={tasksForCase(caseTasks, cs.id)} createCaseTask={createCaseTask} toggleCaseTaskDone={toggleCaseTaskDone} deleteCaseTask={deleteCaseTask} fmtDate={fmtDate}/>
           </div>
         ):activeStage&&(
           <div style={{maxWidth:800,margin:"0 auto"}}>

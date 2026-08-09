@@ -16,6 +16,7 @@ export function AppHeader({ screen, setScreen, cases, getCaseStage, isMobile, sh
   const primaryItems = [
     {s:SCREENS.HOME, l:"Home"},
     {s:SCREENS.CASES, l:"Cases"+(cases.filter(x=>getCaseStage(x)!=="closed").length>0?" ("+cases.filter(x=>getCaseStage(x)!=="closed").length+")":"")},
+    {s:SCREENS.TASKS, l:"Tasks"},
     {s:SCREENS.PEOPLE, l:"People"},
     {s:SCREENS.ERREPORT, l:"Reports"},
   ];

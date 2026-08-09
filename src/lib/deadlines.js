@@ -7,7 +7,12 @@ import { getCaseStage } from './caseStage.js';
 // due_date, status }. Fed into the same due-soon array under category
 // "dsar" so the existing overdue banner, Settings list, and digest cron
 // all pick up DSAR deadlines automatically with no changes of their own.
-export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
+// caseTasks (optional): open case_tasks rows, each { id, caseId, name,
+// dueDate, status }, category "task" — appended as a fourth, separately
+// defaulted param (not inserted before `today`) so every existing
+// positional call site — the digest cron included — keeps working
+// unchanged until it's ready to pass tasks through too.
+export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = []) {
   const start = new Date(today);
   start.setHours(0,0,0,0);
   const due = [];
@@ -102,6 +107,14 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
   dsarRequests.forEach(req => {
     if(req.status==="completed") return;
     addDeadline(req.employeeName||req.employee_name, "DSAR response due (statutory: 1 calendar month)", new Date(req.due_date||req.dueDate), "dsar", `dsar:${req.id}`);
+  });
+
+  caseTasks.forEach(task => {
+    if(task.status==="done"||!task.dueDate) return;
+    const cs = cases.find(c=>c.id===task.caseId);
+    if(cs && getCaseStage(cs)==="closed") return;
+    const dl = task.dueDate.includes('/') ? (()=>{ const p=task.dueDate.split('/'); return new Date(p[2],p[1]-1,p[0]); })() : new Date(task.dueDate);
+    addDeadline(cs?.employeeName||"Unassigned case", "Task due: "+task.name, dl, "task", `task:${task.id}`, cs ? { confidential: !!cs.confidential, caseId: cs.id, createdBy: cs.createdBy||null } : {});
   });
 
   due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.overdue?b.daysOverdue-a.daysOverdue:a.daysLeft-b.daysLeft; });

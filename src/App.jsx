@@ -12,6 +12,7 @@ import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta } from './lib/allegations';
+import { addTask, toggleTaskDone, removeTask } from './lib/caseTasks';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
@@ -49,6 +50,7 @@ const ErReportScreen = lazy(() => import('./screens/ErReportScreen').then(m => (
 const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
+const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
 import { HandoffModal } from './screens/HandoffModal';
@@ -849,7 +851,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = member?.role==='hr_director'||member?.role==='hr_manager';
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1131,6 +1133,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── Allegations (case-scoped issues under investigation) ──
   const [allegations, setAllegations] = useState([]);
 
+  // ── Case tasks ──
+  const [caseTasks, setCaseTasks] = useState([]);
+
   // Refs
   const feedRef = useRef(null);
   const inputRef = useRef(null);
@@ -1189,8 +1194,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Rules live in src/lib/deadlines.js so the digest cron function (server
   // side) can compute the same due-soon set without duplicating them.
   useEffect(() => {
-    setDueSoon(computeDueSoon(cases, dsarRequests));
-  }, [cases, dsarRequests]);
+    setDueSoon(computeDueSoon(cases, dsarRequests, new Date(), caseTasks));
+  }, [cases, dsarRequests, caseTasks]);
 
   // Lets a deep link (Home's "Suggested for you" quick links) land
   // directly on a specific Settings section instead of always Billing.
@@ -1909,6 +1914,63 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAllegations(removeAllegation(allegations, allegationId));
     deleteAllegationFromDB(allegationId);
     if(target) audit("Allegation removed", target.title, target.caseId);
+  };
+
+  // ── Case tasks ──
+  // Same own-table treatment as allegations (see supabase/case_structure_2026-08-09.sql)
+  // — checklistTasks.js's nested {id, tasks:[...]} shape doesn't fit a flat,
+  // cross-case-listable table, so these are new but deliberately small,
+  // mirroring allegations' own CRUD shape rather than inventing a third pattern.
+  const loadCaseTasks = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('case_tasks').select('*').eq('org_id', org.id).order('created_at', {ascending:true});
+      if(error) { console.error('loadCaseTasks', error); return; }
+      if(data) setCaseTasks(data.map(r=>({
+        id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
+        dueDate:r.due_date||"", priority:r.priority, status:r.status,
+        createdBy:r.created_by, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadCaseTasks', e); }
+  };
+
+  const saveCaseTaskToDB = async (task) => {
+    if(!org?.id) return;
+    const { error } = await withFkRetry(() => supabase.from('case_tasks').upsert({
+      id: task.id, case_id: task.caseId, org_id: org.id,
+      name: task.name, owner: task.owner||null, due_date: task.dueDate||null,
+      priority: task.priority||'normal', status: task.status||'open',
+      created_by: task.createdBy||user?.id||null, updated_at: new Date().toISOString(),
+    }));
+    if(error) { console.error('saveCaseTaskToDB', error); showToast("Couldn't save task to the cloud — "+error.message, "error"); }
+  };
+
+  const deleteCaseTaskFromDB = async (taskId) => {
+    const { error } = await supabase.from('case_tasks').delete().eq('id', taskId);
+    if(error) { console.error('deleteCaseTaskFromDB', error); showToast("Couldn't delete task — "+error.message, "error"); }
+  };
+
+  const createCaseTask = (caseId, fields) => {
+    const updated = addTask(caseTasks, caseId, fields);
+    if(updated===caseTasks) return;
+    setCaseTasks(updated);
+    const created = updated[updated.length-1];
+    saveCaseTaskToDB({...created, createdBy:user?.id});
+    audit("Task added", created.name, caseId);
+  };
+
+  const toggleCaseTaskDone = (taskId) => {
+    const updated = toggleTaskDone(caseTasks, taskId);
+    setCaseTasks(updated);
+    const changed = updated.find(t=>t.id===taskId);
+    if(changed) saveCaseTaskToDB(changed);
+  };
+
+  const deleteCaseTask = (taskId) => {
+    const target = caseTasks.find(t=>t.id===taskId);
+    setCaseTasks(removeTask(caseTasks, taskId));
+    deleteCaseTaskFromDB(taskId);
+    if(target) audit("Task removed", target.name, target.caseId);
   };
 
   // ── Onboarding steps ──
@@ -3681,6 +3743,10 @@ Please produce:
           changeAllegationStatus={changeAllegationStatus}
           deleteAllegation={deleteAllegation}
           auditLog={auditLog}
+          caseTasks={caseTasks}
+          createCaseTask={createCaseTask}
+          toggleCaseTaskDone={toggleCaseTaskDone}
+          deleteCaseTask={deleteCaseTask}
         />
       )}
 {/* ══ INTAKE ══ */}
@@ -3939,6 +4005,19 @@ Please produce:
           starterInstances={starterInstances}
           leaverInstances={leaverInstances}
           setScreen={setScreen}
+        />
+      )}
+      {screen===SCREENS.TASKS&&(
+        <TasksScreen
+          caseTasks={caseTasks}
+          cases={cases}
+          createCaseTask={createCaseTask}
+          toggleCaseTaskDone={toggleCaseTaskDone}
+          deleteCaseTask={deleteCaseTask}
+          setScreen={setScreen}
+          setActiveCaseId={setActiveCaseId}
+          setActiveCaseStage={setActiveCaseStage}
+          fmtDate={fmtDate}
         />
       )}
       </Suspense>
