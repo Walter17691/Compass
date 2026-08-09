@@ -22,24 +22,32 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
     return d;
   };
 
-  const addDeadline = (employeeName, label, deadlineDate, category, key) => {
+  // caseId/createdBy/confidential ride along on every case-based deadline so
+  // downstream consumers that leave Compass's own RLS-protected boundary —
+  // the digest cron's email/webhook, the calendar-sync push to Google
+  // Calendar — can decide whether it's safe to forward a given deadline
+  // outside that boundary. In-app consumers (the overdue banner, this
+  // function's cases[] input itself) don't need to check this: they already
+  // only ever see cases the current user is authorised for, via RLS.
+  const addDeadline = (employeeName, label, deadlineDate, category, key, meta={}) => {
     if(!deadlineDate||isNaN(deadlineDate)) return;
     deadlineDate.setHours(0,0,0,0);
     const diff = Math.ceil((deadlineDate-start)/(1000*60*60*24));
-    if(diff<=14) due.push({employeeName,label,category,key,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),daysOverdue:diff<0?Math.abs(diff):0,overdue:diff<0});
+    if(diff<=14) due.push({employeeName,label,category,key,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),daysOverdue:diff<0?Math.abs(diff):0,overdue:diff<0,confidential:false,caseId:null,createdBy:null,...meta});
   };
 
   cases.forEach(cs => {
     if(getCaseStage(cs)==="closed") return;
     const meetings = cs.meetings||[];
     const evidence = cs.evidence||[];
+    const caseMeta = { confidential: !!cs.confidential, caseId: cs.id, createdBy: cs.createdBy||null };
 
     // Manual next steps
     meetings.forEach(m => {
       (m.nextSteps||[]).filter(s=>!s.done&&s.deadline).forEach(s => {
         const parts=s.deadline.split("/");
         const dl=parts.length===3?new Date(parts[2],parts[1]-1,parts[0]):new Date(s.deadline);
-        addDeadline(cs.employeeName, s.step||"Next step due", dl, "next_step", `${cs.id}:nextstep:${m.id}:${s.step}`);
+        addDeadline(cs.employeeName, s.step||"Next step due", dl, "next_step", `${cs.id}:nextstep:${m.id}:${s.step}`, caseMeta);
       });
     });
 
@@ -49,7 +57,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
       const hasOutcome = cs.outcome||meetings.some(mt=>mt.letterOutput&&(mt.type||"").toLowerCase().includes("outcome"));
       if(!hasOutcome) {
         const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-        if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS: 5 working days)", dl, "outcome", `${cs.id}:outcome`);
+        if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS: 5 working days)", dl, "outcome", `${cs.id}:outcome`, caseMeta);
       }
     });
 
@@ -57,7 +65,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
     const outcomeLetters = meetings.filter(m=>m.letterOutput&&(m.type||"").toLowerCase().includes("disciplinary"));
     outcomeLetters.forEach(m => {
       const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-      if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`);
+      if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`, caseMeta);
     });
 
     // Investigation overrunning — 28 days
@@ -69,7 +77,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
         if(startStr) {
           let mStart; if(startStr.includes('/')) { const p=startStr.split('/'); mStart=new Date(p[2],p[1]-1,p[0]); } else mStart=new Date(startStr);
           const daysSince = Math.ceil((start-mStart)/(1000*60*60*24));
-          if(daysSince>21) { const dl=new Date(mStart); dl.setDate(dl.getDate()+28); addDeadline(cs.employeeName,"Investigation overrunning — consider concluding (ACAS guidance)",dl,"investigation",`${cs.id}:investigation`); }
+          if(daysSince>21) { const dl=new Date(mStart); dl.setDate(dl.getDate()+28); addDeadline(cs.employeeName,"Investigation overrunning — consider concluding (ACAS guidance)",dl,"investigation",`${cs.id}:investigation`, caseMeta); }
         }
       }
     }
@@ -77,7 +85,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
     // Grievance acknowledgement — 5 working days from receipt
     if((cs.caseType||"").toLowerCase()==="grievance"&&meetings.length===0&&cs.dateReceived) {
       const dl = workingDaysFromDate(cs.dateReceived, 5);
-      if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS: 5 working days)", dl, "grievance", `${cs.id}:grievance`);
+      if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS: 5 working days)", dl, "grievance", `${cs.id}:grievance`, caseMeta);
     }
 
     // Pending signature chase — 7 days
@@ -86,7 +94,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date()) {
       if(sent) {
         const sentDate=new Date(sent);
         const daysPending=Math.ceil((start-sentDate)/(1000*60*60*24));
-        if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature",`${cs.id}:signature:${e.id||e.signId}`); }
+        if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature",`${cs.id}:signature:${e.id||e.signId}`, caseMeta); }
       }
     });
   });

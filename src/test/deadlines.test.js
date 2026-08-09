@@ -189,3 +189,39 @@ describe('computeDueSoon — case-derived ACAS/statutory deadlines', () => {
     expect(computeDueSoon([], dsarRequests, new Date('2025-06-01'))).toHaveLength(0);
   });
 });
+
+describe('computeDueSoon — confidential/caseId/createdBy threading', () => {
+  // Consumers that leave Compass's RLS-protected boundary (calendar sync,
+  // the digest cron's email/webhook) need these fields to decide whether a
+  // deadline is safe to forward — see App.jsx's calendar-sync effect and
+  // api/cron/_digest.js's isAuthorisedFor.
+  const today = new Date('2025-06-16');
+
+  it('carries confidential/caseId/createdBy through from a confidential case', () => {
+    const cases = [{
+      id: 'c1', employeeName: 'Alice', stage: 'disciplinary', confidential: true, createdBy: 'user-1',
+      meetings: [{ id: 'm1', type: 'Disciplinary', nextSteps: [{ step: 'Send outcome letter', deadline: '20/06/2025', done: false }] }],
+    }];
+    const [item] = computeDueSoon(cases, [], today);
+    expect(item.confidential).toBe(true);
+    expect(item.caseId).toBe('c1');
+    expect(item.createdBy).toBe('user-1');
+  });
+
+  it('defaults confidential to false for a non-confidential case', () => {
+    const cases = [{
+      id: 'c2', employeeName: 'Bob', stage: 'disciplinary',
+      meetings: [{ id: 'm1', type: 'Disciplinary', nextSteps: [{ step: 'Send outcome letter', deadline: '20/06/2025', done: false }] }],
+    }];
+    const [item] = computeDueSoon(cases, [], today);
+    expect(item.confidential).toBe(false);
+  });
+
+  it('a DSAR deadline is never confidential and has no case link', () => {
+    const dsarRequests = [{ id: 'd1', employeeName: 'Carol', dueDate: '2025-06-20' }];
+    const [item] = computeDueSoon([], dsarRequests, today);
+    expect(item.confidential).toBe(false);
+    expect(item.caseId).toBe(null);
+    expect(item.createdBy).toBe(null);
+  });
+});

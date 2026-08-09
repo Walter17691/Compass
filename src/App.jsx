@@ -1206,9 +1206,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   useEffect(() => {
     if(!calendarConnected || !user?.id) return;
     const timeout = setTimeout(() => {
+      // Google Calendar is outside Compass's own access control (RLS
+      // already scopes dueSoon to cases this user can see, but a shared
+      // or delegated calendar has no such per-case boundary) — "Mark
+      // confidential" exists specifically to restrict a case beyond normal
+      // org-wide visibility, so those deadlines never leave Compass via
+      // this sync, full stop, even for the case's own creator.
       authedFetch("/api/calendar/sync", {
         method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ deadlines: dueSoon }),
+        body: JSON.stringify({ deadlines: dueSoon.filter(d => !d.confidential) }),
       }).catch(e => console.error("Calendar sync failed:", e));
     }, 3000);
     return () => clearTimeout(timeout);

@@ -47,6 +47,24 @@ async function sendDigestEmail(email, items) {
   if (!res.ok) console.error('Digest email failed for', email, await res.text());
 }
 
+// This job runs with the service-role key, which bypasses RLS entirely —
+// unlike every in-app view of dueSoon (the overdue banner, cases list),
+// which Postgres RLS already scopes to cases the logged-in user can see.
+// A confidential case (confidential_cases_2026-07-26.sql) is restricted to
+// its creator, anyone granted case_access, and hr_directors — nobody else,
+// including other hr_managers in the same org. Without this check, every
+// opted-in org member would get emailed the employee name and deadline for
+// a confidential case they have no right to see, and a configured Slack/
+// Teams webhook (one shared, org-wide destination with no per-user
+// boundary at all) would broadcast it to everyone who can read that
+// channel.
+export function isAuthorisedFor(deadline, member, caseAccessByCase) {
+  if (!deadline.confidential) return true;
+  if (member.role === 'hr_director') return true;
+  if (deadline.createdBy && deadline.createdBy === member.user_id) return true;
+  return (caseAccessByCase.get(deadline.caseId) || new Set()).has(member.user_id);
+}
+
 export async function runDigest() {
   const orgsRes = await supabaseRequest('organisations?select=id,name,plan,notification_webhook_url,notification_webhook_type');
   const orgs = await orgsRes.json();
@@ -66,18 +84,32 @@ export async function runDigest() {
     const urgent = dueSoon.filter(isUrgent);
     if (urgent.length === 0) continue;
 
-    const membersRes = await supabaseRequest(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id`);
+    const membersRes = await supabaseRequest(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id,role`);
     const members = await membersRes.json();
 
+    const caseAccessRes = await supabaseRequest(`case_access?org_id=eq.${org.id}&select=case_id,user_id`);
+    const caseAccessRows = await caseAccessRes.json();
+    const caseAccessByCase = new Map();
+    for (const row of caseAccessRows) {
+      if (!caseAccessByCase.has(row.case_id)) caseAccessByCase.set(row.case_id, new Set());
+      caseAccessByCase.get(row.case_id).add(row.user_id);
+    }
+
     for (const member of members) {
+      const authorised = urgent.filter(d => isAuthorisedFor(d, member, caseAccessByCase));
+      if (authorised.length === 0) continue;
       const email = await getUserEmail(member.user_id);
       if (!email) continue;
-      await sendDigestEmail(email, urgent);
+      await sendDigestEmail(email, authorised);
       sent++;
     }
 
-    if (org.notification_webhook_url) {
-      const ok = await postWebhook(org.notification_webhook_url, org.notification_webhook_type, urgent);
+    // Never confidential deadlines here: a webhook is one shared, org-wide
+    // destination (e.g. a Slack channel) with no per-recipient authorisation
+    // to check against, unlike the per-member email loop above.
+    const publicUrgent = urgent.filter(d => !d.confidential);
+    if (org.notification_webhook_url && publicUrgent.length > 0) {
+      const ok = await postWebhook(org.notification_webhook_url, org.notification_webhook_type, publicUrgent);
       if (ok) webhooksNotified++;
     }
   }
