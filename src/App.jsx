@@ -156,7 +156,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const { data, error } = await supabase.from('audit_log').select('*').eq('org_id', org.id).order('created_at',{ascending:false}).limit(500);
-      if(!error && data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||""})));
+      if(!error && data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||"", caseId:r.case_id||null})));
     } catch(e) { console.error("Load audit log error:", e); }
   };
   useEffect(() => { if(org?.id) loadAuditLog(); }, [org?.id]);
@@ -1175,6 +1175,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       user: userName,
       action,
       detail,
+      caseId,
     };
     setAuditLog(p => [entry, ...p].slice(0, 500)); // optimistic — cloud is the source of truth on next load
     if(org?.id && user?.id) {
@@ -3679,6 +3680,7 @@ Please produce:
           patchAllegation={patchAllegation}
           changeAllegationStatus={changeAllegationStatus}
           deleteAllegation={deleteAllegation}
+          auditLog={auditLog}
         />
       )}
 {/* ══ INTAKE ══ */}
