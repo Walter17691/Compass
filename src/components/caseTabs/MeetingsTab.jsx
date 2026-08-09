@@ -1,0 +1,116 @@
+// Absorbs the case view's former top-level "stage tabs" (Investigation /
+// Disciplinary / Appeal / Other) as an internal sub-filter now that
+// they're specifically about which meetings to show, not which workspace
+// tab is active. The investigation-report and disciplinary-officer-
+// handoff blocks stay grouped with the Investigation meetings list
+// (their natural narrative position) rather than moving to Outcome,
+// which is specifically about the disciplinary decision itself.
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, concludeInvestigation, concludingInvestigation, setShowHandoffModal, setLetterOutput }) {
+  const meetings = cs.meetings||[];
+  const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary")).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const appealMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal")).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const otherMeetings = meetings.filter(m=>!["investigation","disciplinary","appeal"].some(t=>(m.type||"").toLowerCase().includes(t))).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const allStages = [
+    {id:"investigation",label:"Investigation",meetings:invMeetings,color:"#7C5CFC"},
+    {id:"disciplinary",label:"Disciplinary",meetings:discMeetings,color:"#C84B2F"},
+    {id:"appeal",label:"Appeal",meetings:appealMeetings,color:"#B87520"},
+    ...(otherMeetings.length>0?[{id:"other",label:"Other",meetings:otherMeetings,color:"#6B6375"}]:[]),
+  ].filter(s=>s.meetings.length>0||s.id==="investigation");
+  const activeStage = allStages.find(s=>s.id===activeCaseStage)||allStages[0];
+
+  const startMeeting = (type) => {
+    setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));
+    setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
+    setScreen(screens.HOME+"_meeting");
+  };
+  const typeFor = stageId => stageId==="investigation"?"investigation":stageId==="appeal"?"appeal-disciplinary":"disciplinary";
+
+  const MeetingRow = ({m}) => (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid #F5F1EA",gap:12}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>{m.type}</div>
+        <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{fmtDate(m.date)} · {m.savedBy||m.manager||"HR Manager"}</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+        {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":"#B87520",background:m.riskScore.rating==="HIGH"?"#FEF0EB":"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
+        {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Signed</span>}
+        {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>Pending signature</span>}
+        {m.signStatus==="pending"&&<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,signStatus:"signed"}:mt)}:x))} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
+        {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
+      </div>
+    </div>
+  );
+
+  if (!activeStage) return null;
+
+  return (
+    <>
+      <div style={{display:"flex",gap:2,marginBottom:16}}>
+        {allStages.map(s=>(
+          <button key={s.id} onClick={()=>setActiveCaseStage(s.id)}
+            style={{padding:"6px 14px",borderRadius:6,border:"none",background:activeCaseStage===s.id||(!activeCaseStage&&s.id===allStages[0].id)?"#F5F3FF":"none",color:activeStage.id===s.id?s.color:"#6B6375",fontWeight:activeStage.id===s.id?600:400,fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
+            {s.label}
+            {s.meetings.length>0&&<span style={{fontSize:10,background:activeStage.id===s.id?s.color:"#E8E0D0",color:activeStage.id===s.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{s.meetings.length}</span>}
+          </button>
+        ))}
+      </div>
+
+      {activeStage.meetings.length>0?(
+        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:11,fontWeight:700,color:activeStage.color,letterSpacing:"0.5px",textTransform:"uppercase"}}>Meetings ({activeStage.meetings.length})</div>
+            <button onClick={()=>startMeeting(typeFor(activeStage.id))} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Add meeting</button>
+          </div>
+          <div style={{padding:"0 16px"}}>
+            {activeStage.meetings.map((m,i)=><MeetingRow key={m.id||i} m={m}/>)}
+          </div>
+        </div>
+      ):(
+        <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0",marginBottom:16}}>
+          <div style={{fontSize:14,color:"#9B9098",marginBottom:12}}>No {activeStage.label.toLowerCase()} meetings yet</div>
+          <button onClick={()=>startMeeting(typeFor(activeStage.id))} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start {activeStage.label.toLowerCase()} meeting</button>
+        </div>
+      )}
+
+      {activeStage.id==="investigation"&&(
+        <>
+          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+            <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Investigation report</div>
+              {cs.investigationReport&&<button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(screens.LETTER);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View report</button>}
+            </div>
+            <div style={{padding:"14px 16px"}}>{
+              cs.investigationReport?(
+                <div style={{fontSize:13,color:"#1A7A4A"}}>Report generated {fmtDate(cs.investigationReportDate)}</div>
+              ):invMeetings.some(m=>m.record)?(
+                <div>
+                  <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to conclude.</div>
+                  <button disabled={concludingInvestigation} onClick={()=>concludeInvestigation(cs.id)}
+                    style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:concludingInvestigation?"not-allowed":"pointer",opacity:concludingInvestigation?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    {concludingInvestigation?"Generating report...":"Conclude investigation & generate report"}
+                  </button>
+                </div>
+              ):(
+                <div style={{fontSize:13,color:"#9B9098"}}>No report yet — complete investigation meetings first, then generate here.</div>
+              )
+            }</div>
+          </div>
+          {(cs.investigationReport || (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("investigation")&&m.signStatus==="signed")) && !cs.disciplinaryOfficer && (
+            <div style={{marginTop:12,padding:"14px 16px",background:"#EDE8FF",borderRadius:12,border:"1px solid #C8BCFF"}}>
+              <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Investigation complete</div>
+              <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Appoint a disciplinary officer to continue the process.</div>
+              <button onClick={()=>setShowHandoffModal(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Appoint disciplinary officer →</button>
+            </div>
+          )}
+          {cs.disciplinaryOfficer && (
+            <div style={{marginTop:12,padding:"14px 16px",background:"#E8F5EE",borderRadius:12,border:"1px solid #A8D5B5"}}>
+              <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Disciplinary officer appointed</div>
+              <div style={{fontSize:12,color:"#6B6375",marginTop:2}}>{cs.disciplinaryOfficer} · Handed off {fmtDate(cs.handoffDate)}</div>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}

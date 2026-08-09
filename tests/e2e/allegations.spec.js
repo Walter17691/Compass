@@ -3,11 +3,11 @@ import { login } from './helpers.js';
 
 // Allegations were entirely missing as data before this — evidence had no
 // way to say which specific issue it spoke to, or whether it supported or
-// contradicted it. This proves the whole loop: create a case, record an
-// allegation, upload evidence, link it to that allegation with a stance,
-// and change the allegation's status — all persisting to the new
-// `allegations` table (supabase/case_structure_2026-08-09.sql), not just
-// local state.
+// contradicted it. This proves the whole loop: create a case, upload
+// evidence (Evidence tab), record an allegation (Allegations tab), link
+// that evidence to it with a stance, and change the allegation's status —
+// all persisting to the new `allegations` table
+// (supabase/case_structure_2026-08-09.sql), not just local state.
 test('an allegation can be added, evidence linked with a stance, and its status changed', async ({ page }) => {
   const employeeName = `E2E Allegations ${Date.now()}`;
 
@@ -16,11 +16,20 @@ test('an allegation can be added, evidence linked with a stance, and its status 
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();
+  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  // Lands directly on the case view, investigation stage, where
-  // Allegations now renders above Evidence.
+  // Upload evidence first, from its own tab.
+  await page.getByRole('button', { name: 'Evidence' }).click();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'cctv-log.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Site exit logged 14:32, no return recorded.'),
+  });
+  await expect(page.locator('div').filter({ hasText: /^cctv-log\.txt$/ })).toBeVisible({ timeout: 10000 });
+
+  // Record the allegation from its own tab.
+  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
-
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Left site without authorisation');
   await page.getByPlaceholder('5 August 2026').fill('5 August 2026');
@@ -33,15 +42,7 @@ test('an allegation can be added, evidence linked with a stance, and its status 
   // Expand the card to reach status/evidence controls.
   await page.getByText('Left site without authorisation').click();
 
-  // Upload a piece of evidence directly (drop zone's hidden file input).
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'cctv-log.txt',
-    mimeType: 'text/plain',
-    buffer: Buffer.from('Site exit logged 14:32, no return recorded.'),
-  });
-  await expect(page.locator('div').filter({ hasText: /^cctv-log\.txt$/ })).toBeVisible({ timeout: 10000 });
-
-  // Link that evidence to the allegation with a stance.
+  // Link the previously-uploaded evidence to the allegation with a stance.
   await page.locator('select').filter({ hasText: 'Link existing evidence...' }).selectOption({ label: 'cctv-log.txt' });
   await expect(page.getByText('Linked evidence (1)')).toBeVisible();
 

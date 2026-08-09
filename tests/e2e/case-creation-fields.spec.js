@@ -26,10 +26,11 @@ test('evidence staged during case creation lands on the case, and priority round
   await expect(page.getByText('incident-photo.txt')).toBeVisible({ timeout: 10000 });
 
   await page.getByRole('button', { name: 'Create case' }).click();
-  await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  // Evidence staged before creation shows up in the case's own Evidence panel.
-  await expect(page.getByText('incident-photo.txt')).toBeVisible();
+  // Evidence staged before creation shows up in the case's own Evidence tab.
+  await page.getByRole('button', { name: 'Evidence', exact: true }).click();
+  await expect(page.getByText('incident-photo.txt')).toBeVisible({ timeout: 10000 });
 
   // Priority round-trips: filtering the Cases list by "High" (scoped to
   // today, since the shared test org accumulates cases across every spec
