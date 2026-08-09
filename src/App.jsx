@@ -448,6 +448,42 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     window.history.pushState(null, '', `${window.location.pathname}${nextSearch}`);
   }, [screen, activeCaseId]);
 
+  // "Send for signature" creates a real signing_requests row, and the
+  // employee's actual signature lands there once they sign via the portal
+  // — but nothing ever read that back into the case. A meeting showed
+  // "Pending signature" forever unless HR remembered to click the manual
+  // "Mark signed" button themselves after reading the notification email,
+  // with no verification a signature had actually been captured. Checks
+  // any pending meeting signatures against the real status whenever the
+  // case is opened, and syncs automatically if signed.
+  useEffect(() => {
+    if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
+    const cs = cases.find(c => c.id === activeCaseId);
+    const pending = (cs?.meetings || []).filter(m => m.signStatus === "pending" && m.signId);
+    if (!pending.length) return;
+    let cancelled = false;
+    (async () => {
+      const signedIds = (await Promise.all(pending.map(async m => {
+        try {
+          const res = await fetch(`/api/signing?signId=${encodeURIComponent(m.signId)}`);
+          if (!res.ok) return null;
+          const data = await res.json();
+          return data.status === "signed" ? m.id : null;
+        } catch { return null; }
+      }))).filter(Boolean);
+      if (cancelled || !signedIds.length) return;
+      const updated = cases.map(c => c.id === activeCaseId
+        ? { ...c, meetings: c.meetings.map(m => signedIds.includes(m.id) ? { ...m, signStatus: "signed" } : m) }
+        : c);
+      saveCases(updated, activeCaseId);
+    })();
+    return () => { cancelled = true; };
+    // cases/saveCases deliberately excluded — this should check once per
+    // case-view visit, not re-run on every unrelated case-data change
+    // (which would refire the check mid-edit and spam the signing API).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, activeCaseId]);
+
   const [activePerson, setActivePerson] = useState(null);
   const [activeCaseStage, setActiveCaseStage] = useState("investigation");
   const [showAppealInput, setShowAppealInput] = useState({});
