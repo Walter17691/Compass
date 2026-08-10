@@ -19,6 +19,16 @@ test('DSAR due date is exactly receivedDate + 1 calendar month', async ({ page }
   await page.locator('input[type="date"]').fill('2020-01-15');
   await page.getByRole('button', { name: 'Log request' }).click();
 
+  // The list is sorted by due date and shows 15 at a time (DsarScreen's
+  // useLoadMore) — every run of this test creates another request dated
+  // 2020-02-15, so after enough accumulated runs the newest one sorts
+  // past the first page. Click "Load more" until it's visible rather than
+  // assuming page one, the same fix already applied elsewhere this
+  // session for identically-dated accumulated test data.
+  const loadMoreButton = page.getByRole('button', { name: /^Load more/ });
+  while (!(await page.getByText(employeeName).first().isVisible()) && await loadMoreButton.isVisible().catch(() => false)) {
+    await loadMoreButton.click();
+  }
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('Due 2020-02-15').first()).toBeVisible();
 

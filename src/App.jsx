@@ -11,7 +11,7 @@ import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeC
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
-import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase } from './lib/allegations';
+import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation } from './lib/allegations';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase } from './lib/caseSignals';
 import { withFkRetry } from './lib/retryOnFkRace';
@@ -1166,6 +1166,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // "still to explore" half becomes real unanswered_question signals.
   const [unansweredCovered, setUnansweredCovered] = useState({});
   const [unansweredLoading, setUnansweredLoading] = useState({});
+  // Proposed evidence-to-allegation links are session-local until the user
+  // accepts one, at which point it becomes a real link via the existing
+  // linkEvidenceToAllegation()/saveCases() path — same "AI proposes, HR
+  // confirms" shape as unansweredCovered, never auto-applied.
+  const [evidenceSuggestions, setEvidenceSuggestions] = useState({});
+  const [evidenceSuggestionsLoading, setEvidenceSuggestionsLoading] = useState({});
 
   // Refs
   const feedRef = useRef(null);
@@ -2168,6 +2174,46 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       updated.filter(s=>s.caseId===cs.id && s.type==="unanswered_question" && s.status==="open").forEach(saveSignalToDB);
     } catch(e) { console.error("generateUnansweredQuestions", e); showToast("Couldn't generate unanswered questions — "+e.message, "error"); }
     setUnansweredLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  // ── Automatic Evidence Matrix — link suggestions ──
+  // The matrix grid itself and manual linking already existed (Evidence
+  // Matrix panel, allegations.js's linkEvidenceToAllegation) — this only
+  // adds the AI proposing which of the case's *unlinked* evidence probably
+  // belongs to which allegation. A suggestion becomes a real link only
+  // through the existing linkEvidenceToAllegation()/saveCases() path when
+  // the HR user accepts it — never applied automatically.
+  const generateEvidenceSuggestions = async (cs) => {
+    const caseAllegations = allegationsForCase(allegations, cs.id);
+    const unlinked = (cs.evidence||[]).map((ev,index)=>({...ev,index})).filter(ev=>!ev.allegationId);
+    if(!caseAllegations.length || !unlinked.length) { setEvidenceSuggestions(s=>({...s, [cs.id]:[]})); return; }
+    setEvidenceSuggestionsLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const allegationList = caseAllegations.map(a=>`- id "${a.id}": ${a.title}${a.description?" — "+a.description:""}`).join("\n");
+      const evidenceList = unlinked.map(ev=>`- index ${ev.index}: ${ev.name}${ev.type?" ("+ev.type+")":""}`).join("\n");
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:500,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot proposing which unlinked evidence items probably belong to which allegation, based on the evidence's name/type alone — you cannot read file contents. Only propose a link where the name/type gives a real reason to connect it to a specific allegation; skip anything ambiguous rather than guessing. These are proposals only — the HR user must confirm or correct every one. Respond ONLY with valid JSON, no other text: [{\"evidenceIndex\":0,\"allegationId\":\"alg_...\",\"stance\":\"supports\",\"reasoning\":\"one short sentence\"}] — stance must be one of supports, contradicts, context, neutral.",
+        messages:[{role:"user", content:"ALLEGATIONS:\n"+allegationList+"\n\nUNLINKED EVIDENCE:\n"+evidenceList}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const valid = (Array.isArray(parsed)?parsed:[]).filter(s=>unlinked.some(ev=>ev.index===s.evidenceIndex) && caseAllegations.some(a=>a.id===s.allegationId));
+      setEvidenceSuggestions(s=>({...s, [cs.id]:valid}));
+    } catch(e) { console.error("generateEvidenceSuggestions", e); showToast("Couldn't generate evidence suggestions — "+e.message, "error"); }
+    setEvidenceSuggestionsLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  const acceptEvidenceSuggestion = (cs, suggestion) => {
+    saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:linkEvidenceToAllegation(x.evidence||[], suggestion.evidenceIndex, suggestion.allegationId, suggestion.stance)}:x));
+    setEvidenceSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(sug=>sug!==suggestion)}));
+  };
+
+  const rejectEvidenceSuggestion = (cs, suggestion) => {
+    setEvidenceSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(sug=>sug!==suggestion)}));
   };
 
   // ── Onboarding steps ──
@@ -4030,6 +4076,11 @@ Please produce:
           unansweredCovered={unansweredCovered}
           unansweredLoading={unansweredLoading}
           generateUnansweredQuestions={generateUnansweredQuestions}
+          evidenceSuggestions={evidenceSuggestions}
+          evidenceSuggestionsLoading={evidenceSuggestionsLoading}
+          generateEvidenceSuggestions={generateEvidenceSuggestions}
+          acceptEvidenceSuggestion={acceptEvidenceSuggestion}
+          rejectEvidenceSuggestion={rejectEvidenceSuggestion}
         />
       )}
 {/* ══ INTAKE ══ */}

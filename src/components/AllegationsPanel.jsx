@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation } from '../lib/allegations';
+import { EvidenceMatrixPanel } from './EvidenceMatrixPanel';
 
 const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
 const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom:4 };
@@ -10,11 +11,21 @@ const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom
 // piece of evidence (support for/against one). Evidence stays on
 // cs.evidence; linking it here just tags an existing item with which
 // allegation it speaks to and whether it supports or contradicts it.
-export function AllegationsPanel({ cs, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast }) {
+export function AllegationsPanel({ cs, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
   const evidence = cs.evidence || [];
+
+  // Same "open the original" affordances EvidenceTab already exposes
+  // (Download for a stored file, View notes for a meeting-derived record)
+  // — reused, not reimplemented, so the matrix never substitutes an AI
+  // summary for the actual source.
+  const openEvidence = (ev) => {
+    if (ev.record) { setReviewOutput(ev.record); setScreen(screens.REVIEW); }
+    else if (ev.dataUrl) { window.open(ev.dataUrl, "_blank"); }
+    else { showToast?.("No stored file for this evidence item", "error"); }
+  };
 
   const submitNew = () => {
     if(!newForm.title.trim()) { showToast?.("Give the allegation a short title first", "error"); return; }
@@ -40,6 +51,8 @@ export function AllegationsPanel({ cs, allegations, createAllegation, patchAlleg
   };
 
   return (
+    <>
+      <EvidenceMatrixPanel cs={cs} allegations={allegations} suggestions={evidenceSuggestions} suggestionsLoading={evidenceSuggestionsLoading} onGenerateSuggestions={generateEvidenceSuggestions} onAcceptSuggestion={acceptEvidenceSuggestion} onRejectSuggestion={rejectEvidenceSuggestion} onOpenEvidence={openEvidence}/>
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Allegations ({allegations.length})</div>
@@ -136,5 +149,6 @@ export function AllegationsPanel({ cs, allegations, createAllegation, patchAlleg
         })}
       </div>
     </div>
+    </>
   );
 }

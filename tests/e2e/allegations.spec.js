@@ -36,11 +36,14 @@ test('an allegation can be added, evidence linked with a stance, and its status 
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
 
   await expect(page.getByText('Allegations (1)')).toBeVisible();
-  await expect(page.getByText('Left site without authorisation')).toBeVisible();
-  await expect(page.getByText('Unreviewed', { exact: true })).toBeVisible();
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Left site without authorisation" cell with the same text.
+  await expect(page.getByText('Left site without authorisation').last()).toBeVisible();
+  // .last() — the Evidence Matrix's status column also shows "Unreviewed".
+  await expect(page.getByText('Unreviewed', { exact: true }).last()).toBeVisible();
 
   // Expand the card to reach status/evidence controls.
-  await page.getByText('Left site without authorisation').click();
+  await page.getByText('Left site without authorisation').last().click();
 
   // Link the previously-uploaded evidence to the allegation with a stance.
   await page.locator('select').filter({ hasText: 'Link existing evidence...' }).selectOption({ label: 'cctv-log.txt' });
@@ -48,5 +51,7 @@ test('an allegation can be added, evidence linked with a stance, and its status 
 
   // Change the allegation's status.
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
-  await expect(page.locator('span').filter({ hasText: 'Substantiated' })).toBeVisible();
+  // .last() — the Evidence Matrix's status column also renders a
+  // "Substantiated" badge for this allegation.
+  await expect(page.locator('span').filter({ hasText: 'Substantiated' }).last()).toBeVisible();
 });
