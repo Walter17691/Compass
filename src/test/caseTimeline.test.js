@@ -77,4 +77,36 @@ describe('buildCaseTimeline', () => {
     const cs = { ...baseCase, dateReceived: 'not-a-date' };
     expect(() => buildCaseTimeline(cs, [], [])).not.toThrow();
   });
+
+  it('gives each entry a stable key and tags allegation entries with their allegationId', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Left site early', createdAt: '2026-08-02' }];
+    const result = buildCaseTimeline(baseCase, allegations, []);
+    expect(result[0].key).toBe('case-opened');
+    const allegationEntry = result.find(e => e.type === 'allegation');
+    expect(allegationEntry.key).toBe('allegation-a1');
+    expect(allegationEntry.allegationId).toBe('a1');
+    expect(result.find(e => e.type === 'case').allegationId).toBeNull();
+  });
+
+  it('excludes entries whose key is in overrides.excluded', () => {
+    const result = buildCaseTimeline(baseCase, [], [], { excluded: ['case-opened'] });
+    expect(result).toHaveLength(0);
+  });
+
+  it('applies a description edit from overrides.edits without touching other entries', () => {
+    const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation meeting', date: '2026-08-03' }] };
+    const result = buildCaseTimeline(cs, [], [], { edits: { 'meeting-m1': 'Rescheduled investigation meeting held' } });
+    expect(result.find(e => e.key === 'meeting-m1').description).toBe('Rescheduled investigation meeting held');
+    expect(result.find(e => e.key === 'case-opened').description).toBe('Case opened — misconduct');
+  });
+
+  it('attaches a cached relevance note by key, defaulting to null', () => {
+    const result = buildCaseTimeline(baseCase, [], [], { relevance: { 'case-opened': 'Origin of the case.' } });
+    expect(result[0].relevance).toBe('Origin of the case.');
+  });
+
+  it('is a no-op when overrides is omitted, matching the pre-Phase-8 signature', () => {
+    const result = buildCaseTimeline(baseCase, [], []);
+    expect(result[0].relevance).toBeNull();
+  });
 });

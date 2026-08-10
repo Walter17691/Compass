@@ -24,12 +24,19 @@ test('DSAR due date is exactly receivedDate + 1 calendar month', async ({ page }
   // 2020-02-15, so after enough accumulated runs the newest one sorts
   // past the first page. Click "Load more" until it's visible rather than
   // assuming page one, the same fix already applied elsewhere this
-  // session for identically-dated accumulated test data.
+  // session for identically-dated accumulated test data. .isVisible()
+  // doesn't wait for the re-render a click triggers (unlike
+  // expect().toBeVisible()), so this pairs each click with a short poll
+  // rather than immediately re-checking a stale DOM snapshot.
   const loadMoreButton = page.getByRole('button', { name: /^Load more/ });
-  while (!(await page.getByText(employeeName).first().isVisible()) && await loadMoreButton.isVisible().catch(() => false)) {
-    await loadMoreButton.click();
+  for (let i = 0; i < 20; i++) {
+    if (await page.getByText(employeeName).first().isVisible().catch(() => false)) break;
+    if (!(await loadMoreButton.isVisible().catch(() => false))) break;
+    await loadMoreButton.scrollIntoViewIfNeeded();
+    await loadMoreButton.click({ force: true });
+    await page.waitForTimeout(500);
   }
-  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('Due 2020-02-15').first()).toBeVisible();
 
   // Every run of this test creates a request permanently dated 2020, i.e.

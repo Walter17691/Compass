@@ -34,5 +34,6 @@ export function mapCaseRow(row) {
     manager: row.manager || "",
     ownerId: row.owner_id || null,
     priority: row.priority || "normal",
+    timelineOverrides: row.timeline_overrides || {},
   };
 }

@@ -36,7 +36,7 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -61,6 +61,14 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const nextActionSignal = openSignalsForCase(caseSignals, cs.id, "next_action")[0];
   const readiness = computeCaseReadiness(cs, allegations, caseSignals, caseTasks);
   const screens = SCREENS;
+
+  const openTimelineSource = (linkTo) => {
+    if(!linkTo) return;
+    if(linkTo.kind==="meeting") setActiveTab("meetings");
+    else if(linkTo.kind==="allegation") setActiveTab("allegations");
+    else if(linkTo.kind==="letter"||linkTo.kind==="report") setActiveTab("documents");
+    else if(linkTo.kind==="outcome") setActiveTab("outcome");
+  };
 
   const resolveSignalRef = (ref) => {
     if(ref.kind==="meeting") { const m = meetings.find(x=>x.id===ref.id); return m ? {label:m.type||"Meeting", detail:null, date:m.date} : null; }
@@ -274,7 +282,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             <OverviewTab cs={cs} cases={cases} saveCases={saveCases} stage={stage} currentRisk={currentRisk} empRecord={empRecord} repeatCount={repeatCount} confirmDialog={confirmDialog} setScreen={setScreen} screens={screens} caseSignals={caseSignals} unansweredCovered={unansweredCovered} unansweredLoading={unansweredLoading} generateUnansweredQuestions={generateUnansweredQuestions} createCaseTask={createCaseTask} changeSignalStatus={changeSignalStatus} onAskWhy={setWhySignal}/>
           )}
           {activeTab==="timeline"&&(
-            <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate}/>
+            <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={toggleTimelineExclude} onEditDescription={editTimelineDescription} onGenerateRelevance={generateTimelineRelevance} relevanceLoading={timelineRelevanceLoading?.[cs.id]} loadJsPDF={loadJsPDF}/>
           )}
           {activeTab==="allegations"&&(
             <AllegationsPanel cs={cs} allegations={caseAllegations} createAllegation={createAllegation} patchAllegation={patchAllegation} changeAllegationStatus={changeAllegationStatus} deleteAllegation={deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={generateEvidenceSuggestions} acceptEvidenceSuggestion={acceptEvidenceSuggestion} rejectEvidenceSuggestion={rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens}/>

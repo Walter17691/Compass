@@ -14,6 +14,7 @@ import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation } from './lib/allegations';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase } from './lib/caseSignals';
+import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
@@ -647,7 +648,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // meetings/evidence stay in: runSearch does full-text search over
       // transcripts client-side, so dropping them would silently break
       // search rather than just trimming payload.
-      let query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential').eq('org_id', org.id);
+      let query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides').eq('org_id', org.id);
       // Location managers only see their location cases
       if(member?.role==='location_manager' && member?.location_ids?.length>0) {
         query = query.in('location_id', member.location_ids);
@@ -699,6 +700,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         manager: caseObj.manager || null,
         owner_id: caseObj.ownerId || null,
         priority: caseObj.priority || null,
+        timeline_overrides: caseObj.timelineOverrides || {},
         updated_at: nowIso,
       };
 
@@ -1172,6 +1174,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // confirms" shape as unansweredCovered, never auto-applied.
   const [evidenceSuggestions, setEvidenceSuggestions] = useState({});
   const [evidenceSuggestionsLoading, setEvidenceSuggestionsLoading] = useState({});
+  const [timelineRelevanceLoading, setTimelineRelevanceLoading] = useState({});
 
   // Refs
   const feedRef = useRef(null);
@@ -2214,6 +2217,45 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   const rejectEvidenceSuggestion = (cs, suggestion) => {
     setEvidenceSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(sug=>sug!==suggestion)}));
+  };
+
+  // ── Case Chronology overrides ──
+  // buildCaseTimeline() (lib/caseTimeline.js) is still the single source
+  // of the merge; these three just write to the case's own
+  // timeline_overrides column, which that function already knows how to
+  // apply — no separate override-handling logic duplicated here.
+  const toggleTimelineExclude = (cs, key) => {
+    const current = cs.timelineOverrides || {};
+    const excluded = current.excluded || [];
+    const nextExcluded = excluded.includes(key) ? excluded.filter(k=>k!==key) : [...excluded, key];
+    saveCases(cases.map(x=>x.id===cs.id?{...x, timelineOverrides:{...current, excluded:nextExcluded}}:x));
+  };
+
+  const editTimelineDescription = (cs, key, text) => {
+    const current = cs.timelineOverrides || {};
+    saveCases(cases.map(x=>x.id===cs.id?{...x, timelineOverrides:{...current, edits:{...(current.edits||{}), [key]:text}}}:x));
+  };
+
+  const generateTimelineRelevance = async (cs) => {
+    const entries = buildCaseTimeline(cs, allegations, auditLog, cs.timelineOverrides||{});
+    if(!entries.length) return;
+    setTimelineRelevanceLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const entryList = entries.map(e=>`- key "${e.key}": ${e.description} (${e.date})`).join("\n");
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:800,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot. For each timeline entry below, write one short sentence on why it matters to this case's progress — not a restatement of the entry itself. Skip routine/administrative entries that add no real understanding rather than inventing significance for them. Respond ONLY with valid JSON, no other text: {\"key1\":\"relevance sentence\", ...} — only include keys worth annotating.",
+        messages:[{role:"user", content:"TIMELINE:\n"+entryList}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const current = cs.timelineOverrides || {};
+      saveCases(cases.map(x=>x.id===cs.id?{...x, timelineOverrides:{...current, relevance:{...(current.relevance||{}), ...parsed}}}:x));
+    } catch(e) { console.error("generateTimelineRelevance", e); showToast("Couldn't assess timeline relevance — "+e.message, "error"); }
+    setTimelineRelevanceLoading(l=>({...l, [cs.id]:false}));
   };
 
   // ── Onboarding steps ──
@@ -4081,6 +4123,11 @@ Please produce:
           generateEvidenceSuggestions={generateEvidenceSuggestions}
           acceptEvidenceSuggestion={acceptEvidenceSuggestion}
           rejectEvidenceSuggestion={rejectEvidenceSuggestion}
+          toggleTimelineExclude={toggleTimelineExclude}
+          editTimelineDescription={editTimelineDescription}
+          generateTimelineRelevance={generateTimelineRelevance}
+          timelineRelevanceLoading={timelineRelevanceLoading}
+          loadJsPDF={loadJsPDF}
         />
       )}
 {/* ══ INTAKE ══ */}
