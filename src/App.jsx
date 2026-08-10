@@ -13,6 +13,7 @@ import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase } from './lib/allegations';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
+import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase } from './lib/caseSignals';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
@@ -1157,9 +1158,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [caseTasks, setCaseTasks] = useState([]);
 
   // ── Case signals (AI-copilot substrate: next-best-action, contradictions,
-  // unanswered questions, procedural guardrails — see lib/caseSignals.js).
-  // Read value isn't consumed anywhere yet — Phase 1 is the first reader. ──
-  const [, setCaseSignals] = useState([]);
+  // unanswered questions, procedural guardrails — see lib/caseSignals.js) ──
+  const [caseSignals, setCaseSignals] = useState([]);
+  const [nextActionLoading, setNextActionLoading] = useState({});
 
   // Refs
   const feedRef = useRef(null);
@@ -1942,12 +1943,6 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   // ── Case signals ──
-  // Load-only for now: this is the shared substrate for Next Best Action /
-  // Contradiction Detection / Unanswered Questions / Procedural Guardrails
-  // (see lib/caseSignals.js). The write path (createCaseSignal,
-  // changeSignalStatus) is added by whichever of those lands first, since
-  // there's no caller for it yet — an unused function is dead code, not a
-  // foundation.
   const loadCaseSignals = async () => {
     if(!org?.id) return;
     try {
@@ -1960,6 +1955,26 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         resolvedReason:r.resolved_reason, createdAt:r.created_at,
       })));
     } catch(e) { console.error('loadCaseSignals', e); }
+  };
+
+  const saveSignalToDB = async (signal) => {
+    if(!org?.id) return;
+    const { error } = await withFkRetry(() => supabase.from('case_signals').upsert({
+      id: signal.id, case_id: signal.caseId, org_id: org.id,
+      type: signal.type, title: signal.title, reasoning: signal.reasoning||null,
+      status: signal.status||'open', source_refs: signal.sourceRefs||[], source: signal.source||'ai',
+      created_by: signal.createdBy||null, resolved_by: signal.resolvedBy||null,
+      resolved_at: signal.resolvedAt||null, resolved_reason: signal.resolvedReason||null,
+      updated_at: new Date().toISOString(),
+    }));
+    if(error) console.error('saveSignalToDB', error);
+  };
+
+  const changeSignalStatus = (signalId, status, reason) => {
+    const updated = setSignalStatus(caseSignals, signalId, status, user?.id, reason);
+    setCaseSignals(updated);
+    const changed = updated.find(s=>s.id===signalId);
+    if(changed) saveSignalToDB(changed);
   };
 
   // ── Case tasks ──
@@ -2074,6 +2089,45 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       else showToast("Couldn't generate the case overview", "error");
     } catch(e) { console.error("generateCaseOverview", e); showToast("Couldn't generate the case overview — "+e.message, "error"); }
     setCaseOverviewLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  // ── Next Best Action ──
+  // getNextStep() (lib/nextStep.js) stays the deterministic floor — this
+  // AI pass never contradicts its procedural stage, only sharpens it with
+  // a reason grounded in the actual case record (a named witness, a
+  // specific evidence gap) and writes the result as a next_action
+  // case_signal so it can be accepted/dismissed/marked-not-relevant and
+  // explained later, rather than living only as a re-generated string.
+  const generateNextBestAction = async (cs) => {
+    setNextActionLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const floor = getNextStep(cs);
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:400,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot recommending the single most useful next step for this case. Ground your recommendation in a specific fact from the case record — name the person, meeting, or evidence gap that makes this the right next step; never recommend something generic the record doesn't support. You must NEVER recommend a sanction, disciplinary outcome, or final decision on any allegation — only a procedural step (e.g. \"interview a named witness\", \"obtain a specific document\", \"send the signed record for confirmation\"). A deterministic procedural-stage check has already identified the case's baseline next step below — you may agree with it and sharpen it with a specific reason, or recommend something more specific that still satisfies that same procedural requirement, but never contradict or skip its stage. Respond ONLY with valid JSON, no other text: {\"title\":\"short imperative action, e.g. 'Interview Sarah Jones'\",\"reasoning\":\"one or two sentences citing the specific fact that makes this the right next step\",\"afterThis\":\"one sentence on what should happen once this is done\"}"+getPolicyCtx(),
+        messages:[{role:"user", content:"CASE RECORD:\n"+context+(floor?"\n\nDeterministic baseline next step: "+floor.label+" — "+(floor.reason||""):"")}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      if(!parsed.title) throw new Error("No recommendation returned");
+
+      const openPrior = openSignalsForCase(caseSignals, cs.id, "next_action");
+      const withoutStale = supersedeOpenSignalsOfType(caseSignals, cs.id, "next_action");
+      openPrior.forEach(s => { const updated = withoutStale.find(x=>x.id===s.id); if(updated) saveSignalToDB(updated); });
+
+      const created = createSignal(withoutStale, cs.id, {
+        type:"next_action", title:parsed.title,
+        reasoning:[parsed.reasoning, parsed.afterThis?"After this: "+parsed.afterThis:null].filter(Boolean).join(" "),
+        source:"ai",
+      });
+      setCaseSignals(created);
+      saveSignalToDB(created[created.length-1]);
+    } catch(e) { console.error("generateNextBestAction", e); showToast("Couldn't generate a recommendation — "+e.message, "error"); }
+    setNextActionLoading(l=>({...l, [cs.id]:false}));
   };
 
   // ── Onboarding steps ──
@@ -3929,6 +3983,10 @@ Please produce:
           caseOverview={caseOverview}
           caseOverviewLoading={caseOverviewLoading}
           generateCaseOverview={generateCaseOverview}
+          caseSignals={caseSignals}
+          changeSignalStatus={changeSignalStatus}
+          generateNextBestAction={generateNextBestAction}
+          nextActionLoading={nextActionLoading}
         />
       )}
 {/* ══ INTAKE ══ */}

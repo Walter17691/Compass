@@ -15,6 +15,9 @@ import { OutcomeTab } from '../components/caseTabs/OutcomeTab';
 import { AIAssistantTab } from '../components/caseTabs/AIAssistantTab';
 import { allegationsForCase } from '../lib/allegations';
 import { tasksForCase } from '../lib/caseTasks';
+import { openSignalsForCase } from '../lib/caseSignals';
+import { SignalCard } from '../components/SignalCard';
+import { WhySourcesModal } from '../components/WhySourcesModal';
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
@@ -31,11 +34,12 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [whySignal, setWhySignal] = useState(null);
   const cs = cases.find(x=>x.id===activeCaseId);
   if(!cs) return <div style={{padding:40,color:"#9B9098",fontFamily:"DM Sans,system-ui,sans-serif"}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7C5CFC",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
   const meetings = cs.meetings||[];
@@ -52,7 +56,14 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const repeatCount = cases.filter(c=>c.employeeName===cs.employeeName).length;
   const caseAllegations = allegationsForCase(allegations, cs.id);
   const caseTaskList = tasksForCase(caseTasks, cs.id);
+  const nextActionSignal = openSignalsForCase(caseSignals, cs.id, "next_action")[0];
   const screens = SCREENS;
+
+  const resolveSignalRef = (ref) => {
+    if(ref.kind==="meeting") { const m = meetings.find(x=>x.id===ref.id); return m ? {label:m.type||"Meeting", detail:null, date:m.date} : null; }
+    if(ref.kind==="allegation") { const a = caseAllegations.find(x=>x.id===ref.id); return a ? {label:a.title, detail:null, date:a.createdAt} : null; }
+    return null;
+  };
 
   const startMeetingFromHeader = () => {
     // nextStep already carries the type-aware meetingType for wherever
@@ -189,7 +200,35 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
               )}
             </>
           )}
+
+          {/* Compass's own take — advisory, separate from the deterministic
+              step above it. Persisted as a next_action case_signal so it
+              can be accepted/dismissed/marked-not-relevant rather than
+              only living as a re-generated string on every visit. */}
+          <div style={{marginTop:12}}>
+            {nextActionSignal ? (
+              <SignalCard
+                signal={nextActionSignal}
+                onDismiss={()=>changeSignalStatus(nextActionSignal.id, "dismissed")}
+                onMarkNotRelevant={()=>changeSignalStatus(nextActionSignal.id, "not_relevant")}
+                onAskWhy={()=>setWhySignal(nextActionSignal)}
+                extraActions={[
+                  {label:"Accept", onClick:()=>changeSignalStatus(nextActionSignal.id, "accepted")},
+                  {label:"Create task", onClick:()=>{createCaseTask(cs.id, {name:nextActionSignal.title}); changeSignalStatus(nextActionSignal.id, "accepted");}},
+                ]}
+              />
+            ) : (
+              <button onClick={()=>generateNextBestAction(cs)} disabled={nextActionLoading?.[cs.id]}
+                style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#7C5CFC",cursor:nextActionLoading?.[cs.id]?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                {nextActionLoading?.[cs.id] ? "Compass is thinking…" : "Ask Compass for its take"}
+              </button>
+            )}
+          </div>
         </div>
+      )}
+
+      {whySignal&&(
+        <WhySourcesModal title={whySignal.title} reasoning={whySignal.reasoning} sourceRefs={whySignal.sourceRefs} resolveRef={resolveSignalRef} onClose={()=>setWhySignal(null)} />
       )}
 
       {/* Closed - appeal */}
