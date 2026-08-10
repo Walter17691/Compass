@@ -34,7 +34,7 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -267,7 +267,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
       <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
         <div style={{maxWidth:800,margin:"0 auto"}}>
           {activeTab==="overview"&&(
-            <OverviewTab cs={cs} cases={cases} saveCases={saveCases} stage={stage} currentRisk={currentRisk} empRecord={empRecord} repeatCount={repeatCount} confirmDialog={confirmDialog} setScreen={setScreen} screens={screens}/>
+            <OverviewTab cs={cs} cases={cases} saveCases={saveCases} stage={stage} currentRisk={currentRisk} empRecord={empRecord} repeatCount={repeatCount} confirmDialog={confirmDialog} setScreen={setScreen} screens={screens} caseSignals={caseSignals} unansweredCovered={unansweredCovered} unansweredLoading={unansweredLoading} generateUnansweredQuestions={generateUnansweredQuestions} createCaseTask={createCaseTask} changeSignalStatus={changeSignalStatus} onAskWhy={setWhySignal}/>
           )}
           {activeTab==="timeline"&&(
             <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate}/>

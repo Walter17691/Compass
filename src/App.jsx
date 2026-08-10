@@ -1161,6 +1161,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // unanswered questions, procedural guardrails — see lib/caseSignals.js) ──
   const [caseSignals, setCaseSignals] = useState([]);
   const [nextActionLoading, setNextActionLoading] = useState({});
+  // "Covered" topics aren't actionable, so — like caseOverview/
+  // caseChatHistory — they're session-local, not persisted; only the
+  // "still to explore" half becomes real unanswered_question signals.
+  const [unansweredCovered, setUnansweredCovered] = useState({});
+  const [unansweredLoading, setUnansweredLoading] = useState({});
 
   // Refs
   const feedRef = useRef(null);
@@ -2128,6 +2133,41 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       saveSignalToDB(created[created.length-1]);
     } catch(e) { console.error("generateNextBestAction", e); showToast("Couldn't generate a recommendation — "+e.message, "error"); }
     setNextActionLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  // ── Unanswered Question Tracker ──
+  // Separates what the case record already addresses from what it raises
+  // but never follows up on — a person named but not interviewed, a claim
+  // made but not checked. Only "still to explore" becomes persisted
+  // unanswered_question signals; "covered" is informational only.
+  const generateUnansweredQuestions = async (cs) => {
+    setUnansweredLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:600,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot maintaining a running list of what's been explored in this case and what hasn't. Read the case record and separate topics genuinely covered (a meeting or document already addresses them) from topics that remain open — a person mentioned but not interviewed, a claim made but not checked, a date or detail nobody has confirmed. Only list a 'still to explore' item if the record itself raises it — never invent a generic question the case doesn't support. Respond ONLY with valid JSON, no other text: {\"covered\":[\"short label\",...],\"stillToExplore\":[{\"question\":\"specific open question\",\"reasoning\":\"one sentence on what in the record raises this\"}]}"+getPolicyCtx(),
+        messages:[{role:"user", content:"CASE RECORD:\n"+context}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+
+      setUnansweredCovered(c=>({...c, [cs.id]: parsed.covered||[]}));
+
+      const openPrior = openSignalsForCase(caseSignals, cs.id, "unanswered_question");
+      let updated = supersedeOpenSignalsOfType(caseSignals, cs.id, "unanswered_question");
+      openPrior.forEach(s => { const u = updated.find(x=>x.id===s.id); if(u) saveSignalToDB(u); });
+      (parsed.stillToExplore||[]).forEach(q => {
+        if(!q.question) return;
+        updated = createSignal(updated, cs.id, { type:"unanswered_question", title:q.question, reasoning:q.reasoning||"", source:"ai" });
+      });
+      setCaseSignals(updated);
+      updated.filter(s=>s.caseId===cs.id && s.type==="unanswered_question" && s.status==="open").forEach(saveSignalToDB);
+    } catch(e) { console.error("generateUnansweredQuestions", e); showToast("Couldn't generate unanswered questions — "+e.message, "error"); }
+    setUnansweredLoading(l=>({...l, [cs.id]:false}));
   };
 
   // ── Onboarding steps ──
@@ -3987,6 +4027,9 @@ Please produce:
           changeSignalStatus={changeSignalStatus}
           generateNextBestAction={generateNextBestAction}
           nextActionLoading={nextActionLoading}
+          unansweredCovered={unansweredCovered}
+          unansweredLoading={unansweredLoading}
+          generateUnansweredQuestions={generateUnansweredQuestions}
         />
       )}
 {/* ══ INTAKE ══ */}
