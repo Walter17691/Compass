@@ -15,7 +15,7 @@ test('Compass reviews a case for covered vs still-to-explore topics, and a quest
   await page.getByRole('button', { name: '+ New case' }).click();
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
-  await page.getByPlaceholder('Brief summary of the issue…').fill('Alleged unauthorised absence on 5 August. Manager Ryan says colleague Sarah witnessed part of the conversation but has not yet been spoken to.');
+  await page.getByPlaceholder('Brief summary of the issue…').fill('Alleged unauthorised absence on 5 August. Manager Ryan says colleague Sarah Jones witnessed part of the conversation, but Sarah Jones has not yet been interviewed or contacted by HR in any way — this remains completely unexplored.');
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 

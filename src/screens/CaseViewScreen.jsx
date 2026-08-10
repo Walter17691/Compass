@@ -16,8 +16,10 @@ import { AIAssistantTab } from '../components/caseTabs/AIAssistantTab';
 import { allegationsForCase } from '../lib/allegations';
 import { tasksForCase } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
+import { computeCaseReadiness } from '../lib/caseReadiness';
 import { SignalCard } from '../components/SignalCard';
 import { WhySourcesModal } from '../components/WhySourcesModal';
+import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
@@ -57,6 +59,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const caseAllegations = allegationsForCase(allegations, cs.id);
   const caseTaskList = tasksForCase(caseTasks, cs.id);
   const nextActionSignal = openSignalsForCase(caseSignals, cs.id, "next_action")[0];
+  const readiness = computeCaseReadiness(cs, allegations, caseSignals, caseTasks);
   const screens = SCREENS;
 
   const resolveSignalRef = (ref) => {
@@ -123,6 +126,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             <div style={{minWidth:0}}>
               <div style={{fontSize:13,color:"#5B3FD4",fontWeight:600}}>Next: {nextStep.label}</div>
               {nextStep.reason&&<div style={{fontSize:11,color:"#6B6375",marginTop:2}}>{nextStep.reason}</div>}
+              <CaseReadinessBadge readiness={readiness}/>
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
               {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true});}}} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.secondary.label}</button>}
