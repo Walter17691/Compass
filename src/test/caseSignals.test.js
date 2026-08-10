@@ -1,0 +1,118 @@
+import { describe, it, expect } from 'vitest';
+import {
+  SIGNAL_TYPES, SIGNAL_STATUSES, signalTypeMeta, signalsForCase, openSignalsForCase,
+  createSignal, updateSignal, setSignalStatus, supersedeOpenSignalsOfType,
+} from '../lib/caseSignals';
+
+describe('signalTypeMeta', () => {
+  it('returns the matching type meta', () => {
+    expect(signalTypeMeta('process_risk').label).toBe('Procedural guardrail');
+  });
+  it('falls back to the first type for an unknown id', () => {
+    expect(signalTypeMeta('nonsense')).toBe(SIGNAL_TYPES[0]);
+  });
+});
+
+describe('signalsForCase / openSignalsForCase', () => {
+  const signals = [
+    { id: 's1', caseId: 'case1', type: 'next_action', status: 'open' },
+    { id: 's2', caseId: 'case1', type: 'inconsistency', status: 'dismissed' },
+    { id: 's3', caseId: 'case2', type: 'next_action', status: 'open' },
+  ];
+
+  it('filters to one case', () => {
+    expect(signalsForCase(signals, 'case1')).toHaveLength(2);
+  });
+
+  it('filters to open signals for a case', () => {
+    expect(openSignalsForCase(signals, 'case1')).toEqual([signals[0]]);
+  });
+
+  it('further filters open signals by type', () => {
+    expect(openSignalsForCase(signals, 'case1', 'inconsistency')).toEqual([]);
+    expect(openSignalsForCase(signals, 'case1', 'next_action')).toEqual([signals[0]]);
+  });
+});
+
+describe('createSignal', () => {
+  it('creates a signal with defaults', () => {
+    const result = createSignal([], 'case1', { type: 'next_action', title: 'Interview Sarah Jones', reasoning: 'Ryan named her as a witness.' });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      caseId: 'case1', type: 'next_action', title: 'Interview Sarah Jones',
+      reasoning: 'Ryan named her as a witness.', status: 'open', sourceRefs: [], source: 'ai',
+    });
+    expect(result[0].id).toMatch(/^sig_/);
+  });
+
+  it('is a no-op with a blank title', () => {
+    const signals = [];
+    expect(createSignal(signals, 'case1', { type: 'next_action', title: '  ' })).toBe(signals);
+  });
+
+  it('is a no-op with no type', () => {
+    const signals = [];
+    expect(createSignal(signals, 'case1', { title: 'Missing type' })).toBe(signals);
+  });
+
+  it('preserves sourceRefs and a user source', () => {
+    const refs = [{ kind: 'meeting', id: 'm1', label: 'Investigation meeting' }];
+    const result = createSignal([], 'case1', { type: 'inconsistency', title: 'Conflicting times', sourceRefs: refs, source: 'user', createdBy: 'user_1' });
+    expect(result[0].sourceRefs).toEqual(refs);
+    expect(result[0].source).toBe('user');
+    expect(result[0].createdBy).toBe('user_1');
+  });
+});
+
+describe('updateSignal', () => {
+  it('merges fields into the matching signal only', () => {
+    const signals = [{ id: 's1', title: 'A' }, { id: 's2', title: 'B' }];
+    const result = updateSignal(signals, 's1', { title: 'A updated' });
+    expect(result[0].title).toBe('A updated');
+    expect(result[1].title).toBe('B');
+  });
+});
+
+describe('setSignalStatus', () => {
+  const base = [{ id: 's1', caseId: 'case1', type: 'next_action', status: 'open' }];
+
+  it('transitions to a resolved-family status and stamps resolvedBy/resolvedAt', () => {
+    const result = setSignalStatus(base, 's1', 'dismissed', 'user_1', 'Not relevant to this case');
+    expect(result[0]).toMatchObject({ status: 'dismissed', resolvedBy: 'user_1', resolvedReason: 'Not relevant to this case' });
+    expect(result[0].resolvedAt).toBeTruthy();
+  });
+
+  it('clears resolvedBy/resolvedAt when transitioning back to open', () => {
+    const dismissed = setSignalStatus(base, 's1', 'dismissed', 'user_1');
+    const reopened = setSignalStatus(dismissed, 's1', 'open');
+    expect(reopened[0].resolvedBy).toBeNull();
+    expect(reopened[0].resolvedAt).toBeNull();
+  });
+
+  it('ignores an invalid status', () => {
+    expect(setSignalStatus(base, 's1', 'not-a-real-status')).toBe(base);
+  });
+});
+
+describe('supersedeOpenSignalsOfType', () => {
+  it('resolves open signals of the given type and case, leaving others untouched', () => {
+    const signals = [
+      { id: 's1', caseId: 'case1', type: 'next_action', status: 'open' },
+      { id: 's2', caseId: 'case1', type: 'next_action', status: 'dismissed' },
+      { id: 's3', caseId: 'case1', type: 'inconsistency', status: 'open' },
+      { id: 's4', caseId: 'case2', type: 'next_action', status: 'open' },
+    ];
+    const result = supersedeOpenSignalsOfType(signals, 'case1', 'next_action');
+    expect(result.find(s => s.id === 's1').status).toBe('resolved');
+    expect(result.find(s => s.id === 's2').status).toBe('dismissed'); // already resolved-family, untouched
+    expect(result.find(s => s.id === 's3').status).toBe('open'); // different type
+    expect(result.find(s => s.id === 's4').status).toBe('open'); // different case
+  });
+});
+
+describe('SIGNAL_STATUSES', () => {
+  it('includes every status referenced by setSignalStatus', () => {
+    const ids = SIGNAL_STATUSES.map(s => s.id);
+    expect(ids).toEqual(['open', 'accepted', 'dismissed', 'not_relevant', 'resolved', 'explained']);
+  });
+});

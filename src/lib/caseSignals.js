@@ -1,0 +1,80 @@
+// Pure helpers for case signals — the shared substrate behind Next Best
+// Action, Contradiction Detection, the Unanswered Question Tracker, and
+// Procedural Guardrails (see supabase/case_signals_2026-08-10.sql). Same
+// shape as allegations.js: a flat, cross-case-listable entity; the caller
+// (App.jsx) owns persistence and which case is active.
+
+export const SIGNAL_TYPES = [
+  { id: "next_action", label: "Next best action", color: "#7C5CFC" },
+  { id: "inconsistency", label: "Potential inconsistency", color: "#B87520" },
+  { id: "unanswered_question", label: "Unanswered question", color: "#1C5AA0" },
+  { id: "process_risk", label: "Procedural guardrail", color: "#C84B2F" },
+];
+
+export const SIGNAL_STATUSES = [
+  { id: "open", label: "Open" },
+  { id: "accepted", label: "Accepted" },
+  { id: "dismissed", label: "Dismissed" },
+  { id: "not_relevant", label: "Not relevant" },
+  { id: "resolved", label: "Resolved" },
+  { id: "explained", label: "Explained" },
+];
+
+const OPEN_STATUS = "open";
+const RESOLVED_STATUSES = ["accepted", "dismissed", "not_relevant", "resolved", "explained"];
+
+export function signalTypeMeta(type) {
+  return SIGNAL_TYPES.find(t => t.id === type) || SIGNAL_TYPES[0];
+}
+
+export function signalsForCase(signals, caseId) {
+  return (signals || []).filter(s => s.caseId === caseId);
+}
+
+export function openSignalsForCase(signals, caseId, type) {
+  return signalsForCase(signals, caseId).filter(s => s.status === OPEN_STATUS && (!type || s.type === type));
+}
+
+export function createSignal(signals, caseId, fields) {
+  const title = (fields?.title || "").trim();
+  if (!title || !fields?.type) return signals;
+  const signal = {
+    id: "sig_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+    caseId,
+    type: fields.type,
+    title,
+    reasoning: fields.reasoning || "",
+    status: OPEN_STATUS,
+    sourceRefs: fields.sourceRefs || [],
+    source: fields.source || "ai",
+    createdBy: fields.createdBy || null,
+    createdAt: new Date().toISOString(),
+  };
+  return [...(signals || []), signal];
+}
+
+export function updateSignal(signals, signalId, fields) {
+  return (signals || []).map(s => s.id === signalId ? { ...s, ...fields } : s);
+}
+
+export function setSignalStatus(signals, signalId, status, resolvedBy, reason) {
+  if (!SIGNAL_STATUSES.some(s => s.id === status)) return signals;
+  return updateSignal(signals, signalId, {
+    status,
+    resolvedReason: reason || null,
+    resolvedBy: RESOLVED_STATUSES.includes(status) ? (resolvedBy || null) : null,
+    resolvedAt: RESOLVED_STATUSES.includes(status) ? new Date().toISOString() : null,
+  });
+}
+
+// Marks any still-open signals of a given type on a case as superseded
+// (resolved) — used when an AI pass regenerates a signal (e.g. Next Best
+// Action re-running) so stale recommendations don't pile up alongside the
+// fresh one.
+export function supersedeOpenSignalsOfType(signals, caseId, type) {
+  return (signals || []).map(s =>
+    s.caseId === caseId && s.type === type && s.status === OPEN_STATUS
+      ? { ...s, status: "resolved", resolvedReason: "Superseded by a newer recommendation", resolvedAt: new Date().toISOString() }
+      : s
+  );
+}

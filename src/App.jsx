@@ -868,7 +868,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1155,6 +1155,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── Case tasks ──
   const [caseTasks, setCaseTasks] = useState([]);
+
+  // ── Case signals (AI-copilot substrate: next-best-action, contradictions,
+  // unanswered questions, procedural guardrails — see lib/caseSignals.js).
+  // Read value isn't consumed anywhere yet — Phase 1 is the first reader. ──
+  const [, setCaseSignals] = useState([]);
 
   // Refs
   const feedRef = useRef(null);
@@ -1934,6 +1939,27 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAllegations(removeAllegation(allegations, allegationId));
     deleteAllegationFromDB(allegationId);
     if(target) audit("Allegation removed", target.title, target.caseId);
+  };
+
+  // ── Case signals ──
+  // Load-only for now: this is the shared substrate for Next Best Action /
+  // Contradiction Detection / Unanswered Questions / Procedural Guardrails
+  // (see lib/caseSignals.js). The write path (createCaseSignal,
+  // changeSignalStatus) is added by whichever of those lands first, since
+  // there's no caller for it yet — an unused function is dead code, not a
+  // foundation.
+  const loadCaseSignals = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('case_signals').select('*').eq('org_id', org.id).order('created_at', {ascending:true});
+      if(error) { console.error('loadCaseSignals', error); return; }
+      if(data) setCaseSignals(data.map(r=>({
+        id:r.id, caseId:r.case_id, type:r.type, title:r.title, reasoning:r.reasoning||"",
+        status:r.status, sourceRefs:r.source_refs||[], source:r.source,
+        createdBy:r.created_by, resolvedBy:r.resolved_by, resolvedAt:r.resolved_at,
+        resolvedReason:r.resolved_reason, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadCaseSignals', e); }
   };
 
   // ── Case tasks ──
