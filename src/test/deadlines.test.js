@@ -257,3 +257,97 @@ describe('computeDueSoon — case tasks', () => {
     expect(computeDueSoon(cases, [], today)).toHaveLength(0);
   });
 });
+
+describe('computeDueSoon — wellbeing follow-ups', () => {
+  const today = new Date('2025-06-16');
+
+  it('surfaces an open follow-up as confidential with no case link', () => {
+    const wellbeingNotes = [{ id: 'w1', employeeName: 'Priya', followUpDate: '2025-06-20', followUpDone: false }];
+    const items = computeDueSoon([], [], today, [], wellbeingNotes).filter(d => d.category === 'wellbeing');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ employeeName: 'Priya', confidential: true, caseId: null });
+  });
+
+  it('skips a follow-up already marked done', () => {
+    const wellbeingNotes = [{ id: 'w1', employeeName: 'Priya', followUpDate: '2025-06-20', followUpDone: true }];
+    expect(computeDueSoon([], [], today, [], wellbeingNotes).filter(d => d.category === 'wellbeing')).toHaveLength(0);
+  });
+
+  it('skips a note with no follow-up date set', () => {
+    const wellbeingNotes = [{ id: 'w1', employeeName: 'Priya', followUpDate: '', followUpDone: false }];
+    expect(computeDueSoon([], [], today, [], wellbeingNotes).filter(d => d.category === 'wellbeing')).toHaveLength(0);
+  });
+});
+
+describe('computeDueSoon — leaver notice period', () => {
+  const today = new Date('2025-06-16');
+
+  it('surfaces a leaver whose last working day is approaching with open offboarding tasks', () => {
+    const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '2025-06-20', tasks: [{ id: 't1', done: false }] }];
+    const items = computeDueSoon([], [], today, [], [], leaverInstances).filter(d => d.category === 'leaver');
+    expect(items).toHaveLength(1);
+    expect(items[0].employeeName).toBe('Tom');
+  });
+
+  it('skips a leaver whose offboarding tasks are all done', () => {
+    const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '2025-06-20', tasks: [{ id: 't1', done: true }] }];
+    expect(computeDueSoon([], [], today, [], [], leaverInstances).filter(d => d.category === 'leaver')).toHaveLength(0);
+  });
+
+  it('skips a leaver with no last working day recorded', () => {
+    const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '', tasks: [{ id: 't1', done: false }] }];
+    expect(computeDueSoon([], [], today, [], [], leaverInstances).filter(d => d.category === 'leaver')).toHaveLength(0);
+  });
+});
+
+describe('computeDueSoon — collective redundancy consultation', () => {
+  const today = new Date('2025-06-16');
+
+  it('computes a 30-day statutory minimum for 20-99 affected employees', () => {
+    const redundancyCases = [{
+      id: 'r1', type: 'collective', status: 'consultation', reason: 'Site restructure',
+      collectiveInfo: { count: 25, consultationStartDate: '2025-05-20' },
+      atRiskEmployees: [],
+    }];
+    const items = computeDueSoon([], [], today, [], [], [], redundancyCases).filter(d => d.category === 'redundancy');
+    expect(items).toHaveLength(1);
+    expect(items[0].deadlineDate).toBe('19/06/2025');
+    expect(items[0].label).toContain('30 days');
+  });
+
+  it('computes a 45-day statutory minimum for 100+ affected employees', () => {
+    const redundancyCases = [{
+      id: 'r2', type: 'collective', status: 'consultation', reason: 'Depot closure',
+      collectiveInfo: { count: 120, consultationStartDate: '2025-05-01' },
+      atRiskEmployees: [],
+    }];
+    const items = computeDueSoon([], [], today, [], [], [], redundancyCases).filter(d => d.category === 'redundancy');
+    expect(items[0].label).toContain('45 days');
+  });
+
+  it('ignores individual redundancy processes, which have no statutory minimum', () => {
+    const redundancyCases = [{
+      id: 'r3', type: 'individual', status: 'consultation', reason: 'Role redundant',
+      collectiveInfo: null, atRiskEmployees: [],
+    }];
+    expect(computeDueSoon([], [], today, [], [], [], redundancyCases).filter(d => d.category === 'redundancy')).toHaveLength(0);
+  });
+
+  it('ignores a completed redundancy process', () => {
+    const redundancyCases = [{
+      id: 'r4', type: 'collective', status: 'complete', reason: 'Site restructure',
+      collectiveInfo: { count: 25, consultationStartDate: '2025-05-20' },
+      atRiskEmployees: [],
+    }];
+    expect(computeDueSoon([], [], today, [], [], [], redundancyCases).filter(d => d.category === 'redundancy')).toHaveLength(0);
+  });
+
+  it('ignores a collective process with no consultation start date set yet', () => {
+    const redundancyCases = [{
+      id: 'r5', type: 'collective', status: 'setup', reason: 'Site restructure',
+      collectiveInfo: { count: 25, consultationStartDate: '' },
+      atRiskEmployees: [],
+    }];
+    expect(computeDueSoon([], [], today, [], [], [], redundancyCases).filter(d => d.category === 'redundancy')).toHaveLength(0);
+  });
+});

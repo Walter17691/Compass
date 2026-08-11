@@ -12,7 +12,16 @@ import { getCaseStage } from './caseStage.js';
 // defaulted param (not inserted before `today`) so every existing
 // positional call site — the digest cron included — keeps working
 // unchanged until it's ready to pass tasks through too.
-export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = []) {
+// wellbeingNotes/leaverInstances/redundancyCases (optional, Phase 12 of
+// the reasoning-layer build-out): same trailing-optional-param treatment
+// — each is real, already-captured client-side state (WellbeingScreen's
+// followUpDate, OffboardingScreen's lastWorkingDay, RedundancyScreen's
+// consultationStartDate) that was never threaded into the unified
+// due-soon output before now. redundancyCases is localStorage-only, not
+// cloud-synced, so it's client-only by nature — the digest cron will
+// simply never pass it and gets zero redundancy deadlines, same graceful
+// omission as any caller that doesn't pass caseTasks.
+export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = []) {
   const start = new Date(today);
   start.setHours(0,0,0,0);
   const due = [];
@@ -115,6 +124,45 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     if(cs && getCaseStage(cs)==="closed") return;
     const dl = task.dueDate.includes('/') ? (()=>{ const p=task.dueDate.split('/'); return new Date(p[2],p[1]-1,p[0]); })() : new Date(task.dueDate);
     addDeadline(cs?.employeeName||"Unassigned case", "Task due: "+task.name, dl, "task", `task:${task.id}`, cs ? { confidential: !!cs.confidential, caseId: cs.id, createdBy: cs.createdBy||null } : {});
+  });
+
+  // OH/wellbeing follow-up — WellbeingScreen already computes its own
+  // "overdue" list locally from these same fields; this threads the real
+  // dates into the unified output. Never case-linked (wellbeing notes are
+  // employee-level, not case-scoped) and always confidential — loading
+  // this data client-side is already gated to HR roles (App.jsx's org-load
+  // effect only calls loadWellbeingNotes when isHR).
+  wellbeingNotes.forEach(n => {
+    if(n.followUpDone||!n.followUpDate) return;
+    addDeadline(n.employeeName, "Wellbeing follow-up due", new Date(n.followUpDate), "wellbeing", `wellbeing:${n.id}`, { confidential: true });
+  });
+
+  // Notice period — a leaver's last working day approaching while
+  // offboarding tasks (checklistTasks.js's own {done} flag) are still
+  // open is worth a reminder; once every task is ticked off there's
+  // nothing left to chase, so it drops out rather than nagging forever.
+  leaverInstances.forEach(instance => {
+    if(!instance.lastWorkingDay) return;
+    if(!(instance.tasks||[]).some(t=>!t.done)) return;
+    addDeadline(instance.name, "Last working day approaching — offboarding tasks still open", new Date(instance.lastWorkingDay), "leaver", `leaver:${instance.id}`);
+  });
+
+  // Collective redundancy consultation — TULRCA s.188 minimum consultation
+  // period (30 days for 20-99 proposed redundancies, 45 for 100+) before
+  // dismissals can take effect, timed from consultationStartDate. No
+  // equivalent statutory minimum exists for individual redundancy, so
+  // that type is left alone here.
+  redundancyCases.forEach(r => {
+    if(r.type!=="collective"||r.status==="complete") return;
+    const startStr = r.collectiveInfo?.consultationStartDate;
+    if(!startStr) return;
+    const consultStart = new Date(startStr);
+    if(isNaN(consultStart)) return;
+    const count = r.collectiveInfo?.count || (r.atRiskEmployees||[]).length;
+    const minDays = count>=100 ? 45 : 30;
+    const dl = new Date(consultStart);
+    dl.setDate(dl.getDate()+minDays);
+    addDeadline(r.reason||"Redundancy process", `Statutory consultation period ends (${minDays} days, ${count} affected)`, dl, "redundancy", `redundancy:${r.id}`);
   });
 
   due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.overdue?b.daysOverdue-a.daysOverdue:a.daysLeft-b.daysLeft; });
