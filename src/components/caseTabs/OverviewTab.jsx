@@ -1,6 +1,7 @@
 import { estimateExposure } from '../../lib/tribunalEstimate';
 import { openSignalsForCase } from '../../lib/caseSignals';
 import { UnansweredQuestionsPanel } from '../UnansweredQuestionsPanel';
+import { InconsistenciesPanel } from '../InconsistenciesPanel';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -9,7 +10,7 @@ const RISK_STYLE = {
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
-export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy }) {
+export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation }) {
   const yearsService = (() => {
     if(!empRecord?.startDate) return null;
     const start = new Date(empRecord.startDate.includes("/") ? empRecord.startDate.split("/").reverse().join("-") : empRecord.startDate);
@@ -72,6 +73,18 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
           onAskWhy={onAskWhy}
         />
       </div>
+
+      <InconsistenciesPanel
+        cs={cs}
+        signals={openSignalsForCase(caseSignals, cs.id, "inconsistency")}
+        loading={inconsistencyLoading}
+        onCheck={generateInconsistencies}
+        changeSignalStatus={changeSignalStatus}
+        createCaseTask={createCaseTask}
+        allegations={(allegations||[]).filter(a=>a.caseId===cs.id)}
+        onLinkAllegation={linkSignalToAllegation}
+        onAskWhy={onAskWhy}
+      />
 
       <div style={{textAlign:"right"}}>
         <button onClick={async()=>{

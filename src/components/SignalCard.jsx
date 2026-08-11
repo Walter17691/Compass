@@ -14,7 +14,7 @@ function statusLabel(status) {
 // extraActions carries whatever's specific to the signal's type — e.g.
 // "Create task" for a next_action signal, "Link to allegation" for an
 // inconsistency.
-export function SignalCard({ signal, onDismiss, onMarkNotRelevant, onMarkResolved, onAskWhy, extraActions = [] }) {
+export function SignalCard({ signal, onDismiss, onMarkNotRelevant, onMarkResolved, resolvedLabel="Mark resolved", onAskWhy, extraActions = [] }) {
   const meta = signalTypeMeta(signal.type);
   const Icon = signal.type === "process_risk" ? WarningIcon : InfoIcon;
   const isOpen = signal.status === "open";
@@ -38,7 +38,7 @@ export function SignalCard({ signal, onDismiss, onMarkNotRelevant, onMarkResolve
               {extraActions.map((a, i) => (
                 <Btn key={i} variant="secondary" style={{padding:"6px 12px",fontSize:12}} onClick={a.onClick}>{a.label}</Btn>
               ))}
-              {onMarkResolved && <Btn variant="secondary" style={{padding:"6px 12px",fontSize:12}} onClick={onMarkResolved}>Mark resolved</Btn>}
+              {onMarkResolved && <Btn variant="secondary" style={{padding:"6px 12px",fontSize:12}} onClick={onMarkResolved}>{resolvedLabel}</Btn>}
               {onMarkNotRelevant && <Btn variant="ghost" style={{padding:"6px 12px",fontSize:12}} onClick={onMarkNotRelevant}>Not relevant</Btn>}
               {onDismiss && <Btn variant="ghost" style={{padding:"6px 12px",fontSize:12}} onClick={onDismiss}>Dismiss</Btn>}
               {onAskWhy && <Btn variant="ghost" style={{padding:"6px 12px",fontSize:12}} onClick={onAskWhy}>Ask why</Btn>}

@@ -13,7 +13,7 @@ import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation } from './lib/allegations';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
-import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase } from './lib/caseSignals';
+import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal } from './lib/caseSignals';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
@@ -1175,6 +1175,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [evidenceSuggestions, setEvidenceSuggestions] = useState({});
   const [evidenceSuggestionsLoading, setEvidenceSuggestionsLoading] = useState({});
   const [timelineRelevanceLoading, setTimelineRelevanceLoading] = useState({});
+  const [inconsistencyLoading, setInconsistencyLoading] = useState({});
 
   // Refs
   const feedRef = useRef(null);
@@ -2177,6 +2178,61 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       updated.filter(s=>s.caseId===cs.id && s.type==="unanswered_question" && s.status==="open").forEach(saveSignalToDB);
     } catch(e) { console.error("generateUnansweredQuestions", e); showToast("Couldn't generate unanswered questions — "+e.message, "error"); }
     setUnansweredLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  // ── Contradiction & Inconsistency Detection ──
+  // Compares meeting records pairwise for specific, quotable conflicts —
+  // never phrased as an accusation (the prompt enforces "potential
+  // inconsistency" / "point requiring clarification" wording directly,
+  // matching the spec's own constraint). Each signal carries two real
+  // meeting source_refs, so "ask why" here is the first place
+  // WhySourcesModal resolves more than one source. silent=true is used
+  // when this runs automatically after concludeInvestigation() — no
+  // loading spinner, no toast on finding nothing, since the user didn't
+  // ask for it directly.
+  const generateInconsistencies = async (cs, silent=false) => {
+    const meetingsWithRecords = (cs.meetings||[]).filter(m=>m.record);
+    if(meetingsWithRecords.length<2) { if(!silent) showToast("Need at least two meeting records to compare", "error"); return; }
+    if(!silent) setInconsistencyLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const meetingList = meetingsWithRecords.map(m=>`MEETING id="${m.id}" — ${m.type||"Meeting"} on ${m.date}:\n${(m.record||"").slice(0,2500)}`).join("\n\n---\n\n");
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:900,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot comparing meeting records for potential inconsistencies — specific factual details (times, dates, who was present, what was said) that appear to conflict between two accounts. Never state or imply that anyone is lying; accounts can differ for innocent reasons. Always frame findings as a potential inconsistency or a point requiring clarification, never as a contradiction that proves something. Only report a genuine, specific, quotable conflict — not a vague difference in emphasis or a gap where one account simply says less than another. Respond ONLY with valid JSON, no other text: [{\"meetingId1\":\"...\",\"quote1\":\"short quote or paraphrase\",\"meetingId2\":\"...\",\"quote2\":\"short quote or paraphrase\",\"suggestedQuestion\":\"a neutral clarifying question\"}]",
+        messages:[{role:"user", content:"MEETING RECORDS:\n\n"+meetingList}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const valid = (Array.isArray(parsed)?parsed:[]).filter(f=>meetingsWithRecords.some(m=>m.id===f.meetingId1) && meetingsWithRecords.some(m=>m.id===f.meetingId2));
+
+      let updated = caseSignals;
+      valid.forEach(f => {
+        const m1 = meetingsWithRecords.find(m=>m.id===f.meetingId1), m2 = meetingsWithRecords.find(m=>m.id===f.meetingId2);
+        updated = createSignal(updated, cs.id, {
+          type:"inconsistency",
+          title:"Potential inconsistency: "+(m1.type||"a meeting")+" vs "+(m2.type||"another meeting"),
+          reasoning:`"${f.quote1}" (${m1.type||"meeting"}, ${m1.date}) — "${f.quote2}" (${m2.type||"meeting"}, ${m2.date}). Suggested clarifying question: ${f.suggestedQuestion||"—"}`,
+          sourceRefs:[{kind:"meeting", id:m1.id}, {kind:"meeting", id:m2.id}],
+          source:"ai",
+        });
+      });
+      setCaseSignals(updated);
+      updated.filter(s=>!caseSignals.includes(s)).forEach(saveSignalToDB);
+      if(!silent && valid.length===0) showToast("No inconsistencies found");
+    } catch(e) { console.error("generateInconsistencies", e); if(!silent) showToast("Couldn't check for inconsistencies — "+e.message, "error"); }
+    if(!silent) setInconsistencyLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  const linkSignalToAllegation = (signal, allegationId) => {
+    const allegation = allegations.find(a=>a.id===allegationId);
+    if(!allegation) return;
+    const updated = updateSignal(caseSignals, signal.id, { sourceRefs:[...(signal.sourceRefs||[]), {kind:"allegation", id:allegationId, label:allegation.title}] });
+    setCaseSignals(updated);
+    const changed = updated.find(s=>s.id===signal.id);
+    if(changed) saveSignalToDB(changed);
   };
 
   // ── Automatic Evidence Matrix — link suggestions ──
@@ -3265,6 +3321,7 @@ Please produce:
         saveCases(cases.map(x=>x.id===caseId?{...x,investigationReport:text,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x));
         audit("Investigation report generated", cs.employeeName);
         showToast("Investigation report generated");
+        if(invMeetings.length>=2) generateInconsistencies(cs, true);
       } else {
         showToast("Failed to generate investigation report", "error");
       }
@@ -4128,6 +4185,9 @@ Please produce:
           generateTimelineRelevance={generateTimelineRelevance}
           timelineRelevanceLoading={timelineRelevanceLoading}
           loadJsPDF={loadJsPDF}
+          generateInconsistencies={generateInconsistencies}
+          inconsistencyLoading={inconsistencyLoading}
+          linkSignalToAllegation={linkSignalToAllegation}
         />
       )}
 {/* ══ INTAKE ══ */}
