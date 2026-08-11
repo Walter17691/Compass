@@ -14,6 +14,7 @@ import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation } from './lib/allegations';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
+import { computeGuardrailChecks } from './lib/guardrails';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
@@ -2262,6 +2263,51 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const changed = updated.find(s=>s.id===signal.id);
     if(changed) saveSignalToDB(changed);
   };
+
+  // ── Procedural Guardrails ──
+  // computeGuardrailChecks (lib/guardrails.js) is a plain data comparison,
+  // no AI call — so this runs automatically when a case is opened rather
+  // than needing a button + loading state, same "always current" treatment
+  // as Case Readiness. Dedup is by exact signal title: a check only
+  // creates a new signal if no signal (any status) with that title already
+  // exists for this case, so a human's dismiss/not-relevant/accept
+  // decision sticks rather than being re-surfaced on the next sync. A
+  // currently-open signal is auto-resolved once its condition clears,
+  // since these are factual comparisons, not judgment calls a human needs
+  // to confirm away.
+  const syncGuardrailSignals = (cs) => {
+    const checks = computeGuardrailChecks(cs, allegations);
+    const triggeredTitles = new Set(checks.map(c=>c.title));
+    const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk");
+
+    let updated = caseSignals;
+    existing.filter(s=>s.status==="open" && !triggeredTitles.has(s.title)).forEach(s => {
+      updated = setSignalStatus(updated, s.id, "resolved", null, "Condition no longer detected");
+      const changed = updated.find(x=>x.id===s.id);
+      if(changed) saveSignalToDB(changed);
+    });
+
+    checks.forEach(c => {
+      if(existing.some(s=>s.title===c.title)) return;
+      updated = createSignal(updated, cs.id, { type:"process_risk", title:c.title, reasoning:c.reasoning, sourceRefs:c.sourceRefs||[], source:"ai" });
+      saveSignalToDB(updated[updated.length-1]);
+    });
+
+    if(updated!==caseSignals) setCaseSignals(updated);
+  };
+
+  // Fires once per case open (or when switching to a different case), not
+  // on every caseSignals/allegations mutation — avoids a write-triggers-
+  // effect loop, and the dedup-by-title logic above already makes re-runs
+  // idempotent if this ever fires more than once for the same case.
+  useEffect(()=>{
+    if(screen===SCREENS.CASE_VIEW && activeCaseId) {
+      const cs = cases.find(c=>c.id===activeCaseId);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncGuardrailSignals only calls setCaseSignals when a check's dedup-by-title comparison finds something new/cleared, not on every fire; the guarded, title-deduped write is what keeps this effect from cascading, same shape the rule can't see through elsewhere in this file (e.g. updateMeetingIntelligence above).
+      if(cs) syncGuardrailSignals(cs);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, activeCaseId]);
 
   // ── Automatic Evidence Matrix — link suggestions ──
   // The matrix grid itself and manual linking already existed (Evidence

@@ -2,6 +2,7 @@ import { estimateExposure } from '../../lib/tribunalEstimate';
 import { openSignalsForCase } from '../../lib/caseSignals';
 import { UnansweredQuestionsPanel } from '../UnansweredQuestionsPanel';
 import { InconsistenciesPanel } from '../InconsistenciesPanel';
+import { GuardrailsPanel } from '../GuardrailsPanel';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -83,6 +84,12 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
         createCaseTask={createCaseTask}
         allegations={(allegations||[]).filter(a=>a.caseId===cs.id)}
         onLinkAllegation={linkSignalToAllegation}
+        onAskWhy={onAskWhy}
+      />
+
+      <GuardrailsPanel
+        signals={openSignalsForCase(caseSignals, cs.id, "process_risk")}
+        changeSignalStatus={changeSignalStatus}
         onAskWhy={onAskWhy}
       />
 

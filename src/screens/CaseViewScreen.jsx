@@ -73,6 +73,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const resolveSignalRef = (ref) => {
     if(ref.kind==="meeting") { const m = meetings.find(x=>x.id===ref.id); return m ? {label:m.type||"Meeting", detail:null, date:m.date} : null; }
     if(ref.kind==="allegation") { const a = caseAllegations.find(x=>x.id===ref.id); return a ? {label:a.title, detail:null, date:a.createdAt} : null; }
+    if(ref.kind==="evidence") { const e = (cs.evidence||[])[ref.id]; return e ? {label:e.name||"Evidence", detail:e.type||null, date:e.date||null} : null; }
     return null;
   };
 
