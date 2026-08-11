@@ -11,9 +11,9 @@ import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeC
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
-import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation } from './lib/allegations';
+import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation } from './lib/allegations';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
-import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal } from './lib/caseSignals';
+import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
@@ -3332,6 +3332,19 @@ Please produce:
   // investigation meeting rather than handleLetter's generic ~100-char-
   // per-meeting context summary, since a real investigation report has to
   // reflect actual findings, not truncated paraphrase.
+  // ── One-Click Investigation Report — Phase 9 ──
+  // Restructured from one free-text prompt into the spec's full section
+  // list, organised into three explicitly-labelled parts so Evidence / AI
+  // interpretation / HR conclusions read as visually distinct in
+  // MDRenderer (## for the three parts, ### for subsections — MDRenderer
+  // was stripping all markdown headers to plain paragraphs before this
+  // phase, so that got a small, generally-useful fix rather than building
+  // a report-specific renderer). Findings by allegation, conflicting
+  // accounts, and the recommended next step aren't re-derived from
+  // scratch — they carry forward what Phases 1/3/6 already found (real
+  // evidence stance links, real inconsistency signals, the real next-
+  // action recommendation) as input context, same "surface what Compass
+  // already knows" pattern used in Phase 10's prep enhancement.
   const concludeInvestigation = async (caseId) => {
     const cs = cases.find(x=>x.id===caseId);
     if(!cs) return;
@@ -3342,16 +3355,41 @@ Please produce:
       const nl = String.fromCharCode(10);
       const meetingContent = invMeetings.map((m,i)=>"Investigation meeting "+(i+1)+" — "+m.date+nl+m.record).join(nl+nl+"---"+nl+nl);
       const evidenceList = (cs.evidence||[]).map((e,i)=>(i+1)+". "+e.name+" ("+e.type+", "+e.date+")").join(nl);
-      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR documents that are legally sound and follow ACAS Code of Practice and relevant UK employment legislation. Always produce a complete document — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets. Output only the document itself with no preamble, explanation or sign-off instructions.";
-      const userPrompt = "Draft a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed, findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections."+nl+nl
-        +"Employee: "+cs.employeeName+nl
+
+      const caseAllegations = allegationsForCase(allegations, caseId);
+      const allegationContext = caseAllegations.map(a => {
+        const linked = evidenceForAllegation(cs.evidence||[], a.id);
+        const supporting = linked.filter(ev=>ev.stance==="supports").map(ev=>ev.name);
+        const contrary = linked.filter(ev=>ev.stance==="contradicts").map(ev=>ev.name);
+        return `- "${a.title}"${a.description?": "+a.description:""}\n  Current status: ${allegationStatusMeta(a.status).label}\n  Supporting evidence: ${supporting.join(", ")||"none linked"}\n  Contrary evidence: ${contrary.join(", ")||"none linked"}\n  Employee response: ${a.employeeResponse||"not recorded"}\n  Witness evidence: ${a.witnessEvidence||"not recorded"}`;
+      }).join(nl+nl);
+
+      const openQuestions = openSignalsForCase(caseSignals, caseId, "unanswered_question");
+      const inconsistencies = signalsForCase(caseSignals, caseId).filter(s=>s.type==="inconsistency");
+      const nextAction = openSignalsForCase(caseSignals, caseId, "next_action")[0];
+
+      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience, drafting a formal internal investigation report. Follow ACAS Code of Practice. Produce the report using EXACTLY the section structure given, using ## for the three PART headers and ### for subsections within them — this structure is what keeps evidence, AI interpretation, and the HR decision visually separate for the reader, so do not merge or reorder it. PART 1 must contain only what is actually in the record — no interpretation. PART 2 is explicitly your analysis — say so, and never state a finding as an established fact where the record is silent or disputed. PART 3 must recommend only a procedural next step, never a sanction, disciplinary outcome, or finding of guilt — that decision belongs solely to the responsible HR manager. Where a detail is genuinely unknown, say so rather than inventing it. Output only the document itself, no preamble.";
+      const userPrompt = "Employee: "+cs.employeeName+nl
         +"Case type: "+(cs.caseType||"HR Matter")+nl
         +(cs.description?"Case description: "+cs.description+nl:"")
         +(evidenceList?"Evidence gathered:"+nl+evidenceList+nl:"")
+        +(allegationContext?nl+"ALLEGATIONS ON RECORD:"+nl+allegationContext+nl:"")
+        +(openQuestions.length?nl+"UNANSWERED QUESTIONS ALREADY IDENTIFIED (carry into Outstanding Issues):"+nl+openQuestions.map(q=>"- "+q.title).join(nl)+nl:"")
+        +(inconsistencies.length?nl+"POTENTIAL INCONSISTENCIES ALREADY IDENTIFIED (carry into Conflicting Accounts):"+nl+inconsistencies.map(s=>"- "+s.title+(s.reasoning?" — "+s.reasoning:"")).join(nl)+nl:"")
+        +(nextAction?nl+"COMPASS'S CURRENT NEXT-STEP RECOMMENDATION (carry into Recommended Procedural Next Step, unless the investigation record clearly supersedes it):"+nl+"- "+nextAction.title+(nextAction.reasoning?" — "+nextAction.reasoning:"")+nl:"")
         +nl+"Investigation meeting records (full):"+nl+meetingContent+nl+nl
-        +"Today's date for reference: "+new Date().toLocaleDateString("en-GB")+". Always complete the full report.";
+        +"Today's date for reference: "+new Date().toLocaleDateString("en-GB")+"."+nl+nl
+        +"Produce the report with exactly this structure:"+nl
+        +"## Executive Summary"+nl
+        +"## PART 1 — Evidence on Record"+nl
+        +"### Background"+nl+"### Scope of Investigation"+nl+"### Allegations"+nl+"### Investigation Undertaken"+nl+"### People Interviewed"+nl+"### Evidence Considered"+nl+"### Employee Responses"+nl+"### Witness Evidence"+nl
+        +"## PART 2 — Compass Analysis (advisory interpretation, not a finding)"+nl
+        +"### Findings by Allegation (for each: supporting evidence, contrary evidence, and whether the allegation currently appears upheld / not upheld / unable to determine)"+nl+"### Conflicting Accounts"+nl+"### Matters That Could Not Be Established"+nl+"### Outstanding Issues"+nl
+        +"## PART 3 — For HR Decision"+nl
+        +"### Recommended Procedural Next Step"+nl
+        +"End PART 3 with one line making clear that the final finding, sanction, and outcome decision rest with the responsible HR manager, not with this report.";
       const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:3000,stream:false,
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:3400,stream:false,
           system:systemPrompt,
           messages:[{role:"user",content:userPrompt}]
         })});

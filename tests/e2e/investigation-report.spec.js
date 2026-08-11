@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { login } from './helpers.js';
 
-// Covers two real bugs found in the same flow:
+// Covers two real bugs found in the same flow, plus Phase 9's
+// restructuring of the report itself into the spec's full section list
+// (Executive Summary, then three explicitly-labelled parts — Evidence on
+// Record / Compass Analysis / For HR Decision — so the reader sees
+// evidence, AI interpretation, and the HR decision as visually distinct
+// sections, not run together in one block).
 //
 // 1. ReviewScreen's primary "Save and go to case →" button only ever
 //    called saveMeetingToCase() with no navigation after it — despite the
@@ -58,4 +63,16 @@ test('investigation meeting saves straight into the case, and the generated repo
   expect(reportText).not.toContain('Meeting Dialogue');
   expect(reportText.toLowerCase()).toMatch(/allegation/);
   expect(reportText.toLowerCase()).toMatch(/finding|recommend/);
+
+  // Phase 9: the three-part structure that keeps evidence, AI
+  // interpretation, and the HR decision visually distinct.
+  expect(reportText).toContain('Evidence on Record');
+  expect(reportText).toContain('Compass Analysis');
+  expect(reportText).toContain('For HR Decision');
+  expect(reportText.toLowerCase()).toMatch(/rest(s)? with|responsible hr manager/);
+  // MDRenderer no longer strips ## headers to plain paragraphs — this is
+  // what makes PART 1/2/3 actually read as distinct sections rather than
+  // just differently-worded prose. .first() — the report's own prose
+  // repeats "evidence on record" in body text too, not just the heading.
+  await expect(page.getByText('Evidence on Record', { exact: false }).first()).toBeVisible();
 });
