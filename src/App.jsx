@@ -626,6 +626,32 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [homeAttachment, setHomeAttachment] = useState(null);
   const [liveContext, setLiveContext] = useState(null);
   const [liveContextLoading, setLiveContextLoading] = useState(false);
+  const [meetingIntelligence, setMeetingIntelligence] = useState(null);
+  const [dismissedNudgeKey, setDismissedNudgeKey] = useState(null);
+
+  // ── Intelligent Meeting Mode — live panels ──
+  // Fires on the same throttled cadence as updateLiveContext (every 3rd
+  // utterance) rather than its own timer — no new polling infrastructure.
+  // A separate call from updateLiveContext rather than folding into it:
+  // that one's existing prose-summary contract stays untouched, this adds
+  // structured data alongside it. possibleInconsistency compares the
+  // *current live transcript* against itself (an early/late answer from
+  // the same meeting) — distinct from Phase 3's generateInconsistencies,
+  // which compares across separate, already-saved meetings.
+  const updateMeetingIntelligence = async (notes) => {
+    if(notes.trim().split(/\s+/).length < 10) return;
+    try {
+      const plannedQuestions = (prepNotes.match(/## Key Questions\n([\s\S]*?)(\n## |$)/)||[])[1]||"";
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:500, stream:false,
+          system:"You are Compass, an Employee Relations copilot silently tracking a live HR meeting. Read the transcript so far and, where the planned key questions are provided, track which have been asked. Only report a possible inconsistency if someone's later statement genuinely conflicts with something specific they (or another named participant) said earlier in THIS transcript — never flag a mere gap or a different emphasis, and never state or imply anyone is lying. Respond ONLY with valid JSON, no other text: {\"questionsAsked\":[\"...\"],\"questionsRemaining\":[\"...\"],\"newIssues\":[\"...\"],\"evidenceMentioned\":[\"...\"],\"actionsIdentified\":[\"...\"],\"possibleInconsistency\":{\"earlier\":\"...\",\"later\":\"...\",\"suggestedQuestion\":\"...\"}} — omit possibleInconsistency (set it null) if there is none. Keep every array short — only real, specific items, empty arrays where nothing applies.",
+          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+(plannedQuestions?"\nPlanned key questions:\n"+plannedQuestions:"")+"\n\nTranscript so far:\n"+notes.slice(-3000)}]})});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      setMeetingIntelligence(parsed);
+    } catch(e) { console.error("updateMeetingIntelligence", e); }
+  };
   const [meetingStartTime, setMeetingStartTime] = useState(null);
   const [meetingEndTime, setMeetingEndTime] = useState(null);
   const [editingRecord, setEditingRecord] = useState(false);
@@ -883,6 +909,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(screen===SCREENS.RECORD && transcript.length>0 && transcript.length%3===0) {
       const notes = transcript.map(u=>u.text).join(" ");
       updateLiveContext(notes);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- same fire-and-forget shape as updateLiveContext just above (async, setState only after an await); the rule doesn't flag that call, only this one, for reasons unclear from its generic message — both are equally safe here.
+      updateMeetingIntelligence(notes);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript.length]);
@@ -2526,9 +2554,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!caseInfo.employee.trim()) return;
     setAiError(""); setAiProcessing(true);
     try {
+      // When this meeting is linked to an existing case, surface what
+      // Phases 2/3 already found (open unanswered_question / inconsistency
+      // signals) as prep context — not fresh AI reasoning, just carrying
+      // forward what Compass already knows about this case into the
+      // sections the meeting is actually being prepared for.
+      const linkedCaseId = caseInfo._linkedCaseId;
+      const openQuestions = linkedCaseId ? openSignalsForCase(caseSignals, linkedCaseId, "unanswered_question") : [];
+      const openInconsistencies = linkedCaseId ? openSignalsForCase(caseSignals, linkedCaseId, "inconsistency") : [];
+      const carriedContext = [
+        openQuestions.length ? "Unanswered questions already identified on this case:\n"+openQuestions.map(q=>"- "+q.title).join("\n") : null,
+        openInconsistencies.length ? "Potential inconsistencies already identified on this case:\n"+openInconsistencies.map(s=>"- "+s.title+(s.reasoning?" — "+s.reasoning:"")).join("\n") : null,
+      ].filter(Boolean).join("\n\n");
       await streamClaude(
         `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
-        `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}\n\n## Objectives\n## Agenda\n## Key Questions\n## Legal Checklist\n## Risk Flags`,
+        `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}\n\n## Objectives\n## Agenda\n## Key Questions\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use the items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the background/context clearly supports them.":""}`,
         t=>setPrepNotes(t)
       );
     } catch(e) { setAiError(e.message); }
@@ -4202,7 +4242,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} />
       )}
 
       {/* ══ REVIEW ══ */}

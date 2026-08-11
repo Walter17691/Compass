@@ -2,7 +2,9 @@ import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
 import { SCREENS } from '../constants';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey }) {
+  const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
+  const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const cancelMeeting = async () => {
     const hasContent = transcript.length>0 || inputText.trim();
     if(hasContent) {
@@ -90,6 +92,7 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
                 ls.forEach(line=>addUtterance(line.trim()));
                 setInputText("");
                 updateLiveContext(val);
+                updateMeetingIntelligence(val);
               } else {
                 setInputText(val);
               }
@@ -134,6 +137,50 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
               !liveContextLoading&&<div style={{fontSize:12,color:"#C4BAB0"}}>Will update as you take notes</div>
             )}
           </div>
+
+          {/* Meeting intelligence — live panels + the quiet inconsistency
+              nudge. Never auto-inserted into the transcript; the HR user
+              chooses whether to ask the suggested question. */}
+          {meetingIntelligence&&(
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #EDE5D8",flexShrink:0,maxHeight:220,overflowY:"auto"}}>
+              <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10}}>Meeting intelligence</div>
+              {showNudge&&(
+                <div style={{background:"#FEF5E7",border:"1px solid #E8C88A",borderRadius:8,padding:"10px 12px",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#B87520",marginBottom:4}}>Possible clarification required</div>
+                  <div style={{fontSize:11,color:"#6B6375",marginBottom:2}}>Earlier: "{meetingIntelligence.possibleInconsistency.earlier}"</div>
+                  <div style={{fontSize:11,color:"#6B6375",marginBottom:8}}>Later: "{meetingIntelligence.possibleInconsistency.later}"</div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>{
+                      const q = meetingIntelligence.possibleInconsistency.suggestedQuestion;
+                      setInputText(t=>t?t+" "+q:q);
+                      inputRef.current?.focus();
+                    }} style={{fontSize:11,background:"#B87520",border:"none",borderRadius:5,padding:"4px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Insert question</button>
+                    <button onClick={()=>setDismissedNudgeKey(nudgeKey)} style={{fontSize:11,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                  </div>
+                </div>
+              )}
+              {[
+                {key:"questionsAsked", label:"Questions asked", color:"#1A7A4A"},
+                {key:"questionsRemaining", label:"Questions remaining", color:"#B87520"},
+                {key:"newIssues", label:"New issues raised", color:"#C84B2F"},
+                {key:"evidenceMentioned", label:"Evidence mentioned", color:"#7C5CFC"},
+                {key:"actionsIdentified", label:"Actions identified", color:"#1C5AA0"},
+              ].map(({key,label,color})=>{
+                const items = meetingIntelligence[key];
+                if(!items?.length) return null;
+                return (
+                  <div key={key} style={{marginBottom:10}}>
+                    <div style={{fontSize:10,fontWeight:700,color,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>{label}</div>
+                    {items.map((item,i)=>(
+                      <div key={i} style={{fontSize:11,color:"#3D3560",lineHeight:1.5,paddingLeft:8,position:"relative"}}>
+                        <span style={{position:"absolute",left:0}}>·</span>{item}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Ask Compass */}
           <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>

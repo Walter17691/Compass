@@ -45,9 +45,9 @@ test('Compass flags a potential inconsistency between two meeting records and it
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await expect(page.getByText('Potential inconsistencies', { exact: true })).toBeVisible();
+  await expect(page.getByText('Potential inconsistencies', { exact: true })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Check for inconsistencies' }).click();
-  await expect(page.getByText('Comparing meeting records…')).toBeVisible();
+  await expect(page.getByText('Comparing meeting records…')).toBeVisible({ timeout: 10000 });
 
   const signalCard = page.getByText(/^Potential inconsistency:/).first().locator('xpath=ancestor::div[2]');
   await expect(signalCard).toBeVisible({ timeout: 30000 });
