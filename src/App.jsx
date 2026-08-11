@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
-import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES } from './constants';
+import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES } from './constants';
 import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
 import { ls, lsSet } from './lib/storage';
@@ -2428,9 +2428,25 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   }, [currentUser]);
 
   // ── Policy context ──
+  // Phase 11 — grouped by category (blank/"other" policies still included,
+  // just unlabelled by area) so a consumer prompt can cite "your
+  // Disciplinary Policy" specifically rather than an undifferentiated
+  // policy blob. The distinguish-company-policy-from-guidance instruction
+  // lives here, once, since every AI call site already goes through this
+  // single function rather than each needing its own wording.
   const getPolicyCtx = () => {
     if(!policies.length) return "";
-    return "\n\nCOMPANY POLICIES (reference where relevant):\n" + policies.map(p=>`--- ${p.name} ---\n${p.content}`).join("\n\n").slice(0,12000);
+    const byCategory = POLICY_CATEGORIES.map(cat => ({
+      cat, items: policies.filter(p => (p.category||"other")===cat.id),
+    })).filter(g => g.items.length);
+    const body = byCategory.map(g =>
+      `[${g.cat.label}]\n` + g.items.map(p=>`--- ${p.name} ---\n${p.content}`).join("\n\n")
+    ).join("\n\n");
+    return "\n\nCOMPANY POLICIES (grouped by area — cite these specifically as \"your company [X] policy\" when relied on. Always keep three things visibly distinct in your answer: company policy (what these documents say), general Compass guidance (standard HR/ACAS practice where no policy is provided), and legal/regulatory guidance (UK employment law) — never state or imply that a company policy is itself the law):\n" + body.slice(0,12000);
+  };
+
+  const changePolicyCategory = (policyId, category) => {
+    setPolicies(p=>{const u=p.map(x=>x.id===policyId?{...x,category}:x);lsSet("compass_policies",u);return u;});
   };
 
   // ── Speech ──
@@ -2973,7 +2989,7 @@ Please produce:
           await new Promise(res=>{if(window.mammoth){res();return;}const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";s.onload=res;document.head.appendChild(s);});
           const buf=await file.arrayBuffer(); const r=await window.mammoth.extractRawText({arrayBuffer:buf}); content=r.value;
         } else { content=await file.text(); }
-        const pol={id:Date.now().toString()+Math.random(),name:file.name.replace(/\.[^.]+$/,""),fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k"};
+        const pol={id:Date.now().toString()+Math.random(),name:file.name.replace(/\.[^.]+$/,""),fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k",category:"other"};
         setPolicies(p=>{const u=[...p,pol];lsSet("compass_policies",u);return u;});
       } catch(err){showToast("Could not read "+file.name, "error");}
     }
@@ -4469,6 +4485,7 @@ Please produce:
           policyFileRef={policyFileRef}
           handlePolicyUpload={handlePolicyUpload}
           policyProcessing={policyProcessing}
+          changePolicyCategory={changePolicyCategory}
           starterTemplates={starterTemplates}
           saveStarterTemplates={saveStarterTemplates}
           leaverTemplates={leaverTemplates}

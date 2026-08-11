@@ -21,6 +21,21 @@ export const MEETING_TYPES = [
   { id:"redundancy-appeal",   label:"Redundancy Appeal",       tag:"ERA 1996 s.98",  group:"redundancy", mode:"er" },
 ];
 
+// Phase 11 of the reasoning-layer build-out. New uploads default to
+// "other" (no picker mid-multi-file-upload) — the category is set
+// afterwards from the policy list in Settings.
+export const POLICY_CATEGORIES = [
+  { id:"disciplinary",      label:"Disciplinary" },
+  { id:"grievance",         label:"Grievance" },
+  { id:"attendance",        label:"Attendance" },
+  { id:"capability",        label:"Capability" },
+  { id:"probation",         label:"Probation" },
+  { id:"flexible_working",  label:"Flexible Working" },
+  { id:"redundancy",        label:"Redundancy" },
+  { id:"family_leave",      label:"Family Leave" },
+  { id:"other",             label:"Other" },
+];
+
 // Note: ORG_SETTINGS, PORTAL, TIMELINE, AUDIT, PREDICT, GDPR, ONBOARD were
 // removed here - none of them were ever referenced by a screen===SCREENS.X
 // render block anywhere in the app (verified by grep before removal).
