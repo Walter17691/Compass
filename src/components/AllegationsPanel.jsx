@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus } from '../lib/allegations';
+import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus, APPEAL_OUTCOMES, appealOutcomeMeta } from '../lib/allegations';
 import { computeOutcomeDistribution } from '../lib/outcomeConsistency';
+import { appealMeetingsForCase } from '../lib/appealReview';
 import { EvidenceMatrixPanel } from './EvidenceMatrixPanel';
+import { SignalCard } from './SignalCard';
 
 const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
 const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom:4 };
@@ -12,7 +14,7 @@ const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom
 // piece of evidence (support for/against one). Evidence stays on
 // cs.evidence; linking it here just tags an existing item with which
 // allegation it speaks to and whether it supports or contradicts it.
-export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate }) {
+export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -21,6 +23,10 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   // grouped by the case's own caseType, not per-allegation), so computed
   // once rather than inside the allegation .map() below.
   const outcomeDistribution = computeOutcomeDistribution(cases, allAllegations||allegations, cs.caseType, cs.id);
+  // Phase 19 — the Appeal Workspace only appears once there's a real
+  // appeal meeting record to compare against; before that, this is just
+  // Phase 16's Decision Workspace with nothing appeal-specific to show.
+  const hasAppealMeeting = appealMeetingsForCase(cs).length > 0;
 
   // Same "open the original" affordances EvidenceTab already exposes
   // (Download for a stored file, View notes for a meeting-derived record)
@@ -140,6 +146,35 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                           Decided {fmtDate?fmtDate(a.decidedAt):new Date(a.decidedAt).toLocaleDateString("en-GB")}{a.decidedBy&&orgMembers&&(()=>{const m=orgMembers.find(x=>x.user_id===a.decidedBy);return m?" by "+m.name:"";})()}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {hasAppealMeeting && isFindingStatus(a.status) && (
+                    <div style={{marginBottom:12,background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                        <label style={{...labelStyle,marginBottom:0}}>Appeal review</label>
+                        <button onClick={()=>generateAppealReview(cs)} disabled={appealReviewLoading} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 10px",color:"#5B3FD4",cursor:appealReviewLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                          {appealReviewLoading?"Reviewing…":"Generate appeal review"}
+                        </button>
+                      </div>
+                      {caseSignals.filter(s=>s.caseId===cs.id&&s.title==="Appeal review: "+a.title&&s.status==="open").map(s=>(
+                        <SignalCard key={s.id} signal={s} onAskWhy={()=>onAskWhy?.(s)} />
+                      ))}
+                      <div style={{marginTop:10}}>
+                        <label style={labelStyle}>Appeal outcome — recorded by the chair, never Compass</label>
+                        <select value={a.appealOutcome||""} onChange={e=>recordAppealOutcome(a.id, e.target.value, a.appealReasoning||"")} style={{...inputStyle,width:"auto"}}>
+                          <option value="" disabled>Not yet decided</option>
+                          {APPEAL_OUTCOMES.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
+                        </select>
+                        {a.appealOutcome && (
+                          <textarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF",marginTop:8}} rows={2} value={a.appealReasoning||""} placeholder="Reasoning for the appeal decision." onChange={e=>patchAllegation(a.id,{appealReasoning:e.target.value})} onBlur={e=>recordAppealOutcome(a.id, a.appealOutcome, e.target.value)} />
+                        )}
+                        {a.appealDecidedAt && (
+                          <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>
+                            {appealOutcomeMeta(a.appealOutcome)?.label} — decided {fmtDate?fmtDate(a.appealDecidedAt):new Date(a.appealDecidedAt).toLocaleDateString("en-GB")}{a.appealDecidedBy&&orgMembers&&(()=>{const m=orgMembers.find(x=>x.user_id===a.appealDecidedBy);return m?" by "+m.name:"";})()}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 

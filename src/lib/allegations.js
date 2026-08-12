@@ -82,6 +82,31 @@ export function removeAllegation(allegations, allegationId) {
   return (allegations || []).filter(a => a.id !== allegationId);
 }
 
+// Phase 19 (Advanced Appeal Workspace) — a separate decision layered on
+// top of the original finding, not a replacement of it: the finding
+// (status/decidedBy/decidedAt) stays exactly as recorded, and the appeal
+// outcome is its own accountability trail alongside it.
+export const APPEAL_OUTCOMES = [
+  { id: "upheld", label: "Appeal upheld" },
+  { id: "partially_upheld", label: "Partially upheld" },
+  { id: "not_upheld", label: "Not upheld" },
+  { id: "further_investigation_required", label: "Further investigation required" },
+];
+
+export function appealOutcomeMeta(outcome) {
+  return APPEAL_OUTCOMES.find(o => o.id === outcome) || null;
+}
+
+export function setAppealOutcome(allegations, allegationId, outcome, reasoning, decidedBy = null) {
+  if (!APPEAL_OUTCOMES.some(o => o.id === outcome)) return allegations;
+  return updateAllegation(allegations, allegationId, {
+    appealOutcome: outcome,
+    appealReasoning: reasoning || "",
+    appealDecidedBy: decidedBy,
+    appealDecidedAt: new Date().toISOString(),
+  });
+}
+
 // ── Evidence linking ──
 // Evidence itself stays nested JSONB on cases.evidence (no migration
 // needed) — these just add/clear the optional allegationId/stance fields

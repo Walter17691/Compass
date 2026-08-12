@@ -11,7 +11,8 @@ import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeC
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
-import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation } from './lib/allegations';
+import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
+import { newEvidenceSinceFinding, appealMeetingsForCase } from './lib/appealReview';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -1208,6 +1209,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [evidenceSuggestionsLoading, setEvidenceSuggestionsLoading] = useState({});
   const [timelineRelevanceLoading, setTimelineRelevanceLoading] = useState({});
   const [inconsistencyLoading, setInconsistencyLoading] = useState({});
+  const [appealReviewLoading, setAppealReviewLoading] = useState({});
 
   // ── Concern referrals (manager self-service — any org member can raise
   // one, only HR triages) — see lib/concernReferrals.js ──
@@ -1253,8 +1255,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         if(changed) saveCaseToDB(changed);
         else deleteCaseFromDB(changedId);
       } else {
-        // Sync all
-        u.forEach(cs => saveCaseToDB(cs));
+        // Sync all — but only cases that actually changed. Callers build u
+        // via cases.map(x => cond ? {...x, ...} : x), which preserves
+        // reference equality for every untouched case, so a reference
+        // check here is enough to skip them. Blindly re-saving the whole
+        // array (as this used to) bumped every case's updated_at on every
+        // single bulk action regardless of whether its fields changed —
+        // in an org with hundreds of cases, that's hundreds of concurrent
+        // no-op writes on every close/bulk action, and saveCaseToDB's own
+        // optimistic-concurrency check (conditional update on updated_at)
+        // meant any of those no-op writes could silently clobber a
+        // genuine concurrent edit to an unrelated case, or itself fail
+        // and trigger a full loadCasesFromDB() that discards whatever
+        // this action just changed.
+        const prevById = new Map(cases.map(cs => [cs.id, cs]));
+        u.forEach(cs => { if(cs !== prevById.get(cs.id)) saveCaseToDB(cs); });
         cases.forEach(cs => { if(!u.find(x=>x.id===cs.id)) deleteCaseFromDB(cs.id); });
       }
     }
@@ -1952,6 +1967,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         period:r.period||"", peopleInvolved:r.people_involved||"", status:r.status,
         employeeResponse:r.employee_response||"", witnessEvidence:r.witness_evidence||"",
         decisionReasoning:r.decision_reasoning||"", decidedBy:r.decided_by||null, decidedAt:r.decided_at||null,
+        appealOutcome:r.appeal_outcome||null, appealReasoning:r.appeal_reasoning||"",
+        appealDecidedBy:r.appeal_decided_by||null, appealDecidedAt:r.appeal_decided_at||null,
         createdBy:r.created_by, createdAt:r.created_at,
       })));
     } catch(e) { console.error('loadAllegations', e); }
@@ -1967,6 +1984,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       witness_evidence: allegation.witnessEvidence||null, created_by: allegation.createdBy||user?.id||null,
       decision_reasoning: allegation.decisionReasoning||null, decided_by: allegation.decidedBy||null,
       decided_at: allegation.decidedAt||null,
+      appeal_outcome: allegation.appealOutcome||null, appeal_reasoning: allegation.appealReasoning||null,
+      appeal_decided_by: allegation.appealDecidedBy||null, appeal_decided_at: allegation.appealDecidedAt||null,
       updated_at: new Date().toISOString(),
     }));
     if(error) { console.error('saveAllegationToDB', error); showToast("Couldn't save allegation to the cloud — "+error.message, "error"); }
@@ -2005,6 +2024,16 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAllegations(removeAllegation(allegations, allegationId));
     deleteAllegationFromDB(allegationId);
     if(target) audit("Allegation removed", target.title, target.caseId);
+  };
+
+  // Phase 19 — the chair's own recorded appeal outcome, layered on top of
+  // (never replacing) the original finding — Compass's own appeal review
+  // is advisory only, generated separately below as case_signals.
+  const recordAppealOutcome = (allegationId, outcome, reasoning) => {
+    const updated = setAppealOutcome(allegations, allegationId, outcome, reasoning, user?.id||null);
+    setAllegations(updated);
+    const changed = updated.find(a=>a.id===allegationId);
+    if(changed) { saveAllegationToDB(changed); audit("Appeal outcome recorded", `${changed.title} → ${appealOutcomeMeta(outcome)?.label||outcome}`, changed.caseId); }
   };
 
   // ── Concern referrals (manager self-service) ──
@@ -2402,6 +2431,68 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setCaseSignals(updated);
     const changed = updated.find(s=>s.id===signal.id);
     if(changed) saveSignalToDB(changed);
+  };
+
+  // ── Advanced Appeal Workspace (Phase 19) ──
+  // Assembles a per-ground comparison once an appeal meeting has a real
+  // record: original finding/reasoning (Phase 16) vs. the grounds of
+  // appeal Compass extracts from that record vs. any evidence added since
+  // the finding (lib/appealReview.js). Written as process_risk case_signals
+  // — the same explainability substrate as guardrails/inconsistencies —
+  // so "ask why" resolves back to the real allegation and meeting. Never
+  // recommends upheld/not upheld; the chair records that separately via
+  // recordAppealOutcome.
+  const generateAppealReview = async (cs) => {
+    const appealMeetings = appealMeetingsForCase(cs);
+    if(!appealMeetings.length) { showToast("No appeal meeting record found for this case yet", "error"); return; }
+    const caseAllegs = allegations.filter(a=>a.caseId===cs.id);
+    if(!caseAllegs.length) { showToast("No allegations recorded on this case", "error"); return; }
+    setAppealReviewLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const appealMeeting = appealMeetings[appealMeetings.length-1];
+      const allegationContext = caseAllegs.map(a=>`ALLEGATION id="${a.id}" — ${a.title}\nOriginal finding: ${allegationStatusMeta(a.status).label}\nReasoning: ${a.decisionReasoning||"None recorded"}`).join("\n\n");
+      const newEvidenceContext = caseAllegs.map(a=>{
+        const ne = newEvidenceSinceFinding(cs.evidence||[], a);
+        return ne.length ? `New evidence since the finding on "${a.title}": ${ne.map(e=>e.name).join(", ")}` : null;
+      }).filter(Boolean).join("\n") || "None recorded";
+
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:1200,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot assembling a neutral appeal review. For each allegation, compare the original finding and reasoning against the grounds of appeal raised in the appeal meeting record, and note any new evidence. Never state or recommend whether the appeal should be upheld, partially upheld, or not upheld — that decision belongs solely to the chair hearing the appeal; only describe what the record shows. Respond ONLY with valid JSON, no other text: [{\"allegationId\":\"...\",\"groundsOfAppeal\":\"what the employee argued, from the appeal meeting record\",\"reviewNote\":\"a neutral comparison of the original finding/reasoning against the grounds raised and any new evidence\"}]",
+        messages:[{role:"user", content:"ALLEGATIONS AND ORIGINAL FINDINGS:\n"+allegationContext+"\n\nNEW EVIDENCE:\n"+newEvidenceContext+"\n\nAPPEAL MEETING RECORD:\n"+(appealMeeting.record||"").slice(0,4000)}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const valid = (Array.isArray(parsed)?parsed:[]).filter(f=>caseAllegs.some(a=>a.id===f.allegationId));
+      if(!valid.length) { showToast("Compass couldn't match the appeal record to any allegation", "error"); setAppealReviewLoading(l=>({...l,[cs.id]:false})); return; }
+
+      // Regenerating supersedes only this case's prior appeal-review
+      // signals (matched by title prefix), never other process_risk
+      // signals (guardrails write that same type) — the exact same
+      // "supersede stale, don't touch unrelated" split guardrails.js's
+      // syncGuardrailSignals already relies on.
+      const priorOpen = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && s.status==="open" && s.title.startsWith("Appeal review:"));
+      let updated = caseSignals;
+      priorOpen.forEach(s => { updated = setSignalStatus(updated, s.id, "resolved", null, "Superseded by a refreshed appeal review"); });
+      priorOpen.forEach(s => { const u = updated.find(x=>x.id===s.id); if(u) saveSignalToDB(u); });
+
+      valid.forEach(f => {
+        const allegation = caseAllegs.find(a=>a.id===f.allegationId);
+        updated = createSignal(updated, cs.id, {
+          type:"process_risk",
+          title:"Appeal review: "+allegation.title,
+          reasoning:`Grounds of appeal: ${f.groundsOfAppeal}\n\nCompass review: ${f.reviewNote}`,
+          sourceRefs:[{kind:"allegation", id:allegation.id, label:allegation.title}, {kind:"meeting", id:appealMeeting.id}],
+          source:"ai",
+        });
+        saveSignalToDB(updated[updated.length-1]);
+      });
+      setCaseSignals(updated);
+    } catch(e) { console.error("generateAppealReview", e); showToast("Couldn't generate the appeal review — "+e.message, "error"); }
+    setAppealReviewLoading(l=>({...l, [cs.id]:false}));
   };
 
   // ── Procedural Guardrails ──
@@ -3900,7 +3991,14 @@ Please produce:
                     // before any heuristic ever runs, so without this the
                     // case would silently stay shown as closed even with
                     // a live appeal meeting now on file.
-                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",meetings:[...x.meetings,meeting]}:x));
+                    // Scoped to just this case (changedId) — an unscoped
+                    // sync-all here re-saves every case in the org, and
+                    // saveCaseToDB's optimistic-concurrency check reloads
+                    // ALL cases from the DB the moment any single one of
+                    // them has a stale updatedAt (near-guaranteed in an
+                    // org with hundreds of cases and ongoing activity),
+                    // silently reverting this exact update before it lands.
+                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",meetings:[...x.meetings,meeting]}:x), cs.id);
                     setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""}));
                     setShowLinkCase(false);
                     setAppealDetected(false);
@@ -4476,6 +4574,9 @@ Please produce:
           isHR={isHR}
           caseAccess={caseAccess}
           assignInvestigator={assignInvestigator}
+          generateAppealReview={generateAppealReview}
+          appealReviewLoading={appealReviewLoading?.[activeCaseId]}
+          recordAppealOutcome={recordAppealOutcome}
         />
       )}
 {/* ══ INTAKE ══ */}

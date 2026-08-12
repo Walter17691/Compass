@@ -3,6 +3,7 @@ import {
   addAllegation, updateAllegation, setAllegationStatus, removeAllegation,
   allegationsForCase, linkEvidenceToAllegation, unlinkEvidenceFromAllegation,
   evidenceForAllegation, allegationStatusMeta, isFindingStatus,
+  setAppealOutcome, appealOutcomeMeta,
 } from '../lib/allegations';
 
 describe('addAllegation', () => {
@@ -99,6 +100,41 @@ describe('removeAllegation', () => {
   it('removes only the matching allegation', () => {
     const all = [{ id: 'a1' }, { id: 'a2' }];
     expect(removeAllegation(all, 'a1')).toEqual([{ id: 'a2' }]);
+  });
+});
+
+describe('setAppealOutcome (Phase 19)', () => {
+  const base = [{ id: 'a1', caseId: 'case1', status: 'substantiated', decidedAt: '2026-08-01T00:00:00.000Z' }];
+
+  it('stamps the appeal outcome/reasoning/decidedAt without touching the original finding', () => {
+    const result = setAppealOutcome(base, 'a1', 'upheld', 'New CCTV footage contradicts the original account.', 'user-1');
+    expect(result[0]).toMatchObject({
+      status: 'substantiated', decidedAt: '2026-08-01T00:00:00.000Z',
+      appealOutcome: 'upheld', appealReasoning: 'New CCTV footage contradicts the original account.', appealDecidedBy: 'user-1',
+    });
+    expect(result[0].appealDecidedAt).toBeTruthy();
+  });
+
+  it('ignores an unrecognised appeal outcome', () => {
+    const result = setAppealOutcome(base, 'a1', 'bogus', 'x');
+    expect(result[0].appealOutcome).toBeUndefined();
+  });
+
+  it('defaults reasoning to an empty string and decidedBy to null when omitted', () => {
+    const result = setAppealOutcome(base, 'a1', 'not_upheld');
+    expect(result[0].appealReasoning).toBe('');
+    expect(result[0].appealDecidedBy).toBeNull();
+  });
+});
+
+describe('appealOutcomeMeta', () => {
+  it('returns metadata for a known outcome', () => {
+    expect(appealOutcomeMeta('partially_upheld').label).toBe('Partially upheld');
+  });
+
+  it('returns null for an unknown or unset outcome', () => {
+    expect(appealOutcomeMeta('bogus')).toBeNull();
+    expect(appealOutcomeMeta(undefined)).toBeNull();
   });
 });
 
