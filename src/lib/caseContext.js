@@ -119,3 +119,16 @@ export function meetingsNeedingSummary(cs, meetingSummaries = {}) {
     return overBudget && !meetingSummaries[m.id];
   }).reverse();
 }
+
+// Phase 23 — Explainability retrofit. The exact set of allegations/
+// meetings that fed a generated case overview, in WhySourcesModal's
+// sourceRefs shape — captured once at generation time (App.jsx's
+// generateCaseOverview) rather than re-derived at render time, so "why"
+// always reflects what the overview actually saw, even if the case's own
+// allegations/meetings change afterwards.
+export function buildOverviewSourceRefs(allegations = [], meetings = []) {
+  return [
+    ...allegations.map(a => ({ kind: "allegation", id: a.id, label: a.title })),
+    ...meetings.map(m => ({ kind: "meeting", id: m.id, label: m.type || "Meeting" })),
+  ];
+}

@@ -6,13 +6,25 @@ import { MDRenderer } from '../MDRenderer';
 // AI-generated content here is explicitly never presented as established
 // fact or a recommended sanction (enforced in the system prompts, not
 // just this UI), so there's nothing that needs to survive a refresh.
-export function AIAssistantTab({ cs, chatHistory, chatInput, setChatInput, chatProcessing, sendChat, overview, overviewLoading, generateOverview }) {
+// Phase 23 — Explainability retrofit adds onAskWhy/overviewSources: the
+// overview predates the case_signals/WhySourcesModal primitive (Phase 0)
+// and rendered as unsourced prose until now. Reuses that same modal via
+// the caller (CaseViewScreen's existing whySignal state/resolveSignalRef)
+// rather than inventing a second explainability UI — sourceRefs is
+// exactly the allegations/meetings that actually fed the case record at
+// generation time (App.jsx's generateCaseOverview), not re-derived live.
+export function AIAssistantTab({ cs, chatHistory, chatInput, setChatInput, chatProcessing, sendChat, overview, overviewLoading, generateOverview, overviewSources, onAskWhy }) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>AI case overview</div>
-          <button onClick={generateOverview} disabled={overviewLoading} style={{fontSize:11,background:overviewLoading?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",cursor:overviewLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>{overviewLoading?"Generating…":overview?"Regenerate":"Generate overview"}</button>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {overview && !overviewLoading && (
+              <button onClick={()=>onAskWhy?.({title:"AI case overview", reasoning:"Generated from this case's own record — the allegations and meetings listed below — as of when you last generated it. Regenerating refreshes both the overview and this source list.", sourceRefs:overviewSources||[]})} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"5px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Ask why</button>
+            )}
+            <button onClick={generateOverview} disabled={overviewLoading} style={{fontSize:11,background:overviewLoading?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",cursor:overviewLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>{overviewLoading?"Generating…":overview?"Regenerate":"Generate overview"}</button>
+          </div>
         </div>
         <div style={{padding:"16px"}}>
           {!overview && !overviewLoading && <div style={{fontSize:13,color:"#9B9098"}}>Generates a structured, neutral summary of established/disputed facts and outstanding questions from what's recorded on this case. It never decides an allegation or recommends a sanction — only the next procedural step.</div>}

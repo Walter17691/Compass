@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCaseContext, meetingsNeedingSummary } from '../lib/caseContext';
+import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from '../lib/caseContext';
 
 const baseCase = { employeeName: 'Ada Lovelace', caseType: 'misconduct', dateReceived: '2026-08-01', description: 'Alleged unauthorised absence.' };
 
@@ -137,5 +137,25 @@ describe('meetingsNeedingSummary', () => {
   it('excludes a meeting that already has a cached summary', () => {
     const result = meetingsNeedingSummary({ ...baseCase, meetings: manyMeetings }, { old1: 'Already summarised.' });
     expect(result.map(m => m.id)).not.toContain('old1');
+  });
+});
+
+describe('buildOverviewSourceRefs (Phase 23)', () => {
+  it('produces a sourceRef per allegation and per meeting, in WhySourcesModal shape', () => {
+    const allegations = [{ id: 'a1', title: 'Left site early' }];
+    const meetings = [{ id: 'm1', type: 'Investigation meeting' }];
+    expect(buildOverviewSourceRefs(allegations, meetings)).toEqual([
+      { kind: 'allegation', id: 'a1', label: 'Left site early' },
+      { kind: 'meeting', id: 'm1', label: 'Investigation meeting' },
+    ]);
+  });
+
+  it('falls back to a generic label for a meeting with no type', () => {
+    expect(buildOverviewSourceRefs([], [{ id: 'm1' }])).toEqual([{ kind: 'meeting', id: 'm1', label: 'Meeting' }]);
+  });
+
+  it('returns an empty array for a case with no allegations or meetings', () => {
+    expect(buildOverviewSourceRefs([], [])).toEqual([]);
+    expect(buildOverviewSourceRefs()).toEqual([]);
   });
 });

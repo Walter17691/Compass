@@ -23,7 +23,7 @@ import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
-import { buildCaseContext, meetingsNeedingSummary } from './lib/caseContext';
+import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
 import { matchCaseByEmployeeName } from './lib/globalAssistant';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
@@ -2332,6 +2332,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const [caseChatInput, setCaseChatInput] = useState("");
   const [caseChatProcessing, setCaseChatProcessing] = useState(false);
   const [caseOverview, setCaseOverview] = useState({});
+  // Phase 23 — Explainability retrofit. Captured once per generation
+  // (not re-derived at render time) so "why" always reflects exactly
+  // what actually fed that specific overview, even if the case's own
+  // allegations/meetings change afterwards.
+  const [caseOverviewSources, setCaseOverviewSources] = useState({});
   const [caseOverviewLoading, setCaseOverviewLoading] = useState({});
 
   // Phase 21 — Case Memory hardening. Session-local only (meeting records
@@ -2504,7 +2509,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       })});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      if(text) setCaseOverview(o=>({...o, [cs.id]:text}));
+      if(text) {
+        setCaseOverview(o=>({...o, [cs.id]:text}));
+        const caseAllegs = allegationsForCase(allegations, cs.id);
+        setCaseOverviewSources(s=>({...s, [cs.id]:buildOverviewSourceRefs(caseAllegs, cs.meetings||[])}));
+      }
       else showToast("Couldn't generate the case overview", "error");
     } catch(e) { console.error("generateCaseOverview", e); showToast("Couldn't generate the case overview — "+e.message, "error"); }
     setCaseOverviewLoading(l=>({...l, [cs.id]:false}));
@@ -3098,6 +3107,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const baseDate = caseInfo.date ? new Date(caseInfo.date.split("/").reverse().join("-")) : new Date();
     const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days), done:false }));
     setNextSteps(steps);
+    let fullRecord = "";
     try {
       const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
           // Appeal detection
@@ -3107,7 +3117,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         setAppealDetected(true);
         setShowLinkCase(true);
       }
-      const fullRecord = await streamClaude(
+      fullRecord = await streamClaude(
         `You are a senior UK HR documentation specialist. Generate a meeting record with EXACTLY these three sections and NO others: ## Meeting Details (date, type, attendees, purpose), ## Meeting Dialogue (what was said, in concise prose), ## HR Advisor Notes (expert legal guidance in flowing prose from a senior employment lawyer - one paragraph covering ACAS compliance, legal risks and recommended next steps). Do NOT add any other sections like Key Points, Next Steps, Summary, Actions, Risk Assessment or anything else. Three sections only. No bold, no emoji, no tables.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}${caseInfo.employeeJobTitle?" ("+caseInfo.employeeJobTitle+")":(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle?" ("+((employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle)+")":" "}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}${caseInfo.chairJobTitle?" ("+caseInfo.chairJobTitle+")":(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title?" ("+((orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title)+")":" "}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}${adjournments.length>0?" Adjournments: "+adjournments.map(a=>a.start+(a.end?" to "+a.end:"- ongoing")+(a.reason?" ("+a.reason+")":"")).join(", "):""}. Notetaker: ${caseInfo.notetaker||"Not specified"}. Representative/companion: ${caseInfo.representative?caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")":"N/A"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]${adjournments.length>0?"\n- Adjournments: [list each adjournment with times and reason]":""}\n- Chair: [chair name and job title]\n- Notetaker: [notetaker name or "Not specified"]\n- Employee: [employee name and job title]\n- Representative/companion: [name and role, or "N/A"]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker\'s INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
@@ -3115,8 +3125,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       setReviewOutputOriginal(fullRecord);
     } catch(e) { setAiError(e.message); }
     setAiProcessing(false);
-    // Auto risk score
-    runRiskScore();
+    // Auto risk score — fullRecord is preferred (the polished, structured
+    // record) but falls back to the raw transcript text if the record
+    // generation itself failed, so a risk assessment can still be
+    // attempted from whatever content is actually available.
+    runRiskScore(fullRecord || allNotes.slice(-40).map(u=>u.text).join("\n"));
     // Auto-populate names and update dialogue initials
     setReviewOutput(r => {
       if(!r) return r;
@@ -3165,11 +3178,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     return parts.length ? parts.join(" ") : null;
   };
 
-  const runRiskScore = async () => {
-    if(!reviewOutput && !transcript.length) return;
+  // Phase 23 — Explainability retrofit surfaced a real, pre-existing bug
+  // here (not something this phase introduced, but the first thing to
+  // actually exercise the risk-assessment panel end-to-end): handleReview()
+  // called this with no arguments, so it read reviewOutput/transcript from
+  // its OWN closure — captured back when handleReview started running,
+  // before the meeting record had streamed in. Both were still empty at
+  // that point, so the guard below silently no-opped on every single
+  // meeting, and the risk panel simply never appeared. Taking the
+  // transcript text as a parameter (handleReview now passes fullRecord,
+  // its own local/hoisted variable with the just-generated record) fixes
+  // this at the source instead of reaching for a fresher closure another
+  // way.
+  const runRiskScore = async (transcriptText) => {
+    if(!transcriptText) return;
     setRiskProcessing(true);
     try {
-      const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
+      const tx = transcriptText;
       const historyContext = getCaseHistoryContext();
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:300, stream:false,
@@ -4775,6 +4800,7 @@ Please produce:
           caseOverview={caseOverview}
           caseOverviewLoading={caseOverviewLoading}
           generateCaseOverview={generateCaseOverview}
+          caseOverviewSources={caseOverviewSources}
           caseSignals={caseSignals}
           changeSignalStatus={changeSignalStatus}
           generateNextBestAction={generateNextBestAction}

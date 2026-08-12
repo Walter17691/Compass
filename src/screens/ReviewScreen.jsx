@@ -1,8 +1,21 @@
+import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
+import { WhySourcesModal } from '../components/WhySourcesModal';
 
 export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore }) {
+  // Phase 23 — Explainability retrofit. This panel predates the
+  // case_signals/WhySourcesModal primitive (Phase 0) and rendered as
+  // unsourced prose until now. Self-contained here rather than routed
+  // through App.jsx's whySignal state (CaseViewScreen's own pattern) —
+  // this screen renders before a meeting is even saved to the case, so
+  // there's no persisted meeting id yet to resolve a ref against; the
+  // meeting record itself and the deterministic org-history line
+  // (getCaseHistoryContext, already computed into riskScore.historyContext)
+  // are the only two sources, and both are already fully self-contained
+  // (label/detail inline), so resolveRef is a plain identity function.
+  const [showRiskWhy, setShowRiskWhy] = useState(false);
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -159,7 +172,10 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
           {/* Risk score */}
           {riskScore&&(
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
-              <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:12}}>Risk assessment</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Risk assessment</div>
+                <button onClick={()=>setShowRiskWhy(true)} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"3px 10px",color:"#5B3FD4",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Ask why</button>
+              </div>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                 <div style={{width:10,height:10,borderRadius:"50%",background:riskScore.rating==="HIGH"?"#C84B2F":riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",flexShrink:0}}></div>
                 <span style={{fontSize:18,fontWeight:700,color:riskScore.rating==="HIGH"?"#C84B2F":riskScore.rating==="MEDIUM"?"#B87520":"#1A7A4A",fontFamily:"DM Serif Display,Georgia,serif"}}>{riskScore.rating}</span>
@@ -173,6 +189,19 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 </div>
               )}
             </div>
+          )}
+
+          {showRiskWhy&&riskScore&&(
+            <WhySourcesModal
+              title={`Risk assessment: ${riskScore.rating}`}
+              reasoning={riskScore.summary}
+              sourceRefs={[
+                {kind:"transcript", label:"This meeting's record", detail:(reviewOutput||"").slice(0,300)||"The live transcript captured so far."},
+                ...(riskScore.historyContext ? [{kind:"context", label:"Organisational history", detail:riskScore.historyContext}] : []),
+              ]}
+              resolveRef={ref=>ref}
+              onClose={()=>setShowRiskWhy(false)}
+            />
           )}
 
 

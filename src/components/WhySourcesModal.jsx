@@ -1,6 +1,6 @@
 import { Btn } from './Primitives';
 
-const KIND_LABEL = { meeting: "Meeting", evidence: "Evidence", allegation: "Allegation", document: "Document" };
+const KIND_LABEL = { meeting: "Meeting", evidence: "Evidence", allegation: "Allegation", document: "Document", transcript: "Meeting record", context: "Context" };
 
 // Explainability drill-down — resolves a signal's source_refs back to the
 // case content that produced it. resolveRef is supplied by the caller
