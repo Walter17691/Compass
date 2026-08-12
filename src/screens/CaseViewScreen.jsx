@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 import { MDRenderer } from '../components/MDRenderer';
@@ -38,13 +38,19 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [whySignal, setWhySignal] = useState(null);
+  const [changesBannerDismissed, setChangesBannerDismissed] = useState(false);
   const cs = cases.find(x=>x.id===activeCaseId);
+  // CaseViewScreen doesn't remount when switching between cases while
+  // staying on this screen (no key={cs.id} at the App.jsx call site), so
+  // without this a dismiss on one case would silently carry over and hide
+  // the next case's own banner too.
+  useEffect(() => { setChangesBannerDismissed(false); }, [activeCaseId]);
   if(!cs) return <div style={{padding:40,color:"#9B9098",fontFamily:"DM Sans,system-ui,sans-serif"}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7C5CFC",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
   const meetings = cs.meetings||[];
   const stage = getCaseStage(cs);
@@ -168,6 +174,18 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
           ))}
         </div>
       </div>
+
+      {/* Phase 13 — "What Changed Since Last View." Dismissible for this
+          viewing session only; reopening the case later recomputes a
+          fresh diff against the just-updated last_viewed_at regardless. */}
+      {changesSinceView?.length>0 && !changesBannerDismissed && (
+        <div style={{background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexShrink:0}}>
+          <div style={{fontSize:12,color:"#5B3FD4",flex:1,minWidth:0}}>
+            {changesSummaryLoading ? "Compass is summarising what's changed…" : (changesSummary || `${changesSinceView.length} update${changesSinceView.length!==1?"s":""} since you last viewed this case.`)}
+          </div>
+          <button onClick={()=>setChangesBannerDismissed(true)} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>Dismiss</button>
+        </div>
+      )}
 
       {/* Case Copilot — recommended next action, upgraded in place from the
           old "Next action" banner rather than adding a new element */}

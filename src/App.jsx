@@ -18,6 +18,7 @@ import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsF
 import { computeGuardrailChecks } from './lib/guardrails';
 import { addConcernReferral, setReferralStatus } from './lib/concernReferrals';
 import { seedInvestigationChecklist } from './lib/investigationChecklist';
+import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
@@ -503,6 +504,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, activeCaseId]);
 
+  // Phase 13 — "What Changed Since Last View." Reads the stored
+  // last_viewed_at BEFORE recordCaseView overwrites it below, same
+  // once-per-visit shape as the signature-sync effect just above (deps
+  // deliberately just [screen, activeCaseId] — this should diff once per
+  // open, not re-run and keep sliding the comparison point forward on
+  // every unrelated case edit while the user is still looking at it).
+  useEffect(() => {
+    if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
+    const cs = cases.find(c => c.id === activeCaseId);
+    if (!cs) return;
+    const priorView = caseViews.find(v => v.caseId === activeCaseId);
+    const changes = computeChangesSinceView(priorView?.lastViewedAt, { auditLog, caseSignals }, activeCaseId);
+    setChangesSinceView(prev => ({ ...prev, [activeCaseId]: changes }));
+    if (isNonTrivialChange(changes)) generateChangesSummary(cs, changes);
+    recordCaseView(activeCaseId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, activeCaseId]);
+
   const [activePerson, setActivePerson] = useState(null);
   const [activeCaseStage, setActiveCaseStage] = useState("investigation");
   const [showAppealInput, setShowAppealInput] = useState({});
@@ -902,7 +921,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1225,6 +1244,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // CaseViewScreen can tell whether the current, non-HR user has been
   // granted investigator access to the case they're viewing.
   const [caseAccess, setCaseAccess] = useState([]);
+
+  // Phase 13 — "What Changed Since Last View." caseViews mirrors
+  // case_views (one row per case+user); changesSinceView/changesSummary
+  // are ephemeral, computed fresh each time a case is opened rather than
+  // persisted — see the useEffect near syncGuardrailSignals.
+  const [caseViews, setCaseViews] = useState([]);
+  const [changesSinceView, setChangesSinceView] = useState({});
+  const [changesSummary, setChangesSummary] = useState({});
+  const [changesSummaryLoading, setChangesSummaryLoading] = useState({});
 
   // Refs
   const feedRef = useRef(null);
@@ -2130,6 +2158,52 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(error) { console.error('loadCaseAccess', error); return; }
       if(data) setCaseAccess(data.map(r=>({id:r.id, caseId:r.case_id, userId:r.user_id, role:r.role, grantedBy:r.granted_by, grantedAt:r.granted_at})));
     } catch(e) { console.error('loadCaseAccess', e); }
+  };
+
+  // Phase 13 — scoped to the current user's own rows (RLS enforces this
+  // anyway) since "since I last viewed" is per-viewer, not org-wide.
+  const loadCaseViews = async () => {
+    if(!org?.id||!user?.id) return;
+    try {
+      const {data, error} = await supabase.from('case_views').select('*').eq('org_id', org.id).eq('user_id', user.id);
+      if(error) { console.error('loadCaseViews', error); return; }
+      if(data) setCaseViews(data.map(r=>({caseId:r.case_id, userId:r.user_id, lastViewedAt:r.last_viewed_at})));
+    } catch(e) { console.error('loadCaseViews', e); }
+  };
+
+  const recordCaseView = async (caseId) => {
+    if(!org?.id||!user?.id) return;
+    const nowIso = new Date().toISOString();
+    const { error } = await withFkRetry(() => supabase.from('case_views').upsert({
+      case_id: caseId, user_id: user.id, org_id: org.id, last_viewed_at: nowIso,
+    }, { onConflict: 'case_id,user_id' }));
+    if(error) { console.error('recordCaseView', error); return; }
+    setCaseViews(prev => prev.some(v=>v.caseId===caseId&&v.userId===user.id)
+      ? prev.map(v => v.caseId===caseId&&v.userId===user.id ? {...v, lastViewedAt:nowIso} : v)
+      : [...prev, {caseId, userId:user.id, lastViewedAt:nowIso}]);
+  };
+
+  // Only called when computeChangesSinceView() already found something —
+  // no LLM call on a quiet case, and no LLM call at all on the very first
+  // ever view (lastViewedAt null, so computeChangesSinceView short-circuits
+  // to []). One plain sentence, not a structured breakdown — the change
+  // list itself (rendered in the banner) already has the detail.
+  const generateChangesSummary = async (cs, changes) => {
+    setChangesSummaryLoading(l => ({...l, [cs.id]:true}));
+    try {
+      const changesText = changes.map(c=>`- ${c.label}`).join("\n");
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:150,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot. Summarise what has changed on a case since the user last viewed it, in exactly one plain sentence, factual and neutral, starting with \"Since you last viewed this case,\". No markdown, no bullet points, no preamble — just the one sentence.",
+        messages:[{role:"user", content:`Case: ${cs.employeeName} (${cs.caseType||"HR matter"})\n\nChanges:\n${changesText}`}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+      if(text) setChangesSummary(s => ({...s, [cs.id]:text}));
+    } catch(e) { console.error("generateChangesSummary", e); }
+    setChangesSummaryLoading(l => ({...l, [cs.id]:false}));
   };
 
   // Grants case_access with role "investigator" (a vocabulary value that
@@ -4580,6 +4654,9 @@ Please produce:
           generateAppealReview={generateAppealReview}
           appealReviewLoading={appealReviewLoading?.[activeCaseId]}
           recordAppealOutcome={recordAppealOutcome}
+          changesSinceView={changesSinceView[activeCaseId]}
+          changesSummary={changesSummary[activeCaseId]}
+          changesSummaryLoading={changesSummaryLoading[activeCaseId]}
         />
       )}
 {/* ══ INTAKE ══ */}
