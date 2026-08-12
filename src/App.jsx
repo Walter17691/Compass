@@ -2926,6 +2926,68 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setScreen(SCREENS.CASE_VIEW);
   };
 
+  // ── Outlook mail connection (Phase 24 follow-up) ──
+  // Delegated OAuth to the signed-in user's own Outlook inbox — same
+  // architecture as the Google Calendar connection above (api/graph-mail/*
+  // mirrors api/calendar/*). Never pulls or files mail automatically:
+  // picking a message just fetches its text and runs it through the same
+  // extractEmailDetails()/saveEmailToCase() review-then-confirm pipeline a
+  // pasted email already uses.
+  const [mailConnected, setMailConnected] = useState(false);
+  const [mailboxEmail, setMailboxEmail] = useState(null);
+  const [inboxMessages, setInboxMessages] = useState(null);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  useEffect(() => {
+    if(!user?.id) return;
+    authedFetch(`/api/graph-mail/status`)
+      .then(r=>r.json()).then(d=>{ setMailConnected(!!d.connected); setMailboxEmail(d.mailbox||null); }).catch(()=>{});
+  }, [user?.id]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mailParam = params.get("mail");
+    if(!mailParam) return;
+    if(mailParam==="connected") { setMailConnected(true); showToast("Outlook connected"); }
+    else if(mailParam==="error") { showToast("Couldn't connect Outlook — please try again"); }
+    params.delete("mail");
+    const newUrl = window.location.pathname + (params.toString()?"?"+params.toString():"");
+    window.history.replaceState({}, "", newUrl);
+  }, []);
+  const connectOutlookMail = async () => {
+    if(!user?.id || !org?.id) return;
+    try {
+      const res = await authedFetch(`/api/graph-mail/oauth-start?orgId=${encodeURIComponent(org.id)}`);
+      const data = await res.json();
+      if(data.url) window.location.href = data.url;
+      else showToast(data.error||"Couldn't start Outlook connection", "error");
+    } catch(e) { showToast("Couldn't start Outlook connection", "error"); }
+  };
+  const disconnectOutlookMail = async () => {
+    if(!user?.id) return;
+    try {
+      await authedFetch("/api/graph-mail/disconnect", { method: "POST", headers: {"Content-Type":"application/json"} });
+      setMailConnected(false); setMailboxEmail(null); setInboxMessages(null);
+      showToast("Outlook disconnected");
+    } catch(e) { showToast("Couldn't disconnect — please try again"); }
+  };
+  const loadInboxMessages = async () => {
+    setInboxLoading(true);
+    try {
+      const res = await authedFetch("/api/graph-mail/list-messages");
+      const data = await res.json();
+      if(res.ok) setInboxMessages(data.messages||[]);
+      else showToast(data.error||"Couldn't load your inbox", "error");
+    } catch(e) { showToast("Couldn't load your inbox", "error"); }
+    setInboxLoading(false);
+  };
+  const pickInboxMessage = async (messageId) => {
+    try {
+      const res = await authedFetch(`/api/graph-mail/get-message?messageId=${encodeURIComponent(messageId)}`);
+      const data = await res.json();
+      if(res.ok && data.rawText) extractEmailDetails(data.rawText);
+      else showToast(data.error||"Couldn't read that email", "error");
+    } catch(e) { showToast("Couldn't read that email", "error"); }
+  };
+
   // ── Case Chronology overrides ──
   // buildCaseTimeline() (lib/caseTimeline.js) is still the single source
   // of the merge; these three just write to the case's own
@@ -4826,6 +4888,14 @@ Please produce:
           onExtract={extractEmailDetails}
           onSave={saveEmailToCase}
           onClear={()=>setEmailExtraction(null)}
+          mailConnected={mailConnected}
+          mailboxEmail={mailboxEmail}
+          onConnectMail={connectOutlookMail}
+          onDisconnectMail={disconnectOutlookMail}
+          inboxMessages={inboxMessages}
+          inboxLoading={inboxLoading}
+          onLoadInbox={loadInboxMessages}
+          onPickMessage={pickInboxMessage}
         />
       )}
 

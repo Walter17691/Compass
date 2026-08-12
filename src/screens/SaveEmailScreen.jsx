@@ -1,14 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-// Phase 24 of the reasoning-layer build-out — Email integration
-// groundwork. The manual half of a flow designed so a later webhook
-// adapter (Graph mail push / Gmail push) can feed the same pipeline once
-// OAuth credentials exist and the org owner registers the app — see
-// lib/emailIngestion.js. Nothing is saved until the user explicitly picks
-// a case and confirms, even when Compass found a confident match.
-export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtract, onSave, onClear }) {
+// Phase 24 of the reasoning-layer build-out — Email integration.
+// Started as a manual-only "paste an email" flow; now also supports
+// connecting the signed-in user's own Outlook inbox (delegated OAuth via
+// api/graph-mail/*, same architecture as the Google Calendar connection)
+// so a recent email can be picked instead of copy-pasted. Either path feeds
+// the exact same extraction — see lib/emailIngestion.js. Nothing is saved
+// until the user explicitly picks a case and confirms, even when Compass
+// found a confident match or the message came straight from a connected
+// inbox.
+export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtract, onSave, onClear, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, inboxMessages, inboxLoading, onLoadInbox, onPickMessage }) {
   const [rawText, setRawText] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState('');
+
+  useEffect(() => {
+    if (mailConnected && inboxMessages === null && !inboxLoading) onLoadInbox?.();
+  }, [mailConnected, inboxMessages, inboxLoading, onLoadInbox]);
 
   const matchedCase = extraction?.matchedCaseId ? cases.find(c => c.id === extraction.matchedCaseId) : null;
   const targetCaseId = selectedCaseId || extraction?.matchedCaseId || '';
@@ -21,6 +28,42 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
           <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1C1820",margin:0}}>Save email to case</h1>
           <p style={{fontSize:13,color:"#9B9098",margin:"6px 0 0"}}>Paste an email below — Compass reads it, suggests which case it belongs to, and files it as evidence once you confirm. Nothing is saved automatically.</p>
         </div>
+
+        {!extraction && !extractionLoading && (
+          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:20,marginBottom:16}}>
+            {!mailConnected ? (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:"#1C1820"}}>Connect your Outlook inbox</div>
+                  <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>Pick a recent email instead of pasting it — nothing is read or saved until you choose one.</div>
+                </div>
+                <button onClick={onConnectMail} style={{fontSize:12,background:"#F5F1EA",border:"none",borderRadius:8,padding:"7px 14px",color:"#1C1820",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",whiteSpace:"nowrap"}}>Connect Outlook</button>
+              </div>
+            ) : (
+              <div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+                  <div style={{fontSize:12,color:"#1A7A4A",fontWeight:600}}>Outlook connected{mailboxEmail?` — ${mailboxEmail}`:""}</div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={onLoadInbox} disabled={inboxLoading} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",color:"#6B6375",cursor:inboxLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{inboxLoading?"Loading…":"Refresh"}</button>
+                    <button onClick={onDisconnectMail} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Disconnect</button>
+                  </div>
+                </div>
+                {inboxLoading && !inboxMessages && <div style={{fontSize:12,color:"#9B9098"}}>Loading your recent emails…</div>}
+                {inboxMessages && inboxMessages.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recent emails found.</div>}
+                {inboxMessages && inboxMessages.length>0 && (
+                  <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:260,overflowY:"auto"}}>
+                    {inboxMessages.map(m=>(
+                      <button key={m.id} onClick={()=>onPickMessage(m.id)} style={{textAlign:"left",background:"#FDFAF5",border:"1px solid #F0EAD8",borderRadius:8,padding:"8px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"#1C1820"}}>{m.subject}</div>
+                        <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{m.from}{m.receivedAt?` · ${new Date(m.receivedAt).toLocaleDateString('en-GB')}`:""}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {!extraction && !extractionLoading && (
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:20}}>
