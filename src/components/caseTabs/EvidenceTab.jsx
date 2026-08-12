@@ -1,10 +1,18 @@
 import { EvidenceDropzone } from '../EvidenceDropzone';
 import { readEvidenceFiles, fmtBytes } from '../../lib/evidenceUpload';
+import { canAnalyseEvidence } from '../../lib/documentIngestion';
+
+const FINDING_LABEL = {
+  witness: f => `Potential witness: ${f.name}`,
+  allegation_link: (f, allegations) => `Relates to "${allegations.find(a=>a.id===f.allegationId)?.title || "an allegation"}" (${f.stance})`,
+  inconsistency: f => `Potential inconsistency: ${f.description}`,
+  action: f => `Suggested action: ${f.description}`,
+};
 
 // No longer gated to the investigation stage — evidence (and witness
 // statements specifically) can come in at any point in a case, not just
 // while it's formally "in investigation".
-export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setReviewOutput, setScreen, screens, fmtDate, setMeetingSetup, setCaseInfo, orgMembers }) {
+export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setReviewOutput, setScreen, screens, fmtDate, setMeetingSetup, setCaseInfo, orgMembers, allegations=[], documentFindings={}, documentAnalysisLoading={}, onAnalyseEvidence, onAcceptFinding, onDismissFinding }) {
   const addEvidenceFiles = async files => {
     const newItems = await readEvidenceFiles(files, { addedBy: currentUser?.name||"HR Manager", onReject: msg => showToast?.(msg, "error") });
     if(newItems.length) saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:[...(x.evidence||[]), ...newItems]}:x));
@@ -15,8 +23,14 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}><div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Evidence & witness statements</div></div>
       <div style={{padding:"16px"}}>
         {(cs.evidence||[]).length===0&&<div style={{fontSize:13,color:"#9B9098",marginBottom:12}}>No evidence added yet</div>}
-        {(cs.evidence||[]).map((ev,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #F5F1EA"}}>
+        {(cs.evidence||[]).map((ev,i)=>{
+          const findingsKey = `${cs.id}::${i}`;
+          const findings = (documentFindings[findingsKey]||[]).filter(f=>f.status==="open");
+          const analysed = findingsKey in documentFindings;
+          const loading = !!documentAnalysisLoading[findingsKey];
+          return (
+          <div key={i} style={{padding:"10px 0",borderBottom:"1px solid #F5F1EA"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:13,color:"#1A1535",fontWeight:500}}>{ev.name}</div>
               <div style={{display:"flex",gap:6,marginTop:2,alignItems:"center",flexWrap:"wrap"}}>
@@ -27,11 +41,40 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
             <div style={{display:"flex",gap:6,flexShrink:0}}>
               {ev.dataUrl&&<a href={ev.dataUrl} download={ev.name} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>Download</a>}
               {ev.record&&<button onClick={()=>{setReviewOutput(ev.record);setScreen(screens.REVIEW);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
+              {canAnalyseEvidence(ev)&&!analysed&&(
+                <button onClick={()=>onAnalyseEvidence?.(i)} disabled={loading} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"1px solid #DDD9F5",borderRadius:4,padding:"3px 8px",cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{loading?"Analysing…":"Analyse document"}</button>
+              )}
               {ev.type==="Witness statement"&&(ev.signStatus==="signed"?<span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"3px 8px",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Signed</span>:<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed"}:e)}:x))} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>)}
               <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter((_,j)=>j!==i)}:x))} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
             </div>
+            </div>
+            {/* Phase 7 — Intelligent Document Ingestion. Only ever shown
+                once an analysis has actually run, and only findings still
+                "open" (not yet accepted/dismissed) render — accepted ones
+                have already been written to their real destination (a
+                task, an evidence link, a signal), dismissed ones are just
+                gone, so nothing here duplicates what the rest of the case
+                workspace already shows. */}
+            {findings.length>0&&(
+              <div style={{marginTop:8,background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Document analysed</div>
+                {findings.map(f=>(
+                  <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid #EDE5FA"}}>
+                    <div style={{minWidth:0,flex:1}}>
+                      <div style={{fontSize:12,color:"#1A1535"}}>{FINDING_LABEL[f.type]?.(f, allegations)}</div>
+                      {f.reasoning&&<div style={{fontSize:11,color:"#6B6375",marginTop:1}}>{f.reasoning}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                      <button onClick={()=>onAcceptFinding?.(i,f)} style={{fontSize:11,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>
+                      <button onClick={()=>onDismissFinding?.(i,f)} style={{fontSize:11,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
         <div style={{marginTop:12}}><EvidenceDropzone onFilesSelected={addEvidenceFiles}/></div>
         <div style={{marginTop:12,padding:"12px",background:"#F5F3FF",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div><div style={{fontSize:12,fontWeight:500,color:"#1A1535"}}>Witness interview</div><div style={{fontSize:11,color:"#9B9098"}}>Record and save directly to this investigation</div></div>

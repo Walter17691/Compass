@@ -24,6 +24,8 @@ import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
+import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
+import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName } from './lib/globalAssistant';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
@@ -2800,6 +2802,86 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setEvidenceSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(sug=>sug!==suggestion)}));
   };
 
+  // ── Intelligent Document Ingestion (Phase 7) ──
+  // Findings are session-local only (documentFindings), same posture as
+  // caseOverview/caseChatHistory — nothing is written anywhere until a
+  // specific finding is accepted, and each finding type dispatches to an
+  // existing write path rather than a new one: a witness/action finding
+  // becomes an ordinary case_task (lib/caseTasks.js), an allegation_link
+  // finding reuses Phase 6's own linkEvidenceToAllegation, and an
+  // inconsistency finding becomes a process_risk... no, an
+  // "inconsistency"-type case_signal (Phase 0/3's substrate) with a
+  // sourceRef back to this exact evidence item. There's no standalone
+  // "people record" or manual timeline-entry concept anywhere else in
+  // this app (People/Timeline are both fully derived views — see
+  // lib/casePeople.js/lib/caseTimeline.js) to write those two finding
+  // shapes from the original spec into, so this deliberately only
+  // implements the four finding types that map onto something that
+  // already exists.
+  const [documentFindings, setDocumentFindings] = useState({}); // `${caseId}::${evidenceIndex}` -> [{id,type,...,status}]
+  const [documentAnalysisLoading, setDocumentAnalysisLoading] = useState({});
+
+  const analyseEvidenceDocument = async (cs, evidenceIndex) => {
+    const ev = (cs.evidence||[])[evidenceIndex];
+    if(!ev || !canAnalyseEvidence(ev)) return;
+    const content = buildAnalysisContent(ev);
+    if(!content) return;
+    const key = `${cs.id}::${evidenceIndex}`;
+    setDocumentAnalysisLoading(l=>({...l, [key]:true}));
+    try {
+      const caseAllegations = allegationsForCase(allegations, cs.id);
+      const knownPeople = derivePeopleForCase(cs).map(p=>p.name);
+      const allegationList = caseAllegations.length ? caseAllegations.map(a=>`- id "${a.id}": ${a.title}`).join("\n") : "None recorded on this case.";
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:700,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot analysing a document just uploaded as evidence on an HR case. Read its actual content — you are given the real file, not just its name — and extract findings for the case handler to review and decide on; never act on them yourself. Only include a finding where the document's actual content clearly supports it — never invent a generic one just to have something to report. Valid finding types: \"witness\" (a person mentioned who is NOT already in the known-people list below and might need to be interviewed — give their exact name), \"allegation_link\" (the document relates to one of the case's existing allegations — give its id and whether the document supports, contradicts, or gives context), \"inconsistency\" (the document appears to conflict with something else already described to you), \"action\" (a concrete follow-up step the document's content suggests). Respond ONLY with valid JSON, no other text: [{\"type\":\"witness\",\"name\":\"...\",\"reasoning\":\"...\"}] or [{\"type\":\"allegation_link\",\"allegationId\":\"...\",\"stance\":\"supports\",\"reasoning\":\"...\"}] or [{\"type\":\"inconsistency\",\"description\":\"...\",\"reasoning\":\"...\"}] or [{\"type\":\"action\",\"description\":\"...\",\"reasoning\":\"...\"}] — stance must be one of supports, contradicts, context.",
+        messages:[{role:"user", content:[
+          {type:"text", text:`CASE: ${cs.employeeName} (${cs.caseType||"HR matter"})\n\nKNOWN PEOPLE ALREADY ON THIS CASE: ${knownPeople.join(", ")||"None recorded"}\n\nEXISTING ALLEGATIONS:\n${allegationList}\n\nDOCUMENT TO ANALYSE ("${ev.name}"):`},
+          content,
+        ]}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const validTypes = ["witness","allegation_link","inconsistency","action"];
+      const findings = (Array.isArray(parsed)?parsed:[])
+        .filter(f=>validTypes.includes(f.type) && (f.type!=="allegation_link" || caseAllegations.some(a=>a.id===f.allegationId)))
+        .map((f,i)=>({...f, id:`finding_${Date.now()}_${i}`, status:"open"}));
+      setDocumentFindings(s=>({...s, [key]:findings}));
+      if(!findings.length) showToast("Compass found nothing to flag in this document");
+    } catch(e) { console.error("analyseEvidenceDocument", e); showToast("Couldn't analyse the document — "+e.message, "error"); }
+    setDocumentAnalysisLoading(l=>({...l, [key]:false}));
+  };
+
+  const acceptDocumentFinding = (cs, evidenceIndex, finding) => {
+    const key = `${cs.id}::${evidenceIndex}`;
+    if(finding.type==="witness") {
+      createCaseTask(cs.id, {name:`Interview ${finding.name} as a potential witness`});
+    } else if(finding.type==="action") {
+      createCaseTask(cs.id, {name:finding.description});
+    } else if(finding.type==="allegation_link") {
+      saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:linkEvidenceToAllegation(x.evidence||[], evidenceIndex, finding.allegationId, finding.stance)}:x));
+    } else if(finding.type==="inconsistency") {
+      const ev = (cs.evidence||[])[evidenceIndex];
+      const created = createSignal(caseSignals, cs.id, {
+        type:"inconsistency", title:"Potential inconsistency: "+(ev?.name||"uploaded document"),
+        reasoning:finding.description+(finding.reasoning?" — "+finding.reasoning:""),
+        sourceRefs:[{kind:"evidence", id:evidenceIndex, label:ev?.name}],
+        source:"ai",
+      });
+      setCaseSignals(created);
+      saveSignalToDB(created[created.length-1]);
+    }
+    setDocumentFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"accepted"}:f)}));
+  };
+
+  const dismissDocumentFinding = (cs, evidenceIndex, finding) => {
+    const key = `${cs.id}::${evidenceIndex}`;
+    setDocumentFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"dismissed"}:f)}));
+  };
+
   // ── Case Chronology overrides ──
   // buildCaseTimeline() (lib/caseTimeline.js) is still the single source
   // of the merge; these three just write to the case's own
@@ -4830,6 +4912,11 @@ Please produce:
           changesSinceView={changesSinceView[activeCaseId]}
           changesSummary={changesSummary[activeCaseId]}
           changesSummaryLoading={changesSummaryLoading[activeCaseId]}
+          documentFindings={documentFindings}
+          documentAnalysisLoading={documentAnalysisLoading}
+          analyseEvidenceDocument={analyseEvidenceDocument}
+          acceptDocumentFinding={acceptDocumentFinding}
+          dismissDocumentFinding={dismissDocumentFinding}
         />
       )}
 {/* ══ INTAKE ══ */}
