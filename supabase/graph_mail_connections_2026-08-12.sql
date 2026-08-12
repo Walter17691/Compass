@@ -21,11 +21,13 @@
 --      return an empty result or an RLS error — never real rows.
 -- ============================================================================
 
+-- provider is 'microsoft' only for now; extend the check constraint when
+-- Gmail push support is added later.
 create table if not exists public.graph_mail_connections (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   org_id uuid not null references public.organisations(id) on delete cascade,
-  provider text not null check (provider in ('microsoft')), -- extend when Gmail push lands
+  provider text not null check (provider in ('microsoft')),
   mailbox_email text,
   access_token text not null,
   refresh_token text not null,

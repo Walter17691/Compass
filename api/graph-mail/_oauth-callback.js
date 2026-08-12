@@ -1,8 +1,24 @@
+import crypto from 'crypto';
 import { verifyState } from './_state.js';
 import { GRAPH_SCOPE } from './_outlook.js';
 import { supabaseRequest } from '../_supabase.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
+
+function readCookie(req, name) {
+  const header = req.headers.cookie || '';
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return rest.join('=');
+  }
+  return null;
+}
+
+// Clears the one-time nonce cookie regardless of outcome, so a stale value
+// can never be reused for a second callback attempt.
+function clearNonceCookie(res) {
+  res.setHeader('Set-Cookie', 'graph_mail_oauth_nonce=; Max-Age=0; Path=/api/graph-mail; HttpOnly; Secure; SameSite=Lax');
+}
 
 export async function oauthCallback(req, res) {
   const { code, state, error } = req.query;
@@ -12,6 +28,22 @@ export async function oauthCallback(req, res) {
   try {
     const payload = verifyState(state);
     if (!payload) return res.redirect(302, `${APP_URL}/?mail=error`);
+
+    // Requires the SAME browser that started the flow (via _oauth-start.js's
+    // HttpOnly cookie) to be the one completing it — verifyState alone only
+    // proves the state wasn't tampered with, not that this request came
+    // from the session that requested it. See the HIGH-severity finding
+    // this closes: OAuth state must be bound to the initiating session, not
+    // just cryptographically signed.
+    const cookieNonce = readCookie(req, 'graph_mail_oauth_nonce');
+    const cookieBuf = Buffer.from(cookieNonce || '');
+    const payloadBuf = Buffer.from(payload.nonce || '');
+    const nonceMatches = cookieBuf.length > 0 && cookieBuf.length === payloadBuf.length && crypto.timingSafeEqual(cookieBuf, payloadBuf);
+    clearNonceCookie(res);
+    if (!nonceMatches) {
+      console.error('Graph mail oauth-callback: nonce cookie mismatch or missing');
+      return res.redirect(302, `${APP_URL}/?mail=error`);
+    }
 
     const tenant = process.env.MS_GRAPH_TENANT_ID.trim();
     const redirectUri = `${APP_URL}/api/graph-mail/oauth-callback`;
