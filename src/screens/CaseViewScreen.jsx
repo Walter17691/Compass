@@ -17,9 +17,11 @@ import { allegationsForCase } from '../lib/allegations';
 import { tasksForCase } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
 import { computeCaseReadiness } from '../lib/caseReadiness';
+import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
 import { SignalCard } from '../components/SignalCard';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
+import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
@@ -36,7 +38,7 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -62,6 +64,48 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const readiness = computeCaseReadiness(cs, allegations, caseSignals, caseTasks);
   const screens = SCREENS;
 
+  // Phase 15 — Manager Investigation Mode. caseAccess is org-wide (RLS
+  // scopes SELECT by org, not by user — see baseline_schema_2026-08-06.sql),
+  // so this filters down to just this case's grants client-side.
+  const caseInvestigatorAccess = caseAccess.filter(a=>a.caseId===cs.id && a.role==="investigator");
+  const currentInvestigatorAccess = caseInvestigatorAccess[caseInvestigatorAccess.length-1];
+  const currentInvestigator = currentInvestigatorAccess ? orgMembers.find(m=>m.user_id===currentInvestigatorAccess.userId) : null;
+  const myAccess = caseAccess.find(a=>a.caseId===cs.id && a.userId===currentUser?.user_id);
+  const isAssignedInvestigator = !isHR && myAccess?.role==="investigator";
+  const checklistTasks = investigationChecklistTasks(caseTasks, cs.id);
+
+  const startWitnessInterview = () => {
+    setMeetingSetup(p=>({...p,employee:"",employeeJobTitle:"",manager:currentUser?.name||"",chairJobTitle:"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));
+    setCaseInfo(p=>({...p,employee:"",employeeJobTitle:"",manager:currentUser?.name||"",chairJobTitle:"",_linkedCaseId:cs.id,_linkedCaseName:cs.employeeName}));
+    setScreen(SCREENS.HOME+"_meeting");
+  };
+
+  const startMeetingFromHeader = () => {
+    // nextStep already carries the type-aware meetingType for wherever
+    // this case actually is (disciplinary vs grievance shaped); only a
+    // closed case (nextStep null) falls back to the old default.
+    const type = nextStep?.meetingType || (stage==="investigation"?"investigation":stage==="appeal"?"appeal-disciplinary":"disciplinary");
+    setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));
+    setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
+    setScreen(SCREENS.HOME+"_meeting");
+  };
+
+  if(isAssignedInvestigator) {
+    return (
+      <InvestigatorChecklistView
+        cs={cs}
+        caseAllegations={caseAllegations}
+        checklistTasks={checklistTasks}
+        toggleCaseTaskDone={toggleCaseTaskDone}
+        openQuestions={openSignalsForCase(caseSignals, cs.id, "unanswered_question")}
+        onStartWitnessInterview={startWitnessInterview}
+        onStartEmployeeInterview={startMeetingFromHeader}
+        setScreen={setScreen}
+        screens={screens}
+      />
+    );
+  }
+
   const openTimelineSource = (linkTo) => {
     if(!linkTo) return;
     if(linkTo.kind==="meeting") setActiveTab("meetings");
@@ -75,16 +119,6 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
     if(ref.kind==="allegation") { const a = caseAllegations.find(x=>x.id===ref.id); return a ? {label:a.title, detail:null, date:a.createdAt} : null; }
     if(ref.kind==="evidence") { const e = (cs.evidence||[])[ref.id]; return e ? {label:e.name||"Evidence", detail:e.type||null, date:e.date||null} : null; }
     return null;
-  };
-
-  const startMeetingFromHeader = () => {
-    // nextStep already carries the type-aware meetingType for wherever
-    // this case actually is (disciplinary vs grievance shaped); only a
-    // closed case (nextStep null) falls back to the old default.
-    const type = nextStep?.meetingType || (stage==="investigation"?"investigation":stage==="appeal"?"appeal-disciplinary":"disciplinary");
-    setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));
-    setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
-    setScreen(SCREENS.HOME+"_meeting");
   };
 
   return(
@@ -110,6 +144,14 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
               showToast(turningOn?"Case marked confidential":"Case no longer confidential");
             }} title={cs.confidential?"Visible only to authorised staff":"Visible to all HR staff in the org"} style={{background:cs.confidential?"#FEF5E7":"none",border:"1px solid",borderColor:cs.confidential?"#E8C88A":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:cs.confidential?"#B87520":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6}}>{cs.confidential?<><LockIcon size={11} />Confidential</>:"Mark confidential"}</button>
             <button onClick={()=>setShowReassignModal(true)} title={`Currently run by ${cs.manager||"unassigned"}`} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Reassign</button>
+            {isHR&&(
+              <select defaultValue="" onChange={e=>{if(e.target.value){assignInvestigator(cs.id, e.target.value);e.target.value="";}}}
+                title={currentInvestigator?"Currently investigating: "+currentInvestigator.name:"No investigator assigned"}
+                style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",cursor:"pointer"}}>
+                <option value="" disabled>{currentInvestigator?"Investigator: "+currentInvestigator.name:"Assign investigator..."}</option>
+                {(orgMembers||[]).filter(m=>m.user_id).map(m=><option key={m.id} value={m.user_id}>{m.name}</option>)}
+              </select>
+            )}
             <button onClick={startMeetingFromHeader}
               style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>
           </div>
@@ -136,6 +178,11 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
               <div style={{fontSize:13,color:"#5B3FD4",fontWeight:600}}>Next: {nextStep.label}</div>
               {nextStep.reason&&<div style={{fontSize:11,color:"#6B6375",marginTop:2}}>{nextStep.reason}</div>}
               <CaseReadinessBadge readiness={readiness}/>
+              {isHR&&currentInvestigator&&(
+                <div style={{fontSize:11,color:"#5B3FD4",marginTop:6}}>
+                  Investigation by {currentInvestigator.name}: {checklistTasks.filter(t=>t.status==="done").length} of {INVESTIGATION_CHECKLIST_STEPS.length} steps complete
+                </div>
+              )}
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
               {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true});}}} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.secondary.label}</button>}

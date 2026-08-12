@@ -16,6 +16,7 @@ import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTas
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
 import { addConcernReferral, setReferralStatus } from './lib/concernReferrals';
+import { seedInvestigationChecklist } from './lib/investigationChecklist';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
@@ -900,7 +901,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1213,6 +1214,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [concernReferrals, setConcernReferrals] = useState([]);
   const [concernForm, setConcernForm] = useState({employeeName:"",concernType:"other",description:"",discussedWithEmployee:false,involvesSafetyOrWelfare:false,mayNeedFormalProcess:false});
   const [concernSubmitted, setConcernSubmitted] = useState(false);
+
+  // ── Case access (Phase 15 — Manager Investigation Mode) ──
+  // case_access already existed (baseline_schema_2026-08-06.sql) for the
+  // disciplinary-officer handoff and case-owner assignment flows
+  // (HandoffModal.jsx/ReassignCaseModal.jsx write it, but nothing ever
+  // loaded it client-side) — this is the first read of it, so
+  // CaseViewScreen can tell whether the current, non-HR user has been
+  // granted investigator access to the case they're viewing.
+  const [caseAccess, setCaseAccess] = useState([]);
 
   // Refs
   const feedRef = useRef(null);
@@ -2082,6 +2092,38 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setConcernReferrals(updated);
     saveConcernReferralToDB(updated.find(r=>r.id===referralId));
     audit("Concern referral "+status.replace(/_/g," "), referral.employeeName);
+  };
+
+  const loadCaseAccess = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('case_access').select('*').eq('org_id', org.id);
+      if(error) { console.error('loadCaseAccess', error); return; }
+      if(data) setCaseAccess(data.map(r=>({id:r.id, caseId:r.case_id, userId:r.user_id, role:r.role, grantedBy:r.granted_by, grantedAt:r.granted_at})));
+    } catch(e) { console.error('loadCaseAccess', e); }
+  };
+
+  // Grants case_access with role "investigator" (a vocabulary value that
+  // existed since role_expansion_2026-08-09.sql but nothing ever wrote
+  // until now — HandoffModal/ReassignCaseModal only ever write
+  // "disciplinary_officer"/"case_owner") and seeds the fixed 7-step
+  // investigation checklist as ordinary case_tasks so it's immediately
+  // visible on both the investigator's restricted view and HR's normal
+  // Tasks tab.
+  const assignInvestigator = async (caseId, memberId) => {
+    const targetMember = orgMembers.find(m=>m.id===memberId||m.user_id===memberId);
+    if(!targetMember?.user_id||!org?.id) { showToast("Couldn't find that team member", "error"); return; }
+    const { error } = await withFkRetry(() => supabase.from('case_access').upsert({
+      case_id: caseId, user_id: targetMember.user_id, org_id: org.id, role: "investigator", granted_by: user?.id,
+    }));
+    if(error) { console.error('assignInvestigator', error); showToast("Couldn't assign investigator — "+error.message, "error"); return; }
+    await loadCaseAccess();
+    const updatedTasks = seedInvestigationChecklist(caseTasks, caseId, targetMember.name);
+    const newlyCreated = updatedTasks.filter(t=>!caseTasks.some(existing=>existing.id===t.id));
+    setCaseTasks(updatedTasks);
+    newlyCreated.forEach(t=>saveCaseTaskToDB({...t, createdBy:user?.id}));
+    audit("Investigator assigned", targetMember.name, caseId);
+    showToast(targetMember.name+" assigned as investigator");
   };
 
   // ── Case signals ──
@@ -4431,6 +4473,9 @@ Please produce:
           generateInconsistencies={generateInconsistencies}
           inconsistencyLoading={inconsistencyLoading}
           linkSignalToAllegation={linkSignalToAllegation}
+          isHR={isHR}
+          caseAccess={caseAccess}
+          assignInvestigator={assignInvestigator}
         />
       )}
 {/* ══ INTAKE ══ */}
