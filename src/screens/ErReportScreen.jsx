@@ -1,6 +1,7 @@
 import { SCREENS } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
 import { useLoadMore } from '../hooks/useLoadMore';
+import { extractThemeKeywords } from '../lib/orgIntelligence';
 
 export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF }) {
   // ── Core data calculations ──
@@ -102,6 +103,12 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
   cases.forEach(cs=>{casesByEmployee[cs.employeeName]=(casesByEmployee[cs.employeeName]||0)+1;});
   const repeatEmployees = Object.entries(casesByEmployee).filter(([,n])=>n>1).sort((a,b)=>b[1]-a[1]);
 
+  // Phase 18 — recurring themes across case descriptions/titles, the
+  // second signal (alongside the month-over-month deltas above) that
+  // gives "Generate AI summary" genuine pattern-finding material instead
+  // of only headline counts.
+  const themeKeywords = extractThemeKeywords(cases);
+
   // Manager caseload
   const managerCases = {};
   cases.forEach(cs=>{
@@ -143,7 +150,16 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={async()=>{
-            const prompt = "You are a senior HR director. Write a concise executive summary of the following HR data for this organisation. Be factual and highlight key risks, patterns and recommendations. Data: Total cases: "+cases.length+". Active: "+activeCases.length+". Closed: "+closedCases.length+". Case types: "+caseTypeList.map(([t,n])=>t+": "+n).join(", ")+". Outcomes: "+outcomeList.map(([o,n])=>o+": "+n).join(", ")+". High risk cases: "+highRisk.length+". Slow investigations (>28 days): "+slowInvestigations.length+". Repeat employees: "+repeatEmployees.length+". Average resolution time: "+(avgResolution?avgResolution+" days":"unknown")+". Write 3-4 paragraphs. No markdown.";
+            // Phase 18 — the deltas below already existed (computed up top
+            // for the stat cards) but never actually reached this prompt;
+            // themeKeywords is the other new signal. Both are real,
+            // computed-not-invented pattern material — the wording
+            // constraint stops the model turning "a correlation exists"
+            // into "X caused Y" or naming anyone specific.
+            const deltaText = casesDelta!=null ? "New cases this month vs last: "+(casesDelta>0?"+":"")+casesDelta+". " : "";
+            const resDeltaText = resolutionDelta!=null ? "Average resolution time change vs last month: "+(resolutionDelta>0?"+":"")+resolutionDelta+" days. " : "";
+            const themeText = themeKeywords.length ? "Recurring themes across case descriptions (word: number of cases mentioning it): "+themeKeywords.map(t=>t.keyword+": "+t.count).join(", ")+". " : "";
+            const prompt = "You are a senior HR director. Write a concise executive summary of the following HR data for this organisation. Be factual and highlight key risks, patterns and recommendations. Data: Total cases: "+cases.length+". Active: "+activeCases.length+". Closed: "+closedCases.length+". Case types: "+caseTypeList.map(([t,n])=>t+": "+n).join(", ")+". Outcomes: "+outcomeList.map(([o,n])=>o+": "+n).join(", ")+". High risk cases: "+highRisk.length+". Slow investigations (>28 days): "+slowInvestigations.length+". Repeat employees: "+repeatEmployees.length+". Average resolution time: "+(avgResolution?avgResolution+" days":"unknown")+". "+deltaText+resDeltaText+themeText+"If the theme or delta data points to a genuine pattern worth flagging, introduce it with wording like \"Compass has identified a correlation between…\" — never state or imply that a pattern was *caused* by a named manager, team, or individual; only describe what the aggregate, anonymised data shows. Write 3-4 paragraphs. No markdown.";
             setReportNarrative("Generating...");
             try {
               const r = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})});
@@ -199,6 +215,16 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:24}}>
             <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Executive summary</div>
             <div style={{fontSize:13,color:"#1C1820",lineHeight:1.8}}>{reportNarrative==="Generating..."?<span style={{color:"#9B9098",fontStyle:"italic"}}>Generating AI summary…</span>:reportNarrative}</div>
+            {themeKeywords.length>0&&(
+              <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #F5F1EA"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Recurring themes behind this summary</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {themeKeywords.map(t=>(
+                    <span key={t.keyword} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:20,padding:"3px 10px"}}>{t.keyword} · {t.count} case{t.count===1?"":"s"}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
