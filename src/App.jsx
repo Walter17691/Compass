@@ -23,7 +23,7 @@ import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
-import { buildCaseContext } from './lib/caseContext';
+import { buildCaseContext, meetingsNeedingSummary } from './lib/caseContext';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -2332,6 +2332,55 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const [caseOverview, setCaseOverview] = useState({});
   const [caseOverviewLoading, setCaseOverviewLoading] = useState({});
 
+  // Phase 21 — Case Memory hardening. Session-local only (meeting records
+  // don't change once a meeting's saved, so a fresh summary next session
+  // costs nothing beyond one more AI call and never goes stale) — no new
+  // table needed for what's really a memoisation cache.
+  const [meetingSummaries, setMeetingSummaries] = useState({});
+
+  // One combined call per case per session, not one per meeting — every
+  // meeting still needing a summary (lib/caseContext.js's
+  // meetingsNeedingSummary) goes in a single request. Falls back silently
+  // (buildCaseContext's own short excerpt) if the call or parse fails,
+  // same "never block on an enrichment step" posture as every other
+  // best-effort AI pass in this build-out.
+  const summarizeMeetingsForCase = async (meetings) => {
+    if (!meetings.length) return {};
+    try {
+      const meetingsText = meetings.map(m => `MEETING id="${m.id}" — ${m.type||"Meeting"} on ${m.date||"unknown date"}\n${(m.record||"").slice(0, 3000)}`).join("\n\n");
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:800,
+        stream:false,
+        system:"You are compressing older meeting records from an HR case file so they can still inform later AI analysis without the full transcript. For each meeting given, write a factual 2-3 sentence summary: what was discussed, any admissions/denials, and any evidence or names mentioned. Respond ONLY with valid JSON, no other text: [{\"id\":\"...\",\"summary\":\"...\"}]",
+        messages:[{role:"user", content:meetingsText}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      if (!Array.isArray(parsed)) return {};
+      const next = {};
+      parsed.forEach(p => { if (p.id && p.summary) next[p.id] = p.summary; });
+      setMeetingSummaries(prev => ({...prev, ...next}));
+      return next;
+    } catch(e) { console.error("summarizeMeetingsForCase", e); return {}; }
+  };
+
+  // The one entry point every case-context AI call (Ask Compass, Case
+  // Overview, Next Best Action, Unanswered Questions) should build its
+  // context through — ensures any meeting summaries the budget needs are
+  // ready before the pure, synchronous buildCaseContext() assembles the
+  // final string, without those call sites needing to know this exists.
+  const buildHardenedCaseContext = async (cs) => {
+    const caseAllegations = allegationsForCase(allegations, cs.id);
+    const caseTaskList = tasksForCase(caseTasks, cs.id);
+    const needing = meetingsNeedingSummary(cs, meetingSummaries);
+    const summaries = needing.length
+      ? {...meetingSummaries, ...(await summarizeMeetingsForCase(needing))}
+      : meetingSummaries;
+    return buildCaseContext(cs, caseAllegations, caseTaskList, summaries);
+  };
+
   const sendCaseChat = async (cs) => {
     const question = caseChatInput.trim();
     if(!question || caseChatProcessing) return;
@@ -2341,7 +2390,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setCaseChatHistory(h=>({...h, [cs.id]:updated}));
     setCaseChatProcessing(true);
     try {
-      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const context = await buildHardenedCaseContext(cs);
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
         max_tokens:500,
@@ -2362,7 +2411,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const generateCaseOverview = async (cs) => {
     setCaseOverviewLoading(l=>({...l, [cs.id]:true}));
     try {
-      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const context = await buildHardenedCaseContext(cs);
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
         max_tokens:1200,
@@ -2388,7 +2437,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const generateNextBestAction = async (cs) => {
     setNextActionLoading(l=>({...l, [cs.id]:true}));
     try {
-      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const context = await buildHardenedCaseContext(cs);
       const floor = getNextStep(cs);
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
@@ -2425,7 +2474,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const generateUnansweredQuestions = async (cs) => {
     setUnansweredLoading(l=>({...l, [cs.id]:true}));
     try {
-      const context = buildCaseContext(cs, allegationsForCase(allegations, cs.id), tasksForCase(caseTasks, cs.id));
+      const context = await buildHardenedCaseContext(cs);
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
         max_tokens:600,
