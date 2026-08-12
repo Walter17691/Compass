@@ -31,6 +31,11 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     {s:SCREENS.TASKS, l:"Tasks"},
     {s:SCREENS.PEOPLE, l:"People"},
     {s:SCREENS.ERREPORT, l:"Reports"},
+    // The one destination every org member can reach regardless of role —
+    // ConcernsScreen itself renders an intake-only view for non-HR and a
+    // full triage queue for HR (concern_referrals_2026-08-12.sql's RLS
+    // backs this, not just the label here).
+    {s:SCREENS.CONCERNS, l:isHR?"Concerns":"Raise a concern"},
   ];
   const moduleItems = [
     {s:SCREENS.NEWSTARTER, l:"Onboarding"},

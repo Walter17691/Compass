@@ -15,6 +15,7 @@ import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation,
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
+import { addConcernReferral, setReferralStatus } from './lib/concernReferrals';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
@@ -56,6 +57,7 @@ const OffboardingScreen = lazy(() => import('./screens/OffboardingScreen').then(
 const DevelopScreen = lazy(() => import('./screens/DevelopScreen').then(m => ({default: m.DevelopScreen})));
 const ErReportScreen = lazy(() => import('./screens/ErReportScreen').then(m => ({default: m.ErReportScreen})));
 const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
+const ConcernsScreen = lazy(() => import('./screens/ConcernsScreen').then(m => ({default: m.ConcernsScreen})));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
@@ -898,7 +900,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1205,6 +1207,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [evidenceSuggestionsLoading, setEvidenceSuggestionsLoading] = useState({});
   const [timelineRelevanceLoading, setTimelineRelevanceLoading] = useState({});
   const [inconsistencyLoading, setInconsistencyLoading] = useState({});
+
+  // ── Concern referrals (manager self-service — any org member can raise
+  // one, only HR triages) — see lib/concernReferrals.js ──
+  const [concernReferrals, setConcernReferrals] = useState([]);
+  const [concernForm, setConcernForm] = useState({employeeName:"",concernType:"other",description:"",discussedWithEmployee:false,involvesSafetyOrWelfare:false,mayNeedFormalProcess:false});
+  const [concernSubmitted, setConcernSubmitted] = useState(false);
 
   // Refs
   const feedRef = useRef(null);
@@ -1987,6 +1995,93 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAllegations(removeAllegation(allegations, allegationId));
     deleteAllegationFromDB(allegationId);
     if(target) audit("Allegation removed", target.title, target.caseId);
+  };
+
+  // ── Concern referrals (manager self-service) ──
+  // Any org member can read/insert their own; only HR roles can see every
+  // referral or triage one — enforced by RLS (concern_referrals_2026-08-12.sql),
+  // not just this client-side gate, since a non-HR user's own request would
+  // otherwise be denied by Postgres regardless of what the UI shows.
+  const loadConcernReferrals = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('concern_referrals').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      if(error) { console.error('loadConcernReferrals', error); return; }
+      if(data) setConcernReferrals(data.map(r=>({
+        id:r.id, employeeName:r.employee_name, concernType:r.concern_type, description:r.description,
+        discussedWithEmployee:!!r.discussed_with_employee, involvesSafetyOrWelfare:!!r.involves_safety_or_welfare,
+        mayNeedFormalProcess:!!r.may_need_formal_process, submittedBy:r.submitted_by, submittedByName:r.submitted_by_name||"",
+        status:r.status, hrNotes:r.hr_notes||"", linkedCaseId:r.linked_case_id, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadConcernReferrals', e); }
+  };
+
+  const saveConcernReferralToDB = async (referral) => {
+    if(!org?.id) return;
+    const { error } = await withFkRetry(() => supabase.from('concern_referrals').upsert({
+      id: referral.id, org_id: org.id,
+      employee_name: referral.employeeName, concern_type: referral.concernType||null,
+      description: referral.description, discussed_with_employee: !!referral.discussedWithEmployee,
+      involves_safety_or_welfare: !!referral.involvesSafetyOrWelfare, may_need_formal_process: !!referral.mayNeedFormalProcess,
+      submitted_by: referral.submittedBy||null, submitted_by_name: referral.submittedByName||null,
+      status: referral.status||'new', hr_notes: referral.hrNotes||null, linked_case_id: referral.linkedCaseId||null,
+      updated_at: new Date().toISOString(),
+    }));
+    if(error) { console.error('saveConcernReferralToDB', error); showToast("Couldn't submit — "+error.message, "error"); }
+  };
+
+  const submitConcernReferral = () => {
+    const updated = addConcernReferral(concernReferrals, {
+      ...concernForm, submittedBy: user?.id||null, submittedByName: currentUser?.name||"",
+    });
+    if(updated===concernReferrals) { showToast("Add the employee's name and a short description first", "error"); return; }
+    setConcernReferrals(updated);
+    const created = updated[updated.length-1];
+    saveConcernReferralToDB(created);
+    audit("Concern referral submitted", created.employeeName+" — "+created.concernType);
+    setConcernForm({employeeName:"",concernType:"other",description:"",discussedWithEmployee:false,involvesSafetyOrWelfare:false,mayNeedFormalProcess:false});
+    setConcernSubmitted(true);
+  };
+
+  // The five triage dispositions HR can give a referral. "Open formal
+  // case" is the one genuinely interconnected action — it creates a real
+  // case using the same shape IntakeScreen's own "Create case file" button
+  // writes (id/employeeName/caseType/description/status/meetings/
+  // createdAt), rather than leaving the referral as a dead-end record HR
+  // has to separately remember to act on.
+  const CONCERN_TYPE_TO_CASE_TYPE = {
+    conduct:"misconduct", performance:"performance", attendance:"attendance", grievance:"grievance",
+    bullying_harassment:"discrimination", safety_welfare:"other", other:"other",
+  };
+
+  const triageReferral = (referralId, action) => {
+    const referral = concernReferrals.find(r=>r.id===referralId);
+    if(!referral) return;
+    const actionToStatus = {
+      request_more_info:"more_info_requested", return_to_manager:"returned_to_manager",
+      deal_informally:"handled_informally", close:"closed",
+    };
+    if(action==="open_case") {
+      const newCase = {
+        id: crypto.randomUUID(), employeeName: referral.employeeName, manager: "", email: "",
+        caseType: CONCERN_TYPE_TO_CASE_TYPE[referral.concernType]||"other",
+        description: referral.description, referredBy: "Manager referral — "+(referral.submittedByName||"unknown"),
+        dateReceived: new Date().toISOString().split("T")[0], status: "open", meetings: [],
+        createdAt: new Date().toISOString(),
+      };
+      saveCases([...cases, newCase]);
+      const updated = setReferralStatus(concernReferrals, referralId, "case_opened", { linkedCaseId: newCase.id });
+      setConcernReferrals(updated);
+      saveConcernReferralToDB(updated.find(r=>r.id===referralId));
+      audit("Concern referral opened as a case", referral.employeeName, newCase.id);
+      return;
+    }
+    const status = actionToStatus[action];
+    if(!status) return;
+    const updated = setReferralStatus(concernReferrals, referralId, status);
+    setConcernReferrals(updated);
+    saveConcernReferralToDB(updated.find(r=>r.id===referralId));
+    audit("Concern referral "+status.replace(/_/g," "), referral.employeeName);
   };
 
   // ── Case signals ──
@@ -4480,6 +4575,25 @@ Please produce:
           redundancyAiProcessing={redundancyAiProcessing}
           startOffboarding={startOffboarding}
           promptDialog={promptDialog}
+        />
+      )}
+
+      {/* ══ MANAGER SELF-SERVICE — CONCERN REFERRALS ══ */}
+      {screen===SCREENS.CONCERNS&&(
+        <ConcernsScreen
+          isHR={isHR}
+          concernReferrals={concernReferrals}
+          concernForm={concernForm}
+          setConcernForm={setConcernForm}
+          submitConcernReferral={submitConcernReferral}
+          concernSubmitted={concernSubmitted}
+          setConcernSubmitted={setConcernSubmitted}
+          triageReferral={triageReferral}
+          currentUser={currentUser}
+          setActiveCaseId={setActiveCaseId}
+          setActiveCaseStage={setActiveCaseStage}
+          setScreen={setScreen}
+          screens={SCREENS}
         />
       )}
 

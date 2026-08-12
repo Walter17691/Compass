@@ -47,7 +47,23 @@ export const SCREENS = {
   DEVELOP:"develop", SEARCH:"search",
   NEWSTARTER:"newstarter", OFFBOARDING:"offboarding", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing", DSAR:"dsar", TASKS:"tasks",
+  CONCERNS:"concerns",
 };
+
+// Phase 14 of the reasoning-layer build-out (manager self-service). Kept
+// narrower and more neutral than the case-type list (constants.js's own
+// IntakeScreen options) — a manager raising a concern is describing a
+// situation, not yet classifying it into a formal case type; HR does that
+// classification if/when a concern becomes a case.
+export const CONCERN_TYPES = [
+  { id:"conduct", label:"Conduct" },
+  { id:"performance", label:"Performance" },
+  { id:"attendance", label:"Attendance" },
+  { id:"grievance", label:"Grievance or complaint" },
+  { id:"bullying_harassment", label:"Bullying or harassment" },
+  { id:"safety_welfare", label:"Safety or welfare" },
+  { id:"other", label:"Other" },
+];
 
 export const SPEAKERS = { HR:"HR Manager", EMP:"Employee", NOTE:"Note" };
 

@@ -1,0 +1,50 @@
+import { test, expect } from '@playwright/test';
+import { login } from './helpers.js';
+
+// Phase 14 of the reasoning-layer build-out (first of the scale/
+// commercialisation wave). The one screen any org member can reach
+// regardless of role — the line_manager role (role_expansion_2026-08-09.sql)
+// has existed since that migration but never actually gated anything
+// until now. The E2E test account is HR, so this covers the HR-facing
+// triage queue path (submit -> triage -> "open formal case" creates a
+// real case, per concern_referrals_2026-08-12.sql); the non-HR
+// intake-only view is covered by ConcernsScreen's own !isHR branch, not
+// separately E2E-tested here since there's no non-HR test account to
+// verify it against live RLS.
+test('a raised concern can be triaged into a real formal case', async ({ page }) => {
+  const employeeName = `E2E Concern ${Date.now()}`;
+
+  await login(page);
+  // The E2E test account is HR, so the nav label reads "Concerns" (the
+  // full triage view) rather than "Raise a concern" (the non-HR
+  // intake-only label) — see AppSidebar.jsx's isHR-conditional label.
+  await page.getByRole('button', { name: 'Concerns', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'People concerns' })).toBeVisible({ timeout: 10000 });
+
+  await page.getByRole('button', { name: '+ Raise a concern' }).click();
+  await page.getByPlaceholder("Who is this about?").fill(employeeName);
+  await page.locator('select').first().selectOption('conduct');
+  await page.getByPlaceholder(/What happened/).fill('Repeatedly left site during shift without authorisation, witnessed by two colleagues.');
+  await page.getByText('Does this involve a safety or welfare risk?').click();
+  const saveResponse = page.waitForResponse(r => r.url().includes('/rest/v1/concern_referrals') && r.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Submit concern' }).click();
+  await saveResponse;
+
+  const referralCard = page.locator('div').filter({ hasText: employeeName }).filter({ hasText: 'Open formal case' }).last();
+  await expect(referralCard).toBeVisible({ timeout: 10000 });
+  await expect(referralCard.getByText('⚠ Safety/welfare risk flagged')).toBeVisible();
+
+  const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && r.request().method() === 'POST');
+  await referralCard.getByRole('button', { name: 'Open formal case' }).click();
+  await caseSaved;
+
+  // The card updates in place — status badge flips and the disposition
+  // buttons are replaced by a direct link into the new case.
+  const resolvedCard = page.locator('div').filter({ hasText: employeeName }).filter({ hasText: 'Open the case' }).last();
+  await expect(resolvedCard).toBeVisible({ timeout: 10000 });
+  await expect(resolvedCard.getByText('Formal case opened')).toBeVisible();
+
+  await resolvedCard.getByRole('button', { name: 'Open the case' }).click();
+  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('button', { name: '← Cases' })).toBeVisible();
+});
