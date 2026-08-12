@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus } from '../lib/allegations';
+import { computeOutcomeDistribution } from '../lib/outcomeConsistency';
 import { EvidenceMatrixPanel } from './EvidenceMatrixPanel';
 
 const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
@@ -11,11 +12,15 @@ const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom
 // piece of evidence (support for/against one). Evidence stays on
 // cs.evidence; linking it here just tags an existing item with which
 // allegation it speaks to and whether it supports or contradicts it.
-export function AllegationsPanel({ cs, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate }) {
+export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
   const evidence = cs.evidence || [];
+  // Phase 17 — same distribution for every allegation on this case (it's
+  // grouped by the case's own caseType, not per-allegation), so computed
+  // once rather than inside the allegation .map() below.
+  const outcomeDistribution = computeOutcomeDistribution(cases, allAllegations||allegations, cs.caseType, cs.id);
 
   // Same "open the original" affordances EvidenceTab already exposes
   // (Download for a stored file, View notes for a meeting-derived record)
@@ -109,6 +114,22 @@ export function AllegationsPanel({ cs, allegations, createAllegation, patchAlleg
                       {ALLEGATION_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
                   </div>
+
+                  {outcomeDistribution.applicable && (
+                    <div style={{marginBottom:12,background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:12}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>How similar cases have been decided</div>
+                      <div style={{fontSize:11,color:"#9B9098",marginBottom:10}}>Based on {outcomeDistribution.total} closed {cs.caseType} case{outcomeDistribution.total===1?"":"s"} at this organisation. For context only — every case turns on its own facts.</div>
+                      {outcomeDistribution.distribution.map(d=>(
+                        <div key={d.status} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                          <div style={{width:130,fontSize:11,color:"#1A1535",flexShrink:0}}>{d.label}</div>
+                          <div style={{flex:1,background:"#EDE5D8",borderRadius:4,height:6,overflow:"hidden"}}>
+                            <div style={{width:d.pct+"%",background:"#7C5CFC",height:"100%"}}/>
+                          </div>
+                          <div style={{width:64,fontSize:11,color:"#6B6375",textAlign:"right",flexShrink:0}}>{d.pct}% ({d.count})</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {isFindingStatus(a.status) && (
                     <div style={{marginBottom:12,background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:12}}>
