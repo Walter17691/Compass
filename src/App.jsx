@@ -27,6 +27,7 @@ import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } fro
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName } from './lib/globalAssistant';
+import { buildEmailEvidenceItem } from './lib/emailIngestion';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -56,6 +57,7 @@ import { PersonViewScreen } from './screens/PersonViewScreen';
 import { CaseViewScreen } from './screens/CaseViewScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { GlobalAssistantScreen } from './screens/GlobalAssistantScreen';
+import { SaveEmailScreen } from './screens/SaveEmailScreen';
 // Lazy: less-common screens, split out of the main bundle so the common
 // login -> Home -> Cases path doesn't pay to download them upfront.
 const WellbeingScreen = lazy(() => import('./screens/WellbeingScreen').then(m => ({default: m.WellbeingScreen})));
@@ -2882,6 +2884,48 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setDocumentFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"dismissed"}:f)}));
   };
 
+  // ── Email integration groundwork (Phase 24) ──
+  // The manual half of a flow designed so a later webhook adapter (Graph
+  // mail push / Gmail push) can feed the same pipeline once OAuth
+  // credentials exist — see lib/emailIngestion.js. Nothing is saved until
+  // saveEmailToCase() is called explicitly; extraction alone never writes
+  // anything, same "review before write" posture as Phase 7.
+  const [emailExtraction, setEmailExtraction] = useState(null);
+  const [emailExtractionLoading, setEmailExtractionLoading] = useState(false);
+
+  const extractEmailDetails = async (rawText) => {
+    if(!rawText?.trim()) return;
+    setEmailExtractionLoading(true);
+    setEmailExtraction(null);
+    try {
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:400,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot extracting structured details from a pasted email so it can be filed to the right case. Read the content given and extract: the sender, the subject, the date (if mentioned or inferable, in DD/MM/YYYY), which named employee this email is actually about (may differ from the sender or recipient — look for who the content concerns, not just who wrote it), and a one-sentence neutral summary. Respond ONLY with valid JSON, no other text: {\"sender\":null,\"subject\":null,\"date\":null,\"employeeName\":null,\"summary\":null} — use null (not a guess) for anything you can't actually determine from the content.",
+        messages:[{role:"user", content:rawText.slice(0,8000)}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const matchedCase = parsed.employeeName ? matchCaseByEmployeeName(cases, parsed.employeeName) : null;
+      setEmailExtraction({...parsed, rawText, matchedCaseId:matchedCase?.id||null});
+    } catch(e) { console.error("extractEmailDetails", e); showToast("Couldn't read that email — "+e.message, "error"); }
+    setEmailExtractionLoading(false);
+  };
+
+  const saveEmailToCase = (caseId) => {
+    if(!emailExtraction) return;
+    const item = buildEmailEvidenceItem({sender:emailExtraction.sender, subject:emailExtraction.subject, date:emailExtraction.date, body:emailExtraction.rawText, addedBy:currentUser?.name||"HR Manager"});
+    saveCases(cases.map(x=>x.id===caseId?{...x, evidence:[...(x.evidence||[]), item]}:x), caseId);
+    audit("Email saved to case", item.name, caseId);
+    showToast("Email saved to the case's evidence");
+    setEmailExtraction(null);
+    setActiveCaseId(caseId);
+    setActiveCaseStage("investigation");
+    setScreen(SCREENS.CASE_VIEW);
+  };
+
   // ── Case Chronology overrides ──
   // buildCaseTimeline() (lib/caseTimeline.js) is still the single source
   // of the merge; these three just write to the case's own
@@ -4770,6 +4814,18 @@ Please produce:
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           setScreen={setScreen}
+        />
+      )}
+
+      {/* ══ SAVE EMAIL TO CASE (Phase 24 — Email integration groundwork) ══ */}
+      {screen===SCREENS.SAVE_EMAIL&&(
+        <SaveEmailScreen
+          cases={cases}
+          extraction={emailExtraction}
+          extractionLoading={emailExtractionLoading}
+          onExtract={extractEmailDetails}
+          onSave={saveEmailToCase}
+          onClear={()=>setEmailExtraction(null)}
         />
       )}
 

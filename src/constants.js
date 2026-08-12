@@ -47,7 +47,7 @@ export const SCREENS = {
   DEVELOP:"develop", SEARCH:"search",
   NEWSTARTER:"newstarter", OFFBOARDING:"offboarding", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing", DSAR:"dsar", TASKS:"tasks",
-  CONCERNS:"concerns", ASK_COMPASS:"ask_compass",
+  CONCERNS:"concerns", ASK_COMPASS:"ask_compass", SAVE_EMAIL:"save_email",
 };
 
 // Phase 14 of the reasoning-layer build-out (manager self-service). Kept

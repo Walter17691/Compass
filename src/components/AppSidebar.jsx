@@ -47,6 +47,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     // database access to them, so don't even show the link.
     ...(isHR ? [{s:SCREENS.WELLBEING, l:"Wellbeing"}] : []),
     {s:SCREENS.DSAR, l:"DSAR"},
+    {s:SCREENS.SAVE_EMAIL, l:"Save email to case"},
   ];
   const allNavItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];
 
