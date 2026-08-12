@@ -4439,6 +4439,9 @@ Please produce:
           connectGoogleCalendar={connectGoogleCalendar}
           disconnectGoogleCalendar={disconnectGoogleCalendar}
           setSettingsSection={setSettingsSection}
+          caseSignals={caseSignals}
+          concernReferrals={concernReferrals}
+          isHR={isHR}
         />
       )}
 

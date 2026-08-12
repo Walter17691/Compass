@@ -1,12 +1,19 @@
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
+import { openReferrals } from '../lib/concernReferrals';
+import { topOpenSignalsOrgWide, signalTypeMeta } from '../lib/caseSignals';
+
+// Phase 20 — a case with no activity in this many days surfaces in the
+// "Needs attention" strip as stale, separate from actions/overdue items
+// which are keyed off explicit dated deadlines rather than plain inactivity.
+const STALE_DAYS = 14;
 
 // The nav/logo shell is rendered once by AppSidebar (App.jsx), mounted
 // unconditionally above every screen including this one — Home used to
 // render its own separate copy here, which had drifted out of sync with
 // the shared one (different height, padding, logo size) and caused a
 // visible layout jump on every navigation away from Home.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, setSettingsSection }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, setSettingsSection, caseSignals=[], concernReferrals=[], isHR }) {
   const freshMeetingSetup = () => ({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
@@ -41,7 +48,15 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
           const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
           const overdue=dueSoon.filter(d=>d.overdue);
           const highRisk=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getCurrentRisk(cs)==="HIGH");
-          if(actions.length===0&&pendingSigs===0&&overdue.length===0&&highRisk.length===0) return null;
+          const appealsOutstanding=cases.filter(cs=>getCaseStage(cs)==="appeal");
+          const staleCases=cases.filter(cs=>{
+            if(getCaseStage(cs)==="closed") return false;
+            const lastUpdated=cs.updatedAt||cs.createdAt;
+            if(!lastUpdated) return false;
+            return (Date.now()-new Date(lastUpdated))>STALE_DAYS*24*60*60*1000;
+          });
+          const openReferralsCount=isHR?openReferrals(concernReferrals).length:0;
+          if(actions.length===0&&pendingSigs===0&&overdue.length===0&&highRisk.length===0&&appealsOutstanding.length===0&&staleCases.length===0&&openReferralsCount===0) return null;
           return (
             <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A44",borderRadius:12,padding:"12px 18px",marginBottom:24,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#E8622A",letterSpacing:"0.5px",textTransform:"uppercase",flexShrink:0}}>Needs attention</div>
@@ -61,6 +76,25 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                   {cs.employeeName} · HIGH risk
                 </button>
               ))}
+              {appealsOutstanding.slice(0,3).map((cs,i)=>(
+                <button key={"appeal"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("appeal");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · Appeal outstanding`} style={{fontSize:12,color:"#5B3FD4",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {cs.employeeName} · Appeal outstanding
+                </button>
+              ))}
+              {staleCases.slice(0,3).map((cs,i)=>{
+                const lastUpdated=cs.updatedAt||cs.createdAt;
+                const daysAgo=Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24));
+                return (
+                  <button key={"stale"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · No activity in ${daysAgo} days`} style={{fontSize:12,color:"#6B6375",background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    {cs.employeeName} · No activity in {daysAgo}d
+                  </button>
+                );
+              })}
+              {openReferralsCount>0&&(
+                <button onClick={()=>setScreen(SCREENS.CONCERNS)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
+                  {openReferralsCount} referral{openReferralsCount!==1?"s":""} awaiting triage
+                </button>
+              )}
             </div>
           );
         })()}
@@ -258,6 +292,42 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
 
           {/* ── Right column ── */}
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+            {/* Compass Recommendations — the highest-priority open signals
+                org-wide (next_action/process_risk), already AI-written when
+                each one was created (Next Best Action, Guardrails). Capped
+                small deliberately — this is a shortlist, not another full
+                list view; the case workspace's own Copilot banner is where
+                the complete picture for any one case lives. */}
+            {(()=>{
+              const recommendations=topOpenSignalsOrgWide(caseSignals,["next_action","process_risk"],5);
+              if(recommendations.length===0) return null;
+              return (
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI-prioritised</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Compass Recommendations</div>
+                  </div>
+                  <div style={{padding:"4px 0"}}>
+                    {recommendations.map((sig,i)=>{
+                      const cs=cases.find(c=>c.id===sig.caseId);
+                      const meta=signalTypeMeta(sig.type);
+                      return (
+                        <button key={sig.id} onClick={()=>{if(!cs) return; setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}} style={{width:"100%",display:"flex",alignItems:"flex-start",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:cs?"pointer":"default",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<recommendations.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
+                          onMouseEnter={e=>{if(cs) e.currentTarget.style.background="#FDFAF5";}}
+                          onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:meta.color,flexShrink:0,marginTop:5}}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,color:"#1C1820",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sig.title}</div>
+                            <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{cs?.employeeName||"Unknown case"} · {meta.label}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Quick links — context-aware */}
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>

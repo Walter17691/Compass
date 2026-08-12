@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   SIGNAL_TYPES, SIGNAL_STATUSES, signalTypeMeta, signalsForCase, openSignalsForCase,
-  createSignal, updateSignal, setSignalStatus, supersedeOpenSignalsOfType,
+  createSignal, updateSignal, setSignalStatus, supersedeOpenSignalsOfType, topOpenSignalsOrgWide,
 } from '../lib/caseSignals';
 
 describe('signalTypeMeta', () => {
@@ -114,5 +114,36 @@ describe('SIGNAL_STATUSES', () => {
   it('includes every status referenced by setSignalStatus', () => {
     const ids = SIGNAL_STATUSES.map(s => s.id);
     expect(ids).toEqual(['open', 'accepted', 'dismissed', 'not_relevant', 'resolved', 'explained']);
+  });
+});
+
+describe('topOpenSignalsOrgWide (Phase 20)', () => {
+  const signals = [
+    { id: 's1', caseId: 'case1', type: 'next_action', status: 'open', createdAt: '2026-08-01T00:00:00Z' },
+    { id: 's2', caseId: 'case2', type: 'process_risk', status: 'open', createdAt: '2026-07-01T00:00:00Z' },
+    { id: 's3', caseId: 'case2', type: 'unanswered_question', status: 'open', createdAt: '2026-08-10T00:00:00Z' },
+    { id: 's4', caseId: 'case3', type: 'next_action', status: 'dismissed', createdAt: '2026-08-11T00:00:00Z' },
+    { id: 's5', caseId: 'case3', type: 'process_risk', status: 'open', createdAt: '2026-08-05T00:00:00Z' },
+  ];
+
+  it('only includes open signals of the requested types', () => {
+    const result = topOpenSignalsOrgWide(signals, ['next_action', 'process_risk']);
+    expect(result.map(s => s.id)).toEqual(['s5', 's2', 's1']);
+  });
+
+  it('ranks process_risk above next_action regardless of recency, then by newest first within a type', () => {
+    const result = topOpenSignalsOrgWide(signals, ['next_action', 'process_risk']);
+    expect(result[0].id).toBe('s5'); // newer process_risk
+    expect(result[1].id).toBe('s2'); // older process_risk, still ahead of any next_action
+    expect(result[2].id).toBe('s1'); // only open next_action
+  });
+
+  it('caps the result to the given limit', () => {
+    expect(topOpenSignalsOrgWide(signals, ['next_action', 'process_risk'], 2)).toHaveLength(2);
+  });
+
+  it('defaults to all open signals when no types filter is given', () => {
+    const result = topOpenSignalsOrgWide(signals);
+    expect(result.map(s => s.id)).toContain('s3');
   });
 });

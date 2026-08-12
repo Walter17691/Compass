@@ -35,6 +35,29 @@ export function openSignalsForCase(signals, caseId, type) {
   return signalsForCase(signals, caseId).filter(s => s.status === OPEN_STATUS && (!type || s.type === type));
 }
 
+// Phase 20 — Daily HR Command Centre's "Compass Recommendations" shortlist
+// reads straight from this same open-signal substrate org-wide rather than
+// a new AI call: every signal's title/reasoning was already AI-written
+// when it was created (Next Best Action, Guardrails, etc.), so ranking and
+// capping the existing ones is enough — no need to re-summarise on every
+// Home page load. process_risk (a procedural risk already in motion)
+// ranks above next_action (a suggestion) before falling back to recency,
+// then capped by the caller to whatever the dashboard can show without
+// overwhelming it.
+const RECOMMENDATION_TYPE_PRIORITY = { process_risk: 0, next_action: 1 };
+
+export function topOpenSignalsOrgWide(signals, types, limit = 5) {
+  return (signals || [])
+    .filter(s => s.status === OPEN_STATUS && (!types || types.includes(s.type)))
+    .sort((a, b) => {
+      const pa = RECOMMENDATION_TYPE_PRIORITY[a.type] ?? 99;
+      const pb = RECOMMENDATION_TYPE_PRIORITY[b.type] ?? 99;
+      if (pa !== pb) return pa - pb;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    })
+    .slice(0, limit);
+}
+
 export function createSignal(signals, caseId, fields) {
   const title = (fields?.title || "").trim();
   if (!title || !fields?.type) return signals;
