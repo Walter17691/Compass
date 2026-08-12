@@ -24,6 +24,7 @@ import { withFkRetry } from './lib/retryOnFkRace';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary } from './lib/caseContext';
+import { matchCaseByEmployeeName } from './lib/globalAssistant';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -52,6 +53,7 @@ import { RecordScreen } from './screens/RecordScreen';
 import { PersonViewScreen } from './screens/PersonViewScreen';
 import { CaseViewScreen } from './screens/CaseViewScreen';
 import { HomeScreen } from './screens/HomeScreen';
+import { GlobalAssistantScreen } from './screens/GlobalAssistantScreen';
 // Lazy: less-common screens, split out of the main bundle so the common
 // login -> Home -> Cases path doesn't pay to download them upfront.
 const WellbeingScreen = lazy(() => import('./screens/WellbeingScreen').then(m => ({default: m.WellbeingScreen})));
@@ -2381,6 +2383,87 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     return buildCaseContext(cs, caseAllegations, caseTaskList, summaries);
   };
 
+  // ── Global Compass AI (Phase 22) ──
+  // A new, additive entry point alongside — not replacing — the existing
+  // per-case AI Assistant tab and per-meeting Ask Compass widget above.
+  // Answers org-wide questions by classifying intent first (a real,
+  // separate AI call) and only then routing to a genuinely scoped query:
+  // org_case_stats() (a Supabase RPC, supabase/global_ai_stats_2026-08-12.sql)
+  // for aggregate/count questions, so the client never has to loop over
+  // every case it can see just to answer "how many"; buildHardenedCaseContext
+  // (Phase 21) for a specific named case, over the SAME already-loaded,
+  // already RLS-scoped `cases` array every other feature in this app
+  // already relies on — matchCaseByEmployeeName (lib/globalAssistant.js)
+  // can only ever narrow within that array, never see anything wider.
+  // Confidentiality is therefore enforced twice over: once by RLS on the
+  // `cases` table itself (what's ever loaded client-side), and again by
+  // RLS on org_case_stats() specifically — verified directly against the
+  // database (not just assumed) before this shipped: a simulated session
+  // for a user with no org membership got every count back as zero, and
+  // the real org member correctly saw the real numbers including a
+  // temporary confidential test case, matching how hr_director oversight
+  // already works everywhere else in this app.
+  const [globalChatHistory, setGlobalChatHistory] = useState([]);
+  const [globalChatInput, setGlobalChatInput] = useState("");
+  const [globalChatProcessing, setGlobalChatProcessing] = useState(false);
+  const [globalChatCaseRef, setGlobalChatCaseRef] = useState(null);
+
+  const sendGlobalChat = async () => {
+    const question = globalChatInput.trim();
+    if(!question || globalChatProcessing) return;
+    setGlobalChatInput("");
+    const updated = [...globalChatHistory, {role:"user", content:question}];
+    setGlobalChatHistory(updated);
+    setGlobalChatProcessing(true);
+    setGlobalChatCaseRef(null);
+    try {
+      const classifyRes = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:200,
+        stream:false,
+        system:"You classify a question an HR professional is asking an organisation-wide assistant. Respond ONLY with valid JSON, no other text: {\"intent\":\"stats\"|\"case\"|\"general\",\"employeeName\":\"exact name mentioned, or null\"}. Use \"stats\" for questions about counts, totals, or breakdowns across cases (e.g. how many open cases, what mix of case types). Use \"case\" only when a specific named employee's case is being asked about. Use \"general\" for policy, process, or legal-guidance questions not about specific case data.",
+        messages:[{role:"user", content:question}],
+      })});
+      const classifyData = await classifyRes.json();
+      const classifyText = (classifyData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      let intent = "general", employeeName = null;
+      try {
+        const parsed = JSON.parse(classifyText.replace(/```json|```/g,"").trim());
+        intent = parsed.intent || "general";
+        employeeName = parsed.employeeName || null;
+      } catch { /* malformed classification — fall back to general, no case/stats data attached */ }
+
+      let dataContext = "";
+      let matchedCase = null;
+      if(intent==="stats") {
+        const { data, error } = await supabase.rpc('org_case_stats');
+        if(error) console.error("org_case_stats", error);
+        else dataContext = "ORG-WIDE CASE STATISTICS (live database query, scoped to cases you have access to):\n"+JSON.stringify(data);
+      } else if(intent==="case" && employeeName) {
+        matchedCase = matchCaseByEmployeeName(cases, employeeName);
+        dataContext = matchedCase
+          ? "CASE RECORD for "+matchedCase.employeeName+":\n"+await buildHardenedCaseContext(matchedCase)
+          : "No case matching the name \""+employeeName+"\" was found among the cases you have access to.";
+      }
+
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:600,
+        stream:false,
+        system:"You are Compass, an organisation-wide Employee Relations copilot. Answer only using the data provided below — if a specific number or fact isn't in it, say so rather than guessing or estimating. Never recommend a sanction, disciplinary outcome, or final decision on any specific case. When discussing statistics, cite only the real numbers given. Plain text only — no asterisks, no markdown headers."+getPolicyCtx(),
+        messages:[
+          ...updated.map(m=>({role:m.role, content:m.content})).slice(0,-1),
+          {role:"user", content:(dataContext?dataContext+"\n\n":"")+"Question: "+question},
+        ],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text) setGlobalChatHistory(h=>[...h, {role:"assistant", content:text}]);
+      if(matchedCase) setGlobalChatCaseRef(matchedCase.id);
+    } catch(e) { console.error("sendGlobalChat", e); showToast("Couldn't reach Compass — "+e.message, "error"); }
+    setGlobalChatProcessing(false);
+  };
+
   const sendCaseChat = async (cs) => {
     const question = caseChatInput.trim();
     if(!question || caseChatProcessing) return;
@@ -4565,6 +4648,21 @@ Please produce:
           caseSignals={caseSignals}
           concernReferrals={concernReferrals}
           isHR={isHR}
+        />
+      )}
+
+      {/* ══ ASK COMPASS (Phase 22 — Global Compass AI) ══ */}
+      {screen===SCREENS.ASK_COMPASS&&(
+        <GlobalAssistantScreen
+          chatHistory={globalChatHistory}
+          chatInput={globalChatInput}
+          setChatInput={setGlobalChatInput}
+          chatProcessing={globalChatProcessing}
+          sendChat={sendGlobalChat}
+          caseRef={globalChatCaseRef}
+          setActiveCaseId={setActiveCaseId}
+          setActiveCaseStage={setActiveCaseStage}
+          setScreen={setScreen}
         />
       )}
 

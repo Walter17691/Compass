@@ -27,6 +27,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
 
   const primaryItems = [
     {s:SCREENS.HOME, l:"Home"},
+    {s:SCREENS.ASK_COMPASS, l:"Ask Compass"},
     {s:SCREENS.CASES, l:"Cases"+(activeCaseCount>0?" ("+activeCaseCount+")":"")},
     {s:SCREENS.TASKS, l:"Tasks"},
     {s:SCREENS.PEOPLE, l:"People"},
