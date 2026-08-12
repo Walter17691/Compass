@@ -13,6 +13,8 @@
 // signals by exact title match, so a title that changed every run would
 // spawn a fresh signal every time instead of updating one.
 
+import { isFindingStatus } from './allegations';
+
 function parseFlexDate(str) {
   if (!str) return null;
   if (typeof str === "string" && str.includes("/")) {
@@ -92,6 +94,23 @@ function checkWitnessEvidenceGaps(cs, caseAllegations) {
   };
 }
 
+// Phase 16 (Decision Workspace): a finding (substantiated/partially
+// substantiated/not substantiated/unable to determine) recorded with
+// little or no reasoning is exactly the kind of thing worth a nudge
+// before the case progresses — advisory only, never blocks saving the
+// finding itself.
+const MIN_REASONING_LENGTH = 20;
+
+function checkDecisionReasoningMissing(cs, caseAllegations) {
+  const thin = caseAllegations.filter(a => isFindingStatus(a.status) && (a.decisionReasoning || "").trim().length < MIN_REASONING_LENGTH);
+  if (!thin.length) return null;
+  return {
+    title: "A finding was recorded with little or no reasoning",
+    reasoning: `${thin.length === 1 ? "One finding" : thin.length + " findings"} — ${thin.map(a => a.title).join(", ")} — ${thin.length === 1 ? "has" : "have"} little or no reasoning recorded. A brief note on what the evidence showed makes the finding easier to defend later, at appeal or otherwise.`,
+    sourceRefs: thin.map(a => ({ kind: "allegation", id: a.id, label: a.title })),
+  };
+}
+
 export function computeGuardrailChecks(cs, allegations) {
   const caseAllegations = (allegations || []).filter(a => a.caseId === cs.id);
   return [
@@ -99,5 +118,6 @@ export function computeGuardrailChecks(cs, allegations) {
     checkEvidenceAfterReport(cs),
     checkAppealClauseMissing(cs),
     checkWitnessEvidenceGaps(cs, caseAllegations),
+    checkDecisionReasoningMissing(cs, caseAllegations),
   ].filter(Boolean);
 }

@@ -1933,6 +1933,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         id:r.id, caseId:r.case_id, title:r.title, description:r.description||"",
         period:r.period||"", peopleInvolved:r.people_involved||"", status:r.status,
         employeeResponse:r.employee_response||"", witnessEvidence:r.witness_evidence||"",
+        decisionReasoning:r.decision_reasoning||"", decidedBy:r.decided_by||null, decidedAt:r.decided_at||null,
         createdBy:r.created_by, createdAt:r.created_at,
       })));
     } catch(e) { console.error('loadAllegations', e); }
@@ -1946,6 +1947,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       period: allegation.period||null, people_involved: allegation.peopleInvolved||null,
       status: allegation.status||'unreviewed', employee_response: allegation.employeeResponse||null,
       witness_evidence: allegation.witnessEvidence||null, created_by: allegation.createdBy||user?.id||null,
+      decision_reasoning: allegation.decisionReasoning||null, decided_by: allegation.decidedBy||null,
+      decided_at: allegation.decidedAt||null,
       updated_at: new Date().toISOString(),
     }));
     if(error) { console.error('saveAllegationToDB', error); showToast("Couldn't save allegation to the cloud — "+error.message, "error"); }
@@ -1973,7 +1976,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   const changeAllegationStatus = (allegationId, status) => {
-    const updated = setAllegationStatus(allegations, allegationId, status);
+    const updated = setAllegationStatus(allegations, allegationId, status, user?.id||null);
     setAllegations(updated);
     const changed = updated.find(a=>a.id===allegationId);
     if(changed) { saveAllegationToDB(changed); audit("Allegation status changed", `${changed.title} → ${allegationStatusMeta(status).label}`, changed.caseId); }
@@ -2296,10 +2299,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(updated!==caseSignals) setCaseSignals(updated);
   };
 
-  // Fires once per case open (or when switching to a different case), not
-  // on every caseSignals/allegations mutation — avoids a write-triggers-
-  // effect loop, and the dedup-by-title logic above already makes re-runs
-  // idempotent if this ever fires more than once for the same case.
+  // cases/allegations are deliberately in this dependency array, not just
+  // [screen, activeCaseId]: on a fresh page load or reload straight into a
+  // case (e.g. following a link, or the browser's own refresh), cases
+  // hasn't finished loading from Supabase yet the first time this fires,
+  // so `cs` is undefined and the sync silently never runs — and without
+  // cases/allegations as deps, it would never get a second chance once
+  // they do load. Re-running on every mutation is safe, not wasteful
+  // churn: syncGuardrailSignals is idempotent by construction (dedup by
+  // exact title), so a re-fire that finds nothing new just does nothing.
   useEffect(()=>{
     if(screen===SCREENS.CASE_VIEW && activeCaseId) {
       const cs = cases.find(c=>c.id===activeCaseId);
@@ -2307,7 +2315,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(cs) syncGuardrailSignals(cs);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, activeCaseId]);
+  }, [screen, activeCaseId, cases, allegations]);
 
   // ── Automatic Evidence Matrix — link suggestions ──
   // The matrix grid itself and manual linking already existed (Evidence

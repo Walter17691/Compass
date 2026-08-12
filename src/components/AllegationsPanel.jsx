@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation } from '../lib/allegations';
+import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus } from '../lib/allegations';
 import { EvidenceMatrixPanel } from './EvidenceMatrixPanel';
 
 const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
@@ -11,7 +11,7 @@ const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom
 // piece of evidence (support for/against one). Evidence stays on
 // cs.evidence; linking it here just tags an existing item with which
 // allegation it speaks to and whether it supports or contradicts it.
-export function AllegationsPanel({ cs, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens }) {
+export function AllegationsPanel({ cs, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -109,6 +109,18 @@ export function AllegationsPanel({ cs, allegations, createAllegation, patchAlleg
                       {ALLEGATION_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
                   </div>
+
+                  {isFindingStatus(a.status) && (
+                    <div style={{marginBottom:12,background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:12}}>
+                      <label style={labelStyle}>Decision reasoning — why was this finding reached?</label>
+                      <textarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF"}} rows={3} value={a.decisionReasoning||""} placeholder="Summarise what the evidence showed and why it supports this finding." onChange={e=>patchAllegation(a.id, {decisionReasoning:e.target.value})} onBlur={e=>patchAllegation(a.id,{decisionReasoning:e.target.value})} />
+                      {a.decidedAt && (
+                        <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>
+                          Decided {fmtDate?fmtDate(a.decidedAt):new Date(a.decidedAt).toLocaleDateString("en-GB")}{a.decidedBy&&orgMembers&&(()=>{const m=orgMembers.find(x=>x.user_id===a.decidedBy);return m?" by "+m.name:"";})()}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{marginBottom:12}}>
                     <label style={labelStyle}>Employee response</label>

@@ -23,6 +23,17 @@ export const EVIDENCE_STANCES = [
   { id: "neutral", label: "Neutral" },
 ];
 
+// The four statuses that represent a recorded finding, as opposed to the
+// two procedural/in-progress statuses above them. Phase 16 (Decision
+// Workspace) stamps decidedBy/decidedAt whenever status moves into one of
+// these — never Compass's own call, just an accountability trail for a
+// decision the responsible manager made.
+export const FINDING_STATUSES = ["substantiated", "partially_substantiated", "not_substantiated", "unable_to_determine"];
+
+export function isFindingStatus(status) {
+  return FINDING_STATUSES.includes(status);
+}
+
 export function allegationStatusMeta(status) {
   return ALLEGATION_STATUSES.find(s => s.id === status) || ALLEGATION_STATUSES[0];
 }
@@ -44,6 +55,9 @@ export function addAllegation(allegations, caseId, fields) {
     status: "unreviewed",
     employeeResponse: "",
     witnessEvidence: "",
+    decisionReasoning: "",
+    decidedBy: null,
+    decidedAt: null,
     createdAt: new Date().toISOString(),
   };
   return [...(allegations || []), allegation];
@@ -53,8 +67,15 @@ export function updateAllegation(allegations, allegationId, fields) {
   return (allegations || []).map(a => a.id === allegationId ? { ...a, ...fields } : a);
 }
 
-export function setAllegationStatus(allegations, allegationId, status) {
-  return updateAllegation(allegations, allegationId, { status });
+// Stamps decidedBy/decidedAt the moment status moves into a finding, and
+// clears them if it's ever moved back out (e.g. reopened for more
+// evidence) — a stale "decided" timestamp on a status that's no longer a
+// finding would misrepresent the case's actual accountability trail.
+export function setAllegationStatus(allegations, allegationId, status, decidedBy = null) {
+  const fields = isFindingStatus(status)
+    ? { status, decidedBy, decidedAt: new Date().toISOString() }
+    : { status, decidedBy: null, decidedAt: null };
+  return updateAllegation(allegations, allegationId, fields);
 }
 
 export function removeAllegation(allegations, allegationId) {

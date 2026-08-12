@@ -116,6 +116,34 @@ describe('computeGuardrailChecks — witness evidence gap', () => {
   });
 });
 
+describe('computeGuardrailChecks — decision reasoning missing (Phase 16)', () => {
+  it('flags a finding recorded with little or no reasoning', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'substantiated', decisionReasoning: '' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    const flagged = checks.find(c => c.title === 'A finding was recorded with little or no reasoning');
+    expect(flagged).toBeTruthy();
+    expect(flagged.sourceRefs).toEqual([{ kind: 'allegation', id: 'a1', label: 'Unauthorised absence' }]);
+  });
+
+  it('flags a finding whose reasoning is present but too short to be meaningful', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'not_substantiated', decisionReasoning: 'No evidence.' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes('little or no reasoning'))).toBeTruthy();
+  });
+
+  it('does not flag a finding with substantive reasoning recorded', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'substantiated', decisionReasoning: 'CCTV footage confirms the employee left the site at 14:32 without authorisation, corroborated by two witness statements.' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes('little or no reasoning'))).toBeUndefined();
+  });
+
+  it('does not flag an allegation still in a procedural (non-finding) status', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'evidence_gathering', decisionReasoning: '' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes('little or no reasoning'))).toBeUndefined();
+  });
+});
+
 describe('computeGuardrailChecks — clean case', () => {
   it('returns no checks for a case with nothing to flag', () => {
     expect(computeGuardrailChecks(baseCase, [])).toEqual([]);

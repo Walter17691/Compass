@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   addAllegation, updateAllegation, setAllegationStatus, removeAllegation,
   allegationsForCase, linkEvidenceToAllegation, unlinkEvidenceFromAllegation,
-  evidenceForAllegation, allegationStatusMeta,
+  evidenceForAllegation, allegationStatusMeta, isFindingStatus,
 } from '../lib/allegations';
 
 describe('addAllegation', () => {
@@ -48,6 +48,50 @@ describe('updateAllegation / setAllegationStatus', () => {
     const two = [...base, { id: 'a2', caseId: 'case1', status: 'unreviewed' }];
     const result = setAllegationStatus(two, 'a1', 'substantiated');
     expect(result[1].status).toBe('unreviewed');
+  });
+});
+
+describe('isFindingStatus', () => {
+  it('treats the four decision statuses as findings', () => {
+    expect(isFindingStatus('substantiated')).toBe(true);
+    expect(isFindingStatus('partially_substantiated')).toBe(true);
+    expect(isFindingStatus('not_substantiated')).toBe(true);
+    expect(isFindingStatus('unable_to_determine')).toBe(true);
+  });
+
+  it('does not treat the procedural statuses as findings', () => {
+    expect(isFindingStatus('unreviewed')).toBe(false);
+    expect(isFindingStatus('evidence_gathering')).toBe(false);
+  });
+});
+
+describe('setAllegationStatus — decision stamping (Phase 16)', () => {
+  const base = [{ id: 'a1', caseId: 'case1', status: 'unreviewed' }];
+
+  it('stamps decidedBy/decidedAt when moving into a finding status', () => {
+    const result = setAllegationStatus(base, 'a1', 'substantiated', 'user-123');
+    expect(result[0].status).toBe('substantiated');
+    expect(result[0].decidedBy).toBe('user-123');
+    expect(result[0].decidedAt).toBeTruthy();
+  });
+
+  it('does not stamp decidedBy/decidedAt for a non-finding status', () => {
+    const result = setAllegationStatus(base, 'a1', 'evidence_gathering', 'user-123');
+    expect(result[0].decidedBy).toBeNull();
+    expect(result[0].decidedAt).toBeNull();
+  });
+
+  it('clears decidedBy/decidedAt if a finding is moved back to a procedural status', () => {
+    const decided = setAllegationStatus(base, 'a1', 'substantiated', 'user-123');
+    const reopened = setAllegationStatus(decided, 'a1', 'evidence_gathering');
+    expect(reopened[0].decidedBy).toBeNull();
+    expect(reopened[0].decidedAt).toBeNull();
+  });
+
+  it('defaults decidedBy to null when not supplied', () => {
+    const result = setAllegationStatus(base, 'a1', 'not_substantiated');
+    expect(result[0].decidedBy).toBeNull();
+    expect(result[0].decidedAt).toBeTruthy();
   });
 });
 
