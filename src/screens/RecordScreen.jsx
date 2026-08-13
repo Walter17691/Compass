@@ -3,9 +3,11 @@ import { MDRenderer } from '../components/MDRenderer';
 import { SCREENS } from '../constants';
 import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
+  const followUpKey = meetingIntelligence?.suggestedFollowUp ? meetingIntelligence.suggestedFollowUp.text : null;
+  const showFollowUp = followUpKey && followUpKey !== dismissedFollowUpKey;
   const cancelMeeting = async () => {
     const hasContent = transcript.length>0 || inputText.trim();
     if(hasContent) {
@@ -160,6 +162,24 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
                       inputRef.current?.focus();
                     }} style={{fontSize:11,background:"#B87520",border:"none",borderRadius:5,padding:"4px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Insert question</button>
                     <button onClick={()=>setDismissedNudgeKey(nudgeKey)} style={{fontSize:11,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                  </div>
+                </div>
+              )}
+              {showFollowUp&&(
+                <div style={{background:"#F5F3FF",border:"1px solid #D4C9F5",borderRadius:8,padding:"10px 12px",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#5B3FD4",marginBottom:4}}>Suggested follow-up</div>
+                  <div style={{fontSize:11,color:"#3D3560",marginBottom:2}}>"{meetingIntelligence.suggestedFollowUp.text}"</div>
+                  {meetingIntelligence.suggestedFollowUp.reasoning&&(
+                    <div style={{fontSize:10,color:"#6B6375",marginBottom:8,fontStyle:"italic"}}>{meetingIntelligence.suggestedFollowUp.reasoning}</div>
+                  )}
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>{
+                      const q = meetingIntelligence.suggestedFollowUp.text;
+                      setInputText(t=>t?t+" "+q:q);
+                      inputRef.current?.focus();
+                      setDismissedFollowUpKey(followUpKey);
+                    }} style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:5,padding:"4px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Insert question</button>
+                    <button onClick={()=>setDismissedFollowUpKey(followUpKey)} style={{fontSize:11,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
                   </div>
                 </div>
               )}
