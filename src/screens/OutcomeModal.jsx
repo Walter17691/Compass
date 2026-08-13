@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { approvalActionForOutcome, approvalActionLabel } from '../lib/approvals';
+import { computeDecisionQualityGaps } from '../lib/decisionQuality';
+import { DecisionQualityCheckModal } from '../components/DecisionQualityCheckModal';
 
 const DISMISSAL_OUTCOMES = ["Dismissal with notice", "Summary dismissal (gross misconduct)"];
 
@@ -11,8 +14,55 @@ const DISMISSAL_OUTCOMES = ["Dismissal with notice", "Summary dismissal (gross m
 // tracking, not yet a hard block on sending, matching this whole
 // codebase's established never-block-HR posture (M8/M9's own "advisory
 // only" precedent).
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, startOffboarding, requestHrReview }) {
+//
+// Process Intelligence (P11) — "Issue outcome" is also where
+// computeDecisionQualityGaps gets checked, gating letter generation via
+// the same "Proceed anyway" pattern as everywhere else in this codebase.
+// Kept as component-local state (not lifted to App.jsx like Meeting
+// Intelligence's equivalent) since OutcomeModal is already a
+// self-contained modal, not a full screen orchestrated from App.jsx —
+// nothing else needs to know this check ran.
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, startOffboarding, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask }) {
   const cs = cases.find(x=>x.id===activeCaseId);
+  const [showQualityCheck, setShowQualityCheck] = useState(false);
+  const [qualityGaps, setQualityGaps] = useState([]);
+
+  const finalizeOutcome = () => {
+    const wasDismissal = DISMISSAL_OUTCOMES.includes(outcomeType);
+    const employeeName = cs?.employeeName;
+    const employeeManager = cs?.manager;
+    saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));
+    const approvalAction = approvalActionForOutcome(outcomeType);
+    if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
+    setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");handleLetter("outcome");
+    if(wasDismissal) startOffboarding({name:employeeName, manager:employeeManager, reason:"dismissal"});
+  };
+
+  const issueOutcome = () => {
+    if(!outcomeType || !cs) return;
+    const prospectiveCase = {...cs, outcome:outcomeType, outcomeNotes};
+    const gaps = computeDecisionQualityGaps(prospectiveCase, allegations, caseSignals);
+    if(gaps.length) { setQualityGaps(gaps); setShowQualityCheck(true); return; }
+    finalizeOutcome();
+  };
+
+  const proceedPastQualityCheck = async () => {
+    setShowQualityCheck(false);
+    const ok = await requestOverrideReason(qualityGaps.join("; "), { caseId: activeCaseId, actionLabel: "Issued outcome despite quality check gaps" });
+    if(!ok) return;
+    finalizeOutcome();
+  };
+
+  const createQualityCheckFollowUp = () => {
+    createCaseTask(activeCaseId, { name: "Follow up on: "+qualityGaps.join("; ") });
+    setShowQualityCheck(false);
+    finalizeOutcome();
+  };
+
+  if(showQualityCheck) {
+    return <DecisionQualityCheckModal gaps={qualityGaps} onGoBack={()=>setShowQualityCheck(false)} onCreateFollowUp={createQualityCheckFollowUp} onProceed={proceedPastQualityCheck} />;
+  }
+
   return (
     <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
@@ -49,17 +99,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
         )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
-          <button disabled={!outcomeType} onClick={()=>{
-            if(!outcomeType)return;
-            const wasDismissal = DISMISSAL_OUTCOMES.includes(outcomeType);
-            const employeeName = cs?.employeeName;
-            const employeeManager = cs?.manager;
-            saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));
-            const approvalAction = approvalActionForOutcome(outcomeType);
-            if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
-            setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");handleLetter("outcome");
-            if(wasDismissal) startOffboarding({name:employeeName, manager:employeeManager, reason:"dismissal"});
-          }} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
+          <button disabled={!outcomeType} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
         </div>
       </div>
     </div>

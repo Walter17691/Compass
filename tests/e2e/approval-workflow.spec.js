@@ -52,6 +52,13 @@ test('issuing an approval-gated outcome opens a visible, actionable approval req
   const outcomeSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Select outcome…' }) });
   await outcomeSelect.selectOption('Final written warning');
   await expect(page.getByText(/Final written warning requires sign-off/)).toBeVisible();
+  // Process Intelligence (P11) — computeDecisionQualityGaps flags an
+  // outcome with no documented rationale; this case has no allegations
+  // recorded at all, so outcomeNotes is the only place that rationale
+  // could live. Filling it in keeps this test on the direct "Issue
+  // outcome" path — the quality-check gate itself has its own dedicated
+  // coverage in decision-quality-check.spec.js.
+  await page.getByPlaceholder('Any additional notes…').fill('Consistent with the disciplinary policy given the severity of the conduct.');
 
   const reviewSaved = page.waitForResponse(r => r.url().includes('/rest/v1/hr_review_requests') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Issue outcome & generate letter' }).click();

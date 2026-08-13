@@ -5895,6 +5895,10 @@ Please produce:
           handleLetter={handleLetter}
           startOffboarding={startOffboarding}
           requestHrReview={requestHrReview}
+          allegations={allegations}
+          caseSignals={caseSignals}
+          requestOverrideReason={requestOverrideReason}
+          createCaseTask={createCaseTask}
         />
       )}
       </div>
