@@ -18,7 +18,16 @@ describe('withFkRetry', () => {
     expect(insertFn).toHaveBeenCalledTimes(2);
   });
 
-  it('does not retry on a non-FK error', async () => {
+  it('retries once on a row-level security violation (42501)', async () => {
+    const insertFn = vi.fn()
+      .mockResolvedValueOnce({ error: { code: '42501', message: 'new row violates row-level security policy' } })
+      .mockResolvedValueOnce({ error: null });
+    const result = await withFkRetry(insertFn, { delayMs: 0 });
+    expect(result.error).toBeNull();
+    expect(insertFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry on a non-FK, non-RLS error', async () => {
     const insertFn = vi.fn().mockResolvedValue({ error: { code: '23505', message: 'duplicate key' } });
     const result = await withFkRetry(insertFn, { delayMs: 0 });
     expect(result.error.code).toBe('23505');
