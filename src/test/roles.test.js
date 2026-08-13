@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLES, ROLE_LABELS, roleLabel, isHrRole, hasConfidentialOversight } from '../lib/roles';
+import { ROLES, ROLE_LABELS, roleLabel, isHrRole, hasConfidentialOversight, canSeeAllOrgCases } from '../lib/roles';
 
 describe('ROLES / ROLE_LABELS', () => {
   it('has exactly 7 roles', () => {
@@ -47,5 +47,25 @@ describe('hasConfidentialOversight', () => {
     expect(hasConfidentialOversight('location_manager')).toBe(false);
     expect(hasConfidentialOversight('investigator')).toBe(false);
     expect(hasConfidentialOversight('line_manager')).toBe(false);
+  });
+});
+
+describe('canSeeAllOrgCases (Phase 4, MP1)', () => {
+  it('mirrors can_see_all_org_cases() in manager_enablement_case_access_2026-08-13.sql: hr_manager, hr_director, legal_reviewer, auditor', () => {
+    expect(canSeeAllOrgCases('hr_manager')).toBe(true);
+    expect(canSeeAllOrgCases('hr_director')).toBe(true);
+    expect(canSeeAllOrgCases('legal_reviewer')).toBe(true);
+    expect(canSeeAllOrgCases('auditor')).toBe(true);
+  });
+
+  it('is false for location_manager and line_manager — narrowed to created/owned/case_access cases by the new restrictive RLS policy', () => {
+    expect(canSeeAllOrgCases('location_manager')).toBe(false);
+    expect(canSeeAllOrgCases('line_manager')).toBe(false);
+    expect(canSeeAllOrgCases('investigator')).toBe(false);
+  });
+
+  it('is false for no role at all', () => {
+    expect(canSeeAllOrgCases(null)).toBe(false);
+    expect(canSeeAllOrgCases(undefined)).toBe(false);
   });
 });

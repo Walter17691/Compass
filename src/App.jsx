@@ -911,11 +911,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // meetings/evidence stay in: runSearch does full-text search over
       // transcripts client-side, so dropping them would silently break
       // search rather than just trimming payload.
-      let query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,suspension_review_date').eq('org_id', org.id);
-      // Location managers only see their location cases
-      if(member?.role==='location_manager' && member?.location_ids?.length>0) {
-        query = query.in('location_id', member.location_ids);
-      }
+      // Manager Enablement (Phase 4, MP1) — no client-side location_id
+      // filter here any more: the new restrictive RLS policy on cases
+      // (manager_enablement_case_access_2026-08-13.sql) already narrows
+      // non-oversight roles down to created/owned/case_access-granted
+      // cases, which can legitimately include a case outside a location_
+      // manager's own assigned locations (e.g. HR explicitly granting
+      // them investigator access elsewhere) — the old blanket
+      // .in('location_id', ...) filter would have incorrectly hidden
+      // exactly that case from the list. RLS is now the single source of
+      // truth for what this query returns.
+      const query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,suspension_review_date').eq('org_id', org.id);
       const { data, error } = await query;
   if(!error && data) {
         setCases(data.map(mapCaseRow));

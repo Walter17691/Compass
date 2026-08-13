@@ -20,9 +20,18 @@ test('a probation review date entered on a case surfaces on the Calendar and lin
   // A date 5 days from today — comfortably inside computeDueSoon's
   // 14-day window, and reliably inside "this month" or "next month"
   // depending on when this runs, so the test navigates to whichever.
+  // targetIso is built from LOCAL date components, not toISOString()
+  // (which converts to UTC) — right after local midnight in any
+  // UTC-ahead timezone (e.g. BST), toISOString() rolls the date back a
+  // day while targetDay below stays on the local calendar day, so the
+  // two silently disagreed on which day to expect the deadline on. Same
+  // class of UTC/local mismatch this suite's own dsar.spec.js was
+  // already bitten by once (see tests/e2e/README.md), and the same fix
+  // pattern src/lib/dates.js's toISODateLocal already uses in app code.
   const target = new Date();
   target.setDate(target.getDate() + 5);
-  const targetIso = target.toISOString().split('T')[0];
+  const pad = n => String(n).padStart(2, "0");
+  const targetIso = `${target.getFullYear()}-${pad(target.getMonth()+1)}-${pad(target.getDate())}`;
   const targetDay = target.getDate();
   const crossesMonth = target.getMonth() !== new Date().getMonth();
 
