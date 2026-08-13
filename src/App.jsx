@@ -2688,8 +2688,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // specific evidence gap) and writes the result as a next_action
   // case_signal so it can be accepted/dismissed/marked-not-relevant and
   // explained later, rather than living only as a re-generated string.
-  const generateNextBestAction = async (cs) => {
-    setNextActionLoading(l=>({...l, [cs.id]:true}));
+  const generateNextBestAction = async (cs, silent=false) => {
+    if(!silent) setNextActionLoading(l=>({...l, [cs.id]:true}));
     try {
       const context = await buildHardenedCaseContext(cs);
       const floor = getNextStep(cs);
@@ -2716,8 +2716,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       });
       setCaseSignals(created);
       saveSignalToDB(created[created.length-1]);
-    } catch(e) { console.error("generateNextBestAction", e); showToast("Couldn't generate a recommendation — "+e.message, "error"); }
-    setNextActionLoading(l=>({...l, [cs.id]:false}));
+    } catch(e) { console.error("generateNextBestAction", e); if(!silent) showToast("Couldn't generate a recommendation — "+e.message, "error"); }
+    if(!silent) setNextActionLoading(l=>({...l, [cs.id]:false}));
   };
 
   // ── Unanswered Question Tracker ──
@@ -2725,8 +2725,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // but never follows up on — a person named but not interviewed, a claim
   // made but not checked. Only "still to explore" becomes persisted
   // unanswered_question signals; "covered" is informational only.
-  const generateUnansweredQuestions = async (cs) => {
-    setUnansweredLoading(l=>({...l, [cs.id]:true}));
+  const generateUnansweredQuestions = async (cs, silent=false) => {
+    if(!silent) setUnansweredLoading(l=>({...l, [cs.id]:true}));
     try {
       const context = await buildHardenedCaseContext(cs);
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
@@ -2751,8 +2751,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       });
       setCaseSignals(updated);
       updated.filter(s=>s.caseId===cs.id && s.type==="unanswered_question" && s.status==="open").forEach(saveSignalToDB);
-    } catch(e) { console.error("generateUnansweredQuestions", e); showToast("Couldn't generate unanswered questions — "+e.message, "error"); }
-    setUnansweredLoading(l=>({...l, [cs.id]:false}));
+    } catch(e) { console.error("generateUnansweredQuestions", e); if(!silent) showToast("Couldn't generate unanswered questions — "+e.message, "error"); }
+    if(!silent) setUnansweredLoading(l=>({...l, [cs.id]:false}));
   };
 
   // ── Contradiction & Inconsistency Detection ──
@@ -2929,11 +2929,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // belongs to which allegation. A suggestion becomes a real link only
   // through the existing linkEvidenceToAllegation()/saveCases() path when
   // the HR user accepts it — never applied automatically.
-  const generateEvidenceSuggestions = async (cs) => {
+  const generateEvidenceSuggestions = async (cs, silent=false) => {
     const caseAllegations = allegationsForCase(allegations, cs.id);
     const unlinked = (cs.evidence||[]).map((ev,index)=>({...ev,index})).filter(ev=>!ev.allegationId);
     if(!caseAllegations.length || !unlinked.length) { setEvidenceSuggestions(s=>({...s, [cs.id]:[]})); return; }
-    setEvidenceSuggestionsLoading(l=>({...l, [cs.id]:true}));
+    if(!silent) setEvidenceSuggestionsLoading(l=>({...l, [cs.id]:true}));
     try {
       const allegationList = caseAllegations.map(a=>`- id "${a.id}": ${a.title}${a.description?" — "+a.description:""}`).join("\n");
       const evidenceList = unlinked.map(ev=>`- index ${ev.index}: ${ev.name}${ev.type?" ("+ev.type+")":""}`).join("\n");
@@ -2949,8 +2949,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       const valid = (Array.isArray(parsed)?parsed:[]).filter(s=>unlinked.some(ev=>ev.index===s.evidenceIndex) && caseAllegations.some(a=>a.id===s.allegationId));
       setEvidenceSuggestions(s=>({...s, [cs.id]:valid}));
-    } catch(e) { console.error("generateEvidenceSuggestions", e); showToast("Couldn't generate evidence suggestions — "+e.message, "error"); }
-    setEvidenceSuggestionsLoading(l=>({...l, [cs.id]:false}));
+    } catch(e) { console.error("generateEvidenceSuggestions", e); if(!silent) showToast("Couldn't generate evidence suggestions — "+e.message, "error"); }
+    if(!silent) setEvidenceSuggestionsLoading(l=>({...l, [cs.id]:false}));
   };
 
   const acceptEvidenceSuggestion = (cs, suggestion) => {
@@ -3750,6 +3750,8 @@ Please produce:
         record:reviewOutput,
         signStatus:"pending"
       };
+      const targetCase = cases.find(x=>x.id===caseInfo._linkedCaseId);
+      const updatedTargetCase = targetCase ? {...targetCase, evidence:[...(targetCase.evidence||[]), witnessNote]} : null;
       saveCases(cases.map(x=>x.id===caseInfo._linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
       const targetId = caseInfo._linkedCaseId;
       setCaseInfo(p=>({...p,_linkedCaseId:null,_linkedCaseName:null}));
@@ -3758,6 +3760,13 @@ Please produce:
       setActiveCaseStage("investigation");
       setScreen(SCREENS.CASE_VIEW);
       showToast("Witness statement saved to case");
+      // M7 — a new witness statement can resolve an open question or
+      // introduce new evidence just as much as a regular meeting can.
+      if(updatedTargetCase) {
+        generateUnansweredQuestions(updatedTargetCase, true);
+        generateEvidenceSuggestions(updatedTargetCase, true);
+        generateNextBestAction(updatedTargetCase, true);
+      }
       return;
     }
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
@@ -3792,11 +3801,23 @@ Please produce:
     };
     const existing = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
     const caseId = existing ? existing.id : crypto.randomUUID();
+    const updatedCase = existing
+      ? {...existing, meetings:[...existing.meetings, meeting]}
+      : {id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting]};
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     } else {
-      saveCases([...cases,{id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting]}]);
+      saveCases([...cases,updatedCase]);
     }
+    // M7 — auto-refresh case intelligence so the rest of the case reflects
+    // this meeting without HR having to click each panel separately.
+    // Case Readiness and Chronology need no direct call here — both are
+    // pure derivations over exactly what these calls (plus
+    // generateInconsistencies, already silent-capable) just wrote.
+    generateInconsistencies(updatedCase, true);
+    generateUnansweredQuestions(updatedCase, true);
+    generateEvidenceSuggestions(updatedCase, true);
+    generateNextBestAction(updatedCase, true);
     audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`);
     showToast("Meeting saved to case file");
     // The button that triggers this is labelled "Save and go to case →" —
