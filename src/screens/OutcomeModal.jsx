@@ -1,6 +1,17 @@
+import { approvalActionForOutcome, approvalActionLabel } from '../lib/approvals';
+
 const DISMISSAL_OUTCOMES = ["Dismissal with notice", "Summary dismissal (gross misconduct)"];
 
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, startOffboarding }) {
+// Process Intelligence (P9) — issuing the outcome itself is unchanged
+// (case saved, letter drafted, offboarding started where relevant); for
+// the spec's own approval-gated outcome types this ALSO opens a visible,
+// trackable approval request (requestHrReview, generalized beyond its
+// original single "record" step) so the decision shows as "Awaiting
+// approval" until someone with sign-off records a decision — advisory
+// tracking, not yet a hard block on sending, matching this whole
+// codebase's established never-block-HR posture (M8/M9's own "advisory
+// only" precedent).
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, startOffboarding, requestHrReview }) {
   const cs = cases.find(x=>x.id===activeCaseId);
   return (
     <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -28,9 +39,14 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
           <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Notes <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
           <textarea value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Any additional notes…" rows={3} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
         </div>
-        <div style={{background:"#FFF8F0",border:"1px solid #E8622A33",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:"#E8622A"}}>
+        <div style={{background:"#FFF8F0",border:"1px solid #E8622A33",borderRadius:8,padding:"10px 14px",marginBottom:outcomeType&&approvalActionForOutcome(outcomeType)?10:20,fontSize:12,color:"#E8622A"}}>
           Issuing this outcome starts the employee's 5 working day appeal window (ACAS Code).
         </div>
+        {outcomeType&&approvalActionForOutcome(outcomeType)&&(
+          <div style={{background:"#F5F3FF",border:"1px solid #D4C9F5",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:"#5B3FD4"}}>
+            {approvalActionLabel(approvalActionForOutcome(outcomeType))} requires sign-off — this will also open an approval request, visible on the case's Overview tab.
+          </div>
+        )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
           <button disabled={!outcomeType} onClick={()=>{
@@ -39,7 +55,9 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
             const employeeName = cs?.employeeName;
             const employeeManager = cs?.manager;
             saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));
-            setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast("Outcome recorded");handleLetter("outcome");
+            const approvalAction = approvalActionForOutcome(outcomeType);
+            if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
+            setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");handleLetter("outcome");
             if(wasDismissal) startOffboarding({name:employeeName, manager:employeeManager, reason:"dismissal"});
           }} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
         </div>

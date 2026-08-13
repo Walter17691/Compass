@@ -16,10 +16,10 @@ const FK_VIOLATION = "23503";
 const RLS_VIOLATION = "42501";
 
 export async function withFkRetry(insertFn, { delayMs = 1500 } = {}) {
-  const { error } = await insertFn();
-  if (error?.code === FK_VIOLATION || error?.code === RLS_VIOLATION) {
+  const result = await insertFn();
+  if (result.error?.code === FK_VIOLATION || result.error?.code === RLS_VIOLATION) {
     await new Promise(r => setTimeout(r, delayMs));
     return insertFn();
   }
-  return { error };
+  return result;
 }

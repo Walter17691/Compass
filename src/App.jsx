@@ -1082,11 +1082,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(data) setHrReviewRequests(data);
   };
 
-  const requestHrReview = async (step, caseId, meetingId, recordSnapshot) => {
+  // Process Intelligence (P9) — OutcomeModal calls this right after
+  // saveCases() for the case it's scoped to; that case save is itself
+  // fire-and-forget (saveCaseToDB), so this needs the same FK-race
+  // protection every other case-scoped write already has (withFkRetry).
+  // Not needed before P9 — the only prior call site (ReviewScreen's
+  // "Request HR review") always fires well after its case was already
+  // saved and settled.
+  // `announce` defaults to true for ReviewScreen's "Request HR review"
+  // button, which shows no toast of its own and relies on this one for
+  // feedback. OutcomeModal (P9) passes false since it already shows its
+  // own combined "Outcome recorded — approval requested" toast right
+  // after calling this — without this flag the two toasts (single-slot
+  // `toast` state) race and the generic one silently wins.
+  const requestHrReview = async (step, caseId, meetingId, recordSnapshot, announce=true) => {
     if(!org?.id) return;
     const cs = cases.find(x=>x.id===caseId);
     const meeting = cs?.meetings.find(m=>m.id===meetingId);
-    const { data, error } = await supabase.from('hr_review_requests').insert({
+    const { data, error } = await withFkRetry(() => supabase.from('hr_review_requests').insert({
       org_id: org.id,
       case_id: caseId,
       meeting_id: meetingId,
@@ -1097,10 +1110,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       meeting_type: meeting?.type||meetingType?.label,
       record_snapshot: recordSnapshot||reviewOutput,
       status: 'pending'
-    }).select().single();
+    }).select().single());
     if(data) {
       setHrReviewRequests(r=>[data,...r]);
-      showToast("HR review requested");
+      if(announce) showToast("HR review requested");
     } else {
       console.error("requestHrReview", error);
       showToast("Couldn't request HR review — "+error?.message, "error");
@@ -5486,6 +5499,8 @@ Please produce:
           requestOverrideReason={requestOverrideReason}
           requestPolicyDeviationReason={requestPolicyDeviationReason}
           assignCaseRole={assignCaseRole}
+          hrReviewRequests={hrReviewRequests}
+          respondToReview={respondToReview}
         />
       )}
 {/* ══ INTAKE ══ */}
@@ -5876,6 +5891,7 @@ Please produce:
           showToast={showToast}
           handleLetter={handleLetter}
           startOffboarding={startOffboarding}
+          requestHrReview={requestHrReview}
         />
       )}
       </div>
