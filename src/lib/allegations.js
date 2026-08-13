@@ -55,6 +55,8 @@ export function addAllegation(allegations, caseId, fields) {
     status: "unreviewed",
     employeeResponse: "",
     witnessEvidence: "",
+    investigatorFinding: "",
+    outstandingUncertainty: "",
     decisionReasoning: "",
     decidedBy: null,
     decidedAt: null,

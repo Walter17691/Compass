@@ -2218,6 +2218,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         id:r.id, caseId:r.case_id, title:r.title, description:r.description||"",
         period:r.period||"", peopleInvolved:r.people_involved||"", status:r.status,
         employeeResponse:r.employee_response||"", witnessEvidence:r.witness_evidence||"",
+        investigatorFinding:r.investigator_finding||"", outstandingUncertainty:r.outstanding_uncertainty||"",
         decisionReasoning:r.decision_reasoning||"", decidedBy:r.decided_by||null, decidedAt:r.decided_at||null,
         appealOutcome:r.appeal_outcome||null, appealReasoning:r.appeal_reasoning||"",
         appealDecidedBy:r.appeal_decided_by||null, appealDecidedAt:r.appeal_decided_at||null,
@@ -2234,6 +2235,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       period: allegation.period||null, people_involved: allegation.peopleInvolved||null,
       status: allegation.status||'unreviewed', employee_response: allegation.employeeResponse||null,
       witness_evidence: allegation.witnessEvidence||null, created_by: allegation.createdBy||user?.id||null,
+      investigator_finding: allegation.investigatorFinding||null, outstanding_uncertainty: allegation.outstandingUncertainty||null,
       decision_reasoning: allegation.decisionReasoning||null, decided_by: allegation.decidedBy||null,
       decided_at: allegation.decidedAt||null,
       appeal_outcome: allegation.appealOutcome||null, appeal_reasoning: allegation.appealReasoning||null,
@@ -5501,6 +5503,7 @@ Please produce:
           assignCaseRole={assignCaseRole}
           hrReviewRequests={hrReviewRequests}
           respondToReview={respondToReview}
+          policies={policies}
         />
       )}
 {/* ══ INTAKE ══ */}

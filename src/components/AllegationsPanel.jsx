@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus, APPEAL_OUTCOMES, appealOutcomeMeta } from '../lib/allegations';
 import { computeOutcomeDistribution } from '../lib/outcomeConsistency';
 import { appealMeetingsForCase } from '../lib/appealReview';
+import { allegationPolicyClauseRef } from '../lib/guardrails';
 import { EvidenceMatrixPanel } from './EvidenceMatrixPanel';
 import { SignalCard } from './SignalCard';
+import { PolicyCitation } from './PolicyCitation';
 
 const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
 const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom:4 };
@@ -14,7 +16,7 @@ const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom
 // piece of evidence (support for/against one). Evidence stays on
 // cs.evidence; linking it here just tags an existing item with which
 // allegation it speaks to and whether it supports or contradicts it.
-export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome }) {
+export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -114,11 +116,29 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   {a.description && <div style={{fontSize:13,color:"#1A1535",marginBottom:12}}>{a.description}</div>}
                   {a.peopleInvolved && <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>People involved: {a.peopleInvolved}</div>}
 
+                  {(()=>{
+                    const policyRef = allegationPolicyClauseRef(a, policies);
+                    return policyRef && (
+                      <div style={{marginBottom:12}}>
+                        <PolicyCitation policyName={policyRef.label} clauseHeading={policyRef.clauseHeading} clauseText={policyRef.clauseText} />
+                      </div>
+                    );
+                  })()}
+
                   <div style={{marginBottom:12}}>
                     <label style={labelStyle}>Status</label>
                     <select value={a.status} onChange={e=>changeAllegationStatus(a.id, e.target.value)} style={{...inputStyle,width:"auto"}}>
                       {ALLEGATION_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
+                  </div>
+
+                  <div style={{marginBottom:12}}>
+                    <label style={labelStyle}>Investigator's finding — distinct from the decision-maker's reasoning below</label>
+                    <textarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.investigatorFinding||""} placeholder="What did the investigation itself conclude, before any hearing?" onChange={e=>patchAllegation(a.id, {investigatorFinding:e.target.value})} onBlur={e=>patchAllegation(a.id,{investigatorFinding:e.target.value})} />
+                  </div>
+                  <div style={{marginBottom:12}}>
+                    <label style={labelStyle}>Outstanding uncertainty</label>
+                    <textarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.outstandingUncertainty||""} placeholder="Anything still unclear or unresolved about this allegation?" onChange={e=>patchAllegation(a.id, {outstandingUncertainty:e.target.value})} onBlur={e=>patchAllegation(a.id,{outstandingUncertainty:e.target.value})} />
                   </div>
 
                   {outcomeDistribution.applicable && (

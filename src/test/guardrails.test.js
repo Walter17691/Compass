@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeGuardrailChecks } from '../lib/guardrails';
+import { computeGuardrailChecks, allegationPolicyClauseRef } from '../lib/guardrails';
 
 const baseCase = { id: 'case1', meetings: [], evidence: [] };
 
@@ -223,6 +223,59 @@ describe('computeGuardrailChecks — decision reasoning missing (Phase 16)', () 
     const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'evidence_gathering', decisionReasoning: '' }];
     const checks = computeGuardrailChecks(baseCase, allegations);
     expect(checks.find(c => c.title.includes('little or no reasoning'))).toBeUndefined();
+  });
+});
+
+describe('computeGuardrailChecks — reasoning ignores employee response (P10)', () => {
+  it('flags a finding whose reasoning shows no sign of addressing the employee response', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'substantiated', employeeResponse: 'I was attending a medical appointment and forgot to notify my manager beforehand.', decisionReasoning: 'CCTV footage confirms the employee left the site at 14:32 without authorisation.' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    const flagged = checks.find(c => c.title === "A finding's reasoning may not address the employee's response");
+    expect(flagged).toBeTruthy();
+    expect(flagged.sourceRefs).toEqual([{ kind: 'allegation', id: 'a1', label: 'Unauthorised absence' }]);
+  });
+
+  it('does not flag when the reasoning references words from the employee response', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'not_substantiated', employeeResponse: 'I was attending a medical appointment and forgot to notify my manager beforehand.', decisionReasoning: 'The employee explained they were at a medical appointment; this is corroborated by a GP letter, so the allegation is not substantiated.' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes("may not address"))).toBeUndefined();
+  });
+
+  it('does not flag when there is no employee response recorded (a different check covers that gap)', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'substantiated', employeeResponse: '', decisionReasoning: 'CCTV footage confirms the employee left the site at 14:32 without authorisation.' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes("may not address"))).toBeUndefined();
+  });
+
+  it('does not flag when the reasoning is too thin (a different check covers that gap)', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'substantiated', employeeResponse: 'I was attending a medical appointment.', decisionReasoning: 'No evidence.' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes("may not address"))).toBeUndefined();
+  });
+
+  it('does not flag an allegation still in a procedural (non-finding) status', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', status: 'evidence_gathering', employeeResponse: 'I was attending a medical appointment.', decisionReasoning: 'CCTV footage confirms the employee left the site without authorisation.' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes("may not address"))).toBeUndefined();
+  });
+});
+
+describe('allegationPolicyClauseRef (P10)', () => {
+  it('finds a policy clause matching a significant word from the allegation title', () => {
+    const allegation = { title: 'Unauthorised absence on 5 August', description: '' };
+    const policies = [{ id: 'p1', name: 'Attendance Policy', clauses: [{ heading: 'Unauthorised absence', text: 'Employees must notify their manager of any absence.' }] }];
+    const ref = allegationPolicyClauseRef(allegation, policies);
+    expect(ref).toEqual({ kind: 'policy', id: 'p1', label: 'Attendance Policy', clauseHeading: 'Unauthorised absence', clauseText: 'Employees must notify their manager of any absence.' });
+  });
+
+  it('returns null when no clause matches', () => {
+    const allegation = { title: 'Unauthorised absence', description: '' };
+    const policies = [{ id: 'p1', name: 'Expenses Policy', clauses: [{ heading: 'Travel claims', text: 'Submit receipts within 30 days.' }] }];
+    expect(allegationPolicyClauseRef(allegation, policies)).toBeNull();
+  });
+
+  it('returns null when there are no policies', () => {
+    expect(allegationPolicyClauseRef({ title: 'Unauthorised absence', description: '' }, [])).toBeNull();
   });
 });
 

@@ -22,7 +22,7 @@ import { currentRoleHolder } from './caseRoles';
 // of the given keywords, as a ready-to-render sourceRef, or null if
 // nothing indexed matches (no policies uploaded yet, or none relevant —
 // both real, common, non-error states).
-function findPolicyClauseRef(policies, keywords) {
+export function findPolicyClauseRef(policies, keywords) {
   for (const policy of policies || []) {
     for (const clause of policy.clauses || []) {
       const haystack = (clause.heading + " " + clause.text).toLowerCase();
@@ -32,6 +32,23 @@ function findPolicyClauseRef(policies, keywords) {
     }
   }
   return null;
+}
+
+const STOPWORDS = new Set(["the","a","an","and","or","but","of","to","in","on","at","for","with","by","that","this","was","were","is","are","it","as","not","did","does","had","have","has","been","which","what","when","then","from","into","their","them","they","some","were","been","being"]);
+
+function significantWords(text) {
+  return (text || "").toLowerCase().match(/[a-z']+/g)?.filter(w => w.length > 3 && !STOPWORDS.has(w)) || [];
+}
+
+// Process Intelligence (P10) — the Decision-Maker Workspace's per-
+// allegation policy link. Every other citation in this phase (P4-P6)
+// searches with a fixed, concern-specific keyword list; here what's
+// relevant genuinely varies allegation to allegation, so the keywords
+// come from the allegation's own title/description instead.
+export function allegationPolicyClauseRef(allegation, policies) {
+  const words = significantWords((allegation?.title || "") + " " + (allegation?.description || ""));
+  if (!words.length) return null;
+  return findPolicyClauseRef(policies, words);
 }
 
 function parseFlexDate(str) {
@@ -150,6 +167,30 @@ function checkDecisionReasoningMissing(cs, caseAllegations) {
   };
 }
 
+// Process Intelligence (P10) — checkDecisionReasoningMissing above only
+// catches reasoning that's absent or too short; a finding can carry
+// plenty of reasoning that never actually engages with what the
+// employee said in response. This is a lexical-overlap heuristic, not
+// real comprehension — it can't confirm the reasoning DOES address the
+// response, only flag when it shows no sign of having done so, worth a
+// second look before the case progresses.
+function checkReasoningIgnoresEmployeeResponse(cs, caseAllegations) {
+  const gaps = caseAllegations.filter(a => {
+    if (!isFindingStatus(a.status)) return false;
+    const responseWords = significantWords(a.employeeResponse);
+    if (!responseWords.length) return false; // checkAllegationResponseOpportunity covers "no response at all"
+    const reasoning = (a.decisionReasoning || "").toLowerCase();
+    if (reasoning.trim().length < MIN_REASONING_LENGTH) return false; // checkDecisionReasoningMissing covers this
+    return !responseWords.some(w => reasoning.includes(w));
+  });
+  if (!gaps.length) return null;
+  return {
+    title: "A finding's reasoning may not address the employee's response",
+    reasoning: `${gaps.length === 1 ? "One finding" : gaps.length + " findings"} — ${gaps.map(a => a.title).join(", ")} — ${gaps.length === 1 ? "has" : "have"} a recorded employee response, but the reasoning doesn't appear to reference any of it. Worth checking it genuinely engages with what the employee said, not just the evidence against them.`,
+    sourceRefs: gaps.map(a => ({ kind: "allegation", id: a.id, label: a.title })),
+  };
+}
+
 // Role Separation (P8) — natural justice, one stage later than
 // checkChairIndependence above: the person deciding an appeal shouldn't
 // be the same person who made the original decision being appealed.
@@ -180,6 +221,7 @@ export function computeGuardrailChecks(cs, allegations, policies, caseAccess, or
     checkAllegationResponseOpportunity(cs, caseAllegations, policies),
     checkWitnessEvidenceGaps(cs, caseAllegations),
     checkDecisionReasoningMissing(cs, caseAllegations),
+    checkReasoningIgnoresEmployeeResponse(cs, caseAllegations),
     checkAppealManagerConflict(cs, caseAccess, orgMembers),
   ].filter(Boolean);
 }

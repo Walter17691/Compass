@@ -73,6 +73,8 @@ export function EvidenceMatrixPanel({ cs, allegations, suggestions, suggestionsL
               <th style={headStyle}>Context</th>
               <th style={headStyle}>Employee response</th>
               <th style={headStyle}>Witness evidence</th>
+              <th style={headStyle}>Investigator's finding</th>
+              <th style={headStyle}>Outstanding uncertainty</th>
               <th style={headStyle}>Status</th>
             </tr>
           </thead>
@@ -95,6 +97,8 @@ export function EvidenceMatrixPanel({ cs, allegations, suggestions, suggestionsL
                   <td style={{...cellStyle,minWidth:140}}>{context.map((ev,i)=><EvidenceChip key={i} ev={ev} onOpen={onOpenEvidence}/>)}</td>
                   <td style={{...cellStyle,minWidth:160,color:a.employeeResponse?"#1A1535":"#9B9098"}}>{a.employeeResponse||"Not recorded"}</td>
                   <td style={{...cellStyle,minWidth:160,color:a.witnessEvidence?"#1A1535":"#9B9098"}}>{a.witnessEvidence||"Not recorded"}</td>
+                  <td style={{...cellStyle,minWidth:160,color:a.investigatorFinding?"#1A1535":"#9B9098"}}>{a.investigatorFinding||"Not recorded"}</td>
+                  <td style={{...cellStyle,minWidth:160,color:a.outstandingUncertainty?"#C84B2F":"#9B9098"}}>{a.outstandingUncertainty||"None recorded"}</td>
                   <td style={cellStyle}><span style={{fontSize:10,fontWeight:600,color:statusMeta.color,background:statusMeta.bg,borderRadius:4,padding:"2px 8px",whiteSpace:"nowrap"}}>{statusMeta.label}</span>{missing&&<div style={{fontSize:10,color:"#C84B2F",marginTop:3}}>No evidence linked</div>}</td>
                 </tr>
               );

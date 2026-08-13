@@ -18,6 +18,11 @@ describe('addAllegation', () => {
     expect(addAllegation([], 'case1', { title: '   ' })).toEqual([]);
   });
 
+  it('defaults the investigator-finding and outstanding-uncertainty fields to empty (P10)', () => {
+    const result = addAllegation([], 'case1', { title: 'Late to shift repeatedly' });
+    expect(result[0]).toMatchObject({ investigatorFinding: '', outstandingUncertainty: '' });
+  });
+
   it('does not mutate the input array', () => {
     const original = [];
     addAllegation(original, 'case1', { title: 'x' });
