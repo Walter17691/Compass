@@ -23,6 +23,7 @@ import {
   setPrepQuestionStatus as setPrepQuestionStatusHelper,
 } from './lib/prepQuestions';
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning } from './lib/appealReview';
+import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -1442,6 +1443,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [timelineRelevanceLoading, setTimelineRelevanceLoading] = useState({});
   const [inconsistencyLoading, setInconsistencyLoading] = useState({});
   const [appealReviewLoading, setAppealReviewLoading] = useState({});
+  // Process Intelligence (P14) — transient, regenerate-on-demand, keyed
+  // by case id, same "not persisted to Supabase" pattern as caseOverview:
+  // this is an on-demand comparison, not a record that needs to survive
+  // a reload.
+  const [consistencyReview, setConsistencyReview] = useState({});
+  const [consistencyReviewLoading, setConsistencyReviewLoading] = useState({});
 
   // ── Concern referrals (manager self-service — any org member can raise
   // one, only HR triages) — see lib/concernReferrals.js ──
@@ -2993,6 +3000,47 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       setCaseSignals(updated);
     } catch(e) { console.error("generateAppealReview", e); showToast("Couldn't generate the appeal review — "+e.message, "error"); }
     setAppealReviewLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  // Process Intelligence (P14, §11+§12) — an AI-written companion to
+  // computeSanctionDistribution/comparableCaseSummaries' own deterministic
+  // tallies (lib/outcomeConsistency.js): why the comparable cases are
+  // actually comparable, and what genuinely distinguishes this one.
+  // comparableCaseSummaries already strips employee names before this is
+  // ever called, so there is nothing identifying to leak into the
+  // prompt — but the model is still told explicitly never to reason
+  // about protected characteristics, since that's a real instruction
+  // this specific prompt needs even though the data itself carries no
+  // such field (same "explicit, not just incidental" guard the module's
+  // own header comment calls for). Never persisted (see
+  // consistencyReview's own declaration) — regenerated on demand, same
+  // as generateCaseOverview.
+  const generateConsistencyReview = async (cs) => {
+    const comparable = comparableCaseSummaries(cases, allegations, cs.caseType, cs.id);
+    if(comparable.length < 3) { showToast("Not enough closed cases of this type yet for a consistency review", "error"); return; }
+    setConsistencyReviewLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const currentAllegs = allegationsForCase(allegations, cs.id);
+      const currentSummary = currentAllegs.map(a=>`- ${a.title}: ${allegationStatusMeta(a.status).label}${a.decisionReasoning?" — "+a.decisionReasoning.slice(0,220):""}`).join("\n") || "No allegations recorded yet";
+      const comparableContext = comparable.map((c,i)=>`Case ${i+1} — outcome: ${c.outcome||"not recorded"}\n`+c.findings.map(f=>`  - ${f.label}${f.reasoningExcerpt?": "+f.reasoningExcerpt:""}`).join("\n")).join("\n\n");
+
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:1200,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot comparing a case against anonymised closed cases of the same type to help HR reason about consistency. You are given no employee names, and you must never speculate about, infer, or reason based on any employee's protected characteristics (age, sex, race, disability, religion or belief, sexual orientation, gender reassignment, marriage/civil partnership, pregnancy/maternity) — none of that data is provided to you, and none should be assumed. Compare on procedural/factual grounds only: allegation type, seriousness of the conduct, whether it's a first offence or part of a pattern (only if the record actually says so), and impact. Never state something as an established fact the record doesn't support, and never recommend what outcome this case should receive — describe similarities and differences only; the decision is HR's alone. Respond ONLY with valid JSON, no other text: {\"similarityReasoning\":\"why these comparable cases are relevant to this one\",\"distinguishingFeatures\":\"how this case differs from the comparable set, or an empty string if nothing distinguishes it\"}",
+        messages:[{role:"user", content:"THIS CASE'S ALLEGATIONS:\n"+currentSummary+"\n\nCOMPARABLE CLOSED CASES (same case type, anonymised):\n"+comparableContext}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      if(parsed.similarityReasoning || parsed.distinguishingFeatures) {
+        setConsistencyReview(r=>({...r, [cs.id]: parsed}));
+      } else {
+        showToast("Couldn't generate a consistency review", "error");
+      }
+    } catch(e) { console.error("generateConsistencyReview", e); showToast("Couldn't generate a consistency review — "+e.message, "error"); }
+    setConsistencyReviewLoading(l=>({...l, [cs.id]:false}));
   };
 
   // ── Procedural Guardrails ──
@@ -5538,6 +5586,9 @@ Please produce:
           hrReviewRequests={hrReviewRequests}
           respondToReview={respondToReview}
           policies={policies}
+          consistencyReview={consistencyReview}
+          consistencyReviewLoading={consistencyReviewLoading}
+          generateConsistencyReview={generateConsistencyReview}
         />
       )}
 {/* ══ INTAKE ══ */}

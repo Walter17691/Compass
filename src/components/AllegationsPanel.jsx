@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus, APPEAL_OUTCOMES, appealOutcomeMeta } from '../lib/allegations';
-import { computeOutcomeDistribution } from '../lib/outcomeConsistency';
+import { computeOutcomeDistribution, computeSanctionDistribution, comparableCaseSummaries } from '../lib/outcomeConsistency';
 import { appealMeetingsForCase } from '../lib/appealReview';
 import { allegationPolicyClauseRef } from '../lib/guardrails';
 import { EvidenceMatrixPanel } from './EvidenceMatrixPanel';
+import { ConsistencyPanel } from './ConsistencyPanel';
 import { AppealGroundCard } from './AppealGroundCard';
 import { PolicyCitation } from './PolicyCitation';
 
@@ -16,7 +17,7 @@ const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom
 // piece of evidence (support for/against one). Evidence stays on
 // cs.evidence; linking it here just tags an existing item with which
 // allegation it speaks to and whether it supports or contradicts it.
-export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies }) {
+export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -25,6 +26,11 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   // grouped by the case's own caseType, not per-allegation), so computed
   // once rather than inside the allegation .map() below.
   const outcomeDistribution = computeOutcomeDistribution(cases, allAllegations||allegations, cs.caseType, cs.id);
+  // Process Intelligence (P14) — same "case-level, computed once" note as
+  // outcomeDistribution above; ConsistencyPanel renders once per case,
+  // not per allegation.
+  const sanctionDistribution = computeSanctionDistribution(cases, cs.caseType, cs.id);
+  const comparableCases = comparableCaseSummaries(cases, allAllegations||allegations, cs.caseType, cs.id);
   // Phase 19 — the Appeal Workspace only appears once there's a real
   // appeal meeting record to compare against; before that, this is just
   // Phase 16's Decision Workspace with nothing appeal-specific to show.
@@ -66,6 +72,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   return (
     <>
       <EvidenceMatrixPanel cs={cs} allegations={allegations} suggestions={evidenceSuggestions} suggestionsLoading={evidenceSuggestionsLoading} onGenerateSuggestions={generateEvidenceSuggestions} onAcceptSuggestion={acceptEvidenceSuggestion} onRejectSuggestion={rejectEvidenceSuggestion} onOpenEvidence={openEvidence}/>
+      <ConsistencyPanel cs={cs} sanctionDistribution={sanctionDistribution} comparableCases={comparableCases} consistencyReview={consistencyReview} consistencyReviewLoading={consistencyReviewLoading} onGenerateReview={generateConsistencyReview}/>
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Allegations ({allegations.length})</div>

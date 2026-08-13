@@ -34,3 +34,46 @@ export function computeOutcomeDistribution(cases, allegations, caseType, exclude
 
   return { applicable: true, total: findings.length, distribution };
 }
+
+// Process Intelligence (P14, §11) — computeOutcomeDistribution above
+// buckets by allegation FINDING (substantiated/not substantiated/etc.);
+// this buckets the same closed, same-case-type population by the
+// SANCTION actually issued (cs.outcome — OutcomeModal's own dropdown
+// values), a genuinely different question ("once substantiated, what
+// sanction followed?"). Same MIN_SAMPLE_SIZE floor, same reasoning for
+// it: a distribution built on too few cases is either meaningless or
+// effectively identifying.
+export function computeSanctionDistribution(cases, caseType, excludeCaseId) {
+  if (!caseType) return { applicable: false, total: 0 };
+  const closed = (cases || []).filter(c => c.caseType === caseType && c.id !== excludeCaseId && getCaseStage(c) === "closed" && c.outcome);
+  if (closed.length < MIN_SAMPLE_SIZE) return { applicable: false, total: closed.length };
+
+  const tally = {};
+  closed.forEach(c => { tally[c.outcome] = (tally[c.outcome] || 0) + 1; });
+  const distribution = Object.entries(tally)
+    .map(([outcome, count]) => ({ outcome, count, pct: Math.round((count / closed.length) * 100) }))
+    .sort((a, b) => b.count - a.count);
+
+  return { applicable: true, total: closed.length, distribution };
+}
+
+// Process Intelligence (P14, §12) — the anonymised individual case
+// summaries the spec asks HR be able to open: case type + finding(s) +
+// a reasoning excerpt, and nothing else — no employeeName, no case id
+// exposed beyond a stable React key. Same hard constraint as the module
+// header: never group or describe by anything protected-characteristic-
+// adjacent. The schema holds no such field, so there's nothing here to
+// accidentally carry over — this function's own shape is the guard.
+export function comparableCaseSummaries(cases, allegations, caseType, excludeCaseId) {
+  if (!caseType) return [];
+  const closedCases = (cases || []).filter(c => c.caseType === caseType && c.id !== excludeCaseId && getCaseStage(c) === "closed");
+  return closedCases.map(c => {
+    const findings = (allegations || []).filter(a => a.caseId === c.id && isFindingStatus(a.status));
+    if (!findings.length) return null;
+    return {
+      key: c.id,
+      outcome: c.outcome || null,
+      findings: findings.map(a => ({ status: a.status, label: allegationStatusMeta(a.status).label, reasoningExcerpt: (a.decisionReasoning || "").slice(0, 220) })),
+    };
+  }).filter(Boolean);
+}
