@@ -104,6 +104,25 @@ export function getCaseStage(cs) {
   return isGrievanceCase(cs) ? inferGrievanceStage(cs) : inferDisciplinaryStage(cs);
 }
 
+// Process Intelligence (P17, §18) — the "Potential Bottlenecks" panel
+// needs to know how long a case has sat in its current stage, and
+// nothing tracked that before now (P2's own note: cs.stage is set at
+// several explicit transition points, but none of them stamped a
+// timestamp). Rather than touching every one of those call sites
+// individually, this is called once, centrally, from saveCases — the
+// single place every case write already passes through — comparing
+// computed stage (not just the raw cs.stage field, so heuristically-
+// inferred transitions get tracked too, not only explicit ones) before
+// and after. Stored inside the existing timelineOverrides JSONB column
+// (no migration needed) rather than a new one.
+export function withStageTransitionStamp(cs, prevCs) {
+  const stage = getCaseStage(cs);
+  const prevStage = prevCs ? getCaseStage(prevCs) : null;
+  if(stage === prevStage) return cs;
+  const stageEnteredAt = { ...(cs.timelineOverrides?.stageEnteredAt || {}), [stage]: new Date().toISOString() };
+  return { ...cs, timelineOverrides: { ...(cs.timelineOverrides || {}), stageEnteredAt } };
+}
+
 // "Currently" risk, not "ever was" — the most recent meeting that carries a
 // rating, not just any meeting that ever did. A case rated HIGH early on
 // that later resolved down to LOW should read as LOW here; the org-wide

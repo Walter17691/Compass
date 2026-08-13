@@ -9,7 +9,7 @@ import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeChecklistTask, reassignChecklistTaskOwner, updateChecklistInstanceFields } from './lib/checklistTasks';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
-import { getCaseStage } from './lib/caseStage';
+import { getCaseStage, withStageTransitionStamp } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
 import {
@@ -1499,13 +1499,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   useEffect(() => { if(feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight; }, [transcript]);
 
   // ── Persistence helpers ──
-  const saveCases = (u, changedId=null) => { 
-    setCases(u); 
-    lsSet("compass_cases", u);
+  const saveCases = (u, changedId=null) => {
+    // P17 — stamps timelineOverrides.stageEnteredAt whenever a case's
+    // computed stage actually changes (withStageTransitionStamp returns
+    // the exact same reference otherwise), so every case write passing
+    // through this one central function gets the "Potential Bottlenecks"
+    // panel's own time-in-stage tracking for free, regardless of which
+    // of the many call sites that set cs.stage (or just change data a
+    // heuristic infers a new stage from) triggered it.
+    const prevById = new Map(cases.map(cs => [cs.id, cs]));
+    const stamped = u.map(cs => withStageTransitionStamp(cs, prevById.get(cs.id) || null));
+    setCases(stamped);
+    lsSet("compass_cases", stamped);
     if(org?.id) {
       if(changedId) {
         // Only sync the changed case
-        const changed = u.find(x=>x.id===changedId);
+        const changed = stamped.find(x=>x.id===changedId);
         if(changed) saveCaseToDB(changed);
         else deleteCaseFromDB(changedId);
       } else {
@@ -1522,9 +1531,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         // genuine concurrent edit to an unrelated case, or itself fail
         // and trigger a full loadCasesFromDB() that discards whatever
         // this action just changed.
-        const prevById = new Map(cases.map(cs => [cs.id, cs]));
-        u.forEach(cs => { if(cs !== prevById.get(cs.id)) saveCaseToDB(cs); });
-        cases.forEach(cs => { if(!u.find(x=>x.id===cs.id)) deleteCaseFromDB(cs.id); });
+        stamped.forEach(cs => { if(cs !== prevById.get(cs.id)) saveCaseToDB(cs); });
+        cases.forEach(cs => { if(!stamped.find(x=>x.id===cs.id)) deleteCaseFromDB(cs.id); });
       }
     }
   };
@@ -5404,6 +5412,7 @@ Please produce:
           caseSignals={caseSignals}
           concernReferrals={concernReferrals}
           isHR={isHR}
+          hrReviewRequests={hrReviewRequests}
         />
       )}
 

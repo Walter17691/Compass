@@ -2,6 +2,8 @@ import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 import { openReferrals } from '../lib/concernReferrals';
 import { topOpenSignalsOrgWide, signalTypeMeta } from '../lib/caseSignals';
+import { requiresApproval } from '../lib/approvals';
+import { computeStageBottlenecks } from '../lib/processDashboard';
 
 // Phase 20 — a case with no activity in this many days surfaces in the
 // "Needs attention" strip as stale, separate from actions/overdue items
@@ -13,7 +15,7 @@ const STALE_DAYS = 14;
 // render its own separate copy here, which had drifted out of sync with
 // the shared one (different height, padding, logo size) and caused a
 // visible layout jump on every navigation away from Home.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, setSettingsSection, caseSignals=[], concernReferrals=[], isHR }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, setSettingsSection, caseSignals=[], concernReferrals=[], isHR, hrReviewRequests=[] }) {
   const freshMeetingSetup = () => ({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
@@ -56,7 +58,15 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
             return (Date.now()-new Date(lastUpdated))>STALE_DAYS*24*60*60*1000;
           });
           const openReferralsCount=isHR?openReferrals(concernReferrals).length:0;
-          if(actions.length===0&&pendingSigs===0&&overdue.length===0&&highRisk.length===0&&appealsOutstanding.length===0&&staleCases.length===0&&openReferralsCount===0) return null;
+          // Process Intelligence (P17, §18) — each of these four reuses an
+          // existing computed source (P6's process_risk signals, P16's own
+          // dueSoon appeal/investigation categories, P9's approval requests)
+          // rather than any new deterministic logic of its own.
+          const proceduralWarnings=caseSignals.filter(s=>s.type==="process_risk"&&s.status==="open").length;
+          const appealsNearingDeadline=dueSoon.filter(d=>d.category==="appeal").length;
+          const outcomesAwaitingApproval=hrReviewRequests.filter(r=>r.status==="pending"&&requiresApproval(r.step)).length;
+          const investigationsOverrunning=dueSoon.filter(d=>d.category==="investigation").length;
+          if(actions.length===0&&pendingSigs===0&&overdue.length===0&&highRisk.length===0&&appealsOutstanding.length===0&&staleCases.length===0&&openReferralsCount===0&&proceduralWarnings===0&&appealsNearingDeadline===0&&outcomesAwaitingApproval===0&&investigationsOverrunning===0) return null;
           return (
             <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A44",borderRadius:12,padding:"12px 18px",marginBottom:24,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#E8622A",letterSpacing:"0.5px",textTransform:"uppercase",flexShrink:0}}>Needs attention</div>
@@ -94,6 +104,26 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                 <button onClick={()=>setScreen(SCREENS.CONCERNS)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
                   {openReferralsCount} referral{openReferralsCount!==1?"s":""} awaiting triage
                 </button>
+              )}
+              {proceduralWarnings>0&&(
+                <span title="Open procedural guardrail warnings across all cases" style={{fontSize:12,color:"#B8850F",background:"#FFF6E0",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
+                  {proceduralWarnings} procedural warning{proceduralWarnings!==1?"s":""}
+                </span>
+              )}
+              {appealsNearingDeadline>0&&(
+                <span title="Appeals with a deadline coming up" style={{fontSize:12,color:"#5B3FD4",background:"#F5F3FF",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
+                  {appealsNearingDeadline} appeal{appealsNearingDeadline!==1?"s":""} nearing deadline
+                </span>
+              )}
+              {outcomesAwaitingApproval>0&&(
+                <span title="Outcomes prepared and awaiting approval sign-off" style={{fontSize:12,color:"#1A7A4A",background:"#EAF7EE",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
+                  {outcomesAwaitingApproval} outcome{outcomesAwaitingApproval!==1?"s":""} awaiting approval
+                </span>
+              )}
+              {investigationsOverrunning>0&&(
+                <span title="Investigations running longer than the target timescale" style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
+                  {investigationsOverrunning} investigation{investigationsOverrunning!==1?"s":""} overrunning
+                </span>
               )}
             </div>
           );
@@ -325,6 +355,36 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                       );
                     })}
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* Potential Bottlenecks (P17, §18) — average time-in-stage vs.
+                a single advisory target, using P17's own stage-transition
+                tracking (withStageTransitionStamp, hooked into saveCases).
+                Same card styling as Compass Recommendations/Quick links
+                above/below it. */}
+            {(()=>{
+              const bottlenecks=computeStageBottlenecks(cases);
+              if(bottlenecks.length===0) return null;
+              return (
+                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Running long</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Potential Bottlenecks</div>
+                  </div>
+                  <div style={{padding:"4px 0"}}>
+                    {bottlenecks.slice(0,5).map((b,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",borderBottom:i<Math.min(bottlenecks.length,5)-1?"1px solid #F5F1EA":"none"}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{b.processType} · {b.stage}</div>
+                          <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{b.caseCount} case{b.caseCount!==1?"s":""} · avg {b.avgDays}d (target {b.targetDays}d)</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{padding:"8px 18px",borderTop:"1px solid #F5F1EA",fontSize:10,color:"#9B9098"}}>Guideline only, not a statutory deadline.</div>
                 </div>
               );
             })()}

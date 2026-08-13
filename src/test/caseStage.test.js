@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCurrentRisk, getCaseStage, isGrievanceCase } from '../lib/caseStage.js';
+import { getCurrentRisk, getCaseStage, isGrievanceCase, withStageTransitionStamp } from '../lib/caseStage.js';
 
 describe('getCaseStage', () => {
   it('an explicitly-tracked stage wins over the signed+outcome heuristic', () => {
@@ -186,5 +186,50 @@ describe('getCurrentRisk', () => {
       ],
     };
     expect(getCurrentRisk(cs)).toBe('HIGH');
+  });
+});
+
+describe('withStageTransitionStamp (P17)', () => {
+  it('stamps the new stage with a timestamp when the computed stage changes', () => {
+    const prev = { id: 'c1', stage: 'investigation', meetings: [] };
+    const next = { id: 'c1', stage: 'disciplinary', meetings: [] };
+    const result = withStageTransitionStamp(next, prev);
+    expect(result.timelineOverrides.stageEnteredAt.disciplinary).toBeTruthy();
+    expect(new Date(result.timelineOverrides.stageEnteredAt.disciplinary).toString()).not.toBe('Invalid Date');
+  });
+
+  it('returns the same object reference when the computed stage has not changed', () => {
+    const prev = { id: 'c1', stage: 'investigation', meetings: [] };
+    const next = { id: 'c1', stage: 'investigation', meetings: [], description: 'updated' };
+    expect(withStageTransitionStamp(next, prev)).toBe(next);
+  });
+
+  it('treats a heuristically-inferred stage change as a real transition, not just an explicit cs.stage change', () => {
+    const prev = { id: 'c1', caseType: 'misconduct', meetings: [] }; // no explicit stage -> inferred "intake" style
+    const next = { id: 'c1', caseType: 'misconduct', meetings: [{ type: 'Investigation', date: '01/08/2026' }] }; // now infers "investigation"
+    const result = withStageTransitionStamp(next, prev);
+    expect(result.timelineOverrides.stageEnteredAt.investigation).toBeTruthy();
+  });
+
+  it('preserves existing timelineOverrides content and existing stageEnteredAt entries', () => {
+    const prev = { id: 'c1', stage: 'investigation', meetings: [], timelineOverrides: { excluded: ['x'], stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } };
+    const next = { id: 'c1', stage: 'disciplinary', meetings: [], timelineOverrides: { excluded: ['x'], stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } };
+    const result = withStageTransitionStamp(next, prev);
+    expect(result.timelineOverrides.excluded).toEqual(['x']);
+    expect(result.timelineOverrides.stageEnteredAt.investigation).toBe('2026-08-01T00:00:00.000Z');
+    expect(result.timelineOverrides.stageEnteredAt.disciplinary).toBeTruthy();
+  });
+
+  it('treats a brand-new case (no prevCs) as a transition into its initial stage', () => {
+    const next = { id: 'c1', stage: 'investigation', meetings: [] };
+    const result = withStageTransitionStamp(next, null);
+    expect(result.timelineOverrides.stageEnteredAt.investigation).toBeTruthy();
+  });
+
+  it('treats moving into "closed" as a stamped transition like any other stage', () => {
+    const prev = { id: 'c1', stage: 'outcome', meetings: [] };
+    const next = { id: 'c1', stage: 'closed', meetings: [] };
+    const result = withStageTransitionStamp(next, prev);
+    expect(result.timelineOverrides.stageEnteredAt.closed).toBeTruthy();
   });
 });
