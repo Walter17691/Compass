@@ -681,6 +681,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // repeated live passes instead of being wiped out each cycle — same
   // "AI proposes, session-local until acted on" shape as evidenceSuggestions.
   const [meetingEvidenceSuggestions, setMeetingEvidenceSuggestions] = useState([]);
+  // M4 — live action/commitment detection, made actionable. Same shape and
+  // merge discipline as meetingEvidenceSuggestions above.
+  const [meetingActionSuggestions, setMeetingActionSuggestions] = useState([]);
 
   // ── Intelligent Meeting Mode — live panels ──
   // Fires on the same throttled cadence as updateLiveContext (every 3rd
@@ -713,9 +716,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const questionShape = trackedQuestions.length
         ? "\"questionStatusUpdates\":[{\"id\":\"...\",\"status\":\"...\"}],"
         : "\"questionsAsked\":[\"...\"],\"questionsRemaining\":[\"...\"],";
+      const todayStr = new Date().toLocaleDateString("en-GB");
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:600, stream:false,
-          system:"You are Compass, an Employee Relations copilot silently tracking a live HR meeting. Read the transcript so far. "+questionInstruction+" For evidenceMentioned, capture anything referred to that isn't already on record — a document, recording, message or piece of physical/digital evidence (kind:\"evidence\", e.g. \"CCTV footage from the loading bay\", \"a WhatsApp message to their manager\"), or a person named as having relevant knowledge who isn't already a participant in this meeting (kind:\"witness\", e.g. \"Sarah Jones\"). Only report a possible inconsistency if someone's later statement genuinely conflicts with something specific they (or another named participant) said earlier in THIS transcript — never flag a mere gap or a different emphasis, and never state or imply anyone is lying. Respond ONLY with valid JSON, no other text: {"+questionShape+"\"newIssues\":[\"...\"],\"evidenceMentioned\":[{\"description\":\"...\",\"kind\":\"evidence\"|\"witness\"}],\"actionsIdentified\":[\"...\"],\"possibleInconsistency\":{\"earlier\":\"...\",\"later\":\"...\",\"suggestedQuestion\":\"...\"}} — omit possibleInconsistency (set it null) if there is none. Keep every array short — only real, specific items, empty arrays where nothing applies.",
+        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:700, stream:false,
+          system:"You are Compass, an Employee Relations copilot silently tracking a live HR meeting. Read the transcript so far. "+questionInstruction+" For evidenceMentioned, capture anything referred to that isn't already on record — a document, recording, message or piece of physical/digital evidence (kind:\"evidence\", e.g. \"CCTV footage from the loading bay\", \"a WhatsApp message to their manager\"), or a person named as having relevant knowledge who isn't already a participant in this meeting (kind:\"witness\", e.g. \"Sarah Jones\"). For actionsIdentified, capture only genuine commitments someone in the meeting actually made (e.g. \"I'll send the screenshots tomorrow\", \"HR will check the CCTV\") — never a generic to-do you've inferred yourself. suggestedOwner is who said they'd do it (or \"HR\" if HR committed to it), suggestedDueDate is a DD/MM/YYYY date if the transcript implies a timeframe (today is "+todayStr+", so \"tomorrow\" etc. can be resolved relative to that) or null if no timeframe was mentioned. Only report a possible inconsistency if someone's later statement genuinely conflicts with something specific they (or another named participant) said earlier in THIS transcript — never flag a mere gap or a different emphasis, and never state or imply anyone is lying. Respond ONLY with valid JSON, no other text: {"+questionShape+"\"newIssues\":[\"...\"],\"evidenceMentioned\":[{\"description\":\"...\",\"kind\":\"evidence\"|\"witness\"}],\"actionsIdentified\":[{\"description\":\"...\",\"suggestedOwner\":\"...\",\"suggestedDueDate\":\"DD/MM/YYYY\"|null}],\"possibleInconsistency\":{\"earlier\":\"...\",\"later\":\"...\",\"suggestedQuestion\":\"...\"}} — omit possibleInconsistency (set it null) if there is none. Keep every array short — only real, specific items, empty arrays where nothing applies.",
           messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+questionContext+"\n\nTranscript so far:\n"+notes.slice(-3000)}]})});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
@@ -738,6 +742,16 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           const fresh = parsed.evidenceMentioned
             .filter(m=>m?.description && !known.has(m.description.trim().toLowerCase()))
             .map((m,i)=>({ id:"mes_"+Date.now()+"_"+i, description:m.description, kind:m.kind==="witness"?"witness":"evidence", status:"pending" }));
+          return fresh.length ? [...existing, ...fresh] : existing;
+        });
+      }
+      // M4 — same merge discipline for detected actions/commitments.
+      if(Array.isArray(parsed.actionsIdentified) && parsed.actionsIdentified.length) {
+        setMeetingActionSuggestions(existing => {
+          const known = new Set(existing.map(s=>s.description.trim().toLowerCase()));
+          const fresh = parsed.actionsIdentified
+            .filter(a=>a?.description && !known.has(a.description.trim().toLowerCase()))
+            .map((a,i)=>({ id:"mas_"+Date.now()+"_"+i, description:a.description, suggestedOwner:a.suggestedOwner||"", suggestedDueDate:a.suggestedDueDate||"", status:"pending" }));
           return fresh.length ? [...existing, ...fresh] : existing;
         });
       }
@@ -772,6 +786,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setMeetingEvidenceSuggestions(s => s.map(x=>x.id===suggestion.id?{...x,status:"accepted"}:x));
   };
   const dismissMeetingEvidenceSuggestion = (id) => setMeetingEvidenceSuggestions(s => s.map(x=>x.id===id?{...x,status:"dismissed"}:x));
+
+  // M4 — accept/dismiss for detected actions/commitments. Same case-
+  // resolution and "record locally either way" behaviour as M3's
+  // acceptMeetingEvidenceSuggestion above.
+  const acceptMeetingActionSuggestion = (suggestion) => {
+    const existingCase = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
+    const caseId = caseInfo._linkedCaseId || existingCase?.id;
+    if(caseId) {
+      createCaseTask(caseId, { name:suggestion.description, owner:suggestion.suggestedOwner||"", dueDate:suggestion.suggestedDueDate||"" });
+    } else {
+      showToast("Noted — save this meeting to a case to turn it into a task");
+    }
+    setMeetingActionSuggestions(s => s.map(x=>x.id===suggestion.id?{...x,status:"accepted"}:x));
+  };
+  const dismissMeetingActionSuggestion = (id) => setMeetingActionSuggestions(s => s.map(x=>x.id===id?{...x,status:"dismissed"}:x));
 
   const [meetingStartTime, setMeetingStartTime] = useState(null);
   const [meetingEndTime, setMeetingEndTime] = useState(null);
@@ -3318,7 +3347,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setShowLinkCase(false);
     setMeetingStartTime(null);
     setMeetingEndTime(null);
-    setMeetingType(type); setTranscript([]); setPrepNotes(""); setPrepQuestions([]); setMeetingEvidenceSuggestions([]); setReviewOutput(""); setReviewOutputOriginal(""); setLetterOutput(""); setLetterHistory([]);
+    setMeetingType(type); setTranscript([]); setPrepNotes(""); setPrepQuestions([]); setMeetingEvidenceSuggestions([]); setMeetingActionSuggestions([]); setReviewOutput(""); setReviewOutputOriginal(""); setLetterOutput(""); setLetterHistory([]);
     setRiskScore(null); setPrediction(""); setNextSteps([]); setParticipants([]);
     if(type && type.group === "dev") {
       const config = DEV_MEETING_CONFIG[type.label];
@@ -5047,7 +5076,7 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} fmtDate={fmtDate} startSession={startSession} />
+        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setMeetingActionSuggestions={setMeetingActionSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} fmtDate={fmtDate} startSession={startSession} />
       )}
 
             {screen===SCREENS.PEOPLE&&(
@@ -5214,7 +5243,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} />
       )}
 
       {/* ══ REVIEW ══ */}
