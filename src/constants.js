@@ -33,6 +33,8 @@ export const POLICY_CATEGORIES = [
   { id:"flexible_working",  label:"Flexible Working" },
   { id:"redundancy",        label:"Redundancy" },
   { id:"family_leave",      label:"Family Leave" },
+  { id:"reasonable_adjustments", label:"Reasonable Adjustments" },
+  { id:"hybrid_working",    label:"Hybrid Working" },
   { id:"other",             label:"Other" },
 ];
 

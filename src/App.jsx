@@ -4038,6 +4038,27 @@ Please produce:
   const handleLetterheadUpload = e => { const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setLetterhead(ev.target.result);lsSet("compass_letterhead",ev.target.result);};r.readAsDataURL(f); };
   const handleWordTemplateUpload = e => { const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const o={name:f.name,base64:ev.target.result};setWordTemplate(o);lsSet("compass_word_template",o);};r.readAsDataURL(f); };
   const handleSaveSignature = sig => { setSignature(sig); setShowSigPad(false); lsSet("compass_signature",sig); if(pendingSend){const a=pendingSend;setPendingSend(null);setTimeout(()=>doSend(a,sig),100);} };
+  // Process Intelligence (P4) — one extra AI call per uploaded policy,
+  // extracting its specific quotable clauses (short heading + a near-
+  // verbatim excerpt) rather than leaving the whole document as one
+  // undifferentiated blob only ever consumed as raw context (getPolicyCtx,
+  // below, still does that for general drafting/Q&A — this is additive,
+  // not a replacement). Downstream consumers (P5's Next Best Action, P6's
+  // guardrails, P10's decision workspace) cite a specific clause instead
+  // of an unsourced "your policy says something relevant".
+  const indexPolicyClauses = async (name, content) => {
+    try {
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1200, stream:false,
+          system:"You are indexing a UK HR policy document into short, quotable clauses for later citation. Extract only genuine procedural provisions with clear practical meaning — timeframes, notice periods, rights, required steps, escalation routes. Each clause's text should be a short, near-verbatim excerpt (1-3 sentences), not a paraphrase or summary. Respond ONLY with valid JSON, no other text: [{\"heading\":\"short label, e.g. Notice of hearing\",\"text\":\"the near-verbatim clause text\"}]. Return at most 12 clauses — the most practically citable ones, not every sentence.",
+          messages:[{role:"user", content:`Policy: ${name}\n\n${content.slice(0,8000)}`}]})});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      return Array.isArray(parsed) ? parsed : [];
+    } catch(e) { console.error("indexPolicyClauses failed:", e); return []; }
+  };
+
   const handlePolicyUpload = async e => {
     const files=Array.from(e.target.files);if(!files.length)return; setPolicyProcessing(true);
     for(const file of files) {
@@ -4047,7 +4068,9 @@ Please produce:
           await new Promise(res=>{if(window.mammoth){res();return;}const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";s.onload=res;document.head.appendChild(s);});
           const buf=await file.arrayBuffer(); const r=await window.mammoth.extractRawText({arrayBuffer:buf}); content=r.value;
         } else { content=await file.text(); }
-        const pol={id:Date.now().toString()+Math.random(),name:file.name.replace(/\.[^.]+$/,""),fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k",category:"other"};
+        const name = file.name.replace(/\.[^.]+$/,"");
+        const clauses = await indexPolicyClauses(name, content);
+        const pol={id:Date.now().toString()+Math.random(),name,fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k",category:"other",clauses};
         setPolicies(p=>{const u=[...p,pol];lsSet("compass_policies",u);return u;});
       } catch(err){showToast("Could not read "+file.name, "error");}
     }

@@ -8,6 +8,7 @@ import { login } from './helpers.js';
 // itself is a plain localStorage write (lsSet, unchanged by this phase),
 // not worth a UI round-trip through reload to re-prove.
 test('an uploaded policy defaults to Other and can be recategorised', async ({ page }) => {
+  test.setTimeout(60000); // Process Intelligence (P4) — upload now also awaits a real clause-indexing AI call before the row appears
   await login(page);
   await page.getByRole('button', { name: /View all policies & templates/ }).click();
   await expect(page.getByRole('heading', { name: 'Company policies' })).toBeVisible({ timeout: 10000 });
@@ -20,7 +21,7 @@ test('an uploaded policy defaults to Other and can be recategorised', async ({ p
   });
 
   const row = page.locator('div').filter({ hasText: policyName }).filter({ has: page.locator('select') }).last();
-  await expect(row.locator('select')).toHaveValue('other', { timeout: 10000 });
+  await expect(row.locator('select')).toHaveValue('other', { timeout: 45000 });
 
   await row.locator('select').selectOption('disciplinary');
   await expect(row.locator('select')).toHaveValue('disciplinary');
