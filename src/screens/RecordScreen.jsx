@@ -1,9 +1,10 @@
 import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
+import { MeetingQualityCheckModal } from '../components/MeetingQualityCheckModal';
 import { SCREENS } from '../constants';
 import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const followUpKey = meetingIntelligence?.suggestedFollowUp ? meetingIntelligence.suggestedFollowUp.text : null;
@@ -70,7 +71,7 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
             </button>
           )}
           <button
-            onClick={()=>{if(inputText.trim())addUtterance(inputText);handleReview();}}
+            onClick={()=>{if(inputText.trim())addUtterance(inputText);attemptEndMeeting();}}
             disabled={aiProcessing||(transcript.length===0&&!inputText.trim())}
             style={{background:aiProcessing?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"8px 20px",fontSize:13,color:aiProcessing?"#9B9098":"#FFFFFF",fontWeight:600,cursor:aiProcessing?"not-allowed":"pointer",transition:"all 0.15s",boxShadow:aiProcessing?"none":"0 2px 8px rgba(124,92,252,0.25)"}}>
             {aiProcessing?"Processing...":"End meeting →"}
@@ -294,6 +295,15 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
           </div>
         </div>
       </div>
+
+      {showQualityCheck&&(
+        <MeetingQualityCheckModal
+          gaps={qualityCheckGaps}
+          onReturnToMeeting={onReturnToMeeting}
+          onCreateFollowUp={createQualityCheckFollowUp}
+          onProceed={proceedPastQualityCheck}
+        />
+      )}
     </div>
   );
 }

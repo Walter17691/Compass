@@ -688,6 +688,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // M4 — live action/commitment detection, made actionable. Same shape and
   // merge discipline as meetingEvidenceSuggestions above.
   const [meetingActionSuggestions, setMeetingActionSuggestions] = useState([]);
+  // M9 — Meeting Quality Check. Advisory only, never blocking — see
+  // attemptEndMeeting below.
+  const [showQualityCheck, setShowQualityCheck] = useState(false);
+  const [qualityCheckGaps, setQualityCheckGaps] = useState([]);
 
   // ── Intelligent Meeting Mode — live panels ──
   // Fires on the same throttled cadence as updateLiveContext (every 3rd
@@ -3514,6 +3518,58 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // rather than silently reverting the user's own correction.
   const setPrepQuestionStatus = (id, status) => setPrepQuestions(qs => setPrepQuestionStatusHelper(qs, id, status, "user"));
 
+  // M9 — Meeting Quality Check. Fully deterministic, no AI call — reuses
+  // exactly what M1/M3/M4 already computed rather than re-deriving an
+  // approximation (same discipline as Case Readiness). Mirrors
+  // handleReview's own pattern of combining transcript state with
+  // whatever's still sitting in inputText directly, rather than trusting
+  // transcript to already reflect it — the same stale-closure shape found
+  // and fixed in runRiskScore earlier this session.
+  const computeMeetingQualityGaps = () => {
+    const fullText = (transcript.map(u=>u.text).join(" ") + " " + inputText).toLowerCase();
+    const gaps = [];
+
+    prepQuestions.filter(q=>q.essential && q.status==="not_asked").forEach(q => {
+      gaps.push(`Essential question not yet asked: "${q.text}"`);
+    });
+
+    meetingEvidenceSuggestions.filter(s=>s.status==="pending").forEach(s => {
+      gaps.push((s.kind==="witness"?"Potential witness":"Evidence")+" mentioned but not yet actioned: "+s.description);
+    });
+
+    meetingActionSuggestions.filter(s=>s.status==="pending").forEach(s => {
+      gaps.push("Action identified but not yet actioned: "+s.description);
+    });
+
+    const linkedCase = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
+    if(linkedCase) {
+      allegationsForCase(allegations, linkedCase.id).forEach(a => {
+        const words = (a.title||"").toLowerCase().split(/\W+/).filter(w=>w.length>3);
+        if(!words.length) return;
+        const matched = words.filter(w=>fullText.includes(w));
+        if(matched.length < Math.ceil(words.length/2)) gaps.push(`Allegation not discussed in this meeting: "${a.title}"`);
+      });
+    }
+    return gaps;
+  };
+
+  // Never blocking — RecordScreen's "End meeting" always calls this
+  // instead of handleReview directly; if there's nothing to flag it goes
+  // straight through with no extra step, same as before this phase.
+  const attemptEndMeeting = () => {
+    const gaps = computeMeetingQualityGaps();
+    if(gaps.length) { setQualityCheckGaps(gaps); setShowQualityCheck(true); }
+    else handleReview();
+  };
+  const proceedPastQualityCheck = () => { setShowQualityCheck(false); handleReview(); };
+  const createQualityCheckFollowUp = () => {
+    const linkedCase = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
+    if(linkedCase) createCaseTask(linkedCase.id, { name:"Follow up on: "+qualityCheckGaps.join("; ") });
+    else showToast("Noted — save this meeting to a case to turn it into a task");
+    setShowQualityCheck(false);
+    handleReview();
+  };
+
   // ── AI: Review + Risk ──
   const handleReview = async () => {
     meetingEndedRef.current = false;
@@ -5329,7 +5385,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} />
       )}
 
       {/* ══ REVIEW ══ */}

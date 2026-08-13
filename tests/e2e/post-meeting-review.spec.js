@@ -37,7 +37,13 @@ test('a suggestion left undecided during the meeting can still be approved on th
   // no Accept/Dismiss click in the live sidebar.
   await expect(page.getByText('Evidence mentioned', { exact: true })).toBeVisible({ timeout: 30000 });
 
+  // A suggestion still pending is exactly the kind of thing M9's Meeting
+  // Quality Check now flags — "Proceed anyway" is the equivalent of the
+  // old direct End meeting click; nothing about that path changed.
   await page.getByRole('button', { name: 'End meeting' }).click();
+  const qualityModal = page.getByRole('dialog');
+  await expect(qualityModal.getByText('Meeting Quality Check', { exact: true })).toBeVisible({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Proceed anyway' }).click();
   await expect(page.getByText('Processing...')).not.toBeVisible({ timeout: 60000 });
 
   await expect(page.getByText('Compass proposes these updates', { exact: true })).toBeVisible({ timeout: 10000 });
