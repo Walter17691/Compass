@@ -24,7 +24,11 @@
 // a natural follow-up, not required to close the gap the audit found
 // (no dedicated stage tracking at all for those types).
 
-const DISCIPLINARY_STAGES = [
+// Exported (not just internal consts) so processTimeline.js (P3) can
+// tell, by reference, which shape a given process type's stages array
+// actually is — several process types deliberately share one of these
+// two arrays rather than each getting a distinct object.
+export const DISCIPLINARY_STAGES = [
   { id: "intake", label: "Concern raised" },
   { id: "investigation", label: "Investigation" },
   { id: "inv_report", label: "Investigation review" },
@@ -34,7 +38,7 @@ const DISCIPLINARY_STAGES = [
   { id: "closed", label: "Closed" },
 ];
 
-const GRIEVANCE_STAGES = [
+export const GRIEVANCE_STAGES = [
   { id: "intake", label: "Grievance raised" },
   { id: "hearing", label: "Grievance meeting" },
   { id: "outcome", label: "Outcome" },

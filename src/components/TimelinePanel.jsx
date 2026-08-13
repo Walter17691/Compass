@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { buildCaseTimeline } from '../lib/caseTimeline';
+import { computeStageProgress } from '../lib/processTimeline';
 import { Btn } from './Primitives';
 
 const TYPE_STYLE = {
@@ -29,6 +30,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
   const [editText, setEditText] = useState("");
 
   const caseAllegations = (allegations || []).filter(a => a.caseId === cs.id);
+  const stageProgress = computeStageProgress(cs);
   const allEntries = buildCaseTimeline(cs, allegations, auditLog, cs.timelineOverrides || {});
   const people = [...new Set(allEntries.map(e => e.actor).filter(Boolean))];
 
@@ -83,6 +85,35 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
           {loadJsPDF && <Btn variant="secondary" style={{padding:"5px 10px",fontSize:12}} onClick={exportPdf}>Export</Btn>}
         </div>
       </div>
+
+      {/* P3 — a stage-aware lens over the same case data below: where are
+          we in the process, what's already done, what's still to come,
+          and (where the process shape supports a real evidence check —
+          see processTimeline.js) any stage the case has moved past
+          without its own expected evidence on file. Purely derived, no
+          new source of truth. */}
+      <div style={{padding:"14px 16px",borderBottom:"1px solid #EDE5D8",background:"#FDFAF5"}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>
+          {stageProgress.processType.label} process
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:stageProgress.missingSteps.length?10:0}}>
+          {stageProgress.completed.map(s=>(
+            <span key={s.id} style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#E8F5EE",color:"#1A7A4A",fontWeight:500}}>✓ {s.label}</span>
+          ))}
+          {stageProgress.current&&(
+            <span style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#7C5CFC",color:"#FFFFFF",fontWeight:700}}>{stageProgress.current.label}</span>
+          )}
+          {stageProgress.upcoming.map(s=>(
+            <span key={s.id} style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#F5F1EA",color:"#9B9098"}}>{s.label}</span>
+          ))}
+        </div>
+        {stageProgress.missingSteps.length>0&&(
+          <div style={{background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#6B5218",lineHeight:1.6}}>
+            Potential missing step{stageProgress.missingSteps.length>1?"s":""}: {stageProgress.missingSteps.join(", ")}
+          </div>
+        )}
+      </div>
+
       <div style={{padding:"16px"}}>
         {entries.length===0 && <div style={{fontSize:13,color:"#9B9098"}}>Nothing recorded on this case yet.</div>}
         {entries.map((e, i) => {
