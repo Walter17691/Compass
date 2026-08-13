@@ -72,7 +72,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   return (
     <>
       <EvidenceMatrixPanel cs={cs} allegations={allegations} suggestions={evidenceSuggestions} suggestionsLoading={evidenceSuggestionsLoading} onGenerateSuggestions={generateEvidenceSuggestions} onAcceptSuggestion={acceptEvidenceSuggestion} onRejectSuggestion={rejectEvidenceSuggestion} onOpenEvidence={openEvidence}/>
-      <ConsistencyPanel cs={cs} sanctionDistribution={sanctionDistribution} comparableCases={comparableCases} consistencyReview={consistencyReview} consistencyReviewLoading={consistencyReviewLoading} onGenerateReview={generateConsistencyReview}/>
+      <ConsistencyPanel cs={cs} sanctionDistribution={sanctionDistribution} comparableCases={comparableCases} consistencyReview={consistencyReview} consistencyReviewLoading={consistencyReviewLoading} onGenerateReview={generateConsistencyReview} onAskWhy={onAskWhy}/>
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Allegations ({allegations.length})</div>

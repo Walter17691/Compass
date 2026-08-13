@@ -58,6 +58,7 @@ import { AdjustmentForm } from './components/AdjustmentForm';
 import { AddRoleForm } from './components/AddRoleForm';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PromptModal } from './components/PromptModal';
+import { WhySourcesModal } from './components/WhySourcesModal';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { LetterScreen } from './screens/LetterScreen';
@@ -145,6 +146,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // meeting.summary once the meeting itself saves.
   const [meetingSummary, setMeetingSummary] = useState("");
   const [letterOutput, setLetterOutput] = useState("");
+  // Explainability sweep (P19, §19) — snapshot of what fed this exact
+  // letter draft, captured at generation time (same "as-of" approach
+  // AIAssistantTab's overviewSources already uses) rather than resolved
+  // live later, since case data can change after the letter was drafted.
+  // Fully self-contained refs (own label/detail/date), not ids to look
+  // up — WhySourcesModal is given the identity function as resolveRef.
+  const [letterSources, setLetterSources] = useState([]);
+  const [letterWhySignal, setLetterWhySignal] = useState(null);
   const [letterHistory, setLetterHistory] = useState([]); // previous drafts from this session, most recent first
   const [activeLetter, setActiveLetter] = useState("outcome");
   // AI-approval gate — see src/lib/letterApproval.js. Tied to the exact
@@ -4530,7 +4539,7 @@ Please produce:
     // so it's not just silently gone.
     if(letterOutput) setLetterHistory(h => [{type: activeLetter, text: letterOutput, ts: new Date().toISOString()}, ...h].slice(0, 10));
     setActiveLetter(t);
-    setAiProcessing(true); if(!inline) setScreen(SCREENS.LETTER); setLetterOutput("");
+    setAiProcessing(true); if(!inline) setScreen(SCREENS.LETTER); setLetterOutput(""); setLetterSources([]);
     try {
       const nl = String.fromCharCode(10);
       const tx = transcript.map(u=>u.speaker+": "+u.text).join(nl);
@@ -4581,6 +4590,19 @@ Please produce:
         tx ? "Transcript:"+nl+tx.slice(0,800) : "",
       ].filter(Boolean).join(nl) + getPolicyCtx();
 
+      // Explainability sweep (P19) — a self-contained snapshot mirroring
+      // exactly what the "Available information" block above just fed
+      // the AI, not a generic "this case's data" pointer. Own label/
+      // detail/date on every entry (not ids to resolve later) since case
+      // data can change after the letter was drafted.
+      const letterSources = [
+        (t==="outcome" && activeCase) ? allegationsForCase(allegations, activeCase.id).map(a => ({kind:"allegation", label:a.title, detail:"Finding: "+allegationStatusMeta(a.status).label})) : [],
+        (caseInfo.evidence||[]).map(e => ({kind:"evidence", label:e.name, detail:[e.type, e.date].filter(Boolean).join(" · ")})),
+        activeCase ? (activeCase.meetings||[]).slice(-3).map(m => ({kind:"meeting", label:m.type||"Meeting", date:m.date})) : [],
+        policies.length>0 ? [{kind:"policy", label:"Uploaded company policies", detail:policies.map(p=>p.name).join(", ")}] : [],
+        [{kind:"context", label:"Case & employee details", detail:"Employee, manager, meeting date, and case type/description/outcome as recorded on this case."}],
+      ].flat();
+
       const letterInstructions = {
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. Follow ACAS Code of Practice.",
         "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; any sanction imposed (e.g. [First Written Warning]) and its duration (e.g. [12 months], matching the uploaded policy's own stated duration where one is referenced below); where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal within 5 working days. Follow ACAS Code of Practice.",
@@ -4605,7 +4627,7 @@ Please produce:
         })});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      if(text) { setLetterOutput(text); }
+      if(text) { setLetterOutput(text); setLetterSources(letterSources); }
       else { setAiError("Failed to generate letter. Please try again."); }
     } catch(e) { setAiError("Error: "+e.message); }
     setAiProcessing(false);
@@ -5333,6 +5355,15 @@ Please produce:
         />
       )}
 
+      {/* Explainability sweep (P19) — LetterScreen renders outside
+          CaseViewScreen, which owns its own WhySourcesModal instance for
+          case_signals; letterSources' refs are already fully self-
+          contained (own label/detail/date), so resolveRef is just the
+          identity function rather than a new lookup. */}
+      {letterWhySignal&&(
+        <WhySourcesModal title={letterWhySignal.title} reasoning={letterWhySignal.reasoning} sourceRefs={letterWhySignal.sourceRefs} resolveRef={ref=>ref} onClose={()=>setLetterWhySignal(null)} />
+      )}
+
       {/* ── GDPR consent modal ── */}
       {showGdpr && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -5681,7 +5712,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} />
       )}
 
       {/* ══ DASHBOARD ══ */}

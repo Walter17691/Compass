@@ -168,4 +168,16 @@ test('consistency check shows a sanction distribution and anonymised comparable 
   expect(body).not.toContain(nameB);
   expect(body).not.toContain(nameC);
   expect(body).toContain('DISTINCTIVE_REASONING_A_swipe_card_evidence');
+
+  // Explainability sweep (P19) — this is the one place testing the new
+  // "Ask why" button genuinely needs the AI's actual response (the
+  // button only renders once consistencyReview is populated), unlike the
+  // request-interception check above. A generous wait, in keeping with
+  // this test's already-generous overall budget.
+  await expect(page.getByText('Why these cases are comparable', { exact: true })).toBeVisible({ timeout: 30000 });
+  await page.getByRole('button', { name: 'Ask why', exact: true }).click();
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('Why Compass is saying this', { exact: true })).toBeVisible({ timeout: 5000 });
+  await expect(modal.getByRole('heading', { name: 'Consistency check' })).toBeVisible();
+  await expect(modal.getByText('Anonymised comparable cases', { exact: true })).toBeVisible();
 });

@@ -5,7 +5,7 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter }) {
   const [showHistory, setShowHistory] = useState(false);
   return (
     <div>
@@ -24,7 +24,9 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
         {letterOutput&&(
           <>
             {/* Edit toggle */}
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:8}}>
+              <button onClick={()=>onAskWhy?.({title:"This letter's draft", reasoning:"Drafted by AI from the case information below, as it stood at the moment this draft was generated. Regenerating the letter refreshes both the draft and this source list.", sourceRefs:letterSources})}
+                style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Ask why</button>
               <button onClick={()=>setEditingLetter(e=>!e)}
                 style={{background:editingLetter?"#7C5CFC":"none",border:"1px solid",borderColor:editingLetter?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
                 {editingLetter?"Done editing":"Edit letter"}

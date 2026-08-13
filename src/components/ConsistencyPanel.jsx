@@ -9,7 +9,7 @@ import { useState } from 'react';
 // anonymised comparable cases (case type + finding + reasoning excerpt
 // — never an employee name). Rendered once per case, not per
 // allegation, since none of this is allegation-specific.
-export function ConsistencyPanel({ cs, sanctionDistribution, comparableCases, consistencyReview, consistencyReviewLoading, onGenerateReview }) {
+export function ConsistencyPanel({ cs, sanctionDistribution, comparableCases, consistencyReview, consistencyReviewLoading, onGenerateReview, onAskWhy }) {
   const [expandedKey, setExpandedKey] = useState(null);
   if (!sanctionDistribution.applicable && !comparableCases.length) return null;
 
@@ -41,6 +41,17 @@ export function ConsistencyPanel({ cs, sanctionDistribution, comparableCases, co
 
       {consistencyReview && (consistencyReview.similarityReasoning || consistencyReview.distinguishingFeatures) && (
         <div style={{marginBottom:14,background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:12}}>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:consistencyReview.similarityReasoning||consistencyReview.distinguishingFeatures?8:0}}>
+            <button onClick={()=>onAskWhy?.({
+              title:"Consistency check",
+              reasoning:[consistencyReview.similarityReasoning, consistencyReview.distinguishingFeatures].filter(Boolean).join("\n\n"),
+              // comparableCases are deliberately anonymous (case type + finding
+              // + reasoning excerpt, never an employee name) — the one honest
+              // source to cite is that anonymised basis itself, not individual
+              // case ids that would defeat the anonymity.
+              sourceRefs:comparableCases.length?[{kind:"context", label:"Anonymised comparable cases", detail:comparableCases.length+" closed "+cs.caseType+" case"+(comparableCases.length!==1?"s":"")+" at this organisation, matched by case type and finding."}]:[],
+            })} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Ask why</button>
+          </div>
           {consistencyReview.similarityReasoning && (
             <div style={{marginBottom:consistencyReview.distinguishingFeatures?10:0}}>
               <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Why these cases are comparable</div>

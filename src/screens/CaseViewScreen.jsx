@@ -129,6 +129,11 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
     if(ref.kind==="meeting") { const m = meetings.find(x=>x.id===ref.id); return m ? {label:m.type||"Meeting", detail:null, date:m.date} : null; }
     if(ref.kind==="allegation") { const a = caseAllegations.find(x=>x.id===ref.id); return a ? {label:a.title, detail:null, date:a.createdAt} : null; }
     if(ref.kind==="evidence") { const e = (cs.evidence||[])[ref.id]; return e ? {label:e.name||"Evidence", detail:e.type||null, date:e.date||null} : null; }
+    // Self-contained refs (own label/detail already set, nothing to look
+    // up by id) — e.g. ConsistencyPanel's anonymised comparable-case
+    // count, where there's no specific case id that could be shown
+    // without defeating the anonymity.
+    if(ref.detail || ref.date) return ref;
     return null;
   };
 
