@@ -10,10 +10,16 @@
 // already apply to their own estimates.
 import { getCaseStage } from './caseStage';
 import { getProcessType } from './processStages';
+import { getTemplateForType } from './processTemplates';
 
 export const DEFAULT_STAGE_TARGET_DAYS = 10;
 
-export function computeStageBottlenecks(cases) {
+// templates (P18) is optional — every existing call site keeps working
+// unmodified with the one uniform default; when an org has set a
+// target_days on its template for a given process type, that value
+// replaces the default for that process type's own groups only, not
+// every group in the result.
+export function computeStageBottlenecks(cases, templates) {
   const now = new Date();
   const byKey = {};
 
@@ -33,7 +39,11 @@ export function computeStageBottlenecks(cases) {
     const processType = getProcessType(cs.caseType);
     const stageLabel = processType.stages.find(s => s.id === stage)?.label || stage;
     const key = processType.id + ":" + stage;
-    if (!byKey[key]) byKey[key] = { processType: processType.label, stage: stageLabel, durations: [] };
+    if (!byKey[key]) {
+      const template = getTemplateForType(templates, processType.id);
+      const targetDays = template?.target_days || DEFAULT_STAGE_TARGET_DAYS;
+      byKey[key] = { processType: processType.label, stage: stageLabel, targetDays, durations: [] };
+    }
     byKey[key].durations.push(Math.max(0, Math.floor((now - enteredAt) / (1000 * 60 * 60 * 24))));
   });
 
@@ -45,9 +55,9 @@ export function computeStageBottlenecks(cases) {
         stage: b.stage,
         caseCount: b.durations.length,
         avgDays: Math.round(avgDays * 10) / 10,
-        targetDays: DEFAULT_STAGE_TARGET_DAYS,
+        targetDays: b.targetDays,
       };
     })
-    .filter(b => b.avgDays > DEFAULT_STAGE_TARGET_DAYS)
+    .filter(b => b.avgDays > b.targetDays)
     .sort((a, b) => b.avgDays - a.avgDays);
 }

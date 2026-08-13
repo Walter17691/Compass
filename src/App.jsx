@@ -34,6 +34,8 @@ import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { requestOverride, requestPolicyDeviation } from './lib/humanOverride';
 import { caseRoleLabel } from './lib/caseRoles';
+import { getProcessType } from './lib/processStages';
+import { getTemplateForType, resolveDefaultTaskDueDate } from './lib/processTemplates';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
@@ -1082,6 +1084,25 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     syncBillingQuantity();
   };
 
+  // ── Process Templates (P18) — one row per (org, process type); saved via
+  // upsert on that pair rather than separate insert/update paths, since
+  // ProcessTemplatesSection always edits "the template for this process
+  // type", whether or not a row already exists yet. ──
+  const loadProcessTemplates = async () => {
+    if(!org?.id) return;
+    const { data } = await supabase.from('process_templates').select('*').eq('org_id', org.id);
+    if(data) setProcessTemplates(data);
+  };
+
+  const saveProcessTemplate = async (processType, fields) => {
+    if(!org?.id) return;
+    const { data, error } = await supabase.from('process_templates')
+      .upsert({ org_id: org.id, process_type: processType, ...fields, updated_at: new Date().toISOString() }, { onConflict: 'org_id,process_type' })
+      .select().single();
+    if(error) { console.error("saveProcessTemplate", error); showToast("Couldn't save process template — "+error.message, "error"); return; }
+    if(data) setProcessTemplates(list=>[...list.filter(t=>t.process_type!==processType), data]);
+  };
+
   // ── HR Review Requests ──
   const loadHrReviews = async () => {
     if(!org?.id) return;
@@ -1141,7 +1162,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR, user?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1177,6 +1198,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [inviteLink, setInviteLink] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
+  const [processTemplates, setProcessTemplates] = useState([]);
   const [acasData, setAcasData] = useState({});
   const [redundancyData, setRedundancyData] = useState({});
   const [showEmailLetter, setShowEmailLetter] = useState(false);
@@ -5247,6 +5269,19 @@ Please produce:
                     priority: newCasePriority,
                   };
                   saveCases([...cases, newCase]);
+                  // Process Intelligence (P18) — auto-initialise the
+                  // default tasks from this process type's own org-
+                  // configured template, if one exists. The rest of the
+                  // template (required documents, suggested meetings,
+                  // target days, suggested roles, linked policy) is
+                  // informational only, rendered live from
+                  // processTemplates by ProcessChecklistPanel — nothing
+                  // else about it is copied onto the case itself.
+                  const template = getTemplateForType(processTemplates, getProcessType(newCaseType).id);
+                  (template?.default_tasks||[]).forEach(t => {
+                    if(!t?.name) return;
+                    createCaseTask(newCase.id, { name: t.name, owner: t.owner||"", dueDate: resolveDefaultTaskDueDate(t.dayOffset, newCase.dateReceived) });
+                  });
                   if(newCaseOwnerId && org?.id) {
                     supabase.from("case_access").upsert({
                       case_id: newCase.id, user_id: newCaseOwnerId, org_id: org.id,
@@ -5413,6 +5448,7 @@ Please produce:
           concernReferrals={concernReferrals}
           isHR={isHR}
           hrReviewRequests={hrReviewRequests}
+          processTemplates={processTemplates}
         />
       )}
 
@@ -5550,6 +5586,7 @@ Please produce:
           auditLog={auditLog}
           wellbeingNotes={wellbeingNotes}
           dueSoon={dueSoon}
+          processTemplates={processTemplates}
           caseTasks={caseTasks}
           createCaseTask={createCaseTask}
           toggleCaseTaskDone={toggleCaseTaskDone}
@@ -5847,6 +5884,8 @@ Please produce:
           saveStarterTemplates={saveStarterTemplates}
           leaverTemplates={leaverTemplates}
           saveLeaverTemplates={saveLeaverTemplates}
+          processTemplates={processTemplates}
+          saveProcessTemplate={saveProcessTemplate}
           promptDialog={promptDialog}
           confirmDialog={confirmDialog}
           dueSoon={dueSoon}

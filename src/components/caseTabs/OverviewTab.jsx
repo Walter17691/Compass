@@ -1,12 +1,15 @@
 import { estimateExposure } from '../../lib/tribunalEstimate';
 import { openSignalsForCase } from '../../lib/caseSignals';
 import { computeCaseRisk } from '../../lib/caseRisk';
+import { getProcessType } from '../../lib/processStages';
+import { getTemplateForType } from '../../lib/processTemplates';
 import { UnansweredQuestionsPanel } from '../UnansweredQuestionsPanel';
 import { InconsistenciesPanel } from '../InconsistenciesPanel';
 import { GuardrailsPanel } from '../GuardrailsPanel';
 import { CaseRolesPanel } from '../CaseRolesPanel';
 import { ApprovalsPanel } from '../ApprovalsPanel';
 import { CaseRiskPanel } from '../CaseRiskPanel';
+import { ProcessChecklistPanel } from '../ProcessChecklistPanel';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -15,8 +18,9 @@ const RISK_STYLE = {
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
-export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason, caseAccess, orgMembers, assignCaseRole, hrReviewRequests, respondToReview, isApprover, auditLog, wellbeingNotes, dueSoon }) {
+export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason, caseAccess, orgMembers, assignCaseRole, hrReviewRequests, respondToReview, isApprover, auditLog, wellbeingNotes, dueSoon, processTemplates }) {
   const riskItems = computeCaseRisk(cs, { allegations, caseSignals, cases, auditLog, wellbeingNotes, dueSoon });
+  const processTemplate = getTemplateForType(processTemplates, getProcessType(cs.caseType).id);
   const yearsService = (() => {
     if(!empRecord?.startDate) return null;
     const start = new Date(empRecord.startDate.includes("/") ? empRecord.startDate.split("/").reverse().join("-") : empRecord.startDate);
@@ -85,6 +89,8 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
           </div>
         </div>
       )}
+
+      <ProcessChecklistPanel template={processTemplate} />
 
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
         <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Description</div>

@@ -10,6 +10,7 @@ import { PortalAccessSection } from './settings/PortalAccessSection';
 import { EmployeeRecordsSection } from './settings/EmployeeRecordsSection';
 import { BrandingSection } from './settings/BrandingSection';
 import { PoliciesSection } from './settings/PoliciesSection';
+import { ProcessTemplatesSection } from './settings/ProcessTemplatesSection';
 import { TemplatesSection } from './settings/TemplatesSection';
 import { NotificationsSection } from './settings/NotificationsSection';
 import { AuditTrailSection } from './settings/AuditTrailSection';
@@ -22,7 +23,7 @@ import { HelpSection } from './settings/HelpSection';
 // (OrgSettingsModal, reached only from its own header button); it's now
 // just another section here, alongside everything else that configures
 // the org.
-export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, changePolicyCategory, starterTemplates, saveStarterTemplates, leaverTemplates, saveLeaverTemplates, promptDialog, confirmDialog, dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers, isMobile, initialSection, clearInitialSection }) {
+export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, changePolicyCategory, starterTemplates, saveStarterTemplates, leaverTemplates, saveLeaverTemplates, processTemplates, saveProcessTemplate, promptDialog, confirmDialog, dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers, isMobile, initialSection, clearInitialSection }) {
   const sections = [
     {id:"billing", label:"Billing"},
     ...(isHR?[{id:"team-access", label:"Team & access"}]:[]),
@@ -32,6 +33,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, loc
     {id:"employee-records", label:"Employee data"},
     {id:"branding", label:"Branding & letters"},
     {id:"policies", label:"Policies"},
+    ...(isHR?[{id:"process-templates", label:"Process templates"}]:[]),
     {id:"templates", label:"Checklist templates"},
     {id:"notifications", label:"Notifications"},
     {id:"audit-trail", label:"Audit trail"},
@@ -67,6 +69,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, loc
           {active==="employee-records"&&<EmployeeRecordsSection employeeCsvFileRef={employeeCsvFileRef} employeeCsvProcessing={employeeCsvProcessing} handleEmployeeCsvImport={handleEmployeeCsvImport} exportEmployeesCsv={exportEmployeesCsv} caseCsvFileRef={caseCsvFileRef} caseCsvProcessing={caseCsvProcessing} handleCaseCsvImport={handleCaseCsvImport} downloadCaseCsvTemplate={downloadCaseCsvTemplate}/>}
           {active==="branding"&&<BrandingSection wordTemplate={wordTemplate} setWordTemplate={setWordTemplate} lsSet={lsSet} wordTemplateRef={wordTemplateRef} handleWordTemplateUpload={handleWordTemplateUpload} letterhead={letterhead} setLetterhead={setLetterhead} letterheadRef={letterheadRef} handleLetterheadUpload={handleLetterheadUpload} signature={signature} setSignature={setSignature} setShowSigPad={setShowSigPad}/>}
           {active==="policies"&&<PoliciesSection policies={policies} setPolicies={setPolicies} policyFileRef={policyFileRef} handlePolicyUpload={handlePolicyUpload} policyProcessing={policyProcessing} lsSet={lsSet} changePolicyCategory={changePolicyCategory}/>}
+          {active==="process-templates"&&<ProcessTemplatesSection processTemplates={processTemplates} saveProcessTemplate={saveProcessTemplate}/>}
           {active==="templates"&&<TemplatesSection starterTemplates={starterTemplates} saveStarterTemplates={saveStarterTemplates} leaverTemplates={leaverTemplates} saveLeaverTemplates={saveLeaverTemplates} promptDialog={promptDialog} confirmDialog={confirmDialog}/>}
           {active==="notifications"&&<NotificationsSection dueSoon={dueSoon} caseTasks={caseTasks} createCaseTask={createCaseTask} requestNotifications={requestNotifications} notifGranted={notifGranted} emailDigestOptIn={emailDigestOptIn} toggleEmailDigest={toggleEmailDigest} orgWebhookUrl={orgWebhookUrl} orgWebhookType={orgWebhookType} saveOrgWebhook={saveOrgWebhook} sendTestWebhook={sendTestWebhook}/>}
           {active==="audit-trail"&&<AuditTrailSection auditLog={auditLog}/>}

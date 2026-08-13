@@ -65,4 +65,28 @@ describe('computeStageBottlenecks', () => {
   it('returns an empty array for no cases', () => {
     expect(computeStageBottlenecks([])).toEqual([]);
   });
+
+  // Process Intelligence (P18) — an org's process template can set its
+  // own target_days per process type, overriding the uniform default for
+  // that process type's groups only.
+  it('uses a template\'s target_days for its own process type when provided', () => {
+    const cases = [{ id: 'c1', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-05T00:00:00.000Z' } } }];
+    const templates = [{ process_type: 'misconduct', target_days: 20 }];
+    // 15 days in stage — flagged against the default (10) but not against
+    // this template's own, higher target (20).
+    expect(computeStageBottlenecks(cases, [])).toHaveLength(1);
+    expect(computeStageBottlenecks(cases, templates)).toEqual([]);
+  });
+
+  it('a template\'s target_days only affects its own process type, not others', () => {
+    const cases = [
+      { id: 'c1', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-05T00:00:00.000Z' } } },
+      { id: 'c2', caseType: 'grievance', stage: 'hearing', timelineOverrides: { stageEnteredAt: { hearing: '2026-08-05T00:00:00.000Z' } } },
+    ];
+    const templates = [{ process_type: 'misconduct', target_days: 20 }];
+    const results = computeStageBottlenecks(cases, templates);
+    expect(results).toHaveLength(1);
+    expect(results[0].processType).toBe('Grievance');
+    expect(results[0].targetDays).toBe(DEFAULT_STAGE_TARGET_DAYS);
+  });
 });
