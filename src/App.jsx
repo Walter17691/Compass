@@ -2730,6 +2730,20 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // specific evidence gap) and writes the result as a next_action
   // case_signal so it can be accepted/dismissed/marked-not-relevant and
   // explained later, rather than living only as a re-generated string.
+  // P5 — built from P4's indexed clauses (not the raw policy text
+  // getPolicyCtx already sends as general context) so the model can cite
+  // a SPECIFIC clause by policy name + heading rather than folding "your
+  // policy requires X" anonymously into prose. Bounded the same way
+  // getPolicyCtx is, for the same reason.
+  const buildPolicyClauseDigest = () => {
+    const withClauses = policies.filter(p => (p.clauses||[]).length);
+    if(!withClauses.length) return "";
+    const body = withClauses.map(p =>
+      `Policy: "${p.name}"\n` + p.clauses.map(c=>`- ${c.heading}: ${c.text}`).join("\n")
+    ).join("\n\n");
+    return "\n\nINDEXED POLICY CLAUSES (cite one by exact policyName + heading in policyClause if, and only if, it genuinely supports your recommendation — otherwise policyClause must be null):\n" + body.slice(0, 6000);
+  };
+
   const generateNextBestAction = async (cs, silent=false) => {
     if(!silent) setNextActionLoading(l=>({...l, [cs.id]:true}));
     try {
@@ -2737,15 +2751,27 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const floor = getNextStep(cs);
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
-        max_tokens:400,
+        max_tokens:500,
         stream:false,
-        system:"You are Compass, an Employee Relations copilot recommending the single most useful next step for this case. Ground your recommendation in a specific fact from the case record — name the person, meeting, or evidence gap that makes this the right next step; never recommend something generic the record doesn't support. You must NEVER recommend a sanction, disciplinary outcome, or final decision on any allegation — only a procedural step (e.g. \"interview a named witness\", \"obtain a specific document\", \"send the signed record for confirmation\"). A deterministic procedural-stage check has already identified the case's baseline next step below — you may agree with it and sharpen it with a specific reason, or recommend something more specific that still satisfies that same procedural requirement, but never contradict or skip its stage. Respond ONLY with valid JSON, no other text: {\"title\":\"short imperative action, e.g. 'Interview Sarah Jones'\",\"reasoning\":\"one or two sentences citing the specific fact that makes this the right next step\",\"afterThis\":\"one sentence on what should happen once this is done\"}"+getPolicyCtx(),
+        system:"You are Compass, an Employee Relations copilot recommending the single most useful next step for this case. Ground your recommendation in a specific fact from the case record — name the person, meeting, or evidence gap that makes this the right next step; never recommend something generic the record doesn't support. You must NEVER recommend a sanction, disciplinary outcome, or final decision on any allegation — only a procedural step (e.g. \"interview a named witness\", \"obtain a specific document\", \"send the signed record for confirmation\"). A deterministic procedural-stage check has already identified the case's baseline next step below — you may agree with it and sharpen it with a specific reason, or recommend something more specific that still satisfies that same procedural requirement, but never contradict or skip its stage. Respond ONLY with valid JSON, no other text: {\"title\":\"short imperative action, e.g. 'Interview Sarah Jones'\",\"reasoning\":\"one or two sentences citing the specific fact that makes this the right next step\",\"afterThis\":\"one sentence on what should happen once this is done\",\"policyClause\":{\"policyName\":\"exact policy name as given\",\"heading\":\"exact clause heading as given\"}|null}"+getPolicyCtx()+buildPolicyClauseDigest(),
         messages:[{role:"user", content:"CASE RECORD:\n"+context+(floor?"\n\nDeterministic baseline next step: "+floor.label+" — "+(floor.reason||""):"")}],
       })});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       if(!parsed.title) throw new Error("No recommendation returned");
+
+      // P5 — resolve the AI's citation (by name+heading — it doesn't know
+      // policy ids) back to the real indexed clause, so the signal carries
+      // an actual quotable source. Silently drops it if either side no
+      // longer matches (e.g. the AI slightly reworded a heading) rather
+      // than showing a broken/empty citation.
+      let sourceRefs = [];
+      if(parsed.policyClause?.policyName && parsed.policyClause?.heading) {
+        const policy = policies.find(p=>p.name===parsed.policyClause.policyName);
+        const clause = policy?.clauses?.find(c=>c.heading===parsed.policyClause.heading);
+        if(policy && clause) sourceRefs = [{kind:"policy", id:policy.id, label:policy.name, clauseHeading:clause.heading, clauseText:clause.text}];
+      }
 
       const openPrior = openSignalsForCase(caseSignals, cs.id, "next_action");
       const withoutStale = supersedeOpenSignalsOfType(caseSignals, cs.id, "next_action");
@@ -2754,6 +2780,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const created = createSignal(withoutStale, cs.id, {
         type:"next_action", title:parsed.title,
         reasoning:[parsed.reasoning, parsed.afterThis?"After this: "+parsed.afterThis:null].filter(Boolean).join(" "),
+        sourceRefs,
         source:"ai",
       });
       setCaseSignals(created);

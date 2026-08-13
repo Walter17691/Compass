@@ -20,6 +20,7 @@ import { computeCaseReadiness } from '../lib/caseReadiness';
 import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
 import { SignalCard } from '../components/SignalCard';
 import { WhySourcesModal } from '../components/WhySourcesModal';
+import { PolicyCitation } from '../components/PolicyCitation';
 import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
 import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
 
@@ -67,6 +68,10 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const caseAllegations = allegationsForCase(allegations, cs.id);
   const caseTaskList = tasksForCase(caseTasks, cs.id);
   const nextActionSignal = openSignalsForCase(caseSignals, cs.id, "next_action")[0];
+  // P5 — a next_action signal may carry a real, indexed policy clause
+  // (generateNextBestAction, App.jsx) rather than folding "your policy
+  // requires X" anonymously into its reasoning prose.
+  const nextActionPolicyRef = nextActionSignal?.sourceRefs?.find(r=>r.kind==="policy");
   const readiness = computeCaseReadiness(cs, allegations, caseSignals, caseTasks);
   const screens = SCREENS;
 
@@ -295,7 +300,17 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
                   {label:"Create task", onClick:()=>{createCaseTask(cs.id, {name:nextActionSignal.title}); changeSignalStatus(nextActionSignal.id, "accepted");}},
                 ]}
               />
-            ) : (
+            ) : null}
+            {nextActionPolicyRef&&(
+              <div style={{marginTop:8}}>
+                <PolicyCitation
+                  policyName={nextActionPolicyRef.label}
+                  clauseHeading={nextActionPolicyRef.clauseHeading}
+                  clauseText={nextActionPolicyRef.clauseText}
+                />
+              </div>
+            )}
+            {!nextActionSignal&&(
               <button onClick={()=>generateNextBestAction(cs)} disabled={nextActionLoading?.[cs.id]}
                 style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#7C5CFC",cursor:nextActionLoading?.[cs.id]?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                 {nextActionLoading?.[cs.id] ? "Compass is thinking…" : "Ask Compass for its take"}
