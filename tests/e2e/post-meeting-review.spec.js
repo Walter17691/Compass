@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, confirmOverrideReason } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M8) — a witness or action suggestion
 // raised live but left undecided (HR too busy taking notes to act on it
@@ -44,10 +44,17 @@ test('a suggestion left undecided during the meeting can still be approved on th
   const qualityModal = page.getByRole('dialog');
   await expect(qualityModal.getByText('Meeting Quality Check', { exact: true })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Proceed anyway' }).click();
+  // P1 — proceeding past an unresolved gap now asks for an optional
+  // reason before actually proceeding.
+  await confirmOverrideReason(page);
   await expect(page.getByText('Processing...')).not.toBeVisible({ timeout: 60000 });
 
   await expect(page.getByText('Compass proposes these updates', { exact: true })).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText(/Priya Shah/)).toBeVisible();
+  // .first() — the AI can occasionally also surface a same-named action
+  // suggestion (e.g. "Follow up with Priya Shah...") alongside the
+  // witness suggestion; either is equally valid proof the pending item
+  // made it onto this screen.
+  await expect(page.getByText(/Priya Shah/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Approve' }).first().click();
 
   const saveButton = page.getByRole('button', { name: 'Save and go to case →' });

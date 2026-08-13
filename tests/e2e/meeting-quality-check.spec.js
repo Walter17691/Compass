@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, confirmOverrideReason } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M9) — "End meeting" used to jump straight
 // to handleReview with no check at all, so an essential prep question left
@@ -60,6 +60,9 @@ test('an unasked essential question surfaces a non-blocking quality check before
   await page.getByRole('button', { name: 'End meeting' }).click();
   await expect(qualityModal.getByText('Meeting Quality Check', { exact: true })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Proceed anyway' }).click();
+  // P1 — proceeding past an unresolved gap now asks for an optional
+  // reason before actually proceeding.
+  await confirmOverrideReason(page);
 
   await expect(page.getByText('Processing...')).not.toBeVisible({ timeout: 60000 });
   await expect(page.getByRole('button', { name: 'Save and go to case →' })).toBeVisible({ timeout: 10000 });

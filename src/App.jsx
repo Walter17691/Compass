@@ -31,6 +31,7 @@ import { seedInvestigationChecklist } from './lib/investigationChecklist';
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
+import { requestOverride } from './lib/humanOverride';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
@@ -1517,6 +1518,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         .then(({error}) => { if(error) console.error('Audit log sync failed:', error.message); });
     }
   };
+
+  // Process Intelligence (P1) — thin App-level wrapper binding
+  // requestOverride to this component's own promptDialog/audit closures.
+  // Every later phase that needs a "significant override, optionally
+  // explain why" step (P6, P7, P9, P11) calls this rather than building
+  // its own reason-capture UI.
+  const requestOverrideReason = (label, opts) => requestOverride(promptDialog, audit, label, opts);
 
   // ── Users ──
   // ── Deadline checker — UK statutory & ACAS deadlines ──
@@ -3566,7 +3574,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(gaps.length) { setQualityCheckGaps(gaps); setShowQualityCheck(true); }
     else handleReview();
   };
-  const proceedPastQualityCheck = () => { setShowQualityCheck(false); handleReview(); };
+  // P1 — proceeding past an unresolved gap is exactly the kind of
+  // significant override requestOverrideReason exists for: the modal
+  // closes immediately (no stacked modals), then an optional-reason
+  // prompt takes its place. Cancelling that prompt cancels the whole
+  // "proceed" action — the user's left back on the meeting, same end
+  // state as clicking "Return to meeting" would have given them.
+  const proceedPastQualityCheck = async () => {
+    setShowQualityCheck(false);
+    const linkedCase = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
+    const ok = await requestOverrideReason(qualityCheckGaps.join("; "), { caseId: linkedCase?.id, actionLabel: "Ended meeting despite quality check gaps" });
+    if(!ok) return;
+    handleReview();
+  };
   const createQualityCheckFollowUp = () => {
     const linkedCase = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
     if(linkedCase) createCaseTask(linkedCase.id, { name:"Follow up on: "+qualityCheckGaps.join("; ") });

@@ -46,3 +46,18 @@ export async function login(page) {
   await dismissDialog('Skip');
   await dismissDialog('Close');
 }
+
+// Process Intelligence (P1) — clicking "Proceed anyway" on any advisory
+// gate (Meeting Quality Check, and every later phase reusing
+// requestOverrideReason) now opens a second "Proceed anyway?" prompt
+// asking for an optional reason before the original action actually
+// proceeds. Confirming with a blank reason is a fully valid submission —
+// this is the equivalent of the old direct "Proceed anyway" click for any
+// test that doesn't care about exercising the reason-capture itself.
+export async function confirmOverrideReason(page, reason = '') {
+  const prompt = page.getByRole('dialog', { name: 'Proceed anyway?' });
+  await prompt.waitFor({ state: 'visible', timeout: 5000 });
+  if (reason) await prompt.locator('input').fill(reason);
+  await prompt.getByRole('button', { name: 'Proceed', exact: true }).click();
+  await prompt.waitFor({ state: 'hidden', timeout: 5000 });
+}

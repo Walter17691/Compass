@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, confirmOverrideReason } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M11) — end-to-end verification. Builds the
 // exact scenario from the spec's own §16: a case with several allegations,
@@ -57,6 +57,9 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   const qualityModal1 = page.getByRole('dialog');
   await expect(qualityModal1.getByText('Meeting Quality Check', { exact: true })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Proceed anyway' }).click();
+  // P1 — proceeding past an unresolved gap now asks for an optional
+  // reason before actually proceeding.
+  await confirmOverrideReason(page);
 
   await expect(page.getByText('Compass HR Advisor', { exact: true })).toBeVisible({ timeout: 90000 });
   await page.getByRole('button', { name: 'Save and go to case →' }).click();
@@ -126,6 +129,9 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   await expect(qualityModal.getByText('Meeting Quality Check', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(qualityModal.getByText(/Breach of confidentiality policy/)).toBeVisible();
   await page.getByRole('button', { name: 'Proceed anyway' }).click();
+  // P1 — proceeding past an unresolved gap now asks for an optional
+  // reason before actually proceeding.
+  await confirmOverrideReason(page);
 
   // M10 — the full record and the separate short summary both generate.
   await expect(page.getByText('Compass HR Advisor', { exact: true })).toBeVisible({ timeout: 90000 });

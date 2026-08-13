@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, confirmOverrideReason } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M10) — handleReview only ever produced one
 // long, formally-structured meeting record (Meeting Details / Meeting
@@ -35,6 +35,9 @@ test('ending a meeting produces a separate, collapsible meeting summary alongsid
   const gotQualityCheck = await qualityModal.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false);
   if (gotQualityCheck) {
     await page.getByRole('button', { name: 'Proceed anyway' }).click();
+    // P1 — proceeding past an unresolved gap now asks for an optional
+    // reason before actually proceeding.
+    await confirmOverrideReason(page);
   }
 
   await expect(page.getByText('Meeting record', { exact: true })).toBeVisible({ timeout: 60000 });
