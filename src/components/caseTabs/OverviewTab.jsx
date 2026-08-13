@@ -56,6 +56,36 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
         </div>
       )}
 
+      {stage!=="closed"&&(
+        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,padding:"14px 16px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Key dates</div>
+          <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
+            <div>
+              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Fit note expires</label>
+              <input type="date" value={cs.fitNoteEndDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,fitNoteEndDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Probation review</label>
+              <input type="date" value={cs.probationReviewDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,probationReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH referral date</label>
+              <input type="date" value={cs.ohReferralDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,ohReferralDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+            </div>
+            {cs.ohReferralDate&&(
+              <div>
+                <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH report received</label>
+                <input type="date" value={cs.ohReportReceivedDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,ohReportReceivedDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              </div>
+            )}
+            <div>
+              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Suspension review</label>
+              <input type="date" value={cs.suspensionReviewDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,suspensionReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
         <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Description</div>
         {cs.description ? (

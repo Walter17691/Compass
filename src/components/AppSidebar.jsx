@@ -30,6 +30,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     {s:SCREENS.ASK_COMPASS, l:"Ask Compass"},
     {s:SCREENS.CASES, l:"Cases"+(activeCaseCount>0?" ("+activeCaseCount+")":"")},
     {s:SCREENS.TASKS, l:"Tasks"},
+    {s:SCREENS.CALENDAR, l:"Calendar"},
     {s:SCREENS.PEOPLE, l:"People"},
     {s:SCREENS.ERREPORT, l:"Reports"},
     // The one destination every org member can reach regardless of role —

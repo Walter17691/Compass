@@ -83,6 +83,7 @@ const ConcernsScreen = lazy(() => import('./screens/ConcernsScreen').then(m => (
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
+const CalendarScreen = lazy(() => import('./screens/CalendarScreen').then(m => ({default: m.CalendarScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
 import { HandoffModal } from './screens/HandoffModal';
@@ -899,7 +900,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // meetings/evidence stay in: runSearch does full-text search over
       // transcripts client-side, so dropping them would silently break
       // search rather than just trimming payload.
-      let query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides').eq('org_id', org.id);
+      let query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,suspension_review_date').eq('org_id', org.id);
       // Location managers only see their location cases
       if(member?.role==='location_manager' && member?.location_ids?.length>0) {
         query = query.in('location_id', member.location_ids);
@@ -952,6 +953,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         owner_id: caseObj.ownerId || null,
         priority: caseObj.priority || null,
         timeline_overrides: caseObj.timelineOverrides || {},
+        fit_note_end_date: caseObj.fitNoteEndDate || null,
+        probation_review_date: caseObj.probationReviewDate || null,
+        oh_referral_date: caseObj.ohReferralDate || null,
+        oh_report_received_date: caseObj.ohReportReceivedDate || null,
+        suspension_review_date: caseObj.suspensionReviewDate || null,
         updated_at: nowIso,
       };
 
@@ -5898,6 +5904,15 @@ Please produce:
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           fmtDate={fmtDate}
+        />
+      )}
+      {screen===SCREENS.CALENDAR&&(
+        <CalendarScreen
+          dueSoon={dueSoon}
+          setScreen={setScreen}
+          screens={SCREENS}
+          setActiveCaseId={setActiveCaseId}
+          setActiveCaseStage={setActiveCaseStage}
         />
       )}
       </Suspense>

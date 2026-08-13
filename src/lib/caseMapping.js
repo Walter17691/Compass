@@ -35,5 +35,10 @@ export function mapCaseRow(row) {
     ownerId: row.owner_id || null,
     priority: row.priority || "normal",
     timelineOverrides: row.timeline_overrides || {},
+    fitNoteEndDate: row.fit_note_end_date || null,
+    probationReviewDate: row.probation_review_date || null,
+    ohReferralDate: row.oh_referral_date || null,
+    ohReportReceivedDate: row.oh_report_received_date || null,
+    suspensionReviewDate: row.suspension_review_date || null,
   };
 }

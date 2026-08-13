@@ -111,6 +111,28 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
         if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature",`${cs.id}:signature:${e.id||e.signId}`, caseMeta); }
       }
     });
+
+    // P16 — the four dated fields lib/caseStage.js's and
+    // lib/processTimeline.js's own forward-reference comments named as
+    // "P16's job": fit notes, probation review, OH referral, suspension
+    // review. All direct HR-entered dates on the case (no dedicated form
+    // existed to capture any of them before now), except the OH report,
+    // which is a chase computed from the referral date the same way the
+    // signature chase above works from a sent date — gated on the report
+    // not yet being received so it stops nagging once one arrives.
+    if(cs.fitNoteEndDate) {
+      addDeadline(cs.employeeName, "Fit note expires — review or request an updated note", new Date(cs.fitNoteEndDate), "fit_note", `${cs.id}:fitnote`, caseMeta);
+    }
+    if(cs.probationReviewDate) {
+      addDeadline(cs.employeeName, "Probation review due", new Date(cs.probationReviewDate), "probation", `${cs.id}:probation`, caseMeta);
+    }
+    if(cs.ohReferralDate && !cs.ohReportReceivedDate) {
+      const dl = workingDaysFromDate(cs.ohReferralDate, 15);
+      if(dl) addDeadline(cs.employeeName, "Occupational health report expected — chase if not received", dl, "oh_referral", `${cs.id}:oh`, caseMeta);
+    }
+    if(cs.suspensionReviewDate) {
+      addDeadline(cs.employeeName, "Suspension review due", new Date(cs.suspensionReviewDate), "suspension", `${cs.id}:suspension`, caseMeta);
+    }
   });
 
   dsarRequests.forEach(req => {

@@ -351,3 +351,64 @@ describe('computeDueSoon — collective redundancy consultation', () => {
     expect(computeDueSoon([], [], today, [], [], [], redundancyCases).filter(d => d.category === 'redundancy')).toHaveLength(0);
   });
 });
+
+describe('computeDueSoon — P16: fit note, probation review, OH referral, suspension review', () => {
+  const today = new Date('2025-06-16');
+
+  it('surfaces a fit note expiry date', () => {
+    const cases = [{ id: 'c20', employeeName: 'Amir', stage: 'open', meetings: [], fitNoteEndDate: '2025-06-20' }];
+    const items = computeDueSoon(cases, [], today).filter(d => d.category === 'fit_note');
+    expect(items).toHaveLength(1);
+    expect(items[0].employeeName).toBe('Amir');
+    expect(items[0].deadlineDate).toBe('20/06/2025');
+  });
+
+  it('surfaces a probation review date', () => {
+    const cases = [{ id: 'c21', employeeName: 'Bina', stage: 'open', meetings: [], probationReviewDate: '2025-06-22' }];
+    const items = computeDueSoon(cases, [], today).filter(d => d.category === 'probation');
+    expect(items).toHaveLength(1);
+    expect(items[0].deadlineDate).toBe('22/06/2025');
+  });
+
+  it('computes an OH report chase as 15 working days after the referral date', () => {
+    const cases = [{ id: 'c22', employeeName: 'Chidi', stage: 'open', meetings: [], ohReferralDate: '2025-05-01' }];
+    const items = computeDueSoon(cases, [], today).filter(d => d.category === 'oh_referral');
+    expect(items).toHaveLength(1);
+    expect(items[0].employeeName).toBe('Chidi');
+  });
+
+  it('does not chase an OH referral once the report has been received', () => {
+    const cases = [{ id: 'c23', employeeName: 'Dara', stage: 'open', meetings: [], ohReferralDate: '2025-05-01', ohReportReceivedDate: '2025-05-20' }];
+    expect(computeDueSoon(cases, [], today).filter(d => d.category === 'oh_referral')).toHaveLength(0);
+  });
+
+  it('surfaces a suspension review date', () => {
+    const cases = [{ id: 'c24', employeeName: 'Elif', stage: 'open', meetings: [], suspensionReviewDate: '2025-06-25' }];
+    const items = computeDueSoon(cases, [], today).filter(d => d.category === 'suspension');
+    expect(items).toHaveLength(1);
+    expect(items[0].deadlineDate).toBe('25/06/2025');
+  });
+
+  it('omits all four when none of the fields are set', () => {
+    const cases = [{ id: 'c25', employeeName: 'Farid', stage: 'open', meetings: [] }];
+    const items = computeDueSoon(cases, [], today).filter(d => ['fit_note','probation','oh_referral','suspension'].includes(d.category));
+    expect(items).toHaveLength(0);
+  });
+
+  it('ignores these fields on a closed case', () => {
+    const cases = [{
+      id: 'c26', employeeName: 'Greta', stage: 'closed', meetings: [],
+      fitNoteEndDate: '2025-06-20', probationReviewDate: '2025-06-20', ohReferralDate: '2025-05-01', suspensionReviewDate: '2025-06-20',
+    }];
+    const items = computeDueSoon(cases, [], today).filter(d => ['fit_note','probation','oh_referral','suspension'].includes(d.category));
+    expect(items).toHaveLength(0);
+  });
+
+  it('carries case metadata (confidential/caseId/createdBy) through on these new categories', () => {
+    const cases = [{ id: 'c27', employeeName: 'Hana', stage: 'open', confidential: true, createdBy: 'user-1', meetings: [], suspensionReviewDate: '2025-06-25' }];
+    const [item] = computeDueSoon(cases, [], today).filter(d => d.category === 'suspension');
+    expect(item.caseId).toBe('c27');
+    expect(item.confidential).toBe(true);
+    expect(item.createdBy).toBe('user-1');
+  });
+});
