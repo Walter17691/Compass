@@ -32,10 +32,17 @@ export async function oauthStart(req, res) {
     const members = await memberRes.json();
     if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
 
+    // The nonce is embedded in the signed state AND set as an HttpOnly
+    // cookie — oauth-callback requires both to match. This binds the
+    // callback to the same browser that started the flow, so a state+code
+    // pair leaked or replayed from elsewhere (browser history, a shared
+    // link, a proxy log) can't complete a connection on its own. Mirrors
+    // the identical fix in api/graph-mail/_oauth-start.js.
+    const nonce = crypto.randomUUID();
     const state = signState({
       userId,
       orgId,
-      nonce: crypto.randomUUID(),
+      nonce,
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
     });
 
@@ -50,6 +57,7 @@ export async function oauthStart(req, res) {
       state,
     });
 
+    res.setHeader('Set-Cookie', `calendar_oauth_nonce=${nonce}; Max-Age=600; Path=/api/calendar; HttpOnly; Secure; SameSite=Lax`);
     res.status(200).json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
   } catch (e) {
     console.error('Calendar oauth-start error:', e.message);

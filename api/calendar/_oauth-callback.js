@@ -1,7 +1,23 @@
+import crypto from 'crypto';
 import { verifyState } from './_state.js';
 import { supabaseRequest } from './_supabase.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
+
+function readCookie(req, name) {
+  const header = req.headers.cookie || '';
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return rest.join('=');
+  }
+  return null;
+}
+
+// Clears the one-time nonce cookie regardless of outcome, so a stale value
+// can never be reused for a second callback attempt.
+function clearNonceCookie(res) {
+  res.setHeader('Set-Cookie', 'calendar_oauth_nonce=; Max-Age=0; Path=/api/calendar; HttpOnly; Secure; SameSite=Lax');
+}
 
 export async function oauthCallback(req, res) {
   const { code, state, error } = req.query;
@@ -11,6 +27,20 @@ export async function oauthCallback(req, res) {
   try {
     const payload = verifyState(state);
     if (!payload) return res.redirect(302, `${APP_URL}/?calendar=error`);
+
+    // Requires the SAME browser that started the flow (via _oauth-start.js's
+    // HttpOnly cookie) to be the one completing it — verifyState alone only
+    // proves the state wasn't tampered with, not that this request came
+    // from the session that requested it.
+    const cookieNonce = readCookie(req, 'calendar_oauth_nonce');
+    const cookieBuf = Buffer.from(cookieNonce || '');
+    const payloadBuf = Buffer.from(payload.nonce || '');
+    const nonceMatches = cookieBuf.length > 0 && cookieBuf.length === payloadBuf.length && crypto.timingSafeEqual(cookieBuf, payloadBuf);
+    clearNonceCookie(res);
+    if (!nonceMatches) {
+      console.error('Calendar oauth-callback: nonce cookie mismatch or missing');
+      return res.redirect(302, `${APP_URL}/?calendar=error`);
+    }
 
     const redirectUri = `${APP_URL}/api/calendar/oauth-callback`;
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
