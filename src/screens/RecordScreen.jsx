@@ -3,7 +3,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { SCREENS } from '../constants';
 import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const cancelMeeting = async () => {
@@ -181,13 +181,26 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
                   })}
                 </div>
               )}
+              {meetingEvidenceSuggestions.some(s=>s.status==="pending")&&(
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Evidence mentioned</div>
+                  {meetingEvidenceSuggestions.filter(s=>s.status==="pending").map(s=>(
+                    <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:6}}>
+                      <span style={{fontSize:11,color:"#3D3560",lineHeight:1.5,flex:1}}>{s.kind==="witness"?"Potential witness: ":""}{s.description}</span>
+                      <div style={{display:"flex",gap:4,flexShrink:0}}>
+                        <button onClick={()=>onAcceptMeetingEvidenceSuggestion(s)} style={{fontSize:10,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>
+                        <button onClick={()=>onDismissMeetingEvidenceSuggestion(s.id)} style={{fontSize:10,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {meetingIntelligence&&[
                 ...(prepQuestions.length>0?[]:[
                   {key:"questionsAsked", label:"Questions asked", color:"#1A7A4A"},
                   {key:"questionsRemaining", label:"Questions remaining", color:"#B87520"},
                 ]),
                 {key:"newIssues", label:"New issues raised", color:"#C84B2F"},
-                {key:"evidenceMentioned", label:"Evidence mentioned", color:"#7C5CFC"},
                 {key:"actionsIdentified", label:"Actions identified", color:"#1C5AA0"},
               ].map(({key,label,color})=>{
                 const items = meetingIntelligence[key];

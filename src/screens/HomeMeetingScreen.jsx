@@ -30,7 +30,7 @@ const FORMAL_MEETING_TYPES = MEETING_TYPES.filter(t => t.group !== "dev");
 // all — DevelopScreen was fully built and completely unreachable.
 const DEV_MEETING_TYPES = MEETING_TYPES.filter(t => t.group === "dev");
 
-export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, fmtDate, startSession }) {
+export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
@@ -312,7 +312,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               const mt = selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               setMeetingType(mt);
               setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
-              setTranscript([]);setPrepNotes("");setPrepQuestions([]);setReviewOutput("");setReviewOutputOriginal("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);
+              setTranscript([]);setPrepNotes("");setPrepQuestions([]);setMeetingEvidenceSuggestions([]);setReviewOutput("");setReviewOutputOriginal("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);
             };
             return (
               <div style={{display:"flex",gap:8}}>
