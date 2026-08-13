@@ -90,6 +90,75 @@ describe('getCaseStage — grievance-shaped cases', () => {
   });
 });
 
+describe('getCaseStage — probation-shaped cases (regular case flow, not DevelopScreen)', () => {
+  it('defaults to "probation_started" for a brand-new case with no meetings', () => {
+    expect(getCaseStage({ caseType: 'probation', meetings: [] })).toBe('probation_started');
+  });
+
+  it('infers "check_in" once one meeting has been held', () => {
+    expect(getCaseStage({ caseType: 'probation', meetings: [{ type: 'Formal Meeting' }] })).toBe('check_in');
+  });
+
+  it('infers "concerns_raised" once more than one meeting has been held', () => {
+    const cs = { caseType: 'probation', meetings: [{ type: 'Formal Meeting' }, { type: 'Formal Meeting' }] };
+    expect(getCaseStage(cs)).toBe('concerns_raised');
+  });
+
+  it('infers "outcome" once cs.outcome is set', () => {
+    expect(getCaseStage({ caseType: 'probation', outcome: 'Pass', meetings: [] })).toBe('outcome');
+  });
+
+  it('an explicitly-tracked stage still wins over the probation heuristic', () => {
+    expect(getCaseStage({ caseType: 'probation', stage: 'closed', meetings: [] })).toBe('closed');
+  });
+});
+
+describe('getCaseStage — flexible working-shaped cases', () => {
+  it('defaults to "request_received" for a brand-new case with no meetings', () => {
+    expect(getCaseStage({ caseType: 'flexible working', meetings: [] })).toBe('request_received');
+  });
+
+  it('is not sensitive to the underscore-vs-space spelling', () => {
+    expect(getCaseStage({ caseType: 'flexible_working', meetings: [] })).toBe('request_received');
+  });
+
+  it('infers "decision_meeting" once a meeting has been held', () => {
+    expect(getCaseStage({ caseType: 'flexible working', meetings: [{ type: 'Formal Meeting' }] })).toBe('decision_meeting');
+  });
+
+  it('infers "decision" once cs.outcome is set', () => {
+    expect(getCaseStage({ caseType: 'flexible working', outcome: 'Approved', meetings: [] })).toBe('decision');
+  });
+
+  it('infers "appeal" when an appeal meeting exists, even without cs.outcome', () => {
+    const cs = { caseType: 'flexible working', meetings: [{ type: 'Appeal' }] };
+    expect(getCaseStage(cs)).toBe('appeal');
+  });
+});
+
+describe('getCaseStage — long-term sickness-shaped cases', () => {
+  it('defaults to "absence_identified" for a brand-new case with no meetings', () => {
+    expect(getCaseStage({ caseType: 'long-term sickness', meetings: [] })).toBe('absence_identified');
+  });
+
+  it('is not sensitive to the hyphen-vs-space spelling', () => {
+    expect(getCaseStage({ caseType: 'long term sickness', meetings: [] })).toBe('absence_identified');
+  });
+
+  it('infers "contact_welfare" once a meeting has been held', () => {
+    expect(getCaseStage({ caseType: 'long-term sickness', meetings: [{ type: 'Return to Work' }] })).toBe('contact_welfare');
+  });
+
+  it('infers "capability_consideration" once a capability-type meeting exists', () => {
+    const cs = { caseType: 'long-term sickness', meetings: [{ type: 'Capability Review' }] };
+    expect(getCaseStage(cs)).toBe('capability_consideration');
+  });
+
+  it('infers "decision" once cs.outcome is set', () => {
+    expect(getCaseStage({ caseType: 'long-term sickness', outcome: 'Return to work agreed', meetings: [] })).toBe('decision');
+  });
+});
+
 describe('getCurrentRisk', () => {
   it('returns null when no meeting has a rating', () => {
     expect(getCurrentRisk({ meetings: [{ date: '2026-01-01' }] })).toBeNull();

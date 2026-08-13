@@ -4,10 +4,13 @@
 // — anything without its own table below. Grievance (ACAS S6) has no
 // separate investigation-vs-hearing split the way disciplinary does, so
 // it collapses to intake -> hearing -> outcome -> appeal -> closed.
-// Probation/appraisal/PDP stay on DevelopScreen's own separate, working
-// flow (confirmed decision, not folded in here) — cs.caseType never
-// matches those, so they always fall through to the disciplinary default,
-// same as before this file had per-type tables at all.
+// DevelopScreen's own probation/appraisal/PDP flow (a genuinely separate,
+// already-working system) stays exactly as it is — this is specifically
+// for the regular case flow's own "probation"/"flexible working"/
+// "long-term sickness" case types (already selectable in the quick-create
+// dropdown, or new here), which had no dedicated stage tracking at all
+// before Process Intelligence (P2) — see processStages.js for the full
+// per-type stage registry these heuristics return ids from.
 function inferDisciplinaryStage(cs) {
   const meetings = cs.meetings||[];
   const types = meetings.map(m=>(m.type||"").toLowerCase());
@@ -36,8 +39,46 @@ function inferGrievanceStage(cs) {
   return "intake";
 }
 
+// P2 — no structured data exists yet for these three (fit notes, OH
+// referral dates, probation review dates are P16's job) so, like the two
+// heuristics above, this reads only what's already on the case: meeting
+// count/type and whether an outcome has been recorded. Coarse by design —
+// real dated fields will let this get more precise once P16 lands them.
+function inferLongTermSicknessStage(cs) {
+  const meetings = cs.meetings||[];
+  const types = meetings.map(m=>(m.type||"").toLowerCase());
+  if(cs.outcome) return "decision";
+  if(types.some(t=>t.includes("capability"))) return "capability_consideration";
+  if(types.some(t=>t.includes("occupational health"))) return "occupational_health";
+  if(meetings.length>0) return "contact_welfare";
+  return "absence_identified";
+}
+
+function inferProbationStage(cs) {
+  const meetings = cs.meetings||[];
+  if(cs.outcome) return "outcome";
+  if(meetings.length>1) return "concerns_raised";
+  if(meetings.length>0) return "check_in";
+  return "probation_started";
+}
+
+function inferFlexibleWorkingStage(cs) {
+  const meetings = cs.meetings||[];
+  if(cs.outcome) return "decision";
+  if(meetings.some(m=>(m.type||"").toLowerCase().includes("appeal"))) return "appeal";
+  if(meetings.length>0) return "decision_meeting";
+  return "request_received";
+}
+
 export function isGrievanceCase(cs) {
   return (cs?.caseType||"").toLowerCase()==="grievance";
+}
+
+// Case-type strings normalized the same way processStages.js's registry
+// does — see that file for why the vocabulary is this specific list
+// (two case-creation entry points, never sharing one vocabulary).
+function normalizedCaseType(cs) {
+  return (cs?.caseType||"").trim().toLowerCase();
 }
 
 export function getCaseStage(cs) {
@@ -56,6 +97,10 @@ export function getCaseStage(cs) {
   // Moved here, the heuristic only ever fires for cases with no tracked
   // stage at all — meeting-only data added outside the guided flow.
   if(cs.stage) return cs.stage;
+  const type = normalizedCaseType(cs);
+  if(type==="probation") return inferProbationStage(cs);
+  if(type==="flexible working"||type==="flexible_working") return inferFlexibleWorkingStage(cs);
+  if(type==="long-term sickness"||type==="long term sickness"||type==="long_term_sickness") return inferLongTermSicknessStage(cs);
   return isGrievanceCase(cs) ? inferGrievanceStage(cs) : inferDisciplinaryStage(cs);
 }
 

@@ -21,9 +21,17 @@ import { getCaseStage, isGrievanceCase } from './caseStage.js';
 // outcome letter produces — before the appeal window had necessarily
 // run. Fixed in caseStage.js by making an explicitly-tracked cs.stage
 // win over that heuristic, so these branches are now reachable.
+function normalizedCaseType(cs) {
+  return (cs?.caseType||"").trim().toLowerCase();
+}
+
 export function getNextStep(cs) {
   const stage = getCaseStage(cs);
   if(stage==="closed") return null;
+  const type = normalizedCaseType(cs);
+  if(type==="probation") return probationNextStep(stage);
+  if(type==="flexible working"||type==="flexible_working") return flexibleWorkingNextStep(stage);
+  if(type==="long-term sickness"||type==="long term sickness"||type==="long_term_sickness") return longTermSicknessNextStep(stage);
   return isGrievanceCase(cs) ? grievanceNextStep(cs, stage) : disciplinaryNextStep(cs, stage);
 }
 
@@ -92,6 +100,73 @@ function grievanceNextStep(cs, stage) {
       if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-grievance", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-grievance", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
       return {label:"Appeal outcome issued — close case", action:"close_case", meetingType:"appeal-grievance", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
+    default:
+      return null;
+  }
+}
+
+// P2 — regular-case-flow probation (deliberately separate from
+// DevelopScreen's own dedicated probation/appraisal/PDP flow, which has
+// its own outcome options and letter templates already). "formal"
+// (Formal Meeting, ERA 1996) is the closest existing "er"-group meeting
+// type — the dedicated "Probation Review" meeting type is reserved for
+// DevelopScreen's dev-group flow and shouldn't be reused here.
+function probationNextStep(stage) {
+  switch(stage) {
+    case "probation_started":
+      return {label:"Schedule a check-in", action:"check_in", meetingType:"formal", primary:true, reason:"Regular check-ins during probation help identify concerns early, while there's still time to address them."};
+    case "check_in":
+      return {label:"Note any concerns raised", action:"concerns_raised", meetingType:"formal", primary:true, reason:"Document specific concerns as they arise so they can be fairly addressed before any decision."};
+    case "concerns_raised":
+      return {label:"Decide: extend probation or move to review", action:"extension_or_review", meetingType:"formal", primary:true, reason:"Concerns raised during probation should lead to a clear decision on extension or confirmation, not drift."};
+    case "extension_or_review":
+      return {label:"Record the outcome", action:"outcome", meetingType:"formal", primary:true, reason:"Confirm whether probation is passed, extended, or employment ends."};
+    case "outcome":
+      return {label:"Close case", action:"close_case", meetingType:"formal", primary:true, reason:"Outcome has been recorded."};
+    default:
+      return null;
+  }
+}
+
+// P2 — statutory flexible working request, regular case flow.
+function flexibleWorkingNextStep(stage) {
+  switch(stage) {
+    case "request_received":
+      return {label:"Assess the request", action:"assessment", meetingType:"formal", primary:true, reason:"A statutory flexible working request must be considered in a reasonable manner."};
+    case "assessment":
+      return {label:"Hold a decision meeting", action:"decision_meeting", meetingType:"formal", primary:true, reason:"Discuss the request with the employee before deciding."};
+    case "decision_meeting":
+      return {label:"Confirm the decision in writing", action:"decision", meetingType:"formal", primary:true, reason:"The decision, and any business reason for refusal, should be confirmed in writing within the statutory timeframe."};
+    case "decision":
+      return {label:"Close case", action:"close_case", meetingType:"formal", primary:true, reason:"Decision has been issued and no appeal is in progress."};
+    case "appeal":
+      return {label:"Hear the appeal", action:"start_appeal_meeting", meetingType:"formal", primary:true, reason:"An appeal has been raised against the flexible working decision."};
+    default:
+      return null;
+  }
+}
+
+// P2 — "return" (Return to Work, EqA 2010) is the closest existing
+// meeting type for the earlier welfare-contact stages; later stages
+// shift toward a formal capability conversation, so "formal" from there.
+function longTermSicknessNextStep(stage) {
+  switch(stage) {
+    case "absence_identified":
+      return {label:"Make contact with the employee", action:"contact_employee", meetingType:"return", primary:true, reason:"Regular, supportive contact during long-term sickness absence is expected under most attendance policies."};
+    case "contact_welfare":
+      return {label:"Request medical evidence", action:"request_medical_evidence", meetingType:"return", primary:true, reason:"A fit note or GP evidence should confirm the nature and expected duration of the absence."};
+    case "medical_evidence":
+      return {label:"Consider an Occupational Health referral", action:"oh_referral", meetingType:"return", primary:true, reason:"OH input helps identify whether reasonable adjustments could support a return to work."};
+    case "occupational_health":
+      return {label:"Consider reasonable adjustments", action:"adjustments", meetingType:"return", primary:true, reason:"The Equality Act may require reasonable adjustments to be considered before any capability step."};
+    case "adjustments_considered":
+      return {label:"Hold a review meeting", action:"review_meeting", meetingType:"return", primary:true, reason:"A review meeting checks whether adjustments are working, or whether the absence is ongoing."};
+    case "review":
+      return {label:"Consider capability process if absence continues", action:"capability_consideration", meetingType:"formal", primary:true, reason:"With no clear return-to-work date, this may need to move to a formal capability process."};
+    case "capability_consideration":
+      return {label:"Prepare a decision", action:"decision", meetingType:"formal", primary:true, reason:"A decision should be reasoned, documented, and follow a fair process."};
+    case "decision":
+      return {label:"Close case", action:"close_case", meetingType:"formal", primary:true, reason:"A decision has been reached."};
     default:
       return null;
   }

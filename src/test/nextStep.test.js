@@ -195,3 +195,62 @@ describe('getNextStep — grievance-shaped cases', () => {
     expect(allActions).not.toContain('disciplinary_invite');
   });
 });
+
+// P2 — regular-case-flow probation/flexible working/long-term sickness.
+// caseType dispatch (not stage-value dispatch like grievance above) since
+// these three each carry their own distinct stage vocabulary from
+// processStages.js, entirely separate from the disciplinary/grievance ids.
+describe('getNextStep — probation-shaped cases', () => {
+  const probationCase = (stage) => ({ caseType: 'probation', stage, meetings: [] });
+
+  it('recommends a check-in from probation_started, using the generic formal meeting type (not DevelopScreen\'s dedicated one)', () => {
+    const step = getNextStep(probationCase('probation_started'));
+    expect(step.action).toBe('check_in');
+    expect(step.meetingType).toBe('formal');
+  });
+
+  it('recommends closing the case at the outcome stage', () => {
+    expect(getNextStep(probationCase('outcome')).action).toBe('close_case');
+  });
+
+  it('never returns a disciplinary-only action for a probation stage id the disciplinary switch wouldn\'t recognise', () => {
+    const step = getNextStep(probationCase('concerns_raised'));
+    expect(step.action).toBe('extension_or_review');
+  });
+});
+
+describe('getNextStep — flexible working-shaped cases', () => {
+  it('recommends assessing the request from request_received', () => {
+    const step = getNextStep({ caseType: 'flexible working', stage: 'request_received', meetings: [] });
+    expect(step.action).toBe('assessment');
+  });
+
+  it('is not sensitive to the underscore-vs-space spelling', () => {
+    const step = getNextStep({ caseType: 'flexible_working', stage: 'decision', meetings: [] });
+    expect(step.action).toBe('close_case');
+  });
+
+  it('recommends hearing the appeal at the appeal stage', () => {
+    const step = getNextStep({ caseType: 'flexible working', stage: 'appeal', meetings: [] });
+    expect(step.action).toBe('start_appeal_meeting');
+  });
+});
+
+describe('getNextStep — long-term sickness-shaped cases', () => {
+  const sicknessCase = (stage) => ({ caseType: 'long-term sickness', stage, meetings: [] });
+
+  it('recommends contacting the employee from absence_identified, using the Return to Work meeting type', () => {
+    const step = getNextStep(sicknessCase('absence_identified'));
+    expect(step.action).toBe('contact_employee');
+    expect(step.meetingType).toBe('return');
+  });
+
+  it('shifts to the generic formal meeting type once it reaches capability consideration', () => {
+    const step = getNextStep(sicknessCase('capability_consideration'));
+    expect(step.meetingType).toBe('formal');
+  });
+
+  it('recommends closing the case at the decision stage', () => {
+    expect(getNextStep(sicknessCase('decision')).action).toBe('close_case');
+  });
+});
