@@ -4446,6 +4446,29 @@ Please produce:
       const activeCase = cases.find(x=>x.id===activeCaseId);
       const empRec = getEmployeeRecord(caseInfo.employee)||{};
       const prevMeetings = activeCase?(activeCase.meetings||[]).slice(-3).map(m=>m.type+" on "+m.date+(m.record?" — "+m.record.slice(0,100):"")).join("; "):"";
+      // Outcome Builder (P12) — an outcome letter used to draw only on the
+      // generic case/meeting context above, the same as every other letter
+      // type; it never actually looked at the allegations, findings, or
+      // mitigation the Decision Workspace (Phase 16, P10) already holds,
+      // even though that's precisely what "reasons for the decision" and
+      // "mitigation considered" should be grounded in. Same per-allegation
+      // pull as concludeInvestigation, just scoped to the outcome letter
+      // and reading the decision-maker's own decisionReasoning/
+      // investigatorFinding/outstandingUncertainty fields concludeInvestigation
+      // doesn't need (it runs before any finding exists).
+      const allegationOutcomeContext = t==="outcome" && activeCase ? allegationsForCase(allegations, activeCase.id).map(a => {
+        const linked = evidenceForAllegation(activeCase.evidence||[], a.id);
+        const supporting = linked.filter(ev=>ev.stance==="supports").map(ev=>ev.name);
+        const contrary = linked.filter(ev=>ev.stance==="contradicts").map(ev=>ev.name);
+        return `- "${a.title}"${a.description?": "+a.description:""}`+nl
+          +"  Finding: "+allegationStatusMeta(a.status).label+nl
+          +"  Decision reasoning: "+(a.decisionReasoning||"not recorded")+nl
+          +"  Investigator's finding: "+(a.investigatorFinding||"not recorded")+nl
+          +"  Employee response / mitigation put forward: "+(a.employeeResponse||"not recorded")+nl
+          +"  Supporting evidence: "+(supporting.join(", ")||"none linked")+nl
+          +"  Contrary evidence: "+(contrary.join(", ")||"none linked")+nl
+          +"  Outstanding uncertainty: "+(a.outstandingUncertainty||"none recorded");
+      }).join(nl+nl) : "";
       const context = [
         caseInfo.employee ? "Employee: "+caseInfo.employee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
         caseInfo.manager ? "Chair/Manager: "+caseInfo.manager : "",
@@ -4456,16 +4479,18 @@ Please produce:
         activeCase?.caseType ? "Case type: "+activeCase.caseType : "",
         activeCase?.description ? "Case description: "+activeCase.description : "",
         activeCase?.outcome ? "Outcome decision: "+activeCase.outcome : "",
+        activeCase?.outcomeNotes ? "Outcome rationale recorded by HR: "+activeCase.outcomeNotes : "",
         meetingType?.label ? "Meeting type: "+meetingType.label : "",
         evidenceList ? "Evidence gathered:"+nl+evidenceList : "",
         prevMeetings ? "Previous meetings: "+prevMeetings : "",
+        allegationOutcomeContext ? "Allegations and findings on record:"+nl+allegationOutcomeContext : "",
         reviewOutput ? "Meeting record:"+nl+reviewOutput.slice(0,1200) : "",
         tx ? "Transcript:"+nl+tx.slice(0,800) : "",
       ].filter(Boolean).join(nl) + getPolicyCtx();
 
       const letterInstructions = {
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. Follow ACAS Code of Practice.",
-        "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed, decision reached (infer from context or use [Decision]), reasons for the decision, any sanction imposed (e.g. [First Written Warning] lasting [duration]), right of appeal within 5 working days. Follow ACAS Code of Practice.",
+        "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; any sanction imposed (e.g. [First Written Warning]) and its duration (e.g. [12 months], matching the uploaded policy's own stated duration where one is referenced below); where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal within 5 working days. Follow ACAS Code of Practice.",
         "appeal": "a formal appeal outcome letter. Include: grounds of appeal considered, outcome of the appeal, reasons, whether original decision is upheld or overturned, confirmation this is the final stage. Follow ACAS Code of Practice.",
         "investigation-report": "a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed (infer from meeting record), findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections.","no-case-answer": "a formal letter to the employee confirming no case to answer. Include: that an investigation has been completed, that no further action will be taken, that the matter is now closed, and that the record will be kept confidential. Warm but professional tone.","grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
         "warning": "a formal written warning letter. Include: nature of misconduct, previous warnings if any, expected improvement, review period, consequence of further misconduct, right of appeal. Follow ACAS Code of Practice.",
