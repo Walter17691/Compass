@@ -86,6 +86,88 @@ describe('computeGuardrailChecks — appeal clause', () => {
   });
 });
 
+describe('computeGuardrailChecks — appeal clause, policy citation (P6)', () => {
+  const cs = {
+    ...baseCase,
+    meetings: [{ id: 'm1', type: 'Disciplinary', date: '10/08/2026', letterOutput: 'You have been issued a final written warning.' }],
+  };
+
+  it('attaches a policy clause citation when an indexed clause mentions appeal', () => {
+    const policies = [{ id: 'p1', name: 'Disciplinary Policy', clauses: [{ heading: 'Right of appeal', text: 'Employees may appeal within 5 working days.' }] }];
+    const checks = computeGuardrailChecks(cs, [], policies);
+    const flagged = checks.find(c => c.title === 'Outcome letter may be missing the right of appeal');
+    expect(flagged.sourceRefs).toEqual(expect.arrayContaining([
+      { kind: 'meeting', id: 'm1' },
+      { kind: 'policy', id: 'p1', label: 'Disciplinary Policy', clauseHeading: 'Right of appeal', clauseText: 'Employees may appeal within 5 working days.' },
+    ]));
+  });
+
+  it('has no policy sourceRef when no policy is uploaded', () => {
+    const checks = computeGuardrailChecks(cs, [], []);
+    const flagged = checks.find(c => c.title === 'Outcome letter may be missing the right of appeal');
+    expect(flagged.sourceRefs).toEqual([{ kind: 'meeting', id: 'm1' }]);
+  });
+
+  it('has no policy sourceRef when no indexed clause mentions appeal', () => {
+    const policies = [{ id: 'p1', name: 'Attendance Policy', clauses: [{ heading: 'Notice period', text: 'Give 48 hours notice.' }] }];
+    const checks = computeGuardrailChecks(cs, [], policies);
+    const flagged = checks.find(c => c.title === 'Outcome letter may be missing the right of appeal');
+    expect(flagged.sourceRefs).toEqual([{ kind: 'meeting', id: 'm1' }]);
+  });
+});
+
+describe('computeGuardrailChecks — allegation response opportunity (P6)', () => {
+  it('flags an allegation with no recorded employee response, once an investigation meeting has actually been held', () => {
+    const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', date: '01/08/2026' }] };
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: '' }];
+    const checks = computeGuardrailChecks(cs, allegations);
+    const flagged = checks.find(c => c.title === 'An allegation has no recorded employee response');
+    expect(flagged).toBeTruthy();
+    expect(flagged.sourceRefs).toEqual([{ kind: 'allegation', id: 'a1', label: 'Unauthorised absence' }]);
+  });
+
+  it('pluralises the title for more than one unaddressed allegation', () => {
+    const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', date: '01/08/2026' }] };
+    const allegations = [
+      { id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: '' },
+      { id: 'a2', caseId: 'case1', title: 'Late timesheets', employeeResponse: '' },
+    ];
+    const checks = computeGuardrailChecks(cs, allegations);
+    expect(checks.find(c => c.title === '2 allegations have no recorded employee response')).toBeTruthy();
+  });
+
+  it('does not flag a brand-new case with no investigation/disciplinary meeting held yet — nothing has failed to happen', () => {
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: '' }];
+    const checks = computeGuardrailChecks(baseCase, allegations);
+    expect(checks.find(c => c.title.includes('employee response'))).toBeUndefined();
+  });
+
+  it('does not flag once the employee response has been recorded', () => {
+    const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', date: '01/08/2026' }] };
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: 'The employee said they had a medical appointment.' }];
+    const checks = computeGuardrailChecks(cs, allegations);
+    expect(checks.find(c => c.title.includes('employee response'))).toBeUndefined();
+  });
+
+  it('a meeting with no record yet does not count as an opportunity already given', () => {
+    const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation', date: '01/08/2026' }] };
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: '' }];
+    const checks = computeGuardrailChecks(cs, allegations);
+    expect(checks.find(c => c.title.includes('employee response'))).toBeUndefined();
+  });
+
+  it('attaches a policy clause citation when an indexed clause mentions responding to allegations', () => {
+    const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', date: '01/08/2026' }] };
+    const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: '' }];
+    const policies = [{ id: 'p1', name: 'Disciplinary Policy', clauses: [{ heading: 'Right to respond', text: 'Employees must be given a fair opportunity to respond to allegations.' }] }];
+    const checks = computeGuardrailChecks(cs, allegations, policies);
+    const flagged = checks.find(c => c.title.includes('employee response'));
+    expect(flagged.sourceRefs).toEqual(expect.arrayContaining([
+      { kind: 'policy', id: 'p1', label: 'Disciplinary Policy', clauseHeading: 'Right to respond', clauseText: 'Employees must be given a fair opportunity to respond to allegations.' },
+    ]));
+  });
+});
+
 describe('computeGuardrailChecks — witness evidence gap', () => {
   it('flags an allegation referencing witness evidence with no witness statement on file', () => {
     const cs = { ...baseCase, evidence: [] };

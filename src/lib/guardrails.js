@@ -15,6 +15,24 @@
 
 import { isFindingStatus } from './allegations';
 
+// Process Intelligence (P6) — plain keyword search over P4's already-
+// indexed clauses, not an AI call: still no LLM in this file. Returns
+// the first clause across any policy whose heading or text mentions any
+// of the given keywords, as a ready-to-render sourceRef, or null if
+// nothing indexed matches (no policies uploaded yet, or none relevant —
+// both real, common, non-error states).
+function findPolicyClauseRef(policies, keywords) {
+  for (const policy of policies || []) {
+    for (const clause of policy.clauses || []) {
+      const haystack = (clause.heading + " " + clause.text).toLowerCase();
+      if (keywords.some(k => haystack.includes(k))) {
+        return { kind: "policy", id: policy.id, label: policy.name, clauseHeading: clause.heading, clauseText: clause.text };
+      }
+    }
+  }
+  return null;
+}
+
 function parseFlexDate(str) {
   if (!str) return null;
   if (typeof str === "string" && str.includes("/")) {
@@ -66,14 +84,34 @@ function checkEvidenceAfterReport(cs) {
 // type, which is the pairing that normally carries a right of appeal.
 // Advisory only, so an occasional false positive (e.g. an invite letter
 // attached to a disciplinary meeting) is dismissible via "Not relevant".
-function checkAppealClauseMissing(cs) {
+function checkAppealClauseMissing(cs, policies) {
   const risky = (cs.meetings || []).filter(m => (m.type === "Disciplinary" || m.type === "Grievance") && m.letterOutput && !/appeal/i.test(m.letterOutput));
   if (!risky.length) return null;
   const m = risky[0];
+  const policyRef = findPolicyClauseRef(policies, ["appeal"]);
   return {
     title: "Outcome letter may be missing the right of appeal",
     reasoning: `The letter attached to the ${m.type.toLowerCase()} on ${m.date} doesn't mention a right of appeal. ACAS-code outcome letters should normally set out the right to appeal and how to do so — worth checking before this is sent.`,
-    sourceRefs: [{ kind: "meeting", id: m.id }],
+    sourceRefs: [{ kind: "meeting", id: m.id }, ...(policyRef ? [policyRef] : [])],
+  };
+}
+
+// Natural justice — the spec's own worked example (§2): an allegation
+// moving toward a hearing without any recorded employee response
+// suggests they may not yet have had a genuine opportunity to address
+// it. Only fires once an investigation/disciplinary meeting has actually
+// been held — a brand-new case with no meetings yet obviously hasn't had
+// that opportunity fail to happen; there's nothing to flag.
+function checkAllegationResponseOpportunity(cs, caseAllegations, policies) {
+  const hasHeldMeeting = (cs.meetings || []).some(m => { const t = (m.type || "").toLowerCase(); return (t.includes("investigation") || t.includes("disciplinary")) && m.record; });
+  if (!hasHeldMeeting) return null;
+  const unaddressed = caseAllegations.filter(a => !(a.employeeResponse || "").trim());
+  if (!unaddressed.length) return null;
+  const policyRef = findPolicyClauseRef(policies, ["respond", "response", "opportunity to respond"]);
+  return {
+    title: unaddressed.length === 1 ? "An allegation has no recorded employee response" : `${unaddressed.length} allegations have no recorded employee response`,
+    reasoning: `${unaddressed.length === 1 ? "This allegation hasn't" : "These allegations haven't"} been shown to have been put to the employee for a response yet: ${unaddressed.map(a => a.title).join(", ")}. Natural justice — and most disciplinary policies — expect the employee to have a genuine opportunity to respond to each allegation before findings are reached.`,
+    sourceRefs: [...unaddressed.map(a => ({ kind: "allegation", id: a.id, label: a.title })), ...(policyRef ? [policyRef] : [])],
   };
 }
 
@@ -111,12 +149,13 @@ function checkDecisionReasoningMissing(cs, caseAllegations) {
   };
 }
 
-export function computeGuardrailChecks(cs, allegations) {
+export function computeGuardrailChecks(cs, allegations, policies) {
   const caseAllegations = (allegations || []).filter(a => a.caseId === cs.id);
   return [
     checkChairIndependence(cs),
     checkEvidenceAfterReport(cs),
-    checkAppealClauseMissing(cs),
+    checkAppealClauseMissing(cs, policies),
+    checkAllegationResponseOpportunity(cs, caseAllegations, policies),
     checkWitnessEvidenceGaps(cs, caseAllegations),
     checkDecisionReasoningMissing(cs, caseAllegations),
   ].filter(Boolean);

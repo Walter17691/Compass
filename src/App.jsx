@@ -2953,7 +2953,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // since these are factual comparisons, not judgment calls a human needs
   // to confirm away.
   const syncGuardrailSignals = (cs) => {
-    const checks = computeGuardrailChecks(cs, allegations);
+    const checks = computeGuardrailChecks(cs, allegations, policies);
     const triggeredTitles = new Set(checks.map(c=>c.title));
     const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk");
 
@@ -5450,6 +5450,7 @@ Please produce:
           analyseEvidenceDocument={analyseEvidenceDocument}
           acceptDocumentFinding={acceptDocumentFinding}
           dismissDocumentFinding={dismissDocumentFinding}
+          requestOverrideReason={requestOverrideReason}
         />
       )}
 {/* ══ INTAKE ══ */}
