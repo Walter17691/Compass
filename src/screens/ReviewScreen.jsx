@@ -4,7 +4,7 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore,
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -34,6 +34,13 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
   // are the only two sources, and both are already fully self-contained
   // (label/detail inline), so resolveRef is a plain identity function.
   const [showRiskWhy, setShowRiskWhy] = useState(false);
+  // M10 — a second, short generation distinct from the full record: what
+  // actually matters for someone triaging the case (key facts, disputed
+  // points, outstanding questions, allegation impact) rather than the full
+  // formatted dialogue. Collapsible, defaulting open since its whole point
+  // is to be scanned in seconds — collapsing it away by default would
+  // defeat that.
+  const [showSummary, setShowSummary] = useState(true);
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -144,6 +151,24 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
               </div>
             )}
           </div>
+
+          {/* Meeting summary — separate, short generation (M10). Distinct
+              from the full record above: what matters for triage, not the
+              full formatted dialogue. */}
+          {meetingSummary&&(
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:16}}>
+              <div onClick={()=>setShowSummary(s=>!s)}
+                style={{padding:"12px 20px",borderBottom:showSummary?"1px solid #EDE5D8":"none",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5",cursor:"pointer"}}>
+                <span style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Meeting summary</span>
+                <span style={{fontSize:11,color:"#7C5CFC",fontWeight:500}}>{showSummary?"Hide":"Show"}</span>
+              </div>
+              {showSummary&&(
+                <div style={{padding:"20px 24px"}}>
+                  <div style={{fontSize:13,lineHeight:1.8,color:"#3D3560"}}><MDRenderer text={meetingSummary}/></div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* HR Advisor Notes — separate card */}
           {reviewOutput&&reviewOutput.includes("## HR Advisor")&&(
