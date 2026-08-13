@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newEvidenceSinceFinding, appealMeetingsForCase } from '../lib/appealReview';
+import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, parseAppealGroundReasoning } from '../lib/appealReview';
 
 describe('newEvidenceSinceFinding', () => {
   const decidedAllegation = { id: 'a1', decidedAt: '2026-08-01T00:00:00.000Z' };
@@ -50,5 +50,43 @@ describe('appealMeetingsForCase', () => {
   it('returns an empty array for a case with no meetings', () => {
     expect(appealMeetingsForCase({ meetings: [] })).toEqual([]);
     expect(appealMeetingsForCase({})).toEqual([]);
+  });
+});
+
+describe('formatAppealGroundReasoning / parseAppealGroundReasoning (P13)', () => {
+  it('round-trips all four fields', () => {
+    const ground = {
+      ground: 'The sanction was disproportionate to the conduct',
+      employeeArgument: 'The employee argued a final written warning was excessive for a first offence.',
+      compassReview: 'The original reasoning cites no prior disciplinary history, consistent with the employee\'s account.',
+      potentialIssue: 'No comparison to how similar cases have been sanctioned is recorded in the original finding.',
+    };
+    const reasoning = formatAppealGroundReasoning(ground);
+    expect(parseAppealGroundReasoning(reasoning)).toEqual(ground);
+  });
+
+  it('omits potentialIssue from the formatted text when not given, and parses back to an empty string', () => {
+    const ground = { ground: 'New evidence was not considered', employeeArgument: 'A witness statement was submitted after the hearing.', compassReview: 'The original finding predates this witness statement.', potentialIssue: '' };
+    const reasoning = formatAppealGroundReasoning(ground);
+    expect(reasoning).not.toContain('Potential issue:');
+    expect(parseAppealGroundReasoning(reasoning).potentialIssue).toBe('');
+  });
+
+  it('parses fields correctly even when their content itself contains blank lines', () => {
+    const ground = {
+      ground: 'Procedural unfairness',
+      employeeArgument: 'The employee argued they were not given the evidence in advance.\n\nThey only saw it at the hearing itself.',
+      compassReview: 'The investigation report was sent 2 working days before the hearing.',
+      potentialIssue: '',
+    };
+    const reasoning = formatAppealGroundReasoning(ground);
+    const parsed = parseAppealGroundReasoning(reasoning);
+    expect(parsed.employeeArgument).toBe(ground.employeeArgument);
+    expect(parsed.compassReview).toBe(ground.compassReview);
+  });
+
+  it('returns empty strings for all fields when reasoning is empty or missing', () => {
+    expect(parseAppealGroundReasoning('')).toEqual({ ground: '', employeeArgument: '', compassReview: '', potentialIssue: '' });
+    expect(parseAppealGroundReasoning(undefined)).toEqual({ ground: '', employeeArgument: '', compassReview: '', potentialIssue: '' });
   });
 });

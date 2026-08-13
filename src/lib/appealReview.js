@@ -34,3 +34,39 @@ export function newEvidenceSinceFinding(evidence, allegation) {
 export function appealMeetingsForCase(cs) {
   return (cs?.meetings || []).filter(m => (m.type || "").toLowerCase().includes("appeal") && m.record);
 }
+
+// Process Intelligence (P13) — restructures the appeal review from one
+// combined blob per allegation to one card per distinct ground of
+// appeal (an allegation can have several — e.g. "the sanction was
+// disproportionate" and "new evidence wasn't considered" both aimed at
+// the same finding). case_signals has no per-field JSONB column to hold
+// these four separately without a migration, so they're encoded as
+// labelled sections within the signal's own `reasoning` text — same
+// "structured content inside a text field" pattern P7's policy
+// deviation record already uses — and parsed back out here for display.
+const GROUND_FIELDS = [
+  ["ground", "Ground: "],
+  ["employeeArgument", "Employee's argument: "],
+  ["compassReview", "Compass review: "],
+  ["potentialIssue", "Potential issue: "],
+];
+
+export function formatAppealGroundReasoning({ ground, employeeArgument, compassReview, potentialIssue }) {
+  const values = { ground, employeeArgument, compassReview, potentialIssue };
+  return GROUND_FIELDS.filter(([key]) => values[key]).map(([key, label]) => label + values[key]).join("\n\n");
+}
+
+export function parseAppealGroundReasoning(reasoning) {
+  const text = reasoning || "";
+  const positions = GROUND_FIELDS
+    .map(([key, label]) => ({ key, label, index: text.indexOf(label) }))
+    .filter(p => p.index !== -1)
+    .sort((a, b) => a.index - b.index);
+  const result = { ground: "", employeeArgument: "", compassReview: "", potentialIssue: "" };
+  positions.forEach((p, i) => {
+    const from = p.index + p.label.length;
+    const to = i + 1 < positions.length ? positions[i + 1].index : text.length;
+    result[p.key] = text.slice(from, to).trim();
+  });
+  return result;
+}

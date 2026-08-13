@@ -4,7 +4,7 @@ import { computeOutcomeDistribution } from '../lib/outcomeConsistency';
 import { appealMeetingsForCase } from '../lib/appealReview';
 import { allegationPolicyClauseRef } from '../lib/guardrails';
 import { EvidenceMatrixPanel } from './EvidenceMatrixPanel';
-import { SignalCard } from './SignalCard';
+import { AppealGroundCard } from './AppealGroundCard';
 import { PolicyCitation } from './PolicyCitation';
 
 const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
@@ -177,8 +177,8 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                           {appealReviewLoading?"Reviewing…":"Generate appeal review"}
                         </button>
                       </div>
-                      {caseSignals.filter(s=>s.caseId===cs.id&&s.title==="Appeal review: "+a.title&&s.status==="open").map(s=>(
-                        <SignalCard key={s.id} signal={s} onAskWhy={()=>onAskWhy?.(s)} />
+                      {caseSignals.filter(s=>s.caseId===cs.id&&s.status==="open"&&s.title.startsWith("Appeal ground:")&&(s.sourceRefs||[]).some(r=>r.kind==="allegation"&&r.id===a.id)).map(s=>(
+                        <AppealGroundCard key={s.id} signal={s} onAskWhy={()=>onAskWhy?.(s)} />
                       ))}
                       <div style={{marginTop:10}}>
                         <label style={labelStyle}>Appeal outcome — recorded by the chair, never Compass</label>

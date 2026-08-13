@@ -24,7 +24,7 @@ async function revealCase(page, employeeName) {
 // same explainability substrate as guardrails/inconsistencies) and record
 // the actual outcome themselves — Compass never proposes upheld/not upheld.
 test('appeal review: generating a review creates a signal, and recording the outcome stamps who/when', async ({ page }) => {
-  test.setTimeout(90000);
+  test.setTimeout(200000); // two real AI calls: the appeal meeting's own record generation, then generateAppealReview
   const employeeName = `E2E AppealReview ${Date.now()}`;
 
   await login(page);
@@ -97,17 +97,38 @@ test('appeal review: generating a review creates a signal, and recording the out
   // link handler snapshots reviewOutput into the meeting's record field at
   // click time (App.jsx's showLinkCase handler), and appealMeetingsForCase()
   // requires a non-empty record — so clicking Link too early would silently
-  // produce a meeting Phase 19's own detection can never find. ReviewScreen's
-  // own "Compass is generating your record..." indicator (rendered behind
-  // the modal overlay, still present in the DOM even though visually
-  // covered) only shows while aiProcessing is true AND reviewOutput is still
-  // empty — waiting for it to clear is a direct, condition-based signal that
-  // reviewOutput has at least started streaming in, unlike waiting on the
-  // network response body (which can resolve before the page's own fetch
-  // reader has finished processing chunks into React state).
+  // produce a meeting Phase 19's own detection can never find.
+  //
+  // Process Intelligence (P13) found the actual bug here: "Compass is
+  // generating your record..." disappears the instant reviewOutput has
+  // ANY content — even a single streamed-in fragment like "## Meeting
+  // Details" — not once the record is actually complete, so clicking Link
+  // right after it clears can snapshot a near-empty record. The old,
+  // looser appeal-review prompt apparently guessed content from that
+  // sparse a record anyway, which is exactly the kind of fabrication P13's
+  // stricter prompt now correctly refuses to do — surfacing this pre-
+  // existing race rather than causing it. ReviewScreen only renders its
+  // "Compass HR Advisor" card once reviewOutput has streamed all the way
+  // through the LAST of the record's three sections
+  // (reviewOutput.includes("## HR Advisor")), so waiting for it — same
+  // condition-based signal every other spec in this suite already waits
+  // on after "End meeting" — is what actually proves the record is done,
+  // not just started.
   await page.getByRole('button', { name: 'End meeting' }).click();
+  // Human Override (P1), added after this test was first written: "End
+  // meeting" now runs attemptEndMeeting first, which can show the Meeting
+  // Quality Check modal (this sparse transcript reliably has gaps) and
+  // blocks handleReview — where appeal detection itself lives — until
+  // it's dismissed. Same optional-handling every newer spec in this
+  // suite already uses.
+  const qualityModal = page.getByRole('dialog').filter({ hasText: 'Meeting Quality Check' });
+  const gotQualityCheck = await qualityModal.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false);
+  if (gotQualityCheck) {
+    await page.getByRole('button', { name: 'Proceed anyway' }).click();
+    await page.getByRole('dialog', { name: 'Proceed anyway?' }).getByRole('button', { name: 'Proceed', exact: true }).click();
+  }
   await expect(page.getByText('Appeal detected')).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText('Compass is generating your record...')).not.toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Compass HR Advisor', { exact: true })).toBeVisible({ timeout: 90000 });
   const linkButton = page.getByRole('button', { name: new RegExp(employeeName) });
   await expect(linkButton).toBeVisible();
   await linkButton.click();
@@ -151,12 +172,18 @@ test('appeal review: generating a review creates a signal, and recording the out
   // only becomes "Generate appeal review" again once the try/catch
   // completes, so this is a direct signal the resulting signal has
   // actually landed in state, rather than racing a fixed network wait.
-  await expect(page.getByRole('button', { name: 'Generate appeal review' })).toBeEnabled({ timeout: 30000 });
+  await expect(page.getByRole('button', { name: 'Generate appeal review' })).toBeEnabled({ timeout: 60000 });
 
-  // Real AI call — assert structure (a signal with the expected title
-  // appears), not exact wording, matching org-intelligence.spec.js's
-  // established pattern for AI-generated content.
-  await expect(page.getByText('Appeal review: Unauthorised absence')).toBeVisible({ timeout: 10000 });
+  // Real AI call — assert structure, not exact wording, matching
+  // org-intelligence.spec.js's established pattern for AI-generated
+  // content. Process Intelligence (P13) restructured the appeal review
+  // from one combined blob per allegation (a deterministic "Appeal
+  // review: <allegation title>" signal title) into one AppealGroundCard
+  // per distinct ground of appeal, titled from the AI's own free-text
+  // ground label — not assertable verbatim. The card's own fixed section
+  // labels are the deterministic, structural thing to check instead.
+  await expect(page.getByText("Employee’s argument", { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Compass review', { exact: true })).toBeVisible();
 
   // Record the outcome — the chair's own call, never Compass's.
   const outcomeSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');

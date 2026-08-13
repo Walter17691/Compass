@@ -22,7 +22,7 @@ import {
   linkPrepQuestionToEvidence as linkPrepQuestionToEvidenceHelper,
   setPrepQuestionStatus as setPrepQuestionStatusHelper,
 } from './lib/prepQuestions';
-import { newEvidenceSinceFinding, appealMeetingsForCase } from './lib/appealReview';
+import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning } from './lib/appealReview';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -2947,25 +2947,34 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         return ne.length ? `New evidence since the finding on "${a.title}": ${ne.map(e=>e.name).join(", ")}` : null;
       }).filter(Boolean).join("\n") || "None recorded";
 
+      // Process Intelligence (P13) — restructured from one combined blob
+      // per allegation to one entry per distinct GROUND of appeal (an
+      // allegation can have several, e.g. "the sanction was
+      // disproportionate" and "new evidence wasn't considered" both aimed
+      // at the same finding) — the AI can return multiple entries sharing
+      // the same allegationId. potentialIssue is a genuinely separate
+      // field from compassReview, not folded into the same prose, so a
+      // real procedural/evidential concern reads distinctly rather than
+      // buried in a paragraph of neutral comparison.
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
-        max_tokens:1200,
+        max_tokens:1600,
         stream:false,
-        system:"You are Compass, an Employee Relations copilot assembling a neutral appeal review. For each allegation, compare the original finding and reasoning against the grounds of appeal raised in the appeal meeting record, and note any new evidence. Never state or recommend whether the appeal should be upheld, partially upheld, or not upheld — that decision belongs solely to the chair hearing the appeal; only describe what the record shows. Respond ONLY with valid JSON, no other text: [{\"allegationId\":\"...\",\"groundsOfAppeal\":\"what the employee argued, from the appeal meeting record\",\"reviewNote\":\"a neutral comparison of the original finding/reasoning against the grounds raised and any new evidence\"}]",
+        system:"You are Compass, an Employee Relations copilot assembling a neutral appeal review. Identify each distinct ground of appeal raised in the appeal meeting record — an allegation may have more than one ground raised against it, or none. For each ground, write a short label, then quote or closely paraphrase what the employee specifically argued for it (from the appeal meeting record), then give a neutral comparison against the original finding/reasoning and any new evidence. Never state or recommend whether the appeal should be upheld, partially upheld, or not upheld — that decision belongs solely to the chair hearing the appeal; only describe what the record shows. ground, employeeArgument and compassReview must never be left blank — if there is genuinely nothing to review, return an empty array [] rather than an entry with empty fields. Respond ONLY with valid JSON, no other text, in this exact shape (allegationId must be one of the ids given in ALLEGATIONS AND ORIGINAL FINDINGS below): [{\"allegationId\":\"the matching allegation id\",\"ground\":\"e.g. 'The sanction was disproportionate to the conduct'\",\"employeeArgument\":\"e.g. 'The employee argued the record didn't account for them covering an emergency delivery that day'\",\"compassReview\":\"e.g. 'The original finding relied solely on the swipe-card record and did not record whether this explanation was put to the employee before the finding was reached'\",\"potentialIssue\":\"e.g. 'No record of the employee being asked about this circumstance before the finding' — or an empty string if there genuinely isn't one\"}]",
         messages:[{role:"user", content:"ALLEGATIONS AND ORIGINAL FINDINGS:\n"+allegationContext+"\n\nNEW EVIDENCE:\n"+newEvidenceContext+"\n\nAPPEAL MEETING RECORD:\n"+(appealMeeting.record||"").slice(0,4000)}],
       })});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
-      const valid = (Array.isArray(parsed)?parsed:[]).filter(f=>caseAllegs.some(a=>a.id===f.allegationId));
+      const valid = (Array.isArray(parsed)?parsed:[]).filter(f=>f.ground && caseAllegs.some(a=>a.id===f.allegationId));
       if(!valid.length) { showToast("Compass couldn't match the appeal record to any allegation", "error"); setAppealReviewLoading(l=>({...l,[cs.id]:false})); return; }
 
-      // Regenerating supersedes only this case's prior appeal-review
+      // Regenerating supersedes only this case's prior appeal-ground
       // signals (matched by title prefix), never other process_risk
       // signals (guardrails write that same type) — the exact same
       // "supersede stale, don't touch unrelated" split guardrails.js's
       // syncGuardrailSignals already relies on.
-      const priorOpen = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && s.status==="open" && s.title.startsWith("Appeal review:"));
+      const priorOpen = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && s.status==="open" && s.title.startsWith("Appeal ground:"));
       let updated = caseSignals;
       priorOpen.forEach(s => { updated = setSignalStatus(updated, s.id, "resolved", null, "Superseded by a refreshed appeal review"); });
       priorOpen.forEach(s => { const u = updated.find(x=>x.id===s.id); if(u) saveSignalToDB(u); });
@@ -2974,8 +2983,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         const allegation = caseAllegs.find(a=>a.id===f.allegationId);
         updated = createSignal(updated, cs.id, {
           type:"process_risk",
-          title:"Appeal review: "+allegation.title,
-          reasoning:`Grounds of appeal: ${f.groundsOfAppeal}\n\nCompass review: ${f.reviewNote}`,
+          title:"Appeal ground: "+f.ground,
+          reasoning: formatAppealGroundReasoning({ground:f.ground, employeeArgument:f.employeeArgument, compassReview:f.compassReview, potentialIssue:f.potentialIssue}),
           sourceRefs:[{kind:"allegation", id:allegation.id, label:allegation.title}, {kind:"meeting", id:appealMeeting.id}],
           source:"ai",
         });
