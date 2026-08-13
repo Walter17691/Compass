@@ -65,7 +65,13 @@ test('an allegation with no recorded employee response is flagged with a policy 
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
   await expect(page.getByText('Procedural guardrails', { exact: true })).toBeVisible({ timeout: 10000 });
-  const signalCard = page.getByText('An allegation has no recorded employee response').locator('xpath=ancestor::div[2]');
+  // Process Intelligence (P15) — this same open guardrail signal now
+  // also appears (deliberately) inside the new Case Risk Panel's own
+  // "Procedural risk" category on the same Overview tab, so a plain
+  // ancestor-climb from the signal text alone is ambiguous. Scoped by
+  // GuardrailsPanel's own "Proceed anyway"/"Create action" buttons,
+  // which only its cards have — CaseRiskPanel's don't.
+  const signalCard = page.locator('div').filter({ hasText: 'An allegation has no recorded employee response' }).filter({ has: page.getByRole('button', { name: 'Proceed anyway' }) }).last();
   await expect(signalCard).toBeVisible({ timeout: 10000 });
   await expect(signalCard.getByText('Unauthorised absence')).toBeVisible();
 
@@ -83,9 +89,14 @@ test('an allegation with no recorded employee response is flagged with a policy 
   const deviationPrompt = page.getByRole('dialog', { name: 'Record a policy deviation' });
   await expect(deviationPrompt).toBeVisible({ timeout: 5000 });
   await deviationPrompt.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(page.getByText('An allegation has no recorded employee response')).toBeVisible();
+  // Scoped the same way as signalCard's own definition (P15's Case Risk
+  // Panel duplicates this exact signal text elsewhere on the page).
+  await expect(signalCard).toBeVisible();
 
-  // Confirm this time — the signal (and its citation) leaves the open list.
+  // Confirm this time — the signal (and its citation) leaves the open
+  // list in BOTH places it appeared (GuardrailsPanel and CaseRiskPanel),
+  // so the plain, unscoped text check is safe again here: once resolved,
+  // neither panel renders it and the locator matches zero elements.
   await signalCard.getByRole('button', { name: 'Proceed anyway' }).click();
   await expect(deviationPrompt).toBeVisible({ timeout: 5000 });
   await deviationPrompt.locator('input').first().fill('Response will be taken at the disciplinary hearing itself.');

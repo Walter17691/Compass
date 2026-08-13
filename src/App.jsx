@@ -5533,6 +5533,8 @@ Please produce:
           changeAllegationStatus={changeAllegationStatus}
           deleteAllegation={deleteAllegation}
           auditLog={auditLog}
+          wellbeingNotes={wellbeingNotes}
+          dueSoon={dueSoon}
           caseTasks={caseTasks}
           createCaseTask={createCaseTask}
           toggleCaseTaskDone={toggleCaseTaskDone}
