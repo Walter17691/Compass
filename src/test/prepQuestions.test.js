@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   addPrepQuestion, updatePrepQuestionText, removePrepQuestion, movePrepQuestion,
   togglePrepQuestionEssential, linkPrepQuestionToAllegation, linkPrepQuestionToEvidence,
+  setPrepQuestionStatus, questionStatusMeta, QUESTION_STATUSES,
 } from '../lib/prepQuestions';
 
 describe('addPrepQuestion', () => {
@@ -10,6 +11,11 @@ describe('addPrepQuestion', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ text: '', category: 'general', essential: false, source: 'user' });
     expect(result[0].id).toBeTruthy();
+  });
+
+  it('defaults status to not_asked, statusSource to ai', () => {
+    const result = addPrepQuestion([]);
+    expect(result[0]).toMatchObject({ status: 'not_asked', statusSource: 'ai' });
   });
 
   it('gives each added question a unique id', () => {
@@ -91,5 +97,39 @@ describe('linkPrepQuestionToEvidence', () => {
   it('index 0 is a valid link, not treated as empty', () => {
     const qs = [{ id: 'a', linkedEvidenceIndex: null }];
     expect(linkPrepQuestionToEvidence(qs, 'a', '0')[0].linkedEvidenceIndex).toBe(0);
+  });
+});
+
+describe('setPrepQuestionStatus', () => {
+  it('sets status and statusSource together', () => {
+    const qs = [{ id: 'a', status: 'not_asked', statusSource: 'ai' }];
+    const result = setPrepQuestionStatus(qs, 'a', 'answered', 'user');
+    expect(result[0]).toMatchObject({ status: 'answered', statusSource: 'user' });
+  });
+
+  it('rejects an unknown status, leaving the list unchanged', () => {
+    const qs = [{ id: 'a', status: 'not_asked', statusSource: 'ai' }];
+    expect(setPrepQuestionStatus(qs, 'a', 'bogus', 'user')).toBe(qs);
+  });
+
+  it('only updates the matching question', () => {
+    const qs = [{ id: 'a', status: 'not_asked' }, { id: 'b', status: 'not_asked' }];
+    const result = setPrepQuestionStatus(qs, 'a', 'asked', 'ai');
+    expect(result.find(q => q.id === 'a').status).toBe('asked');
+    expect(result.find(q => q.id === 'b').status).toBe('not_asked');
+  });
+});
+
+describe('questionStatusMeta', () => {
+  it('returns the matching status entry', () => {
+    expect(questionStatusMeta('answered')).toMatchObject({ id: 'answered', label: 'Answered' });
+  });
+
+  it('falls back to the first status (not_asked) for an unknown value', () => {
+    expect(questionStatusMeta('bogus')).toBe(QUESTION_STATUSES[0]);
+  });
+
+  it('falls back to the first status for undefined', () => {
+    expect(questionStatusMeta(undefined)).toBe(QUESTION_STATUSES[0]);
   });
 });

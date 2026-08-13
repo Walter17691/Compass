@@ -1,8 +1,9 @@
 import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
 import { SCREENS } from '../constants';
+import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, handleReview, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const cancelMeeting = async () => {
@@ -140,9 +141,12 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
 
           {/* Meeting intelligence — live panels + the quiet inconsistency
               nudge. Never auto-inserted into the transcript; the HR user
-              chooses whether to ask the suggested question. */}
-          {meetingIntelligence&&(
-            <div style={{padding:"14px 18px",borderBottom:"1px solid #EDE5D8",flexShrink:0,maxHeight:220,overflowY:"auto"}}>
+              chooses whether to ask the suggested question. The question
+              checklist (M2) shows as soon as prep questions exist, even
+              before the first live AI pass has run — everything else here
+              still waits for meetingIntelligence, same as before. */}
+          {(meetingIntelligence||prepQuestions.length>0)&&(
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #EDE5D8",flexShrink:0,maxHeight:280,overflowY:"auto"}}>
               <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10}}>Meeting intelligence</div>
               {showNudge&&(
                 <div style={{background:"#FEF5E7",border:"1px solid #E8C88A",borderRadius:8,padding:"10px 12px",marginBottom:12}}>
@@ -159,9 +163,29 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
                   </div>
                 </div>
               )}
-              {[
-                {key:"questionsAsked", label:"Questions asked", color:"#1A7A4A"},
-                {key:"questionsRemaining", label:"Questions remaining", color:"#B87520"},
+              {prepQuestions.length>0&&(
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#1A7A4A",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Questions</div>
+                  {prepQuestions.map(q=>{
+                    const meta = questionStatusMeta(q.status);
+                    return (
+                      <div key={q.id} style={{display:"flex",alignItems:"flex-start",gap:6,marginBottom:5}}>
+                        <select value={q.status||"not_asked"} onChange={e=>onSetPrepQuestionStatus(q.id, e.target.value)}
+                          aria-label={"Status for: "+q.text}
+                          style={{fontSize:10,border:"1px solid #E8E0D0",borderRadius:4,padding:"1px 2px",color:meta.color,background:"#FFFFFF",flexShrink:0,marginTop:1}}>
+                          {QUESTION_STATUSES.map(s=><option key={s.id} value={s.id}>{s.symbol} {s.label}</option>)}
+                        </select>
+                        <span style={{fontSize:11,color:"#3D3560",lineHeight:1.5}}>{q.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {meetingIntelligence&&[
+                ...(prepQuestions.length>0?[]:[
+                  {key:"questionsAsked", label:"Questions asked", color:"#1A7A4A"},
+                  {key:"questionsRemaining", label:"Questions remaining", color:"#B87520"},
+                ]),
                 {key:"newIssues", label:"New issues raised", color:"#C84B2F"},
                 {key:"evidenceMentioned", label:"Evidence mentioned", color:"#7C5CFC"},
                 {key:"actionsIdentified", label:"Actions identified", color:"#1C5AA0"},

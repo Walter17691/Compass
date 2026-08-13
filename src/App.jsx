@@ -20,6 +20,7 @@ import {
   togglePrepQuestionEssential as togglePrepQuestionEssentialHelper,
   linkPrepQuestionToAllegation as linkPrepQuestionToAllegationHelper,
   linkPrepQuestionToEvidence as linkPrepQuestionToEvidenceHelper,
+  setPrepQuestionStatus as setPrepQuestionStatusHelper,
 } from './lib/prepQuestions';
 import { newEvidenceSinceFinding, appealMeetingsForCase } from './lib/appealReview';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
@@ -687,15 +688,39 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const updateMeetingIntelligence = async (notes) => {
     if(notes.trim().split(/\s+/).length < 10) return;
     try {
-      const plannedQuestions = (prepNotes.match(/## Key Questions\n([\s\S]*?)(\n## |$)/)||[])[1]||"";
+      // M2 — when the meeting has a real structured question list (M1),
+      // track per-question status against it instead of the old free-text
+      // questionsAsked/questionsRemoved arrays. Only AI-owned questions
+      // (statusSource !== "user") are even sent to the model, so a status
+      // the user already set by hand can never come back changed — the
+      // model was simply never asked about it. Meetings started via "Skip
+      // prep" have no prepQuestions at all, so this falls back to the
+      // original free-text behaviour unchanged.
+      const trackedQuestions = prepQuestions.filter(q=>q.statusSource!=="user");
+      const plannedQuestions = trackedQuestions.length ? "" : ((prepNotes.match(/## Key Questions\n([\s\S]*?)(\n## |$)/)||[])[1]||"");
+      const questionContext = trackedQuestions.length
+        ? "\nQuestions to track (id: text):\n"+trackedQuestions.map(q=>q.id+": "+q.text).join("\n")
+        : (plannedQuestions?"\nPlanned key questions:\n"+plannedQuestions:"");
+      const questionInstruction = trackedQuestions.length
+        ? "For each question under \"Questions to track\", judge its current status from the transcript and add it to questionStatusUpdates as {\"id\":\"<its id>\",\"status\":\"asked\"|\"answered\"|\"partially_answered\"|\"not_asked\"|\"no_longer_relevant\"}. Only include a question you have real evidence for in the transcript — omit ones you're unsure about rather than guessing."
+        : "Where the planned key questions are provided, track which have been asked in questionsAsked and questionsRemaining.";
+      const questionShape = trackedQuestions.length
+        ? "\"questionStatusUpdates\":[{\"id\":\"...\",\"status\":\"...\"}],"
+        : "\"questionsAsked\":[\"...\"],\"questionsRemaining\":[\"...\"],";
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:500, stream:false,
-          system:"You are Compass, an Employee Relations copilot silently tracking a live HR meeting. Read the transcript so far and, where the planned key questions are provided, track which have been asked. Only report a possible inconsistency if someone's later statement genuinely conflicts with something specific they (or another named participant) said earlier in THIS transcript — never flag a mere gap or a different emphasis, and never state or imply anyone is lying. Respond ONLY with valid JSON, no other text: {\"questionsAsked\":[\"...\"],\"questionsRemaining\":[\"...\"],\"newIssues\":[\"...\"],\"evidenceMentioned\":[\"...\"],\"actionsIdentified\":[\"...\"],\"possibleInconsistency\":{\"earlier\":\"...\",\"later\":\"...\",\"suggestedQuestion\":\"...\"}} — omit possibleInconsistency (set it null) if there is none. Keep every array short — only real, specific items, empty arrays where nothing applies.",
-          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+(plannedQuestions?"\nPlanned key questions:\n"+plannedQuestions:"")+"\n\nTranscript so far:\n"+notes.slice(-3000)}]})});
+        body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:600, stream:false,
+          system:"You are Compass, an Employee Relations copilot silently tracking a live HR meeting. Read the transcript so far. "+questionInstruction+" Only report a possible inconsistency if someone's later statement genuinely conflicts with something specific they (or another named participant) said earlier in THIS transcript — never flag a mere gap or a different emphasis, and never state or imply anyone is lying. Respond ONLY with valid JSON, no other text: {"+questionShape+"\"newIssues\":[\"...\"],\"evidenceMentioned\":[\"...\"],\"actionsIdentified\":[\"...\"],\"possibleInconsistency\":{\"earlier\":\"...\",\"later\":\"...\",\"suggestedQuestion\":\"...\"}} — omit possibleInconsistency (set it null) if there is none. Keep every array short — only real, specific items, empty arrays where nothing applies.",
+          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+questionContext+"\n\nTranscript so far:\n"+notes.slice(-3000)}]})});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       setMeetingIntelligence(parsed);
+      if(Array.isArray(parsed.questionStatusUpdates)) {
+        setPrepQuestions(qs => parsed.questionStatusUpdates.reduce(
+          (acc,u) => (u?.id && u?.status) ? setPrepQuestionStatusHelper(acc, u.id, u.status, "ai") : acc,
+          qs
+        ));
+      }
     } catch(e) { console.error("updateMeetingIntelligence", e); }
   };
   const [meetingStartTime, setMeetingStartTime] = useState(null);
@@ -3296,6 +3321,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         linkedAllegationId: null,
         linkedEvidenceIndex: null,
         source: "ai",
+        status: "not_asked",
+        statusSource: "ai",
       })).filter(q=>q.text.trim()));
     } catch(e) { console.error("generatePrepQuestions", e); }
   };
@@ -3340,6 +3367,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const togglePrepQuestionEssential = (id) => setPrepQuestions(qs => togglePrepQuestionEssentialHelper(qs, id));
   const linkPrepQuestionToAllegation = (id, allegationId) => setPrepQuestions(qs => linkPrepQuestionToAllegationHelper(qs, id, allegationId));
   const linkPrepQuestionToEvidence = (id, evidenceIndex) => setPrepQuestions(qs => linkPrepQuestionToEvidenceHelper(qs, id, evidenceIndex));
+  // Manual status override (M2) — always source:"user", so
+  // updateMeetingIntelligence's next live pass leaves this question alone
+  // rather than silently reverting the user's own correction.
+  const setPrepQuestionStatus = (id, status) => setPrepQuestions(qs => setPrepQuestionStatusHelper(qs, id, status, "user"));
 
   // ── AI: Review + Risk ──
   const handleReview = async () => {
@@ -5133,7 +5164,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} handleReview={handleReview} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} />
       )}
 
       {/* ══ REVIEW ══ */}
