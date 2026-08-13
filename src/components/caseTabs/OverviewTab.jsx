@@ -3,6 +3,7 @@ import { openSignalsForCase } from '../../lib/caseSignals';
 import { UnansweredQuestionsPanel } from '../UnansweredQuestionsPanel';
 import { InconsistenciesPanel } from '../InconsistenciesPanel';
 import { GuardrailsPanel } from '../GuardrailsPanel';
+import { CaseRolesPanel } from '../CaseRolesPanel';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -11,7 +12,7 @@ const RISK_STYLE = {
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
-export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason }) {
+export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason, caseAccess, orgMembers, assignCaseRole }) {
   const yearsService = (() => {
     if(!empRecord?.startDate) return null;
     const start = new Date(empRecord.startDate.includes("/") ? empRecord.startDate.split("/").reverse().join("-") : empRecord.startDate);
@@ -61,6 +62,8 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
         {cs.referredBy&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>Referred by: {cs.referredBy}</div>}
         {repeatCount>1&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>{ORDINAL[repeatCount]||repeatCount+"th"} case for {cs.employeeName}.</div>}
       </div>
+
+      <CaseRolesPanel cs={cs} caseAccess={caseAccess} orgMembers={orgMembers} assignCaseRole={assignCaseRole} />
 
       <div style={{marginBottom:16}}>
         <UnansweredQuestionsPanel

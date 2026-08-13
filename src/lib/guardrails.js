@@ -14,6 +14,7 @@
 // spawn a fresh signal every time instead of updating one.
 
 import { isFindingStatus } from './allegations';
+import { currentRoleHolder } from './caseRoles';
 
 // Process Intelligence (P6) — plain keyword search over P4's already-
 // indexed clauses, not an AI call: still no LLM in this file. Returns
@@ -149,7 +150,28 @@ function checkDecisionReasoningMissing(cs, caseAllegations) {
   };
 }
 
-export function computeGuardrailChecks(cs, allegations, policies) {
+// Role Separation (P8) — natural justice, one stage later than
+// checkChairIndependence above: the person deciding an appeal shouldn't
+// be the same person who made the original decision being appealed.
+// "Original decision maker" prefers the dedicated cs.disciplinaryOfficer
+// field (set by HandoffModal's ACAS handoff flow) and falls back to the
+// most recent disciplinary/grievance meeting's own chair — matches by
+// name since that side of the comparison is sometimes free text, not a
+// case_access-backed user id.
+function checkAppealManagerConflict(cs, caseAccess, orgMembers) {
+  const appealManager = currentRoleHolder(caseAccess, orgMembers, cs.id, "appeal_manager");
+  if (!appealManager) return null;
+  const lastDecisionMeeting = (cs.meetings || []).slice().reverse().find(m => { const t = (m.type || "").toLowerCase(); return t.includes("disciplinary") || t.includes("grievance"); });
+  const originalDecisionMaker = cs.disciplinaryOfficer || lastDecisionMeeting?.manager;
+  if (!originalDecisionMaker || appealManager.name !== originalDecisionMaker) return null;
+  return {
+    title: "The Appeal Manager made the original decision",
+    reasoning: `${appealManager.name} is assigned as Appeal Manager but also made the original decision being appealed. Natural justice expects the appeal to be heard by someone who wasn't involved in that decision — consider assigning a different manager to hear the appeal.`,
+    sourceRefs: [],
+  };
+}
+
+export function computeGuardrailChecks(cs, allegations, policies, caseAccess, orgMembers) {
   const caseAllegations = (allegations || []).filter(a => a.caseId === cs.id);
   return [
     checkChairIndependence(cs),
@@ -158,5 +180,6 @@ export function computeGuardrailChecks(cs, allegations, policies) {
     checkAllegationResponseOpportunity(cs, caseAllegations, policies),
     checkWitnessEvidenceGaps(cs, caseAllegations),
     checkDecisionReasoningMissing(cs, caseAllegations),
+    checkAppealManagerConflict(cs, caseAccess, orgMembers),
   ].filter(Boolean);
 }

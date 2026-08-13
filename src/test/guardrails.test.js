@@ -226,6 +226,55 @@ describe('computeGuardrailChecks — decision reasoning missing (Phase 16)', () 
   });
 });
 
+describe('computeGuardrailChecks — appeal manager conflict (P8)', () => {
+  const orgMembers = [
+    { id: 'm1', user_id: 'u1', name: 'Priya Shah' },
+    { id: 'm2', user_id: 'u2', name: 'Tom Norton' },
+  ];
+
+  it('flags when the assigned Appeal Manager also made the original decision (via cs.disciplinaryOfficer)', () => {
+    const cs = { ...baseCase, disciplinaryOfficer: 'Priya Shah' };
+    const caseAccess = [{ caseId: 'case1', userId: 'u1', role: 'appeal_manager' }];
+    const checks = computeGuardrailChecks(cs, [], [], caseAccess, orgMembers);
+    const flagged = checks.find(c => c.title === 'The Appeal Manager made the original decision');
+    expect(flagged).toBeTruthy();
+    expect(flagged.reasoning).toContain('Priya Shah');
+  });
+
+  it('falls back to the most recent disciplinary/grievance meeting chair when cs.disciplinaryOfficer is not set', () => {
+    const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Disciplinary', manager: 'Priya Shah', date: '10/08/2026' }] };
+    const caseAccess = [{ caseId: 'case1', userId: 'u1', role: 'appeal_manager' }];
+    const checks = computeGuardrailChecks(cs, [], [], caseAccess, orgMembers);
+    expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeTruthy();
+  });
+
+  it('does not flag when the Appeal Manager is a different person', () => {
+    const cs = { ...baseCase, disciplinaryOfficer: 'Priya Shah' };
+    const caseAccess = [{ caseId: 'case1', userId: 'u2', role: 'appeal_manager' }];
+    const checks = computeGuardrailChecks(cs, [], [], caseAccess, orgMembers);
+    expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeUndefined();
+  });
+
+  it('does not flag when no Appeal Manager is assigned', () => {
+    const cs = { ...baseCase, disciplinaryOfficer: 'Priya Shah' };
+    const checks = computeGuardrailChecks(cs, [], [], [], orgMembers);
+    expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeUndefined();
+  });
+
+  it('does not flag when there is no original decision maker on record at all', () => {
+    const caseAccess = [{ caseId: 'case1', userId: 'u1', role: 'appeal_manager' }];
+    const checks = computeGuardrailChecks(baseCase, [], [], caseAccess, orgMembers);
+    expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeUndefined();
+  });
+
+  it('ignores an appeal manager assignment on a different case', () => {
+    const cs = { ...baseCase, disciplinaryOfficer: 'Priya Shah' };
+    const caseAccess = [{ caseId: 'other-case', userId: 'u1', role: 'appeal_manager' }];
+    const checks = computeGuardrailChecks(cs, [], [], caseAccess, orgMembers);
+    expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeUndefined();
+  });
+});
+
 describe('computeGuardrailChecks — clean case', () => {
   it('returns no checks for a case with nothing to flag', () => {
     expect(computeGuardrailChecks(baseCase, [])).toEqual([]);

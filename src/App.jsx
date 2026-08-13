@@ -32,6 +32,7 @@ import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { requestOverride, requestPolicyDeviation } from './lib/humanOverride';
+import { caseRoleLabel } from './lib/caseRoles';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
@@ -2439,6 +2440,31 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     showToast(targetMember.name+" assigned as investigator");
   };
 
+  // Process Intelligence (P8) — generalizes assignInvestigator for the
+  // roles that had no dedicated assignment flow at all before this phase
+  // (caseRoles.js's ASSIGNABLE_ROLES: Appeal Manager, Notetaker, the
+  // employee's own line manager, Approver). case_access has one row per
+  // (case, user) — case_access_case_id_user_id_key — so reassigning a
+  // role, or giving someone who already holds a different role on this
+  // case a new one, needs to replace their existing row. That can't be a
+  // plain upsert targeting the constraint: case_access's RLS only has
+  // SELECT/INSERT/DELETE policies (baseline_schema_2026-08-06.sql), no
+  // UPDATE one — an upsert that resolves to an UPDATE gets silently
+  // blocked (42501) rather than failing loudly. Delete-then-insert stays
+  // within the policies that actually exist instead.
+  const assignCaseRole = async (caseId, memberId, roleId) => {
+    const targetMember = orgMembers.find(m=>m.id===memberId||m.user_id===memberId);
+    if(!targetMember?.user_id||!org?.id) { showToast("Couldn't find that team member", "error"); return; }
+    await supabase.from('case_access').delete().eq('case_id', caseId).eq('user_id', targetMember.user_id);
+    const { error } = await withFkRetry(() => supabase.from('case_access').insert({
+      case_id: caseId, user_id: targetMember.user_id, org_id: org.id, role: roleId, granted_by: user?.id,
+    }));
+    if(error) { console.error('assignCaseRole', error); showToast("Couldn't assign "+caseRoleLabel(roleId)+" — "+error.message, "error"); return; }
+    await loadCaseAccess();
+    audit(caseRoleLabel(roleId)+" assigned", targetMember.name, caseId);
+    showToast(targetMember.name+" assigned as "+caseRoleLabel(roleId));
+  };
+
   // ── Case signals ──
   const loadCaseSignals = async () => {
     if(!org?.id) return;
@@ -2957,7 +2983,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // since these are factual comparisons, not judgment calls a human needs
   // to confirm away.
   const syncGuardrailSignals = (cs) => {
-    const checks = computeGuardrailChecks(cs, allegations, policies);
+    const checks = computeGuardrailChecks(cs, allegations, policies, caseAccess, orgMembers);
     const triggeredTitles = new Set(checks.map(c=>c.title));
     const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk");
 
@@ -2986,6 +3012,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // they do load. Re-running on every mutation is safe, not wasteful
   // churn: syncGuardrailSignals is idempotent by construction (dedup by
   // exact title), so a re-fire that finds nothing new just does nothing.
+  // caseAccess added for P8's checkAppealManagerConflict — assigning an
+  // Appeal Manager (or reassigning one) should surface a conflict signal
+  // immediately, not just on the next full page reload.
   useEffect(()=>{
     if(screen===SCREENS.CASE_VIEW && activeCaseId) {
       const cs = cases.find(c=>c.id===activeCaseId);
@@ -2993,7 +3022,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(cs) syncGuardrailSignals(cs);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, activeCaseId, cases, allegations]);
+  }, [screen, activeCaseId, cases, allegations, caseAccess]);
 
   // ── Automatic Evidence Matrix — link suggestions ──
   // The matrix grid itself and manual linking already existed (Evidence
@@ -5456,6 +5485,7 @@ Please produce:
           dismissDocumentFinding={dismissDocumentFinding}
           requestOverrideReason={requestOverrideReason}
           requestPolicyDeviationReason={requestPolicyDeviationReason}
+          assignCaseRole={assignCaseRole}
         />
       )}
 {/* ══ INTAKE ══ */}
