@@ -4,7 +4,25 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore }) {
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore,
+  meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
+  meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
+}) {
+  // M8 — post-meeting proposed-updates review. Pending items (raised live
+  // but never actioned) get one last explicit decision here; accepted
+  // items with nothing created yet (no case existed at the time — see
+  // App.jsx's acceptMeetingEvidenceSuggestion) are shown as already
+  // decided, informational only. Nothing here is a new detection pass —
+  // purely a review of what M3/M4 already found.
+  const pendingEvidence = meetingEvidenceSuggestions.filter(s=>s.status==="pending");
+  const pendingActions = meetingActionSuggestions.filter(s=>s.status==="pending");
+  const unappliedEvidence = meetingEvidenceSuggestions.filter(s=>s.status==="accepted" && !s.applied);
+  const unappliedActions = meetingActionSuggestions.filter(s=>s.status==="accepted" && !s.applied);
+  const hasProposedUpdates = pendingEvidence.length+pendingActions.length+unappliedEvidence.length+unappliedActions.length > 0;
+  const approveAllPending = () => {
+    pendingEvidence.forEach(onAcceptMeetingEvidenceSuggestion);
+    pendingActions.forEach(onAcceptMeetingActionSuggestion);
+  };
   // Phase 23 — Explainability retrofit. This panel predates the
   // case_signals/WhySourcesModal primitive (Phase 0) and rendered as
   // unsourced prose until now. Self-contained here rather than routed
@@ -188,6 +206,40 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                   <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6}}>{riskScore.historyContext}</div>
                 </div>
               )}
+            </div>
+          )}
+
+          {hasProposedUpdates&&(
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px",boxShadow:"0 1px 3px rgba(26,21,53,0.06)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass proposes these updates</div>
+                {(pendingEvidence.length+pendingActions.length)>1&&(
+                  <button onClick={approveAllPending} style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:5,padding:"3px 10px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Approve all</button>
+                )}
+              </div>
+              {pendingEvidence.map(s=>(
+                <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:8}}>
+                  <span style={{fontSize:12,color:"#3D3560",lineHeight:1.5,flex:1}}>{s.kind==="witness"?"Potential witness: ":"Evidence: "}{s.description}</span>
+                  <div style={{display:"flex",gap:4,flexShrink:0}}>
+                    <button onClick={()=>onAcceptMeetingEvidenceSuggestion(s)} style={{fontSize:10,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Approve</button>
+                    <button onClick={()=>onDismissMeetingEvidenceSuggestion(s.id)} style={{fontSize:10,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                  </div>
+                </div>
+              ))}
+              {pendingActions.map(s=>(
+                <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:8}}>
+                  <span style={{fontSize:12,color:"#3D3560",lineHeight:1.5,flex:1}}>Task: {s.description}</span>
+                  <div style={{display:"flex",gap:4,flexShrink:0}}>
+                    <button onClick={()=>onAcceptMeetingActionSuggestion(s)} style={{fontSize:10,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Approve</button>
+                    <button onClick={()=>onDismissMeetingActionSuggestion(s.id)} style={{fontSize:10,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                  </div>
+                </div>
+              ))}
+              {[...unappliedEvidence, ...unappliedActions].map(s=>(
+                <div key={s.id} style={{fontSize:12,color:"#1A7A4A",lineHeight:1.5,marginBottom:6}}>
+                  ✓ {s.description}{s.kind==="witness"?" (witness)":""} — will be added once saved
+                </div>
+              ))}
             </div>
           )}
 

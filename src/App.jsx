@@ -812,16 +812,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const acceptMeetingEvidenceSuggestion = (suggestion) => {
     const existingCase = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
     const caseId = caseInfo._linkedCaseId || existingCase?.id;
+    let applied = false;
     if(caseId) {
       createCaseTask(caseId, {
         name: suggestion.kind==="witness"
           ? "Interview "+suggestion.description+" as a potential witness"
           : "Request "+suggestion.description,
       });
+      applied = true;
     } else {
       showToast("Noted — save this meeting to a case to turn it into a task");
     }
-    setMeetingEvidenceSuggestions(s => s.map(x=>x.id===suggestion.id?{...x,status:"accepted"}:x));
+    // applied:false here is exactly what M8's post-meeting review panel
+    // looks for — an already-accepted decision with nothing created yet,
+    // applied automatically once a real case exists at save time.
+    setMeetingEvidenceSuggestions(s => s.map(x=>x.id===suggestion.id?{...x,status:"accepted",applied}:x));
   };
   const dismissMeetingEvidenceSuggestion = (id) => setMeetingEvidenceSuggestions(s => s.map(x=>x.id===id?{...x,status:"dismissed"}:x));
 
@@ -831,14 +836,34 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const acceptMeetingActionSuggestion = (suggestion) => {
     const existingCase = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
     const caseId = caseInfo._linkedCaseId || existingCase?.id;
+    let applied = false;
     if(caseId) {
       createCaseTask(caseId, { name:suggestion.description, owner:suggestion.suggestedOwner||"", dueDate:suggestion.suggestedDueDate||"" });
+      applied = true;
     } else {
       showToast("Noted — save this meeting to a case to turn it into a task");
     }
-    setMeetingActionSuggestions(s => s.map(x=>x.id===suggestion.id?{...x,status:"accepted"}:x));
+    setMeetingActionSuggestions(s => s.map(x=>x.id===suggestion.id?{...x,status:"accepted",applied}:x));
   };
   const dismissMeetingActionSuggestion = (id) => setMeetingActionSuggestions(s => s.map(x=>x.id===id?{...x,status:"dismissed"}:x));
+
+  // M8 — applies any evidence/action suggestions the user already
+  // accepted (live, or via the post-meeting review panel) but that
+  // couldn't become a real task yet because no case existed at the time.
+  // Called from saveMeetingToCase() once a real case id is finally known.
+  // Still-pending (never decided) suggestions are deliberately left alone
+  // here — silence isn't consent, only an explicit accept applies.
+  const applyPendingMeetingSuggestions = (caseId) => {
+    if(!caseId) return;
+    meetingEvidenceSuggestions.filter(s=>s.status==="accepted" && !s.applied).forEach(s => {
+      createCaseTask(caseId, {
+        name: s.kind==="witness" ? "Interview "+s.description+" as a potential witness" : "Request "+s.description,
+      });
+    });
+    meetingActionSuggestions.filter(s=>s.status==="accepted" && !s.applied).forEach(s => {
+      createCaseTask(caseId, { name:s.description, owner:s.suggestedOwner||"", dueDate:s.suggestedDueDate||"" });
+    });
+  };
 
   const [meetingStartTime, setMeetingStartTime] = useState(null);
   const [meetingEndTime, setMeetingEndTime] = useState(null);
@@ -3760,6 +3785,7 @@ Please produce:
       setActiveCaseStage("investigation");
       setScreen(SCREENS.CASE_VIEW);
       showToast("Witness statement saved to case");
+      applyPendingMeetingSuggestions(targetId);
       // M7 — a new witness statement can resolve an open question or
       // introduce new evidence just as much as a regular meeting can.
       if(updatedTargetCase) {
@@ -3818,6 +3844,7 @@ Please produce:
     generateUnansweredQuestions(updatedCase, true);
     generateEvidenceSuggestions(updatedCase, true);
     generateNextBestAction(updatedCase, true);
+    applyPendingMeetingSuggestions(caseId);
     audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`);
     showToast("Meeting saved to case file");
     // The button that triggers this is labelled "Save and go to case →" —
@@ -5307,7 +5334,10 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} riskScore={riskScore} />
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} riskScore={riskScore}
+          meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
+          meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
+        />
       )}
 
       {/* ══ LETTERS ══ */}
