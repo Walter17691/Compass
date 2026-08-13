@@ -1,9 +1,70 @@
+import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { DateInput } from '../components/DateInput';
 
-export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, handlePrepare, aiProcessing, setScreen, bgDoc, setBgDoc, prepNotes }) {
+const CATEGORY_LABEL = { agenda:"Agenda", evidence:"Evidence", clarification:"Clarification", unanswered:"Unanswered", general:"General" };
+
+// Meeting Intelligence Phase 2 (M1) — one editable question row: essential
+// toggle, inline-editable text, category badge, optional "Why ask this?"
+// reasoning (AI-sourced questions only), reorder/remove, and — only when
+// this prep is linked to an existing case — allegation/evidence link
+// selects. Kept as its own component since PrepScreen's render is already
+// long and every row needs several pieces of local toggle state (the
+// reasoning expand/collapse).
+function PrepQuestionRow({ q, index, total, linkedCaseAllegations, linkedCaseEvidence, onUpdateText, onRemove, onMove, onToggleEssential, onLinkAllegation, onLinkEvidence }) {
+  const [showWhy, setShowWhy] = useState(false);
+  return (
+    <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+        <button onClick={onToggleEssential} aria-label={q.essential?"Essential — click to unmark":"Mark as essential"} title={q.essential?"Essential — click to unmark":"Mark as essential"}
+          style={{background:"none",border:"none",cursor:"pointer",padding:2,fontSize:15,color:q.essential?"#B87520":"#C4BAB0",flexShrink:0,lineHeight:1}}>
+          {q.essential?"★":"☆"}
+        </button>
+        <div style={{flex:1,minWidth:0}}>
+          <input value={q.text} onChange={e=>onUpdateText(e.target.value)} placeholder="Question text..."
+            style={{width:"100%",fontSize:13,color:"#1A1535",border:"none",background:"none",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}/>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,fontWeight:600,color:"#6B6880",background:"#F0EAD8",borderRadius:4,padding:"1px 6px",textTransform:"uppercase",letterSpacing:0.3}}>{CATEGORY_LABEL[q.category]||"General"}</span>
+            {q.reasoning&&(
+              <button onClick={()=>setShowWhy(v=>!v)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0,textDecoration:"underline"}}>
+                {showWhy?"Hide why":"Why ask this?"}
+              </button>
+            )}
+            {linkedCaseAllegations.length>0&&(
+              <select value={q.linkedAllegationId||""} onChange={e=>onLinkAllegation(e.target.value)}
+                style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:5,padding:"2px 4px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                <option value="">Link to allegation…</option>
+                {linkedCaseAllegations.map(a=><option key={a.id} value={a.id}>{a.title}</option>)}
+              </select>
+            )}
+            {linkedCaseEvidence.length>0&&(
+              <select value={q.linkedEvidenceIndex??""} onChange={e=>onLinkEvidence(e.target.value)}
+                style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:5,padding:"2px 4px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                <option value="">Link to evidence…</option>
+                {linkedCaseEvidence.map((ev,i)=><option key={i} value={i}>{ev.name}</option>)}
+              </select>
+            )}
+          </div>
+          {showWhy&&q.reasoning&&(
+            <div style={{fontSize:11,color:"#6B6375",marginTop:6,lineHeight:1.5,fontStyle:"italic"}}>{q.reasoning}</div>
+          )}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flexShrink:0}}>
+          <button onClick={()=>onMove(-1)} disabled={index===0} aria-label="Move up" style={{background:"none",border:"none",cursor:index===0?"default":"pointer",color:index===0?"#E8E0D0":"#9B9098",fontSize:12,padding:0,lineHeight:1}}>▲</button>
+          <button onClick={()=>onMove(1)} disabled={index===total-1} aria-label="Move down" style={{background:"none",border:"none",cursor:index===total-1?"default":"pointer",color:index===total-1?"#E8E0D0":"#9B9098",fontSize:12,padding:0,lineHeight:1}}>▼</button>
+        </div>
+        <button onClick={onRemove} aria-label="Remove question" style={{background:"none",border:"none",color:"#C4BAB0",fontSize:14,cursor:"pointer",padding:"0 2px",lineHeight:1,flexShrink:0}}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, handlePrepare, aiProcessing, setScreen, bgDoc, setBgDoc, prepNotes,
+  prepQuestions=[], linkedCaseAllegations=[], linkedCaseEvidence=[],
+  onAddPrepQuestion, onUpdatePrepQuestionText, onRemovePrepQuestion, onMovePrepQuestion, onTogglePrepQuestionEssential, onLinkPrepQuestionToAllegation, onLinkPrepQuestionToEvidence,
+}) {
   return (
     <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
       <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
@@ -108,6 +169,28 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
         <div style={{marginTop:28,textAlign:"left",background:"#FFFFFF",border:"1px solid #7C5CFC33",borderRadius:12,padding:20}}>
           <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Prep pack ready</div>
           <MDRenderer text={prepNotes}/>
+
+          <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid #EDE5D8"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Key questions</div>
+            {prepQuestions.length===0&&(
+              <div style={{fontSize:12,color:"#9B9098",marginBottom:8}}>No questions yet — add one below.</div>
+            )}
+            {prepQuestions.map((q,i)=>(
+              <PrepQuestionRow key={q.id} q={q} index={i} total={prepQuestions.length}
+                linkedCaseAllegations={linkedCaseAllegations} linkedCaseEvidence={linkedCaseEvidence}
+                onUpdateText={t=>onUpdatePrepQuestionText(q.id,t)}
+                onRemove={()=>onRemovePrepQuestion(q.id)}
+                onMove={dir=>onMovePrepQuestion(q.id,dir)}
+                onToggleEssential={()=>onTogglePrepQuestionEssential(q.id)}
+                onLinkAllegation={id=>onLinkPrepQuestionToAllegation(q.id,id)}
+                onLinkEvidence={idx=>onLinkPrepQuestionToEvidence(q.id,idx)}
+              />
+            ))}
+            <button onClick={onAddPrepQuestion} style={{fontSize:12,background:"none",border:"1px dashed #E8E0D0",borderRadius:8,padding:"7px 14px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",width:"100%"}}>
+              + Add question
+            </button>
+          </div>
+
           <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
         </div>
       )}

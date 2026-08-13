@@ -12,6 +12,15 @@ import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
+import {
+  addPrepQuestion as addPrepQuestionHelper,
+  updatePrepQuestionText as updatePrepQuestionTextHelper,
+  removePrepQuestion as removePrepQuestionHelper,
+  movePrepQuestion as movePrepQuestionHelper,
+  togglePrepQuestionEssential as togglePrepQuestionEssentialHelper,
+  linkPrepQuestionToAllegation as linkPrepQuestionToAllegationHelper,
+  linkPrepQuestionToEvidence as linkPrepQuestionToEvidenceHelper,
+} from './lib/prepQuestions';
 import { newEvidenceSinceFinding, appealMeetingsForCase } from './lib/appealReview';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
@@ -114,6 +123,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [aiError, setAiError] = useState("");
   const [concludingInvestigation, setConcludingInvestigation] = useState(false);
   const [prepNotes, setPrepNotes] = useState("");
+  // Meeting Intelligence Phase 2 (M1) — structured, editable pre-meeting
+  // questions alongside the free-text prep pack: {id, text, category,
+  // essential, reasoning, linkedAllegationId, linkedEvidenceIndex, source}.
+  // source is "ai" for AI-generated or "user" for manually added. Session-
+  // local like prepNotes — not written to the DB until the meeting itself
+  // saves.
+  const [prepQuestions, setPrepQuestions] = useState([]);
   const [reviewOutput, setReviewOutput] = useState("");
   const [reviewOutputOriginal, setReviewOutputOriginal] = useState(""); // the AI's un-edited draft, kept so hand-edits can be reverted
   const [letterOutput, setLetterOutput] = useState("");
@@ -3059,10 +3075,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const hasContent = transcript.length > 0 || inputText.trim();
     if(!hasContent) { lsSet("compass_meeting_draft", null); return; }
     lsSet("compass_meeting_draft", {
-      transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes,
+      transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes, prepQuestions,
       savedAt: new Date().toISOString(),
     });
-  }, [screen, transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes]);
+  }, [screen, transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes, prepQuestions]);
 
   // Warn on accidental tab close/refresh mid-meeting — the in-app "← Back"
   // button already confirms via cancelMeeting, but that doesn't cover
@@ -3100,6 +3116,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         setAdjournments(draft.adjournments || []);
         setParticipants(draft.participants || []);
         setPrepNotes(draft.prepNotes || "");
+        setPrepQuestions(draft.prepQuestions || []);
         setScreen(SCREENS.RECORD);
       } else {
         lsSet("compass_meeting_draft", null);
@@ -3226,7 +3243,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setShowLinkCase(false);
     setMeetingStartTime(null);
     setMeetingEndTime(null);
-    setMeetingType(type); setTranscript([]); setPrepNotes(""); setReviewOutput(""); setReviewOutputOriginal(""); setLetterOutput(""); setLetterHistory([]);
+    setMeetingType(type); setTranscript([]); setPrepNotes(""); setPrepQuestions([]); setReviewOutput(""); setReviewOutputOriginal(""); setLetterOutput(""); setLetterHistory([]);
     setRiskScore(null); setPrediction(""); setNextSteps([]); setParticipants([]);
     if(type && type.group === "dev") {
       const config = DEV_MEETING_CONFIG[type.label];
@@ -3250,10 +3267,43 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     stopSpeech(); stopScreenCapture(); setScreen(SCREENS.HOME);
   };
 
+  // Meeting Intelligence Phase 2 (M1) — a second, non-streaming call
+  // alongside the free-text prep pack, producing an editable, structured
+  // question list. Kept separate from the streamClaude call above rather
+  // than embedded in the markdown: interleaving a JSON block into a
+  // streaming response would flash raw JSON into the visible prep pack
+  // while it's still generating, and every other structured-output call in
+  // this codebase (extractEmailDetails, generateNextBestAction, etc.)
+  // already uses this same plain non-streaming JSON pattern.
+  const generatePrepQuestions = async (carriedContext) => {
+    try {
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:2000,
+        stream:false,
+        system:"You are a senior UK HR advisor preparing structured questions for an upcoming Employee Relations meeting. Respond ONLY with valid JSON, no other text: [{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\"}] — produce 5 to 12 concise, specific questions. Mark essential true only for questions central to the core issue(s) being addressed. reasoning is one short sentence explaining why this particular question matters, grounded in the background given — this is shown to the user as \"Why ask this?\".",
+        messages:[{role:"user", content:`Meeting: ${meetingType.label}. Employee: ${caseInfo.employee}. Background: ${caseInfo.context||"None"}.${carriedContext?"\n\n"+carriedContext:""}`}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      setPrepQuestions((Array.isArray(parsed)?parsed:[]).map((q,i)=>({
+        id: "pq_"+Date.now()+"_"+i,
+        text: q.text||"",
+        category: q.category||"general",
+        essential: !!q.essential,
+        reasoning: q.reasoning||"",
+        linkedAllegationId: null,
+        linkedEvidenceIndex: null,
+        source: "ai",
+      })).filter(q=>q.text.trim()));
+    } catch(e) { console.error("generatePrepQuestions", e); }
+  };
+
   // ── AI: Prepare ──
   const handlePrepare = async () => {
     if(!caseInfo.employee.trim()) return;
-    setAiError(""); setAiProcessing(true);
+    setAiError(""); setAiProcessing(true); setPrepQuestions([]);
     try {
       // When this meeting is linked to an existing case, surface what
       // Phases 2/3 already found (open unanswered_question / inconsistency
@@ -3267,14 +3317,29 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         openQuestions.length ? "Unanswered questions already identified on this case:\n"+openQuestions.map(q=>"- "+q.title).join("\n") : null,
         openInconsistencies.length ? "Potential inconsistencies already identified on this case:\n"+openInconsistencies.map(s=>"- "+s.title+(s.reasoning?" — "+s.reasoning:"")).join("\n") : null,
       ].filter(Boolean).join("\n\n");
-      await streamClaude(
-        `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
-        `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}\n\n## Objectives\n## Agenda\n## Key Questions\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use the items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the background/context clearly supports them.":""}`,
-        t=>setPrepNotes(t)
-      );
+      await Promise.all([
+        streamClaude(
+          `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
+          `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}\n\n## Objectives\n## Agenda\n## Key Questions\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use the items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the background/context clearly supports them.":""}`,
+          t=>setPrepNotes(t)
+        ),
+        generatePrepQuestions(carriedContext),
+      ]);
     } catch(e) { setAiError(e.message); }
     setAiProcessing(false);
   };
+
+  // ── Pre-meeting question list editing (M1) — thin wrappers over the pure
+  // helpers in lib/prepQuestions.js; no DB persistence of their own, the
+  // list travels with the meeting draft and is saved as part of the
+  // meeting record once the meeting itself saves. ──
+  const addPrepQuestion = () => setPrepQuestions(qs => addPrepQuestionHelper(qs));
+  const updatePrepQuestionText = (id, text) => setPrepQuestions(qs => updatePrepQuestionTextHelper(qs, id, text));
+  const removePrepQuestion = (id) => setPrepQuestions(qs => removePrepQuestionHelper(qs, id));
+  const movePrepQuestion = (id, direction) => setPrepQuestions(qs => movePrepQuestionHelper(qs, id, direction));
+  const togglePrepQuestionEssential = (id) => setPrepQuestions(qs => togglePrepQuestionEssentialHelper(qs, id));
+  const linkPrepQuestionToAllegation = (id, allegationId) => setPrepQuestions(qs => linkPrepQuestionToAllegationHelper(qs, id, allegationId));
+  const linkPrepQuestionToEvidence = (id, evidenceIndex) => setPrepQuestions(qs => linkPrepQuestionToEvidenceHelper(qs, id, evidenceIndex));
 
   // ── AI: Review + Risk ──
   const handleReview = async () => {
@@ -4901,7 +4966,7 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} fmtDate={fmtDate} startSession={startSession} />
+        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} fmtDate={fmtDate} startSession={startSession} />
       )}
 
             {screen===SCREENS.PEOPLE&&(
@@ -5052,7 +5117,18 @@ Please produce:
 
 {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <PrepScreen isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} handlePrepare={handlePrepare} aiProcessing={aiProcessing} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes} />
+        <PrepScreen isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} handlePrepare={handlePrepare} aiProcessing={aiProcessing} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes}
+          prepQuestions={prepQuestions}
+          linkedCaseAllegations={caseInfo._linkedCaseId ? allegationsForCase(allegations, caseInfo._linkedCaseId) : []}
+          linkedCaseEvidence={caseInfo._linkedCaseId ? (cases.find(c=>c.id===caseInfo._linkedCaseId)?.evidence||[]) : []}
+          onAddPrepQuestion={addPrepQuestion}
+          onUpdatePrepQuestionText={updatePrepQuestionText}
+          onRemovePrepQuestion={removePrepQuestion}
+          onMovePrepQuestion={movePrepQuestion}
+          onTogglePrepQuestionEssential={togglePrepQuestionEssential}
+          onLinkPrepQuestionToAllegation={linkPrepQuestionToAllegation}
+          onLinkPrepQuestionToEvidence={linkPrepQuestionToEvidence}
+        />
       )}
 
             {/* ══ RECORD ══ */}

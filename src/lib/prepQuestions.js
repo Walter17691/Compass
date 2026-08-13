@@ -1,0 +1,46 @@
+// Pure helpers for a meeting's editable pre-meeting question list (Meeting
+// Intelligence Phase 2, M1). Session-local, same lifecycle as prepNotes —
+// not persisted to Supabase on their own; a question object is:
+// {id, text, category, essential, reasoning, linkedAllegationId, linkedEvidenceIndex, source}.
+// source is "ai" (from generatePrepQuestions) or "user" (manually added).
+
+export function addPrepQuestion(questions) {
+  return [...(questions || []), {
+    id: "pq_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+    text: "", category: "general", essential: false, reasoning: "",
+    linkedAllegationId: null, linkedEvidenceIndex: null, source: "user",
+  }];
+}
+
+export function updatePrepQuestionText(questions, id, text) {
+  return (questions || []).map(q => q.id === id ? { ...q, text } : q);
+}
+
+export function removePrepQuestion(questions, id) {
+  return (questions || []).filter(q => q.id !== id);
+}
+
+// direction: -1 to move up, +1 to move down. Returns the same array
+// reference if the move would go out of bounds.
+export function movePrepQuestion(questions, id, direction) {
+  const qs = questions || [];
+  const idx = qs.findIndex(q => q.id === id);
+  const newIdx = idx + direction;
+  if (idx < 0 || newIdx < 0 || newIdx >= qs.length) return qs;
+  const copy = [...qs];
+  [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
+  return copy;
+}
+
+export function togglePrepQuestionEssential(questions, id) {
+  return (questions || []).map(q => q.id === id ? { ...q, essential: !q.essential } : q);
+}
+
+export function linkPrepQuestionToAllegation(questions, id, allegationId) {
+  return (questions || []).map(q => q.id === id ? { ...q, linkedAllegationId: allegationId || null } : q);
+}
+
+export function linkPrepQuestionToEvidence(questions, id, evidenceIndex) {
+  const idx = evidenceIndex === "" || evidenceIndex === null || evidenceIndex === undefined ? null : Number(evidenceIndex);
+  return (questions || []).map(q => q.id === id ? { ...q, linkedEvidenceIndex: idx } : q);
+}

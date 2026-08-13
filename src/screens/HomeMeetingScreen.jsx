@@ -30,7 +30,7 @@ const FORMAL_MEETING_TYPES = MEETING_TYPES.filter(t => t.group !== "dev");
 // all — DevelopScreen was fully built and completely unreachable.
 const DEV_MEETING_TYPES = MEETING_TYPES.filter(t => t.group === "dev");
 
-export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, fmtDate, startSession }) {
+export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setReviewOutput, setReviewOutputOriginal, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
@@ -300,19 +300,43 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
           </div>
 
-          <button
-            disabled={!meetingSetup.employee.trim()||!meetingSetup.type}
-            onClick={()=>{
-              const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
-              if(mt.group==="dev"){ startSession(mt); return; }
+          {(() => {
+            const disabled = !meetingSetup.employee.trim()||!meetingSetup.type;
+            const selected = MEETING_TYPES.find(t=>t.id===meetingSetup.type);
+            const isDev = selected?.group==="dev";
+            // Shared by both buttons below — sets meeting type/caseInfo/
+            // participants identically, only the final destination screen
+            // differs. Kept as a closure over meetingSetup rather than a
+            // top-level function since it reads so much local form state.
+            const commit = () => {
+              const mt = selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               setMeetingType(mt);
               setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
-              setTranscript([]);setPrepNotes("");setReviewOutput("");setReviewOutputOriginal("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);
-              setScreen(SCREENS.RECORD);
-            }}
-            style={{width:"100%",background:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:(!meetingSetup.employee.trim()||!meetingSetup.type)?"#9B9098":"#FFFFFF",fontWeight:600,cursor:(!meetingSetup.employee.trim()||!meetingSetup.type)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:(!meetingSetup.employee.trim()||!meetingSetup.type)?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
-            Start meeting
-          </button>
+              setTranscript([]);setPrepNotes("");setPrepQuestions([]);setReviewOutput("");setReviewOutputOriginal("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);
+            };
+            return (
+              <div style={{display:"flex",gap:8}}>
+                {!isDev&&(
+                  <button
+                    disabled={disabled}
+                    onClick={()=>{ commit(); setScreen(SCREENS.PREP); }}
+                    style={{flex:1,background:"#FFFFFF",border:"1px solid "+(disabled?"#E8E0D0":"#7C5CFC"),borderRadius:10,padding:"14px",fontSize:15,color:disabled?"#9B9098":"#7C5CFC",fontWeight:600,cursor:disabled?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    Prepare meeting
+                  </button>
+                )}
+                <button
+                  disabled={disabled}
+                  onClick={()=>{
+                    if(isDev){ startSession(selected); return; }
+                    commit();
+                    setScreen(SCREENS.RECORD);
+                  }}
+                  style={{flex:1,background:disabled?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:disabled?"#9B9098":"#FFFFFF",fontWeight:600,cursor:disabled?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:disabled?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
+                  Start meeting
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

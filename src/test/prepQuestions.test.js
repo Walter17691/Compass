@@ -1,0 +1,95 @@
+import { describe, it, expect } from 'vitest';
+import {
+  addPrepQuestion, updatePrepQuestionText, removePrepQuestion, movePrepQuestion,
+  togglePrepQuestionEssential, linkPrepQuestionToAllegation, linkPrepQuestionToEvidence,
+} from '../lib/prepQuestions';
+
+describe('addPrepQuestion', () => {
+  it('appends a new blank, non-essential, user-sourced question', () => {
+    const result = addPrepQuestion([]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ text: '', category: 'general', essential: false, source: 'user' });
+    expect(result[0].id).toBeTruthy();
+  });
+
+  it('gives each added question a unique id', () => {
+    const result = addPrepQuestion(addPrepQuestion([]));
+    expect(result[0].id).not.toBe(result[1].id);
+  });
+});
+
+describe('updatePrepQuestionText', () => {
+  it('updates only the matching question', () => {
+    const qs = [{ id: 'a', text: 'old' }, { id: 'b', text: 'unchanged' }];
+    const result = updatePrepQuestionText(qs, 'a', 'new text');
+    expect(result.find(q => q.id === 'a').text).toBe('new text');
+    expect(result.find(q => q.id === 'b').text).toBe('unchanged');
+  });
+});
+
+describe('removePrepQuestion', () => {
+  it('removes the matching question and leaves others intact', () => {
+    const qs = [{ id: 'a' }, { id: 'b' }];
+    expect(removePrepQuestion(qs, 'a')).toEqual([{ id: 'b' }]);
+  });
+});
+
+describe('movePrepQuestion', () => {
+  const qs = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+  it('moves a question up', () => {
+    const result = movePrepQuestion(qs, 'b', -1);
+    expect(result.map(q => q.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('moves a question down', () => {
+    const result = movePrepQuestion(qs, 'b', 1);
+    expect(result.map(q => q.id)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('is a no-op moving the first question up', () => {
+    expect(movePrepQuestion(qs, 'a', -1)).toBe(qs);
+  });
+
+  it('is a no-op moving the last question down', () => {
+    expect(movePrepQuestion(qs, 'c', 1)).toBe(qs);
+  });
+});
+
+describe('togglePrepQuestionEssential', () => {
+  it('flips essential on and back off', () => {
+    const qs = [{ id: 'a', essential: false }];
+    const toggled = togglePrepQuestionEssential(qs, 'a');
+    expect(toggled[0].essential).toBe(true);
+    expect(togglePrepQuestionEssential(toggled, 'a')[0].essential).toBe(false);
+  });
+});
+
+describe('linkPrepQuestionToAllegation', () => {
+  it('sets the linked allegation id', () => {
+    const qs = [{ id: 'a', linkedAllegationId: null }];
+    expect(linkPrepQuestionToAllegation(qs, 'a', 'alleg_1')[0].linkedAllegationId).toBe('alleg_1');
+  });
+
+  it('clears the link when given an empty value', () => {
+    const qs = [{ id: 'a', linkedAllegationId: 'alleg_1' }];
+    expect(linkPrepQuestionToAllegation(qs, 'a', '')[0].linkedAllegationId).toBeNull();
+  });
+});
+
+describe('linkPrepQuestionToEvidence', () => {
+  it('sets the linked evidence index as a number', () => {
+    const qs = [{ id: 'a', linkedEvidenceIndex: null }];
+    expect(linkPrepQuestionToEvidence(qs, 'a', '2')[0].linkedEvidenceIndex).toBe(2);
+  });
+
+  it('treats an empty string as clearing the link', () => {
+    const qs = [{ id: 'a', linkedEvidenceIndex: 2 }];
+    expect(linkPrepQuestionToEvidence(qs, 'a', '')[0].linkedEvidenceIndex).toBeNull();
+  });
+
+  it('index 0 is a valid link, not treated as empty', () => {
+    const qs = [{ id: 'a', linkedEvidenceIndex: null }];
+    expect(linkPrepQuestionToEvidence(qs, 'a', '0')[0].linkedEvidenceIndex).toBe(0);
+  });
+});
