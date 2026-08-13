@@ -11,7 +11,7 @@ const RISK_STYLE = {
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
-export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason }) {
+export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason }) {
   const yearsService = (() => {
     if(!empRecord?.startDate) return null;
     const start = new Date(empRecord.startDate.includes("/") ? empRecord.startDate.split("/").reverse().join("-") : empRecord.startDate);
@@ -94,6 +94,7 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
         onAskWhy={onAskWhy}
         createCaseTask={createCaseTask}
         requestOverrideReason={requestOverrideReason}
+        requestPolicyDeviationReason={requestPolicyDeviationReason}
       />
 
       <div style={{textAlign:"right"}}>

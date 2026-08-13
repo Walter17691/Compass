@@ -31,7 +31,7 @@ import { seedInvestigationChecklist } from './lib/investigationChecklist';
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
-import { requestOverride } from './lib/humanOverride';
+import { requestOverride, requestPolicyDeviation } from './lib/humanOverride';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
@@ -1525,6 +1525,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // explain why" step (P6, P7, P9, P11) calls this rather than building
   // its own reason-capture UI.
   const requestOverrideReason = (label, opts) => requestOverride(promptDialog, audit, label, opts);
+  // Process Intelligence (P7) — same binding pattern, for the richer
+  // policy-expectation/actual/reason flow used when proceeding past a
+  // signal that carries a real policy citation (P6's guardrails today).
+  const requestPolicyDeviationReason = (opts) => requestPolicyDeviation(promptDialog, audit, opts);
 
   // ── Users ──
   // ── Deadline checker — UK statutory & ACAS deadlines ──
@@ -5451,6 +5455,7 @@ Please produce:
           acceptDocumentFinding={acceptDocumentFinding}
           dismissDocumentFinding={dismissDocumentFinding}
           requestOverrideReason={requestOverrideReason}
+          requestPolicyDeviationReason={requestPolicyDeviationReason}
         />
       )}
 {/* ══ INTAKE ══ */}

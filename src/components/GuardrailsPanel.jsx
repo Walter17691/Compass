@@ -15,7 +15,13 @@ import { PolicyCitation } from './PolicyCitation';
 // logic. A guardrail signal that carries a policy sourceRef (App.jsx's
 // syncGuardrailSignals -> guardrails.js's findPolicyClauseRef) renders
 // via P4's PolicyCitation, same pattern as P5's Next Best Action card.
-export function GuardrailsPanel({ cs, signals, changeSignalStatus, onAskWhy, createCaseTask, requestOverrideReason }) {
+//
+// P7 — proceeding past a signal that carries that policy citation is a
+// genuine, documented policy departure, not just an unresolved warning:
+// "Proceed anyway" routes through requestPolicyDeviationReason instead of
+// the plain requestOverrideReason when a policyRef exists, capturing what
+// will actually happen (not just why) alongside the policy's own wording.
+export function GuardrailsPanel({ cs, signals, changeSignalStatus, onAskWhy, createCaseTask, requestOverrideReason, requestPolicyDeviationReason }) {
   if (!signals.length) return null;
 
   return (
@@ -35,7 +41,9 @@ export function GuardrailsPanel({ cs, signals, changeSignalStatus, onAskWhy, cre
                 extraActions={[
                   {label:"Create action", onClick:()=>{createCaseTask(cs.id, {name:signal.title}); changeSignalStatus(signal.id, "accepted");}},
                   {label:"Proceed anyway", onClick: async ()=>{
-                    const ok = await requestOverrideReason(signal.title, {caseId:cs.id, actionLabel:"Proceeded past procedural guardrail"});
+                    const ok = policyRef
+                      ? await requestPolicyDeviationReason({policyName:policyRef.label, clauseHeading:policyRef.clauseHeading, clauseText:policyRef.clauseText, caseId:cs.id})
+                      : await requestOverrideReason(signal.title, {caseId:cs.id, actionLabel:"Proceeded past procedural guardrail"});
                     if(ok) changeSignalStatus(signal.id, "accepted", "Proceeded anyway");
                   }},
                 ]}

@@ -25,3 +25,32 @@ export async function requestOverride(promptDialogFn, auditFn, label, { caseId=n
   if(reason) auditFn(actionLabel, `${label} — ${reason}`, caseId);
   return true;
 }
+
+// Process Intelligence (P7) — a guardrail or recommendation backed by a
+// specific, quoted policy clause (P4/P5/P6) is a different kind of
+// override to plain requestOverride above: proceeding past it is a real,
+// documented departure from company policy, not just an unresolved
+// warning. Records a stable, consistently-templated audit entry —
+// "Policy expectation: ... — Actual: ... — Reason: ..." — always under
+// the same action label ("Policy deviation recorded"), so a future
+// reviewer sees exactly what the policy expected, what happened
+// instead, and why, not an unexplained gap or a wall of free prose.
+// "Actual" is required (there's a real departure to describe); "Reason"
+// stays optional, same as every other override in this codebase.
+export async function requestPolicyDeviation(promptDialogFn, auditFn, { policyName, clauseHeading, clauseText, caseId=null }) {
+  const values = await promptDialogFn({
+    title: "Record a policy deviation",
+    message: `Your ${policyName} policy${clauseHeading?" ("+clauseHeading+")":""} says: "${clauseText}". What will actually happen, and why?`,
+    fields: [
+      { key:"actual", label:"What will actually happen", required:true, placeholder:"e.g. Hearing held with 3 working days' notice" },
+      { key:"reason", label:"Reason (optional)", placeholder:"Why is this happening instead?" },
+    ],
+    confirmLabel: "Record and proceed",
+  });
+  if(!values) return false;
+  const actual = (values.actual||"").trim();
+  const reason = (values.reason||"").trim();
+  const detail = `Policy expectation: "${clauseText}" — Actual: ${actual}` + (reason ? ` — Reason: ${reason}` : "");
+  auditFn("Policy deviation recorded", detail, caseId);
+  return true;
+}
