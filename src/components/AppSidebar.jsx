@@ -27,6 +27,12 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
 
   const primaryItems = [
     {s:SCREENS.HOME, l:"Home"},
+    // Manager Enablement (Phase 4, MP16, §1) — "My People Actions", a
+    // manager-appropriate front door onto data every other phase in this
+    // track already produces (assigned cases, tasks, HR responses,
+    // concerns submitted). HR runs the full Cases/Tasks/Concerns screens
+    // directly and has no need for a narrowed aggregate view of their own.
+    ...(isHR ? [] : [{s:SCREENS.MANAGER_PORTAL, l:"My People Actions"}]),
     {s:SCREENS.ASK_COMPASS, l:"Ask Compass"},
     {s:SCREENS.CASES, l:"Cases"+(activeCaseCount>0?" ("+activeCaseCount+")":"")},
     {s:SCREENS.TASKS, l:"Tasks"},

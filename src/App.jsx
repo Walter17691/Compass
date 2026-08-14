@@ -89,6 +89,7 @@ const DevelopScreen = lazy(() => import('./screens/DevelopScreen').then(m => ({d
 const ErReportScreen = lazy(() => import('./screens/ErReportScreen').then(m => ({default: m.ErReportScreen})));
 const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
 const ConcernsScreen = lazy(() => import('./screens/ConcernsScreen').then(m => ({default: m.ConcernsScreen})));
+const ManagerPortalScreen = lazy(() => import('./screens/ManagerPortalScreen').then(m => ({default: m.ManagerPortalScreen})));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
@@ -6196,6 +6197,23 @@ Please produce:
           setActiveCaseStage={setActiveCaseStage}
           setScreen={setScreen}
           screens={SCREENS}
+        />
+      )}
+
+      {/* Manager Enablement (Phase 4, MP16, §1) — "My People Actions" */}
+      {screen===SCREENS.MANAGER_PORTAL&&(
+        <ManagerPortalScreen
+          cases={cases}
+          caseAccess={caseAccess}
+          caseTasks={caseTasks}
+          hrReviewRequests={hrReviewRequests}
+          concernReferrals={concernReferrals}
+          dueSoon={dueSoon}
+          currentUser={currentUser}
+          fmtDate={fmtDate}
+          setScreen={setScreen}
+          setActiveCaseId={setActiveCaseId}
+          setActiveCaseStage={setActiveCaseStage}
         />
       )}
 
