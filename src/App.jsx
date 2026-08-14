@@ -2521,20 +2521,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       const sanitized = sanitizeTriageSummary(parsed);
-      // Functional update, not the concernReferrals closed over above —
-      // this call can take 20-30s (a real AI round trip), and by the time
-      // it resolves that closure's array is whatever it was back when
-      // submitConcernReferral first called this function, which doesn't
-      // yet include the referral just created (setConcernReferrals there
-      // hadn't been applied yet either). Reading state instead of relying
-      // on a stale closure is what makes this safe regardless of timing.
-      let savedReferral = null;
-      setConcernReferrals(prev => {
-        const updated = updateConcernReferral(prev, referral.id, sanitized);
-        savedReferral = updated.find(r=>r.id===referral.id);
-        return updated;
-      });
-      if(savedReferral) saveConcernReferralToDB(savedReferral);
+      // `referral` (the parameter) already IS the current, known-complete
+      // referral object — submitConcernReferral passes in the exact
+      // record it just created, so the merged object to persist can be
+      // built directly from it and `sanitized`, with no need to read
+      // anything back out of concernReferrals state at all (which this
+      // call's own 20-30s AI round trip can make stale relative to
+      // regardless — see below). setConcernReferrals is still called
+      // with the functional form, but only to apply the merge against
+      // whatever `prev` truly is when React processes it — an earlier
+      // version of this tried to read the merged result back out of that
+      // same updater synchronously, which doesn't work: React defers a
+      // functional setState updater's execution rather than running it
+      // immediately, even from a plain synchronous caller, so the read
+      // always saw the pre-call value and this save silently never ran.
+      const savedReferral = { ...referral, ...sanitized };
+      setConcernReferrals(prev => updateConcernReferral(prev, referral.id, sanitized));
+      saveConcernReferralToDB(savedReferral);
     } catch(e) { console.error("generateConcernTriageSummary", e); }
     setConcernTriageLoading(l=>({...l, [referral.id]:false}));
   };
@@ -2698,21 +2701,38 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     }));
     if(error) { console.error('assignInvestigator', error); showToast("Couldn't assign investigator — "+error.message, "error"); return; }
     await loadCaseAccess();
-    // Manager Enablement (Phase 4, MP19) — functional update: this runs
-    // after an awaited network round trip (loadCaseAccess above), so a
-    // plain setCaseTasks(updatedTasks) built from whatever caseTasks
-    // closure existed when assignInvestigator was first called can race
-    // another write (e.g. createCaseTask, MP19's own sendHrGuidance)
-    // that happens in between and silently overwrite it. Real bug, found
-    // via hr-intervention.spec.js sending guidance immediately after
-    // assigning an investigator — not a hypothetical.
-    let newlyCreated = [];
-    setCaseTasks(prev => {
-      const updatedTasks = seedInvestigationChecklist(prev, caseId, targetMember.name);
-      newlyCreated = updatedTasks.filter(t=>!prev.some(existing=>existing.id===t.id));
-      return updatedTasks;
-    });
-    newlyCreated.forEach(t=>saveCaseTaskToDB({...t, createdBy:user?.id}));
+    // Manager Enablement (Phase 4, MP19) — this runs after an awaited
+    // network round trip (loadCaseAccess above), so building the seeded
+    // checklist from a plain, possibly-stale `caseTasks` closure risked
+    // racing another write (createCaseTask, sendHrGuidance) landing in
+    // between and silently overwriting it — real, found via
+    // hr-intervention.spec.js sending guidance right after assigning an
+    // investigator.
+    //
+    // The original fix for that (computing `newlyCreated` as a side
+    // effect *inside* the setCaseTasks updater, then reading it right
+    // after) was itself wrong — caught during final review by
+    // instrumenting toggleCaseTaskDone's identical pattern and observing
+    // that React defers a functional setState updater's execution rather
+    // than running it synchronously, even from a plain event handler.
+    // newlyCreated was always still `[]` at the point it was read, so
+    // saveCaseTaskToDB never actually ran here either — the 7-step
+    // checklist has been seeded into local state correctly (so it always
+    // *looked* right in the UI) but silently never persisted to the
+    // database since this fix landed.
+    //
+    // The real fix: seedInvestigationChecklist is pure given its inputs,
+    // so it's called once against the outer `caseTasks` closure to
+    // synchronously compute what's new — no round-trip through React's
+    // update queue needed to read that back. The functional setCaseTasks
+    // call is kept, but only to merge those already-computed objects in,
+    // which is what actually protects against the concurrent-write race.
+    const seededFromClosure = seedInvestigationChecklist(caseTasks, caseId, targetMember.name);
+    const newlyCreated = seededFromClosure.filter(t=>!caseTasks.some(existing=>existing.id===t.id));
+    if(newlyCreated.length) {
+      setCaseTasks(prev => [...prev, ...newlyCreated.filter(t=>!prev.some(existing=>existing.id===t.id))]);
+      newlyCreated.forEach(t=>saveCaseTaskToDB({...t, createdBy:user?.id}));
+    }
     audit("Investigator assigned", targetMember.name, caseId);
     showToast(targetMember.name+" assigned as investigator");
   };
@@ -2749,19 +2769,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       const items = sanitizeInvestigationPlanItems(parsed);
-      // Functional update — caseTasks was captured before the 20-30s AI
-      // round trip above; any write landing in that window (HR guidance,
-      // a checklist toggle, assignInvestigator's own seeding) would
-      // otherwise be silently reverted by a plain setCaseTasks call built
-      // from this stale snapshot.
-      let newlyCreated = [];
-      setCaseTasks(prev => {
-        const updatedTasks = seedInvestigationPlanTasks(prev, cs.id, items);
-        newlyCreated = updatedTasks.filter(t=>!prev.some(existing=>existing.id===t.id));
-        return updatedTasks;
-      });
+      // caseTasks was captured before the 20-30s AI round trip above —
+      // seedInvestigationPlanTasks is pure given its inputs, so it's
+      // called once against that closure to synchronously compute what's
+      // new (see createCaseTask's own comment on why NOT reading this
+      // back out of a functional setState updater — React defers those,
+      // so a value only ever set inside one is never actually readable
+      // right after the call). The functional setCaseTasks call is kept
+      // to merge those already-computed objects against whatever `prev`
+      // truly is when React processes it, protecting against a write
+      // landing in the same window (HR guidance, a checklist toggle,
+      // assignInvestigator's own seeding) without needing to read
+      // anything back out of it.
+      const seededFromClosure = seedInvestigationPlanTasks(caseTasks, cs.id, items);
+      const newlyCreated = seededFromClosure.filter(t=>!caseTasks.some(existing=>existing.id===t.id));
       if(!newlyCreated.length) { showToast("Compass didn't find any new plan items to add"); }
       else {
+        setCaseTasks(prev => [...prev, ...newlyCreated.filter(t=>!prev.some(existing=>existing.id===t.id))]);
         newlyCreated.forEach(t=>saveCaseTaskToDB({...t, createdBy:user?.id}));
         audit("Investigation plan generated", newlyCreated.length+" item"+(newlyCreated.length!==1?"s":""), cs.id);
       }
@@ -3017,53 +3041,63 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(error) { console.error('deleteCaseTaskFromDB', error); showToast("Couldn't delete task — "+error.message, "error"); }
   };
 
-  // Manager Enablement (Phase 4, MP19) — functional update, same
-  // stale-closure fix pattern as MP5/MP6: createCaseTask is called from
+  // Manager Enablement (Phase 4, MP19) — createCaseTask is called from
   // many places (Tasks tab, sendHrGuidance, hrReturnForFurtherWork...),
   // and assignInvestigator's own checklist seeding writes caseTasks
   // independently and asynchronously (after an awaited loadCaseAccess()
-  // call) — a plain setCaseTasks(updated) here reads whatever caseTasks
-  // closure this call happened to capture, and if the checklist's own
-  // still-in-flight write commits afterwards, ITS plain setCaseTasks
-  // call (built from ITS OWN pre-await snapshot) silently overwrites
-  // this one. Found via a real E2E race (hr-intervention.spec.js
-  // sending guidance immediately after assigning an investigator), not
-  // just reasoned about in the abstract.
+  // call) — a plain setCaseTasks(updated) built from a stale caseTasks
+  // closure risks silently overwriting whichever of the two writes
+  // resolves second. Found via a real E2E race (hr-intervention.spec.js
+  // sending guidance immediately after assigning an investigator).
+  //
+  // The FIRST fix attempt for this (computing `created` as a side effect
+  // *inside* the setCaseTasks updater callback, then reading it
+  // synchronously right after) was itself wrong, caught during final
+  // review by instrumenting the actual call and observing the order of
+  // execution: React does NOT invoke a functional setState updater
+  // synchronously — it's deferred into the next render pass, even from a
+  // plain synchronous event handler, under React 18's automatic batching.
+  // `created`/`changed`/`target` were reliably still null/undefined at
+  // the point they were read, so saveCaseTaskToDB/audit never actually
+  // ran — the underlying persistence bug this was meant to fix was
+  // silently made *worse* (a save that always failed, not one that
+  // occasionally lost a race), just invisible because the one E2E test
+  // that exercises this path deliberately checks UI state rather than
+  // the network write (its own comment says why: an earlier, differently
+  // wrong attempt at asserting on the network response was unreliable —
+  // which, in hindsight, was very likely this exact bug, misdiagnosed).
+  //
+  // The actual fix: addTask (a pure function of its inputs, not of
+  // "what's the latest state") is called ONCE against the outer
+  // `caseTasks` closure to synchronously compute the new task object —
+  // reading fields off a freshly-created object we already hold a
+  // reference to needs no round-trip through React's update queue at
+  // all. The functional setCaseTasks call is kept, but only to append
+  // that already-computed object, which is what actually protects
+  // against the concurrent-write race (the merge happens against
+  // whatever `prev` truly is when React processes it, not a stale
+  // snapshot) — it just no longer tries to read a value back out of it.
   const createCaseTask = (caseId, fields) => {
-    let created = null;
-    setCaseTasks(prev => {
-      const updated = addTask(prev, caseId, fields);
-      if(updated===prev) return prev;
-      created = updated[updated.length-1];
-      return updated;
-    });
-    if(created) {
-      saveCaseTaskToDB({...created, createdBy:user?.id});
-      audit("Task added", created.name, caseId);
-    }
+    const created = addTask([], caseId, fields)[0];
+    if(!created) return;
+    setCaseTasks(prev => prev.some(t=>t.id===created.id) ? prev : [...prev, created]);
+    saveCaseTaskToDB({...created, createdBy:user?.id});
+    audit("Task added", created.name, caseId);
   };
 
-  // Functional updates — same stale-closure race as createCaseTask above:
-  // this can run right after another caseTasks write that's still
-  // in-flight (e.g. generateInvestigationPlan's AI round trip, or a
-  // second toggle fired in quick succession), and a plain setCaseTasks
-  // call built from a pre-await snapshot would silently overwrite it.
+  // Same fix as createCaseTask above, same reasoning — toggleTaskDone is
+  // pure given (tasks, taskId), so the toggled task can be computed
+  // synchronously from the closure for the DB save, while the functional
+  // form is kept for the actual local-state merge.
   const toggleCaseTaskDone = (taskId) => {
-    let changed = null;
-    setCaseTasks(prev => {
-      const updated = toggleTaskDone(prev, taskId);
-      changed = updated.find(t=>t.id===taskId);
-      return updated;
-    });
+    const changed = toggleTaskDone(caseTasks, taskId).find(t=>t.id===taskId);
+    setCaseTasks(prev => toggleTaskDone(prev, taskId));
     if(changed) saveCaseTaskToDB(changed);
   };
 
   const deleteCaseTask = (taskId) => {
-    let target = null;
-    setCaseTasks(prev => {
-      target = prev.find(t=>t.id===taskId);
-      return removeTask(prev, taskId);
-    });
+    const target = caseTasks.find(t=>t.id===taskId);
+    setCaseTasks(prev => removeTask(prev, taskId));
     deleteCaseTaskFromDB(taskId);
     if(target) audit("Task removed", target.name, target.caseId);
   };
