@@ -2479,8 +2479,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const referral = concernReferrals.find(r=>r.id===referralId);
     if(!referral) return;
     const actionToStatus = {
-      request_more_info:"more_info_requested", return_to_manager:"returned_to_manager",
-      deal_informally:"handled_informally", close:"closed",
+      request_more_info:"more_info_requested", return_to_manager:"returned_to_manager", close:"closed",
     };
     if(action==="open_case") {
       const newCase = {
@@ -2503,6 +2502,28 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setConcernReferrals(updated);
     saveConcernReferralToDB(updated.find(r=>r.id===referralId));
     audit("Concern referral "+status.replace(/_/g," "), referral.employeeName);
+  };
+
+  // Manager Enablement (Phase 4, MP6, §6) — "Deal with informally" used
+  // to just flip the referral's status with nothing to show for it; this
+  // launches a real, guided conversation instead, reusing the existing
+  // "Informal / 1-1" meeting type (mode:"quick", constants.js) rather
+  // than inventing a new meeting shape. caseInfo.context is the same
+  // field handlePrepare's own AI prep already reads ("Background:
+  // ${caseInfo.context}") — the closest thing this app already has to
+  // §6's "before meeting: review record" — pre-filled here with the
+  // referral's own description and, once MP5 has run, Compass's own
+  // summary of it. The actual disposition write (status →
+  // handled_informally, linked to whatever case the meeting lands on)
+  // only happens once the meeting is actually saved — see
+  // saveMeetingToCase's own _linkedReferralId branch — not here, so
+  // nothing changes if the manager backs out without ever starting it.
+  const startInformalConversation = (referral) => {
+    setMeetingSetup(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"informal", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]}));
+    setCaseInfo(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"",
+      context: [referral.aiSummary, referral.description].filter(Boolean).join("\n\n"),
+      _linkedCaseId:null, _linkedCaseName:null, _linkedReferralId:referral.id, _linkedReferralName:referral.employeeName}));
+    setScreen(SCREENS.HOME+"_meeting");
   };
 
   const loadCaseAccess = async () => {
@@ -4178,11 +4199,31 @@ Please produce:
     const caseId = existing ? existing.id : crypto.randomUUID();
     const updatedCase = existing
       ? {...existing, meetings:[...existing.meetings, meeting]}
-      : {id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting]};
+      // caseType "informal" only on a brand-new case created from a
+      // referral (MP6) — an existing employee's own case keeps whatever
+      // type it already had; one informal chat about them doesn't
+      // relabel it.
+      : {id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting], ...(caseInfo._linkedReferralId?{caseType:"informal"}:{})};
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     } else {
       saveCases([...cases,updatedCase]);
+    }
+    // Manager Enablement (Phase 4, MP6) — closes the loop back to the
+    // referral that started this conversation. Functional update, same
+    // reasoning as generateConcernTriageSummary (MP5): concernReferrals
+    // closed over above could be stale by the time a real meeting is
+    // actually recorded and saved.
+    if(caseInfo._linkedReferralId) {
+      const referralId = caseInfo._linkedReferralId;
+      setConcernReferrals(prev => {
+        const updated = setReferralStatus(prev, referralId, "handled_informally", { linkedCaseId: caseId });
+        const saved = updated.find(r=>r.id===referralId);
+        if(saved) saveConcernReferralToDB(saved);
+        return updated;
+      });
+      setCaseInfo(p=>({...p, _linkedReferralId:null, _linkedReferralName:null}));
+      audit("Concern referral handled informally", caseInfo.employee, caseId);
     }
     // M7 — auto-refresh case intelligence so the rest of the case reflects
     // this meeting without HR having to click each panel separately.
@@ -5922,6 +5963,7 @@ Please produce:
           concernSubmitted={concernSubmitted}
           setConcernSubmitted={setConcernSubmitted}
           triageReferral={triageReferral}
+          startInformalConversation={startInformalConversation}
           concernTriageLoading={concernTriageLoading}
           currentUser={currentUser}
           showToast={showToast}

@@ -135,7 +135,7 @@ function TriageSummary({ referral, loading }) {
   );
 }
 
-function ReferralCard({ referral, onTriage, onOpenCase, triageLoading }) {
+function ReferralCard({ referral, onTriage, onOpenCase, onStartInformal, triageLoading }) {
   const meta = referralStatusMeta(referral.status);
   const isOpen = referral.status==="new";
   return (
@@ -163,13 +163,13 @@ function ReferralCard({ referral, onTriage, onOpenCase, triageLoading }) {
         {referral.immediateSafetyConcern&&<span style={{fontSize:11,color:"#C84B2F"}}>⚠ Immediate safety concern</span>}
         {referral.mayNeedFormalProcess&&<span style={{fontSize:11,color:"#B87520"}}>May need a formal process</span>}
       </div>
-      {referral.status==="case_opened"&&referral.linkedCaseId&&(
-        <button onClick={()=>onOpenCase(referral.linkedCaseId)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Open the case →</button>
+      {(referral.status==="case_opened"||referral.status==="handled_informally")&&referral.linkedCaseId&&(
+        <button onClick={()=>onOpenCase(referral.linkedCaseId)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>{referral.status==="case_opened"?"Open the case →":"View the conversation record →"}</button>
       )}
       {isOpen&&(
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <Btn variant="secondary" onClick={()=>onTriage(referral.id,"open_case")} style={{padding:"6px 12px",fontSize:12}}>Open formal case</Btn>
-          <Btn variant="ghost" onClick={()=>onTriage(referral.id,"deal_informally")} style={{padding:"6px 12px",fontSize:12}}>Deal with informally</Btn>
+          <Btn variant="ghost" onClick={()=>onStartInformal(referral)} style={{padding:"6px 12px",fontSize:12}}>Deal with informally</Btn>
           <Btn variant="ghost" onClick={()=>onTriage(referral.id,"request_more_info")} style={{padding:"6px 12px",fontSize:12}}>Request more info</Btn>
           <Btn variant="ghost" onClick={()=>onTriage(referral.id,"return_to_manager")} style={{padding:"6px 12px",fontSize:12}}>Return to manager</Btn>
           <Btn variant="ghost" onClick={()=>onTriage(referral.id,"close")} style={{padding:"6px 12px",fontSize:12}}>Close</Btn>
@@ -179,7 +179,7 @@ function ReferralCard({ referral, onTriage, onOpenCase, triageLoading }) {
   );
 }
 
-export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, concernTriageLoading={}, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens }) {
+export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, startInformalConversation, concernTriageLoading={}, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens }) {
   const [showForm, setShowForm] = useState(false);
   const openCase = (caseId) => {
     setActiveCaseId(caseId);
@@ -234,12 +234,12 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
         <Card style={{textAlign:"center",padding:"32px 20px",color:"#9B9098",fontSize:13}}>No concerns raised yet.</Card>
       )}
 
-      {open.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} triageLoading={!!concernTriageLoading[r.id]} />)}
+      {open.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} onStartInformal={startInformalConversation} triageLoading={!!concernTriageLoading[r.id]} />)}
 
       {otherStatusGroups.map(group=>(
         <div key={group.id}>
           <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",margin:"20px 0 10px"}}>{group.label} ({group.referrals.length})</div>
-          {group.referrals.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} triageLoading={!!concernTriageLoading[r.id]} />)}
+          {group.referrals.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} onStartInformal={startInformalConversation} triageLoading={!!concernTriageLoading[r.id]} />)}
         </div>
       ))}
     </div>
