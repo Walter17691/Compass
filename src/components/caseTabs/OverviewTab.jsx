@@ -9,6 +9,7 @@ import { GuardrailsPanel } from '../GuardrailsPanel';
 import { CaseRolesPanel } from '../CaseRolesPanel';
 import { ApprovalsPanel } from '../ApprovalsPanel';
 import { HrReviewGatePanel } from '../HrReviewGatePanel';
+import { AskHrPanel } from '../AskHrPanel';
 import { CaseRiskPanel } from '../CaseRiskPanel';
 import { ProcessChecklistPanel } from '../ProcessChecklistPanel';
 
@@ -107,6 +108,8 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
       <ApprovalsPanel cs={cs} hrReviewRequests={hrReviewRequests} respondToReview={respondToReview} isApprover={isApprover} />
 
       <HrReviewGatePanel cs={cs} hrReviewRequests={hrReviewRequests} resolveInvestigationReview={resolveInvestigationReview} isHR={isApprover} />
+
+      <AskHrPanel cs={cs} hrReviewRequests={hrReviewRequests} respondToReview={respondToReview} isHR={isApprover} />
 
       <CaseRolesPanel cs={cs} caseAccess={caseAccess} orgMembers={orgMembers} assignCaseRole={assignCaseRole} />
 

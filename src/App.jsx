@@ -38,7 +38,9 @@ import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { requestOverride, requestPolicyDeviation } from './lib/humanOverride';
 import { caseRoleLabel } from './lib/caseRoles';
-import { getProcessType } from './lib/processStages';
+import { getProcessType, stageLabel } from './lib/processStages';
+import { buildEscalationContext } from './lib/escalation';
+import { EscalateToHrModal } from './screens/EscalateToHrModal';
 import { getTemplateForType, resolveDefaultTaskDueDate } from './lib/processTemplates';
 import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
@@ -1182,6 +1184,33 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       console.error("requestHrReview", error);
       showToast("Couldn't request HR review — "+error?.message, "error");
     }
+  };
+
+  // Manager Enablement (Phase 4, MP12, §13) — "Escalate to HR". A new,
+  // distinct step ("escalation") from ReviewScreen's own pre-existing
+  // step:"record" request — that one stays exactly as it is, tied to a
+  // specific just-recorded meeting. This is the persistent, case-wide
+  // affordance the plan calls for: reachable from anywhere on a case
+  // (CaseViewScreen's header, and the investigator's own restricted
+  // view), auto-attaching context via buildEscalationContext rather than
+  // making the manager explain the situation from scratch.
+  const [showEscalateModal, setShowEscalateModal] = useState(false);
+  const [escalateCaseId, setEscalateCaseId] = useState(null);
+  const openEscalateModal = (caseId) => { setEscalateCaseId(caseId); setShowEscalateModal(true); };
+  const escalateToHr = (note) => {
+    const cs = cases.find(c=>c.id===escalateCaseId);
+    if(!cs) return;
+    const context = buildEscalationContext({
+      employeeName: cs.employeeName,
+      caseType: cs.caseType,
+      stageLabel: stageLabel(cs.caseType, getCaseStage(cs)),
+      lastMeeting: (cs.meetings||[])[(cs.meetings||[]).length-1]||null,
+      allegationsCount: allegationsForCase(allegations, cs.id).length,
+      evidenceCount: (cs.evidence||[]).length,
+      openQuestionsCount: openSignalsForCase(caseSignals, cs.id, "unanswered_question").length,
+      note,
+    });
+    requestHrReview("escalation", escalateCaseId, null, context, true);
   };
 
   const respondToReview = async (reviewId, status, comments) => {
@@ -5880,6 +5909,7 @@ Please produce:
           concludeInvestigation={concludeInvestigation}
           concludingInvestigation={concludingInvestigation}
           attemptSubmitInvestigation={attemptSubmitInvestigation}
+          openEscalateModal={openEscalateModal}
           allegations={allegations}
           createAllegation={createAllegation}
           patchAllegation={patchAllegation}
@@ -6357,6 +6387,15 @@ Please produce:
           onGoBack={()=>setShowInvestigationQualityCheck(false)}
           onCreateFollowUp={createInvestigationQualityFollowUp}
           onProceed={proceedPastInvestigationQualityCheck}
+        />
+      )}
+
+      {/* ── Escalate to HR Modal ── */}
+      {showEscalateModal&&(
+        <EscalateToHrModal
+          caseName={cases.find(c=>c.id===escalateCaseId)?.employeeName}
+          setShowEscalateModal={setShowEscalateModal}
+          escalateToHr={escalateToHr}
         />
       )}
 

@@ -33,7 +33,7 @@ function StepCard({ index, step, task, onToggle, children }) {
   );
 }
 
-export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading, caseSignals=[], onSubmitInvestigation, submittingInvestigation }) {
+export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading, caseSignals=[], onSubmitInvestigation, submittingInvestigation, onEscalate }) {
   const evidence = cs.evidence||[];
   const stepFor = (label) => checklistTasks.find(t=>t.name===label);
   const doneCount = checklistTasks.filter(t=>t.status==="done").length;
@@ -48,7 +48,16 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
       <div style={{maxWidth:640,margin:"0 auto",padding:"40px 20px"}}>
-        <button onClick={()=>setScreen(screens.CASES)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0,marginBottom:16}}>← Cases</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+          <button onClick={()=>setScreen(screens.CASES)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>← Cases</button>
+          {/* Manager Enablement (Phase 4, MP12, §13) — same persistent
+              "Ask HR" affordance as CaseViewScreen's own header, available
+              here too since the investigator's restricted view never
+              reaches that header. */}
+          {onEscalate&&(
+            <button onClick={onEscalate} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 12px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask HR</button>
+          )}
+        </div>
         <div style={{fontSize:11,color:"#9B9098"}}>{cs.employeeName}</div>
         <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:24,color:"#7C5CFC",margin:"2px 0 6px",fontWeight:600}}>Investigation checklist</h2>
         <p style={{fontSize:13,color:"#6B6375",margin:"0 0 8px"}}>You've been assigned to investigate this case. Work through each step below — HR can see your progress at any point.</p>

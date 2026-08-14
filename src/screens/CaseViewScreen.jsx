@@ -41,7 +41,7 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowAssignInvestigatorModal, generateInvestigationPlan, investigationPlanLoading, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, attemptSubmitInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading, documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole, hrReviewRequests, respondToReview, resolveInvestigationReview, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, wellbeingNotes, dueSoon, processTemplates }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowAssignInvestigatorModal, generateInvestigationPlan, investigationPlanLoading, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, attemptSubmitInvestigation, openEscalateModal, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading, documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole, hrReviewRequests, respondToReview, resolveInvestigationReview, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, wellbeingNotes, dueSoon, processTemplates }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -160,6 +160,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
         caseSignals={caseSignals}
         onSubmitInvestigation={attemptSubmitInvestigation}
         submittingInvestigation={concludingInvestigation}
+        onEscalate={()=>openEscalateModal(cs.id)}
       />
     );
   }
@@ -213,6 +214,14 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
                 style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",cursor:"pointer",fontWeight:500}}>
                 {currentInvestigator?"Investigator: "+currentInvestigator.name:"Assign investigator..."}
               </button>
+            )}
+            {/* Manager Enablement (Phase 4, MP12, §13) — persistent,
+                case-wide, unlike the old post-meeting-only "Request HR
+                review" button (ReviewScreen.jsx, untouched). HR doesn't
+                need to escalate to themselves. */}
+            {!isHR&&(
+              <button onClick={()=>openEscalateModal(cs.id)}
+                style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask HR</button>
             )}
             <button onClick={startMeetingFromHeader}
               style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>

@@ -174,3 +174,21 @@ describe('InvestigatorChecklistView — submit investigation (MP10)', () => {
     expect(screen.queryByRole('button', { name: 'Submit investigation' })).not.toBeInTheDocument();
   });
 });
+
+// Manager Enablement (Phase 4, MP12, §13) — "Ask HR", available here too
+// since the investigator's restricted view never reaches CaseViewScreen's
+// own header, where the same persistent affordance also lives.
+describe('InvestigatorChecklistView — Ask HR (MP12)', () => {
+  it('shows an Ask HR button when onEscalate is provided, and calls it on click', async () => {
+    const user = userEvent.setup();
+    const onEscalate = vi.fn();
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} onEscalate={onEscalate} />);
+    await user.click(screen.getByRole('button', { name: 'Ask HR' }));
+    expect(onEscalate).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no Ask HR affordance when onEscalate is not provided', () => {
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} />);
+    expect(screen.queryByRole('button', { name: 'Ask HR' })).not.toBeInTheDocument();
+  });
+});
