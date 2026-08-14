@@ -62,4 +62,33 @@ describe('HrDelegatedWorkScreen', () => {
     await user.click(screen.getByText('Sam Employee'));
     expect(setActiveCaseId).toHaveBeenCalledWith('c1');
   });
+
+  // Manager Enablement (Phase 4, MP19, §15) — "Pause investigation" and
+  // the "Intervene" entry point into HrInterventionModal.
+  it('shows a Paused badge for a paused case, and never an attention badge even if it would otherwise be flagged', () => {
+    const pausedCases = [{ ...cases[0], investigationPaused: true }];
+    const flaggedCaseTasks = [
+      { id: 't1', caseId: 'c1', name: 'Interview witnesses', status: 'done' },
+      { id: 't2', caseId: 'c1', name: 'Interview the employee', status: 'done' },
+    ];
+    const allegations = [{ id: 'al1', caseId: 'c1', status: 'unreviewed' }];
+    render(<HrDelegatedWorkScreen {...baseProps} cases={pausedCases} caseTasks={flaggedCaseTasks} allegations={allegations} />);
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    expect(screen.queryByText('HR attention suggested')).not.toBeInTheDocument();
+  });
+
+  it('renders no Intervene button when openHrInterventionModal is not provided', () => {
+    render(<HrDelegatedWorkScreen {...baseProps} />);
+    expect(screen.queryByRole('button', { name: 'Intervene' })).not.toBeInTheDocument();
+  });
+
+  it('clicking Intervene opens the modal for that case without navigating away', async () => {
+    const user = userEvent.setup();
+    const openHrInterventionModal = vi.fn();
+    const setActiveCaseId = vi.fn();
+    render(<HrDelegatedWorkScreen {...baseProps} openHrInterventionModal={openHrInterventionModal} setActiveCaseId={setActiveCaseId} />);
+    await user.click(screen.getByRole('button', { name: 'Intervene' }));
+    expect(openHrInterventionModal).toHaveBeenCalledWith('c1');
+    expect(setActiveCaseId).not.toHaveBeenCalled();
+  });
 });

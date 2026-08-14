@@ -100,6 +100,7 @@ import { AskCompassWidget } from './screens/AskCompassWidget';
 import { HandoffModal } from './screens/HandoffModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
 import { AssignInvestigatorModal } from './screens/AssignInvestigatorModal';
+import { HrInterventionModal } from './screens/HrInterventionModal';
 import { OutcomeModal } from './screens/OutcomeModal';
 
 // Manager Enablement (Phase 4, MP4) — shared by concernForm's initial
@@ -954,7 +955,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // .in('location_id', ...) filter would have incorrectly hidden
       // exactly that case from the list. RLS is now the single source of
       // truth for what this query returns.
-      const query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,suspension_review_date').eq('org_id', org.id);
+      const query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,suspension_review_date,investigation_paused').eq('org_id', org.id);
       const { data, error } = await query;
   if(!error && data) {
         setCases(data.map(mapCaseRow));
@@ -1008,6 +1009,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         oh_referral_date: caseObj.ohReferralDate || null,
         oh_report_received_date: caseObj.ohReportReceivedDate || null,
         suspension_review_date: caseObj.suspensionReviewDate || null,
+        investigation_paused: caseObj.investigationPaused || false,
         updated_at: nowIso,
       };
 
@@ -2668,9 +2670,20 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     }));
     if(error) { console.error('assignInvestigator', error); showToast("Couldn't assign investigator — "+error.message, "error"); return; }
     await loadCaseAccess();
-    const updatedTasks = seedInvestigationChecklist(caseTasks, caseId, targetMember.name);
-    const newlyCreated = updatedTasks.filter(t=>!caseTasks.some(existing=>existing.id===t.id));
-    setCaseTasks(updatedTasks);
+    // Manager Enablement (Phase 4, MP19) — functional update: this runs
+    // after an awaited network round trip (loadCaseAccess above), so a
+    // plain setCaseTasks(updatedTasks) built from whatever caseTasks
+    // closure existed when assignInvestigator was first called can race
+    // another write (e.g. createCaseTask, MP19's own sendHrGuidance)
+    // that happens in between and silently overwrite it. Real bug, found
+    // via hr-intervention.spec.js sending guidance immediately after
+    // assigning an investigator — not a hypothetical.
+    let newlyCreated = [];
+    setCaseTasks(prev => {
+      const updatedTasks = seedInvestigationChecklist(prev, caseId, targetMember.name);
+      newlyCreated = updatedTasks.filter(t=>!prev.some(existing=>existing.id===t.id));
+      return updatedTasks;
+    });
     newlyCreated.forEach(t=>saveCaseTaskToDB({...t, createdBy:user?.id}));
     audit("Investigator assigned", targetMember.name, caseId);
     showToast(targetMember.name+" assigned as investigator");
@@ -2783,6 +2796,77 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     }
   };
 
+  // Manager Enablement (Phase 4, MP19, §15) — HR Intervention actions,
+  // reachable from the case itself (CaseViewScreen's header) and from
+  // MP18's own Delegated Work dashboard. Distinct from
+  // resolveInvestigationReview above: these are proactive, HR-initiated
+  // actions available at any point during a delegated investigation, not
+  // only in response to a submitted review request — "Return for further
+  // work" and "Take over" apply the exact same case-level effects as
+  // resolveInvestigationReview's own "returned"/"taken_over" branches,
+  // just without needing a review request to exist first.
+  const [showHrInterventionModal, setShowHrInterventionModal] = useState(false);
+  const [hrInterventionCaseId, setHrInterventionCaseId] = useState(null);
+  const openHrInterventionModal = (caseId) => { setHrInterventionCaseId(caseId); setShowHrInterventionModal(true); };
+
+  // "Send guidance", "Add investigation question" and "Request additional
+  // witness" are the same underlying mechanism — a case_task tagged with
+  // its own distinct source (same tagging pattern MP8 uses for the
+  // investigation plan) so InvestigatorChecklistView can render it as a
+  // note rather than a checklist item — differing only in label/source.
+  const HR_NOTE_TYPES = {
+    guidance: { source: "hr_guidance", prefix: "Guidance from HR" },
+    question: { source: "hr_question", prefix: "HR question" },
+    witness: { source: "hr_witness_request", prefix: "HR requests a witness" },
+  };
+  const sendHrGuidance = (caseId, note, noteType) => {
+    const cs = cases.find(c=>c.id===caseId);
+    if(!cs || !(note||"").trim()) return;
+    const { source, prefix } = HR_NOTE_TYPES[noteType] || HR_NOTE_TYPES.guidance;
+    createCaseTask(caseId, { name: prefix+": "+note.trim(), source, owner: "" });
+    audit(prefix, note.trim(), caseId);
+  };
+
+  const hrReturnForFurtherWork = (caseId, note) => {
+    const cs = cases.find(c=>c.id===caseId);
+    if(!cs) return;
+    saveCases(cases.map(x=>x.id===caseId?{...x,stage:"investigation"}:x));
+    const submitTask = investigationChecklistTasks(caseTasks, caseId).find(t=>t.name===INVESTIGATION_CHECKLIST_STEPS[INVESTIGATION_CHECKLIST_STEPS.length-1].label);
+    if(submitTask?.status==="done") toggleCaseTaskDone(submitTask.id);
+    if((note||"").trim()) createCaseTask(caseId, { name: "Guidance from HR: "+note.trim(), source: "hr_guidance", owner: "" });
+    audit("Investigation returned for further work (HR intervention)", note||cs.employeeName, caseId);
+  };
+
+  const hrTakeOverCase = async (caseId) => {
+    const cs = cases.find(c=>c.id===caseId);
+    if(!cs) return;
+    saveCases(cases.map(x=>x.id===caseId?{...x,manager:member?.name||user?.email||x.manager}:x));
+    if(user?.id) await assignCaseRole(caseId, user.id, "case_owner");
+    audit("Case taken over by HR (intervention)", member?.name||user?.email, caseId);
+  };
+
+  // "Pause" is deliberately scoped narrow: a boolean + this one audit
+  // entry, not a new status state machine — computeDueSoon (MP17) and
+  // computeDelegatedWork (MP18) both already respect it, nothing more.
+  const togglePauseInvestigation = (caseId) => {
+    const cs = cases.find(c=>c.id===caseId);
+    if(!cs) return;
+    const nowPaused = !cs.investigationPaused;
+    saveCases(cases.map(x=>x.id===caseId?{...x,investigationPaused:nowPaused}:x));
+    audit(nowPaused?"Investigation paused":"Investigation resumed", cs.employeeName, caseId);
+  };
+
+  // Closes this modal and opens the existing AssignInvestigatorModal
+  // (MP7) instead of duplicating its own reassignment UI — that modal
+  // reads activeCaseId, which the Delegated Work dashboard's own
+  // "Intervene" button never sets (it isn't "viewing" a case), so this
+  // sets it explicitly first.
+  const reassignFromIntervention = () => {
+    setActiveCaseId(hrInterventionCaseId);
+    setShowHrInterventionModal(false);
+    setShowAssignInvestigatorModal(true);
+  };
+
   // ── Case signals ──
   const loadCaseSignals = async () => {
     if(!org?.id) return;
@@ -2852,13 +2936,30 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(error) { console.error('deleteCaseTaskFromDB', error); showToast("Couldn't delete task — "+error.message, "error"); }
   };
 
+  // Manager Enablement (Phase 4, MP19) — functional update, same
+  // stale-closure fix pattern as MP5/MP6: createCaseTask is called from
+  // many places (Tasks tab, sendHrGuidance, hrReturnForFurtherWork...),
+  // and assignInvestigator's own checklist seeding writes caseTasks
+  // independently and asynchronously (after an awaited loadCaseAccess()
+  // call) — a plain setCaseTasks(updated) here reads whatever caseTasks
+  // closure this call happened to capture, and if the checklist's own
+  // still-in-flight write commits afterwards, ITS plain setCaseTasks
+  // call (built from ITS OWN pre-await snapshot) silently overwrites
+  // this one. Found via a real E2E race (hr-intervention.spec.js
+  // sending guidance immediately after assigning an investigator), not
+  // just reasoned about in the abstract.
   const createCaseTask = (caseId, fields) => {
-    const updated = addTask(caseTasks, caseId, fields);
-    if(updated===caseTasks) return;
-    setCaseTasks(updated);
-    const created = updated[updated.length-1];
-    saveCaseTaskToDB({...created, createdBy:user?.id});
-    audit("Task added", created.name, caseId);
+    let created = null;
+    setCaseTasks(prev => {
+      const updated = addTask(prev, caseId, fields);
+      if(updated===prev) return prev;
+      created = updated[updated.length-1];
+      return updated;
+    });
+    if(created) {
+      saveCaseTaskToDB({...created, createdBy:user?.id});
+      audit("Task added", created.name, caseId);
+    }
   };
 
   const toggleCaseTaskDone = (taskId) => {
@@ -5954,6 +6055,7 @@ Please produce:
           concludingInvestigation={concludingInvestigation}
           attemptSubmitInvestigation={attemptSubmitInvestigation}
           openEscalateModal={openEscalateModal}
+          openHrInterventionModal={openHrInterventionModal}
           allegations={allegations}
           createAllegation={createAllegation}
           patchAllegation={patchAllegation}
@@ -6234,6 +6336,7 @@ Please produce:
           setScreen={setScreen}
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
+          openHrInterventionModal={openHrInterventionModal}
         />
       )}
 
@@ -6453,6 +6556,19 @@ Please produce:
           orgMembers={orgMembers}
           setShowAssignInvestigatorModal={setShowAssignInvestigatorModal}
           assignInvestigator={assignInvestigator}
+        />
+      )}
+
+      {/* ── HR Intervention Modal ── */}
+      {showHrInterventionModal&&(
+        <HrInterventionModal
+          cs={cases.find(c=>c.id===hrInterventionCaseId)}
+          setShowHrInterventionModal={setShowHrInterventionModal}
+          onSendGuidance={(note,noteType)=>sendHrGuidance(hrInterventionCaseId,note,noteType)}
+          onReturnForFurtherWork={(note)=>hrReturnForFurtherWork(hrInterventionCaseId,note)}
+          onTakeOver={()=>hrTakeOverCase(hrInterventionCaseId)}
+          onTogglePause={()=>togglePauseInvestigation(hrInterventionCaseId)}
+          onReassign={reassignFromIntervention}
         />
       )}
 

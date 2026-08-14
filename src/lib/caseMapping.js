@@ -40,5 +40,6 @@ export function mapCaseRow(row) {
     ohReferralDate: row.oh_referral_date || null,
     ohReportReceivedDate: row.oh_report_received_date || null,
     suspensionReviewDate: row.suspension_review_date || null,
+    investigationPaused: row.investigation_paused || false,
   };
 }

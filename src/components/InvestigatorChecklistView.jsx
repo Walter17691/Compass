@@ -33,7 +33,7 @@ function StepCard({ index, step, task, onToggle, children }) {
   );
 }
 
-export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading, caseSignals=[], onSubmitInvestigation, submittingInvestigation, onEscalate }) {
+export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading, caseSignals=[], onSubmitInvestigation, submittingInvestigation, onEscalate, guidanceTasks=[] }) {
   const evidence = cs.evidence||[];
   const stepFor = (label) => checklistTasks.find(t=>t.name===label);
   const doneCount = checklistTasks.filter(t=>t.status==="done").length;
@@ -71,9 +71,22 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
             plan, and the fixed checklist in that priority order
             (computeInvestigatorRecommendation). Never free-form AI text. */}
         {recommendation&&(
-          <div style={{background:recommendation.kind==="guardrail"?"#FEF0EB":"#F5F3FF",border:"1px solid "+(recommendation.kind==="guardrail"?"#F5C9BA":"#DDD9F5"),borderRadius:8,padding:"12px 14px",marginBottom:24}}>
+          <div style={{background:recommendation.kind==="guardrail"?"#FEF0EB":"#F5F3FF",border:"1px solid "+(recommendation.kind==="guardrail"?"#F5C9BA":"#DDD9F5"),borderRadius:8,padding:"12px 14px",marginBottom:guidanceTasks.length?12:24}}>
             <div style={{fontSize:10,fontWeight:700,color:recommendation.kind==="guardrail"?"#C84B2F":"#5B3FD4",textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:4}}>Compass recommends next</div>
             <div style={{fontSize:13,color:"#1A1535"}}>{recommendation.text}</div>
+          </div>
+        )}
+
+        {/* Manager Enablement (Phase 4, MP19, §15) — guidance, questions
+            and witness requests HR has sent on this case (App.jsx's
+            sendHrGuidance) — read-only notes, distinct from the fixed
+            checklist and MP8's own generated plan below. */}
+        {guidanceTasks.length>0&&(
+          <div style={{background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"12px 14px",marginBottom:24}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:8}}>Guidance from HR</div>
+            {guidanceTasks.map(t=>(
+              <div key={t.id} style={{fontSize:13,color:"#1A1535",padding:"6px 0",borderBottom:"1px solid #F5F1EA"}}>{t.name}</div>
+            ))}
           </div>
         )}
 

@@ -45,3 +45,15 @@ export function toggleTaskDone(tasks, taskId) {
 export function removeTask(tasks, taskId) {
   return (tasks || []).filter(t => t.id !== taskId);
 }
+
+// Manager Enablement (Phase 4, MP19, §15) — "Send guidance"/"Add
+// investigation question"/"Request additional witness" (App.jsx's
+// sendHrGuidance) all write ordinary case_tasks tagged with one of
+// these three sources — same tagging pattern MP8 uses for the
+// investigation plan — so InvestigatorChecklistView can render them as
+// read-only notes from HR rather than checklist items.
+export const HR_NOTE_SOURCES = ["hr_guidance", "hr_question", "hr_witness_request"];
+
+export function hrNoteTasks(tasks, caseId) {
+  return tasksForCase(tasks, caseId).filter(t => HR_NOTE_SOURCES.includes(t.source));
+}

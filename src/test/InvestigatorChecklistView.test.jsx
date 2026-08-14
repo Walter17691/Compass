@@ -192,3 +192,23 @@ describe('InvestigatorChecklistView — Ask HR (MP12)', () => {
     expect(screen.queryByRole('button', { name: 'Ask HR' })).not.toBeInTheDocument();
   });
 });
+
+// Manager Enablement (Phase 4, MP19, §15) — "Guidance from HR": read-only
+// notes an HR Intervention (App.jsx's sendHrGuidance) sends down.
+describe('InvestigatorChecklistView — guidance from HR (MP19)', () => {
+  it('shows no guidance section when there is none', () => {
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} guidanceTasks={[]} />);
+    expect(screen.queryByText('Guidance from HR')).not.toBeInTheDocument();
+  });
+
+  it('lists every guidance/question/witness-request note HR has sent', () => {
+    const guidanceTasks = [
+      { id: 'g1', name: 'Guidance from HR: Focus on the CCTV angle first.' },
+      { id: 'g2', name: 'HR question: Did they check the swipe logs?' },
+    ];
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} guidanceTasks={guidanceTasks} />);
+    expect(screen.getByText('Guidance from HR')).toBeInTheDocument();
+    expect(screen.getByText('Guidance from HR: Focus on the CCTV angle first.')).toBeInTheDocument();
+    expect(screen.getByText('HR question: Did they check the swipe logs?')).toBeInTheDocument();
+  });
+});

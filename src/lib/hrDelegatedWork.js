@@ -45,7 +45,12 @@ export function computeDelegatedWork(cases, caseAccess, orgMembers, caseTasks, a
       const meetingsCompleted = (cs.meetings || []).filter(m => (m.type || "").toLowerCase().includes("investigation") && m.record).length;
       const tasksOverdue = (caseTasks || []).filter(t => t.caseId === cs.id && t.status !== "done" && t.dueDate && t.dueDate < todayIso).length;
       const caseAllegations = allegationsForCase(allegations, cs.id);
-      const attention = computeHrAttentionFlag(cs, caseAllegations, checklistTasks, access.targetCompletionDate, today);
+      // Manager Enablement (Phase 4, MP19, §15) — a paused case never
+      // gets flagged for attention (HR paused it deliberately; a
+      // deadline/attention nag would defeat the point), but still
+      // appears here — silently dropping it, the way computeDueSoon
+      // does, would leave HR wondering where a delegated case went.
+      const attention = cs.investigationPaused ? { flagged: false, reasons: [] } : computeHrAttentionFlag(cs, caseAllegations, checklistTasks, access.targetCompletionDate, today);
       return {
         caseId: cs.id,
         employeeName: cs.employeeName,
@@ -55,6 +60,7 @@ export function computeDelegatedWork(cases, caseAccess, orgMembers, caseTasks, a
         meetingsCompleted,
         tasksOverdue,
         targetCompletionDate: access.targetCompletionDate || null,
+        paused: !!cs.investigationPaused,
         attentionFlagged: attention.flagged,
         attentionReasons: attention.reasons,
       };

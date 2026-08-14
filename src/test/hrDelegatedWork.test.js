@@ -100,4 +100,25 @@ describe('computeDelegatedWork', () => {
     const [row] = computeDelegatedWork(cases, accessNoMember, orgMembers, [], [], today);
     expect(row.investigatorName).toBe('Unknown');
   });
+
+  // Manager Enablement (Phase 4, MP19, §15) — a paused case still appears
+  // (unlike computeDueSoon, which drops it entirely) but never gets
+  // flagged for attention.
+  it('marks a paused case as paused and never flags it for attention, even when it otherwise would be', () => {
+    const pausedCases = [{ ...cases[0], investigationPaused: true }];
+    const flaggedChecklist = [
+      { id: 't1', caseId: 'c1', name: 'Interview witnesses', status: 'done' },
+      { id: 't2', caseId: 'c1', name: 'Interview the employee', status: 'done' },
+    ];
+    const unreviewedAllegation = [{ id: 'al1', caseId: 'c1', status: 'unreviewed' }];
+    const [row] = computeDelegatedWork(pausedCases, caseAccess, orgMembers, flaggedChecklist, unreviewedAllegation, today);
+    expect(row.paused).toBe(true);
+    expect(row.attentionFlagged).toBe(false);
+    expect(row.attentionReasons).toEqual([]);
+  });
+
+  it('marks a non-paused case as not paused', () => {
+    const [row] = computeDelegatedWork(cases, caseAccess, orgMembers, caseTasks, allegations, today);
+    expect(row.paused).toBe(false);
+  });
 });

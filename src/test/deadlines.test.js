@@ -496,3 +496,21 @@ describe('groupDueSoon', () => {
     expect(total).toBe(dueSoon.length);
   });
 });
+
+// Manager Enablement (Phase 4, MP19, §15) — HR's "Pause investigation".
+describe('computeDueSoon — paused cases (MP19)', () => {
+  const today = new Date('2026-08-14');
+
+  it('excludes every deadline on a paused case, not just investigation-specific ones', () => {
+    const cases = [{
+      id: 'c1', employeeName: 'Sam', investigationPaused: true, meetings: [],
+      suspensionReviewDate: '2026-08-15', fitNoteEndDate: '2026-08-15',
+    }];
+    expect(computeDueSoon(cases, [], today)).toEqual([]);
+  });
+
+  it('still computes deadlines normally for a case that is not paused', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', investigationPaused: false, meetings: [], suspensionReviewDate: '2026-08-15' }];
+    expect(computeDueSoon(cases, [], today)).toHaveLength(1);
+  });
+});

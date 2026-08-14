@@ -60,6 +60,12 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
 
   cases.forEach(cs => {
     if(getCaseStage(cs)==="closed") return;
+    // Manager Enablement (Phase 4, MP19, §15) — a case HR has explicitly
+    // paused (a deliberate boolean, not a new status) drops out of every
+    // deadline this function computes for it, not just investigation-
+    // specific ones — the whole case is on hold, same as closed cases
+    // being excluded above.
+    if(cs.investigationPaused) return;
     const meetings = cs.meetings||[];
     const evidence = cs.evidence||[];
     const caseMeta = { confidential: !!cs.confidential, caseId: cs.id, createdBy: cs.createdBy||null };
