@@ -23,6 +23,7 @@ import { WhySourcesModal } from '../components/WhySourcesModal';
 import { PolicyCitation } from '../components/PolicyCitation';
 import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
 import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
+import { NotetakerView } from '../components/NotetakerView';
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
@@ -83,6 +84,10 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   const currentInvestigator = currentInvestigatorAccess ? orgMembers.find(m=>m.user_id===currentInvestigatorAccess.userId) : null;
   const myAccess = caseAccess.find(a=>a.caseId===cs.id && a.userId===currentUser?.user_id);
   const isAssignedInvestigator = !isHR && myAccess?.role==="investigator";
+  // Manager Enablement (Phase 4, MP2) — same restricted-view branch-point
+  // as isAssignedInvestigator above, one case_access role earlier in the
+  // render order since they're mutually exclusive per user per case.
+  const isAssignedNotetaker = !isHR && myAccess?.role==="notetaker";
   const checklistTasks = investigationChecklistTasks(caseTasks, cs.id);
 
   const startWitnessInterview = () => {
@@ -100,6 +105,22 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
     setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
     setScreen(SCREENS.HOME+"_meeting");
   };
+
+  if(isAssignedNotetaker) {
+    return (
+      <NotetakerView
+        cs={cs}
+        cases={cases}
+        saveCases={saveCases}
+        createCaseTask={createCaseTask}
+        openQuestions={openSignalsForCase(caseSignals, cs.id, "unanswered_question")}
+        currentUser={currentUser}
+        fmtDate={fmtDate}
+        setScreen={setScreen}
+        screens={screens}
+      />
+    );
+  }
 
   if(isAssignedInvestigator) {
     return (
