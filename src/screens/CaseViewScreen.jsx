@@ -88,6 +88,20 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   // as isAssignedInvestigator above, one case_access role earlier in the
   // render order since they're mutually exclusive per user per case.
   const isAssignedNotetaker = !isHR && myAccess?.role==="notetaker";
+  // Manager Enablement (Phase 4, MP3, §18) — the P10 decision workspace
+  // (AllegationsPanel's investigator finding / decision reasoning /
+  // outstanding uncertainty / employee response / status) used to be
+  // implicitly editable by anyone who reached the full case view at all —
+  // there was no formal "who's actually deciding this" concept. Real
+  // assignment already existed (HandoffModal already writes a real
+  // case_access role:"disciplinary_officer" row on appointment); this is
+  // what actually reads it to gate editing to HR or that assigned Hearing
+  // Manager. Investigator/notetaker never reach this panel at all any
+  // more (MP1/MP2's own restricted views), so the remaining non-HR
+  // audience here is appeal_manager/employee_manager/approver/case_owner —
+  // they still see these fields (context they may legitimately need), just
+  // read-only.
+  const canDecide = isHR || (myAccess?.role==="disciplinary_officer");
   const checklistTasks = investigationChecklistTasks(caseTasks, cs.id);
 
   const startWitnessInterview = () => {
@@ -392,7 +406,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={toggleTimelineExclude} onEditDescription={editTimelineDescription} onGenerateRelevance={generateTimelineRelevance} relevanceLoading={timelineRelevanceLoading?.[cs.id]} loadJsPDF={loadJsPDF}/>
           )}
           {activeTab==="allegations"&&(
-            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={createAllegation} patchAllegation={patchAllegation} changeAllegationStatus={changeAllegationStatus} deleteAllegation={deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={generateEvidenceSuggestions} acceptEvidenceSuggestion={acceptEvidenceSuggestion} rejectEvidenceSuggestion={rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={generateAppealReview} appealReviewLoading={appealReviewLoading} recordAppealOutcome={recordAppealOutcome} policies={policies} consistencyReview={consistencyReview?.[cs.id]} consistencyReviewLoading={consistencyReviewLoading?.[cs.id]} generateConsistencyReview={generateConsistencyReview}/>
+            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={createAllegation} patchAllegation={patchAllegation} changeAllegationStatus={changeAllegationStatus} deleteAllegation={deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={generateEvidenceSuggestions} acceptEvidenceSuggestion={acceptEvidenceSuggestion} rejectEvidenceSuggestion={rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={generateAppealReview} appealReviewLoading={appealReviewLoading} recordAppealOutcome={recordAppealOutcome} policies={policies} consistencyReview={consistencyReview?.[cs.id]} consistencyReviewLoading={consistencyReviewLoading?.[cs.id]} generateConsistencyReview={generateConsistencyReview} canDecide={canDecide}/>
           )}
           {activeTab==="meetings"&&(
             <MeetingsTab cs={cs} cases={cases} saveCases={saveCases} activeCaseStage={activeCaseStage} setActiveCaseStage={setActiveCaseStage} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} orgMembers={orgMembers} setScreen={setScreen} screens={screens} setReviewOutput={setReviewOutput} setMeetingType={setMeetingType} meetingTypes={MEETING_TYPES} fmtDate={fmtDate} concludeInvestigation={concludeInvestigation} concludingInvestigation={concludingInvestigation} setShowHandoffModal={setShowHandoffModal} setLetterOutput={setLetterOutput}/>
