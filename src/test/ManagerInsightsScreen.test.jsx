@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ManagerInsightsScreen } from '../screens/ManagerInsightsScreen.jsx';
 
 // Manager Enablement (Phase 4, MP20, §24) — HR-only, so reachable by the
@@ -49,5 +50,54 @@ describe('ManagerInsightsScreen', () => {
     render(<ManagerInsightsScreen cases={cases} caseAccess={caseAccess} hrReviewRequests={[]} auditLog={auditLog} dueSoon={[]} />);
     expect(screen.getByText('Meeting quality gaps').closest('div').parentElement).toHaveTextContent('1');
     expect(screen.getByText('Process deviations').closest('div').parentElement).toHaveTextContent('2');
+  });
+
+  // Manager Enablement (Phase 4, MP21, §25) — "Manager Capability Insight".
+  describe('Manager Capability Insight', () => {
+    const caseTasks = [{ id: 't1', caseId: 'c1', source: 'hr_guidance', name: 'Guidance from HR: Check the CCTV angle again.', createdAt: '2026-08-01T00:00:00Z' }];
+
+    it('shows an empty state and a disabled button when there is no intervention history at all', () => {
+      render(<ManagerInsightsScreen cases={[]} caseAccess={[]} hrReviewRequests={[]} auditLog={[]} dueSoon={[]} caseTasks={[]} managerCapabilityInsights={[]} onGenerateManagerInsight={()=>{}} />);
+      expect(screen.getByText(/Not enough recorded intervention history yet/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Generate insight' })).toBeDisabled();
+    });
+
+    it('enables the button once there is at least one recorded signal', () => {
+      render(<ManagerInsightsScreen cases={[]} caseAccess={[]} hrReviewRequests={[]} auditLog={[]} dueSoon={[]} caseTasks={caseTasks} managerCapabilityInsights={[]} onGenerateManagerInsight={()=>{}} />);
+      expect(screen.getByRole('button', { name: 'Generate insight' })).not.toBeDisabled();
+      expect(screen.getByText(/No insight generated yet/)).toBeInTheDocument();
+    });
+
+    it('clicking "Generate insight" calls onGenerateManagerInsight', async () => {
+      const user = userEvent.setup();
+      const onGenerateManagerInsight = vi.fn();
+      render(<ManagerInsightsScreen cases={[]} caseAccess={[]} hrReviewRequests={[]} auditLog={[]} dueSoon={[]} caseTasks={caseTasks} managerCapabilityInsights={[]} onGenerateManagerInsight={onGenerateManagerInsight} />);
+      await user.click(screen.getByRole('button', { name: 'Generate insight' }));
+      expect(onGenerateManagerInsight).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows "Generating…" and disables the button while a generation is in flight', () => {
+      render(<ManagerInsightsScreen cases={[]} caseAccess={[]} hrReviewRequests={[]} auditLog={[]} dueSoon={[]} caseTasks={caseTasks} managerCapabilityInsights={[]} generatingManagerInsight onGenerateManagerInsight={()=>{}} />);
+      expect(screen.getByRole('button', { name: 'Generating…' })).toBeDisabled();
+    });
+
+    it('renders a generated insight — categories and the suggested response', () => {
+      const insights = [{
+        id: 'i1', created_at: '2026-08-14T10:00:00Z', sample_size: 5,
+        categories: [{ label: 'Insufficient follow-up questioning', description: 'Several notes ask investigators to go back and probe further.', frequency: 'Seen in 3 of 5 notes' }],
+        suggested_response: 'Consider a short refresher on probing-question technique.',
+      }];
+      render(<ManagerInsightsScreen cases={[]} caseAccess={[]} hrReviewRequests={[]} auditLog={[]} dueSoon={[]} caseTasks={caseTasks} managerCapabilityInsights={insights} onGenerateManagerInsight={()=>{}} />);
+      expect(screen.getByText('Insufficient follow-up questioning')).toBeInTheDocument();
+      expect(screen.getByText('Several notes ask investigators to go back and probe further.')).toBeInTheDocument();
+      expect(screen.getByText('Seen in 3 of 5 notes')).toBeInTheDocument();
+      expect(screen.getByText(/Consider a short refresher on probing-question technique/)).toBeInTheDocument();
+      expect(screen.getByText(/based on 5 recorded interventions/)).toBeInTheDocument();
+    });
+
+    it('does not render the generate button when no handler is given', () => {
+      render(<ManagerInsightsScreen cases={[]} caseAccess={[]} hrReviewRequests={[]} auditLog={[]} dueSoon={[]} caseTasks={caseTasks} managerCapabilityInsights={[]} />);
+      expect(screen.queryByRole('button', { name: /Generate insight/ })).not.toBeInTheDocument();
+    });
   });
 });

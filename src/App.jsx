@@ -31,6 +31,7 @@ import { addConcernReferral, setReferralStatus, updateConcernReferral } from './
 import { sanitizeTriageSummary } from './lib/concernTriage';
 import { seedInvestigationChecklist, investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './lib/investigationChecklist';
 import { sanitizeInvestigationPlanItems, seedInvestigationPlanTasks } from './lib/investigationPlan';
+import { collectInterventionSignals, formatSignalsForPrompt, sanitizeManagerCapabilityInsight } from './lib/managerLearningLoop';
 import { computeInvestigationQualityGaps } from './lib/investigationQuality';
 import { InvestigationQualityCheckModal } from './components/InvestigationQualityCheckModal';
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
@@ -1161,6 +1162,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(data) setHrReviewRequests(data);
   };
 
+  // Manager Enablement (Phase 4, MP21, §25) — HR-only, same gating as
+  // loadWellbeingNotes (manager_capability_insights_2026-08-14.sql's own
+  // RLS is the real boundary; this just avoids a doomed query for
+  // non-HR members). State declared right above (rather than grouped
+  // with every other useState further down, like hrReviewRequests' own)
+  // so this function doesn't reference it before it's declared.
+  const [managerCapabilityInsights, setManagerCapabilityInsights] = useState([]);
+  const [generatingManagerInsight, setGeneratingManagerInsight] = useState(false);
+  const loadManagerCapabilityInsights = async () => {
+    if(!org?.id) return;
+    const { data, error } = await supabase.from('manager_capability_insights').select('*').eq('org_id', org.id).order('created_at', {ascending: false});
+    if(error) { console.error('loadManagerCapabilityInsights', error); return; }
+    if(data) setManagerCapabilityInsights(data);
+  };
+
   // Process Intelligence (P9) — OutcomeModal calls this right after
   // saveCases() for the case it's scoped to; that case save is itself
   // fire-and-forget (saveCaseToDB), so this needs the same FK-race
@@ -1240,7 +1256,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) loadWellbeingNotes(); } }, [org?.id, isHR, user?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); } } }, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -2732,6 +2748,43 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       }
     } catch(e) { console.error("generateInvestigationPlan", e); showToast("Couldn't generate the investigation plan — "+e.message, "error"); }
     setInvestigationPlanLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  // Manager Enablement (Phase 4, MP21, §25) — Manager Learning Loop. One
+  // AI call over managerLearningLoop.js's own collectInterventionSignals
+  // (HR guidance/question/witness notes, MP11 return-for-rework reasons,
+  // M9 meeting-quality-gap overrides, P7 policy deviations) — never full
+  // case/meeting content, matching the plan's own "MP20's own aggregated
+  // data, not raw case text". Persisted to manager_capability_insights so
+  // a real history builds up over time rather than being recomputed (and
+  // silently changing) on every page load.
+  const generateManagerCapabilityInsight = async () => {
+    const signals = collectInterventionSignals(caseTasks, hrReviewRequests, auditLog);
+    if(!signals.length) { showToast("Not enough recorded intervention history yet to generate an insight"); return; }
+    setGeneratingManagerInsight(true);
+    try {
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:900,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot identifying ORGANISATIONAL training patterns from a list of HR's own recorded interventions across many different managers' investigations. This is advisory input for HR to consider, never a verdict — you are never grading or naming any individual manager, only describing recurring THEMES a training or process response could address. Ground every category in what the signals actually show; if the data is sparse or inconsistent, say fewer categories with lower confidence rather than inventing patterns. Respond ONLY with valid JSON, no other text: {\"categories\":[{\"label\":\"short theme name, e.g. Insufficient follow-up questioning\",\"description\":\"one or two sentences describing the pattern, grounded in the signals given\",\"frequency\":\"short phrase on how often this theme appears in the data, e.g. Seen in 4 of the recorded notes\"}],\"suggestedResponse\":\"one to three sentences suggesting a concrete organisational or training response HR could consider\"}",
+        messages:[{role:"user", content:"RECORDED HR INTERVENTIONS ACROSS INVESTIGATIONS (most recent first):\n"+formatSignalsForPrompt(signals)}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const sanitized = sanitizeManagerCapabilityInsight(parsed);
+      if(!sanitized.categories.length) { showToast("Compass couldn't identify a clear pattern from the data on file yet"); }
+      else {
+        const { data: saved, error } = await withFkRetry(() => supabase.from('manager_capability_insights').insert({
+          org_id: org.id, generated_by: user?.id, generated_by_name: member?.name||user?.email,
+          sample_size: signals.length, categories: sanitized.categories, suggested_response: sanitized.suggestedResponse,
+        }).select().single());
+        if(saved) { setManagerCapabilityInsights(list=>[saved, ...list]); audit("Manager capability insight generated", sanitized.categories.length+" theme"+(sanitized.categories.length!==1?"s":"")); }
+        else { console.error("generateManagerCapabilityInsight save", error); showToast("Couldn't save the generated insight — "+error?.message, "error"); }
+      }
+    } catch(e) { console.error("generateManagerCapabilityInsight", e); showToast("Couldn't generate a manager capability insight — "+e.message, "error"); }
+    setGeneratingManagerInsight(false);
   };
 
   // Process Intelligence (P8) — generalizes assignInvestigator for the
@@ -6349,6 +6402,10 @@ Please produce:
           hrReviewRequests={hrReviewRequests}
           auditLog={auditLog}
           dueSoon={dueSoon}
+          caseTasks={caseTasks}
+          managerCapabilityInsights={managerCapabilityInsights}
+          generatingManagerInsight={generatingManagerInsight}
+          onGenerateManagerInsight={generateManagerCapabilityInsight}
         />
       )}
 
