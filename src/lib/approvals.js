@@ -39,3 +39,26 @@ export function approvalActionForOutcome(outcomeType) {
   if (outcomeType === "Dismissal with notice" || outcomeType === "Summary dismissal (gross misconduct)") return "dismissal";
   return null;
 }
+
+// Manager Enablement (Phase 4, MP11, §17) — a second, richer status
+// vocabulary on the SAME hr_review_requests.status column, specific to
+// investigation submissions (step:"inv_report", MP10's own
+// finalizeInvestigationSubmission) rather than the simple approve/reject
+// sign-off the outcome-approval flow above still uses unchanged.
+// "Approved" is deliberately the one status shared between both
+// vocabularies — "yes, this is fine" means the same thing either way.
+// No migration needed: hr_review_requests.status has never had a CHECK
+// constraint (baseline_schema_2026-08-06.sql), so it already accepts any
+// text value.
+export const INVESTIGATION_REVIEW_STATUSES = [
+  { id: "approved", actionLabel: "Approve", statusLabel: "Approved" },
+  { id: "returned", actionLabel: "Return for further investigation", statusLabel: "Returned for further investigation" },
+  { id: "clarification_requested", actionLabel: "Request clarification", statusLabel: "Clarification requested" },
+  { id: "taken_over", actionLabel: "Take over case", statusLabel: "Taken over by HR" },
+  { id: "closed", actionLabel: "Close", statusLabel: "Closed" },
+  { id: "progressed", actionLabel: "Progress to next stage", statusLabel: "Progressed to next stage" },
+];
+
+export function investigationReviewStatusLabel(status) {
+  return INVESTIGATION_REVIEW_STATUSES.find(s => s.id === status)?.statusLabel || "Awaiting HR review";
+}

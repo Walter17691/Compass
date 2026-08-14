@@ -9,7 +9,16 @@ import { login, confirmOverrideReason } from './helpers.js';
 // existing flow (a case with no allegations at all) already covers the
 // no-gaps path unchanged — this test deliberately leaves a recorded
 // allegation in the default "unreviewed" status to trigger a real gap.
-test('an unreviewed allegation triggers the Investigation Quality Check before a report can be generated', async ({ page }) => {
+//
+// Also covers MP11, §17 — finalizeInvestigationSubmission creates a real
+// hr_review_request once the report is generated, which the HR Review
+// Gate panel (Overview tab) should show as awaiting review. Reuses this
+// same flow rather than a separate E2E test: HrReviewGatePanel's own
+// action-set/history logic is already covered directly by
+// HrReviewGatePanel.test.jsx, so this only needs to prove the real
+// submission path actually produces a visible request, not re-test the
+// panel's own rendering rules.
+test('an unreviewed allegation triggers the Investigation Quality Check, and submitting creates a real HR Review Gate request', async ({ page }) => {
   test.setTimeout(150000); // one real ~65s report-generation call, per investigation-report.spec.js's own measured margin
   const employeeName = `E2E InvQuality ${Date.now()}`;
 
@@ -67,4 +76,9 @@ test('an unreviewed allegation triggers the Investigation Quality Check before a
   await qualityModal.getByRole('button', { name: 'Proceed anyway' }).click();
   await confirmOverrideReason(page);
   await expect(page.getByText(/Report generated/)).toBeVisible({ timeout: 120000 });
+
+  await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(page.getByText('HR Review Gate', { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Awaiting HR review', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
 });

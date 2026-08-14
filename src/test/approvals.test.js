@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { requiresApproval, approvalActionLabel, approvalStatusLabel, approvalActionForOutcome, APPROVAL_ACTIONS } from '../lib/approvals';
+import { requiresApproval, approvalActionLabel, approvalStatusLabel, approvalActionForOutcome, APPROVAL_ACTIONS, INVESTIGATION_REVIEW_STATUSES, investigationReviewStatusLabel } from '../lib/approvals';
 
 describe('requiresApproval', () => {
   it('returns true for each of the spec\'s five approval-gated actions', () => {
@@ -60,5 +60,29 @@ describe('APPROVAL_ACTIONS', () => {
     expect(APPROVAL_ACTIONS.map(a => a.id)).toEqual([
       'suspension', 'final_written_warning', 'dismissal', 'settlement', 'redundancy_outcome',
     ]);
+  });
+});
+
+// Manager Enablement (Phase 4, MP11, §17) — the HR Review Gate's own,
+// separate status vocabulary for investigation submissions.
+describe('INVESTIGATION_REVIEW_STATUSES / investigationReviewStatusLabel', () => {
+  it('has exactly the plan\'s six listed actions, in order', () => {
+    expect(INVESTIGATION_REVIEW_STATUSES.map(s => s.id)).toEqual([
+      'approved', 'returned', 'clarification_requested', 'taken_over', 'closed', 'progressed',
+    ]);
+  });
+
+  it('maps each status id onto its own display label', () => {
+    expect(investigationReviewStatusLabel('approved')).toBe('Approved');
+    expect(investigationReviewStatusLabel('returned')).toBe('Returned for further investigation');
+    expect(investigationReviewStatusLabel('clarification_requested')).toBe('Clarification requested');
+    expect(investigationReviewStatusLabel('taken_over')).toBe('Taken over by HR');
+    expect(investigationReviewStatusLabel('closed')).toBe('Closed');
+    expect(investigationReviewStatusLabel('progressed')).toBe('Progressed to next stage');
+  });
+
+  it('falls back to "Awaiting HR review" for pending or unrecognised statuses', () => {
+    expect(investigationReviewStatusLabel('pending')).toBe('Awaiting HR review');
+    expect(investigationReviewStatusLabel(undefined)).toBe('Awaiting HR review');
   });
 });

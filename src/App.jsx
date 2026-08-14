@@ -2702,6 +2702,44 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     showToast(targetMember.name+" assigned as "+caseRoleLabel(roleId));
   };
 
+  // Manager Enablement (Phase 4, MP11, §17) — the HR Review Gate's own
+  // action set (HrReviewGatePanel.jsx), distinct from respondToReview's
+  // plain approve/reject that the outcome-approval flow (OutcomeModal,
+  // ApprovalsPanel) still uses unchanged. Each action writes its own
+  // status via respondToReview, then applies at most one deterministic
+  // case-level effect. Deliberately does NOT make "progress to next
+  // stage" force cs.stage straight to "disciplinary": getNextStep's own
+  // "disciplinary" branch assumes an invitation was already sent
+  // (checks !lastDisc?.record), so skipping straight there would bypass
+  // the ACAS invitation step entirely. Both "approved" and "progressed"
+  // leave the case's stage machinery alone — the case's own next-step
+  // banner already shows "Proceed to disciplinary — send invitation"
+  // once stage is "inv_report" (MP10's own finalizeInvestigationSubmission);
+  // the review's status is what's genuinely new here, not a stage jump.
+  const resolveInvestigationReview = async (reviewId, caseId, actionId, comments) => {
+    await respondToReview(reviewId, actionId, comments);
+    const cs = cases.find(c=>c.id===caseId);
+    if(!cs) return;
+    if(actionId==="returned") {
+      saveCases(cases.map(x=>x.id===caseId?{...x,stage:"investigation"}:x));
+      const submitTask = investigationChecklistTasks(caseTasks, caseId).find(t=>t.name===INVESTIGATION_CHECKLIST_STEPS[INVESTIGATION_CHECKLIST_STEPS.length-1].label);
+      if(submitTask?.status==="done") toggleCaseTaskDone(submitTask.id);
+      audit("Investigation returned for further work", comments||cs.employeeName, caseId);
+    } else if(actionId==="clarification_requested") {
+      createCaseTask(caseId, { name: "Clarify: "+(comments||"HR requested clarification on the investigation") });
+      audit("Clarification requested on investigation", comments||cs.employeeName, caseId);
+    } else if(actionId==="taken_over") {
+      saveCases(cases.map(x=>x.id===caseId?{...x,manager:member?.name||user?.email||x.manager}:x));
+      if(user?.id) await assignCaseRole(caseId, user.id, "case_owner");
+      audit("Case taken over by HR", member?.name||user?.email, caseId);
+    } else if(actionId==="closed") {
+      saveCases(cases.map(x=>x.id===caseId?{...x,stage:"closed"}:x));
+      audit("Case closed from HR review", comments||cs.employeeName, caseId);
+    } else {
+      audit("Investigation review: "+actionId, comments||cs.employeeName, caseId);
+    }
+  };
+
   // ── Case signals ──
   const loadCaseSignals = async () => {
     if(!org?.id) return;
@@ -5905,6 +5943,7 @@ Please produce:
           assignCaseRole={assignCaseRole}
           hrReviewRequests={hrReviewRequests}
           respondToReview={respondToReview}
+          resolveInvestigationReview={resolveInvestigationReview}
           policies={policies}
           consistencyReview={consistencyReview}
           consistencyReviewLoading={consistencyReviewLoading}
