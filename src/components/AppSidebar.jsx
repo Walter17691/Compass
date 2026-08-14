@@ -37,6 +37,10 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     // to My People Actions: what's been delegated out, and to whom,
     // rather than a manager's own view of it.
     ...(isHR ? [{s:SCREENS.HR_DELEGATED_WORK, l:"Delegated Work"}] : []),
+    // Manager Enablement (Phase 4, MP20, §24) — closing, aggregating
+    // sibling to Delegated Work: trends over the same delegated
+    // investigations, not another per-case list.
+    ...(isHR ? [{s:SCREENS.MANAGER_INSIGHTS, l:"Performance Insights"}] : []),
     {s:SCREENS.ASK_COMPASS, l:"Ask Compass"},
     {s:SCREENS.CASES, l:"Cases"+(activeCaseCount>0?" ("+activeCaseCount+")":"")},
     {s:SCREENS.TASKS, l:"Tasks"},

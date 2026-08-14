@@ -91,6 +91,7 @@ const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m 
 const ConcernsScreen = lazy(() => import('./screens/ConcernsScreen').then(m => ({default: m.ConcernsScreen})));
 const ManagerPortalScreen = lazy(() => import('./screens/ManagerPortalScreen').then(m => ({default: m.ManagerPortalScreen})));
 const HrDelegatedWorkScreen = lazy(() => import('./screens/HrDelegatedWorkScreen').then(m => ({default: m.HrDelegatedWorkScreen})));
+const ManagerInsightsScreen = lazy(() => import('./screens/ManagerInsightsScreen').then(m => ({default: m.ManagerInsightsScreen})));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
@@ -6337,6 +6338,17 @@ Please produce:
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           openHrInterventionModal={openHrInterventionModal}
+        />
+      )}
+
+      {/* Manager Enablement (Phase 4, MP20, §24) — "Manager Performance Insights" */}
+      {screen===SCREENS.MANAGER_INSIGHTS&&isHR&&(
+        <ManagerInsightsScreen
+          cases={cases}
+          caseAccess={caseAccess}
+          hrReviewRequests={hrReviewRequests}
+          auditLog={auditLog}
+          dueSoon={dueSoon}
         />
       )}
 
