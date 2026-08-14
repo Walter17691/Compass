@@ -33,7 +33,7 @@ function StepCard({ index, step, task, onToggle, children }) {
   );
 }
 
-export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading, caseSignals=[] }) {
+export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading, caseSignals=[], onSubmitInvestigation, submittingInvestigation }) {
   const evidence = cs.evidence||[];
   const stepFor = (label) => checklistTasks.find(t=>t.name===label);
   const doneCount = checklistTasks.filter(t=>t.status==="done").length;
@@ -101,7 +101,16 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
         </StepCard>
 
         <StepCard index={5} step={INVESTIGATION_CHECKLIST_STEPS[5]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[5].label)} onToggle={toggleCaseTaskDone} />
-        <StepCard index={6} step={INVESTIGATION_CHECKLIST_STEPS[6]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[6].label)} onToggle={toggleCaseTaskDone} />
+        {/* Manager Enablement (Phase 4, MP10, §16) — this used to be an
+            inert checkbox; onSubmitInvestigation runs the same
+            attemptSubmitInvestigation gate (App.jsx) HR's own two
+            trigger points use, so a not-yet-thorough investigation gets
+            the same Investigation Quality Check either side. */}
+        <StepCard index={6} step={INVESTIGATION_CHECKLIST_STEPS[6]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[6].label)} onToggle={toggleCaseTaskDone}>
+          {stepFor(INVESTIGATION_CHECKLIST_STEPS[6].label)?.status==="done"
+            ? <div style={{fontSize:12,color:"#1A7A4A"}}>Submitted to HR.</div>
+            : onSubmitInvestigation&&<button onClick={()=>onSubmitInvestigation(cs.id)} disabled={submittingInvestigation} style={{fontSize:12,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 12px",color:"#6B6375",cursor:submittingInvestigation?"default":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",opacity:submittingInvestigation?0.6:1}}>{submittingInvestigation?"Submitting…":"Submit investigation"}</button>}
+        </StepCard>
 
         {/* Manager Enablement (Phase 4, MP8, §9) — distinct from the fixed
             steps above: Compass's own case-specific plan, grounded in this

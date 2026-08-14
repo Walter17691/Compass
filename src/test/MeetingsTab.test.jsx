@@ -31,7 +31,7 @@ const baseProps = {
   setMeetingType: noop,
   meetingTypes: [],
   fmtDate: d => d,
-  concludeInvestigation: noop,
+  attemptSubmitInvestigation: noop,
   concludingInvestigation: false,
   setShowHandoffModal: noop,
   setLetterOutput: noop,

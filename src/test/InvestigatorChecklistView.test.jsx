@@ -144,3 +144,33 @@ describe('InvestigatorChecklistView — Compass recommends next (MP9)', () => {
     expect(screen.queryByText('Compass recommends next')).not.toBeInTheDocument();
   });
 });
+
+// Manager Enablement (Phase 4, MP10, §16) — "Submit findings to HR" used
+// to be an inert checkbox; it now runs the same attemptSubmitInvestigation
+// gate (App.jsx) both of HR's own trigger points use.
+describe('InvestigatorChecklistView — submit investigation (MP10)', () => {
+  it('offers a real submit button on the final step when not yet submitted', async () => {
+    const user = userEvent.setup();
+    const onSubmitInvestigation = vi.fn();
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} onSubmitInvestigation={onSubmitInvestigation} />);
+    await user.click(screen.getByRole('button', { name: 'Submit investigation' }));
+    expect(onSubmitInvestigation).toHaveBeenCalledWith('c1');
+  });
+
+  it('shows a submitted confirmation instead of the button once the step is marked done', () => {
+    const checklistTasks = [{ id: 't1', name: 'Submit findings to HR', status: 'done' }];
+    render(<InvestigatorChecklistView {...baseProps} checklistTasks={checklistTasks} planTasks={[]} onGeneratePlan={noop} onSubmitInvestigation={noop} />);
+    expect(screen.getByText('Submitted to HR.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit investigation' })).not.toBeInTheDocument();
+  });
+
+  it('disables the button and shows a submitting state while in flight', () => {
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} onSubmitInvestigation={noop} submittingInvestigation={true} />);
+    expect(screen.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
+  });
+
+  it('renders no submit affordance at all when onSubmitInvestigation is not provided', () => {
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} />);
+    expect(screen.queryByRole('button', { name: 'Submit investigation' })).not.toBeInTheDocument();
+  });
+});

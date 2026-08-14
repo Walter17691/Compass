@@ -29,8 +29,10 @@ import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsF
 import { computeGuardrailChecks } from './lib/guardrails';
 import { addConcernReferral, setReferralStatus, updateConcernReferral } from './lib/concernReferrals';
 import { sanitizeTriageSummary } from './lib/concernTriage';
-import { seedInvestigationChecklist } from './lib/investigationChecklist';
+import { seedInvestigationChecklist, investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './lib/investigationChecklist';
 import { sanitizeInvestigationPlanItems, seedInvestigationPlanTasks } from './lib/investigationPlan';
+import { computeInvestigationQualityGaps } from './lib/investigationQuality';
+import { InvestigationQualityCheckModal } from './components/InvestigationQualityCheckModal';
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
@@ -720,6 +722,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // attemptEndMeeting below.
   const [showQualityCheck, setShowQualityCheck] = useState(false);
   const [qualityCheckGaps, setQualityCheckGaps] = useState([]);
+  // Manager Enablement (Phase 4, MP10, §16) — Investigation Quality
+  // Check. Same advisory-only shape, but a separate gap set
+  // (computeInvestigationQualityGaps) and its own modal, since it's
+  // triggered from three different places (CaseViewScreen's next-step
+  // banner, MeetingsTab's own button, and the assigned investigator's
+  // restricted view) rather than living component-local like
+  // OutcomeModal's own decision-quality check — see
+  // attemptSubmitInvestigation below.
+  const [showInvestigationQualityCheck, setShowInvestigationQualityCheck] = useState(false);
+  const [investigationQualityGaps, setInvestigationQualityGaps] = useState([]);
+  const [investigationQualitySubmitCaseId, setInvestigationQualitySubmitCaseId] = useState(null);
 
   // ── Intelligent Meeting Mode — live panels ──
   // Fires on the same throttled cadence as updateLiveContext (every 3rd
@@ -4899,6 +4912,47 @@ Please produce:
     setConcludingInvestigation(false);
   };
 
+  // Manager Enablement (Phase 4, MP10, §16) — "Submit investigation" is
+  // the gated entry point every trigger (the next-step banner, MeetingsTab's
+  // "Conclude investigation & generate report" button, and the assigned
+  // investigator's own "Submit investigation" step) now calls instead of
+  // concludeInvestigation directly. finalizeInvestigationSubmission does
+  // the real work (still concludeInvestigation underneath — no duplicate
+  // report-generation logic), plus the two things MP10 adds: a trackable
+  // hr_review_request (reusing the existing pipeline rather than a new
+  // one — MP11 later extends its status set beyond today's binary
+  // pending/approved/rejected, it doesn't need to exist yet) and marking
+  // the checklist's own "Submit findings to HR" step done, if a checklist
+  // was ever seeded for this case.
+  const finalizeInvestigationSubmission = (caseId) => {
+    concludeInvestigation(caseId);
+    requestHrReview("inv_report", caseId, null, "Investigation submitted for review", false);
+    const submitTask = investigationChecklistTasks(caseTasks, caseId).find(t => t.name === INVESTIGATION_CHECKLIST_STEPS[INVESTIGATION_CHECKLIST_STEPS.length - 1].label);
+    if(submitTask && submitTask.status !== "done") toggleCaseTaskDone(submitTask.id);
+  };
+
+  const attemptSubmitInvestigation = (caseId) => {
+    const cs = cases.find(c=>c.id===caseId);
+    if(!cs) return;
+    const gaps = computeInvestigationQualityGaps(cs, allegations, caseTasks);
+    setInvestigationQualitySubmitCaseId(caseId);
+    if(gaps.length) { setInvestigationQualityGaps(gaps); setShowInvestigationQualityCheck(true); return; }
+    finalizeInvestigationSubmission(caseId);
+  };
+
+  const proceedPastInvestigationQualityCheck = async () => {
+    setShowInvestigationQualityCheck(false);
+    const ok = await requestOverrideReason(investigationQualityGaps.join("; "), { caseId: investigationQualitySubmitCaseId, actionLabel: "Submitted investigation despite quality check gaps" });
+    if(!ok) return;
+    finalizeInvestigationSubmission(investigationQualitySubmitCaseId);
+  };
+
+  const createInvestigationQualityFollowUp = () => {
+    createCaseTask(investigationQualitySubmitCaseId, { name: "Follow up on: "+investigationQualityGaps.join("; ") });
+    setShowInvestigationQualityCheck(false);
+    finalizeInvestigationSubmission(investigationQualitySubmitCaseId);
+  };
+
   const restoreLetterVersion = (entry) => {
     if(letterOutput) setLetterHistory(h => [{type: activeLetter, text: letterOutput, ts: new Date().toISOString()}, ...h.filter(x=>x!==entry)].slice(0, 10));
     else setLetterHistory(h => h.filter(x=>x!==entry));
@@ -5787,6 +5841,7 @@ Please produce:
           toggleNextStepDone={toggleNextStepDone}
           concludeInvestigation={concludeInvestigation}
           concludingInvestigation={concludingInvestigation}
+          attemptSubmitInvestigation={attemptSubmitInvestigation}
           allegations={allegations}
           createAllegation={createAllegation}
           patchAllegation={patchAllegation}
@@ -6253,6 +6308,16 @@ Please produce:
           orgMembers={orgMembers}
           setShowAssignInvestigatorModal={setShowAssignInvestigatorModal}
           assignInvestigator={assignInvestigator}
+        />
+      )}
+
+      {/* ── Investigation Quality Check Modal ── */}
+      {showInvestigationQualityCheck&&(
+        <InvestigationQualityCheckModal
+          gaps={investigationQualityGaps}
+          onGoBack={()=>setShowInvestigationQualityCheck(false)}
+          onCreateFollowUp={createInvestigationQualityFollowUp}
+          onProceed={proceedPastInvestigationQualityCheck}
         />
       )}
 

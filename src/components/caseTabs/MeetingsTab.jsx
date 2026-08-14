@@ -10,7 +10,7 @@ import { isGrievanceCase } from '../../lib/caseStage';
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, concludeInvestigation, concludingInvestigation, setShowHandoffModal, setLetterOutput }) {
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, setShowHandoffModal, setLetterOutput }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -121,7 +121,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
               ):invMeetings.some(m=>m.record)?(
                 <div>
                   <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to conclude.</div>
-                  <button disabled={concludingInvestigation} onClick={()=>concludeInvestigation(cs.id)}
+                  <button disabled={concludingInvestigation} onClick={()=>attemptSubmitInvestigation(cs.id)}
                     style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:concludingInvestigation?"not-allowed":"pointer",opacity:concludingInvestigation?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
                     {concludingInvestigation?"Generating report...":"Conclude investigation & generate report"}
                   </button>
