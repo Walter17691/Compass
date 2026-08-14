@@ -31,6 +31,17 @@ test('prep pack generates an editable question list that can be added to, marked
   await expect(page.getByText('Prep pack ready')).toBeVisible({ timeout: 60000 });
   await expect(page.getByText('Key questions')).toBeVisible();
 
+  // Manager Enablement (Phase 4, MP13, §10) — the two sections added to
+  // this same prompt (Opening Script, Closing Points), reusing this
+  // test's own real prep-pack generation rather than a second slow,
+  // real-AI E2E test just to prove two more headers render.
+  // Both stream in progressively — Opening Script sits early in the
+  // response, Closing Points near the very end (after Key Questions/
+  // Evidence to Explore/Unanswered Issues/Potential Inconsistencies), so
+  // each needs its own generous wait rather than sharing one.
+  await expect(page.getByText('Opening Script', { exact: true })).toBeVisible({ timeout: 45000 });
+  await expect(page.getByText('Closing Points', { exact: true })).toBeVisible({ timeout: 45000 });
+
   const questionRows = page.locator('input[placeholder="Question text..."]');
   await expect(questionRows.first()).toBeVisible({ timeout: 45000 });
   const initialCount = await questionRows.count();

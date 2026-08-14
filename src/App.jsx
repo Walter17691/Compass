@@ -3901,6 +3901,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   // ── AI: Prepare ──
+  // Manager Enablement (Phase 4, MP13, §10 first half) — this pre-dates
+  // the phase (PrepScreen/handlePrepare already existed) but already
+  // covered nearly all of the spec's own pre-meeting-brief list —
+  // Objectives≈purpose, Key Questions≈questions, Evidence to
+  // Explore≈evidence requiring clarification, Unanswered Issues≈
+  // outstanding issues. Only Opening Script and Closing Points were
+  // missing, added here as two more ## sections rather than building a
+  // parallel screen: PrepScreen.jsx renders prepNotes through MDRenderer
+  // generically, so any ## section in this prompt appears with zero UI
+  // changes. Applies to every meeting type this screen already serves,
+  // not just investigations — the spec frames this around investigation
+  // meetings specifically, but there's no reason a disciplinary or
+  // grievance chair should get a worse-equipped prep pack.
   const handlePrepare = async () => {
     if(!caseInfo.employee.trim()) return;
     setAiError(""); setAiProcessing(true); setPrepQuestions([]);
@@ -3920,7 +3933,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       await Promise.all([
         streamClaude(
           `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
-          `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}\n\n## Objectives\n## Agenda\n## Key Questions\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use the items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the background/context clearly supports them.":""}`,
+          `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}\n\n## Objectives\n## Agenda\n## Opening Script\n## Key Questions\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Closing Points\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use the items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the background/context clearly supports them.":""}\n\nFor Opening Script, write actual words the chair could read aloud to open the meeting professionally (introductions, purpose, right to be accompanied where relevant) — a real script, not a bullet-point agenda restated. For Closing Points, list what the chair should cover before ending: next steps, what happens next and by when, and confirming the employee has nothing further to add.`,
           t=>setPrepNotes(t)
         ),
         generatePrepQuestions(carriedContext),
