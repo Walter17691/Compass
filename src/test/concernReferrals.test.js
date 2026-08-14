@@ -19,6 +19,25 @@ describe('addConcernReferral', () => {
     expect(result[0].id).toBeTruthy();
   });
 
+  it('captures witnesses, the new immediateSafetyConcern question, and evidence description/files (Phase 4, MP4)', () => {
+    const result = addConcernReferral([], {
+      employeeName: 'Jamie Lee', description: 'Repeated lateness this month.',
+      witnesses: 'Priya Shah, Tom Norton', immediateSafetyConcern: true,
+      evidenceDescription: 'CCTV from the loading bay camera', evidenceFiles: [{ name: 'clip.mp4' }],
+    });
+    expect(result[0]).toMatchObject({
+      witnesses: 'Priya Shah, Tom Norton', immediateSafetyConcern: true,
+      evidenceDescription: 'CCTV from the loading bay camera', evidenceFiles: [{ name: 'clip.mp4' }],
+    });
+  });
+
+  it('trims witnesses/evidenceDescription and defaults evidenceFiles to an empty array', () => {
+    const result = addConcernReferral([], { employeeName: 'Jamie Lee', description: 'x', witnesses: '  Priya Shah  ', evidenceDescription: '  a note  ' });
+    expect(result[0].witnesses).toBe('Priya Shah');
+    expect(result[0].evidenceDescription).toBe('a note');
+    expect(result[0].evidenceFiles).toEqual([]);
+  });
+
   it('defaults concernType to other when not supplied', () => {
     const result = addConcernReferral([], { employeeName: 'Jamie Lee', description: 'x' });
     expect(result[0].concernType).toBe('other');

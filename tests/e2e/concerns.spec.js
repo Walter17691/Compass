@@ -25,14 +25,26 @@ test('a raised concern can be triaged into a real formal case', async ({ page })
   await page.getByPlaceholder("Who is this about?").fill(employeeName);
   await page.locator('select').first().selectOption('conduct');
   await page.getByPlaceholder(/What happened/).fill('Repeatedly left site during shift without authorisation, witnessed by two colleagues.');
-  await page.getByText('Does this involve a safety or welfare risk?').click();
+  // Manager Enablement (Phase 4, MP4) — the description above mentions a
+  // witness with no name given yet, so the live, advisory gap hint should
+  // appear (and never blocks submission).
+  await expect(page.getByText('You mentioned someone else may have seen or heard this', { exact: false })).toBeVisible();
+  await page.getByPlaceholder('Names of anyone who saw or heard this').fill('Priya Shah, Tom Norton');
+  await expect(page.getByText('You mentioned someone else may have seen or heard this', { exact: false })).not.toBeVisible();
+  await page.getByPlaceholder('Briefly describe it').fill('CCTV footage from the loading bay camera');
+  // Anyone at risk? — split from the original single safety/welfare
+  // checkbox (MP4, §2) into this and the immediate-safety-concern
+  // question right below it.
+  await page.getByText('Is anyone currently at risk?', { exact: true }).click();
   const saveResponse = page.waitForResponse(r => r.url().includes('/rest/v1/concern_referrals') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Submit concern' }).click();
   await saveResponse;
 
   const referralCard = page.locator('div').filter({ hasText: employeeName }).filter({ hasText: 'Open formal case' }).last();
   await expect(referralCard).toBeVisible({ timeout: 10000 });
-  await expect(referralCard.getByText('⚠ Safety/welfare risk flagged')).toBeVisible();
+  await expect(referralCard.getByText('⚠ Anyone at risk flagged')).toBeVisible();
+  await expect(referralCard.getByText('Witnesses: Priya Shah, Tom Norton')).toBeVisible();
+  await expect(referralCard.getByText('Evidence: CCTV footage from the loading bay camera')).toBeVisible();
 
   const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && r.request().method() === 'POST');
   await referralCard.getByRole('button', { name: 'Open formal case' }).click();

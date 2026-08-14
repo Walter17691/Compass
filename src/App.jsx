@@ -93,6 +93,10 @@ import { HandoffModal } from './screens/HandoffModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
 import { OutcomeModal } from './screens/OutcomeModal';
 
+// Manager Enablement (Phase 4, MP4) — shared by concernForm's initial
+// state and its post-submit reset, so the two can't silently drift apart.
+const EMPTY_CONCERN_FORM = {employeeName:"",concernType:"other",description:"",witnesses:"",discussedWithEmployee:false,involvesSafetyOrWelfare:false,immediateSafetyConcern:false,mayNeedFormalProcess:false,evidenceDescription:"",evidenceFiles:[]};
+
 export default function Compass({ user=null, org=null, member=null, availableOrgs=[], switchOrg=()=>{}, onJoinAnotherOrg=()=>{}, onSignOut=null }) {
   useFonts();
 
@@ -1496,7 +1500,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── Concern referrals (manager self-service — any org member can raise
   // one, only HR triages) — see lib/concernReferrals.js ──
   const [concernReferrals, setConcernReferrals] = useState([]);
-  const [concernForm, setConcernForm] = useState({employeeName:"",concernType:"other",description:"",discussedWithEmployee:false,involvesSafetyOrWelfare:false,mayNeedFormalProcess:false});
+  const [concernForm, setConcernForm] = useState(EMPTY_CONCERN_FORM);
   const [concernSubmitted, setConcernSubmitted] = useState(false);
 
   // ── Case access (Phase 15 — Manager Investigation Mode) ──
@@ -2360,8 +2364,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(error) { console.error('loadConcernReferrals', error); return; }
       if(data) setConcernReferrals(data.map(r=>({
         id:r.id, employeeName:r.employee_name, concernType:r.concern_type, description:r.description,
-        discussedWithEmployee:!!r.discussed_with_employee, involvesSafetyOrWelfare:!!r.involves_safety_or_welfare,
-        mayNeedFormalProcess:!!r.may_need_formal_process, submittedBy:r.submitted_by, submittedByName:r.submitted_by_name||"",
+        witnesses:r.witnesses||"", discussedWithEmployee:!!r.discussed_with_employee, involvesSafetyOrWelfare:!!r.involves_safety_or_welfare,
+        immediateSafetyConcern:!!r.immediate_safety_concern,
+        mayNeedFormalProcess:!!r.may_need_formal_process, evidenceDescription:r.evidence_description||"", evidenceFiles:r.evidence_files||[],
+        submittedBy:r.submitted_by, submittedByName:r.submitted_by_name||"",
         status:r.status, hrNotes:r.hr_notes||"", linkedCaseId:r.linked_case_id, createdAt:r.created_at,
       })));
     } catch(e) { console.error('loadConcernReferrals', e); }
@@ -2372,8 +2378,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const { error } = await withFkRetry(() => supabase.from('concern_referrals').upsert({
       id: referral.id, org_id: org.id,
       employee_name: referral.employeeName, concern_type: referral.concernType||null,
-      description: referral.description, discussed_with_employee: !!referral.discussedWithEmployee,
-      involves_safety_or_welfare: !!referral.involvesSafetyOrWelfare, may_need_formal_process: !!referral.mayNeedFormalProcess,
+      description: referral.description, witnesses: referral.witnesses||null, discussed_with_employee: !!referral.discussedWithEmployee,
+      involves_safety_or_welfare: !!referral.involvesSafetyOrWelfare, immediate_safety_concern: !!referral.immediateSafetyConcern,
+      may_need_formal_process: !!referral.mayNeedFormalProcess,
+      evidence_description: referral.evidenceDescription||null, evidence_files: referral.evidenceFiles||[],
       submitted_by: referral.submittedBy||null, submitted_by_name: referral.submittedByName||null,
       status: referral.status||'new', hr_notes: referral.hrNotes||null, linked_case_id: referral.linkedCaseId||null,
       updated_at: new Date().toISOString(),
@@ -2390,7 +2398,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const created = updated[updated.length-1];
     saveConcernReferralToDB(created);
     audit("Concern referral submitted", created.employeeName+" — "+created.concernType);
-    setConcernForm({employeeName:"",concernType:"other",description:"",discussedWithEmployee:false,involvesSafetyOrWelfare:false,mayNeedFormalProcess:false});
+    setConcernForm(EMPTY_CONCERN_FORM);
     setConcernSubmitted(true);
   };
 
@@ -5853,6 +5861,7 @@ Please produce:
           setConcernSubmitted={setConcernSubmitted}
           triageReferral={triageReferral}
           currentUser={currentUser}
+          showToast={showToast}
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           setScreen={setScreen}

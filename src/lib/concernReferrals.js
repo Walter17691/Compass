@@ -36,9 +36,19 @@ export function addConcernReferral(referrals, fields) {
     employeeName,
     concernType: fields.concernType || "other",
     description,
+    // Manager Enablement (Phase 4, MP4, §2) — witnesses/evidence are new;
+    // involvesSafetyOrWelfare keeps its original field name (avoids
+    // churning every existing reader) but is now specifically "is anyone
+    // currently at risk?" — immediateSafetyConcern is the new, genuinely
+    // separate "is there an immediate operational or safety concern?"
+    // question the spec asks for alongside it.
+    witnesses: (fields.witnesses || "").trim(),
     discussedWithEmployee: !!fields.discussedWithEmployee,
     involvesSafetyOrWelfare: !!fields.involvesSafetyOrWelfare,
+    immediateSafetyConcern: !!fields.immediateSafetyConcern,
     mayNeedFormalProcess: !!fields.mayNeedFormalProcess,
+    evidenceDescription: (fields.evidenceDescription || "").trim(),
+    evidenceFiles: fields.evidenceFiles || [],
     submittedBy: fields.submittedBy || null,
     submittedByName: fields.submittedByName || "",
     status: OPEN_STATUS,

@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { CONCERN_TYPES } from '../constants';
 import { referralStatusMeta } from '../lib/concernReferrals';
+import { computeConcernIntakeGaps } from '../lib/concernIntakeGaps';
+import { readEvidenceFiles } from '../lib/evidenceUpload';
 import { Btn, Card, Badge } from '../components/Primitives';
+import { EvidenceDropzone } from '../components/EvidenceDropzone';
 
 const inputStyle = { width:"100%", fontSize:14, border:"1px solid #E8E0D0", borderRadius:8, padding:"10px 14px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
 const labelStyle = { display:"block", fontSize:13, fontWeight:500, color:"#1A1535", marginBottom:6 };
@@ -14,8 +17,14 @@ const labelStyle = { display:"block", fontSize:13, fontWeight:500, color:"#1A153
 // submission confirmation; HR additionally sees the full triage queue
 // (RLS backs this, not just the isHR prop — see
 // concern_referrals_2026-08-12.sql).
-function ConcernForm({ concernForm, setConcernForm, onSubmit, submitLabel="Submit concern" }) {
+function ConcernForm({ concernForm, setConcernForm, onSubmit, submitLabel="Submit concern", currentUser, showToast }) {
   const canSubmit = concernForm.employeeName.trim() && concernForm.description.trim();
+  // Manager Enablement (Phase 4, MP4, §4) — live, advisory, never
+  // blocking: a manager filling in a simple form shouldn't be gated by
+  // this, just gently reminded of the one or two things HR will
+  // otherwise have to come back and ask for anyway.
+  const gaps = computeConcernIntakeGaps(concernForm);
+
   return (
     <Card>
       <div style={{marginBottom:14}}>
@@ -35,6 +44,41 @@ function ConcernForm({ concernForm, setConcernForm, onSubmit, submitLabel="Submi
           placeholder="What happened? When? Who else was involved or witnessed it?"
           onChange={e=>setConcernForm(f=>({...f,description:e.target.value}))} />
       </div>
+
+      {gaps.length>0 && (
+        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
+          {gaps.map((gap,i)=>(
+            <div key={i} style={{fontSize:12,color:"#8A5A1E",background:"#FDF3E8",border:"1px solid #E8C088",borderRadius:8,padding:"8px 12px"}}>{gap}</div>
+          ))}
+        </div>
+      )}
+
+      <div style={{marginBottom:16}}>
+        <label style={labelStyle}>Were there any witnesses? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+        <input style={inputStyle} value={concernForm.witnesses} placeholder="Names of anyone who saw or heard this"
+          onChange={e=>setConcernForm(f=>({...f,witnesses:e.target.value}))} />
+      </div>
+
+      <div style={{marginBottom:16}}>
+        <label style={labelStyle}>Do you have emails, messages, CCTV or other evidence? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+        <input style={{...inputStyle,marginBottom:8}} value={concernForm.evidenceDescription} placeholder="Briefly describe it"
+          onChange={e=>setConcernForm(f=>({...f,evidenceDescription:e.target.value}))} />
+        {concernForm.evidenceFiles.length>0 && (
+          <div style={{marginBottom:8}}>
+            {concernForm.evidenceFiles.map((ev,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F5F1EA"}}>
+                <span style={{fontSize:12,color:"#1A1535"}}>{ev.name}</span>
+                <button onClick={()=>setConcernForm(f=>({...f,evidenceFiles:f.evidenceFiles.filter((_,j)=>j!==i)}))} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <EvidenceDropzone onFilesSelected={async files=>{
+          const items = await readEvidenceFiles(files, { addedBy: currentUser?.name||"Team member", onReject: msg=>showToast?.(msg,"error") });
+          if(items.length) setConcernForm(f=>({...f,evidenceFiles:[...f.evidenceFiles,...items]}));
+        }}/>
+      </div>
+
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:18}}>
         <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
           <input type="checkbox" checked={concernForm.discussedWithEmployee} onChange={e=>setConcernForm(f=>({...f,discussedWithEmployee:e.target.checked}))} style={{width:16,height:16,cursor:"pointer"}}/>
@@ -42,7 +86,11 @@ function ConcernForm({ concernForm, setConcernForm, onSubmit, submitLabel="Submi
         </label>
         <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
           <input type="checkbox" checked={concernForm.involvesSafetyOrWelfare} onChange={e=>setConcernForm(f=>({...f,involvesSafetyOrWelfare:e.target.checked}))} style={{width:16,height:16,accentColor:"#C84B2F",cursor:"pointer"}}/>
-          <span style={{fontSize:13,color:"#1A1535"}}>Does this involve a safety or welfare risk?</span>
+          <span style={{fontSize:13,color:"#1A1535"}}>Is anyone currently at risk?</span>
+        </label>
+        <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+          <input type="checkbox" checked={concernForm.immediateSafetyConcern} onChange={e=>setConcernForm(f=>({...f,immediateSafetyConcern:e.target.checked}))} style={{width:16,height:16,accentColor:"#C84B2F",cursor:"pointer"}}/>
+          <span style={{fontSize:13,color:"#1A1535"}}>Is there an immediate operational or safety concern?</span>
         </label>
         <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
           <input type="checkbox" checked={concernForm.mayNeedFormalProcess} onChange={e=>setConcernForm(f=>({...f,mayNeedFormalProcess:e.target.checked}))} style={{width:16,height:16,cursor:"pointer"}}/>
@@ -69,9 +117,16 @@ function ReferralCard({ referral, onTriage, onOpenCase }) {
         <Badge color={meta.color}>{meta.label}</Badge>
       </div>
       <div style={{fontSize:13,color:"#3D3560",lineHeight:1.6,marginBottom:10}}>{referral.description}</div>
+      {referral.witnesses&&<div style={{fontSize:12,color:"#6B6375",marginBottom:6}}>Witnesses: {referral.witnesses}</div>}
+      {(referral.evidenceDescription||referral.evidenceFiles?.length>0)&&(
+        <div style={{fontSize:12,color:"#6B6375",marginBottom:6}}>
+          Evidence: {referral.evidenceDescription||"—"}{referral.evidenceFiles?.length>0?" · "+referral.evidenceFiles.length+" file"+(referral.evidenceFiles.length!==1?"s":""):""}
+        </div>
+      )}
       <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:isOpen?12:0}}>
         {referral.discussedWithEmployee&&<span style={{fontSize:11,color:"#6B6880"}}>✓ Discussed with employee</span>}
-        {referral.involvesSafetyOrWelfare&&<span style={{fontSize:11,color:"#C84B2F"}}>⚠ Safety/welfare risk flagged</span>}
+        {referral.involvesSafetyOrWelfare&&<span style={{fontSize:11,color:"#C84B2F"}}>⚠ Anyone at risk flagged</span>}
+        {referral.immediateSafetyConcern&&<span style={{fontSize:11,color:"#C84B2F"}}>⚠ Immediate safety concern</span>}
         {referral.mayNeedFormalProcess&&<span style={{fontSize:11,color:"#B87520"}}>May need a formal process</span>}
       </div>
       {referral.status==="case_opened"&&referral.linkedCaseId&&(
@@ -90,7 +145,7 @@ function ReferralCard({ referral, onTriage, onOpenCase }) {
   );
 }
 
-export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, setActiveCaseId, setActiveCaseStage, setScreen, screens }) {
+export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens }) {
   const [showForm, setShowForm] = useState(false);
   const openCase = (caseId) => {
     setActiveCaseId(caseId);
@@ -110,7 +165,7 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
             <Btn variant="secondary" onClick={()=>setConcernSubmitted(false)}>Raise another concern</Btn>
           </Card>
         ) : (
-          <ConcernForm concernForm={concernForm} setConcernForm={setConcernForm} onSubmit={submitConcernReferral} />
+          <ConcernForm concernForm={concernForm} setConcernForm={setConcernForm} onSubmit={submitConcernReferral} currentUser={currentUser} showToast={showToast} />
         )}
       </div>
     );
@@ -130,7 +185,7 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
       {showForm&&(
         <div style={{marginBottom:24}}>
           <ConcernForm concernForm={concernForm} setConcernForm={setConcernForm}
-            onSubmit={()=>{submitConcernReferral();setShowForm(false);}} />
+            onSubmit={()=>{submitConcernReferral();setShowForm(false);}} currentUser={currentUser} showToast={showToast} />
         </div>
       )}
 
