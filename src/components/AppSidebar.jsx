@@ -33,6 +33,10 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     // concerns submitted). HR runs the full Cases/Tasks/Concerns screens
     // directly and has no need for a narrowed aggregate view of their own.
     ...(isHR ? [] : [{s:SCREENS.MANAGER_PORTAL, l:"My People Actions"}]),
+    // Manager Enablement (Phase 4, MP18, §14) — the HR-facing counterpart
+    // to My People Actions: what's been delegated out, and to whom,
+    // rather than a manager's own view of it.
+    ...(isHR ? [{s:SCREENS.HR_DELEGATED_WORK, l:"Delegated Work"}] : []),
     {s:SCREENS.ASK_COMPASS, l:"Ask Compass"},
     {s:SCREENS.CASES, l:"Cases"+(activeCaseCount>0?" ("+activeCaseCount+")":"")},
     {s:SCREENS.TASKS, l:"Tasks"},

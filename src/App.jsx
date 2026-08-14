@@ -90,6 +90,7 @@ const ErReportScreen = lazy(() => import('./screens/ErReportScreen').then(m => (
 const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
 const ConcernsScreen = lazy(() => import('./screens/ConcernsScreen').then(m => ({default: m.ConcernsScreen})));
 const ManagerPortalScreen = lazy(() => import('./screens/ManagerPortalScreen').then(m => ({default: m.ManagerPortalScreen})));
+const HrDelegatedWorkScreen = lazy(() => import('./screens/HrDelegatedWorkScreen').then(m => ({default: m.HrDelegatedWorkScreen})));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
@@ -6210,6 +6211,21 @@ Please produce:
           concernReferrals={concernReferrals}
           dueSoon={dueSoon}
           currentUser={currentUser}
+          fmtDate={fmtDate}
+          setScreen={setScreen}
+          setActiveCaseId={setActiveCaseId}
+          setActiveCaseStage={setActiveCaseStage}
+        />
+      )}
+
+      {/* Manager Enablement (Phase 4, MP18, §14) — "Delegated Work" */}
+      {screen===SCREENS.HR_DELEGATED_WORK&&isHR&&(
+        <HrDelegatedWorkScreen
+          cases={cases}
+          caseAccess={caseAccess}
+          orgMembers={orgMembers}
+          caseTasks={caseTasks}
+          allegations={allegations}
           fmtDate={fmtDate}
           setScreen={setScreen}
           setActiveCaseId={setActiveCaseId}
