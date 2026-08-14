@@ -6503,6 +6503,13 @@ Please produce:
           showToast={showToast}
           exportCSV={exportCSV}
           exportPDF={exportPDF}
+          mailConnected={mailConnected}
+          mailboxEmail={mailboxEmail}
+          onConnectMail={connectOutlookMail}
+          onDisconnectMail={disconnectOutlookMail}
+          calendarConnected={calendarConnected}
+          connectGoogleCalendar={connectGoogleCalendar}
+          disconnectGoogleCalendar={disconnectGoogleCalendar}
           initialSection={settingsSection}
           clearInitialSection={()=>setSettingsSection(null)}
           org={org}
