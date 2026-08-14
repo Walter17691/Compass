@@ -60,12 +60,6 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
 
   cases.forEach(cs => {
     if(getCaseStage(cs)==="closed") return;
-    // Manager Enablement (Phase 4, MP19, §15) — a case HR has explicitly
-    // paused (a deliberate boolean, not a new status) drops out of every
-    // deadline this function computes for it, not just investigation-
-    // specific ones — the whole case is on hold, same as closed cases
-    // being excluded above.
-    if(cs.investigationPaused) return;
     const meetings = cs.meetings||[];
     const evidence = cs.evidence||[];
     const caseMeta = { confidential: !!cs.confidential, caseId: cs.id, createdBy: cs.createdBy||null };
@@ -96,8 +90,17 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
       if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`, caseMeta);
     });
 
-    // Investigation overrunning — 28 days
-    if((cs.stage==="investigation"||getCaseStage(cs)==="investigation")&&!cs.investigationReport) {
+    // Investigation overrunning — 28 days. Manager Enablement (Phase 4,
+    // MP19, §15) — a case HR has explicitly paused (a deliberate boolean,
+    // not a new status) drops out of this and the investigation target
+    // date below, since both are specifically about investigation
+    // progress. Every other deadline this function computes (statutory
+    // ones especially — grievance acknowledgement, appeal window,
+    // suspension review — plus generic tasks/signatures) is NOT
+    // investigation-specific and keeps firing regardless: pausing an
+    // investigation doesn't lawfully pause a grievance acknowledgement,
+    // and this feed is what the email digest cron reads too.
+    if(!cs.investigationPaused&&(cs.stage==="investigation"||getCaseStage(cs)==="investigation")&&!cs.investigationReport) {
       const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
       if(invMeetings.length>0) {
         const first = invMeetings[0];
@@ -117,9 +120,11 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // just the current one — a stale target from a since-reassigned
     // investigator still deserves a reminder rather than silently
     // vanishing.
-    caseAccess.filter(a=>a.caseId===cs.id&&a.role==="investigator"&&a.targetCompletionDate).forEach(a => {
-      addDeadline(cs.employeeName, "Investigation target completion date", new Date(a.targetCompletionDate), "investigation_target", `${cs.id}:invtarget:${a.id}`, caseMeta);
-    });
+    if(!cs.investigationPaused) {
+      caseAccess.filter(a=>a.caseId===cs.id&&a.role==="investigator"&&a.targetCompletionDate).forEach(a => {
+        addDeadline(cs.employeeName, "Investigation target completion date", new Date(a.targetCompletionDate), "investigation_target", `${cs.id}:invtarget:${a.id}`, caseMeta);
+      });
+    }
 
     // Grievance acknowledgement — 5 working days from receipt
     if((cs.caseType||"").toLowerCase()==="grievance"&&meetings.length===0&&cs.dateReceived) {

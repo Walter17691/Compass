@@ -498,15 +498,34 @@ describe('groupDueSoon', () => {
 });
 
 // Manager Enablement (Phase 4, MP19, §15) — HR's "Pause investigation".
+// Scoped narrowly to investigation-specific deadlines only (found and
+// fixed during final review — the original implementation dropped every
+// deadline on a paused case, including statutory ones like suspension
+// review or a grievance acknowledgement, which don't lawfully pause just
+// because the investigation itself is on hold).
 describe('computeDueSoon — paused cases (MP19)', () => {
   const today = new Date('2026-08-14');
 
-  it('excludes every deadline on a paused case, not just investigation-specific ones', () => {
+  it('excludes the investigation-overrunning deadline on a paused case', () => {
+    const cases = [{
+      id: 'c1', employeeName: 'Sam', investigationPaused: true, stage: 'investigation',
+      meetings: [{ id:'m1', type:'Investigation', date:'01/07/2026', savedAt:'01/07/2026' }],
+    }];
+    expect(computeDueSoon(cases, [], today)).toEqual([]);
+  });
+
+  it('excludes the investigation target completion date on a paused case', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', investigationPaused: true, meetings: [] }];
+    const caseAccess = [{ id:'a1', caseId:'c1', role:'investigator', targetCompletionDate:'2026-08-15' }];
+    expect(computeDueSoon(cases, [], today, [], [], [], [], caseAccess)).toEqual([]);
+  });
+
+  it('still surfaces statutory and other non-investigation deadlines on a paused case', () => {
     const cases = [{
       id: 'c1', employeeName: 'Sam', investigationPaused: true, meetings: [],
       suspensionReviewDate: '2026-08-15', fitNoteEndDate: '2026-08-15',
     }];
-    expect(computeDueSoon(cases, [], today)).toEqual([]);
+    expect(computeDueSoon(cases, [], today)).toHaveLength(2);
   });
 
   it('still computes deadlines normally for a case that is not paused', () => {

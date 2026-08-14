@@ -2738,11 +2738,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       const items = sanitizeInvestigationPlanItems(parsed);
-      const updatedTasks = seedInvestigationPlanTasks(caseTasks, cs.id, items);
-      const newlyCreated = updatedTasks.filter(t=>!caseTasks.some(existing=>existing.id===t.id));
+      // Functional update — caseTasks was captured before the 20-30s AI
+      // round trip above; any write landing in that window (HR guidance,
+      // a checklist toggle, assignInvestigator's own seeding) would
+      // otherwise be silently reverted by a plain setCaseTasks call built
+      // from this stale snapshot.
+      let newlyCreated = [];
+      setCaseTasks(prev => {
+        const updatedTasks = seedInvestigationPlanTasks(prev, cs.id, items);
+        newlyCreated = updatedTasks.filter(t=>!prev.some(existing=>existing.id===t.id));
+        return updatedTasks;
+      });
       if(!newlyCreated.length) { showToast("Compass didn't find any new plan items to add"); }
       else {
-        setCaseTasks(updatedTasks);
         newlyCreated.forEach(t=>saveCaseTaskToDB({...t, createdBy:user?.id}));
         audit("Investigation plan generated", newlyCreated.length+" item"+(newlyCreated.length!==1?"s":""), cs.id);
       }
@@ -2826,8 +2834,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // banner already shows "Proceed to disciplinary — send invitation"
   // once stage is "inv_report" (MP10's own finalizeInvestigationSubmission);
   // the review's status is what's genuinely new here, not a stage jump.
+  // The local case/task mutations below all run BEFORE the awaited network
+  // calls, deliberately — saveCases takes a full array built from the
+  // `cases` closure (it has no functional-update form the way setCaseTasks
+  // does), so reading `cases`/`caseTasks` after an await here would risk
+  // building that array from a stale pre-await snapshot and silently
+  // reverting anything written while respondToReview's request was in
+  // flight. Reading and writing them synchronously, before either await,
+  // sidesteps the race entirely rather than papering over it.
   const resolveInvestigationReview = async (reviewId, caseId, actionId, comments) => {
-    await respondToReview(reviewId, actionId, comments);
     const cs = cases.find(c=>c.id===caseId);
     if(!cs) return;
     if(actionId==="returned") {
@@ -2840,7 +2855,6 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       audit("Clarification requested on investigation", comments||cs.employeeName, caseId);
     } else if(actionId==="taken_over") {
       saveCases(cases.map(x=>x.id===caseId?{...x,manager:member?.name||user?.email||x.manager}:x));
-      if(user?.id) await assignCaseRole(caseId, user.id, "case_owner");
       audit("Case taken over by HR", member?.name||user?.email, caseId);
     } else if(actionId==="closed") {
       saveCases(cases.map(x=>x.id===caseId?{...x,stage:"closed"}:x));
@@ -2848,6 +2862,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } else {
       audit("Investigation review: "+actionId, comments||cs.employeeName, caseId);
     }
+    await respondToReview(reviewId, actionId, comments);
+    if(actionId==="taken_over" && user?.id) await assignCaseRole(caseId, user.id, "case_owner");
   };
 
   // Manager Enablement (Phase 4, MP19, §15) — HR Intervention actions,
@@ -3016,16 +3032,27 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     }
   };
 
+  // Functional updates — same stale-closure race as createCaseTask above:
+  // this can run right after another caseTasks write that's still
+  // in-flight (e.g. generateInvestigationPlan's AI round trip, or a
+  // second toggle fired in quick succession), and a plain setCaseTasks
+  // call built from a pre-await snapshot would silently overwrite it.
   const toggleCaseTaskDone = (taskId) => {
-    const updated = toggleTaskDone(caseTasks, taskId);
-    setCaseTasks(updated);
-    const changed = updated.find(t=>t.id===taskId);
+    let changed = null;
+    setCaseTasks(prev => {
+      const updated = toggleTaskDone(prev, taskId);
+      changed = updated.find(t=>t.id===taskId);
+      return updated;
+    });
     if(changed) saveCaseTaskToDB(changed);
   };
 
   const deleteCaseTask = (taskId) => {
-    const target = caseTasks.find(t=>t.id===taskId);
-    setCaseTasks(removeTask(caseTasks, taskId));
+    let target = null;
+    setCaseTasks(prev => {
+      target = prev.find(t=>t.id===taskId);
+      return removeTask(prev, taskId);
+    });
     deleteCaseTaskFromDB(taskId);
     if(target) audit("Task removed", target.name, target.caseId);
   };
