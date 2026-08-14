@@ -3,12 +3,21 @@ import { MDRenderer } from '../components/MDRenderer';
 import { MeetingQualityCheckModal } from '../components/MeetingQualityCheckModal';
 import { SCREENS } from '../constants';
 import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
+import { computeCoachingTips } from '../lib/managerCoaching';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const followUpKey = meetingIntelligence?.suggestedFollowUp ? meetingIntelligence.suggestedFollowUp.text : null;
   const showFollowUp = followUpKey && followUpKey !== dismissedFollowUpKey;
+  // Manager Enablement (Phase 4, MP14, §10/§11) — computed fresh every
+  // render from the live transcript, not tied to updateMeetingIntelligence's
+  // own throttled AI cadence: the wellbeing/outcome-language triggers are
+  // plain keyword checks and shouldn't wait on a network round trip just
+  // because the inconsistency trigger (the one AI-derived signal here)
+  // does.
+  const coachingTips = computeCoachingTips(transcript.map(u=>u.text).join(" ")+" "+inputText, meetingIntelligence)
+    .filter(t=>!dismissedCoachingTipKeys.includes(t.key));
   const cancelMeeting = async () => {
     const hasContent = transcript.length>0 || inputText.trim();
     if(hasContent) {
@@ -141,6 +150,24 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
               !liveContextLoading&&<div style={{fontSize:12,color:"#C4BAB0"}}>Will update as you take notes</div>
             )}
           </div>
+
+          {/* Manager Enablement (Phase 4, MP14, §10/§11) — coaching tips.
+              Deliberately outside the "Meeting intelligence" panel's own
+              gate below (meetingIntelligence||prepQuestions.length>0):
+              the wellbeing/outcome-language triggers are keyword-only and
+              available from the very first line typed, not tied to
+              whether an AI intelligence pass has run yet. */}
+          {coachingTips.length>0&&(
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #EDE5D8",flexShrink:0}}>
+              {coachingTips.map(tip=>(
+                <div key={tip.key} style={{background:"#F5F3FF",border:"1px solid #D4C9F5",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#5B3FD4",marginBottom:4}}>Helpful reminder</div>
+                  <div style={{fontSize:11,color:"#3D3560",marginBottom:8,lineHeight:1.5}}>{tip.text}</div>
+                  <button onClick={()=>onDismissCoachingTip(tip.key)} style={{fontSize:11,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Meeting intelligence — live panels + the quiet inconsistency
               nudge. Never auto-inserted into the transcript; the HR user
