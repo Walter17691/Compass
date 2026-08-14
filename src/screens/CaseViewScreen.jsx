@@ -18,6 +18,7 @@ import { tasksForCase } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
 import { computeCaseReadiness } from '../lib/caseReadiness';
 import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
+import { investigationPlanTasks } from '../lib/investigationPlan';
 import { SignalCard } from '../components/SignalCard';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { PolicyCitation } from '../components/PolicyCitation';
@@ -40,7 +41,7 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowAssignInvestigatorModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading, documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole, hrReviewRequests, respondToReview, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, wellbeingNotes, dueSoon, processTemplates }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowAssignInvestigatorModal, generateInvestigationPlan, investigationPlanLoading, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading, documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole, hrReviewRequests, respondToReview, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, wellbeingNotes, dueSoon, processTemplates }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -103,6 +104,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
   // read-only.
   const canDecide = isHR || (myAccess?.role==="disciplinary_officer");
   const checklistTasks = investigationChecklistTasks(caseTasks, cs.id);
+  const planTasks = investigationPlanTasks(caseTasks, cs.id);
 
   const startWitnessInterview = () => {
     setMeetingSetup(p=>({...p,employee:"",employeeJobTitle:"",manager:currentUser?.name||"",chairJobTitle:"",type:"investigation",linkedCaseId:cs.id,linkedCaseName:cs.employeeName}));
@@ -152,6 +154,9 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
         targetCompletionDate={myAccess?.targetCompletionDate}
         scopeNote={myAccess?.scopeNote}
         fmtDate={fmtDate}
+        planTasks={planTasks}
+        onGeneratePlan={()=>generateInvestigationPlan(cs)}
+        planLoading={!!investigationPlanLoading[cs.id]}
       />
     );
   }
@@ -422,7 +427,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             <PeopleTab cs={cs}/>
           )}
           {activeTab==="tasks"&&(
-            <CaseTasksPanel cs={cs} tasks={caseTaskList} createCaseTask={createCaseTask} toggleCaseTaskDone={toggleCaseTaskDone} deleteCaseTask={deleteCaseTask} fmtDate={fmtDate}/>
+            <CaseTasksPanel cs={cs} tasks={caseTaskList} createCaseTask={createCaseTask} toggleCaseTaskDone={toggleCaseTaskDone} deleteCaseTask={deleteCaseTask} fmtDate={fmtDate} isHR={isHR} onGeneratePlan={()=>generateInvestigationPlan(cs)} planLoading={!!investigationPlanLoading[cs.id]}/>
           )}
           {activeTab==="documents"&&(
             <DocumentsTab cs={cs} setLetterOutput={setLetterOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate}/>

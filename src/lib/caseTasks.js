@@ -23,6 +23,12 @@ export function addTask(tasks, caseId, fields) {
     dueDate: fields.dueDate || "",
     priority: TASK_PRIORITIES.includes(fields.priority) ? fields.priority : "normal",
     status: "open",
+    // Manager Enablement (Phase 4, MP8) — null for every ordinary task;
+    // only investigationPlan.js's own seeding sets this, tagging which
+    // tasks came from Compass's case-specific plan vs. the fixed generic
+    // checklist (investigationChecklist.js) or an ad-hoc HR/investigator
+    // addition.
+    source: fields.source || null,
     createdAt: new Date().toISOString(),
   };
   return [...(tasks || []), task];

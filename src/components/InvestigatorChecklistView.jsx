@@ -24,7 +24,7 @@ function StepCard({ index, step, task, onToggle, children }) {
   );
 }
 
-export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate }) {
+export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading }) {
   const evidence = cs.evidence||[];
   const stepFor = (label) => checklistTasks.find(t=>t.name===label);
   const doneCount = checklistTasks.filter(t=>t.status==="done").length;
@@ -81,6 +81,28 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
 
         <StepCard index={5} step={INVESTIGATION_CHECKLIST_STEPS[5]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[5].label)} onToggle={toggleCaseTaskDone} />
         <StepCard index={6} step={INVESTIGATION_CHECKLIST_STEPS[6]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[6].label)} onToggle={toggleCaseTaskDone} />
+
+        {/* Manager Enablement (Phase 4, MP8, §9) — distinct from the fixed
+            steps above: Compass's own case-specific plan, grounded in this
+            case's actual allegations/evidence rather than a generic list.
+            Deliberately separate, not folded into a StepCard, since it
+            isn't a fixed step — it's a variable-length, generated set. */}
+        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px",marginTop:8}}>
+          <div style={{fontSize:11,color:"#9B9098",fontWeight:700,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Investigation plan</div>
+          <div style={{fontSize:12,color:"#6B6375",marginBottom:planTasks.length?14:10}}>Compass-suggested, based on what's already on this case.</div>
+          {planTasks.map(t=>(
+            <div key={t.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 0",borderBottom:"1px solid #F5F1EA"}}>
+              <button onClick={()=>toggleCaseTaskDone(t.id)} aria-label={t.status==="done"?"Mark not done":"Mark done"}
+                style={{flexShrink:0,width:18,height:18,borderRadius:"50%",border:"2px solid",borderColor:t.status==="done"?"#1A7A4A":"#E8E0D0",background:t.status==="done"?"#1A7A4A":"#FFFFFF",cursor:"pointer",marginTop:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10}}>{t.status==="done"?"✓":""}</button>
+              <div style={{fontSize:13,color:t.status==="done"?"#6B6375":"#1A1535",textDecoration:t.status==="done"?"line-through":"none"}}>{t.name}</div>
+            </div>
+          ))}
+          {onGeneratePlan&&(
+            <button onClick={onGeneratePlan} disabled={planLoading} style={{marginTop:planTasks.length?14:0,fontSize:12,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 12px",color:"#6B6375",cursor:planLoading?"default":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",opacity:planLoading?0.6:1}}>
+              {planLoading?"Compass is drafting a plan…":planTasks.length?"Regenerate plan":"Generate investigation plan"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

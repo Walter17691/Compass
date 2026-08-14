@@ -30,6 +30,7 @@ import { computeGuardrailChecks } from './lib/guardrails';
 import { addConcernReferral, setReferralStatus, updateConcernReferral } from './lib/concernReferrals';
 import { sanitizeTriageSummary } from './lib/concernTriage';
 import { seedInvestigationChecklist } from './lib/investigationChecklist';
+import { sanitizeInvestigationPlanItems, seedInvestigationPlanTasks } from './lib/investigationPlan';
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
@@ -2619,6 +2620,50 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     showToast(targetMember.name+" assigned as investigator");
   };
 
+  // Manager Enablement (Phase 4, MP8, §9) — distinct from the fixed
+  // generic 7-step checklist above: a real AI call producing concrete,
+  // case-specific action items grounded only in the allegations and
+  // evidence already on this case (never inventing facts — e.g. "obtain
+  // CCTV" only if CCTV is already mentioned). Reachable from both HR
+  // (CaseTasksPanel) and the assigned investigator's own restricted view
+  // (InvestigatorChecklistView) — same case_tasks storage either side
+  // writes to, tagged investigation_plan (investigationPlan.js) so it
+  // renders as its own section rather than mixed into the generic
+  // checklist or ad-hoc tasks. Batches the whole write into one
+  // setCaseTasks call via seedInvestigationPlanTasks (same reasoning as
+  // assignInvestigator/seedInvestigationChecklist above) rather than
+  // looping createCaseTask calls, which would each read the same stale
+  // caseTasks closure and silently drop all but the last item.
+  const [investigationPlanLoading, setInvestigationPlanLoading] = useState({});
+  const generateInvestigationPlan = async (cs) => {
+    const caseAllegations = allegationsForCase(allegations, cs.id);
+    setInvestigationPlanLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const allegationList = caseAllegations.map(a=>`- ${a.title}${a.description?" — "+a.description:""}`).join("\n") || "None recorded yet.";
+      const evidenceList = (cs.evidence||[]).map(e=>`- ${e.name}${e.type?" ("+e.type+")":""}`).join("\n") || "None on file yet.";
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:600,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot drafting a case-specific investigation plan — concrete action items an investigator should actually do, grounded ONLY in the allegations and evidence already on file. Never invent evidence, witnesses, or facts not mentioned (e.g. only suggest obtaining CCTV footage if CCTV is already mentioned in the allegations or evidence). 3 to 8 items, ordered roughly by priority. Respond ONLY with valid JSON, no other text: [{\"name\":\"short imperative action, e.g. Interview Priya Shah as a named witness\",\"reasoning\":\"one short sentence tying it to what's on file\"}]",
+        messages:[{role:"user", content:"ALLEGATIONS:\n"+allegationList+"\n\nEVIDENCE ON FILE:\n"+evidenceList}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const items = sanitizeInvestigationPlanItems(parsed);
+      const updatedTasks = seedInvestigationPlanTasks(caseTasks, cs.id, items);
+      const newlyCreated = updatedTasks.filter(t=>!caseTasks.some(existing=>existing.id===t.id));
+      if(!newlyCreated.length) { showToast("Compass didn't find any new plan items to add"); }
+      else {
+        setCaseTasks(updatedTasks);
+        newlyCreated.forEach(t=>saveCaseTaskToDB({...t, createdBy:user?.id}));
+        audit("Investigation plan generated", newlyCreated.length+" item"+(newlyCreated.length!==1?"s":""), cs.id);
+      }
+    } catch(e) { console.error("generateInvestigationPlan", e); showToast("Couldn't generate the investigation plan — "+e.message, "error"); }
+    setInvestigationPlanLoading(l=>({...l, [cs.id]:false}));
+  };
+
   // Process Intelligence (P8) — generalizes assignInvestigator for the
   // roles that had no dedicated assignment flow at all before this phase
   // (caseRoles.js's ASSIGNABLE_ROLES: Appeal Manager, Notetaker, the
@@ -2692,7 +2737,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(data) setCaseTasks(data.map(r=>({
         id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
         dueDate:r.due_date||"", priority:r.priority, status:r.status,
-        createdBy:r.created_by, createdAt:r.created_at,
+        createdBy:r.created_by, createdAt:r.created_at, source:r.source||null,
       })));
     } catch(e) { console.error('loadCaseTasks', e); }
   };
@@ -2702,7 +2747,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const { error } = await withFkRetry(() => supabase.from('case_tasks').upsert({
       id: task.id, case_id: task.caseId, org_id: org.id,
       name: task.name, owner: task.owner||null, due_date: task.dueDate||null,
-      priority: task.priority||'normal', status: task.status||'open',
+      priority: task.priority||'normal', status: task.status||'open', source: task.source||null,
       created_by: task.createdBy||user?.id||null, updated_at: new Date().toISOString(),
     }));
     if(error) { console.error('saveCaseTaskToDB', error); showToast("Couldn't save task to the cloud — "+error.message, "error"); }
@@ -5787,6 +5832,8 @@ Please produce:
           isHR={isHR}
           caseAccess={caseAccess}
           assignInvestigator={assignInvestigator}
+          generateInvestigationPlan={generateInvestigationPlan}
+          investigationPlanLoading={investigationPlanLoading}
           generateAppealReview={generateAppealReview}
           appealReviewLoading={appealReviewLoading?.[activeCaseId]}
           recordAppealOutcome={recordAppealOutcome}
