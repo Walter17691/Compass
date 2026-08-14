@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeDueSoon } from '../lib/deadlines.js';
+import { computeDueSoon, groupDueSoon } from '../lib/deadlines.js';
 
 describe('computeDueSoon — daysOverdue', () => {
   it('reports the actual number of days overdue, not always zero', () => {
@@ -410,5 +410,89 @@ describe('computeDueSoon — P16: fit note, probation review, OH referral, suspe
     expect(item.caseId).toBe('c27');
     expect(item.confidential).toBe(true);
     expect(item.createdBy).toBe('user-1');
+  });
+});
+
+// Manager Enablement (Phase 4, MP17, §22/§23) — MP7's own investigator
+// target completion date, fed into this same shared pipeline rather than
+// a separate manager-only computation.
+describe('computeDueSoon — investigation target completion date (MP17)', () => {
+  const today = new Date('2025-06-15');
+
+  it('surfaces an investigator\'s target completion date as a deadline', () => {
+    const cases = [{ id: 'c1', employeeName: 'Priya', stage: 'investigation', meetings: [] }];
+    const caseAccess = [{ id: 'a1', caseId: 'c1', role: 'investigator', targetCompletionDate: '2025-06-25' }];
+    const [item] = computeDueSoon(cases, [], today, [], [], [], [], caseAccess);
+    expect(item.category).toBe('investigation_target');
+    expect(item.employeeName).toBe('Priya');
+    expect(item.overdue).toBe(false);
+  });
+
+  it('reports it as overdue once the date has passed', () => {
+    const cases = [{ id: 'c1', employeeName: 'Priya', stage: 'investigation', meetings: [] }];
+    const caseAccess = [{ id: 'a1', caseId: 'c1', role: 'investigator', targetCompletionDate: '2025-06-01' }];
+    const [item] = computeDueSoon(cases, [], today, [], [], [], [], caseAccess);
+    expect(item.overdue).toBe(true);
+  });
+
+  it('ignores a case_access row with no target date set', () => {
+    const cases = [{ id: 'c1', employeeName: 'Priya', stage: 'investigation', meetings: [] }];
+    const caseAccess = [{ id: 'a1', caseId: 'c1', role: 'investigator', targetCompletionDate: null }];
+    expect(computeDueSoon(cases, [], today, [], [], [], [], caseAccess)).toEqual([]);
+  });
+
+  it('ignores a non-investigator role even with a target date (the field only ever gets written for investigator rows, but stay defensive)', () => {
+    const cases = [{ id: 'c1', employeeName: 'Priya', stage: 'investigation', meetings: [] }];
+    const caseAccess = [{ id: 'a1', caseId: 'c1', role: 'notetaker', targetCompletionDate: '2025-06-25' }];
+    expect(computeDueSoon(cases, [], today, [], [], [], [], caseAccess)).toEqual([]);
+  });
+
+  it('ignores case_access rows for a different case', () => {
+    const cases = [{ id: 'c1', employeeName: 'Priya', stage: 'investigation', meetings: [] }];
+    const caseAccess = [{ id: 'a1', caseId: 'c2', role: 'investigator', targetCompletionDate: '2025-06-25' }];
+    expect(computeDueSoon(cases, [], today, [], [], [], [], caseAccess)).toEqual([]);
+  });
+
+  it('defaults to no caseAccess passed at all, matching every other trailing-optional param', () => {
+    const cases = [{ id: 'c1', employeeName: 'Priya', stage: 'investigation', meetings: [] }];
+    expect(computeDueSoon(cases, [], today)).toEqual([]);
+  });
+});
+
+describe('groupDueSoon', () => {
+  it('buckets an overdue item under overdue, not today', () => {
+    const result = groupDueSoon([{ overdue: true, daysLeft: 0 }]);
+    expect(result.overdue).toHaveLength(1);
+    expect(result.today).toHaveLength(0);
+  });
+
+  it('buckets a due-today item correctly', () => {
+    const result = groupDueSoon([{ overdue: false, daysLeft: 0 }]);
+    expect(result.today).toHaveLength(1);
+  });
+
+  it('buckets a due-tomorrow item correctly', () => {
+    const result = groupDueSoon([{ overdue: false, daysLeft: 1 }]);
+    expect(result.tomorrow).toHaveLength(1);
+  });
+
+  it('buckets anything further out under later', () => {
+    const result = groupDueSoon([{ overdue: false, daysLeft: 2 }, { overdue: false, daysLeft: 14 }]);
+    expect(result.later).toHaveLength(2);
+  });
+
+  it('handles an empty or missing list without throwing', () => {
+    expect(groupDueSoon([])).toEqual({ overdue: [], today: [], tomorrow: [], later: [] });
+    expect(groupDueSoon(undefined)).toEqual({ overdue: [], today: [], tomorrow: [], later: [] });
+  });
+
+  it('every item lands in exactly one bucket', () => {
+    const dueSoon = [
+      { overdue: true, daysLeft: 0 }, { overdue: false, daysLeft: 0 },
+      { overdue: false, daysLeft: 1 }, { overdue: false, daysLeft: 5 },
+    ];
+    const result = groupDueSoon(dueSoon);
+    const total = result.overdue.length + result.today.length + result.tomorrow.length + result.later.length;
+    expect(total).toBe(dueSoon.length);
   });
 });

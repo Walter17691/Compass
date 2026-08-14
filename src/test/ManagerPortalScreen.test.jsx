@@ -67,11 +67,23 @@ describe('ManagerPortalScreen', () => {
     expect(screen.getByText('New')).toBeInTheDocument();
   });
 
-  it('lists an upcoming deadline scoped to my own cases only', () => {
-    const dueSoon = [{ employeeName: 'Sam Employee', label: 'Appeal window', caseId: 'c1', overdue: false, deadlineDate: '20/08/2026' }, { employeeName: 'Jo Other', label: 'Unrelated', caseId: 'c2', overdue: false, deadlineDate: '21/08/2026' }];
+  it('lists an upcoming deadline scoped to my own cases only, grouped by how soon it is due', () => {
+    const dueSoon = [
+      { employeeName: 'Sam Employee', label: 'Appeal window', caseId: 'c1', overdue: false, daysLeft: 5, deadlineDate: '20/08/2026' },
+      { employeeName: 'Jo Other', label: 'Unrelated', caseId: 'c2', overdue: false, daysLeft: 5, deadlineDate: '21/08/2026' },
+    ];
     render(<ManagerPortalScreen {...baseProps} dueSoon={dueSoon} />);
     expect(screen.getByText('Upcoming deadlines (1)')).toBeInTheDocument();
+    expect(screen.getByText('Later')).toBeInTheDocument();
     expect(screen.getByText(/Sam Employee — Appeal window/)).toBeInTheDocument();
+    expect(screen.queryByText(/Jo Other/)).not.toBeInTheDocument();
+  });
+
+  it('groups an overdue deadline under its own heading, ahead of due-today/tomorrow/later', () => {
+    const dueSoon = [{ employeeName: 'Sam Employee', label: 'Signature chase', caseId: 'c1', overdue: true, daysOverdue: 3, daysLeft: 0 }];
+    render(<ManagerPortalScreen {...baseProps} dueSoon={dueSoon} />);
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByText('3 days overdue')).toBeInTheDocument();
   });
 
   it('clicking a case row navigates to it', async () => {

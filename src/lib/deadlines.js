@@ -21,7 +21,15 @@ import { getCaseStage } from './caseStage.js';
 // cloud-synced, so it's client-only by nature — the digest cron will
 // simply never pass it and gets zero redundancy deadlines, same graceful
 // omission as any caller that doesn't pass caseTasks.
-export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = []) {
+// caseAccess (optional, Manager Enablement Phase 4, MP17, §22/§23): same
+// trailing-optional-param treatment again — case_access rows, each
+// {caseId, role, targetCompletionDate}, feeding MP7's own investigator
+// target-completion-date field into this same unified output rather than
+// a separate manager-only computation, so it shows up identically
+// wherever dueSoon already does (HomeScreen's HR-facing overdue banner,
+// ManagerPortalScreen's own grouped view, the digest cron) with no extra
+// plumbing anywhere else.
+export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = [], caseAccess = []) {
   const start = new Date(today);
   start.setHours(0,0,0,0);
   const due = [];
@@ -95,6 +103,17 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
         }
       }
     }
+
+    // MP7's own target completion date, set when an investigator is
+    // assigned (AssignInvestigatorModal) — a deterministic reminder, not
+    // an AI-inferred one, and the one new deadline source this phase
+    // adds. One row per investigator ever assigned to this case, not
+    // just the current one — a stale target from a since-reassigned
+    // investigator still deserves a reminder rather than silently
+    // vanishing.
+    caseAccess.filter(a=>a.caseId===cs.id&&a.role==="investigator"&&a.targetCompletionDate).forEach(a => {
+      addDeadline(cs.employeeName, "Investigation target completion date", new Date(a.targetCompletionDate), "investigation_target", `${cs.id}:invtarget:${a.id}`, caseMeta);
+    });
 
     // Grievance acknowledgement — 5 working days from receipt
     if((cs.caseType||"").toLowerCase()==="grievance"&&meetings.length===0&&cs.dateReceived) {
@@ -189,4 +208,23 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
 
   due.sort((a,b)=>{ if(a.overdue&&!b.overdue) return -1; if(!a.overdue&&b.overdue) return 1; return a.overdue?b.daysOverdue-a.daysOverdue:a.daysLeft-b.daysLeft; });
   return due;
+}
+
+// Manager Enablement (Phase 4, MP17, §22/§23) — groups computeDueSoon's
+// existing flat list into Overdue / Due Today / Due Tomorrow / Later for
+// ManagerPortalScreen's own presentation. Deliberately not folded into
+// computeDueSoon itself: every other consumer of dueSoon (HomeScreen's
+// overdue banner, the digest cron, Settings) already works against the
+// flat array and has no reason to change shape just because one more
+// screen wants it grouped. daysLeft alone can't distinguish "due today"
+// from "overdue" — computeDueSoon clamps it to 0 for any overdue item
+// too (Math.max(0,diff)) — so the overdue flag is checked first.
+export function groupDueSoon(dueSoon) {
+  const list = dueSoon || [];
+  return {
+    overdue: list.filter(d => d.overdue),
+    today: list.filter(d => !d.overdue && d.daysLeft === 0),
+    tomorrow: list.filter(d => !d.overdue && d.daysLeft === 1),
+    later: list.filter(d => !d.overdue && d.daysLeft > 1),
+  };
 }

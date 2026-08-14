@@ -1,9 +1,17 @@
 import { SCREENS } from '../constants';
 import { Card, Badge } from '../components/Primitives';
 import { myAssignedCases, myMeetingsToConduct, myTasksDue, myDocumentsToReview, myHrResponses, myConcernsSubmitted, myUpcomingDeadlines } from '../lib/managerPortal';
+import { groupDueSoon } from '../lib/deadlines';
 import { getNextStep } from '../lib/nextStep';
 import { investigationReviewStatusLabel } from '../lib/approvals';
 import { referralStatusMeta } from '../lib/concernReferrals';
+
+const DEADLINE_GROUPS = [
+  { key:"overdue", label:"Overdue", color:"#C84B2F" },
+  { key:"today", label:"Due today", color:"#B87520" },
+  { key:"tomorrow", label:"Due tomorrow", color:"#6B6375" },
+  { key:"later", label:"Later", color:"#6B6375" },
+];
 
 const SectionCard = ({ title, count, children, empty }) => (
   <Card style={{marginBottom:16}}>
@@ -33,6 +41,10 @@ export function ManagerPortalScreen({ cases, caseAccess, caseTasks, hrReviewRequ
   const hrResponses = myHrResponses(hrReviewRequests, currentUser?.user_id);
   const concernsSubmitted = myConcernsSubmitted(concernReferrals, currentUser?.user_id);
   const deadlines = myUpcomingDeadlines(dueSoon, myCases.map(c=>c.id));
+  // Manager Enablement (Phase 4, MP17, §22/§23) — grouped presentation
+  // only; myUpcomingDeadlines above still returns the flat, RLS-scoped
+  // list every other consumer of dueSoon already works with.
+  const groupedDeadlines = groupDueSoon(deadlines);
 
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"40px 20px"}}>
@@ -85,11 +97,16 @@ export function ManagerPortalScreen({ cases, caseAccess, caseTasks, hrReviewRequ
       </SectionCard>
 
       <SectionCard title="Upcoming deadlines" count={deadlines.length} empty="Nothing due in the next two weeks.">
-        {deadlines.map((d,i)=>(
-          <Row key={i} onClick={()=>d.caseId&&openCase(d.caseId)}>
-            <div style={{fontSize:13,color:"#1A1535"}}>{d.employeeName} — {d.label}</div>
-            <div style={{fontSize:11,color:d.overdue?"#C84B2F":"#9B9098",marginTop:2}}>{d.overdue?d.daysOverdue+" day"+(d.daysOverdue!==1?"s":"")+" overdue":"Due "+d.deadlineDate}</div>
-          </Row>
+        {DEADLINE_GROUPS.filter(g=>groupedDeadlines[g.key].length>0).map(g=>(
+          <div key={g.key} style={{marginBottom:10}}>
+            <div style={{fontSize:10,fontWeight:700,color:g.color,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>{g.label}</div>
+            {groupedDeadlines[g.key].map((d,i)=>(
+              <Row key={i} onClick={()=>d.caseId&&openCase(d.caseId)}>
+                <div style={{fontSize:13,color:"#1A1535"}}>{d.employeeName} — {d.label}</div>
+                <div style={{fontSize:11,color:d.overdue?"#C84B2F":"#9B9098",marginTop:2}}>{d.overdue?d.daysOverdue+" day"+(d.daysOverdue!==1?"s":"")+" overdue":"Due "+d.deadlineDate}</div>
+              </Row>
+            ))}
+          </div>
         ))}
       </SectionCard>
 

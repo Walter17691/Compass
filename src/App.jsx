@@ -1667,8 +1667,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Rules live in src/lib/deadlines.js so the digest cron function (server
   // side) can compute the same due-soon set without duplicating them.
   useEffect(() => {
-    setDueSoon(computeDueSoon(cases, dsarRequests, new Date(), caseTasks, wellbeingNotes, leaverInstances, redundancyCases));
-  }, [cases, dsarRequests, caseTasks, wellbeingNotes, leaverInstances, redundancyCases]);
+    setDueSoon(computeDueSoon(cases, dsarRequests, new Date(), caseTasks, wellbeingNotes, leaverInstances, redundancyCases, caseAccess));
+  }, [cases, dsarRequests, caseTasks, wellbeingNotes, leaverInstances, redundancyCases, caseAccess]);
 
   // Lets a deep link (Home's "Suggested for you" quick links) land
   // directly on a specific Settings section instead of always Billing.
