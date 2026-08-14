@@ -24,10 +24,16 @@ function StepCard({ index, step, task, onToggle, children }) {
   );
 }
 
-export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens }) {
+export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate }) {
   const evidence = cs.evidence||[];
   const stepFor = (label) => checklistTasks.find(t=>t.name===label);
   const doneCount = checklistTasks.filter(t=>t.status==="done").length;
+  // Manager Enablement (Phase 4, MP7, §7) — scopeAllegationIds is null for
+  // investigators assigned before this phase (or via a scope-less caller),
+  // which keeps their old "sees every allegation" behaviour; a non-null
+  // array (even an empty one, if HR deliberately unchecked everything)
+  // narrows this step's list to just what was actually assigned.
+  const scopedAllegations = scopeAllegationIds ? caseAllegations.filter(a=>scopeAllegationIds.includes(a.id)) : caseAllegations;
 
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
@@ -36,11 +42,14 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
         <div style={{fontSize:11,color:"#9B9098"}}>{cs.employeeName}</div>
         <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:24,color:"#7C5CFC",margin:"2px 0 6px",fontWeight:600}}>Investigation checklist</h2>
         <p style={{fontSize:13,color:"#6B6375",margin:"0 0 8px"}}>You've been assigned to investigate this case. Work through each step below — HR can see your progress at any point.</p>
-        <p style={{fontSize:12,color:"#9B9098",margin:"0 0 24px"}}>{doneCount} of {INVESTIGATION_CHECKLIST_STEPS.length} steps complete</p>
+        <p style={{fontSize:12,color:"#9B9098",margin:targetCompletionDate||scopeNote?"0 0 8px":"0 0 24px"}}>{doneCount} of {INVESTIGATION_CHECKLIST_STEPS.length} steps complete{targetCompletionDate&&<> · Due {fmtDate(targetCompletionDate)}</>}</p>
+        {scopeNote&&(
+          <div style={{fontSize:12,color:"#5B3FD4",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"8px 12px",marginBottom:24}}>{scopeNote}</div>
+        )}
 
         <StepCard index={0} step={INVESTIGATION_CHECKLIST_STEPS[0]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[0].label)} onToggle={toggleCaseTaskDone}>
-          {caseAllegations.length===0&&<div style={{fontSize:13,color:"#9B9098"}}>No allegations recorded on this case yet.</div>}
-          {caseAllegations.map(a=>(
+          {scopedAllegations.length===0&&<div style={{fontSize:13,color:"#9B9098"}}>No allegations recorded on this case yet.</div>}
+          {scopedAllegations.map(a=>(
             <div key={a.id} style={{padding:"8px 0",borderBottom:"1px solid #F5F1EA"}}>
               <div style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>{a.title}</div>
               {a.description&&<div style={{fontSize:12,color:"#6B6375",marginTop:2}}>{a.description}</div>}

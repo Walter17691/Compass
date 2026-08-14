@@ -92,6 +92,7 @@ import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
 import { HandoffModal } from './screens/HandoffModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
+import { AssignInvestigatorModal } from './screens/AssignInvestigatorModal';
 import { OutcomeModal } from './screens/OutcomeModal';
 
 // Manager Enablement (Phase 4, MP4) — shared by concernForm's initial
@@ -242,6 +243,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [showAssignInvestigatorModal, setShowAssignInvestigatorModal] = useState(false);
   const [adjournments, setAdjournments] = useState([]);
   const [currentAdjournment, setCurrentAdjournment] = useState(null);
   const [expandedCases, setExpandedCases] = useState({});
@@ -2531,7 +2533,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const {data, error} = await supabase.from('case_access').select('*').eq('org_id', org.id);
       if(error) { console.error('loadCaseAccess', error); return; }
-      if(data) setCaseAccess(data.map(r=>({id:r.id, caseId:r.case_id, userId:r.user_id, role:r.role, grantedBy:r.granted_by, grantedAt:r.granted_at})));
+      if(data) setCaseAccess(data.map(r=>({id:r.id, caseId:r.case_id, userId:r.user_id, role:r.role, grantedBy:r.granted_by, grantedAt:r.granted_at,
+        // Manager Enablement (Phase 4, MP7) — only ever set on
+        // role:"investigator" rows; null on every other role.
+        scopeAllegationIds:r.scope_allegation_ids||null, targetCompletionDate:r.target_completion_date||null, scopeNote:r.scope_note||""})));
     } catch(e) { console.error('loadCaseAccess', e); }
   };
 
@@ -2588,11 +2593,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // investigation checklist as ordinary case_tasks so it's immediately
   // visible on both the investigator's restricted view and HR's normal
   // Tasks tab.
-  const assignInvestigator = async (caseId, memberId) => {
+  // Manager Enablement (Phase 4, MP7, §7) — scope gains three fields:
+  // which specific allegations to investigate (a subset, not implicitly
+  // "all" — AssignInvestigatorModal defaults to every allegation checked,
+  // preserving the old implicit behaviour, but HR can now narrow it),
+  // a target completion date, and a short free-text scope note. All
+  // optional/nullable so a scope-less call (e.g. from a test or a future
+  // caller) behaves exactly as before this phase.
+  const assignInvestigator = async (caseId, memberId, scope={}) => {
     const targetMember = orgMembers.find(m=>m.id===memberId||m.user_id===memberId);
     if(!targetMember?.user_id||!org?.id) { showToast("Couldn't find that team member", "error"); return; }
     const { error } = await withFkRetry(() => supabase.from('case_access').upsert({
       case_id: caseId, user_id: targetMember.user_id, org_id: org.id, role: "investigator", granted_by: user?.id,
+      scope_allegation_ids: scope.allegationIds?.length ? scope.allegationIds : null,
+      target_completion_date: scope.targetCompletionDate || null,
+      scope_note: (scope.scopeNote||"").trim() || null,
     }));
     if(error) { console.error('assignInvestigator', error); showToast("Couldn't assign investigator — "+error.message, "error"); return; }
     await loadCaseAccess();
@@ -5714,6 +5729,7 @@ Please produce:
           setAppealText={setAppealText}
           setShowHandoffModal={setShowHandoffModal}
           setShowReassignModal={setShowReassignModal}
+          setShowAssignInvestigatorModal={setShowAssignInvestigatorModal}
           setShowOutcomeModal={setShowOutcomeModal}
           showToast={showToast}
           currentUser={currentUser}
@@ -6178,6 +6194,18 @@ Please produce:
           user={user}
           showToast={showToast}
           audit={audit}
+        />
+      )}
+
+      {/* ── Assign Investigator Modal ── */}
+      {showAssignInvestigatorModal&&(
+        <AssignInvestigatorModal
+          cases={cases}
+          activeCaseId={activeCaseId}
+          allegations={allegations}
+          orgMembers={orgMembers}
+          setShowAssignInvestigatorModal={setShowAssignInvestigatorModal}
+          assignInvestigator={assignInvestigator}
         />
       )}
 

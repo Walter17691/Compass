@@ -40,7 +40,7 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading, documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole, hrReviewRequests, respondToReview, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, wellbeingNotes, dueSoon, processTemplates }) {
+export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowAssignInvestigatorModal, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading, documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole, hrReviewRequests, respondToReview, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, wellbeingNotes, dueSoon, processTemplates }) {
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -148,6 +148,10 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
         onStartEmployeeInterview={startMeetingFromHeader}
         setScreen={setScreen}
         screens={screens}
+        scopeAllegationIds={myAccess?.scopeAllegationIds}
+        targetCompletionDate={myAccess?.targetCompletionDate}
+        scopeNote={myAccess?.scopeNote}
+        fmtDate={fmtDate}
       />
     );
   }
@@ -196,12 +200,11 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             }} title={cs.confidential?"Visible only to authorised staff":"Visible to all HR staff in the org"} style={{background:cs.confidential?"#FEF5E7":"none",border:"1px solid",borderColor:cs.confidential?"#E8C88A":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:cs.confidential?"#B87520":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6}}>{cs.confidential?<><LockIcon size={11} />Confidential</>:"Mark confidential"}</button>
             <button onClick={()=>setShowReassignModal(true)} title={`Currently run by ${cs.manager||"unassigned"}`} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Reassign</button>
             {isHR&&(
-              <select defaultValue="" onChange={e=>{if(e.target.value){assignInvestigator(cs.id, e.target.value);e.target.value="";}}}
-                title={currentInvestigator?"Currently investigating: "+currentInvestigator.name:"No investigator assigned"}
-                style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",cursor:"pointer"}}>
-                <option value="" disabled>{currentInvestigator?"Investigator: "+currentInvestigator.name:"Assign investigator..."}</option>
-                {(orgMembers||[]).filter(m=>m.user_id).map(m=><option key={m.id} value={m.user_id}>{m.name}</option>)}
-              </select>
+              <button onClick={()=>setShowAssignInvestigatorModal(true)}
+                title={currentInvestigator?`Currently investigating: ${currentInvestigator.name}`+(currentInvestigatorAccess?.targetCompletionDate?` — due ${fmtDate(currentInvestigatorAccess.targetCompletionDate)}`:"")+(currentInvestigatorAccess?.scopeNote?` — ${currentInvestigatorAccess.scopeNote}`:""):"No investigator assigned"}
+                style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",cursor:"pointer",fontWeight:500}}>
+                {currentInvestigator?"Investigator: "+currentInvestigator.name:"Assign investigator..."}
+              </button>
             )}
             <button onClick={startMeetingFromHeader}
               style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>
@@ -244,6 +247,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
               {isHR&&currentInvestigator&&(
                 <div style={{fontSize:11,color:"#5B3FD4",marginTop:6}}>
                   Investigation by {currentInvestigator.name}: {checklistTasks.filter(t=>t.status==="done").length} of {INVESTIGATION_CHECKLIST_STEPS.length} steps complete
+                  {currentInvestigatorAccess?.targetCompletionDate&&<> · Due {fmtDate(currentInvestigatorAccess.targetCompletionDate)}</>}
                 </div>
               )}
             </div>
