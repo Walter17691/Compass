@@ -157,6 +157,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
         planTasks={planTasks}
         onGeneratePlan={()=>generateInvestigationPlan(cs)}
         planLoading={!!investigationPlanLoading[cs.id]}
+        caseSignals={caseSignals}
       />
     );
   }

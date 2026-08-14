@@ -69,7 +69,9 @@ describe('InvestigatorChecklistView — investigation plan (MP8)', () => {
       { id: 'p2', caseId: 'c1', name: 'Obtain CCTV footage from the loading bay', status: 'done', source: 'investigation_plan' },
     ];
     render(<InvestigatorChecklistView {...baseProps} planTasks={planTasks} onGeneratePlan={noop} />);
-    expect(screen.getByText('Interview Priya Shah as a named witness')).toBeInTheDocument();
+    // The still-open item ("Interview Priya Shah...") is also MP9's own
+    // "Compass recommends next" pick, so it legitimately appears twice.
+    expect(screen.getAllByText('Interview Priya Shah as a named witness').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Obtain CCTV footage from the loading bay')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regenerate plan' })).toBeInTheDocument();
   });
@@ -99,5 +101,46 @@ describe('InvestigatorChecklistView — investigation plan (MP8)', () => {
     render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={onGeneratePlan} />);
     await user.click(screen.getByRole('button', { name: 'Generate investigation plan' }));
     expect(onGeneratePlan).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Manager Enablement (Phase 4, MP9, §8) — the deterministic "Compass
+// recommends next" banner, computeInvestigatorRecommendation's own
+// priority order (guardrail > plan > checklist) surfaced in the view
+// that actually reads it.
+describe('InvestigatorChecklistView — Compass recommends next (MP9)', () => {
+  it('surfaces an unresolved guardrail ahead of an open plan item', () => {
+    const caseSignals = [{ id: 's1', caseId: 'c1', type: 'process_risk', status: 'open', title: 'Appeal Manager made the original decision' }];
+    const planTasks = [{ id: 'p1', caseId: 'c1', name: 'Interview Priya Shah', status: 'open', source: 'investigation_plan' }];
+    render(<InvestigatorChecklistView {...baseProps} caseSignals={caseSignals} planTasks={planTasks} onGeneratePlan={noop} />);
+    expect(screen.getByText('Compass recommends next')).toBeInTheDocument();
+    expect(screen.getByText('Resolve a flagged procedural guardrail: "Appeal Manager made the original decision"')).toBeInTheDocument();
+  });
+
+  it('recommends the next open plan item when there are no guardrails', () => {
+    const planTasks = [{ id: 'p1', caseId: 'c1', name: 'Obtain CCTV footage from the loading bay', status: 'open', source: 'investigation_plan' }];
+    render(<InvestigatorChecklistView {...baseProps} planTasks={planTasks} onGeneratePlan={noop} />);
+    // "Obtain CCTV footage..." also appears once as the plan item's own
+    // list entry below — the recommendation banner is a second match.
+    expect(screen.getAllByText('Obtain CCTV footage from the loading bay').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('falls back to the fixed checklist when there is no plan or guardrail yet', () => {
+    render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} />);
+    expect(screen.getByText('Compass recommends next')).toBeInTheDocument();
+    // "Review the allegation(s)" also appears once as StepCard 0's own
+    // label — the recommendation banner is a second, legitimate match.
+    expect(screen.getAllByText('Review the allegation(s)').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('renders no banner once everything is resolved', () => {
+    const checklistTasks = [
+      { name: 'Review the allegation(s)', status: 'done' }, { name: 'Review the evidence', status: 'done' },
+      { name: 'Interview witnesses', status: 'done' }, { name: 'Interview the employee', status: 'done' },
+      { name: 'Review outstanding questions', status: 'done' }, { name: 'Complete the investigation', status: 'done' },
+      { name: 'Submit findings to HR', status: 'done' },
+    ];
+    render(<InvestigatorChecklistView {...baseProps} checklistTasks={checklistTasks} planTasks={[]} onGeneratePlan={noop} />);
+    expect(screen.queryByText('Compass recommends next')).not.toBeInTheDocument();
   });
 });

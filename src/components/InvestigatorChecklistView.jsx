@@ -1,4 +1,5 @@
 import { INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
+import { computeInvestigatorRecommendation } from '../lib/investigatorRecommendation';
 
 // Phase 15 of the reasoning-layer build-out (Manager Investigation Mode).
 // A restricted, checklist-driven workspace over the SAME underlying case
@@ -7,6 +8,14 @@ import { INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
 // instead of CaseViewScreen's normal tabbed workspace when the current,
 // non-HR user has been granted case_access with role "investigator" on
 // this specific case (see App.jsx's assignInvestigator).
+//
+// Manager Enablement (Phase 4, MP9, §8/§21) — this component's own prop
+// contract IS the within-case minimization boundary: it is never handed
+// wellbeingNotes, other cases for the same employee, or anything beyond
+// this one case's allegations/evidence/signals/tasks, regardless of what
+// CaseViewScreen's own broader fetch contains. Keep it that way when
+// adding props here — don't widen this beyond what an investigator
+// should see.
 function StepCard({ index, step, task, onToggle, children }) {
   const done = task?.status==="done";
   return (
@@ -24,10 +33,11 @@ function StepCard({ index, step, task, onToggle, children }) {
   );
 }
 
-export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading }) {
+export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks, toggleCaseTaskDone, openQuestions, onStartWitnessInterview, onStartEmployeeInterview, setScreen, screens, scopeAllegationIds, targetCompletionDate, scopeNote, fmtDate, planTasks=[], onGeneratePlan, planLoading, caseSignals=[] }) {
   const evidence = cs.evidence||[];
   const stepFor = (label) => checklistTasks.find(t=>t.name===label);
   const doneCount = checklistTasks.filter(t=>t.status==="done").length;
+  const recommendation = computeInvestigatorRecommendation(cs, checklistTasks, planTasks, caseSignals);
   // Manager Enablement (Phase 4, MP7, §7) — scopeAllegationIds is null for
   // investigators assigned before this phase (or via a scope-less caller),
   // which keeps their old "sees every allegation" behaviour; a non-null
@@ -44,7 +54,18 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
         <p style={{fontSize:13,color:"#6B6375",margin:"0 0 8px"}}>You've been assigned to investigate this case. Work through each step below — HR can see your progress at any point.</p>
         <p style={{fontSize:12,color:"#9B9098",margin:targetCompletionDate||scopeNote?"0 0 8px":"0 0 24px"}}>{doneCount} of {INVESTIGATION_CHECKLIST_STEPS.length} steps complete{targetCompletionDate&&<> · Due {fmtDate(targetCompletionDate)}</>}</p>
         {scopeNote&&(
-          <div style={{fontSize:12,color:"#5B3FD4",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"8px 12px",marginBottom:24}}>{scopeNote}</div>
+          <div style={{fontSize:12,color:"#5B3FD4",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"8px 12px",marginBottom:12}}>{scopeNote}</div>
+        )}
+
+        {/* Manager Enablement (Phase 4, MP9, §8) — the one deterministic
+            "what next" line, combining an unresolved guardrail, MP8's own
+            plan, and the fixed checklist in that priority order
+            (computeInvestigatorRecommendation). Never free-form AI text. */}
+        {recommendation&&(
+          <div style={{background:recommendation.kind==="guardrail"?"#FEF0EB":"#F5F3FF",border:"1px solid "+(recommendation.kind==="guardrail"?"#F5C9BA":"#DDD9F5"),borderRadius:8,padding:"12px 14px",marginBottom:24}}>
+            <div style={{fontSize:10,fontWeight:700,color:recommendation.kind==="guardrail"?"#C84B2F":"#5B3FD4",textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:4}}>Compass recommends next</div>
+            <div style={{fontSize:13,color:"#1A1535"}}>{recommendation.text}</div>
+          </div>
         )}
 
         <StepCard index={0} step={INVESTIGATION_CHECKLIST_STEPS[0]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[0].label)} onToggle={toggleCaseTaskDone}>
