@@ -809,8 +809,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       }
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({model:"claude-sonnet-4-6", max_tokens:700, stream:false,
-          system:"You are Compass, an Employee Relations copilot silently tracking a live HR meeting. Read the transcript so far. "+questionInstruction+" For evidenceMentioned, capture anything referred to that isn't already on record — a document, recording, message or piece of physical/digital evidence (kind:\"evidence\", e.g. \"CCTV footage from the loading bay\", \"a WhatsApp message to their manager\"), or a person named as having relevant knowledge who isn't already a participant in this meeting (kind:\"witness\", e.g. \"Sarah Jones\"). For actionsIdentified, capture only genuine commitments someone in the meeting actually made (e.g. \"I'll send the screenshots tomorrow\", \"HR will check the CCTV\") — never a generic to-do you've inferred yourself. suggestedOwner is who said they'd do it (or \"HR\" if HR committed to it), suggestedDueDate is a DD/MM/YYYY date if the transcript implies a timeframe (today is "+todayStr+", so \"tomorrow\" etc. can be resolved relative to that) or null if no timeframe was mentioned. "+followUpInstruction+" Only report a possible inconsistency if someone's later statement genuinely conflicts with something specific they (or another named participant) said earlier in THIS transcript, or with something in the PRIOR CASE CONTEXT section if one is provided below — never flag a mere gap or a different emphasis, and never state or imply anyone is lying. Respond ONLY with valid JSON, no other text: {"+questionShape+"\"newIssues\":[\"...\"],\"evidenceMentioned\":[{\"description\":\"...\",\"kind\":\"evidence\"|\"witness\"}],\"actionsIdentified\":[{\"description\":\"...\",\"suggestedOwner\":\"...\",\"suggestedDueDate\":\"DD/MM/YYYY\"|null}],\"suggestedFollowUp\":{\"text\":\"...\",\"reasoning\":\"...\"}|null,\"possibleInconsistency\":{\"earlier\":\"...\",\"later\":\"...\",\"suggestedQuestion\":\"...\"}} — omit possibleInconsistency (set it null) if there is none. Keep every array short — only real, specific items, empty arrays where nothing applies.",
-          messages:[{role:"user", content:"Meeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+questionContext+"\n\nTranscript so far:\n"+notes.slice(-3000)+crossMeetingContext}]})});
+          system:"You are Compass, an Employee Relations copilot silently tracking a live HR meeting. Read the transcript so far. "+questionInstruction+" For evidenceMentioned, capture anything referred to that isn't already on record — a document, recording, message or piece of physical/digital evidence (kind:\"evidence\", e.g. \"CCTV footage from the loading bay\", \"a WhatsApp message to their manager\"), or a person named as having relevant knowledge who isn't already a participant in this meeting (kind:\"witness\", e.g. \"Sarah Jones\"). For actionsIdentified, capture only genuine commitments someone in the meeting actually made (e.g. \"I'll send the screenshots tomorrow\", \"HR will check the CCTV\") — never a generic to-do you've inferred yourself. suggestedOwner is who said they'd do it (or \"HR\" if HR committed to it), suggestedDueDate is a DD/MM/YYYY date if the transcript implies a timeframe (today's date is given at the start of the message below, so \"tomorrow\" etc. can be resolved relative to it) or null if no timeframe was mentioned. "+followUpInstruction+" Only report a possible inconsistency if someone's later statement genuinely conflicts with something specific they (or another named participant) said earlier in THIS transcript, or with something in the PRIOR CASE CONTEXT section if one is provided below — never flag a mere gap or a different emphasis, and never state or imply anyone is lying. Respond ONLY with valid JSON, no other text: {"+questionShape+"\"newIssues\":[\"...\"],\"evidenceMentioned\":[{\"description\":\"...\",\"kind\":\"evidence\"|\"witness\"}],\"actionsIdentified\":[{\"description\":\"...\",\"suggestedOwner\":\"...\",\"suggestedDueDate\":\"DD/MM/YYYY\"|null}],\"suggestedFollowUp\":{\"text\":\"...\",\"reasoning\":\"...\"}|null,\"possibleInconsistency\":{\"earlier\":\"...\",\"later\":\"...\",\"suggestedQuestion\":\"...\"}} — omit possibleInconsistency (set it null) if there is none. Keep every array short — only real, specific items, empty arrays where nothing applies.",
+          messages:[{role:"user", content:"Today: "+todayStr+"\nMeeting: "+(meetingType?.label||"General")+"\nEmployee: "+(caseInfo.employee||"Unknown")+questionContext+"\n\nTranscript so far:\n"+notes.slice(-3000)+crossMeetingContext}]})});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
@@ -1324,19 +1324,23 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const askCompass = async (msg, history, setHistory, setProcessing) => {
     if(!msg.trim() && !homeAttachment) return;
     setProcessing(true);
+    // Kept out of the system prompt (below) and appended to the user turn
+    // instead — cases change constantly, and the system prompt is
+    // otherwise identical on every call, so this is what makes it worth
+    // prompt-caching (see api/chat.js).
     const caseContext = cases.length > 0
       ? "Active cases: " + cases.map(ca=>ca.employeeName + " ("+ca.meetings.length+" meetings)").join(", ")
       : "No active cases yet.";
-    const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Give thorough, practical answers. Use plain numbered lists and bullet points (- ) for structure. Never use ## headers, never use ** for bold, never use emoji, never use markdown tables. Plain clear English only. Separate sections with a blank line. " + caseContext;
-    
+    const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Give thorough, practical answers. Use plain numbered lists and bullet points (- ) for structure. Never use ## headers, never use ** for bold, never use emoji, never use markdown tables. Plain clear English only. Separate sections with a blank line.";
+
     let userContent;
     if(homeAttachment?.base64) {
       userContent = [
         {type:"document", source:{type:"base64", media_type:"application/pdf", data:homeAttachment.base64}},
-        {type:"text", text:msg||"Please review this document and advise on any HR or legal considerations."}
+        {type:"text", text:(msg||"Please review this document and advise on any HR or legal considerations.")+"\n\n"+caseContext}
       ];
     } else {
-      userContent = msg;
+      userContent = (msg||"")+"\n\n"+caseContext;
     }
     
     const newHistory = [...history, {role:"user", content:userContent}];
