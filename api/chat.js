@@ -33,6 +33,37 @@ function logCacheUsageFromSseBuffer(buffer) {
   return buffer;
 }
 
+// Places an explicit cache_control breakpoint on the stable system content
+// only — never top-level. Top-level cache_control auto-places on the last
+// cacheable block of the *entire* request, which is the final user message
+// on every real call here (a different question/case record each time), so
+// it never repeats and never reads from cache. Confirmed by direct testing:
+// see investigation notes for 2026-08-14. Anchoring the breakpoint on the
+// system content itself means only the always-different `messages` sit
+// outside the cached prefix — where they belong.
+function withSystemCache(body) {
+  if (!body.system) return body;
+  const cacheControl = { type: 'ephemeral', ttl: '1h' };
+
+  if (typeof body.system === 'string') {
+    return {
+      ...body,
+      system: [{ type: 'text', text: body.system, cache_control: cacheControl }],
+    };
+  }
+
+  if (Array.isArray(body.system) && body.system.length > 0) {
+    const lastIdx = body.system.length - 1;
+    const lastBlock = body.system[lastIdx];
+    if (lastBlock.cache_control) return body; // caller already set its own breakpoint
+    const blocks = [...body.system];
+    blocks[lastIdx] = { ...lastBlock, cache_control: cacheControl };
+    return { ...body, system: blocks };
+  }
+
+  return body;
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -59,15 +90,7 @@ export default async function handler(req, res) {
     const body = req.body;
     const isStreaming = body.stream === true;
 
-    // Automatic prompt caching: every caller already sends a stable system
-    // prompt followed by dynamic content in `messages`, so a single
-    // top-level breakpoint (auto-placed on the last cacheable block) is
-    // enough here — no per-caller changes needed. Skip requests with no
-    // system prompt (nothing stable to cache) and don't clobber a caller
-    // that already set its own cache_control.
-    const requestBody = (body.system && !body.cache_control)
-      ? { ...body, cache_control: { type: 'ephemeral', ttl: '1h' } }
-      : body;
+    const requestBody = withSystemCache(body);
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
