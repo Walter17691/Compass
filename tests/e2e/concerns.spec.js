@@ -12,6 +12,7 @@ import { login } from './helpers.js';
 // separately E2E-tested here since there's no non-HR test account to
 // verify it against live RLS.
 test('a raised concern can be triaged into a real formal case', async ({ page }) => {
+  test.setTimeout(60000); // includes one real triage-summary AI call
   const employeeName = `E2E Concern ${Date.now()}`;
 
   await login(page);
@@ -45,6 +46,15 @@ test('a raised concern can be triaged into a real formal case', async ({ page })
   await expect(referralCard.getByText('⚠ Anyone at risk flagged')).toBeVisible();
   await expect(referralCard.getByText('Witnesses: Priya Shah, Tom Norton')).toBeVisible();
   await expect(referralCard.getByText('Evidence: CCTV footage from the loading bay camera')).toBeVisible();
+
+  // Manager Enablement (Phase 4, MP5, §3) — Compass's own triage summary,
+  // generated automatically (no button click) right after submission.
+  // Structure over exact AI wording, same discipline as every other
+  // AI-response assertion in this suite: only the category badge's
+  // presence (not its specific label) and the summary block existing at
+  // all are asserted.
+  await expect(referralCard.getByText('Compass summary', { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(referralCard.getByText('Compass is analysing this concern…')).not.toBeVisible();
 
   const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && r.request().method() === 'POST');
   await referralCard.getByRole('button', { name: 'Open formal case' }).click();

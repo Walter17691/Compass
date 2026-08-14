@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CONCERN_TYPES } from '../constants';
-import { referralStatusMeta } from '../lib/concernReferrals';
+import { referralStatusMeta, REFERRAL_STATUSES } from '../lib/concernReferrals';
 import { computeConcernIntakeGaps } from '../lib/concernIntakeGaps';
 import { readEvidenceFiles } from '../lib/evidenceUpload';
 import { Btn, Card, Badge } from '../components/Primitives';
@@ -102,7 +102,40 @@ function ConcernForm({ concernForm, setConcernForm, onSubmit, submitLabel="Submi
   );
 }
 
-function ReferralCard({ referral, onTriage, onOpenCase }) {
+const URGENCY_STYLE = {
+  HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
+  MEDIUM: { color:"#B87520", bg:"#FEF5E7" },
+  LOW: { color:"#1A7A4A", bg:"#E8F5EE" },
+};
+
+// Manager Enablement (Phase 4, MP5, §3) — Compass's own structured
+// triage summary, read straight off the referral's ai_* fields
+// (generateConcernTriageSummary, App.jsx) rather than making HR re-read
+// the manager's raw description from scratch. Purely informational —
+// nothing here is clickable or decides anything; HR's own 5-action
+// disposition below is untouched.
+function TriageSummary({ referral, loading }) {
+  if (loading) {
+    return <div style={{fontSize:12,color:"#9B9098",fontStyle:"italic",marginBottom:10}}>Compass is analysing this concern…</div>;
+  }
+  if (!referral.aiSummary) return null;
+  return (
+    <div style={{background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:12,marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+        <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",textTransform:"uppercase",letterSpacing:0.4}}>Compass summary</div>
+        {referral.aiCategory&&<span style={{fontSize:10,color:"#5B3FD4",background:"#EDE8FF",borderRadius:4,padding:"2px 7px",fontWeight:600}}>{referral.aiCategory}</span>}
+        {referral.aiUrgency&&URGENCY_STYLE[referral.aiUrgency]&&<span style={{fontSize:10,fontWeight:700,color:URGENCY_STYLE[referral.aiUrgency].color,background:URGENCY_STYLE[referral.aiUrgency].bg,borderRadius:4,padding:"2px 7px"}}>{referral.aiUrgency} URGENCY</span>}
+      </div>
+      <div style={{fontSize:13,color:"#3D3560",lineHeight:1.6,marginBottom:referral.aiWitnessesCount!=null||referral.aiEvidenceMentioned?.length||referral.aiImmediateAction||referral.aiConsiderations?8:0}}>{referral.aiSummary}</div>
+      {referral.aiWitnessesCount!=null&&<div style={{fontSize:12,color:"#6B6375",marginBottom:2}}>Potential witnesses: {referral.aiWitnessesCount}</div>}
+      {referral.aiEvidenceMentioned?.length>0&&<div style={{fontSize:12,color:"#6B6375",marginBottom:2}}>Evidence mentioned: {referral.aiEvidenceMentioned.join(", ")}</div>}
+      {referral.aiImmediateAction&&<div style={{fontSize:12,color:"#6B6375",marginBottom:2}}>Immediate action taken: {referral.aiImmediateAction}</div>}
+      {referral.aiConsiderations&&<div style={{fontSize:12,color:"#B87520",marginTop:6}}>⚠ {referral.aiConsiderations}</div>}
+    </div>
+  );
+}
+
+function ReferralCard({ referral, onTriage, onOpenCase, triageLoading }) {
   const meta = referralStatusMeta(referral.status);
   const isOpen = referral.status==="new";
   return (
@@ -111,12 +144,13 @@ function ReferralCard({ referral, onTriage, onOpenCase }) {
         <div>
           <div style={{fontSize:15,fontWeight:600,color:"#1A1535"}}>{referral.employeeName}</div>
           <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>
-            {CONCERN_TYPES.find(t=>t.id===referral.concernType)?.label||referral.concernType} · Raised by {referral.submittedByName||"a team member"}
+            {CONCERN_TYPES.find(t=>t.id===referral.concernType)?.label||referral.concernType} · Raised by {referral.submittedByName||"a team member"}{referral.createdAt?" · "+new Date(referral.createdAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}
           </div>
         </div>
         <Badge color={meta.color}>{meta.label}</Badge>
       </div>
       <div style={{fontSize:13,color:"#3D3560",lineHeight:1.6,marginBottom:10}}>{referral.description}</div>
+      <TriageSummary referral={referral} loading={triageLoading} />
       {referral.witnesses&&<div style={{fontSize:12,color:"#6B6375",marginBottom:6}}>Witnesses: {referral.witnesses}</div>}
       {(referral.evidenceDescription||referral.evidenceFiles?.length>0)&&(
         <div style={{fontSize:12,color:"#6B6375",marginBottom:6}}>
@@ -145,7 +179,7 @@ function ReferralCard({ referral, onTriage, onOpenCase }) {
   );
 }
 
-export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens }) {
+export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, concernTriageLoading={}, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens }) {
   const [showForm, setShowForm] = useState(false);
   const openCase = (caseId) => {
     setActiveCaseId(caseId);
@@ -172,7 +206,14 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
   }
 
   const open = concernReferrals.filter(r=>r.status==="new");
-  const resolved = concernReferrals.filter(r=>r.status!=="new");
+  // Manager Enablement (Phase 4, MP5, §5) — the HR triage inbox groups by
+  // each of this app's own real statuses (a richer set than the spec's
+  // own simplified New/Awaiting Information/Under Review/Converted to
+  // Case/Closed list), rather than collapsing everything past "new" into
+  // one flat "previously triaged" bucket.
+  const otherStatusGroups = REFERRAL_STATUSES.filter(s=>s.id!=="new").map(s=>({
+    ...s, referrals: concernReferrals.filter(r=>r.status===s.id),
+  })).filter(g=>g.referrals.length>0);
 
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"40px 20px"}}>
@@ -189,18 +230,18 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
         </div>
       )}
 
-      {open.length===0&&resolved.length===0&&(
+      {open.length===0&&otherStatusGroups.length===0&&(
         <Card style={{textAlign:"center",padding:"32px 20px",color:"#9B9098",fontSize:13}}>No concerns raised yet.</Card>
       )}
 
-      {open.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} />)}
+      {open.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} triageLoading={!!concernTriageLoading[r.id]} />)}
 
-      {resolved.length>0&&(
-        <>
-          <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",margin:"20px 0 10px"}}>Previously triaged</div>
-          {resolved.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} />)}
-        </>
-      )}
+      {otherStatusGroups.map(group=>(
+        <div key={group.id}>
+          <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",margin:"20px 0 10px"}}>{group.label} ({group.referrals.length})</div>
+          {group.referrals.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} triageLoading={!!concernTriageLoading[r.id]} />)}
+        </div>
+      ))}
     </div>
   );
 }

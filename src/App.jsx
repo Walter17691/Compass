@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
-import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES } from './constants';
+import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES, CONCERN_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
 import { ls, lsSet } from './lib/storage';
@@ -27,7 +27,8 @@ import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
-import { addConcernReferral, setReferralStatus } from './lib/concernReferrals';
+import { addConcernReferral, setReferralStatus, updateConcernReferral } from './lib/concernReferrals';
+import { sanitizeTriageSummary } from './lib/concernTriage';
 import { seedInvestigationChecklist } from './lib/investigationChecklist';
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
@@ -1500,6 +1501,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── Concern referrals (manager self-service — any org member can raise
   // one, only HR triages) — see lib/concernReferrals.js ──
   const [concernReferrals, setConcernReferrals] = useState([]);
+  const [concernTriageLoading, setConcernTriageLoading] = useState({});
   const [concernForm, setConcernForm] = useState(EMPTY_CONCERN_FORM);
   const [concernSubmitted, setConcernSubmitted] = useState(false);
 
@@ -2369,6 +2371,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         mayNeedFormalProcess:!!r.may_need_formal_process, evidenceDescription:r.evidence_description||"", evidenceFiles:r.evidence_files||[],
         submittedBy:r.submitted_by, submittedByName:r.submitted_by_name||"",
         status:r.status, hrNotes:r.hr_notes||"", linkedCaseId:r.linked_case_id, createdAt:r.created_at,
+        aiCategory:r.ai_category||"", aiSummary:r.ai_summary||"", aiWitnessesCount:r.ai_witnesses_count??null,
+        aiEvidenceMentioned:r.ai_evidence_mentioned||[], aiImmediateAction:r.ai_immediate_action||"",
+        aiConsiderations:r.ai_considerations||"", aiUrgency:r.ai_urgency||null,
       })));
     } catch(e) { console.error('loadConcernReferrals', e); }
   };
@@ -2384,9 +2389,65 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       evidence_description: referral.evidenceDescription||null, evidence_files: referral.evidenceFiles||[],
       submitted_by: referral.submittedBy||null, submitted_by_name: referral.submittedByName||null,
       status: referral.status||'new', hr_notes: referral.hrNotes||null, linked_case_id: referral.linkedCaseId||null,
+      ai_category: referral.aiCategory||null, ai_summary: referral.aiSummary||null, ai_witnesses_count: referral.aiWitnessesCount??null,
+      ai_evidence_mentioned: referral.aiEvidenceMentioned||[], ai_immediate_action: referral.aiImmediateAction||null,
+      ai_considerations: referral.aiConsiderations||null, ai_urgency: referral.aiUrgency||null,
       updated_at: new Date().toISOString(),
     }));
     if(error) { console.error('saveConcernReferralToDB', error); showToast("Couldn't submit — "+error.message, "error"); }
+  };
+
+  // Manager Enablement (Phase 4, MP5, §3) — runs automatically right
+  // after submission, never on a manual trigger and never deciding
+  // anything: HR's own 5-action disposition is completely untouched by
+  // this. Extracts only what the manager's own account already supports
+  // (category/summary/witness count/evidence mentioned/immediate action/
+  // considerations/urgency) so HR doesn't have to re-read the raw
+  // description from scratch. Failure is silent (console only) — a
+  // referral is fully usable without this, HR just falls back to reading
+  // the manager's own text directly, same as before this phase.
+  const generateConcernTriageSummary = async (referral) => {
+    setConcernTriageLoading(l=>({...l, [referral.id]:true}));
+    try {
+      const nl = String.fromCharCode(10);
+      const context = [
+        "Employee: "+referral.employeeName,
+        "Reported concern type: "+(CONCERN_TYPES.find(t=>t.id===referral.concernType)?.label||referral.concernType),
+        "What happened, in the manager's own words: "+referral.description,
+        referral.witnesses ? "Witnesses named by the manager: "+referral.witnesses : "",
+        referral.evidenceDescription ? "Evidence the manager mentioned: "+referral.evidenceDescription : "",
+        "Already discussed with the employee: "+(referral.discussedWithEmployee?"Yes":"No"),
+        "Manager flagged anyone at risk: "+(referral.involvesSafetyOrWelfare?"Yes":"No"),
+        "Manager flagged an immediate operational or safety concern: "+(referral.immediateSafetyConcern?"Yes":"No"),
+      ].filter(Boolean).join(nl);
+
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:600,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot triaging a concern a line manager has just raised, before it reaches HR. Extract only what the manager's own account actually supports — never invent detail, never speculate beyond what's written. You must never recommend or imply what formal process (if any) this should become — that is HR's decision alone; you only summarise the facts as given, neutrally. Respond ONLY with valid JSON, no other text: {\"category\":\"one short label, e.g. Conduct, Attendance, Welfare, Interpersonal\",\"summary\":\"one or two neutral, factual sentences\",\"witnessesCount\":number or null,\"evidenceMentioned\":[\"short items, e.g. CCTV, WhatsApp conversation\"],\"immediateActionTaken\":\"short phrase, or empty string if none mentioned\",\"considerations\":\"one sentence flagging any genuine ambiguity or gap HR should check, or empty string if nothing stands out\",\"urgency\":\"LOW, MEDIUM, or HIGH\"}",
+        messages:[{role:"user", content:context}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const sanitized = sanitizeTriageSummary(parsed);
+      // Functional update, not the concernReferrals closed over above —
+      // this call can take 20-30s (a real AI round trip), and by the time
+      // it resolves that closure's array is whatever it was back when
+      // submitConcernReferral first called this function, which doesn't
+      // yet include the referral just created (setConcernReferrals there
+      // hadn't been applied yet either). Reading state instead of relying
+      // on a stale closure is what makes this safe regardless of timing.
+      let savedReferral = null;
+      setConcernReferrals(prev => {
+        const updated = updateConcernReferral(prev, referral.id, sanitized);
+        savedReferral = updated.find(r=>r.id===referral.id);
+        return updated;
+      });
+      if(savedReferral) saveConcernReferralToDB(savedReferral);
+    } catch(e) { console.error("generateConcernTriageSummary", e); }
+    setConcernTriageLoading(l=>({...l, [referral.id]:false}));
   };
 
   const submitConcernReferral = () => {
@@ -2397,6 +2458,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setConcernReferrals(updated);
     const created = updated[updated.length-1];
     saveConcernReferralToDB(created);
+    generateConcernTriageSummary(created);
     audit("Concern referral submitted", created.employeeName+" — "+created.concernType);
     setConcernForm(EMPTY_CONCERN_FORM);
     setConcernSubmitted(true);
@@ -5860,6 +5922,7 @@ Please produce:
           concernSubmitted={concernSubmitted}
           setConcernSubmitted={setConcernSubmitted}
           triageReferral={triageReferral}
+          concernTriageLoading={concernTriageLoading}
           currentUser={currentUser}
           showToast={showToast}
           setActiveCaseId={setActiveCaseId}
