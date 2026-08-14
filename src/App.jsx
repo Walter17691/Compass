@@ -2954,6 +2954,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // the real org member correctly saw the real numbers including a
   // temporary confidential test case, matching how hr_director oversight
   // already works everywhere else in this app.
+  //
+  // Manager Enablement (Phase 4, MP15, §12) — the plan called for
+  // "narrowing globalAssistant.js's case-context building for non-HR
+  // roles to reuse MP1's RLS as the sole enforcement boundary." Re-checked
+  // against the live database rather than assumed: org_case_stats() is
+  // still SECURITY INVOKER (pg_proc.prosecdef = false), and MP1's own
+  // restrictive policy ("Non-oversight members restricted to their own
+  // assigned cases", RESTRICTIVE FOR SELECT on public.cases) is deployed
+  // and combines with every other cases policy automatically — so both
+  // this RPC's internal `my_cases` CTE and matchCaseByEmployeeName's own
+  // array (sourced from the same RLS-scoped loadCasesFromDB() fetch)
+  // already narrow to a non-HR manager's own accessible cases with no
+  // code change needed here. There is no second, parallel allow-list to
+  // build or drift out of sync — MP1's RLS already is the sole
+  // enforcement boundary, exactly as the plan asked for, purely as a
+  // structural consequence of this function never having been written as
+  // SECURITY DEFINER and never having its own bespoke visibility rules.
   const [globalChatHistory, setGlobalChatHistory] = useState([]);
   const [globalChatInput, setGlobalChatInput] = useState("");
   const [globalChatProcessing, setGlobalChatProcessing] = useState(false);
