@@ -1920,6 +1920,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { showToast("Couldn't schedule the meeting — "+e.message, "error"); setMeetingScheduling(false); return false; }
   };
 
+  // IP16, §10 — availability checks against the CALLER's own connected
+  // calendar only (api/calendar/_check-availability.js's own comment
+  // explains why — nobody else has authorised this app to read theirs).
+  const [availabilityCheck, setAvailabilityCheck] = useState(null); // {checked, conflicts} | null
+  const [availabilityChecking, setAvailabilityChecking] = useState(false);
+  const checkMeetingAvailability = async ({ startISO, endISO }) => {
+    setAvailabilityChecking(true);
+    try {
+      const res = await authedFetch(`/api/calendar/check-availability?startISO=${encodeURIComponent(startISO)}&endISO=${encodeURIComponent(endISO)}`);
+      const data = await res.json();
+      setAvailabilityCheck(res.ok ? data : { checked:false, conflicts:[] });
+    } catch { setAvailabilityCheck({ checked:false, conflicts:[] }); }
+    setAvailabilityChecking(false);
+  };
+
   // ── Browser notifications ──
   const requestNotifications = async () => {
     if(!("Notification" in window)) return;
@@ -7092,6 +7107,14 @@ Please produce:
           cases={cases}
           onScheduleMeeting={scheduleMeeting}
           meetingScheduling={meetingScheduling}
+          policies={policies}
+          caseAccess={caseAccess}
+          orgMembers={orgMembers}
+          organiserEmail={user?.email}
+          onCheckAvailability={checkMeetingAvailability}
+          availabilityCheck={availabilityCheck}
+          availabilityChecking={availabilityChecking}
+          clearAvailabilityCheck={()=>setAvailabilityCheck(null)}
         />
       )}
       </Suspense>

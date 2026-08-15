@@ -30,3 +30,59 @@ export function parseAttendees(raw) {
     .map(s => s.trim())
     .filter(s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
 }
+
+// IP16, §10 — attendee/role suggestions. org_members has no email column
+// (see baseline_schema_2026-08-06.sql) — only the case's own employee
+// email and the organiser's own signed-in email are ever real, known
+// addresses this app can auto-add. A chair/investigator's role is still
+// worth surfacing (ACAS Code expects a named chair, and — for an appeal
+// specifically — someone not previously involved), just as a reminder
+// to type their email in, not a fabricated address.
+export function suggestAttendees(cs, { caseAccess = [], orgMembers = [], organiserEmail, meetingTypeId } = {}) {
+  const emails = [];
+  if (cs?.email) emails.push(cs.email);
+  if (organiserEmail && !emails.includes(organiserEmail)) emails.push(organiserEmail);
+
+  const roleNotes = [];
+  if (cs?.manager) {
+    const isAppeal = (meetingTypeId || "").startsWith("appeal-");
+    roleNotes.push(isAppeal
+      ? `Appeal chair: someone other than ${cs.manager} — ACAS Code recommends a manager not previously involved`
+      : `Chair: ${cs.manager} — add their email above`);
+  }
+  const investigatorAccess = caseAccess.filter(a => a.caseId === cs?.id && a.role === "investigator");
+  const currentInvestigator = investigatorAccess[investigatorAccess.length - 1];
+  const investigatorName = currentInvestigator ? orgMembers.find(m => m.user_id === currentInvestigator.userId)?.name : null;
+  if (investigatorName) roleNotes.push(`Investigator: ${investigatorName} — add their email above`);
+
+  return { emails, roleNotes };
+}
+
+// IP16, §10 — policy notice-period violation flag. Looks for a clause
+// like "5 working days' notice" or "48 hours notice" in the case-type-
+// relevant policy (same CASE_TYPE_TO_POLICY_CATEGORY lookup
+// lib/hearingPack.js already uses) and compares it against the actual
+// gap between now and the proposed meeting time. A clause that doesn't
+// match this pattern is silently skipped — never a guessed number.
+const NOTICE_PATTERN = /(\d+)\s*(hour|working day|business day|day)s?\b[^.]{0,20}notice/i;
+const UNIT_TO_HOURS = { hour: 1, day: 24, "working day": 24, "business day": 24 };
+
+export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Date() } = {}) {
+  if (!meetingISO) return null;
+  for (const text of policyClauseTexts || []) {
+    const match = NOTICE_PATTERN.exec(text || "");
+    if (!match) continue;
+    const value = Number(match[1]);
+    const unit = match[2].toLowerCase();
+    const requiredHours = value * (UNIT_TO_HOURS[unit] || 24);
+    const actualHours = (new Date(meetingISO).getTime() - now.getTime()) / 3600000;
+    return {
+      requiredText: `${value} ${unit}${value > 1 ? "s" : ""}' notice`,
+      requiredHours,
+      actualHours,
+      violated: actualHours < requiredHours,
+      clauseText: text,
+    };
+  }
+  return null;
+}

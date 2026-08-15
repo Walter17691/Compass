@@ -10,6 +10,7 @@ import { ms365Disconnect } from './_ms365-disconnect.js';
 import { createEvent } from './_create-event.js';
 import { updateEvent } from './_update-event.js';
 import { deleteEvent } from './_delete-event.js';
+import { checkAvailability } from './_check-availability.js';
 
 // Single catch-all route for every /api/calendar/* endpoint. Vercel's
 // Hobby plan caps a deployment at 12 serverless functions total; with
@@ -45,6 +46,10 @@ export default async function handler(req, res) {
     case 'create-event': return createEvent(req, res);
     case 'update-event': return updateEvent(req, res);
     case 'delete-event': return deleteEvent(req, res);
+    // IP16, §10 — availability checks (see _check-availability.js's own
+    // "where authorised" comment on why this only ever reads the
+    // caller's own calendar).
+    case 'check-availability': return checkAvailability(req, res);
     default: return res.status(404).json({ error: 'Not found' });
   }
 }

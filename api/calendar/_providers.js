@@ -48,3 +48,38 @@ export async function freshAccessToken(connection) {
   }
   return accessToken;
 }
+
+// Integrations & Workflow Automation (Phase 5, IP16, §10) — availability
+// checks. Same "pick between the two providers" reasoning as the rest of
+// this file: Google's events.list (with a time window) and Microsoft
+// Graph's calendarView return differently-shaped JSON for "what's on my
+// calendar in this range" — this is the one place that difference is
+// resolved, so _check-availability.js reads one normalized shape
+// regardless of provider.
+export function availabilityPath(provider, startISO, endISO) {
+  if (provider === 'google') {
+    return `events?timeMin=${encodeURIComponent(startISO)}&timeMax=${encodeURIComponent(endISO)}&singleEvents=true`;
+  }
+  if (provider === 'microsoft') {
+    return `calendarView?startDateTime=${encodeURIComponent(startISO)}&endDateTime=${encodeURIComponent(endISO)}`;
+  }
+  throw new Error(`Unknown calendar provider: ${provider}`);
+}
+
+// Only used for the Microsoft request — asks Graph to return
+// calendarView's start/end already normalized to UTC (its default is the
+// user's own mailbox timezone), matching how every other time this app
+// handles Microsoft calendar events (see _microsoft.js's own comment).
+export function availabilityRequestOptions(provider) {
+  return provider === 'microsoft' ? { headers: { Prefer: 'outlook.timezone="UTC"' } } : {};
+}
+
+export function normalizeAvailabilityEvents(provider, json) {
+  if (provider === 'google') {
+    return (json?.items || []).map(e => ({ title: e.summary || 'Busy', start: e.start?.dateTime || e.start?.date || null, end: e.end?.dateTime || e.end?.date || null }));
+  }
+  if (provider === 'microsoft') {
+    return (json?.value || []).map(e => ({ title: e.subject || 'Busy', start: e.start?.dateTime ? e.start.dateTime + 'Z' : null, end: e.end?.dateTime ? e.end.dateTime + 'Z' : null }));
+  }
+  return [];
+}

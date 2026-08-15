@@ -26,7 +26,7 @@ import { getProcessType } from './processStages';
 // case-type ids, POLICY_CATEGORIES' category ids) rather than a new AI
 // judgement call about which policy is "relevant" — a deterministic
 // lookup, not a guess.
-const CASE_TYPE_TO_POLICY_CATEGORY = {
+export const CASE_TYPE_TO_POLICY_CATEGORY = {
   misconduct: "disciplinary",
   appeal: "disciplinary",
   grievance: "grievance",

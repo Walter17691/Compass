@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MEETING_TYPES } from '../constants';
+import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod } from '../lib/meetingScheduling';
+import { CASE_TYPE_TO_POLICY_CATEGORY } from '../lib/hearingPack';
+import { getProcessType } from '../lib/processStages';
 
 // Process Intelligence (P16, §5) — the same computeDueSoon output the
 // overdue banner/Settings list/digest cron already read (lib/deadlines.js),
@@ -21,13 +24,34 @@ function daysInMonth(d) { return new Date(d.getFullYear(), d.getMonth()+1, 0).ge
 
 const EMPTY_SCHEDULE_FORM = { caseId: "", meetingType: "investigation", date: "", startTime: "", durationMinutes: 60, attendees: "", description: "" };
 
-// Integrations & Workflow Automation (Phase 5, IP15, §9) — real
+// Integrations & Workflow Automation (Phase 5, IP15/IP16, §9-10) — real
 // scheduling, calling IP3's create-event primitive on every calendar the
 // user has connected (App.jsx's scheduleMeeting). Every MEETING_TYPES
-// entry is selectable, not a narrowed subset.
-function ScheduleMeetingModal({ cases, onClose, onSubmit, scheduling }) {
+// entry is selectable, not a narrowed subset. IP16 layers in three
+// "smart" additions once a case, date and time are picked: attendee/role
+// suggestions, a policy notice-period check, and an availability check
+// against the organiser's own connected calendar.
+function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMembers = [], organiserEmail, onClose, onSubmit, scheduling, onCheckAvailability, availabilityCheck, availabilityChecking, clearAvailabilityCheck }) {
   const [form, setForm] = useState(EMPTY_SCHEDULE_FORM);
   const canSubmit = form.date && form.startTime && !scheduling;
+  const cs = cases.find(c=>c.id===form.caseId) || null;
+  const times = buildEventTimes({ date: form.date, startTime: form.startTime, durationMinutes: form.durationMinutes });
+
+  // Re-checks whenever the proposed slot actually changes — clearing
+  // first so a stale result from the previous slot never lingers under
+  // the new one while the fresh check is still in flight.
+  useEffect(() => {
+    clearAvailabilityCheck?.();
+    if (times) onCheckAvailability?.(times);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.date, form.startTime, form.durationMinutes]);
+
+  const attendeeSuggestion = cs ? suggestAttendees(cs, { caseAccess, orgMembers, organiserEmail, meetingTypeId: form.meetingType }) : null;
+  const newSuggestedEmails = (attendeeSuggestion?.emails || []).filter(e => !parseAttendees(form.attendees).includes(e));
+
+  const relevantCategory = cs ? CASE_TYPE_TO_POLICY_CATEGORY[getProcessType(cs.caseType).id] : null;
+  const clauseTexts = relevantCategory ? policies.filter(p => p.category === relevantCategory).flatMap(p => (p.clauses || []).map(c => c.text)) : [];
+  const noticeCheck = times ? checkNoticePeriod(clauseTexts, { meetingISO: times.startISO }) : null;
 
   return (
     <div role="dialog" aria-modal="true" onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(26,21,53,0.35)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -62,8 +86,36 @@ function ScheduleMeetingModal({ cases, onClose, onSubmit, scheduling }) {
           </div>
         </div>
 
+        {noticeCheck?.violated&&(
+          <div style={{background:"#FDF3E8",border:"1px solid #E8C088",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#8A5A1E"}}>
+            Policy requires {noticeCheck.requiredText} — this meeting is only {Math.max(0,Math.round(noticeCheck.actualHours))} hour{Math.round(noticeCheck.actualHours)===1?"":"s"} away.
+          </div>
+        )}
+        {times&&availabilityChecking&&(
+          <div style={{fontSize:12,color:"#9B9098",marginBottom:12}}>Checking your calendar…</div>
+        )}
+        {times&&!availabilityChecking&&availabilityCheck?.checked&&(
+          availabilityCheck.conflicts.length>0 ? (
+            <div style={{background:"#FEF0EB",border:"1px solid #F0C4B4",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#8A3B1E"}}>
+              Clashes with {availabilityCheck.conflicts.length} event{availabilityCheck.conflicts.length===1?"":"s"} on your calendar: {availabilityCheck.conflicts.map(c=>c.title).join(", ")}
+            </div>
+          ) : (
+            <div style={{fontSize:11,color:"#1A7A4A",marginBottom:12}}>No conflicts on your calendar</div>
+          )
+        )}
+
         <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Attendees (optional)</label>
-        <input value={form.attendees} onChange={e=>setForm(f=>({...f,attendees:e.target.value}))} placeholder="sarah@company.com, rep@union.org" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}/>
+        <input value={form.attendees} onChange={e=>setForm(f=>({...f,attendees:e.target.value}))} placeholder="sarah@company.com, rep@union.org" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
+        {attendeeSuggestion&&(newSuggestedEmails.length>0||attendeeSuggestion.roleNotes.length>0)&&(
+          <div style={{background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"8px 12px",marginBottom:12}}>
+            {newSuggestedEmails.length>0&&(
+              <button onClick={()=>setForm(f=>({...f,attendees:[...parseAttendees(f.attendees),...newSuggestedEmails].join(", ")}))} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:attendeeSuggestion.roleNotes.length?6:0}}>+ Add {newSuggestedEmails.join(", ")}</button>
+            )}
+            {attendeeSuggestion.roleNotes.map((note,i)=>(
+              <div key={i} style={{fontSize:11,color:"#6B6375"}}>{note}</div>
+            ))}
+          </div>
+        )}
 
         <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Description (optional)</label>
         <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:16,resize:"vertical",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
@@ -77,7 +129,7 @@ function ScheduleMeetingModal({ cases, onClose, onSubmit, scheduling }) {
   );
 }
 
-export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCaseId, setActiveCaseStage, cases = [], onScheduleMeeting, meetingScheduling }) {
+export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCaseId, setActiveCaseStage, cases = [], onScheduleMeeting, meetingScheduling, policies, caseAccess, orgMembers, organiserEmail, onCheckAvailability, availabilityCheck, availabilityChecking, clearAvailabilityCheck }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -119,7 +171,9 @@ export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCase
       </div>
 
       {showScheduleModal&&(
-        <ScheduleMeetingModal cases={cases} onClose={()=>setShowScheduleModal(false)} onSubmit={onScheduleMeeting} scheduling={meetingScheduling}/>
+        <ScheduleMeetingModal cases={cases} policies={policies} caseAccess={caseAccess} orgMembers={orgMembers} organiserEmail={organiserEmail}
+          onClose={()=>setShowScheduleModal(false)} onSubmit={onScheduleMeeting} scheduling={meetingScheduling}
+          onCheckAvailability={onCheckAvailability} availabilityCheck={availabilityCheck} availabilityChecking={availabilityChecking} clearAvailabilityCheck={clearAvailabilityCheck}/>
       )}
 
       <div style={{maxWidth:900,margin:"0 auto",padding:"28px 24px"}}>

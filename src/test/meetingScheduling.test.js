@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildEventTimes, parseAttendees } from '../lib/meetingScheduling.js';
+import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod } from '../lib/meetingScheduling.js';
 
 describe('buildEventTimes (Phase 5, IP15)', () => {
   it('builds start/end ISO strings from a date, time and duration', () => {
@@ -38,5 +38,75 @@ describe('parseAttendees (Phase 5, IP15)', () => {
   it('returns an empty array for empty/missing input', () => {
     expect(parseAttendees('')).toEqual([]);
     expect(parseAttendees(undefined)).toEqual([]);
+  });
+});
+
+describe('suggestAttendees (Phase 5, IP16)', () => {
+  const cs = { id: 'c1', email: 'sarah@company.com', manager: 'Jo Smith' };
+
+  it('includes the case employee and the organiser as real, known emails', () => {
+    const result = suggestAttendees(cs, { organiserEmail: 'hr@company.com' });
+    expect(result.emails).toEqual(['sarah@company.com', 'hr@company.com']);
+  });
+
+  it('does not duplicate the organiser email if it matches the employee email', () => {
+    const result = suggestAttendees(cs, { organiserEmail: 'sarah@company.com' });
+    expect(result.emails).toEqual(['sarah@company.com']);
+  });
+
+  it('suggests the manager as chair by name, not a fabricated email', () => {
+    const result = suggestAttendees(cs, { organiserEmail: 'hr@company.com', meetingTypeId: 'disciplinary' });
+    expect(result.roleNotes).toEqual(['Chair: Jo Smith — add their email above']);
+  });
+
+  it('flags an appeal meeting as needing someone other than the existing manager', () => {
+    const result = suggestAttendees(cs, { meetingTypeId: 'appeal-disciplinary' });
+    expect(result.roleNotes[0]).toContain('someone other than Jo Smith');
+    expect(result.roleNotes[0]).toContain('not previously involved');
+  });
+
+  it('surfaces the assigned investigator by name when one exists', () => {
+    const caseAccess = [{ caseId: 'c1', role: 'investigator', userId: 'u1' }];
+    const orgMembers = [{ user_id: 'u1', name: 'Priya Shah' }];
+    const result = suggestAttendees(cs, { caseAccess, orgMembers, meetingTypeId: 'investigation' });
+    expect(result.roleNotes).toContain('Investigator: Priya Shah — add their email above');
+  });
+
+  it('handles a case with no email/manager and no investigator gracefully', () => {
+    const result = suggestAttendees({ id: 'c2' });
+    expect(result.emails).toEqual([]);
+    expect(result.roleNotes).toEqual([]);
+  });
+});
+
+describe('checkNoticePeriod (Phase 5, IP16)', () => {
+  const now = new Date('2026-08-15T09:00:00Z');
+
+  it('flags a violation when the meeting is sooner than the policy requires', () => {
+    const result = checkNoticePeriod(["Employees are entitled to 48 hours' notice of a disciplinary hearing."], { meetingISO: '2026-08-16T09:00:00Z', now });
+    expect(result.violated).toBe(true);
+    expect(result.requiredHours).toBe(48);
+    expect(result.requiredText).toBe("48 hours' notice");
+  });
+
+  it('does not flag a violation when there is enough notice', () => {
+    const result = checkNoticePeriod(["Employees are entitled to 48 hours' notice of a disciplinary hearing."], { meetingISO: '2026-08-20T09:00:00Z', now });
+    expect(result.violated).toBe(false);
+  });
+
+  it('treats a working-day requirement as 24 hours per day', () => {
+    const result = checkNoticePeriod(["Give 5 working days' notice before the hearing."], { meetingISO: '2026-08-16T09:00:00Z', now });
+    expect(result.requiredHours).toBe(120);
+    expect(result.violated).toBe(true);
+  });
+
+  it('returns null when no clause matches a notice-period pattern', () => {
+    expect(checkNoticePeriod(['This policy covers disciplinary procedure generally.'], { meetingISO: '2026-08-16T09:00:00Z', now })).toBeNull();
+  });
+
+  it('returns null when there is no meeting time or no clauses at all', () => {
+    expect(checkNoticePeriod(["48 hours' notice required."], { now })).toBeNull();
+    expect(checkNoticePeriod([], { meetingISO: '2026-08-16T09:00:00Z', now })).toBeNull();
+    expect(checkNoticePeriod(undefined, { meetingISO: '2026-08-16T09:00:00Z', now })).toBeNull();
   });
 });
