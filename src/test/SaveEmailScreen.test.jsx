@@ -85,3 +85,54 @@ describe('SaveEmailScreen — Create New Concern / Ignore (Phase 5, IP10)', () =
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('SaveEmailScreen — reply capture (Phase 5, IP14)', () => {
+  const replyMatch = { caseId: 'c1', name: 'Sent: Witness invitation', subject: 'Witness invitation - Sarah Jones', recipient: 'sarah@company.com', rawText: 'Reply text' };
+
+  it('shows the reply-detected banner naming the matched case and letter, instead of the normal extraction flow', () => {
+    render(<SaveEmailScreen cases={cases} replyMatch={replyMatch} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} />);
+    expect(screen.getByText('Reply detected')).toBeInTheDocument();
+    expect(screen.getByText(/Sarah Jones/)).toBeInTheDocument();
+    expect(screen.getByText(/Witness invitation/)).toBeInTheDocument();
+    expect(screen.queryByText('Paste the email')).not.toBeInTheDocument();
+  });
+
+  it('renders all four actions and calls the right handler for each', async () => {
+    const user = userEvent.setup();
+    const onSaveReplyToCase = vi.fn();
+    const onAnalyseReply = vi.fn();
+    const onOpenReplyCaseMeetings = vi.fn();
+    const onCreateReplyAction = vi.fn();
+    const onClearReplyMatch = vi.fn();
+    render(<SaveEmailScreen cases={cases} replyMatch={replyMatch} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}}
+      onSaveReplyToCase={onSaveReplyToCase} onAnalyseReply={onAnalyseReply} onOpenReplyCaseMeetings={onOpenReplyCaseMeetings}
+      onCreateReplyAction={onCreateReplyAction} onClearReplyMatch={onClearReplyMatch} />);
+
+    await user.click(screen.getByRole('button', { name: 'Add to Case' }));
+    expect(onSaveReplyToCase).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Analyse Response' }));
+    expect(onAnalyseReply).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Update Meeting' }));
+    expect(onOpenReplyCaseMeetings).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Create Action' }));
+    expect(onCreateReplyAction).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Ignore' }));
+    expect(onClearReplyMatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a loading state while analysing, and the result once it lands', () => {
+    const { rerender } = render(<SaveEmailScreen cases={cases} replyMatch={replyMatch} replyAnalysisLoading onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} onAnalyseReply={()=>{}} />);
+    expect(screen.getByText('Analysing the reply…')).toBeInTheDocument();
+
+    rerender(<SaveEmailScreen cases={cases} replyMatch={replyMatch} replyAnalysis={{ isPostponementRequest: true, isNewIssue: false, summary: 'Asks to move the meeting.' }} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} onAnalyseReply={()=>{}} />);
+    expect(screen.getByText('Asks to move the meeting.')).toBeInTheDocument();
+    expect(screen.getByText(/Needs HR review/)).toBeInTheDocument();
+    expect(screen.getByText(/postponement requested/)).toBeInTheDocument();
+  });
+
+  it('does not flag "Needs HR review" when neither flag is set', () => {
+    render(<SaveEmailScreen cases={cases} replyMatch={replyMatch} replyAnalysis={{ isPostponementRequest: false, isNewIssue: false, summary: 'Just confirms receipt.' }} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} onAnalyseReply={()=>{}} />);
+    expect(screen.getByText('Just confirms receipt.')).toBeInTheDocument();
+    expect(screen.queryByText(/Needs HR review/)).not.toBeInTheDocument();
+  });
+});

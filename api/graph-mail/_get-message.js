@@ -41,7 +41,16 @@ export async function getMessage(req, res) {
       return res.status(502).json({ error: "Couldn't read that email" });
     }
     const message = await msgRes.json();
-    res.status(200).json({ rawText: formatAsRawText(message) });
+    // Integrations & Workflow Automation (Phase 5, IP14, §8) — structured
+    // subject/from alongside the existing flattened rawText, so a picked
+    // message can be checked against a case's sent-letter record
+    // (lib/letterSend.js's matchReplyToSentLetters) without re-parsing
+    // the "From: ...\nSubject: ..." text back apart client-side.
+    res.status(200).json({
+      rawText: formatAsRawText(message),
+      subject: message.subject || '',
+      from: message.from?.emailAddress?.address || message.from?.emailAddress?.name || '',
+    });
   } catch (e) {
     console.error('Graph mail get-message error:', e.message);
     res.status(500).json({ error: e.message });

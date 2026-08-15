@@ -52,7 +52,7 @@ import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from '
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
 import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
-import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter } from './lib/letterSend';
+import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLetterSubject, matchReplyToSentLetters } from './lib/letterSend';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -4012,13 +4012,77 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } catch(e) { showToast("Couldn't load your inbox", "error"); }
     setInboxLoading(false);
   };
+  // ── Reply capture (Phase 5, IP14, §8) ──
+  // Checked before the normal extraction flow whenever a message is
+  // picked from the connected inbox: a reply to a letter Compass already
+  // sent from a specific case should be flagged as that (with its own
+  // Add to Case / Analyse Response / Update Meeting / Create Action
+  // choices), not just filed as a fresh, unrelated email.
+  const [replyMatch, setReplyMatch] = useState(null); // {caseId, name, subject, recipient, rawText}
+  const [caseViewInitialTab, setCaseViewInitialTab] = useState(null);
+  const [replyAnalysis, setReplyAnalysis] = useState(null); // {isPostponementRequest, isNewIssue, summary}
+  const [replyAnalysisLoading, setReplyAnalysisLoading] = useState(false);
+  const clearReplyMatch = () => { setReplyMatch(null); setReplyAnalysis(null); setReplyAnalysisLoading(false); };
+
   const pickInboxMessage = async (messageId) => {
     try {
       const res = await authedFetch(`/api/graph-mail/get-message?messageId=${encodeURIComponent(messageId)}`);
       const data = await res.json();
-      if(res.ok && data.rawText) extractEmailDetails(data.rawText);
-      else showToast(data.error||"Couldn't read that email", "error");
+      if(!res.ok || !data.rawText) { showToast(data.error||"Couldn't read that email", "error"); return; }
+
+      const allSentItems = cases.flatMap(cs => (cs.evidence||[]).filter(ev=>ev.source==="sent_letter").map(ev=>({...ev, caseId:cs.id})));
+      const match = matchReplyToSentLetters({ subject: data.subject, from: data.from }, allSentItems);
+      if(match) { setReplyAnalysis(null); setReplyMatch({ ...match, rawText: data.rawText }); return; }
+
+      extractEmailDetails(data.rawText);
     } catch(e) { showToast("Couldn't read that email", "error"); }
+  };
+
+  const saveReplyToCase = () => {
+    if(!replyMatch) return;
+    const item = buildEmailEvidenceItem({ body: replyMatch.rawText, addedBy: currentUser?.name||"HR Manager" });
+    saveCases(cases.map(x=>x.id===replyMatch.caseId?{...x, evidence:[...(x.evidence||[]), item]}:x), replyMatch.caseId);
+    audit("Email saved to case", item.name, replyMatch.caseId);
+    showToast("Reply saved to the case's evidence");
+    setActiveCaseId(replyMatch.caseId);
+    setActiveCaseStage("investigation");
+    setScreen(SCREENS.CASE_VIEW);
+    clearReplyMatch();
+  };
+
+  const analyseReplyResponse = async () => {
+    if(!replyMatch) return;
+    setReplyAnalysisLoading(true);
+    try {
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:400,
+        stream:false,
+        system:"You are Compass, an Employee Relations copilot reading a reply to a letter HR already sent. Read the reply and determine: whether the sender is asking to postpone or reschedule anything (isPostponementRequest), whether they raise a genuinely new issue, complaint, or piece of information not already anticipated by the letter they're replying to (isNewIssue), and a one-sentence neutral summary of what the reply actually says. Never decide what HR should do about either flag — only report what's there, for a human to review. Respond ONLY with valid JSON, no other text: {\"isPostponementRequest\":false,\"isNewIssue\":false,\"summary\":\"...\"}",
+        messages:[{role:"user", content:`This reply is to: "${replyMatch.subject||replyMatch.name}"\n\n${replyMatch.rawText}`}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      setReplyAnalysis(parsed);
+    } catch(e) { console.error("analyseReplyResponse", e); showToast("Couldn't analyse the reply — "+e.message, "error"); }
+    setReplyAnalysisLoading(false);
+  };
+
+  const openReplyCaseMeetings = () => {
+    if(!replyMatch) return;
+    setActiveCaseId(replyMatch.caseId);
+    setCaseViewInitialTab("meetings");
+    setScreen(SCREENS.CASE_VIEW);
+    clearReplyMatch();
+  };
+
+  const createReplyAction = () => {
+    if(!replyMatch) return;
+    const name = replyAnalysis?.summary || `Follow up on reply to "${replyMatch.name}"`;
+    createCaseTask(replyMatch.caseId, { name });
+    showToast("Task created");
+    clearReplyMatch();
   };
 
   // ── Gmail connection (Phase 5, IP2) ──
@@ -5161,10 +5225,15 @@ Please produce:
   // case (e.g. sending from a case-less meeting session) — the send
   // itself still succeeds either way.
   const sendLetterCoordinated = async (to) => {
+    // IP14, §8 — the subject actually sent must match what
+    // matchReplyToSentLetters later checks a reply's subject against;
+    // see buildLetterSubject's own comment on the bug this fixes (every
+    // type used to go out labelled "Outcome Letter").
+    const subject = buildLetterSubject({ type: activeLetter, meetingType: meetingType?.label, employeeName: caseInfo.employee });
     const r = await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         to,
-        subject: (meetingType?.label||"Meeting")+" Outcome Letter - "+(caseInfo.employee||"Employee"),
+        subject,
         body: letterOutput,
         employeeName: caseInfo.employee||"Employee",
         meetingType: meetingType?.label||"Meeting",
@@ -5176,7 +5245,7 @@ Please produce:
 
     const activeCase = cases.find(x=>x.id===activeCaseId);
     if(activeCase) {
-      const sentItem = buildSentLetterEvidenceItem({ type: activeLetter, recipient: to, body: letterOutput, addedBy: currentUser?.name||"HR Manager" });
+      const sentItem = buildSentLetterEvidenceItem({ type: activeLetter, subject, recipient: to, body: letterOutput, addedBy: currentUser?.name||"HR Manager" });
       saveCases(cases.map(x=>x.id===activeCaseId?{...x, evidence:[...(x.evidence||[]), sentItem]}:x), activeCaseId);
       audit("Letter sent", sentItem.name, activeCaseId);
       const matchingTask = findTaskToCompleteForSentLetter(caseTasks, activeCaseId, activeLetter);
@@ -6426,6 +6495,14 @@ Please produce:
           onLoadInbox={loadInboxMessages}
           onPickMessage={pickInboxMessage}
           onCreateConcern={createConcernFromEmail}
+          replyMatch={replyMatch}
+          replyAnalysis={replyAnalysis}
+          replyAnalysisLoading={replyAnalysisLoading}
+          onSaveReplyToCase={saveReplyToCase}
+          onAnalyseReply={analyseReplyResponse}
+          onOpenReplyCaseMeetings={openReplyCaseMeetings}
+          onCreateReplyAction={createReplyAction}
+          onClearReplyMatch={clearReplyMatch}
         />
       )}
 
@@ -6540,6 +6617,8 @@ Please produce:
           onGenerateHearingPack={handleGenerateHearingPack}
           hearingPackGenerating={hearingPackGenerating}
           onDraftCorrespondence={startCaseCorrespondence}
+          initialTab={caseViewInitialTab}
+          clearInitialTab={()=>setCaseViewInitialTab(null)}
           caseChatHistory={caseChatHistory}
           caseChatInput={caseChatInput}
           setCaseChatInput={setCaseChatInput}

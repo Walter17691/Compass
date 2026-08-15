@@ -22,17 +22,33 @@ function toBase64(text) {
   return btoa(encodeURIComponent(text).replace(/%([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16))));
 }
 
+// The actual email subject a letter is sent with — shared by the send
+// itself (App.jsx's sendLetterCoordinated) and reply-matching below, so
+// the two can never drift out of sync. Previously hard-coded to "...
+// Outcome Letter - ..." for every type (a pre-existing bug this phase's
+// own reply-matching need surfaced — a witness invitation was going out
+// with a subject line calling it an "Outcome Letter").
+export function buildLetterSubject({ type, meetingType, employeeName }) {
+  const label = CORRESPONDENCE_TYPE_LABELS[type];
+  if (label) return `${label} - ${employeeName || "Employee"}`;
+  return `${meetingType || "Meeting"} Outcome Letter - ${employeeName || "Employee"}`;
+}
+
 // Same text/plain + dataUrl shape as buildEmailEvidenceItem
 // (lib/emailIngestion.js) — for the same reason: a saved sent-letter
 // copy should be just as reachable by the document-AI pipeline
 // (canAnalyseEvidence) as any other evidence on the case, not a second-
 // class record. source:"sent_letter" is this item's own equivalent of
 // emailIngestion's source:"email" marker — lib/caseTimeline.js reads it
-// to give a sent letter its own dedicated timeline entry.
-export function buildSentLetterEvidenceItem({ type, recipient, body, addedBy }) {
+// to give a sent letter its own dedicated timeline entry. subject and
+// recipient are kept as their own fields (not just folded into the
+// record text) so matchReplyToSentLetters below can compare against
+// them directly rather than re-parsing free text.
+export function buildSentLetterEvidenceItem({ type, subject, recipient, body, addedBy }) {
   const label = CORRESPONDENCE_TYPE_LABELS[type] || "Letter";
   const lines = [
     `Sent to: ${recipient}`,
+    `Subject: ${subject}`,
     "",
     body || "",
   ].join("\n");
@@ -45,6 +61,8 @@ export function buildSentLetterEvidenceItem({ type, recipient, body, addedBy }) 
     dataUrl: `data:text/plain;base64,${toBase64(lines)}`,
     size: new Blob([lines]).size,
     source: "sent_letter",
+    subject,
+    recipient,
   };
 }
 
@@ -61,4 +79,44 @@ export function findTaskToCompleteForSentLetter(caseTasks, caseId, letterType) {
   return (caseTasks || []).find(t =>
     t.caseId === caseId && t.status !== "done" && t.name?.trim().toLowerCase() === label.toLowerCase()
   ) || null;
+}
+
+function stripReplyPrefixes(subject) {
+  let s = (subject || "").trim();
+  // Handles "Re: Re: Fwd: ..." — a real reply chain accumulates these,
+  // so one pass isn't enough.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const next = s.replace(/^(re|fw|fwd)\s*:\s*/i, "");
+    if (next !== s) { s = next.trim(); changed = true; }
+  }
+  return s;
+}
+
+// Integrations & Workflow Automation (Phase 5, IP14, §8) — reply
+// capture. Real Microsoft Graph message threading (conversationId)
+// would only work for mail actually sent through the user's own
+// connected Outlook mailbox — IP13's send-from-Compass goes via Resend
+// (api/send-letter.js), a separate mail system Graph has no visibility
+// into, so conversationId can never bridge the two. Subject + recipient
+// matching works regardless of which system the original went out
+// through, which is what makes this deterministic and testable rather
+// than another AI guess.
+export function matchReplyToSentLetters(message, sentLetterItems) {
+  const incomingSubject = stripReplyPrefixes(message?.subject).toLowerCase();
+  const incomingFrom = (message?.from || "").trim().toLowerCase();
+  if (!incomingSubject || !incomingFrom) return null;
+
+  const candidates = (sentLetterItems || []).filter(item => {
+    const itemSubject = (item.subject || "").trim().toLowerCase();
+    const itemRecipient = (item.recipient || "").trim().toLowerCase();
+    if (!itemSubject || itemRecipient !== incomingFrom) return false;
+    return incomingSubject === itemSubject || incomingSubject.includes(itemSubject) || itemSubject.includes(incomingSubject);
+  });
+  if (!candidates.length) return null;
+  // Most recently sent match — a case could plausibly have sent the same
+  // correspondence type to the same person twice (e.g. two separate
+  // evidence requests over the life of a case).
+  return candidates.reduce((latest, item) => new Date(item.date) > new Date(latest.date) ? item : latest);
 }

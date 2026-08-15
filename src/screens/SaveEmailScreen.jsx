@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 // until the user explicitly picks a case and confirms, even when Compass
 // found a confident match or the message came straight from a connected
 // inbox.
-export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtract, onSave, onClear, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, inboxMessages, inboxLoading, onLoadInbox, onPickMessage, onCreateConcern }) {
+export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtract, onSave, onClear, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, inboxMessages, inboxLoading, onLoadInbox, onPickMessage, onCreateConcern, replyMatch, replyAnalysis, replyAnalysisLoading, onSaveReplyToCase, onAnalyseReply, onOpenReplyCaseMeetings, onCreateReplyAction, onClearReplyMatch }) {
   const [rawText, setRawText] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState('');
 
@@ -33,7 +33,36 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
           <p style={{fontSize:13,color:"#9B9098",margin:"6px 0 0"}}>Paste an email below — Compass reads it, suggests which case it belongs to, and files it as evidence once you confirm. Nothing is saved automatically.</p>
         </div>
 
-        {!extraction && !extractionLoading && (
+        {replyMatch && (
+          <div style={{background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:12,padding:20,marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#5B3FD4",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Reply detected</div>
+            <p style={{fontSize:13,color:"#1A1535",margin:"0 0 16px"}}>
+              This looks like a reply to <strong>{cases.find(c=>c.id===replyMatch.caseId)?.employeeName||"a case"}</strong>'s "{replyMatch.name.replace(/^Sent: /,"")}".
+            </p>
+
+            {replyAnalysisLoading && <div style={{fontSize:12,color:"#9B9098",marginBottom:12}}>Analysing the reply…</div>}
+            {replyAnalysis && (
+              <div style={{background:(replyAnalysis.isPostponementRequest||replyAnalysis.isNewIssue)?"#FDF3E8":"#F5F3FF",border:"1px solid",borderColor:(replyAnalysis.isPostponementRequest||replyAnalysis.isNewIssue)?"#E8C088":"#DDD9F5",borderRadius:8,padding:"10px 12px",marginBottom:16}}>
+                {(replyAnalysis.isPostponementRequest||replyAnalysis.isNewIssue)&&(
+                  <div style={{fontSize:11,fontWeight:700,color:"#8A5A1E",marginBottom:4}}>
+                    Needs HR review — {[replyAnalysis.isPostponementRequest?"postponement requested":null, replyAnalysis.isNewIssue?"raises a new issue":null].filter(Boolean).join(", ")}
+                  </div>
+                )}
+                <div style={{fontSize:12,color:"#1A1535"}}>{replyAnalysis.summary}</div>
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={onSaveReplyToCase} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 18px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Add to Case</button>
+              {onAnalyseReply&&!replyAnalysis&&<button onClick={onAnalyseReply} disabled={replyAnalysisLoading} style={{fontSize:13,background:"none",border:"1px solid #DDD9F5",borderRadius:8,padding:"9px 18px",color:"#5B3FD4",cursor:replyAnalysisLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{replyAnalysisLoading?"Analysing…":"Analyse Response"}</button>}
+              <button onClick={onOpenReplyCaseMeetings} style={{fontSize:13,background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 18px",color:"#1C1820",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Update Meeting</button>
+              <button onClick={onCreateReplyAction} style={{fontSize:13,background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 18px",color:"#1C1820",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Create Action</button>
+              <button onClick={onClearReplyMatch} style={{fontSize:13,background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 18px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ignore</button>
+            </div>
+          </div>
+        )}
+
+        {!replyMatch && !extraction && !extractionLoading && (
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:20,marginBottom:16}}>
             {!mailConnected ? (
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
@@ -69,7 +98,7 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
           </div>
         )}
 
-        {!extraction && !extractionLoading && (
+        {!replyMatch && !extraction && !extractionLoading && (
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:20}}>
             <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Paste the email</label>
             <textarea value={rawText} onChange={e=>setRawText(e.target.value)} rows={12} placeholder={"From: manager@company.com\nSubject: Re: absence on 5 August\n\nHi HR, following up on..."} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
