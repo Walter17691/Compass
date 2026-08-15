@@ -9,12 +9,15 @@ const KIND_COLOR = { letter: "#B87520", report: "#7C5CFC", evidence: "#6B6375" }
 // see src/lib/caseDocuments.js. Letters open in the existing Letter
 // screen (same as everywhere else generated letters are viewed); evidence
 // files download the same way the Evidence tab already does.
-export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate }) {
+export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate, onGenerateHearingPack, hearingPackGenerating }) {
   const docs = deriveDocumentsForCase(cs);
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
+      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Documents ({docs.length})</div>
+        {onGenerateHearingPack&&(
+          <button onClick={()=>onGenerateHearingPack(cs)} disabled={!!hearingPackGenerating} style={{fontSize:11,fontWeight:600,color:"#fff",background:hearingPackGenerating?"#C4B8F8":"#7C5CFC",border:"none",borderRadius:6,padding:"6px 12px",cursor:hearingPackGenerating?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>{hearingPackGenerating?"Generating…":"Generate Hearing Pack"}</button>
+        )}
       </div>
       <div style={{padding:"16px"}}>
         {docs.length===0 && <div style={{fontSize:13,color:"#9B9098"}}>No letters or files on this case yet.</div>}
