@@ -48,7 +48,7 @@ import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
 import { derivePeopleForCase } from './lib/casePeople';
-import { matchCaseByEmployeeName } from './lib/globalAssistant';
+import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
 import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem } from './lib/emailIngestion';
@@ -3893,6 +3893,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const [emailExtraction, setEmailExtraction] = useState(null);
   const [emailExtractionLoading, setEmailExtractionLoading] = useState(false);
 
+  // Integrations & Workflow Automation (Phase 5, IP9, §2) — extends the
+  // original sender/subject/date/employeeName/summary-only shallow read
+  // to the spec's full field set, plus a genuine confidence tier on the
+  // case match (matchCaseByEmployeeNameWithConfidence) rather than a
+  // silent yes/no. The findings-style fields (potentialActions/
+  // Deadlines/Witnesses/Evidence) are surfaced for HR to read here, not
+  // yet individually accept/dismiss-able against a case — that's IP11's
+  // email-to-evidence phase, once the email is actually saved as
+  // evidence with somewhere real for an accepted finding to attach to.
   const extractEmailDetails = async (rawText) => {
     if(!rawText?.trim()) return;
     setEmailExtractionLoading(true);
@@ -3900,23 +3909,29 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
-        max_tokens:400,
+        max_tokens:800,
         stream:false,
-        system:"You are Compass, an Employee Relations copilot extracting structured details from a pasted email so it can be filed to the right case. Read the content given and extract: the sender, the subject, the date (if mentioned or inferable, in DD/MM/YYYY), which named employee this email is actually about (may differ from the sender or recipient — look for who the content concerns, not just who wrote it), and a one-sentence neutral summary. Respond ONLY with valid JSON, no other text: {\"sender\":null,\"subject\":null,\"date\":null,\"employeeName\":null,\"summary\":null} — use null (not a guess) for anything you can't actually determine from the content.",
+        system:"You are Compass, an Employee Relations copilot extracting structured details from an email so it can be filed to the right case. Read the content given and extract: the sender, recipients (array), the subject, the date (if mentioned or inferable, in DD/MM/YYYY), which named employee this email is primarily about (may differ from the sender or recipient — look for who the content concerns, not just who wrote it), any OTHER named employees mentioned (array, excluding the primary one), any explicit case/matter references mentioned (array, e.g. \"the grievance we discussed\", \"case ref 1234\"), any other dates mentioned beyond the email's own date (array), any attachments the text refers to (array, e.g. \"see attached rota\" -> \"rota\" — only ones the text actually references, never invent one), potential follow-up actions/commitments mentioned (array of short descriptions), potential deadlines mentioned (array of short descriptions), potential witnesses mentioned — people who might need interviewing but aren't the subject employee (array of names), potential evidence mentioned — documents/recordings/messages referred to (array of short descriptions), and a one-sentence neutral summary. Respond ONLY with valid JSON, no other text: {\"sender\":null,\"recipients\":[],\"subject\":null,\"date\":null,\"employeeName\":null,\"employeesMentioned\":[],\"caseReferences\":[],\"datesMentioned\":[],\"attachmentsMentioned\":[],\"potentialActions\":[],\"potentialDeadlines\":[],\"potentialWitnesses\":[],\"potentialEvidence\":[],\"summary\":null} — use null (not a guess) for sender/subject/date/employeeName/summary you can't actually determine, and an empty array for anything the content doesn't mention.",
         messages:[{role:"user", content:rawText.slice(0,8000)}],
       })});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
-      const matchedCase = parsed.employeeName ? matchCaseByEmployeeName(cases, parsed.employeeName) : null;
-      setEmailExtraction({...parsed, rawText, matchedCaseId:matchedCase?.id||null});
+      const { case: matchedCase, confidence: matchConfidence } = parsed.employeeName
+        ? matchCaseByEmployeeNameWithConfidence(cases, parsed.employeeName)
+        : { case: null, confidence: "none" };
+      setEmailExtraction({...parsed, rawText, matchedCaseId:matchedCase?.id||null, matchConfidence});
     } catch(e) { console.error("extractEmailDetails", e); showToast("Couldn't read that email — "+e.message, "error"); }
     setEmailExtractionLoading(false);
   };
 
   const saveEmailToCase = (caseId) => {
     if(!emailExtraction) return;
-    const item = buildEmailEvidenceItem({sender:emailExtraction.sender, subject:emailExtraction.subject, date:emailExtraction.date, body:emailExtraction.rawText, addedBy:currentUser?.name||"HR Manager"});
+    const item = buildEmailEvidenceItem({
+      sender:emailExtraction.sender, subject:emailExtraction.subject, date:emailExtraction.date, body:emailExtraction.rawText, addedBy:currentUser?.name||"HR Manager",
+      recipients:emailExtraction.recipients, attachmentsMentioned:emailExtraction.attachmentsMentioned, employeesMentioned:emailExtraction.employeesMentioned,
+      caseReferences:emailExtraction.caseReferences, datesMentioned:emailExtraction.datesMentioned,
+    });
     saveCases(cases.map(x=>x.id===caseId?{...x, evidence:[...(x.evidence||[]), item]}:x), caseId);
     audit("Email saved to case", item.name, caseId);
     showToast("Email saved to the case's evidence");

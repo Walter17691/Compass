@@ -18,7 +18,11 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
   }, [mailConnected, inboxMessages, inboxLoading, onLoadInbox]);
 
   const matchedCase = extraction?.matchedCaseId ? cases.find(c => c.id === extraction.matchedCaseId) : null;
-  const targetCaseId = selectedCaseId || extraction?.matchedCaseId || '';
+  // IP9 — only pre-select the dropdown on a "high" (exact name) match;
+  // "medium" (substring — e.g. "Sarah" could be the wrong Sarah) is
+  // still shown as a suggestion but requires HR to actually pick it, not
+  // silently land on a guess that could be the wrong employee.
+  const targetCaseId = selectedCaseId || (extraction?.matchConfidence === "high" ? extraction?.matchedCaseId : "") || '';
 
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
@@ -82,15 +86,32 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
             <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Compass read this email as</div>
             <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,fontSize:13,color:"#1A1535"}}>
               {extraction.sender&&<div><strong>From:</strong> {extraction.sender}</div>}
+              {extraction.recipients?.length>0&&<div><strong>To:</strong> {extraction.recipients.join(", ")}</div>}
               {extraction.subject&&<div><strong>Subject:</strong> {extraction.subject}</div>}
               {extraction.date&&<div><strong>Date:</strong> {extraction.date}</div>}
               {extraction.employeeName&&<div><strong>About:</strong> {extraction.employeeName}</div>}
+              {extraction.employeesMentioned?.length>0&&<div><strong>Other employees mentioned:</strong> {extraction.employeesMentioned.join(", ")}</div>}
+              {extraction.caseReferences?.length>0&&<div><strong>Case references:</strong> {extraction.caseReferences.join(", ")}</div>}
+              {extraction.datesMentioned?.length>0&&<div><strong>Other dates mentioned:</strong> {extraction.datesMentioned.join(", ")}</div>}
+              {extraction.attachmentsMentioned?.length>0&&<div><strong>Attachments mentioned:</strong> {extraction.attachmentsMentioned.join(", ")}</div>}
               {extraction.summary&&<div style={{color:"#6B6375",marginTop:4}}>{extraction.summary}</div>}
               {!extraction.sender&&!extraction.subject&&!extraction.employeeName&&<div style={{color:"#9B9098"}}>Compass couldn't confidently extract details from this text — you can still file it to a case manually below.</div>}
             </div>
 
+            {(extraction.potentialActions?.length>0||extraction.potentialDeadlines?.length>0||extraction.potentialWitnesses?.length>0||extraction.potentialEvidence?.length>0)&&(
+              <div style={{background:"#FDFAF5",border:"1px solid #F0EAD8",borderRadius:8,padding:"10px 12px",marginBottom:16}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Worth reviewing once filed</div>
+                <div style={{display:"flex",flexDirection:"column",gap:3,fontSize:12,color:"#1A1535"}}>
+                  {extraction.potentialActions?.map((a,i)=><div key={"a"+i}>Action: {a}</div>)}
+                  {extraction.potentialDeadlines?.map((d,i)=><div key={"d"+i}>Deadline: {d}</div>)}
+                  {extraction.potentialWitnesses?.map((w,i)=><div key={"w"+i}>Witness: {w}</div>)}
+                  {extraction.potentialEvidence?.map((e,i)=><div key={"e"+i}>Evidence: {e}</div>)}
+                </div>
+              </div>
+            )}
+
             <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>
-              {matchedCase ? `Suggested case: ${matchedCase.employeeName}` : "Choose a case to file this under"}
+              {matchedCase ? `Suggested case: ${matchedCase.employeeName}${extraction.matchConfidence==="medium"?" (please confirm — not an exact name match)":""}` : "Choose a case to file this under"}
             </label>
             <select value={targetCaseId} onChange={e=>setSelectedCaseId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}>
               <option value="">Select a case…</option>

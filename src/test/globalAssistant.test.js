@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchCaseByEmployeeName } from '../lib/globalAssistant';
+import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from '../lib/globalAssistant';
 
 describe('matchCaseByEmployeeName', () => {
   const cases = [
@@ -32,5 +32,29 @@ describe('matchCaseByEmployeeName', () => {
 
   it('returns null when nothing matches at all', () => {
     expect(matchCaseByEmployeeName(cases, 'Nonexistent Person')).toBeNull();
+  });
+});
+
+describe('matchCaseByEmployeeNameWithConfidence (Phase 5, IP9)', () => {
+  const cases = [
+    { id: 'c1', employeeName: 'Sarah Jones' },
+    { id: 'c2', employeeName: 'Ryan Osei' },
+  ];
+
+  it('reports high confidence for an exact match', () => {
+    expect(matchCaseByEmployeeNameWithConfidence(cases, 'sarah jones')).toEqual({ case: cases[0], confidence: 'high' });
+  });
+
+  it('reports medium confidence for a substring match', () => {
+    expect(matchCaseByEmployeeNameWithConfidence(cases, 'Osei')).toEqual({ case: cases[1], confidence: 'medium' });
+  });
+
+  it('reports none confidence with a null case when nothing matches', () => {
+    expect(matchCaseByEmployeeNameWithConfidence(cases, 'Nonexistent Person')).toEqual({ case: null, confidence: 'none' });
+  });
+
+  it('reports none confidence for an empty/missing name without throwing', () => {
+    expect(matchCaseByEmployeeNameWithConfidence(cases, '')).toEqual({ case: null, confidence: 'none' });
+    expect(matchCaseByEmployeeNameWithConfidence(cases, null)).toEqual({ case: null, confidence: 'none' });
   });
 });
