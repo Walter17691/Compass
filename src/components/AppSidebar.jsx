@@ -20,7 +20,7 @@ const NavButton = ({s, l, indent, screen, goToScreen}) => (
 // out of sync between screens). Meetings/Tasks/Documents are already
 // real top-level destinations by this point (Phases 3/6), which is why
 // this phase — converting the nav shell itself — was sequenced last.
-export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR }) {
+export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, onOpenCommandBar }) {
   const [processesOpen, setProcessesOpen] = useState(true);
   const goToScreen = (s) => { setScreen(s); setShowMobileNav(false); };
   const activeCaseCount = cases.filter(x=>getCaseStage(x)!=="closed").length;
@@ -86,6 +86,12 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
           <button onClick={()=>goToScreen(SCREENS.SEARCH)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:screen===SCREENS.SEARCH?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SEARCH?"#7C5CFC":"#6B6375",padding:"9px 14px",borderRadius:8,fontSize:13,fontWeight:screen===SCREENS.SEARCH?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
             <SearchIcon/> Search
           </button>
+          {onOpenCommandBar&&(
+            <button onClick={onOpenCommandBar} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:"#6B6375",padding:"9px 14px",borderRadius:8,fontSize:13,fontWeight:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+              <span>Command Bar</span>
+              <span style={{fontSize:10,color:"#9B9098",border:"1px solid #E8E0D0",borderRadius:4,padding:"1px 5px"}}>⌘K</span>
+            </button>
+          )}
           <NavButton s={SCREENS.SETTINGS} l="Settings" screen={screen} goToScreen={goToScreen}/>
         </div>
       </nav>
@@ -115,6 +121,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
           </button>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {meetingType&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo?.employee||meetingType.label}</span>}
+            {onOpenCommandBar&&<button onClick={onOpenCommandBar} aria-label="Command Bar" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><SearchIcon size={14}/></button>}
             <ActivityBell auditLog={auditLog}/>
             <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
           </div>

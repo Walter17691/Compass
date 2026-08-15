@@ -49,6 +49,7 @@ import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } fro
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName } from './lib/globalAssistant';
+import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
 import { buildEmailEvidenceItem } from './lib/emailIngestion';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
@@ -99,6 +100,7 @@ const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({defau
 const CalendarScreen = lazy(() => import('./screens/CalendarScreen').then(m => ({default: m.CalendarScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { AskCompassWidget } from './screens/AskCompassWidget';
+import { CommandBarModal } from './screens/CommandBarModal';
 import { HandoffModal } from './screens/HandoffModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
 import { AssignInvestigatorModal } from './screens/AssignInvestigatorModal';
@@ -1411,6 +1413,66 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }
     setProcessing(false);
   };
+
+  // ── Command Bar (Phase 5, IP6, §25) ──
+  const [showCommandBar, setShowCommandBar] = useState(false);
+  const [commandBarInput, setCommandBarInput] = useState("");
+  const [commandBarProcessing, setCommandBarProcessing] = useState(false);
+  const [commandBarPlan, setCommandBarPlan] = useState(null);
+  const [commandBarError, setCommandBarError] = useState("");
+
+  // Cmd/Ctrl+K opens the Command Bar from anywhere in the app, same as
+  // most editors/tools' own command palette shortcut — Escape closes it,
+  // matching CommandBarModal's own backdrop-click-to-close behaviour.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k") {
+        e.preventDefault();
+        setShowCommandBar(v=>!v);
+      } else if(e.key==="Escape" && showCommandBar) {
+        setShowCommandBar(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showCommandBar]);
+
+  const closeCommandBar = () => {
+    setShowCommandBar(false);
+    setCommandBarInput(""); setCommandBarPlan(null); setCommandBarError(""); setCommandBarProcessing(false);
+  };
+
+  const submitCommandBarInstruction = async (instruction) => {
+    setCommandBarProcessing(true); setCommandBarError(""); setCommandBarPlan(null);
+    try {
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:500,
+        stream:false,
+        system:COMMAND_BAR_SYSTEM_PROMPT+`\n\nToday's date: ${new Date().toISOString().split("T")[0]}.`,
+        messages:[{role:"user", content:instruction}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      setCommandBarPlan(resolveCommandBarPlan(parsed, cases));
+    } catch(e) { console.error("Command Bar parse error:", e); setCommandBarError("Couldn't work out what to do — please try rephrasing."); }
+    setCommandBarProcessing(false);
+  };
+
+  const confirmCommandBarPlan = () => {
+    const resolved = (commandBarPlan?.actions||[]).filter(a=>a.resolved);
+    let taskCount = 0, openedCase = null;
+    for(const action of resolved) {
+      if(action.type==="create_task") { createCaseTask(action.caseId, {name:action.taskName, dueDate:action.dueDate||""}); taskCount++; }
+      else if(action.type==="open_case") { openedCase = action; }
+    }
+    if(openedCase) { setActiveCaseId(openedCase.caseId); setScreen(SCREENS.CASE_VIEW); }
+    const summary = [taskCount>0?`${taskCount} task${taskCount>1?"s":""} created`:null, openedCase?`opened ${openedCase.caseEmployeeName}'s case`:null].filter(Boolean).join(", ");
+    if(summary) showToast(summary.charAt(0).toUpperCase()+summary.slice(1));
+    closeCommandBar();
+  };
+
   const [bgDoc, setBgDoc] = useState(null); // {name, text}
 
   // ── Deadline reminders ──
@@ -6105,6 +6167,7 @@ Please produce:
         auditLog={auditLog}
         onSignOut={onSignOut}
         isHR={isHR}
+        onOpenCommandBar={()=>setShowCommandBar(true)}
       />
 
       {/* ── Content column — everything else (deadline banner through every
@@ -6755,6 +6818,19 @@ Please produce:
           setShowAskCompass={setShowAskCompass}
         />
       )}
+
+      {/* ── Command Bar (Cmd/Ctrl+K) ── */}
+      <CommandBarModal
+        show={showCommandBar}
+        onClose={closeCommandBar}
+        input={commandBarInput}
+        setInput={setCommandBarInput}
+        processing={commandBarProcessing}
+        plan={commandBarPlan}
+        error={commandBarError}
+        onSubmit={submitCommandBarInstruction}
+        onConfirm={confirmCommandBarPlan}
+      />
 
       {/* ── Ask Compass floating chat ── */}
       {screen===SCREENS.HOME&&(
