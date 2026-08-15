@@ -1,12 +1,30 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-// Integrations & Workflow Automation (Phase 5, IP6, §25) — Command Bar.
-// Centred palette (Cmd/Ctrl+K), unlike AskCompassWidget's corner-docked
-// chat bubble — this is a one-shot "type an instruction, review the
-// plan, confirm" flow, not an ongoing conversation, so it doesn't need
-// AskCompassWidget's persistent history/minimize shape.
+// Integrations & Workflow Automation (Phase 5, IP6/IP7, §25-26) — Command
+// Bar + multi-step workflows. Centred palette (Cmd/Ctrl+K), unlike
+// AskCompassWidget's corner-docked chat bubble — this is a one-shot
+// "type an instruction, review the plan, confirm" flow, not an ongoing
+// conversation, so it doesn't need AskCompassWidget's persistent
+// history/minimize shape.
+//
+// IP7 — a single instruction can resolve to several independent steps
+// (e.g. "create a task for Sarah Jones to review evidence and open James
+// Smith's case"); each one gets its own checkbox rather than an
+// all-or-nothing Confirm, so a plan that got one step half-right doesn't
+// have to be thrown away and retyped just to drop that one step.
 export function CommandBarModal({ show, onClose, input, setInput, processing, plan, error, onSubmit, onConfirm }) {
   const inputRef = useRef(null);
+  const [excludedIndices, setExcludedIndices] = useState(new Set());
+  // React's own recommended "reset state when a prop changes" pattern —
+  // adjusting state directly during render, guarded by a comparison —
+  // rather than a useEffect keyed on `plan`, which would setState
+  // synchronously inside an effect on every new plan and trip
+  // react-hooks/set-state-in-effect for no real benefit over this.
+  const [lastPlan, setLastPlan] = useState(plan);
+  if (plan !== lastPlan) {
+    setLastPlan(plan);
+    setExcludedIndices(new Set());
+  }
 
   useEffect(() => {
     if (show) inputRef.current?.focus();
@@ -16,6 +34,15 @@ export function CommandBarModal({ show, onClose, input, setInput, processing, pl
 
   const resolvedActions = (plan?.actions || []).filter(a => a.resolved);
   const unresolvedActions = (plan?.actions || []).filter(a => !a.resolved);
+  const selectedActions = resolvedActions.filter((_, i) => !excludedIndices.has(i));
+
+  const toggleStep = (i) => {
+    setExcludedIndices(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  };
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(26,21,53,0.35)",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:"12vh"}}>
@@ -35,10 +62,13 @@ export function CommandBarModal({ show, onClose, input, setInput, processing, pl
           <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:10}}>
             {resolvedActions.length > 0 && (
               <div>
-                <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Compass will</div>
+                <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Compass will{resolvedActions.length>1?" — each step below can be turned off":""}</div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {resolvedActions.map((a,i)=>(
-                    <div key={i} style={{fontSize:13,color:"#1A1535",background:"#F5F3FF",border:"1px solid #E8E0FF",borderRadius:8,padding:"8px 12px"}}>{a.summary}</div>
+                    <label key={i} style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:13,color:excludedIndices.has(i)?"#9B9098":"#1A1535",background:excludedIndices.has(i)?"#F5F1EA":"#F5F3FF",border:`1px solid ${excludedIndices.has(i)?"#E8E0D0":"#E8E0FF"}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",textDecoration:excludedIndices.has(i)?"line-through":"none"}}>
+                      <input type="checkbox" checked={!excludedIndices.has(i)} onChange={()=>toggleStep(i)} style={{marginTop:2,flexShrink:0,cursor:"pointer"}}/>
+                      <span>{a.summary}</span>
+                    </label>
                   ))}
                 </div>
               </div>
@@ -53,7 +83,7 @@ export function CommandBarModal({ show, onClose, input, setInput, processing, pl
             {resolvedActions.length > 0 && (
               <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:2}}>
                 <button type="button" onClick={onClose} style={{fontSize:12,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
-                <button type="button" onClick={onConfirm} style={{fontSize:12,fontWeight:600,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Confirm</button>
+                <button type="button" disabled={selectedActions.length===0} onClick={()=>onConfirm(selectedActions)} style={{fontSize:12,fontWeight:600,color:"#fff",background:selectedActions.length===0?"#C4B8F8":"#7C5CFC",border:"none",borderRadius:8,padding:"7px 14px",cursor:selectedActions.length===0?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{resolvedActions.length>1?`Confirm ${selectedActions.length} of ${resolvedActions.length}`:"Confirm"}</button>
               </div>
             )}
           </div>

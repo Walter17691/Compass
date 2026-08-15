@@ -1460,10 +1460,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setCommandBarProcessing(false);
   };
 
-  const confirmCommandBarPlan = () => {
-    const resolved = (commandBarPlan?.actions||[]).filter(a=>a.resolved);
+  // IP7 — takes exactly the steps CommandBarModal's own per-step
+  // checkboxes left selected, not the full resolved plan (commandBarPlan
+  // itself never learns which steps the user deselected — that's local,
+  // ephemeral UI state the modal manages and hands back only at confirm
+  // time, the same "just an entry point onto existing ones" reasoning
+  // IP6 already applied to the two action types themselves).
+  const confirmCommandBarPlan = (selectedActions) => {
     let taskCount = 0, openedCase = null;
-    for(const action of resolved) {
+    for(const action of selectedActions) {
       if(action.type==="create_task") { createCaseTask(action.caseId, {name:action.taskName, dueDate:action.dueDate||""}); taskCount++; }
       else if(action.type==="open_case") { openedCase = action; }
     }

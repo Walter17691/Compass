@@ -27,17 +27,48 @@ describe('CommandBarModal', () => {
     expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
   });
 
-  it('renders resolved actions with a Confirm button that calls onConfirm', async () => {
+  it('renders a single resolved action with a Confirm button that calls onConfirm with that action', async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
+    const action = { resolved: true, summary: 'Create task "Chase evidence" on Sarah Jones\'s case.' };
     render(<CommandBarModal show input="x" setInput={()=>{}} onConfirm={onConfirm} plan={{
-      actions: [{ resolved: true, summary: 'Create task "Chase evidence" on Sarah Jones\'s case.' }],
+      actions: [action],
       clarification: null,
     }} />);
     expect(screen.getByText('Compass will')).toBeInTheDocument();
     expect(screen.getByText('Create task "Chase evidence" on Sarah Jones\'s case.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
-    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledWith([action]);
+  });
+
+  it('IP7 — lets an individual step be deselected before confirming a multi-step plan', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const stepA = { resolved: true, summary: 'Create task "Chase evidence" on Sarah Jones\'s case.' };
+    const stepB = { resolved: true, summary: "Open James Smith's case." };
+    render(<CommandBarModal show input="x" setInput={()=>{}} onConfirm={onConfirm} plan={{
+      actions: [stepA, stepB],
+      clarification: null,
+    }} />);
+    expect(screen.getByRole('button', { name: 'Confirm 2 of 2' })).toBeInTheDocument();
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(2);
+    await user.click(checkboxes[1]);
+    expect(screen.getByRole('button', { name: 'Confirm 1 of 2' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm 1 of 2' }));
+    expect(onConfirm).toHaveBeenCalledWith([stepA]);
+  });
+
+  it('IP7 — disables Confirm once every step has been deselected', async () => {
+    const user = userEvent.setup();
+    render(<CommandBarModal show input="x" setInput={()=>{}} onConfirm={()=>{}} plan={{
+      actions: [{ resolved: true, summary: 'Create task "Chase evidence" on Sarah Jones\'s case.' }],
+      clarification: null,
+    }} />);
+    await user.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
   });
 
   it('shows unresolved actions without a Confirm button when nothing resolved', () => {
