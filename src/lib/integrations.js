@@ -26,21 +26,23 @@ export const INTEGRATION_CATALOG = [
   { id: "document_storage", label: "Cloud document storage", category: "Documents" },
 ];
 
-// Only four catalog entries have any real, working connection today:
-// outlook_mail/google_calendar are per-user delegated OAuth (App.jsx's
-// own connectOutlookMail/connectGoogleCalendar, built in an earlier
-// phase); slack/teams is the existing org-wide incoming-webhook config
-// (NotificationsSection.jsx's orgWebhookUrl/orgWebhookType) — a single
-// destination, not two independent connections, so connecting one
-// always means the other reads Not Connected. Every other entry is a
-// stub: Requires Administrator, with `notYetAvailable: true` so the UI
-// can say so honestly rather than implying an admin could act on it
-// today (per the spec's own "do not hard-code integrations that do not
-// yet have working APIs").
-export function computeIntegrationStatuses({ mailConnected, mailboxEmail, calendarConnected, orgWebhookUrl, orgWebhookType } = {}) {
+// Five catalog entries have a real, working connection today: outlook_mail/
+// gmail/google_calendar are per-user delegated OAuth (App.jsx's own
+// connectOutlookMail/connectGmail/connectGoogleCalendar); slack/teams is
+// the existing org-wide incoming-webhook config (NotificationsSection.jsx's
+// orgWebhookUrl/orgWebhookType) — a single destination, not two independent
+// connections, so connecting one always means the other reads Not
+// Connected. Every other entry is a stub: Requires Administrator, with
+// `notYetAvailable: true` so the UI can say so honestly rather than
+// implying an admin could act on it today (per the spec's own "do not
+// hard-code integrations that do not yet have working APIs").
+export function computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, orgWebhookUrl, orgWebhookType } = {}) {
   return INTEGRATION_CATALOG.map(entry => {
     if (entry.id === "outlook_mail") {
       return { ...entry, status: mailConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: mailConnected ? mailboxEmail : null, lastSync: null };
+    }
+    if (entry.id === "gmail") {
+      return { ...entry, status: gmailConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: gmailConnected ? gmailboxEmail : null, lastSync: null };
     }
     if (entry.id === "google_calendar") {
       return { ...entry, status: calendarConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: calendarConnected ? "Deadlines sync automatically" : null, lastSync: null };

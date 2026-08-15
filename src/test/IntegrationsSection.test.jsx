@@ -33,6 +33,26 @@ describe('IntegrationsSection', () => {
     expect(onConnectMail).toHaveBeenCalledTimes(1);
   });
 
+  it('shows Gmail as connected with the mailbox, and calls disconnectGmail', async () => {
+    const user = userEvent.setup();
+    const disconnectGmail = vi.fn();
+    render(<IntegrationsSection gmailConnected gmailboxEmail="hr@gmail.com" disconnectGmail={disconnectGmail} />);
+    expect(screen.getByText('hr@gmail.com')).toBeInTheDocument();
+    const gmailRow = screen.getByText('Gmail').closest('div').parentElement.parentElement;
+    expect(gmailRow).toHaveTextContent('Connected');
+    await user.click(within(gmailRow).getByRole('button', { name: 'Disconnect' }));
+    expect(disconnectGmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Connect for Gmail when not connected, and calls connectGmail', async () => {
+    const user = userEvent.setup();
+    const connectGmail = vi.fn();
+    render(<IntegrationsSection connectGmail={connectGmail} />);
+    const gmailRow = screen.getByText('Gmail').closest('div').parentElement.parentElement;
+    await user.click(within(gmailRow).getByRole('button', { name: 'Connect' }));
+    expect(connectGmail).toHaveBeenCalledTimes(1);
+  });
+
   it('shows Google Calendar as connected and calls disconnectGoogleCalendar', async () => {
     const user = userEvent.setup();
     const disconnectGoogleCalendar = vi.fn();

@@ -27,6 +27,20 @@ describe('computeIntegrationStatuses', () => {
     expect(cal.status).toBe(INTEGRATION_STATUS.CONNECTED);
   });
 
+  it('marks Gmail connected with the mailbox as detail when gmailConnected is true', () => {
+    const rows = computeIntegrationStatuses({ gmailConnected: true, gmailboxEmail: 'hr@gmail.com' });
+    const gmail = rows.find(r => r.id === 'gmail');
+    expect(gmail.status).toBe(INTEGRATION_STATUS.CONNECTED);
+    expect(gmail.detail).toBe('hr@gmail.com');
+  });
+
+  it('marks Gmail not connected when gmailConnected is false', () => {
+    const rows = computeIntegrationStatuses({ gmailConnected: false });
+    const gmail = rows.find(r => r.id === 'gmail');
+    expect(gmail.status).toBe(INTEGRATION_STATUS.NOT_CONNECTED);
+    expect(gmail.detail).toBeNull();
+  });
+
   it('marks Slack connected only when the org webhook type is slack', () => {
     const rows = computeIntegrationStatuses({ orgWebhookUrl: 'https://hooks.slack.com/x', orgWebhookType: 'slack' });
     expect(rows.find(r => r.id === 'slack').status).toBe(INTEGRATION_STATUS.CONNECTED);
@@ -47,7 +61,7 @@ describe('computeIntegrationStatuses', () => {
 
   it('marks every stub integration as requires_admin and flags it not yet available', () => {
     const rows = computeIntegrationStatuses({});
-    const stubIds = ['gmail', 'ms365_calendar', 'hris', 'occupational_health', 'esignature', 'document_storage'];
+    const stubIds = ['ms365_calendar', 'hris', 'occupational_health', 'esignature', 'document_storage'];
     stubIds.forEach(id => {
       const row = rows.find(r => r.id === id);
       expect(row.status).toBe(INTEGRATION_STATUS.REQUIRES_ADMIN);
@@ -56,8 +70,8 @@ describe('computeIntegrationStatuses', () => {
   });
 
   it('never marks a real integration as notYetAvailable', () => {
-    const rows = computeIntegrationStatuses({ mailConnected: true, calendarConnected: true, orgWebhookUrl: 'x', orgWebhookType: 'slack' });
-    ['outlook_mail', 'google_calendar', 'slack', 'teams'].forEach(id => {
+    const rows = computeIntegrationStatuses({ mailConnected: true, gmailConnected: true, calendarConnected: true, orgWebhookUrl: 'x', orgWebhookType: 'slack' });
+    ['outlook_mail', 'gmail', 'google_calendar', 'slack', 'teams'].forEach(id => {
       expect(rows.find(r => r.id === id).notYetAvailable).toBeUndefined();
     });
   });

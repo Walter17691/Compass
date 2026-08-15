@@ -3860,6 +3860,50 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } catch(e) { showToast("Couldn't read that email", "error"); }
   };
 
+  // ── Gmail connection (Phase 5, IP2) ──
+  // Same delegated-OAuth shape as Outlook mail above, sharing its
+  // graph_mail_connections row (provider:'google') and its
+  // api/graph-mail/[...action].js router (gmail-* actions) rather than a
+  // parallel table/router — see api/graph-mail/_gmail.js's own comment on
+  // why. Read-only connector only in this phase — no inbox browsing yet,
+  // that's a later Track B phase extending the same pattern
+  // loadInboxMessages/pickInboxMessage already establish for Outlook.
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailboxEmail, setGmailboxEmail] = useState(null);
+  useEffect(() => {
+    if(!user?.id) return;
+    authedFetch(`/api/graph-mail/gmail-status`)
+      .then(r=>r.json()).then(d=>{ setGmailConnected(!!d.connected); setGmailboxEmail(d.mailbox||null); }).catch(()=>{});
+  }, [user?.id]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gmailParam = params.get("gmail");
+    if(!gmailParam) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- same one-time, query-param-driven sync on mount as the identical mailParam/calendarParam effects above, neither of which the rule flags (it only catches some setState calls in this shape, not the equivalent ones elsewhere in this file, for reasons the rule's own message doesn't explain).
+    if(gmailParam==="connected") { setGmailConnected(true); showToast("Gmail connected"); }
+    else if(gmailParam==="error") { showToast("Couldn't connect Gmail — please try again"); }
+    params.delete("gmail");
+    const newUrl = window.location.pathname + (params.toString()?"?"+params.toString():"");
+    window.history.replaceState({}, "", newUrl);
+  }, []);
+  const connectGmail = async () => {
+    if(!user?.id || !org?.id) return;
+    try {
+      const res = await authedFetch(`/api/graph-mail/gmail-oauth-start?orgId=${encodeURIComponent(org.id)}`);
+      const data = await res.json();
+      if(data.url) window.location.href = data.url;
+      else showToast(data.error||"Couldn't start Gmail connection", "error");
+    } catch { showToast("Couldn't start Gmail connection", "error"); }
+  };
+  const disconnectGmail = async () => {
+    if(!user?.id) return;
+    try {
+      await authedFetch("/api/graph-mail/gmail-disconnect", { method: "POST", headers: {"Content-Type":"application/json"} });
+      setGmailConnected(false); setGmailboxEmail(null);
+      showToast("Gmail disconnected");
+    } catch { showToast("Couldn't disconnect — please try again"); }
+  };
+
   // ── Case Chronology overrides ──
   // buildCaseTimeline() (lib/caseTimeline.js) is still the single source
   // of the merge; these three just write to the case's own
@@ -6507,6 +6551,10 @@ Please produce:
           mailboxEmail={mailboxEmail}
           onConnectMail={connectOutlookMail}
           onDisconnectMail={disconnectOutlookMail}
+          gmailConnected={gmailConnected}
+          gmailboxEmail={gmailboxEmail}
+          connectGmail={connectGmail}
+          disconnectGmail={disconnectGmail}
           calendarConnected={calendarConnected}
           connectGoogleCalendar={connectGoogleCalendar}
           disconnectGoogleCalendar={disconnectGoogleCalendar}

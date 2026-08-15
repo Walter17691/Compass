@@ -17,14 +17,19 @@ const STATUS_COLOR = {
 // disconnect handlers (connectOutlookMail etc.) — this is the new
 // canonical home for their status, not a second implementation of the
 // OAuth flow already wired into SaveEmailScreen/HomeScreen.
-export function IntegrationsSection({ mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, orgWebhookUrl, orgWebhookType, onManageNotifications }) {
-  const rows = computeIntegrationStatuses({ mailConnected, mailboxEmail, calendarConnected, orgWebhookUrl, orgWebhookType });
+export function IntegrationsSection({ mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, orgWebhookUrl, orgWebhookType, onManageNotifications }) {
+  const rows = computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, orgWebhookUrl, orgWebhookType });
 
   const actionFor = (row) => {
     if (row.id === "outlook_mail") {
       return row.status === INTEGRATION_STATUS.CONNECTED
         ? <Btn variant="ghost" onClick={onDisconnectMail}>Disconnect</Btn>
         : <Btn variant="secondary" onClick={onConnectMail}>Connect</Btn>;
+    }
+    if (row.id === "gmail") {
+      return row.status === INTEGRATION_STATUS.CONNECTED
+        ? <Btn variant="ghost" onClick={disconnectGmail}>Disconnect</Btn>
+        : <Btn variant="secondary" onClick={connectGmail}>Connect</Btn>;
     }
     if (row.id === "google_calendar") {
       return row.status === INTEGRATION_STATUS.CONNECTED

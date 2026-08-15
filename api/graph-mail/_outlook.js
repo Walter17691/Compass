@@ -3,7 +3,15 @@ import { supabaseRequest } from '../_supabase.js';
 // Microsoft Graph's mail scope needs an offline-capable refresh alongside
 // Mail.Read, or the connection would silently stop working after the
 // short-lived access token expires (~1 hour) with no way to renew it.
-export const GRAPH_SCOPE = 'openid profile offline_access https://graph.microsoft.com/Mail.Read';
+// Mail.Send added for Integrations & Workflow Automation (Phase 5, IP2) —
+// needed by the later send-from-Compass phase (Track B). A user who
+// connected before this change holds a token scoped to Mail.Read only;
+// Microsoft doesn't retroactively grant a wider scope to an existing
+// token, so they'll need to reconnect (oauth-start again, same
+// prompt:'consent') before a send actually works. No send capability is
+// wired up yet in this phase — this only widens what the NEXT consent
+// grants.
+export const GRAPH_SCOPE = 'openid profile offline_access https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send';
 
 // Refreshes the access token if it's expired (or about to, within 60s),
 // mirroring api/calendar/_google.js's getValidAccessToken. Microsoft
