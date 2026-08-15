@@ -59,6 +59,12 @@ export function buildEmailEvidenceItem({ sender, subject, date, body, addedBy, r
     record: lines,
     dataUrl: `data:text/plain;base64,${toBase64(lines)}`,
     size: new Blob([lines]).size,
+    // Integrations & Workflow Automation (Phase 5, IP11, §4) — the one
+    // marker that distinguishes "this evidence item came from an email"
+    // from any other text/plain evidence (a plain uploaded .txt file has
+    // the same type but no source) — lib/caseTimeline.js reads this to
+    // give a saved email its own dedicated timeline entry.
+    source: "email",
   };
 }
 

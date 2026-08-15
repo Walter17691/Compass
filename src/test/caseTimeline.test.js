@@ -109,4 +109,23 @@ describe('buildCaseTimeline', () => {
     const result = buildCaseTimeline(baseCase, [], []);
     expect(result[0].relevance).toBeNull();
   });
+
+  it('IP11 — gives a saved email its own dedicated timeline entry linking back to the Evidence tab', () => {
+    const cs = { ...baseCase, evidence: [
+      { name: 'Email: Following up', date: '2026-08-03', addedBy: 'Jo', source: 'email' },
+      { name: 'CCTV clip', date: '2026-08-03', addedBy: 'Jo' },
+    ] };
+    const result = buildCaseTimeline(cs, [], []);
+    const emailEntries = result.filter(e => e.type === 'email');
+    expect(emailEntries).toHaveLength(1);
+    expect(emailEntries[0]).toMatchObject({ description: 'Email saved: Email: Following up', actor: 'Jo', linkTo: { kind: 'evidence', id: 0 } });
+  });
+
+  it('IP11 — excludes "Email saved to case" audit entries so a saved email never shows twice', () => {
+    const cs = { ...baseCase, evidence: [{ name: 'Email: Following up', date: '2026-08-03', addedBy: 'Jo', source: 'email' }] };
+    const auditLog = [{ ts: '2026-08-03', user: 'Jo', action: 'Email saved to case', detail: 'Email: Following up', caseId: 'case1' }];
+    const result = buildCaseTimeline(cs, [], auditLog);
+    expect(result.filter(e => e.type === 'audit')).toHaveLength(0);
+    expect(result.filter(e => e.type === 'email')).toHaveLength(1);
+  });
 });

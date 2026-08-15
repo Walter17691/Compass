@@ -12,6 +12,12 @@
 // whose action starts with "Allegation" are excluded from the audit
 // source below to avoid showing the same moment twice.
 //
+// Integrations & Workflow Automation (Phase 5, IP11, §4) — a saved email
+// (evidence.source === "email", see lib/emailIngestion.js) gets the same
+// treatment: a dedicated "email" entry read from cs.evidence itself,
+// with a real linkTo back to the Evidence tab, so "Email saved to case"
+// audit_log entries are excluded here too rather than showing twice.
+//
 // Phase 8 adds: a stable `key` per entry (so overrides survive a
 // regenerated timeline), `allegationId` where an entry is genuinely tied
 // to one specific allegation (only the allegation source itself — a
@@ -52,8 +58,13 @@ function rawEntries(cs, allegations, auditLog) {
     entries.push({ key: `allegation-${a.id}`, date: a.createdAt, type: "allegation", description: `Allegation added: ${a.title}`, actor: null, linkTo: { kind: "allegation", id: a.id }, allegationId: a.id });
   });
 
+  (cs.evidence || []).forEach((ev, index) => {
+    if (ev.source !== "email") return;
+    entries.push({ key: `evidence-email-${index}`, date: ev.date, type: "email", description: `Email saved: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: index }, allegationId: null });
+  });
+
   (auditLog || [])
-    .filter(e => e.caseId === cs.id && !(e.action || "").startsWith("Allegation"))
+    .filter(e => e.caseId === cs.id && !(e.action || "").startsWith("Allegation") && e.action !== "Email saved to case")
     .forEach((e, i) => {
       entries.push({ key: `audit-${e.ts}-${i}`, date: e.ts, type: "audit", description: e.detail ? `${e.action} — ${e.detail}` : e.action, actor: e.user || null, linkTo: null, allegationId: null });
     });

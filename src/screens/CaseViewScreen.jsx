@@ -173,6 +173,7 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
     else if(linkTo.kind==="allegation") setActiveTab("allegations");
     else if(linkTo.kind==="letter"||linkTo.kind==="report") setActiveTab("documents");
     else if(linkTo.kind==="outcome") setActiveTab("outcome");
+    else if(linkTo.kind==="evidence") setActiveTab("evidence");
   };
 
   const resolveSignalRef = (ref) => {
