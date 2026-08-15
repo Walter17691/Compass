@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MEETING_TYPES } from '../constants';
 
 // Process Intelligence (P16, §5) — the same computeDueSoon output the
 // overdue banner/Settings list/digest cron already read (lib/deadlines.js),
@@ -18,9 +19,68 @@ const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 function daysInMonth(d) { return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); }
 
-export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCaseId, setActiveCaseStage }) {
+const EMPTY_SCHEDULE_FORM = { caseId: "", meetingType: "investigation", date: "", startTime: "", durationMinutes: 60, attendees: "", description: "" };
+
+// Integrations & Workflow Automation (Phase 5, IP15, §9) — real
+// scheduling, calling IP3's create-event primitive on every calendar the
+// user has connected (App.jsx's scheduleMeeting). Every MEETING_TYPES
+// entry is selectable, not a narrowed subset.
+function ScheduleMeetingModal({ cases, onClose, onSubmit, scheduling }) {
+  const [form, setForm] = useState(EMPTY_SCHEDULE_FORM);
+  const canSubmit = form.date && form.startTime && !scheduling;
+
+  return (
+    <div role="dialog" aria-modal="true" onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(26,21,53,0.35)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:24,width:"100%",maxWidth:460,boxSizing:"border-box"}}>
+        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 16px",fontWeight:400}}>Schedule a meeting</h3>
+
+        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Case (optional)</label>
+        <select value={form.caseId} onChange={e=>setForm(f=>({...f,caseId:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}>
+          <option value="">No linked case</option>
+          {cases.map(c=><option key={c.id} value={c.id}>{c.employeeName} — {c.caseType||"HR matter"}</option>)}
+        </select>
+
+        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Meeting type</label>
+        <select value={form.meetingType} onChange={e=>setForm(f=>({...f,meetingType:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}>
+          {MEETING_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+
+        <div style={{display:"flex",gap:10,marginBottom:12}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Date</label>
+            <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Start time</label>
+            <input type="time" value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}/>
+          </div>
+          <div style={{width:110}}>
+            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Duration</label>
+            <select value={form.durationMinutes} onChange={e=>setForm(f=>({...f,durationMinutes:Number(e.target.value)}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}>
+              {[15,30,45,60,90,120].map(m=><option key={m} value={m}>{m} min</option>)}
+            </select>
+          </div>
+        </div>
+
+        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Attendees (optional)</label>
+        <input value={form.attendees} onChange={e=>setForm(f=>({...f,attendees:e.target.value}))} placeholder="sarah@company.com, rep@union.org" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}/>
+
+        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Description (optional)</label>
+        <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:16,resize:"vertical",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={async()=>{ if(await onSubmit(form)) onClose(); }} disabled={!canSubmit} style={{flex:1,fontSize:13,background:!canSubmit?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"10px 18px",color:"#fff",fontWeight:600,cursor:!canSubmit?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{scheduling?"Scheduling…":"Schedule"}</button>
+          <button onClick={onClose} style={{flex:1,fontSize:13,background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 18px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCaseId, setActiveCaseStage, cases = [], onScheduleMeeting, meetingScheduling }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   const today = new Date();
   const viewMonth = new Date(today.getFullYear(), today.getMonth()+monthOffset, 1);
@@ -54,8 +114,13 @@ export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCase
           <button onClick={()=>setMonthOffset(m=>m-1)} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>←</button>
           <div style={{fontSize:14,fontWeight:600,color:"#1A1535",minWidth:140,textAlign:"center"}}>{viewMonth.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</div>
           <button onClick={()=>setMonthOffset(m=>m+1)} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>→</button>
+          {onScheduleMeeting&&<button onClick={()=>setShowScheduleModal(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Schedule meeting</button>}
         </div>
       </div>
+
+      {showScheduleModal&&(
+        <ScheduleMeetingModal cases={cases} onClose={()=>setShowScheduleModal(false)} onSubmit={onScheduleMeeting} scheduling={meetingScheduling}/>
+      )}
 
       <div style={{maxWidth:900,margin:"0 auto",padding:"28px 24px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1,background:"#E8E0D0",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>

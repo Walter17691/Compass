@@ -53,6 +53,7 @@ import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandB
 import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
 import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLetterSubject, matchReplyToSentLetters } from './lib/letterSend';
+import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -1889,6 +1890,34 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       setMs365CalendarConnected(false);
       showToast("Microsoft 365 Calendar disconnected");
     } catch { showToast("Couldn't disconnect — please try again"); }
+  };
+
+  // Integrations & Workflow Automation (Phase 5, IP15, §9) — the real
+  // scheduling UI calling IP3's create-event primitive
+  // (api/calendar/_create-event.js) on every calendar the user has
+  // connected. Deliberately does NOT auto-create the case's own meeting
+  // record/agenda yet — that's IP17's "automatic meeting workspace",
+  // layered on top of this once it exists; this phase is just "put it on
+  // the calendar."
+  const [meetingScheduling, setMeetingScheduling] = useState(false);
+  const scheduleMeeting = async ({ caseId, meetingType, date, startTime, durationMinutes, attendees, description }) => {
+    const times = buildEventTimes({ date, startTime, durationMinutes });
+    if(!times) { showToast("Enter a valid date and time", "error"); return false; }
+    const cs = cases.find(x=>x.id===caseId);
+    const meetingLabel = MEETING_TYPES.find(t=>t.id===meetingType)?.label || "Meeting";
+    const title = `${meetingLabel}${cs?" — "+cs.employeeName:""}`;
+    setMeetingScheduling(true);
+    try {
+      const res = await authedFetch("/api/calendar/create-event", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        title, description: description||"", startISO: times.startISO, endISO: times.endISO, attendees: parseAttendees(attendees),
+      })});
+      const data = await res.json();
+      if(!res.ok || !data.success) { showToast(data.error||"Couldn't schedule the meeting", "error"); setMeetingScheduling(false); return false; }
+      audit("Meeting scheduled", title, caseId||null);
+      showToast("Meeting scheduled on your calendar");
+      setMeetingScheduling(false);
+      return true;
+    } catch(e) { showToast("Couldn't schedule the meeting — "+e.message, "error"); setMeetingScheduling(false); return false; }
   };
 
   // ── Browser notifications ──
@@ -7060,6 +7089,9 @@ Please produce:
           screens={SCREENS}
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
+          cases={cases}
+          onScheduleMeeting={scheduleMeeting}
+          meetingScheduling={meetingScheduling}
         />
       )}
       </Suspense>
