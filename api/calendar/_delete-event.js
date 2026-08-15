@@ -1,6 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
-import { providerAdapter, freshAccessToken } from './_providers.js';
+import { providerAdapter, freshAccessToken, INTEGRATION_EVENT_PROVIDER } from './_providers.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 export async function deleteEvent(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -24,9 +25,12 @@ export async function deleteEvent(req, res) {
     // surfacing, since the caller's own intent (this event should no
     // longer exist) is already satisfied either way.
     if (!delRes.ok && delRes.status !== 404) {
-      console.error(`${provider} delete-event failed:`, await delRes.text());
+      const failureText = await delRes.text();
+      console.error(`${provider} delete-event failed:`, failureText);
+      await logIntegrationEvent({ orgId: connection.org_id, userId: caller.id, provider: INTEGRATION_EVENT_PROVIDER[provider], eventType: 'delete_event', status: 'error', detail: failureText });
       return res.status(502).json({ error: "Couldn't delete the calendar event" });
     }
+    await logIntegrationEvent({ orgId: connection.org_id, userId: caller.id, provider: INTEGRATION_EVENT_PROVIDER[provider], eventType: 'delete_event', status: 'success' });
     res.status(200).json({ success: true });
   } catch (e) {
     console.error('delete-event error:', e.message);

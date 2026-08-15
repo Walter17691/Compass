@@ -1,5 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 // No calendar_synced_events cleanup here, unlike Google Calendar's own
 // _disconnect.js — that table is only ever populated by _sync.js's
@@ -15,7 +16,10 @@ export async function ms365Disconnect(req, res) {
   const userId = caller.id;
 
   try {
+    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&provider=eq.microsoft&select=org_id`);
+    const connections = await connRes.json();
     await supabaseRequest(`calendar_connections?user_id=eq.${userId}&provider=eq.microsoft`, { method: 'DELETE' });
+    if (connections[0]) await logIntegrationEvent({ orgId: connections[0].org_id, userId, provider: 'ms365_calendar', eventType: 'disconnect', status: 'success' });
     res.status(200).json({ success: true });
   } catch (e) {
     console.error('MS365 calendar disconnect error:', e.message);

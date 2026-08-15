@@ -242,6 +242,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     return () => window.removeEventListener('focus', onFocus);
   }, [org?.id]);
 
+  // ── Integration health (Phase 5, IP4 — see integration_events_2026-08-15.sql) ──
+  // HR-only, same reasoning as loadWellbeingNotes: org-wide integration
+  // health is an admin concern, not something every member connecting
+  // their own mailbox needs to see. Declared here (rather than nearer the
+  // OAuth connection state further down) so it's already defined by the
+  // time the isHR-gated load effect below references it.
+  const [integrationEvents, setIntegrationEvents] = useState([]);
+  const loadIntegrationEvents = async () => {
+    if(!org?.id) return;
+    try {
+      const { data, error } = await supabase.from('integration_events').select('*').eq('org_id', org.id).order('created_at',{ascending:false}).limit(500);
+      if(!error && data) setIntegrationEvents(data);
+    } catch(e) { console.error("Load integration events error:", e); }
+  };
+
   // ── Search ──
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -1267,7 +1282,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); } } }, [org?.id, isHR, user?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -6606,6 +6621,7 @@ Please produce:
           ms365CalendarConnected={ms365CalendarConnected}
           connectMs365Calendar={connectMs365Calendar}
           disconnectMs365Calendar={disconnectMs365Calendar}
+          integrationEvents={integrationEvents}
           initialSection={settingsSection}
           clearInitialSection={()=>setSettingsSection(null)}
           org={org}

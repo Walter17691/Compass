@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { verifyState } from './_state.js';
 import { supabaseRequest } from './_supabase.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -52,6 +53,7 @@ export async function ms365OauthCallback(req, res) {
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok || !tokenData.refresh_token) {
       console.error('MS365 calendar token exchange failed:', tokenData);
+      await logIntegrationEvent({ orgId: payload.orgId, userId: payload.userId, provider: 'ms365_calendar', eventType: 'connect', status: 'error', detail: 'Token exchange failed' });
       return res.redirect(302, `${APP_URL}/?ms365calendar=error`);
     }
 
@@ -72,9 +74,11 @@ export async function ms365OauthCallback(req, res) {
     });
     if (!upsertRes.ok) {
       console.error('calendar_connections (microsoft) upsert failed:', await upsertRes.text());
+      await logIntegrationEvent({ orgId: payload.orgId, userId: payload.userId, provider: 'ms365_calendar', eventType: 'connect', status: 'error', detail: 'Failed to save the connection' });
       return res.redirect(302, `${APP_URL}/?ms365calendar=error`);
     }
 
+    await logIntegrationEvent({ orgId: payload.orgId, userId: payload.userId, provider: 'ms365_calendar', eventType: 'connect', status: 'success' });
     res.redirect(302, `${APP_URL}/?ms365calendar=connected`);
   } catch (e) {
     console.error('MS365 calendar OAuth callback error:', e.message);

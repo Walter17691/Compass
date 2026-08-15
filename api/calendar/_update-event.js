@@ -1,6 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
-import { providerAdapter, freshAccessToken } from './_providers.js';
+import { providerAdapter, freshAccessToken, INTEGRATION_EVENT_PROVIDER } from './_providers.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 // Unlike createEvent (which fires on every connected calendar at once),
 // update/delete act on one specific {provider, eventId} pair — the
@@ -26,9 +27,12 @@ export async function updateEvent(req, res) {
     const event = adapter.buildEvent({ title, description, startISO, endISO, attendees });
     const updateRes = await adapter.request(accessToken, `${adapter.eventsPath}/${eventId}`, { method: adapter.updateMethod, body: JSON.stringify(event) });
     if (!updateRes.ok) {
-      console.error(`${provider} update-event failed:`, await updateRes.text());
+      const failureText = await updateRes.text();
+      console.error(`${provider} update-event failed:`, failureText);
+      await logIntegrationEvent({ orgId: connection.org_id, userId: caller.id, provider: INTEGRATION_EVENT_PROVIDER[provider], eventType: 'update_event', status: 'error', detail: failureText });
       return res.status(502).json({ error: "Couldn't update the calendar event" });
     }
+    await logIntegrationEvent({ orgId: connection.org_id, userId: caller.id, provider: INTEGRATION_EVENT_PROVIDER[provider], eventType: 'update_event', status: 'success', detail: title });
     res.status(200).json({ success: true });
   } catch (e) {
     console.error('update-event error:', e.message);

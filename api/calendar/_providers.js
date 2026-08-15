@@ -20,6 +20,14 @@ export function providerAdapter(provider) {
   return adapter;
 }
 
+// calendar_connections.provider ('google'/'microsoft') vs.
+// integration_events.provider ('google_calendar'/'ms365_calendar') are
+// deliberately different vocabularies — the former is this table's own
+// long-standing column, the latter matches the Integration Centre's
+// catalog ids (src/lib/integrations.js) so events line up with the rows
+// they're reported against.
+export const INTEGRATION_EVENT_PROVIDER = { google: 'google_calendar', microsoft: 'ms365_calendar' };
+
 // Refreshes a connection's access token if needed and persists the
 // refresh (and rotated refresh token, when the provider issues one),
 // returning just the token — every create/update/delete handler needs

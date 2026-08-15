@@ -1,6 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { getValidAccessToken, googleCalendarRequest } from './_google.js';
 import { verifyCaller } from '../_auth.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 export async function disconnect(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -31,6 +32,7 @@ export async function disconnect(req, res) {
     await supabaseRequest(`calendar_connections?id=eq.${connection.id}`, { method: 'DELETE' });
     // calendar_synced_events rows cascade-delete via the FK constraint.
 
+    await logIntegrationEvent({ orgId: connection.org_id, userId, provider: 'google_calendar', eventType: 'disconnect', status: 'success' });
     res.status(200).json({ success: true });
   } catch (e) {
     console.error('Calendar disconnect error:', e.message);

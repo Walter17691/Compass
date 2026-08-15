@@ -1,6 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { getValidAccessToken, googleCalendarRequest, deadlineToGoogleEvent } from './_google.js';
 import { verifyCaller } from '../_auth.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 export async function sync(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -14,10 +15,14 @@ export async function sync(req, res) {
     return res.status(400).json({ error: 'deadlines[] is required' });
   }
 
+  // Declared here (rather than inside the try block) so the catch block
+  // below can still log against the right org if a connection was found
+  // before something later in the sync failed.
+  let connection = null;
   try {
     const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&provider=eq.google&select=*`);
     const connections = await connRes.json();
-    const connection = connections[0];
+    connection = connections[0];
     if (!connection) return res.status(404).json({ error: 'No Google Calendar connection for this user' });
 
     const { accessToken, newExpiresAt } = await getValidAccessToken(connection);
@@ -76,9 +81,11 @@ export async function sync(req, res) {
       }
     }
 
+    await logIntegrationEvent({ orgId: connection.org_id, userId, provider: 'google_calendar', eventType: 'sync', status: 'success', detail: `${created} created, ${updated} updated, ${deleted} deleted` });
     res.status(200).json({ success: true, created, updated, deleted });
   } catch (e) {
     console.error('Calendar sync error:', e.message);
+    if (connection) await logIntegrationEvent({ orgId: connection.org_id, userId, provider: 'google_calendar', eventType: 'sync', status: 'error', detail: e.message });
     res.status(500).json({ error: e.message });
   }
 }

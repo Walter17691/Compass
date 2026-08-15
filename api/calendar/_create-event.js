@@ -1,6 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
-import { providerAdapter, freshAccessToken } from './_providers.js';
+import { providerAdapter, freshAccessToken, INTEGRATION_EVENT_PROVIDER } from './_providers.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 // Integrations & Workflow Automation (Phase 5, IP3) — the real
 // create-a-timed-event primitive Track C's meeting-scheduling phase
@@ -34,8 +35,11 @@ export async function createEvent(req, res) {
       if (postRes.ok) {
         const created = await postRes.json();
         results.push({ provider: connection.provider, eventId: created.id });
+        await logIntegrationEvent({ orgId: connection.org_id, userId: caller.id, provider: INTEGRATION_EVENT_PROVIDER[connection.provider], eventType: 'create_event', status: 'success', detail: title });
       } else {
-        console.error(`${connection.provider} create-event failed:`, await postRes.text());
+        const failureText = await postRes.text();
+        console.error(`${connection.provider} create-event failed:`, failureText);
+        await logIntegrationEvent({ orgId: connection.org_id, userId: caller.id, provider: INTEGRATION_EVENT_PROVIDER[connection.provider], eventType: 'create_event', status: 'error', detail: failureText });
       }
     }
 

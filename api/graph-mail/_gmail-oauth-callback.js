@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { verifyState } from './_state.js';
 import { supabaseRequest } from '../_supabase.js';
+import { logIntegrationEvent } from '../_integration_events.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -51,6 +52,7 @@ export async function gmailOauthCallback(req, res) {
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok || !tokenData.refresh_token) {
       console.error('Gmail token exchange failed:', tokenData);
+      await logIntegrationEvent({ orgId: payload.orgId, userId: payload.userId, provider: 'gmail', eventType: 'connect', status: 'error', detail: 'Token exchange failed' });
       return res.redirect(302, `${APP_URL}/?gmail=error`);
     }
 
@@ -85,9 +87,11 @@ export async function gmailOauthCallback(req, res) {
     });
     if (!upsertRes.ok) {
       console.error('graph_mail_connections (google) upsert failed:', await upsertRes.text());
+      await logIntegrationEvent({ orgId: payload.orgId, userId: payload.userId, provider: 'gmail', eventType: 'connect', status: 'error', detail: 'Failed to save the connection' });
       return res.redirect(302, `${APP_URL}/?gmail=error`);
     }
 
+    await logIntegrationEvent({ orgId: payload.orgId, userId: payload.userId, provider: 'gmail', eventType: 'connect', status: 'success', detail: mailboxEmail });
     res.redirect(302, `${APP_URL}/?gmail=connected`);
   } catch (e) {
     console.error('Gmail OAuth callback error:', e.message);
