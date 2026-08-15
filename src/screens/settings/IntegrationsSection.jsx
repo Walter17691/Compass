@@ -17,8 +17,8 @@ const STATUS_COLOR = {
 // disconnect handlers (connectOutlookMail etc.) — this is the new
 // canonical home for their status, not a second implementation of the
 // OAuth flow already wired into SaveEmailScreen/HomeScreen.
-export function IntegrationsSection({ mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, orgWebhookUrl, orgWebhookType, onManageNotifications }) {
-  const rows = computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, orgWebhookUrl, orgWebhookType });
+export function IntegrationsSection({ mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, orgWebhookUrl, orgWebhookType, onManageNotifications }) {
+  const rows = computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, ms365CalendarConnected, orgWebhookUrl, orgWebhookType });
 
   const actionFor = (row) => {
     if (row.id === "outlook_mail") {
@@ -35,6 +35,11 @@ export function IntegrationsSection({ mailConnected, mailboxEmail, onConnectMail
       return row.status === INTEGRATION_STATUS.CONNECTED
         ? <Btn variant="ghost" onClick={disconnectGoogleCalendar}>Disconnect</Btn>
         : <Btn variant="secondary" onClick={connectGoogleCalendar}>Connect</Btn>;
+    }
+    if (row.id === "ms365_calendar") {
+      return row.status === INTEGRATION_STATUS.CONNECTED
+        ? <Btn variant="ghost" onClick={disconnectMs365Calendar}>Disconnect</Btn>
+        : <Btn variant="secondary" onClick={connectMs365Calendar}>Connect</Btn>;
     }
     if (row.id === "slack" || row.id === "teams") {
       return <Btn variant="ghost" onClick={onManageNotifications}>{row.status === INTEGRATION_STATUS.CONNECTED ? "Manage" : "Set up"}</Btn>;

@@ -23,6 +23,24 @@ export function deadlineToGoogleEvent(deadline) {
   };
 }
 
+// Integrations & Workflow Automation (Phase 5, IP3) — a real, timed
+// event (start/end datetime, optional attendees), distinct from
+// deadlineToGoogleEvent's all-day-only shape above. This is the
+// primitive Track C's meeting-scheduling phase (IP15+) calls into via
+// _create-event.js/_update-event.js — startISO/endISO are always UTC
+// (callers pass a "...Z"-suffixed ISO string), so both providers store
+// the same literal instant regardless of the viewer's own timezone
+// display.
+export function buildGoogleEvent({ title, description, startISO, endISO, attendees }) {
+  return {
+    summary: title,
+    description: description || '',
+    start: { dateTime: startISO, timeZone: 'UTC' },
+    end: { dateTime: endISO, timeZone: 'UTC' },
+    ...((attendees || []).length ? { attendees: attendees.map(a => ({ email: a.email, displayName: a.name || undefined })) } : {}),
+  };
+}
+
 // Refreshes the access token if it's expired (or about to, within 60s),
 // returning { accessToken, newExpiresAt } — newExpiresAt is null if no
 // refresh was needed, so callers know whether to persist an update.

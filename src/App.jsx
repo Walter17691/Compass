@@ -1762,6 +1762,51 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { showToast("Couldn't disconnect — please try again"); }
   };
 
+  // ── Microsoft 365 Calendar connection (Phase 5, IP3) ──
+  // Same delegated-OAuth shape as Google Calendar above, sharing its
+  // calendar_connections row (provider:'microsoft') and its
+  // api/calendar/[...action].js router (ms365-* actions) rather than a
+  // parallel table/router — see api/calendar/_microsoft.js's own
+  // comment. Doesn't hook into the deadline-sync effect above (that
+  // stays Google-only for now, unchanged) — this connection exists so
+  // the real create/update/delete-event capability (api/calendar/
+  // _create-event.js) has a Microsoft calendar to target once a later
+  // phase actually schedules a meeting through it.
+  const [ms365CalendarConnected, setMs365CalendarConnected] = useState(false);
+  useEffect(() => {
+    if(!user?.id) return;
+    authedFetch(`/api/calendar/ms365-status`)
+      .then(r=>r.json()).then(d=>setMs365CalendarConnected(!!d.connected)).catch(()=>{});
+  }, [user?.id]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ms365Param = params.get("ms365calendar");
+    if(!ms365Param) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- same one-time, query-param-driven sync on mount as the identical calendarParam/mailParam/gmailParam effects elsewhere in this file, none of which the rule flags consistently (see the gmailParam effect's own comment).
+    if(ms365Param==="connected") { setMs365CalendarConnected(true); showToast("Microsoft 365 Calendar connected"); }
+    else if(ms365Param==="error") { showToast("Couldn't connect Microsoft 365 Calendar — please try again"); }
+    params.delete("ms365calendar");
+    const newUrl = window.location.pathname + (params.toString()?"?"+params.toString():"");
+    window.history.replaceState({}, "", newUrl);
+  }, []);
+  const connectMs365Calendar = async () => {
+    if(!user?.id || !org?.id) return;
+    try {
+      const res = await authedFetch(`/api/calendar/ms365-oauth-start?orgId=${encodeURIComponent(org.id)}`);
+      const data = await res.json();
+      if(data.url) window.location.href = data.url;
+      else showToast(data.error||"Couldn't start Microsoft 365 Calendar connection", "error");
+    } catch { showToast("Couldn't start Microsoft 365 Calendar connection", "error"); }
+  };
+  const disconnectMs365Calendar = async () => {
+    if(!user?.id) return;
+    try {
+      await authedFetch("/api/calendar/ms365-disconnect", { method: "POST", headers: {"Content-Type":"application/json"} });
+      setMs365CalendarConnected(false);
+      showToast("Microsoft 365 Calendar disconnected");
+    } catch { showToast("Couldn't disconnect — please try again"); }
+  };
+
   // ── Browser notifications ──
   const requestNotifications = async () => {
     if(!("Notification" in window)) return;
@@ -6558,6 +6603,9 @@ Please produce:
           calendarConnected={calendarConnected}
           connectGoogleCalendar={connectGoogleCalendar}
           disconnectGoogleCalendar={disconnectGoogleCalendar}
+          ms365CalendarConnected={ms365CalendarConnected}
+          connectMs365Calendar={connectMs365Calendar}
+          disconnectMs365Calendar={disconnectMs365Calendar}
           initialSection={settingsSection}
           clearInitialSection={()=>setSettingsSection(null)}
           org={org}

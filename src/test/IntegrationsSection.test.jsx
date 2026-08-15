@@ -64,6 +64,25 @@ describe('IntegrationsSection', () => {
     expect(disconnectGoogleCalendar).toHaveBeenCalledTimes(1);
   });
 
+  it('shows Microsoft 365 Calendar as connected and calls disconnectMs365Calendar', async () => {
+    const user = userEvent.setup();
+    const disconnectMs365Calendar = vi.fn();
+    render(<IntegrationsSection ms365CalendarConnected disconnectMs365Calendar={disconnectMs365Calendar} />);
+    const ms365Row = screen.getByText('Microsoft 365 Calendar').closest('div').parentElement.parentElement;
+    expect(ms365Row).toHaveTextContent('Connected');
+    await user.click(within(ms365Row).getByRole('button', { name: 'Disconnect' }));
+    expect(disconnectMs365Calendar).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Connect for Microsoft 365 Calendar when not connected, and calls connectMs365Calendar', async () => {
+    const user = userEvent.setup();
+    const connectMs365Calendar = vi.fn();
+    render(<IntegrationsSection connectMs365Calendar={connectMs365Calendar} />);
+    const ms365Row = screen.getByText('Microsoft 365 Calendar').closest('div').parentElement.parentElement;
+    await user.click(within(ms365Row).getByRole('button', { name: 'Connect' }));
+    expect(connectMs365Calendar).toHaveBeenCalledTimes(1);
+  });
+
   it('routes to Notifications for Slack/Teams setup via onManageNotifications', async () => {
     const user = userEvent.setup();
     const onManageNotifications = vi.fn();

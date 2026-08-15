@@ -22,19 +22,25 @@ test('the Integration Centre lists every catalog entry and routes Slack/Teams se
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
 
-  // Five stub integrations remain (Gmail moved to a real connector in
-  // IP2), honestly marked rather than shown as if live.
+  // Four stub integrations remain (Gmail moved to a real connector in
+  // IP2, Microsoft 365 Calendar in IP3), honestly marked rather than
+  // shown as if live.
   await expect(page.getByText('Requires administrator', { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/Not yet available/).first()).toBeVisible();
 
-  // Gmail (Phase 5, IP2) — now a real connector, same shape as Outlook:
-  // offers a Connect button, not "Requires administrator"/"not yet
-  // available". Doesn't click it — same reasoning as Outlook/Calendar
-  // above, a real external Google consent screen isn't something an
+  // Gmail (Phase 5, IP2) and Microsoft 365 Calendar (Phase 5, IP3) — both
+  // now real connectors, same shape as Outlook/Google Calendar: offer a
+  // Connect button, not "Requires administrator"/"not yet available".
+  // Neither is actually clicked — same reasoning as Outlook/Google
+  // Calendar above, a real external consent screen isn't something an
   // automated run can complete.
   const gmailRow = page.getByText('Gmail', { exact: true }).locator('xpath=ancestor::div[3]');
   await expect(gmailRow.getByText('Not connected', { exact: true })).toBeVisible();
   await expect(gmailRow.getByRole('button', { name: 'Connect', exact: true })).toBeVisible();
+
+  const ms365Row = page.getByText('Microsoft 365 Calendar', { exact: true }).locator('xpath=ancestor::div[3]');
+  await expect(ms365Row.getByText('Not connected', { exact: true })).toBeVisible();
+  await expect(ms365Row.getByRole('button', { name: 'Connect', exact: true })).toBeVisible();
 
   const slackRow = page.getByText('Slack', { exact: true }).locator('xpath=ancestor::div[3]');
   await slackRow.getByRole('button', { name: 'Set up', exact: true }).click();

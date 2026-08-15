@@ -3,6 +3,13 @@ import { oauthCallback } from './_oauth-callback.js';
 import { sync } from './_sync.js';
 import { disconnect } from './_disconnect.js';
 import { status } from './_status.js';
+import { ms365OauthStart } from './_ms365-oauth-start.js';
+import { ms365OauthCallback } from './_ms365-oauth-callback.js';
+import { ms365Status } from './_ms365-status.js';
+import { ms365Disconnect } from './_ms365-disconnect.js';
+import { createEvent } from './_create-event.js';
+import { updateEvent } from './_update-event.js';
+import { deleteEvent } from './_delete-event.js';
 
 // Single catch-all route for every /api/calendar/* endpoint. Vercel's
 // Hobby plan caps a deployment at 12 serverless functions total; with
@@ -27,6 +34,17 @@ export default async function handler(req, res) {
     case 'sync': return sync(req, res);
     case 'disconnect': return disconnect(req, res);
     case 'status': return status(req, res);
+    // Integrations & Workflow Automation (Phase 5, IP3) — Microsoft 365
+    // Calendar connector and the real create/update/delete-event
+    // primitive, folded into this same router for the same Vercel
+    // function-budget reason as this file's own header comment.
+    case 'ms365-oauth-start': return ms365OauthStart(req, res);
+    case 'ms365-oauth-callback': return ms365OauthCallback(req, res);
+    case 'ms365-status': return ms365Status(req, res);
+    case 'ms365-disconnect': return ms365Disconnect(req, res);
+    case 'create-event': return createEvent(req, res);
+    case 'update-event': return updateEvent(req, res);
+    case 'delete-event': return deleteEvent(req, res);
     default: return res.status(404).json({ error: 'Not found' });
   }
 }

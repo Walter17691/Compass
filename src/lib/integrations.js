@@ -26,17 +26,18 @@ export const INTEGRATION_CATALOG = [
   { id: "document_storage", label: "Cloud document storage", category: "Documents" },
 ];
 
-// Five catalog entries have a real, working connection today: outlook_mail/
-// gmail/google_calendar are per-user delegated OAuth (App.jsx's own
-// connectOutlookMail/connectGmail/connectGoogleCalendar); slack/teams is
-// the existing org-wide incoming-webhook config (NotificationsSection.jsx's
-// orgWebhookUrl/orgWebhookType) — a single destination, not two independent
-// connections, so connecting one always means the other reads Not
-// Connected. Every other entry is a stub: Requires Administrator, with
-// `notYetAvailable: true` so the UI can say so honestly rather than
-// implying an admin could act on it today (per the spec's own "do not
-// hard-code integrations that do not yet have working APIs").
-export function computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, orgWebhookUrl, orgWebhookType } = {}) {
+// Six catalog entries have a real, working connection today: outlook_mail/
+// gmail/google_calendar/ms365_calendar are per-user delegated OAuth
+// (App.jsx's own connectOutlookMail/connectGmail/connectGoogleCalendar/
+// connectMs365Calendar); slack/teams is the existing org-wide incoming-
+// webhook config (NotificationsSection.jsx's orgWebhookUrl/orgWebhookType)
+// — a single destination, not two independent connections, so connecting
+// one always means the other reads Not Connected. Every other entry is a
+// stub: Requires Administrator, with `notYetAvailable: true` so the UI
+// can say so honestly rather than implying an admin could act on it
+// today (per the spec's own "do not hard-code integrations that do not
+// yet have working APIs").
+export function computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, ms365CalendarConnected, orgWebhookUrl, orgWebhookType } = {}) {
   return INTEGRATION_CATALOG.map(entry => {
     if (entry.id === "outlook_mail") {
       return { ...entry, status: mailConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: mailConnected ? mailboxEmail : null, lastSync: null };
@@ -46,6 +47,9 @@ export function computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailC
     }
     if (entry.id === "google_calendar") {
       return { ...entry, status: calendarConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: calendarConnected ? "Deadlines sync automatically" : null, lastSync: null };
+    }
+    if (entry.id === "ms365_calendar") {
+      return { ...entry, status: ms365CalendarConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: null, lastSync: null };
     }
     if (entry.id === "slack" || entry.id === "teams") {
       const type = entry.id === "teams" ? "teams" : "slack";
