@@ -18,6 +18,13 @@
 // with a real linkTo back to the Evidence tab, so "Email saved to case"
 // audit_log entries are excluded here too rather than showing twice.
 //
+// IP13, §7 — a letter sent via the send-from-Compass coordinated
+// workflow (evidence.source === "sent_letter", lib/letterSend.js) gets
+// the same treatment again, reusing the existing "letter" entry type
+// (already used for "Letter drafted") rather than inventing a fourth —
+// "Letter sent" audit_log entries are excluded here for the same
+// duplicate-avoidance reason.
+//
 // Phase 8 adds: a stable `key` per entry (so overrides survive a
 // regenerated timeline), `allegationId` where an entry is genuinely tied
 // to one specific allegation (only the allegation source itself — a
@@ -59,12 +66,15 @@ function rawEntries(cs, allegations, auditLog) {
   });
 
   (cs.evidence || []).forEach((ev, index) => {
-    if (ev.source !== "email") return;
-    entries.push({ key: `evidence-email-${index}`, date: ev.date, type: "email", description: `Email saved: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: index }, allegationId: null });
+    if (ev.source === "email") {
+      entries.push({ key: `evidence-email-${index}`, date: ev.date, type: "email", description: `Email saved: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: index }, allegationId: null });
+    } else if (ev.source === "sent_letter") {
+      entries.push({ key: `evidence-sent-${index}`, date: ev.date, type: "letter", description: `Letter sent: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: index }, allegationId: null });
+    }
   });
 
   (auditLog || [])
-    .filter(e => e.caseId === cs.id && !(e.action || "").startsWith("Allegation") && e.action !== "Email saved to case")
+    .filter(e => e.caseId === cs.id && !(e.action || "").startsWith("Allegation") && e.action !== "Email saved to case" && e.action !== "Letter sent")
     .forEach((e, i) => {
       entries.push({ key: `audit-${e.ts}-${i}`, date: e.ts, type: "audit", description: e.detail ? `${e.action} — ${e.detail}` : e.action, actor: e.user || null, linkTo: null, allegationId: null });
     });

@@ -52,6 +52,7 @@ import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from '
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
 import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
+import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter } from './lib/letterSend';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -5147,6 +5148,45 @@ Please produce:
     handleLetter(type);
   };
 
+  // Integrations & Workflow Automation (Phase 5, IP13, §7) — the actual
+  // send (api/send-letter.js, Resend) is unchanged; what's new is
+  // everything after a successful send that never happened automatically
+  // before: Save Sent Copy (a real, analysable evidence item — see
+  // lib/letterSend.js), Add Timeline Event (that item's own dedicated
+  // entry, lib/caseTimeline.js), Update Task (only when an open task's
+  // name is an exact match for this letter type's product-surfaced
+  // label — never a guess), Record Audit Event (audit(), which every
+  // other case-mutating action in this app already goes through).
+  // Silently skips the case-scoped steps when there's no real linked
+  // case (e.g. sending from a case-less meeting session) — the send
+  // itself still succeeds either way.
+  const sendLetterCoordinated = async (to) => {
+    const r = await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        to,
+        subject: (meetingType?.label||"Meeting")+" Outcome Letter - "+(caseInfo.employee||"Employee"),
+        body: letterOutput,
+        employeeName: caseInfo.employee||"Employee",
+        meetingType: meetingType?.label||"Meeting",
+        managerName: caseInfo.manager||"HR Manager",
+        date: (caseInfo.date&&/^\d{4}-\d{2}-\d{2}$/.test(caseInfo.date)?caseInfo.date.split("-").reverse().join("/"):caseInfo.date)||new Date().toLocaleDateString("en-GB")
+      })});
+    const d = await r.json();
+    if(!d.success) { showToast("Failed: "+d.error, "error"); return false; }
+
+    const activeCase = cases.find(x=>x.id===activeCaseId);
+    if(activeCase) {
+      const sentItem = buildSentLetterEvidenceItem({ type: activeLetter, recipient: to, body: letterOutput, addedBy: currentUser?.name||"HR Manager" });
+      saveCases(cases.map(x=>x.id===activeCaseId?{...x, evidence:[...(x.evidence||[]), sentItem]}:x), activeCaseId);
+      audit("Letter sent", sentItem.name, activeCaseId);
+      const matchingTask = findTaskToCompleteForSentLetter(caseTasks, activeCaseId, activeLetter);
+      if(matchingTask) toggleCaseTaskDone(matchingTask.id);
+    }
+
+    showToast("Letter sent to "+to);
+    return true;
+  };
+
   // ─────────────────────────────────────────────
 
 
@@ -5947,19 +5987,8 @@ Please produce:
               <Btn onClick={async()=>{
                 if(!emailLetterTo.includes("@")) return;
                 try {
-                  const r = await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
-                    body:JSON.stringify({
-                      to: emailLetterTo,
-                      subject: (meetingType?.label||"Meeting")+" Outcome Letter - "+(caseInfo.employee||"Employee"),
-                      body: letterOutput,
-                      employeeName: caseInfo.employee||"Employee",
-                      meetingType: meetingType?.label||"Meeting",
-                      managerName: caseInfo.manager||"HR Manager",
-                      date: (caseInfo.date&&/^\d{4}-\d{2}-\d{2}$/.test(caseInfo.date)?caseInfo.date.split("-").reverse().join("/"):caseInfo.date)||new Date().toLocaleDateString("en-GB")
-                    })});
-                  const d = await r.json();
-                  if(d.success){ showToast("Letter sent to "+emailLetterTo); setShowEmailLetter(false); setEmailLetterTo(""); }
-                  else showToast("Failed: "+d.error, "error");
+                  const ok = await sendLetterCoordinated(emailLetterTo);
+                  if(ok) { setShowEmailLetter(false); setEmailLetterTo(""); }
                 } catch(e){ showToast("Error: "+e.message, "error"); }
               }} disabled={!emailLetterTo.includes("@")} style={{flex:1}}>Send email</Btn>
               <Btn variant="ghost" onClick={()=>{setShowEmailLetter(false);setEmailLetterTo("");}} style={{flex:1}}>Cancel</Btn>
@@ -6604,7 +6633,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} />
       )}
 
       {/* ══ DASHBOARD ══ */}

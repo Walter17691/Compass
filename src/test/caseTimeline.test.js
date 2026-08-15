@@ -128,4 +128,22 @@ describe('buildCaseTimeline', () => {
     expect(result.filter(e => e.type === 'audit')).toHaveLength(0);
     expect(result.filter(e => e.type === 'email')).toHaveLength(1);
   });
+
+  it('IP13 — gives a sent letter its own dedicated (reused "letter" type) timeline entry linking back to the Evidence tab', () => {
+    const cs = { ...baseCase, evidence: [
+      { name: 'Sent: Witness invitation', date: '2026-08-03', addedBy: 'Jo', source: 'sent_letter' },
+    ] };
+    const result = buildCaseTimeline(cs, [], []);
+    const letterEntries = result.filter(e => e.type === 'letter');
+    expect(letterEntries).toHaveLength(1);
+    expect(letterEntries[0]).toMatchObject({ description: 'Letter sent: Sent: Witness invitation', actor: 'Jo', linkTo: { kind: 'evidence', id: 0 } });
+  });
+
+  it('IP13 — excludes "Letter sent" audit entries so a sent letter never shows twice', () => {
+    const cs = { ...baseCase, evidence: [{ name: 'Sent: Witness invitation', date: '2026-08-03', addedBy: 'Jo', source: 'sent_letter' }] };
+    const auditLog = [{ ts: '2026-08-03', user: 'Jo', action: 'Letter sent', detail: 'Sent: Witness invitation', caseId: 'case1' }];
+    const result = buildCaseTimeline(cs, [], auditLog);
+    expect(result.filter(e => e.type === 'audit')).toHaveLength(0);
+    expect(result.filter(e => e.type === 'letter')).toHaveLength(1);
+  });
 });

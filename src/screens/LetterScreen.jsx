@@ -5,7 +5,7 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass }) {
   const [showHistory, setShowHistory] = useState(false);
   return (
     <div>
@@ -100,6 +100,17 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
               <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send via Gmail</Btn>
               <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send via Outlook</Btn>
+              {onSendFromCompass&&(
+                // Integrations & Workflow Automation (Phase 5, IP13, §7) —
+                // unlike "Send via Gmail/Outlook" above (download a PDF,
+                // open a webmail compose window, HR still attaches and
+                // sends it themselves), this actually sends via Compass's
+                // own infrastructure (api/send-letter.js) and then runs
+                // the rest of the coordinated workflow — save a sent copy,
+                // add a timeline event, complete a matching task, log an
+                // audit event — as one action.
+                <Btn variant="secondary" onClick={onSendFromCompass} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send from Compass</Btn>
+              )}
               <Btn variant="ghost" onClick={()=>window.print()} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Print</Btn>
               <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Copy text</Btn>
               <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>

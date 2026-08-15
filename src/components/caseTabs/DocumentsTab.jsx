@@ -1,5 +1,6 @@
 import { deriveDocumentsForCase } from '../../lib/caseDocuments';
 import { fmtBytes } from '../../lib/evidenceUpload';
+import { CORRESPONDENCE_TYPE_LABELS } from '../../lib/letterSend';
 
 const KIND_LABEL = { letter: "Letter", report: "Report", evidence: "File" };
 const KIND_COLOR = { letter: "#B87520", report: "#7C5CFC", evidence: "#6B6375" };
@@ -9,12 +10,10 @@ const KIND_COLOR = { letter: "#B87520", report: "#7C5CFC", evidence: "#6B6375" }
 // request), populated from the same case/employee context every other
 // letter type already reads (see handleLetter's letterInstructions,
 // App.jsx) — no new grounding logic, just new instruction text and an
-// entry point onto it.
-const CORRESPONDENCE_TYPES = [
-  { id: "witness-invitation", label: "Witness invitation" },
-  { id: "evidence-request", label: "Evidence request" },
-  { id: "oh-consent-request", label: "OH consent request" },
-];
+// entry point onto it. Labels come from lib/letterSend.js (not a local
+// copy) — IP13's send-from-Compass workflow matches a completed task's
+// name against these exact same strings, so they can never drift apart.
+const CORRESPONDENCE_TYPES = Object.entries(CORRESPONDENCE_TYPE_LABELS).map(([id, label]) => ({ id, label }));
 
 // Phase 7 of the gap-analysis build-out folds into this same tab, since
 // it's the same "aggregate what already exists, no migration" scope —
