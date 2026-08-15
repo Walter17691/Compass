@@ -4,12 +4,24 @@ import { fmtBytes } from '../../lib/evidenceUpload';
 const KIND_LABEL = { letter: "Letter", report: "Report", evidence: "File" };
 const KIND_COLOR = { letter: "#B87520", report: "#7C5CFC", evidence: "#6B6375" };
 
+// Integrations & Workflow Automation (Phase 5, IP12, §6) — three new
+// draft types (witness invitation, evidence request, OH consent
+// request), populated from the same case/employee context every other
+// letter type already reads (see handleLetter's letterInstructions,
+// App.jsx) — no new grounding logic, just new instruction text and an
+// entry point onto it.
+const CORRESPONDENCE_TYPES = [
+  { id: "witness-invitation", label: "Witness invitation" },
+  { id: "evidence-request", label: "Evidence request" },
+  { id: "oh-consent-request", label: "OH consent request" },
+];
+
 // Phase 7 of the gap-analysis build-out folds into this same tab, since
 // it's the same "aggregate what already exists, no migration" scope —
 // see src/lib/caseDocuments.js. Letters open in the existing Letter
 // screen (same as everywhere else generated letters are viewed); evidence
 // files download the same way the Evidence tab already does.
-export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate, onGenerateHearingPack, hearingPackGenerating }) {
+export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate, onGenerateHearingPack, hearingPackGenerating, onDraftCorrespondence }) {
   const docs = deriveDocumentsForCase(cs);
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
@@ -19,6 +31,14 @@ export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate,
           <button onClick={()=>onGenerateHearingPack(cs)} disabled={!!hearingPackGenerating} style={{fontSize:11,fontWeight:600,color:"#fff",background:hearingPackGenerating?"#C4B8F8":"#7C5CFC",border:"none",borderRadius:6,padding:"6px 12px",cursor:hearingPackGenerating?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>{hearingPackGenerating?"Generating…":"Generate Hearing Pack"}</button>
         )}
       </div>
+      {onDraftCorrespondence&&(
+        <div style={{padding:"12px 16px",borderBottom:"1px solid #F5F1EA",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"#9B9098"}}>Draft:</span>
+          {CORRESPONDENCE_TYPES.map(t=>(
+            <button key={t.id} onClick={()=>onDraftCorrespondence(cs, t.id)} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{t.label}</button>
+          ))}
+        </div>
+      )}
       <div style={{padding:"16px"}}>
         {docs.length===0 && <div style={{fontSize:13,color:"#9B9098"}}>No letters or files on this case yet.</div>}
         {docs.map((d,i) => (

@@ -5136,6 +5136,17 @@ Please produce:
     setHearingPackGenerating(g=>({...g, [cs.id]:false}));
   };
 
+  // Integrations & Workflow Automation (Phase 5, IP12, §6) — the same
+  // minimal caseInfo seed the existing "Start appeal and send invitation"
+  // button already uses (CaseViewScreen.jsx) before calling handleLetter
+  // directly (not {inline:true} — these types aren't tied to a specific
+  // nextStep stage transition, so they navigate straight to the full
+  // Letter editor like most other types already do).
+  const startCaseCorrespondence = (cs, type) => {
+    setCaseInfo(p=>({...p, employee:cs.employeeName, manager:cs.manager||""}));
+    handleLetter(type);
+  };
+
   // ─────────────────────────────────────────────
 
 
@@ -5431,6 +5442,15 @@ Please produce:
         "dismissal": "a formal dismissal letter. Include: reason for dismissal, date employment ends, notice period or payment in lieu, final pay arrangements, right of appeal within 5 working days. Follow ERA 1996 and ACAS Code of Practice.",
         "suspension": "a formal suspension letter. Include: that suspension is a neutral act and not a disciplinary sanction or presumption of guilt, the reason an investigation is required, that suspension is normally on full pay, restrictions during suspension (e.g. contacting colleagues, attending the workplace), a named contact during the suspension period, and that the situation will be kept under review. Follow ACAS Code of Practice.",
         "meeting-confirmation": "a formal letter confirming the details of an upcoming meeting already arranged with the employee. Include: confirmed date, time and location (or video call details), meeting type/purpose, who else will attend, right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and what to bring or prepare. Shorter and less formal in tone than an invitation letter, since the meeting has already been agreed — this simply confirms the arrangements in writing.",
+        // Integrations & Workflow Automation (Phase 5, IP12, §6) — three
+        // new draft types, populated from the exact same case/employee/
+        // evidence/policy context every other letter type already reads
+        // above (no new grounding logic needed) and subject to the same
+        // "use [placeholder] for anything unknown, never invent" system
+        // prompt rule every other type already follows.
+        "witness-invitation": "a letter inviting a named individual to attend a meeting as a witness in an ongoing workplace investigation. Include: that they are being asked to provide information as a witness, not as someone facing any allegation themselves; the general subject matter framed neutrally (never naming a specific allegation against the subject employee unless it's already necessary context); proposed date/time/location placeholders; an explanation that their account will be treated confidentially so far as possible; and that their attendance is appreciated. Follow ACAS Code of Practice principles on witness involvement in investigations.",
+        "evidence-request": "a letter or message requesting a specific piece of evidence or information relevant to an ongoing case, from an employee, manager, or third party. Include: what is being requested and why, framed neutrally and without presuming any conclusion; a reasonable deadline for response (e.g. [5 working days]); how the information will be used and kept confidential; and a named contact for questions.",
+        "oh-consent-request": "a letter requesting the employee's informed consent to a referral to Occupational Health (OH). Include: the reason a referral is being considered, framed supportively as part of the organisation's duty to support the employee's health and wellbeing, not as a disciplinary step; what OH involvement means in practice (an independent medical assessment, generally not treatment); that explicit consent is required before the referral proceeds and before any resulting report is obtained, per the Access to Medical Reports Act 1988 and UK GDPR principles; what will happen with the resulting report (who sees it, and that the employee has the right to see it first and request corrections before it's shared); and clear instructions for how to give or withhold consent. Warm, supportive tone throughout — this is a wellbeing-oriented letter, not a warning.",
       };
 
       const instruction = letterInstructions[t] || letterInstructions["outcome"];
@@ -6490,6 +6510,7 @@ Please produce:
           deleteCaseTask={deleteCaseTask}
           onGenerateHearingPack={handleGenerateHearingPack}
           hearingPackGenerating={hearingPackGenerating}
+          onDraftCorrespondence={startCaseCorrespondence}
           caseChatHistory={caseChatHistory}
           caseChatInput={caseChatInput}
           setCaseChatInput={setCaseChatInput}

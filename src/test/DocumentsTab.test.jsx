@@ -24,3 +24,22 @@ describe('DocumentsTab — Generate Hearing Pack (Phase 5, IP8)', () => {
     expect(screen.queryByRole('button', { name: /Generate Hearing Pack/ })).not.toBeInTheDocument();
   });
 });
+
+describe('DocumentsTab — Draft correspondence (Phase 5, IP12)', () => {
+  it('renders a button per correspondence type and calls onDraftCorrespondence with the case and type', async () => {
+    const user = userEvent.setup();
+    const onDraftCorrespondence = vi.fn();
+    render(<DocumentsTab cs={cs} fmtDate={d=>d} onDraftCorrespondence={onDraftCorrespondence} />);
+    await user.click(screen.getByRole('button', { name: 'Witness invitation' }));
+    expect(onDraftCorrespondence).toHaveBeenCalledWith(cs, 'witness-invitation');
+    await user.click(screen.getByRole('button', { name: 'Evidence request' }));
+    expect(onDraftCorrespondence).toHaveBeenCalledWith(cs, 'evidence-request');
+    await user.click(screen.getByRole('button', { name: 'OH consent request' }));
+    expect(onDraftCorrespondence).toHaveBeenCalledWith(cs, 'oh-consent-request');
+  });
+
+  it('omits the draft row entirely when no handler is given', () => {
+    render(<DocumentsTab cs={cs} fmtDate={d=>d} />);
+    expect(screen.queryByRole('button', { name: 'Witness invitation' })).not.toBeInTheDocument();
+  });
+});
