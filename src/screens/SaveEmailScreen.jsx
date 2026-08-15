@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 // until the user explicitly picks a case and confirms, even when Compass
 // found a confident match or the message came straight from a connected
 // inbox.
-export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtract, onSave, onClear, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, inboxMessages, inboxLoading, onLoadInbox, onPickMessage }) {
+export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtract, onSave, onClear, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, inboxMessages, inboxLoading, onLoadInbox, onPickMessage, onCreateConcern }) {
   const [rawText, setRawText] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState('');
 
@@ -120,9 +120,10 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
               ))}
             </select>
 
-            <div style={{display:"flex",gap:8,marginTop:16}}>
+            <div style={{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}}>
               <button onClick={()=>onSave(targetCaseId)} disabled={!targetCaseId} style={{fontSize:13,background:!targetCaseId?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"9px 18px",color:"#fff",fontWeight:600,cursor:!targetCaseId?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Save to this case</button>
-              <button onClick={()=>{onClear();setRawText('');setSelectedCaseId('');}} style={{fontSize:13,background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 18px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Start over</button>
+              {onCreateConcern&&<button onClick={onCreateConcern} style={{fontSize:13,background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 18px",color:"#1C1820",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Create New Concern</button>}
+              <button onClick={()=>{onClear();setRawText('');setSelectedCaseId('');}} style={{fontSize:13,background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 18px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ignore</button>
             </div>
           </div>
         )}

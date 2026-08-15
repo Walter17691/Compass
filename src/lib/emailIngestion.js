@@ -61,3 +61,25 @@ export function buildEmailEvidenceItem({ sender, subject, date, body, addedBy, r
     size: new Blob([lines]).size,
   };
 }
+
+// Integrations & Workflow Automation (Phase 5, IP10, §2-3) — "Create New
+// Concern" from a read email seeds ConcernForm's own free-text
+// description field (App.jsx's concernForm/submitConcernReferral,
+// unchanged) with what Compass already extracted, rather than asking HR
+// to re-type the email's substance from memory. Genuinely a starting
+// point, not a final version — the description field stays editable, and
+// nothing is submitted until HR reviews and clicks Submit themselves,
+// same posture as every other AI-assisted flow in this app.
+export function buildConcernDescriptionFromEmail(extraction) {
+  const lines = [
+    extraction?.summary || null,
+    extraction?.sender ? `From: ${extraction.sender}` : null,
+    extraction?.subject ? `Subject: ${extraction.subject}` : null,
+    extraction?.potentialWitnesses?.length ? `Possible witnesses mentioned: ${extraction.potentialWitnesses.join(", ")}` : null,
+    extraction?.potentialEvidence?.length ? `Evidence mentioned: ${extraction.potentialEvidence.join(", ")}` : null,
+    "",
+    "Original email:",
+    extraction?.rawText || "",
+  ].filter(l => l !== null);
+  return lines.join("\n").trim();
+}

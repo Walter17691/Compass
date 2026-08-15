@@ -55,3 +55,33 @@ describe('SaveEmailScreen (Phase 5, IP9)', () => {
     expect(onSave).toHaveBeenCalledWith('c1');
   });
 });
+
+describe('SaveEmailScreen — Create New Concern / Ignore (Phase 5, IP10)', () => {
+  it('renders Create New Concern and Ignore alongside Save to this case, once extraction has run', () => {
+    render(<SaveEmailScreen cases={cases} extraction={{ employeeName: 'Sarah Jones', matchConfidence: 'none' }} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} onCreateConcern={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Save to this case' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create New Concern' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ignore' })).toBeInTheDocument();
+  });
+
+  it('calls onCreateConcern when clicked', async () => {
+    const user = userEvent.setup();
+    const onCreateConcern = vi.fn();
+    render(<SaveEmailScreen cases={cases} extraction={{ employeeName: 'Sarah Jones', matchConfidence: 'none' }} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} onCreateConcern={onCreateConcern} />);
+    await user.click(screen.getByRole('button', { name: 'Create New Concern' }));
+    expect(onCreateConcern).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the Create New Concern button when no handler is given', () => {
+    render(<SaveEmailScreen cases={cases} extraction={{ employeeName: 'Sarah Jones', matchConfidence: 'none' }} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} />);
+    expect(screen.queryByRole('button', { name: 'Create New Concern' })).not.toBeInTheDocument();
+  });
+
+  it('clears the extraction when Ignore is clicked', async () => {
+    const user = userEvent.setup();
+    const onClear = vi.fn();
+    render(<SaveEmailScreen cases={cases} extraction={{ employeeName: 'Sarah Jones', matchConfidence: 'none' }} onSave={()=>{}} onClear={onClear} onExtract={()=>{}} />);
+    await user.click(screen.getByRole('button', { name: 'Ignore' }));
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
+});

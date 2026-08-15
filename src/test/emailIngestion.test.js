@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildEmailEvidenceItem } from '../lib/emailIngestion';
+import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from '../lib/emailIngestion';
 
 describe('buildEmailEvidenceItem', () => {
   it('builds an evidence item with headers folded into the record text', () => {
@@ -50,5 +50,32 @@ describe('buildEmailEvidenceItem', () => {
     expect(item.record).not.toContain('From:');
     expect(item.record).not.toContain('Subject:');
     expect(item.record).toContain('Just the body.');
+  });
+});
+
+describe('buildConcernDescriptionFromEmail (Phase 5, IP10)', () => {
+  it('leads with the summary and includes sender/subject/witnesses/evidence when present', () => {
+    const description = buildConcernDescriptionFromEmail({
+      summary: 'Manager flags a possible bullying incident.', sender: 'manager@company.com', subject: 'Concern about team conduct',
+      potentialWitnesses: ['James Smith'], potentialEvidence: ['a screenshot of the messages'], rawText: 'Full email text here.',
+    });
+    expect(description).toContain('Manager flags a possible bullying incident.');
+    expect(description).toContain('From: manager@company.com');
+    expect(description).toContain('Subject: Concern about team conduct');
+    expect(description).toContain('Possible witnesses mentioned: James Smith');
+    expect(description).toContain('Evidence mentioned: a screenshot of the messages');
+    expect(description).toContain('Full email text here.');
+  });
+
+  it('falls back to just the raw email text when nothing else was extracted', () => {
+    const description = buildConcernDescriptionFromEmail({ rawText: 'Just the raw text.' });
+    expect(description).toContain('Just the raw text.');
+    expect(description).not.toContain('undefined');
+    expect(description).not.toContain('null');
+  });
+
+  it('handles a missing extraction gracefully', () => {
+    expect(buildConcernDescriptionFromEmail(null)).toBe('Original email:');
+    expect(buildConcernDescriptionFromEmail(undefined)).toBe('Original email:');
   });
 });

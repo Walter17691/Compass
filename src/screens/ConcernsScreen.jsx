@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CONCERN_TYPES } from '../constants';
 import { referralStatusMeta, REFERRAL_STATUSES } from '../lib/concernReferrals';
 import { computeConcernIntakeGaps } from '../lib/concernIntakeGaps';
@@ -179,8 +179,17 @@ function ReferralCard({ referral, onTriage, onOpenCase, onStartInformal, triageL
   );
 }
 
-export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, startInformalConversation, concernTriageLoading={}, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens }) {
-  const [showForm, setShowForm] = useState(false);
+// Integrations & Workflow Automation (Phase 5, IP10, §2-3) — autoOpenForm
+// lets App.jsx's "Create New Concern" action (from a read email,
+// SaveEmailScreen) land HR straight on a pre-filled form rather than the
+// triage queue they'd otherwise see first — the same initialSection/
+// clearInitialSection deep-link shape SettingsScreen already uses.
+// Non-HR always sees the form regardless (see the isHR branch below), so
+// this only matters for the HR branch's own showForm toggle.
+export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, startInformalConversation, concernTriageLoading={}, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens, autoOpenForm, clearAutoOpenForm }) {
+  const [showForm, setShowForm] = useState(!!autoOpenForm);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => clearAutoOpenForm?.(), []);
   const openCase = (caseId) => {
     setActiveCaseId(caseId);
     setActiveCaseStage("investigation");

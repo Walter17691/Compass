@@ -51,7 +51,7 @@ import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
 import { buildHearingPackSections } from './lib/hearingPack';
-import { buildEmailEvidenceItem } from './lib/emailIngestion';
+import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -3941,6 +3941,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setScreen(SCREENS.CASE_VIEW);
   };
 
+  // Integrations & Workflow Automation (Phase 5, IP10, §2-3) — "Create
+  // New Concern", the fourth of the spec's four choices against a read
+  // email (Add to Case / Choose Different Case / Create New Concern /
+  // Ignore — the first two are the existing case dropdown+Save button,
+  // the last is "Start over"). Seeds the existing concernForm/
+  // submitConcernReferral flow rather than a parallel concern-creation
+  // path; nothing is submitted until HR reviews the pre-filled form and
+  // clicks Submit themselves.
+  const [concernFormAutoOpen, setConcernFormAutoOpen] = useState(false);
+  const createConcernFromEmail = () => {
+    if(!emailExtraction) return;
+    setConcernForm({...EMPTY_CONCERN_FORM, employeeName: emailExtraction.employeeName||"", description: buildConcernDescriptionFromEmail(emailExtraction)});
+    setConcernFormAutoOpen(true);
+    setEmailExtraction(null);
+    setScreen(SCREENS.CONCERNS);
+  };
+
   // ── Outlook mail connection (Phase 24 follow-up) ──
   // Delegated OAuth to the signed-in user's own Outlook inbox — same
   // architecture as the Google Calendar connection above (api/graph-mail/*
@@ -6359,6 +6376,7 @@ Please produce:
           inboxLoading={inboxLoading}
           onLoadInbox={loadInboxMessages}
           onPickMessage={pickInboxMessage}
+          onCreateConcern={createConcernFromEmail}
         />
       )}
 
@@ -6707,6 +6725,8 @@ Please produce:
           setActiveCaseStage={setActiveCaseStage}
           setScreen={setScreen}
           screens={SCREENS}
+          autoOpenForm={concernFormAutoOpen}
+          clearAutoOpenForm={()=>setConcernFormAutoOpen(false)}
         />
       )}
 
