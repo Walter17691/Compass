@@ -665,7 +665,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
-        document, employeeName, managerName, managerEmail,
+        document, employeeEmail, employeeName, managerName, managerEmail,
         meetingType: documentLabel, meetingDate: documentDate,
         documentType, requiresSignature,
       })
@@ -692,6 +692,45 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }
     showToast("Failed to send: "+(data.error||JSON.stringify(data)), "error");
     return { success:false, signId };
+  };
+
+  // Integrations & Workflow Automation (Phase 5, IP28, §22-23) — the one
+  // real, safe administrative action Prepare/Automate can execute
+  // against (lib/automationLevels.js's AUTOMATABLE_RULE_IDS): resending
+  // the signing-link email for a meeting record that's already been sent
+  // and is still sitting unsigned. Looks up the original recipient via
+  // the signing_requests row itself (employee_email, added this phase —
+  // the address was previously only ever collected once, at send time,
+  // and never persisted anywhere retrievable). Stamps reminderSentAt on
+  // the meeting so automationRules.js's own cooldown check keeps this
+  // from firing again on every render at Automate level.
+  const resendSignatureReminder = async (cs, meeting) => {
+    if(!meeting?.signId) return { success:false };
+    try {
+      const statusRes = await fetch(`/api/signing?signId=${encodeURIComponent(meeting.signId)}`);
+      if(!statusRes.ok) { showToast("Couldn't find that signing request", "error"); return { success:false }; }
+      const request = await statusRes.json();
+      if(!request.employee_email) { showToast("No email on file for this reminder — resend manually from the meeting", "error"); return { success:false }; }
+      const res = await authedFetch("/api/send-for-signature", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          employeeEmail: request.employee_email, employeeName: request.employee_name, managerName: request.manager_name,
+          meetingType: request.meeting_type, meetingDate: request.meeting_date,
+          documentType: request.document_type, requiresSignature: request.requires_signature,
+          signId: meeting.signId, appUrl: window.location.origin,
+        })
+      });
+      const data = await res.json();
+      if(!data.success) { showToast("Failed to send reminder: "+(data.error||JSON.stringify(data)), "error"); return { success:false }; }
+      saveCases(cases.map(x=>x.id===cs.id?{...x, meetings:(x.meetings||[]).map(m=>m.id===meeting.id?{...m, reminderSentAt:new Date().toISOString()}:m)}:x), cs.id);
+      audit("Signature reminder resent", meeting.type||"Meeting record", cs.id);
+      showToast("Reminder sent to "+request.employee_email);
+      return { success:true };
+    } catch(e) {
+      console.error("resendSignatureReminder", e);
+      showToast("Couldn't send the reminder — please try again", "error");
+      return { success:false };
+    }
   };
 
   const sendForSignature = async (employeeEmail) => {
@@ -1568,6 +1607,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const { error } = await supabase.from('organisations').update({notification_webhook_url: url||null, notification_webhook_type: type}).eq('id', org.id);
     if(error) showToast("Couldn't save webhook — please try again", "error");
     else showToast("Notification settings saved");
+  };
+  // Integrations & Workflow Automation (Phase 5, IP28, §22-23) — same
+  // JSONB-config-on-organisations precedent as the webhook fields above.
+  // Which rule ids are even eligible to be set beyond "suggest" is
+  // enforced in lib/automationLevels.js (AUTOMATABLE_RULE_IDS), not
+  // here — this just persists whatever level the org picks for a rule
+  // that's actually on that list.
+  const [automationLevels, setAutomationLevels] = useState(org?.automation_levels||{});
+  const saveAutomationLevel = async (ruleId, level) => {
+    if(!org?.id) return;
+    const updated = {...automationLevels, [ruleId]: level};
+    setAutomationLevels(updated);
+    const { error } = await supabase.from('organisations').update({automation_levels: updated}).eq('id', org.id);
+    if(error) showToast("Couldn't save automation setting — please try again", "error");
+    else showToast("Automation setting saved");
   };
   const sendTestWebhook = async () => {
     if(!orgWebhookUrl||!org?.id||!user?.id) return;
@@ -6972,6 +7026,8 @@ Please produce:
           onAcceptOhFinding={acceptOhFinding}
           onDismissOhFinding={dismissOhFinding}
           onSendForSignature={sendDocumentForSignature}
+          automationLevels={automationLevels}
+          onResendReminder={resendSignatureReminder}
           acceptDocumentFinding={acceptDocumentFinding}
           dismissDocumentFinding={dismissDocumentFinding}
           requestOverrideReason={requestOverrideReason}
@@ -7259,6 +7315,8 @@ Please produce:
           connectMs365Calendar={connectMs365Calendar}
           disconnectMs365Calendar={disconnectMs365Calendar}
           integrationEvents={integrationEvents}
+          automationLevels={automationLevels}
+          saveAutomationLevel={saveAutomationLevel}
           initialSection={settingsSection}
           clearInitialSection={()=>setSettingsSection(null)}
           org={org}

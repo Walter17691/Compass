@@ -13,6 +13,7 @@ import { PoliciesSection } from './settings/PoliciesSection';
 import { ProcessTemplatesSection } from './settings/ProcessTemplatesSection';
 import { TemplatesSection } from './settings/TemplatesSection';
 import { NotificationsSection } from './settings/NotificationsSection';
+import { AutomationsSection } from './settings/AutomationsSection';
 import { IntegrationsSection } from './settings/IntegrationsSection';
 import { IntegrationHealthSection } from './settings/IntegrationHealthSection';
 import { AuditTrailSection } from './settings/AuditTrailSection';
@@ -25,7 +26,7 @@ import { HelpSection } from './settings/HelpSection';
 // (OrgSettingsModal, reached only from its own header button); it's now
 // just another section here, alongside everything else that configures
 // the org.
-export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, changePolicyCategory, starterTemplates, saveStarterTemplates, leaverTemplates, saveLeaverTemplates, processTemplates, saveProcessTemplate, promptDialog, confirmDialog, dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers, isMobile, initialSection, clearInitialSection, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, integrationEvents }) {
+export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, locations, deleteLocation, addLocation, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, wordTemplate, setWordTemplate, lsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad, policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, changePolicyCategory, starterTemplates, saveStarterTemplates, leaverTemplates, saveLeaverTemplates, processTemplates, saveProcessTemplate, promptDialog, confirmDialog, dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook, employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate, auditLog, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, setOnboardStep, setShowOnboard, setScreen, portalAccounts, revokePortalAccess, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers, isMobile, initialSection, clearInitialSection, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, integrationEvents, automationLevels, saveAutomationLevel }) {
   const sections = [
     {id:"billing", label:"Billing"},
     ...(isHR?[{id:"team-access", label:"Team & access"}]:[]),
@@ -40,6 +41,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, loc
     {id:"integrations", label:"Integrations"},
     ...(isHR?[{id:"integration-health", label:"Integration health"}]:[]),
     {id:"notifications", label:"Notifications"},
+    ...(isHR?[{id:"automations", label:"Automations"}]:[]),
     {id:"audit-trail", label:"Audit trail"},
     {id:"data-privacy", label:"Data & privacy"},
     {id:"help", label:"Help"},
@@ -78,6 +80,7 @@ export function SettingsScreen({ isHR, showToast, exportCSV, exportPDF, org, loc
           {active==="integrations"&&<IntegrationsSection mailConnected={mailConnected} mailboxEmail={mailboxEmail} onConnectMail={onConnectMail} onDisconnectMail={onDisconnectMail} gmailConnected={gmailConnected} gmailboxEmail={gmailboxEmail} connectGmail={connectGmail} disconnectGmail={disconnectGmail} calendarConnected={calendarConnected} connectGoogleCalendar={connectGoogleCalendar} disconnectGoogleCalendar={disconnectGoogleCalendar} ms365CalendarConnected={ms365CalendarConnected} connectMs365Calendar={connectMs365Calendar} disconnectMs365Calendar={disconnectMs365Calendar} orgWebhookUrl={orgWebhookUrl} orgWebhookType={orgWebhookType} onManageNotifications={()=>setActive("notifications")}/>}
           {active==="integration-health"&&isHR&&<IntegrationHealthSection integrationEvents={integrationEvents}/>}
           {active==="notifications"&&<NotificationsSection dueSoon={dueSoon} caseTasks={caseTasks} createCaseTask={createCaseTask} requestNotifications={requestNotifications} notifGranted={notifGranted} emailDigestOptIn={emailDigestOptIn} toggleEmailDigest={toggleEmailDigest} orgWebhookUrl={orgWebhookUrl} orgWebhookType={orgWebhookType} saveOrgWebhook={saveOrgWebhook} sendTestWebhook={sendTestWebhook}/>}
+          {active==="automations"&&isHR&&<AutomationsSection automationLevels={automationLevels} saveAutomationLevel={saveAutomationLevel}/>}
           {active==="audit-trail"&&<AuditTrailSection auditLog={auditLog}/>}
           {active==="data-privacy"&&<DataPrivacySection isHR={isHR} exportCSV={exportCSV} exportPDF={exportPDF} cases={cases} policies={policies} auditLog={auditLog} exportAllData={exportAllData} deleteAllData={deleteAllData} setGdprAccepted={setGdprAccepted} setShowGdpr={setShowGdpr} lsSet={lsSet}/>}
           {active==="help"&&<HelpSection setOnboardStep={setOnboardStep} setShowOnboard={setShowOnboard}/>}

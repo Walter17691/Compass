@@ -17,6 +17,7 @@
 
 import { openSignalsForCase } from './caseSignals';
 import { tasksForCase } from './caseTasks';
+import { isTerminalStatus } from './eSignature';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -25,6 +26,18 @@ function daysSince(iso, now) {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return null;
   return Math.floor((now.getTime() - then) / DAY_MS);
+}
+
+// Integrations & Workflow Automation (Phase 5, IP28, §22-23) — a meeting
+// whose reminder was already resent (App.jsx's resendSignatureReminder,
+// stamping reminderSentAt) shouldn't immediately re-trigger the same
+// rule again — that's what would let an Automate-level reminder spam an
+// employee on every case view. 24h, same cooldown shape as this rule's
+// own 5-day staleness threshold, just much shorter since a reminder is
+// a lighter-touch action than the original send.
+function recentlyReminded(m, now) {
+  if (!m.reminderSentAt) return false;
+  return daysSince(m.reminderSentAt, now) < 1;
 }
 
 // Each rule: {id, category, when(ctx) -> boolean, then(ctx) -> {label, reason, meetingType?}}.
@@ -36,14 +49,21 @@ export const AUTOMATION_RULES = [
   {
     id: "unsigned_meeting_record_stale",
     category: "signature",
-    when: ({ cs, now }) => (cs.meetings || []).some(m => m.record && m.signStatus !== "signed" && daysSince(m.date, now) >= 5),
+    when: ({ cs, now }) => (cs.meetings || []).some(m => m.record && m.signId && !isTerminalStatus(m.signStatus) && daysSince(m.date, now) >= 5 && !recentlyReminded(m, now)),
     then: ({ cs, now }) => {
-      const stale = (cs.meetings || []).filter(m => m.record && m.signStatus !== "signed" && daysSince(m.date, now) >= 5);
+      const stale = (cs.meetings || []).filter(m => m.record && m.signId && !isTerminalStatus(m.signStatus) && daysSince(m.date, now) >= 5 && !recentlyReminded(m, now));
       const oldest = stale.reduce((a, b) => daysSince(a.date, now) > daysSince(b.date, now) ? a : b);
       return {
         label: stale.length === 1 ? "Chase signature on meeting record" : `Chase signature on ${stale.length} meeting records`,
         reason: `${oldest.type || "A meeting"} record from ${daysSince(oldest.date, now)} days ago is still unsigned.`,
         meetingType: oldest.type,
+        // Integrations & Workflow Automation (Phase 5, IP28, §22-23) —
+        // the real meeting objects behind this suggestion, only ever
+        // read by execution wiring for automatable rules (see
+        // lib/automationLevels.js's AUTOMATABLE_RULE_IDS) — the other
+        // three rules in this file have no equivalent field, by design,
+        // since they have no automatable action to execute against.
+        meetings: stale,
       };
     },
   },

@@ -10,11 +10,25 @@ describe('evaluateAutomationRules', () => {
   });
 
   it('flags a meeting record unsigned for 5+ days', () => {
-    const cs = { id: 'c1', meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'pending', date: '2026-08-08' }] };
+    const cs = { id: 'c1', meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', signStatus: 'pending', signId: 'sign-1', date: '2026-08-08' }] };
     const suggestions = evaluateAutomationRules(cs, { now: NOW });
     expect(suggestions).toHaveLength(1);
     expect(suggestions[0].ruleId).toBe('unsigned_meeting_record_stale');
     expect(suggestions[0].reason).toContain('7 days ago');
+    // Phase 5, IP28, §22-23 — execution wiring reads the real meeting(s)
+    // behind the suggestion, not just the aggregated label/reason.
+    expect(suggestions[0].meetings).toHaveLength(1);
+    expect(suggestions[0].meetings[0].id).toBe('m1');
+  });
+
+  it('does not flag a meeting record never actually sent for signature (no signId)', () => {
+    const cs = { id: 'c1', meetings: [{ type: 'Investigation', record: 'notes', date: '2026-08-01' }] };
+    expect(evaluateAutomationRules(cs, { now: NOW })).toEqual([]);
+  });
+
+  it('does not re-flag a meeting whose reminder was already resent within the last 24h', () => {
+    const cs = { id: 'c1', meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'sent', signId: 'sign-1', date: '2026-08-08', reminderSentAt: '2026-08-15T06:00:00Z' }] };
+    expect(evaluateAutomationRules(cs, { now: NOW })).toEqual([]);
   });
 
   it('does not flag a meeting record unsigned for fewer than 5 days', () => {
@@ -94,7 +108,7 @@ describe('evaluateAutomationRules', () => {
   });
 
   it('returns multiple independent suggestions at once', () => {
-    const cs = { id: 'c1', meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'pending', date: '2026-08-01' }] };
+    const cs = { id: 'c1', meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'pending', signId: 'sign-1', date: '2026-08-01' }] };
     const caseTasks = [{ id: 't1', caseId: 'c1', name: 'A', status: 'open', dueDate: '2026-08-01' }];
     const suggestions = evaluateAutomationRules(cs, { caseTasks, now: NOW });
     expect(suggestions.map(s => s.ruleId).sort()).toEqual(['overdue_task', 'unsigned_meeting_record_stale']);

@@ -29,7 +29,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'POST') {
-    const { document, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, signedAt } = req.body;
+    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, signedAt } = req.body;
     const signId = req.body.signId;
 
     try {
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: { 'Prefer': 'return=minimal' },
           body: JSON.stringify({
-            sign_id: newSignId, document, employee_name: employeeName, manager_name: managerName, manager_email: managerEmail||'',
+            sign_id: newSignId, document, employee_email: employeeEmail||'', employee_name: employeeName, manager_name: managerName, manager_email: managerEmail||'',
             meeting_type: meetingType, meeting_date: meetingDate,
             document_type: documentType || 'meeting_record',
             requires_signature: requiresSignature !== false,
