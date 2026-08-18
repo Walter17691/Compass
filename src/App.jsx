@@ -47,6 +47,7 @@ import { readEvidenceFiles } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
+import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
@@ -4019,6 +4020,61 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setDocumentFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"dismissed"}:f)}));
   };
 
+  // Integrations & Workflow Automation (Phase 5, IP23, §19) — the same
+  // finding-approval shape as analyseEvidenceDocument/acceptDocumentFinding
+  // above, kept as its own state/handlers rather than folding into
+  // documentFindings: an OH report's findings (adjustment/restriction/
+  // further_information/review_date) target ohProcess.js's tracked
+  // process, not the evidence-allegation/case-signal write paths the
+  // generic finding types use, so mixing the two vocabularies into one
+  // map would make both harder to reason about for no real benefit.
+  const [ohReportFindings, setOhReportFindings] = useState({}); // `${caseId}::${evidenceIndex}` -> [{id,type,...,status}]
+  const [ohReportAnalysisLoading, setOhReportAnalysisLoading] = useState({});
+
+  const analyseOhReport = async (cs, evidenceIndex) => {
+    const ev = (cs.evidence||[])[evidenceIndex];
+    if(!ev || !canAnalyseEvidence(ev)) return;
+    const content = buildAnalysisContent(ev);
+    if(!content) return;
+    const key = `${cs.id}::${evidenceIndex}`;
+    setOhReportAnalysisLoading(l=>({...l, [key]:true}));
+    try {
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:700,
+        stream:false,
+        system: OH_REPORT_SYSTEM_PROMPT,
+        messages:[{role:"user", content:[
+          {type:"text", text:`CASE: ${cs.employeeName} (${cs.caseType||"HR matter"})\n\nOCCUPATIONAL HEALTH REPORT TO ANALYSE ("${ev.name}"):`},
+          content,
+        ]}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const findings = buildOhFindings(parsed);
+      setOhReportFindings(s=>({...s, [key]:findings}));
+      if(!findings.length) showToast("Compass found nothing to flag in this report");
+    } catch(e) { console.error("analyseOhReport", e); showToast("Couldn't analyse the report — "+e.message, "error"); }
+    setOhReportAnalysisLoading(l=>({...l, [key]:false}));
+  };
+
+  const acceptOhFinding = (cs, evidenceIndex, finding) => {
+    const key = `${cs.id}::${evidenceIndex}`;
+    const taskName = ohFindingTaskName(finding);
+    if(taskName) {
+      createCaseTask(cs.id, {name: taskName});
+    } else if(finding.type==="review_date") {
+      saveCases(cases.map(x=>x.id===cs.id?{...x, ohProcess:{...(x.ohProcess||{}), reviewDate: finding.date}}:x), cs.id);
+    }
+    setOhReportFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"accepted"}:f)}));
+  };
+
+  const dismissOhFinding = (cs, evidenceIndex, finding) => {
+    const key = `${cs.id}::${evidenceIndex}`;
+    setOhReportFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"dismissed"}:f)}));
+  };
+
   // ── Email integration groundwork (Phase 24) ──
   // The manual half of a flow designed so a later webhook adapter (Graph
   // mail push / Gmail push) can feed the same pipeline once OAuth
@@ -6832,6 +6888,11 @@ Please produce:
           documentFindings={documentFindings}
           documentAnalysisLoading={documentAnalysisLoading}
           analyseEvidenceDocument={analyseEvidenceDocument}
+          ohReportFindings={ohReportFindings}
+          ohReportAnalysisLoading={ohReportAnalysisLoading}
+          onAnalyseOhReport={analyseOhReport}
+          onAcceptOhFinding={acceptOhFinding}
+          onDismissOhFinding={dismissOhFinding}
           acceptDocumentFinding={acceptDocumentFinding}
           dismissDocumentFinding={dismissDocumentFinding}
           requestOverrideReason={requestOverrideReason}

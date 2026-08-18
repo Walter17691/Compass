@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Btn } from './Primitives';
 import { OH_PROCESS_STEPS, ohStepIndex, ohStepStatus, applyOhStepTransition } from '../lib/ohProcess';
+import { canAnalyseEvidence } from '../lib/documentIngestion';
 
 const STATUS_DOT = { done: "#1A7A4A", current: "#5B3FD4", upcoming: "#D8D2E8" };
 const fmtShort = iso => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
+const OH_FINDING_LABEL = { adjustment: "Adjustment", restriction: "Restriction", further_information: "Further information needed", review_date: "Suggested review date" };
 
 // Integrations & Workflow Automation (Phase 5, IP22, §18) — a genuine
 // step-by-step tracker for the OH referral-to-review process, alongside
@@ -14,11 +16,12 @@ const fmtShort = iso => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "
 // working unchanged. Compass tracks the process only, never a medical
 // judgement — "Recommendations" is HR's own record of what the OH
 // report said, not Compass's interpretation of one.
-export function OccupationalHealthPanel({ cs, cases, saveCases, stage }) {
+export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportFindings, ohReportAnalysisLoading, onAnalyseOhReport, onAcceptOhFinding, onDismissOhFinding }) {
   const ohProcess = cs.ohProcess;
   const [recommendationsDraft, setRecommendationsDraft] = useState(ohProcess?.recommendations || "");
   const [reviewDateDraft, setReviewDateDraft] = useState(ohProcess?.reviewDate || "");
   const [consentChecked, setConsentChecked] = useState(false);
+  const [selectedEvidenceIndex, setSelectedEvidenceIndex] = useState("");
 
   // Resyncing local drafts when the case itself changes (not on every
   // ohProcess update, which would stomp what HR is mid-typing) — React's
@@ -31,7 +34,14 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage }) {
     setRecommendationsDraft(ohProcess?.recommendations || "");
     setReviewDateDraft(ohProcess?.reviewDate || "");
     setConsentChecked(false);
+    setSelectedEvidenceIndex("");
   }
+
+  const analysableEvidence = (cs.evidence||[]).map((ev,i)=>({ev,i})).filter(({ev})=>canAnalyseEvidence(ev));
+  const findingsKey = `${cs.id}::${selectedEvidenceIndex}`;
+  const findings = (selectedEvidenceIndex!==""&&ohReportFindings?.[findingsKey])||[];
+  const openFindings = findings.filter(f=>f.status==="open");
+  const analysing = !!ohReportAnalysisLoading?.[findingsKey];
 
   if (stage === "closed" && !ohProcess?.currentStep) return null;
 
@@ -79,6 +89,36 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage }) {
                     <textarea value={recommendationsDraft} onChange={e=>setRecommendationsDraft(e.target.value)} rows={3} placeholder="What did the OH report recommend?"
                       style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",resize:"vertical"}} />
                     <Btn onClick={()=>advance("recommendations", { recommendations: recommendationsDraft })} disabled={!recommendationsDraft.trim()} style={{marginTop:6}}>Save recommendations</Btn>
+
+                    {onAnalyseOhReport&&analysableEvidence.length>0&&(
+                      <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",marginBottom:6}}>Or let Compass suggest findings from the uploaded report</div>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          <select value={selectedEvidenceIndex} onChange={e=>setSelectedEvidenceIndex(e.target.value)}
+                            style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                            <option value="">Select the OH report...</option>
+                            {analysableEvidence.map(({ev,i})=><option key={i} value={i}>{ev.name}</option>)}
+                          </select>
+                          <Btn variant="secondary" onClick={()=>onAnalyseOhReport(cs, Number(selectedEvidenceIndex))} disabled={selectedEvidenceIndex===""||analysing}>{analysing?"Analysing...":"Analyse OH report"}</Btn>
+                        </div>
+
+                        {openFindings.length>0&&(
+                          <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:8}}>
+                            {openFindings.map(finding=>(
+                              <div key={finding.id} style={{background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px"}}>
+                                <div style={{fontSize:11,fontWeight:700,color:"#5B3FD4",textTransform:"uppercase",letterSpacing:"0.3px",marginBottom:3}}>{OH_FINDING_LABEL[finding.type]||finding.type}</div>
+                                <div style={{fontSize:13,color:"#1A1535"}}>{finding.type==="review_date"?finding.date:finding.description}</div>
+                                {finding.reasoning&&<div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{finding.reasoning}</div>}
+                                <div style={{display:"flex",gap:8,marginTop:8}}>
+                                  <Btn onClick={()=>onAcceptOhFinding(cs, Number(selectedEvidenceIndex), finding)} style={{fontSize:12,padding:"6px 14px"}}>Accept</Btn>
+                                  <Btn variant="ghost" onClick={()=>onDismissOhFinding(cs, Number(selectedEvidenceIndex), finding)} style={{fontSize:12,padding:"6px 14px"}}>Dismiss</Btn>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
