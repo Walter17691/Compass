@@ -50,6 +50,29 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
   // just plain text to read and a status to flip.
   const markNotetakerNotesReviewed = (m) => saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,notetakerNotesStatus:"reviewed"}:mt)}:x));
 
+  // Integrations & Workflow Automation (Phase 5, IP17, §11) — a meeting
+  // scheduled via the Calendar screen's automatic workspace
+  // (lib/meetingScheduling.js's buildScheduledMeetingEntry) has no
+  // record yet — nextStep.js already treats that as "hasn't happened",
+  // so this shows the auto-generated agenda/questions/attendees instead
+  // of the sign-status/notes controls that only make sense once the
+  // meeting has actually been held.
+  const ScheduledMeetingDetails = ({m}) => (
+    <div style={{marginTop:8,background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px"}}>
+      <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Scheduled — not yet held</div>
+      {m.attendees?.length>0&&<div style={{fontSize:12,color:"#1A1535",marginBottom:6}}>Attendees: {m.attendees.join(", ")}</div>}
+      {m.agenda&&<div style={{fontSize:12,color:"#1A1535",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:m.prepQuestions?.length?8:0}}>{m.agenda}</div>}
+      {m.prepQuestions?.length>0&&(
+        <div>
+          <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",letterSpacing:0.5,textTransform:"uppercase",marginBottom:4}}>Prep questions</div>
+          {m.prepQuestions.map(q=>(
+            <div key={q.id} style={{fontSize:12,color:"#1A1535",marginBottom:2}}>{q.essential?"● ":"○ "}{q.text}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   const MeetingRow = ({m}) => (
     <div style={{padding:"12px 0",borderBottom:"1px solid #F5F1EA"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
@@ -67,6 +90,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
         </div>
       </div>
+      {!m.record&&(m.agenda||m.prepQuestions?.length>0||m.attendees?.length>0)&&<ScheduledMeetingDetails m={m}/>}
       {m.notetakerNotesStatus==="submitted"&&(
         <div style={{marginTop:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:8,padding:"10px 12px"}}>
           <div style={{fontSize:11,color:"#9B9098",marginBottom:6}}>Submitted by {m.notetakerNotesSubmittedBy||"the notetaker"}{m.notetakerNotesSubmittedAt?" · "+fmtDate(m.notetakerNotesSubmittedAt):""}</div>

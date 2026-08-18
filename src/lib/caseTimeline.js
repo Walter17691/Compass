@@ -47,7 +47,11 @@ function rawEntries(cs, allegations, auditLog) {
   }
 
   (cs.meetings || []).forEach(m => {
-    entries.push({ key: `meeting-${m.id}`, date: m.date, type: "meeting", description: `${m.type || "Meeting"} held`, actor: m.manager || m.savedBy || null, linkTo: { kind: "meeting", id: m.id }, allegationId: null });
+    // IP17, §11 — a meeting created by the automatic scheduling workspace
+    // (lib/meetingScheduling.js's buildScheduledMeetingEntry) has no
+    // record yet; nextStep.js already treats that as "hasn't happened",
+    // so the timeline should say so too rather than claiming it was held.
+    entries.push({ key: `meeting-${m.id}`, date: m.date, type: "meeting", description: `${m.type || "Meeting"} ${m.record ? "held" : "scheduled"}`, actor: m.manager || m.savedBy || null, linkTo: { kind: "meeting", id: m.id }, allegationId: null });
     if (m.letterOutput) {
       entries.push({ key: `letter-${m.id}`, date: m.savedAt || m.date, type: "letter", description: "Letter drafted", actor: m.savedBy || null, linkTo: { kind: "meeting", id: m.id }, allegationId: null });
     }

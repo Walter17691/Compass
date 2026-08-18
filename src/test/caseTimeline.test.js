@@ -31,6 +31,19 @@ describe('buildCaseTimeline', () => {
     expect(letterEntries[0].linkTo).toEqual({ kind: 'meeting', id: 'm2' });
   });
 
+  it('IP17 — describes a recordless (scheduled but not yet held) meeting as "scheduled", and a recorded one as "held"', () => {
+    const cs = {
+      ...baseCase,
+      meetings: [
+        { id: 'm1', type: 'Investigation', date: '2026-08-03', record: null },
+        { id: 'm2', type: 'Disciplinary', date: '2026-08-05', record: 'Notes taken' },
+      ],
+    };
+    const result = buildCaseTimeline(cs, [], []);
+    expect(result.find(e => e.key === 'meeting-m1').description).toBe('Investigation scheduled');
+    expect(result.find(e => e.key === 'meeting-m2').description).toBe('Disciplinary held');
+  });
+
   it('includes an investigation report entry and an outcome entry when present', () => {
     const cs = { ...baseCase, investigationReport: 'text', investigationReportDate: '2026-08-04', outcome: 'Final written warning', outcomeDate: '2026-08-06' };
     const result = buildCaseTimeline(cs, [], []);

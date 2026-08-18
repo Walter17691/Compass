@@ -53,7 +53,7 @@ import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandB
 import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
 import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLetterSubject, matchReplyToSentLetters } from './lib/letterSend';
-import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
+import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -1900,6 +1900,38 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // layered on top of this once it exists; this phase is just "put it on
   // the calendar."
   const [meetingScheduling, setMeetingScheduling] = useState(false);
+  // Integrations & Workflow Automation (Phase 5, IP17, §11) — automatic
+  // meeting workspace. One AI call producing both a short agenda and
+  // structured prep questions, grounded in the case's own allegations
+  // (linkedAllegationId only ever set when it matches a real allegation
+  // id already on the case — never a guessed link) — same "AI proposes,
+  // nothing auto-executes beyond a draft" posture as generatePrepQuestions
+  // (the live-session equivalent this reuses the exact question shape
+  // from) and every other AI call in this app.
+  const generateMeetingWorkspace = async (cs, meetingLabel) => {
+    try {
+      const caseAllegations = allegationsForCase(allegations, cs.id);
+      const allegationList = caseAllegations.length ? caseAllegations.map(a=>`- id "${a.id}": ${a.title}`).join("\n") : "None recorded.";
+      const evidenceList = (cs.evidence||[]).map(e=>e.name).join(", ") || "None recorded.";
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:1200,
+        stream:false,
+        system:"You are a senior UK HR advisor preparing an automatic workspace for an upcoming Employee Relations meeting, before it has been held. Read the case background and produce a short agenda (3-6 plain bullet points starting each line with \"- \", no headers) and 4-8 structured prep questions. Respond ONLY with valid JSON, no other text: {\"agenda\":\"- ...\\n- ...\",\"questions\":[{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\",\"allegationId\":\"...\"|null}]} — allegationId only when a question clearly concerns one of the case's own listed allegations (by its exact given id), otherwise null.",
+        messages:[{role:"user", content:`Meeting: ${meetingLabel}. Employee: ${cs.employeeName}. Case type: ${cs.caseType||"HR matter"}. Description: ${cs.description||"None"}.\n\nAllegations:\n${allegationList}\n\nEvidence on file: ${evidenceList}`}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const questions = (Array.isArray(parsed.questions)?parsed.questions:[]).map((q,i)=>({
+        id:"pq_"+Date.now()+"_"+i, text:q.text||"", category:q.category||"general", essential:!!q.essential, reasoning:q.reasoning||"",
+        linkedAllegationId: caseAllegations.some(a=>a.id===q.allegationId) ? q.allegationId : null,
+        linkedEvidenceIndex:null, source:"ai", status:"not_asked", statusSource:"ai",
+      })).filter(q=>q.text.trim());
+      return { agenda: parsed.agenda||"", questions };
+    } catch(e) { console.error("generateMeetingWorkspace", e); return { agenda:"", questions:[] }; }
+  };
+
   const scheduleMeeting = async ({ caseId, meetingType, date, startTime, durationMinutes, attendees, description }) => {
     const times = buildEventTimes({ date, startTime, durationMinutes });
     if(!times) { showToast("Enter a valid date and time", "error"); return false; }
@@ -1914,6 +1946,25 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const data = await res.json();
       if(!res.ok || !data.success) { showToast(data.error||"Couldn't schedule the meeting", "error"); setMeetingScheduling(false); return false; }
       audit("Meeting scheduled", title, caseId||null);
+
+      // IP17 — only when a real case is linked; a stand-alone meeting has
+      // no case record to attach a workspace to.
+      if(cs) {
+        const workspace = await generateMeetingWorkspace(cs, meetingLabel);
+        const meetingEntry = buildScheduledMeetingEntry({
+          meetingTypeLabel: meetingLabel, date, startISO: times.startISO, endISO: times.endISO,
+          attendees: parseAttendees(attendees), agenda: workspace.agenda, prepQuestions: workspace.questions,
+          manager: cs.manager, savedBy: currentUser?.name,
+        });
+        saveCases(cases.map(x=>x.id===caseId?{...x, meetings:[...(x.meetings||[]), meetingEntry]}:x), caseId);
+        // Pre-meeting tasks — only genuinely actionable prep items
+        // (essential AND about evidence to gather), not every question.
+        workspace.questions.filter(q=>q.essential && q.category==="evidence").forEach(q => {
+          createCaseTask(caseId, { name: "Prepare: "+q.text });
+        });
+        audit("Meeting workspace created", title, caseId);
+      }
+
       showToast("Meeting scheduled on your calendar");
       setMeetingScheduling(false);
       return true;

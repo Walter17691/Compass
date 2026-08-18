@@ -86,3 +86,33 @@ export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Dat
   }
   return null;
 }
+
+// Integrations & Workflow Automation (Phase 5, IP17, §11) — automatic
+// meeting workspace. Deliberately reuses the exact meeting-record shape
+// every meeting on a case already has (id/type/date/manager/savedBy —
+// see App.jsx's own saveMeetingToCase) rather than a parallel
+// "scheduled meeting" entity: nextStep.js's own stage logic already
+// treats a meeting with no `record` yet as "hasn't happened, offer Start
+// meeting" (e.g. disciplinaryNextStep's `if(!lastInv?.record)` branch),
+// so a scheduled-not-yet-held meeting already behaves correctly
+// everywhere else in the app for free — MeetingsTab, buildCaseTimeline,
+// nextStep — with no changes needed to any of them beyond
+// buildCaseTimeline's own "held" vs "scheduled" wording (see its own
+// comment). record stays null/undefined until the meeting is actually
+// run through the live session.
+export function buildScheduledMeetingEntry({ meetingTypeLabel, date, startISO, endISO, attendees, agenda, prepQuestions, manager, savedBy }) {
+  return {
+    id: crypto.randomUUID(),
+    type: meetingTypeLabel,
+    date,
+    scheduledStartISO: startISO,
+    scheduledEndISO: endISO,
+    attendees: attendees || [],
+    agenda: agenda || "",
+    prepQuestions: prepQuestions || [],
+    manager: manager || "",
+    savedBy: savedBy || "HR Manager",
+    savedAt: new Date().toISOString(),
+    record: null,
+  };
+}

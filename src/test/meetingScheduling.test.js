@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod } from '../lib/meetingScheduling.js';
+import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod, buildScheduledMeetingEntry } from '../lib/meetingScheduling.js';
 
 describe('buildEventTimes (Phase 5, IP15)', () => {
   it('builds start/end ISO strings from a date, time and duration', () => {
@@ -108,5 +108,35 @@ describe('checkNoticePeriod (Phase 5, IP16)', () => {
     expect(checkNoticePeriod(["48 hours' notice required."], { now })).toBeNull();
     expect(checkNoticePeriod([], { meetingISO: '2026-08-16T09:00:00Z', now })).toBeNull();
     expect(checkNoticePeriod(undefined, { meetingISO: '2026-08-16T09:00:00Z', now })).toBeNull();
+  });
+});
+
+describe('buildScheduledMeetingEntry (Phase 5, IP17)', () => {
+  it('builds a meeting entry with no record, matching every other meeting shape on the case', () => {
+    const entry = buildScheduledMeetingEntry({
+      meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: '2026-08-20T14:00:00.000Z', endISO: '2026-08-20T15:00:00.000Z',
+      attendees: ['sarah@company.com'], agenda: '- Discuss the allegation', prepQuestions: [{ text: 'Question 1' }], manager: 'Jo Smith', savedBy: 'HR Manager',
+    });
+    expect(entry).toMatchObject({
+      type: 'Investigation', date: '20/08/2026', scheduledStartISO: '2026-08-20T14:00:00.000Z', scheduledEndISO: '2026-08-20T15:00:00.000Z',
+      attendees: ['sarah@company.com'], agenda: '- Discuss the allegation', prepQuestions: [{ text: 'Question 1' }], manager: 'Jo Smith', savedBy: 'HR Manager', record: null,
+    });
+    expect(entry.id).toBeTruthy();
+    expect(entry.savedAt).toBeTruthy();
+  });
+
+  it('defaults optional fields sensibly when omitted', () => {
+    const entry = buildScheduledMeetingEntry({ meetingTypeLabel: 'Grievance', date: '20/08/2026', startISO: 'x', endISO: 'y' });
+    expect(entry.attendees).toEqual([]);
+    expect(entry.agenda).toBe('');
+    expect(entry.prepQuestions).toEqual([]);
+    expect(entry.manager).toBe('');
+    expect(entry.savedBy).toBe('HR Manager');
+  });
+
+  it('gives each entry a unique id', () => {
+    const a = buildScheduledMeetingEntry({ meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: 'x', endISO: 'y' });
+    const b = buildScheduledMeetingEntry({ meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: 'x', endISO: 'y' });
+    expect(a.id).not.toBe(b.id);
   });
 });

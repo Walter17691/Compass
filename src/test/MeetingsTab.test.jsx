@@ -81,3 +81,31 @@ describe('MeetingsTab — notetaker notes review', () => {
     expect(screen.queryByRole('button', { name: 'Mark reviewed' })).not.toBeInTheDocument();
   });
 });
+
+describe('MeetingsTab — automatic meeting workspace (Phase 5, IP17)', () => {
+  it('shows the "Scheduled — not yet held" workspace with agenda, attendees and prep questions for a recordless meeting', () => {
+    const cs = caseWithMeeting({
+      record: null, attendees: ['sarah@company.com'], agenda: '- Discuss the allegation\n- Confirm next steps',
+      prepQuestions: [{ id: 'q1', text: 'What happened on 5 August?', essential: true }, { id: 'q2', text: 'Any prior warnings?', essential: false }],
+    });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+
+    expect(screen.getByText('Scheduled — not yet held')).toBeInTheDocument();
+    expect(screen.getByText('Attendees: sarah@company.com')).toBeInTheDocument();
+    expect(screen.getByText(/Discuss the allegation/)).toBeInTheDocument();
+    expect(screen.getByText(/What happened on 5 August\?/)).toBeInTheDocument();
+    expect(screen.getByText(/Any prior warnings\?/)).toBeInTheDocument();
+  });
+
+  it('does not show the workspace card once the meeting has a real record', () => {
+    const cs = caseWithMeeting({ record: 'Meeting notes here', agenda: '- Discuss the allegation', attendees: ['sarah@company.com'] });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.queryByText('Scheduled — not yet held')).not.toBeInTheDocument();
+  });
+
+  it('does not show the workspace card for an ordinary meeting with no agenda/questions/attendees at all', () => {
+    const cs = caseWithMeeting({});
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.queryByText('Scheduled — not yet held')).not.toBeInTheDocument();
+  });
+});
