@@ -1026,7 +1026,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // the moment anyone saved it. manager being nulled the same way
       // also undid MP19's "take over case" reassignment on the very next
       // save.
-      const query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,suspension_review_date,investigation_paused,owner_id,manager,priority').eq('org_id', org.id);
+      const query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority').eq('org_id', org.id);
       const { data, error } = await query;
   if(!error && data) {
         setCases(data.map(mapCaseRow));
@@ -1079,6 +1079,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         probation_review_date: caseObj.probationReviewDate || null,
         oh_referral_date: caseObj.ohReferralDate || null,
         oh_report_received_date: caseObj.ohReportReceivedDate || null,
+        oh_process: caseObj.ohProcess || null,
         suspension_review_date: caseObj.suspensionReviewDate || null,
         investigation_paused: caseObj.investigationPaused || false,
         updated_at: nowIso,

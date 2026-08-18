@@ -1,0 +1,33 @@
+-- ============================================================================
+-- Occupational health — full tracked process — 2026-08-18
+-- ============================================================================
+-- Integrations & Workflow Automation (Phase 5, IP22, §18) — expands the
+-- existing occupational_health STAGE (a single step in the long-term-
+-- sickness case flow, processStages.js) and its two flat date fields
+-- (oh_referral_date/oh_report_received_date, see
+-- employee_records_history_2026-08-18.sql's neighbour for the case-level
+-- schema this builds on) into the spec's full tracked process: concern
+-- identified -> consider referral -> consent -> prepare -> submit ->
+-- await report -> received -> HR review -> recommendations ->
+-- adjustments considered -> manager discussion -> review date.
+--
+-- One JSONB column, not twelve new ones — same precedent as
+-- timeline_overrides (timeline_overrides_2026-08-10.sql): a single
+-- structured record { currentStep, history: {stepId: isoDate},
+-- consentObtained, recommendations, reviewDate }. The two existing flat
+-- date columns stay as-is and keep working exactly as before (submit and
+-- received still mirror into them) — this is additive, not a
+-- replacement, so deadlines.js's existing OH-report-chase logic needs no
+-- changes.
+--
+-- Compass tracks the process only, never makes or implies a medical
+-- judgement — "recommendations" here is HR's own record of what the OH
+-- report said and what HR decided, not Compass's interpretation.
+--
+-- Purely additive and nullable — no existing row or query breaks.
+--
+-- HOW TO APPLY: paste into the Supabase SQL Editor and run.
+-- ============================================================================
+
+alter table public.cases
+  add column if not exists oh_process jsonb;

@@ -14,6 +14,7 @@ import { HrReviewGatePanel } from '../HrReviewGatePanel';
 import { AskHrPanel } from '../AskHrPanel';
 import { CaseRiskPanel } from '../CaseRiskPanel';
 import { ProcessChecklistPanel } from '../ProcessChecklistPanel';
+import { OccupationalHealthPanel } from '../OccupationalHealthPanel';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -94,6 +95,8 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
           </div>
         </div>
       )}
+
+      <OccupationalHealthPanel cs={cs} cases={cases} saveCases={saveCases} stage={stage} />
 
       <ProcessChecklistPanel template={processTemplate} />
 
