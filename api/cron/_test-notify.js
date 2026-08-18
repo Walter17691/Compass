@@ -1,5 +1,5 @@
 import { supabaseRequest } from './_supabase.js';
-import { postWebhook } from './_notify.js';
+import { postTestWebhook } from './_notify.js';
 import { isAllowedWebhookUrl } from './_webhookGuard.js';
 import { verifyCaller } from '../_auth.js';
 
@@ -27,7 +27,7 @@ export async function testNotify(req, res) {
     const members = await memberRes.json();
     if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
 
-    const ok = await postWebhook(url, type, [{ employeeName: 'Compass HR', label: 'Test message — your notifications are connected', overdue: false, daysLeft: 0 }]);
+    const ok = await postTestWebhook(url, type);
     if (!ok) return res.status(502).json({ error: 'Webhook responded with an error' });
     res.status(200).json({ success: true });
   } catch (e) {

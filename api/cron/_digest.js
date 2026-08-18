@@ -109,7 +109,7 @@ export async function runDigest() {
     // to check against, unlike the per-member email loop above.
     const publicUrgent = urgent.filter(d => !d.confidential);
     if (org.notification_webhook_url && publicUrgent.length > 0) {
-      const ok = await postWebhook(org.notification_webhook_url, org.notification_webhook_type, publicUrgent);
+      const ok = await postWebhook(org.notification_webhook_url, org.notification_webhook_type, publicUrgent.length);
       if (ok) webhooksNotified++;
     }
   }
