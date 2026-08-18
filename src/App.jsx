@@ -55,6 +55,7 @@ import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/
 import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLetterSubject, matchReplyToSentLetters } from './lib/letterSend';
 import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/meetingCompletion';
 import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/employeeHistory';
+import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
@@ -74,6 +75,7 @@ import { PromptModal } from './components/PromptModal';
 import { WhySourcesModal } from './components/WhySourcesModal';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { CasesScreen } from './screens/CasesScreen';
+import { OpenInCompassScreen } from './screens/OpenInCompassScreen';
 import { LetterScreen } from './screens/LetterScreen';
 import { SearchScreen } from './screens/SearchScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
@@ -4242,6 +4244,27 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const newUrl = window.location.pathname + (params.toString()?"?"+params.toString():"");
     window.history.replaceState({}, "", newUrl);
   }, []);
+
+  // Integrations & Workflow Automation (Phase 5, IP21, §15) — "Open in
+  // Compass" deep link from an HRIS profile. Same one-time,
+  // query-param-driven shape as the gmailParam/mailParam/calendarParam
+  // effects above rather than folding into readNavFromUrl's bidirectional
+  // screen/case router: this is a one-shot "arrived here from an external
+  // profile" trigger, not ordinary in-app navigation the user browses
+  // into and might expect Back/Forward to retrace.
+  const [openEmployeeName, setOpenEmployeeName] = useState(null);
+  useEffect(() => {
+    const employeeName = parseEmployeeDeepLink(window.location.search);
+    if(!employeeName) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- same one-time, query-param-driven sync on mount as the identical gmailParam/mailParam/calendarParam effects above.
+    setOpenEmployeeName(employeeName);
+    setScreen(SCREENS.OPEN_EMPLOYEE);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("employee");
+    const newUrl = window.location.pathname + (params.toString()?"?"+params.toString():"");
+    window.history.replaceState({}, "", newUrl);
+  }, []);
+
   const connectGmail = async () => {
     if(!user?.id || !org?.id) return;
     try {
@@ -6869,6 +6892,11 @@ Please produce:
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
         <CasesScreen cases={cases} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} />
+      )}
+
+      {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}
+      {screen===SCREENS.OPEN_EMPLOYEE&&(
+        <OpenInCompassScreen employeeName={openEmployeeName} cases={cases} getCaseStage={getCaseStage} getEmployeeRecord={getEmployeeRecord} setActiveCaseId={setActiveCaseId} setCaseViewInitialTab={setCaseViewInitialTab} setScreen={setScreen} setConcernForm={setConcernForm} emptyConcernForm={EMPTY_CONCERN_FORM} setConcernFormAutoOpen={setConcernFormAutoOpen} setCasePromptName={setCasePromptName} setShowCasePrompt={setShowCasePrompt} fmtDate={fmtDate} />
       )}
 
       {screen===SCREENS.SEARCH&&(
