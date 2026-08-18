@@ -5,7 +5,7 @@ export function EmployeeRecordsSection({ employeeCsvFileRef, employeeCsvProcessi
     <>
       <Card style={{marginBottom:12}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Employee records</h3>
-        <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Import or export employee names, job titles, start dates and locations as a CSV — works with an export from any HRIS or payroll system (BambooHR, Xero, Sage, etc). Expected columns: Name, Job title, Start date, Location.</p>
+        <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Import or export employee records as a CSV — works with an export from any HRIS or payroll system (BambooHR, Xero, Sage, etc). Expected columns: Name, Job title, Start date, Location, Employee number, Department, Manager, Status, Working pattern, Probation end date — only Name is required, the rest are optional.</p>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <Btn onClick={()=>employeeCsvFileRef.current?.click()} disabled={employeeCsvProcessing}>{employeeCsvProcessing?"Importing...":"Import from CSV"}</Btn>
           <Btn variant="secondary" onClick={exportEmployeesCsv}>Export to CSV</Btn>

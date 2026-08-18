@@ -54,6 +54,7 @@ import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
 import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLetterSubject, matchReplyToSentLetters } from './lib/letterSend';
 import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/meetingCompletion';
+import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/employeeHistory';
 import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
@@ -324,7 +325,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const {data} = await supabase.from('employee_records').select('*').eq('org_id', org.id);
-      if(data) setEmployeeRecords(data.map(r=>({name:r.name,jobTitle:r.job_title,startDate:r.start_date,location:r.location})));
+      if(data) setEmployeeRecords(data.map(r=>({name:r.name,jobTitle:r.job_title,startDate:r.start_date,location:r.location,employeeNumber:r.employee_number||"",department:r.department||"",manager:r.manager||"",status:r.status||"",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
     } catch(e) { console.error('loadEmployeeRecords', e); }
   };
 
@@ -350,6 +351,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       job_title: fields.jobTitle||null,
       start_date: fields.startDate||null,
       location: fields.location||null,
+      // IP20 — the richer HRIS field set (lib/hrisAdapter.js's own
+      // canonical shape); nullable and additive, existing callers that
+      // don't pass these just write null, same as before this phase.
+      employee_number: fields.employeeNumber||null,
+      department: fields.department||null,
+      manager: fields.manager||null,
+      status: fields.status||null,
+      working_pattern: fields.workingPattern||null,
+      probation_end_date: fields.probationEndDate||null,
       updated_at: new Date().toISOString(),
     }, {onConflict: 'org_id,name'});
     if(error) { console.error('saveEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
@@ -367,19 +377,23 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const objs = csvRowsToObjects(parseCsv(text));
       const valid = objs.filter(o => o.name && o.name.trim());
       const skipped = objs.length - valid.length;
+      // IP20 — recognises the full HRIS field set (lib/hrisAdapter.js's
+      // canonical shape) if the CSV has those columns, same as before if
+      // it doesn't (they just come through as "").
       const records = valid.map(o => ({
         name: o.name.trim(),
         jobTitle: o['job title']||o.jobtitle||"",
         startDate: o['start date']||o.startdate||"",
         location: o.location||"",
+        employeeNumber: o['employee number']||o.employeenumber||o['emp no']||o.empno||"",
+        department: o.department||o.dept||"",
+        manager: o.manager||"",
+        status: o.status||"",
+        workingPattern: o['working pattern']||o.workingpattern||"",
+        probationEndDate: o['probation end date']||o.probationenddate||"",
       }));
 
-      const merged = [...employeeRecords];
-      records.forEach(r => {
-        const idx = merged.findIndex(m=>m.name===r.name);
-        if(idx>=0) merged[idx] = {...merged[idx], ...r};
-        else merged.push(r);
-      });
+      const merged = mergeHrisEmployeesIntoRecords(employeeRecords, records.map(r=>({...r, site:r.location})));
       saveEmployeeRecords(merged);
 
       if(org?.id && records.length>0) {
@@ -390,6 +404,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
             job_title: r.jobTitle||null,
             start_date: r.startDate||null,
             location: r.location||null,
+            employee_number: r.employeeNumber||null,
+            department: r.department||null,
+            manager: r.manager||null,
+            status: r.status||null,
+            working_pattern: r.workingPattern||null,
+            probation_end_date: r.probationEndDate||null,
             updated_at: new Date().toISOString(),
           })),
           {onConflict: 'org_id,name'}
@@ -406,8 +426,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const exportEmployeesCsv = () => {
-    const rows = [["Name","Job title","Start date","Location"]];
-    employeeRecords.forEach(r => rows.push([r.name||"", r.jobTitle||"", r.startDate||"", r.location||""]));
+    const rows = [["Name","Job title","Start date","Location","Employee number","Department","Manager","Status","Working pattern","Probation end date"]];
+    employeeRecords.forEach(r => rows.push([r.name||"", r.jobTitle||"", r.startDate||"", r.location||"", r.employeeNumber||"", r.department||"", r.manager||"", r.status||"", r.workingPattern||"", r.probationEndDate||""]));
     const csv = toCsv(rows);
     const blob = new Blob([csv],{type:"text/csv"});
     const url = URL.createObjectURL(blob);
@@ -4990,6 +5010,14 @@ Please produce:
       // Meetings tab instead of silently vanishing with this session's
       // meetingEvidenceSuggestions/meetingActionSuggestions state.
       unresolvedSuggestions: snapshotUnresolvedSuggestions(meetingEvidenceSuggestions, meetingActionSuggestions),
+      // IP20 — formalises what caseInfo.manager above already stamped
+      // onto every meeting incidentally: a full point-in-time snapshot of
+      // the employee's job title/site/department/manager/status/working
+      // pattern AS IT STOOD when this meeting was saved, captured once
+      // and never updated afterward — so this meeting keeps showing who
+      // was actually in post at the time, even after employee_records
+      // (or a future real HRIS sync) later changes.
+      employeeSnapshot: buildEmployeeSnapshot(getEmployeeRecord(caseInfo.employee)),
     };
     const existing = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
     const caseId = existing ? existing.id : crypto.randomUUID();
