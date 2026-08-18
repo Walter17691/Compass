@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Btn } from './Primitives';
 import { OH_PROCESS_STEPS, ohStepIndex, ohStepStatus, applyOhStepTransition } from '../lib/ohProcess';
 import { canAnalyseEvidence } from '../lib/documentIngestion';
+import { parseCommitmentDueDate } from '../lib/taskDueDateParsing';
+
+const OH_TASK_FINDING_TYPES = ["adjustment", "restriction", "further_information"];
 
 const STATUS_DOT = { done: "#1A7A4A", current: "#5B3FD4", upcoming: "#D8D2E8" };
 const fmtShort = iso => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
@@ -109,6 +112,10 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                                 <div style={{fontSize:11,fontWeight:700,color:"#5B3FD4",textTransform:"uppercase",letterSpacing:"0.3px",marginBottom:3}}>{OH_FINDING_LABEL[finding.type]||finding.type}</div>
                                 <div style={{fontSize:13,color:"#1A1535"}}>{finding.type==="review_date"?finding.date:finding.description}</div>
                                 {finding.reasoning&&<div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{finding.reasoning}</div>}
+                                {/* Integrations & Workflow Automation (Phase 5, IP24, §20) —
+                                    preview of the due date accepting this finding will set
+                                    on the resulting task, parsed from the finding's own text. */}
+                                {OH_TASK_FINDING_TYPES.includes(finding.type)&&parseCommitmentDueDate(finding.description)&&<div style={{fontSize:11,color:"#5B3FD4",marginTop:2}}>Due {parseCommitmentDueDate(finding.description)}</div>}
                                 <div style={{display:"flex",gap:8,marginTop:8}}>
                                   <Btn onClick={()=>onAcceptOhFinding(cs, Number(selectedEvidenceIndex), finding)} style={{fontSize:12,padding:"6px 14px"}}>Accept</Btn>
                                   <Btn variant="ghost" onClick={()=>onDismissOhFinding(cs, Number(selectedEvidenceIndex), finding)} style={{fontSize:12,padding:"6px 14px"}}>Dismiss</Btn>

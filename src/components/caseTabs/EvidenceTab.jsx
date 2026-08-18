@@ -1,6 +1,7 @@
 import { EvidenceDropzone } from '../EvidenceDropzone';
 import { readEvidenceFiles, fmtBytes } from '../../lib/evidenceUpload';
 import { canAnalyseEvidence } from '../../lib/documentIngestion';
+import { parseCommitmentDueDate } from '../../lib/taskDueDateParsing';
 
 const FINDING_LABEL = {
   witness: f => `Potential witness: ${f.name}`,
@@ -63,6 +64,12 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
                     <div style={{minWidth:0,flex:1}}>
                       <div style={{fontSize:12,color:"#1A1535"}}>{FINDING_LABEL[f.type]?.(f, allegations)}</div>
                       {f.reasoning&&<div style={{fontSize:11,color:"#6B6375",marginTop:1}}>{f.reasoning}</div>}
+                      {/* Integrations & Workflow Automation (Phase 5, IP24, §20) —
+                          a preview of the due date accepting this finding will set
+                          on the resulting task, parsed from the finding's own text
+                          (see taskDueDateParsing.js), so it's never a silent
+                          surprise once accepted. */}
+                      {f.type==="action"&&parseCommitmentDueDate(f.description)&&<div style={{fontSize:11,color:"#5B3FD4",marginTop:2}}>Due {parseCommitmentDueDate(f.description)}</div>}
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       <button onClick={()=>onAcceptFinding?.(i,f)} style={{fontSize:11,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>

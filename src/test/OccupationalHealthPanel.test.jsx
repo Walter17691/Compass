@@ -156,3 +156,40 @@ describe('OccupationalHealthPanel — OH report intelligence (Phase 5, IP23)', (
     expect(screen.queryByText('No heavy lifting')).not.toBeInTheDocument();
   });
 });
+
+describe('OccupationalHealthPanel — due-date preview on task-shaped findings (Phase 5, IP24)', () => {
+  const analysableEvidence = { name: 'OH Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA', size: 1000 };
+
+  it('shows a parsed due date next to an adjustment/restriction/further_information finding with a commitment', async () => {
+    const user = userEvent.setup();
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [analysableEvidence] });
+    const finding = { id: 'f1', type: 'adjustment', description: 'Provide a standing desk within 2 weeks', status: 'open' };
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
+      onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
+      ohReportFindings={{ 'c1::0': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+    expect(screen.getByText(/^Due \d{4}-\d{2}-\d{2}$/)).toBeInTheDocument();
+  });
+
+  it('omits the due-date preview when the description has no parseable commitment', async () => {
+    const user = userEvent.setup();
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [analysableEvidence] });
+    const finding = { id: 'f1', type: 'restriction', description: 'No heavy lifting', status: 'open' };
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
+      onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
+      ohReportFindings={{ 'c1::0': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+    expect(screen.queryByText(/^Due \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
+  });
+
+  it('never shows a due-date preview for a review_date finding, which has no description', async () => {
+    const user = userEvent.setup();
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [analysableEvidence] });
+    const finding = { id: 'f1', type: 'review_date', date: '2026-10-01', status: 'open' };
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
+      onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
+      ohReportFindings={{ 'c1::0': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+    expect(screen.queryByText(/^Due \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
+  });
+});

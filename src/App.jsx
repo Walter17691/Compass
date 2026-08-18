@@ -48,6 +48,7 @@ import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
 import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
+import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
@@ -3998,7 +3999,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(finding.type==="witness") {
       createCaseTask(cs.id, {name:`Interview ${finding.name} as a potential witness`});
     } else if(finding.type==="action") {
-      createCaseTask(cs.id, {name:finding.description});
+      createCaseTask(cs.id, {name:finding.description, dueDate: parseCommitmentDueDate(finding.description)||"", owner: suggestTaskOwner(cs, orgMembers)});
     } else if(finding.type==="allegation_link") {
       saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:linkEvidenceToAllegation(x.evidence||[], evidenceIndex, finding.allegationId, finding.stance)}:x));
     } else if(finding.type==="inconsistency") {
@@ -4063,7 +4064,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const key = `${cs.id}::${evidenceIndex}`;
     const taskName = ohFindingTaskName(finding);
     if(taskName) {
-      createCaseTask(cs.id, {name: taskName});
+      createCaseTask(cs.id, {name: taskName, dueDate: parseCommitmentDueDate(finding.description)||"", owner: suggestTaskOwner(cs, orgMembers)});
     } else if(finding.type==="review_date") {
       saveCases(cases.map(x=>x.id===cs.id?{...x, ohProcess:{...(x.ohProcess||{}), reviewDate: finding.date}}:x), cs.id);
     }
