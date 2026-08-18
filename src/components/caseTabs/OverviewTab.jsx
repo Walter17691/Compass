@@ -23,7 +23,7 @@ const RISK_STYLE = {
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 const fmtGBP = n => "£"+Math.round(n).toLocaleString("en-GB");
 
-export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, caseTasks, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason, caseAccess, orgMembers, assignCaseRole, hrReviewRequests, respondToReview, resolveInvestigationReview, isApprover, auditLog, wellbeingNotes, dueSoon, processTemplates, ohReportFindings, ohReportAnalysisLoading, onAnalyseOhReport, onAcceptOhFinding, onDismissOhFinding }) {
+export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecord, repeatCount, confirmDialog, setScreen, screens, caseSignals, caseTasks, unansweredCovered, unansweredLoading, generateUnansweredQuestions, createCaseTask, changeSignalStatus, onAskWhy, allegations, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason, caseAccess, orgMembers, assignCaseRole, hrReviewRequests, respondToReview, resolveInvestigationReview, isApprover, auditLog, wellbeingNotes, dueSoon, processTemplates, ohReportFindings, ohReportAnalysisLoading, onAnalyseOhReport, onAcceptOhFinding, onDismissOhFinding, onSendForSignature }) {
   const riskItems = computeCaseRisk(cs, { allegations, caseSignals, cases, auditLog, wellbeingNotes, dueSoon });
   const automationSuggestions = evaluateAutomationRules(cs, { caseTasks, caseSignals });
   const processTemplate = getTemplateForType(processTemplates, getProcessType(cs.caseType).id);
@@ -96,7 +96,7 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
         </div>
       )}
 
-      <OccupationalHealthPanel cs={cs} cases={cases} saveCases={saveCases} stage={stage} ohReportFindings={ohReportFindings} ohReportAnalysisLoading={ohReportAnalysisLoading} onAnalyseOhReport={onAnalyseOhReport} onAcceptOhFinding={onAcceptOhFinding} onDismissOhFinding={onDismissOhFinding} />
+      <OccupationalHealthPanel cs={cs} cases={cases} saveCases={saveCases} stage={stage} ohReportFindings={ohReportFindings} ohReportAnalysisLoading={ohReportAnalysisLoading} onAnalyseOhReport={onAnalyseOhReport} onAcceptOhFinding={onAcceptOhFinding} onDismissOhFinding={onDismissOhFinding} onSendForSignature={onSendForSignature} />
 
       <ProcessChecklistPanel template={processTemplate} />
 

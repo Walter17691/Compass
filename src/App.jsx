@@ -48,6 +48,7 @@ import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
 import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
+import { isTerminalStatus, signatureStatusLabel } from './lib/eSignature';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
@@ -584,21 +585,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   useEffect(() => {
     if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
     const cs = cases.find(c => c.id === activeCaseId);
-    const pending = (cs?.meetings || []).filter(m => m.signStatus === "pending" && m.signId);
+    const pending = (cs?.meetings || []).filter(m => m.signId && !isTerminalStatus(m.signStatus));
     if (!pending.length) return;
     let cancelled = false;
     (async () => {
-      const signedIds = (await Promise.all(pending.map(async m => {
+      const changes = (await Promise.all(pending.map(async m => {
         try {
           const res = await fetch(`/api/signing?signId=${encodeURIComponent(m.signId)}`);
           if (!res.ok) return null;
           const data = await res.json();
-          return data.status === "signed" ? m.id : null;
+          return data.status && data.status !== m.signStatus ? { id: m.id, status: data.status } : null;
         } catch { return null; }
       }))).filter(Boolean);
-      if (cancelled || !signedIds.length) return;
+      if (cancelled || !changes.length) return;
+      const changeMap = new Map(changes.map(c => [c.id, c.status]));
       const updated = cases.map(c => c.id === activeCaseId
-        ? { ...c, meetings: c.meetings.map(m => signedIds.includes(m.id) ? { ...m, signStatus: "signed" } : m) }
+        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id) } : m) }
         : c);
       saveCases(updated, activeCaseId);
     })();
@@ -643,12 +645,16 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [homeChatOpen, setHomeChatOpen] = useState(false);
   const [homeChatProcessing, setHomeChatProcessing] = useState(false);
 
-  const sendForSignature = async (employeeEmail) => {
-    if(!employeeEmail||!reviewOutput) return;
-    setSignStatus("pending");
-
-    // Note: saveMeetingToCase() is called after signature success
-    // so we don't auto-save here (avoids duplicate / wrong case allocation)
+  // Integrations & Workflow Automation (Phase 5, IP27, §21) — generalised
+  // from the meeting-record-only flow below into something any document
+  // type can call: outcome letters (LetterScreen), agreed adjustments
+  // (OccupationalHealthPanel), and consultation records (already just
+  // meetings, no change needed — meetingType has always been free text).
+  // Returns {success, signId} rather than driving UI itself, so each
+  // caller decides what "success" means for its own document (save a
+  // meeting, advance an OH step, or just show a toast).
+  const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true }) => {
+    if(!employeeEmail||!document) return { success:false };
     const appUrl = window.location.origin;
 
     // Store document in Supabase via API. Authenticated — this step creates
@@ -659,56 +665,63 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
-        document: (()=>{
-        const full = reviewOutput;
-        const start = full.indexOf("## Meeting Details");
-        const advisorCut = full.indexOf("## HR Advisor");
-        const keyCut = full.indexOf("\n## Key Points");
-        const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
-        const raw = start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
-        return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
-      })(),
-        employeeName: caseInfo.employee||"Employee",
-        managerName: caseInfo.manager||"Manager",
-        meetingType: meetingType?.label||"Meeting",
-        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB")
+        document, employeeName, managerName, managerEmail,
+        meetingType: documentLabel, meetingDate: documentDate,
+        documentType, requiresSignature,
       })
     });
     if(!storeRes.ok) {
       showToast("Couldn't prepare the document for signing — please try again", "error");
-      setSignStatus(null);
-      return;
+      return { success:false };
     }
     const { signId } = await storeRes.json();
-    setSignId(signId);
 
-    // Send email via Resend
     const res = await authedFetch("/api/send-for-signature", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
-        employeeEmail,
-        employeeName: caseInfo.employee||"Employee",
-        managerName: caseInfo.manager||"Manager",
-        meetingType: meetingType?.label||"Meeting",
-        meetingDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
-        signId,
-        appUrl
+        employeeEmail, employeeName, managerName,
+        meetingType: documentLabel, meetingDate: documentDate,
+        documentType, requiresSignature, signId, appUrl,
       })
     });
-    
     const data = await res.json();
-        if(data.success) {
-      showToast("Signature request sent to "+employeeEmail);
-      setShowSignModal(false);
-      // saveMeetingToCase() navigates to the saved case itself now (both
-      // branches — witness interviews to the linked case, regular meetings
-      // to the found-or-just-created one), so this no longer needs its own
-      // duplicate lookup-and-navigate logic.
-      saveMeetingToCase();
-    } else {
-      showToast("Failed to send: "+(data.error||JSON.stringify(data)), "error");
+    if(data.success) {
+      showToast((requiresSignature===false?"Acknowledgement":"Signature")+" request sent to "+employeeEmail);
+      return { success:true, signId };
     }
+    showToast("Failed to send: "+(data.error||JSON.stringify(data)), "error");
+    return { success:false, signId };
+  };
+
+  const sendForSignature = async (employeeEmail) => {
+    if(!employeeEmail||!reviewOutput) return;
+    setSignStatus("sent");
+    const document = (()=>{
+      const full = reviewOutput;
+      const start = full.indexOf("## Meeting Details");
+      const advisorCut = full.indexOf("## HR Advisor");
+      const keyCut = full.indexOf("\n## Key Points");
+      const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
+      const raw = start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
+      return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
+    })();
+    const { success, signId } = await sendDocumentForSignature({
+      document, employeeEmail,
+      employeeName: caseInfo.employee||"Employee",
+      managerName: caseInfo.manager||"Manager",
+      documentType: "meeting_record",
+      documentLabel: meetingType?.label||"Meeting",
+      documentDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+    });
+    if(!success) { setSignStatus(null); return; }
+    setSignId(signId);
+    setShowSignModal(false);
+    // saveMeetingToCase() navigates to the saved case itself now (both
+    // branches — witness interviews to the linked case, regular meetings
+    // to the found-or-just-created one), so this no longer needs its own
+    // duplicate lookup-and-navigate logic.
+    saveMeetingToCase();
   };
 
   const sendLiveChat = async () => {
@@ -990,6 +1003,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
+  // Integrations & Workflow Automation (Phase 5, IP27, §21) — a separate
+  // modal from showSignModal/signEmail above rather than overloading it:
+  // that one always drives sendForSignature (a meeting record, drawn
+  // signature required); this one drives an outcome letter through
+  // sendDocumentForSignature with requiresSignature:false (an
+  // acknowledgement, not a signature) — different backing action,
+  // different email-collection state, same UI shape.
+  const [showLetterAckModal, setShowLetterAckModal] = useState(false);
+  const [letterAckEmail, setLetterAckEmail] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showMobileNav, setShowMobileNav] = useState(false);
   useEffect(() => {
@@ -5380,7 +5402,7 @@ Please produce:
     heading((sections.investigationReport?"3":"2")+". Meeting Records");
     if(!sections.meetings.length) body("No meetings recorded.");
     sections.meetings.forEach(m=>{
-      label(`${m.type} — ${m.date||"no date"} (${m.signStatus})`);
+      label(`${m.type} — ${m.date||"no date"} (${m.signStatus?signatureStatusLabel(m.signStatus):"not sent"})`);
       if(m.record) body(m.record.slice(0,1500));
       y+=3;
     });
@@ -5478,6 +5500,39 @@ Please produce:
     }
 
     showToast("Letter sent to "+to);
+    return true;
+  };
+
+  // Integrations & Workflow Automation (Phase 5, IP27, §21) — an
+  // alternative to sendLetterCoordinated above: instead of a plain email
+  // (Resend, no receipt), this sends the outcome letter through the
+  // signing_requests lifecycle so HR can see whether the employee has
+  // actually opened and acknowledged it. requiresSignature:false — an
+  // outcome letter needs acknowledgement of receipt, not a drawn
+  // signature. Same case-side bookkeeping as sendLetterCoordinated (sent
+  // copy saved to evidence, audit event, matching task completed), since
+  // from the case's own record the letter has equally been sent either way.
+  const sendLetterForAcknowledgement = async (to) => {
+    const subject = buildLetterSubject({ type: activeLetter, meetingType: meetingType?.label, employeeName: caseInfo.employee });
+    const { success } = await sendDocumentForSignature({
+      document: letterOutput, employeeEmail: to,
+      employeeName: caseInfo.employee||"Employee",
+      managerName: caseInfo.manager||"HR Manager",
+      documentType: "outcome_letter",
+      documentLabel: subject,
+      documentDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+      requiresSignature: false,
+    });
+    if(!success) return false;
+
+    const activeCase = cases.find(x=>x.id===activeCaseId);
+    if(activeCase) {
+      const sentItem = buildSentLetterEvidenceItem({ type: activeLetter, subject, recipient: to, body: letterOutput, addedBy: currentUser?.name||"HR Manager" });
+      saveCases(cases.map(x=>x.id===activeCaseId?{...x, evidence:[...(x.evidence||[]), sentItem]}:x), activeCaseId);
+      audit("Letter sent for acknowledgement", sentItem.name, activeCaseId);
+      const matchingTask = findTaskToCompleteForSentLetter(caseTasks, activeCaseId, activeLetter);
+      if(matchingTask) toggleCaseTaskDone(matchingTask.id);
+    }
     return true;
   };
 
@@ -6083,8 +6138,8 @@ Please produce:
     const meetings = cs.meetings || [];
     const types = meetings.map(m => (m.type || "").toLowerCase());
     const hasOutcomeLetter = meetings.some(m => m.letterOutput);
-    const hasSigned = meetings.some(m => m.signStatus === "signed");
-    const hasPending = meetings.some(m => m.signStatus === "pending");
+    const hasSigned = meetings.some(m => m.signStatus === "signed" || m.signStatus === "acknowledged");
+    const hasPending = meetings.some(m => m.signStatus && !isTerminalStatus(m.signStatus));
 
     // cs.status was never set anywhere — every closed-case transition in
     // this app (bulk close, appeal-window close, "Close case" buttons)
@@ -6329,6 +6384,28 @@ Please produce:
                 Send email
               </Btn>
               <Btn variant="ghost" onClick={()=>{setShowSignModal(false);setSignEmail("");}} style={{flex:1}}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLetterAckModal&&(
+        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowLetterAckModal(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
+            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Send for acknowledgement</h3>
+            <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The employee will receive an email with a link to read and acknowledge receipt of this letter.</p>
+            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
+            <input value={letterAckEmail} onChange={e=>setLetterAckEmail(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&letterAckEmail.includes("@")&&(sendLetterForAcknowledgement(letterAckEmail),setShowLetterAckModal(false),setLetterAckEmail(""))}
+              placeholder="employee@company.com" autoFocus
+              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
+            <div style={{display:"flex",gap:10}}>
+              <Btn onClick={()=>{if(letterAckEmail.includes("@")){sendLetterForAcknowledgement(letterAckEmail);setShowLetterAckModal(false);setLetterAckEmail("");}}}
+                disabled={!letterAckEmail.includes("@")}
+                style={{flex:1}}>
+                Send email
+              </Btn>
+              <Btn variant="ghost" onClick={()=>{setShowLetterAckModal(false);setLetterAckEmail("");}} style={{flex:1}}>Cancel</Btn>
             </div>
           </div>
         </div>
@@ -6894,6 +6971,7 @@ Please produce:
           onAnalyseOhReport={analyseOhReport}
           onAcceptOhFinding={acceptOhFinding}
           onDismissOhFinding={dismissOhFinding}
+          onSendForSignature={sendDocumentForSignature}
           acceptDocumentFinding={acceptDocumentFinding}
           dismissDocumentFinding={dismissDocumentFinding}
           requestOverrideReason={requestOverrideReason}
@@ -6944,7 +7022,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} />
       )}
 
       {/* ══ DASHBOARD ══ */}

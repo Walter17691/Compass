@@ -193,3 +193,40 @@ describe('OccupationalHealthPanel — due-date preview on task-shaped findings (
     expect(screen.queryByText(/^Due \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
   });
 });
+
+describe('OccupationalHealthPanel — send agreed adjustments for signature (Phase 5, IP27)', () => {
+  it('offers the send-for-signature option only once recommendations have been recorded', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'adjustments_considered', history: {}, recommendations: '' } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onSendForSignature={()=>{}} />);
+    expect(screen.queryByText(/send the agreed adjustments/)).not.toBeInTheDocument();
+  });
+
+  it('shows the send-for-signature form once recommendations exist and a handler is given', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'adjustments_considered', history: {}, recommendations: 'Standing desk for 4 weeks.' } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onSendForSignature={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Send for signature' })).toBeDisabled();
+  });
+
+  it('calls onSendForSignature with the recommendations text and acknowledgement (not signature) once an email is entered', async () => {
+    const user = userEvent.setup();
+    const onSendForSignature = vi.fn().mockResolvedValue({ success: true });
+    const cs = makeCase({ id: 'c1', employeeName: 'Sarah Jones', manager: 'Jo Smith', ohProcess: { currentStep: 'adjustments_considered', history: {}, recommendations: 'Standing desk for 4 weeks.' } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onSendForSignature={onSendForSignature} />);
+    await user.type(screen.getByPlaceholderText('employee@company.com'), 'sarah@example.com');
+    await user.click(screen.getByRole('button', { name: 'Send for signature' }));
+    expect(onSendForSignature).toHaveBeenCalledWith(expect.objectContaining({
+      document: 'Standing desk for 4 weeks.',
+      employeeEmail: 'sarah@example.com',
+      employeeName: 'Sarah Jones',
+      managerName: 'Jo Smith',
+      documentType: 'adjustment_record',
+      requiresSignature: false,
+    }));
+  });
+
+  it('does not render the option at all when adjustments_considered is not the current step', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {}, recommendations: 'Standing desk for 4 weeks.' } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onSendForSignature={()=>{}} />);
+    expect(screen.queryByText(/send the agreed adjustments/)).not.toBeInTheDocument();
+  });
+});

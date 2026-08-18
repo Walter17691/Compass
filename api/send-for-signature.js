@@ -1,5 +1,6 @@
 import { verifyCaller } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
+import { documentTypeLabel } from '../src/lib/eSignature.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -7,8 +8,16 @@ export default async function handler(req, res) {
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { employeeEmail, employeeName, managerName, meetingType, meetingDate, signId, appUrl } = req.body;
+  const { employeeEmail, employeeName, managerName, meetingType, meetingDate, documentType, requiresSignature, signId, appUrl } = req.body;
   const signingUrl = `${appUrl}/sign/${signId}`;
+  // Integrations & Workflow Automation (Phase 5, IP27, §21) — generalised
+  // from a hardcoded "meeting record" subject/body to any of the widened
+  // document types (outcome letter, agreed adjustments, consultation
+  // record), and the action verb reflects requires_signature — an
+  // outcome letter or an adjustments record often just needs an
+  // acknowledgement, not a drawn signature.
+  const label = documentTypeLabel(documentType).toLowerCase();
+  const action = requiresSignature === false ? 'acknowledge' : 'sign';
 
   try {
     const response = await fetch('https://api.resend.com/emails', {
@@ -20,12 +29,12 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'Compass HR <notifications@mail.compasshruk.com>',
         to: [employeeEmail],
-        subject: `Please sign your meeting record - ${meetingType}`,
+        subject: `Please ${action} your ${label}${meetingType ? ` - ${meetingType}` : ''}`,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
           <h2 style="color:#7C5CFC">Compass HR</h2>
           <p>Dear ${esc(employeeName)},</p>
-          <p>Your meeting record from <strong>${esc(meetingType)}</strong> on <strong>${esc(meetingDate)}</strong> is ready for your review and signature.</p>
-          <a href="${esc(signingUrl)}" style="display:inline-block;background:#7C5CFC;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0">Review and Sign</a>
+          <p>Your <strong>${esc(label)}</strong>${meetingType ? ` from <strong>${esc(meetingType)}</strong>` : ''}${meetingDate ? ` on <strong>${esc(meetingDate)}</strong>` : ''} is ready for your review${action === 'sign' ? ' and signature' : ' and acknowledgement'}.</p>
+          <a href="${esc(signingUrl)}" style="display:inline-block;background:#7C5CFC;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0">Review and ${action === 'sign' ? 'Sign' : 'Acknowledge'}</a>
           <p style="color:#666;font-size:12px">This link expires in 7 days. Questions? Contact ${esc(managerName)}.</p>
         </div>`
       })

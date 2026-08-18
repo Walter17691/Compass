@@ -5,7 +5,7 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement }) {
   const [showHistory, setShowHistory] = useState(false);
   return (
     <div>
@@ -110,6 +110,14 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                 // add a timeline event, complete a matching task, log an
                 // audit event — as one action.
                 <Btn variant="secondary" onClick={onSendFromCompass} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send from Compass</Btn>
+              )}
+              {onSendForAcknowledgement&&(
+                // Integrations & Workflow Automation (Phase 5, IP27, §21) —
+                // unlike "Send from Compass" above (a plain email, no
+                // receipt), this tracks whether the employee has actually
+                // opened and acknowledged the letter via the same
+                // signing_requests lifecycle meeting records already use.
+                <Btn variant="secondary" onClick={onSendForAcknowledgement} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send for acknowledgement</Btn>
               )}
               <Btn variant="ghost" onClick={()=>window.print()} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Print</Btn>
               <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Copy text</Btn>

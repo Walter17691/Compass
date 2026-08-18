@@ -19,12 +19,14 @@ const OH_FINDING_LABEL = { adjustment: "Adjustment", restriction: "Restriction",
 // working unchanged. Compass tracks the process only, never a medical
 // judgement — "Recommendations" is HR's own record of what the OH
 // report said, not Compass's interpretation of one.
-export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportFindings, ohReportAnalysisLoading, onAnalyseOhReport, onAcceptOhFinding, onDismissOhFinding }) {
+export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportFindings, ohReportAnalysisLoading, onAnalyseOhReport, onAcceptOhFinding, onDismissOhFinding, onSendForSignature }) {
   const ohProcess = cs.ohProcess;
   const [recommendationsDraft, setRecommendationsDraft] = useState(ohProcess?.recommendations || "");
   const [reviewDateDraft, setReviewDateDraft] = useState(ohProcess?.reviewDate || "");
   const [consentChecked, setConsentChecked] = useState(false);
   const [selectedEvidenceIndex, setSelectedEvidenceIndex] = useState("");
+  const [adjustmentEmailDraft, setAdjustmentEmailDraft] = useState("");
+  const [sendingAdjustment, setSendingAdjustment] = useState(false);
 
   // Resyncing local drafts when the case itself changes (not on every
   // ohProcess update, which would stomp what HR is mid-typing) — React's
@@ -38,6 +40,7 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
     setReviewDateDraft(ohProcess?.reviewDate || "");
     setConsentChecked(false);
     setSelectedEvidenceIndex("");
+    setAdjustmentEmailDraft("");
   }
 
   const analysableEvidence = (cs.evidence||[]).map((ev,i)=>({ev,i})).filter(({ev})=>canAnalyseEvidence(ev));
@@ -129,6 +132,40 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                   </div>
                 )}
 
+                {status==="current"&&step.id==="adjustments_considered"&&(
+                  <div style={{marginTop:8}}>
+                    <Btn variant="secondary" onClick={()=>advance("manager_discussion")}>Mark done</Btn>
+                    {/* Integrations & Workflow Automation (Phase 5, IP27, §21) —
+                        the closest real analog in this codebase to "agreed
+                        adjustments" as a document type: the free-text
+                        recommendations HR already recorded at hr_review,
+                        sent through the same signing_requests lifecycle as
+                        an outcome letter (acknowledgement, not a drawn
+                        signature — an employee confirms they've seen and
+                        agreed the adjustments, they don't sign a form). */}
+                    {onSendForSignature&&ohProcess?.recommendations&&(
+                      <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #F5F1EA"}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",marginBottom:6}}>Or send the agreed adjustments for the employee to sign</div>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          <input value={adjustmentEmailDraft} onChange={e=>setAdjustmentEmailDraft(e.target.value)} placeholder="employee@company.com"
+                            style={{flex:1,minWidth:180,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}} />
+                          <Btn variant="secondary" disabled={!adjustmentEmailDraft.includes("@")||sendingAdjustment} onClick={async ()=>{
+                            setSendingAdjustment(true);
+                            const result = await onSendForSignature({
+                              document: ohProcess.recommendations, employeeEmail: adjustmentEmailDraft,
+                              employeeName: cs.employeeName, managerName: cs.manager||"HR Manager",
+                              documentType: "adjustment_record", documentLabel: "Agreed adjustments",
+                              documentDate: new Date().toLocaleDateString("en-GB"), requiresSignature: false,
+                            });
+                            setSendingAdjustment(false);
+                            if (result?.success) setAdjustmentEmailDraft("");
+                          }}>{sendingAdjustment?"Sending...":"Send for signature"}</Btn>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {step.id==="review_date"&&status==="current"&&(
                   <div style={{display:"flex",gap:8,alignItems:"flex-end",marginTop:8}}>
                     <div>
@@ -140,7 +177,7 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                   </div>
                 )}
 
-                {status==="current"&&!["consider_referral","hr_review","review_date"].includes(step.id)&&(
+                {status==="current"&&!["consider_referral","hr_review","adjustments_considered","review_date"].includes(step.id)&&(
                   <Btn variant="secondary" onClick={()=>advance(OH_PROCESS_STEPS[ohStepIndex(step.id)+1].id)} style={{marginTop:8}}>Mark done</Btn>
                 )}
               </div>

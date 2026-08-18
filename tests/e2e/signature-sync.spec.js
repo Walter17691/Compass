@@ -49,7 +49,9 @@ test('a meeting shows Signed automatically once the real signature lands, withou
   // Appeal stage tabs — they land under "Other", which isn't the default
   // active tab.
   await page.getByRole('button', { name: /^Other/ }).click();
-  await expect(page.getByText('Pending signature', { exact: true })).toBeVisible({ timeout: 10000 });
+  // Phase 5, IP27, §21 — widened from "Pending signature" to the real
+  // signing_requests status lifecycle (Sent -> Opened -> Signed).
+  await expect(page.getByText('Sent — awaiting signature', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('button', { name: 'Mark signed' })).toBeVisible();
 
   // The employee actually signs via the real, unauthenticated sign.html

@@ -41,3 +41,40 @@ describe('LetterScreen — Send from Compass (Phase 5, IP13)', () => {
     expect(screen.queryByRole('button', { name: 'Send from Compass' })).not.toBeInTheDocument();
   });
 });
+
+// Integrations & Workflow Automation (Phase 5, IP27, §21) — a second,
+// independent send path for outcome letters specifically (App.jsx only
+// ever passes onSendForAcknowledgement when activeLetter==="outcome"),
+// tracked through the signing_requests lifecycle instead of a plain
+// Resend email — same "button appears and opens the send modal" E2E
+// boundary as Send from Compass above, real coverage here.
+describe('LetterScreen — Send for acknowledgement (Phase 5, IP27)', () => {
+  it('renders "Send for acknowledgement" disabled until the letter is approved', () => {
+    render(<LetterScreen {...baseProps} letterIsApproved={false} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeDisabled();
+  });
+
+  it('enables it once approved, and calls onSendForAcknowledgement when clicked', async () => {
+    const user = userEvent.setup();
+    const onSendForAcknowledgement = vi.fn();
+    const letterApproval = { by: 'Jo', at: new Date().toISOString() };
+    render(<LetterScreen {...baseProps} letterIsApproved letterApproval={letterApproval} onSendForAcknowledgement={onSendForAcknowledgement} />);
+    const button = screen.getByRole('button', { name: 'Send for acknowledgement' });
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(onSendForAcknowledgement).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the button entirely when no handler is given (e.g. any letter type other than "outcome")', () => {
+    const letterApproval = { by: 'Jo', at: new Date().toISOString() };
+    render(<LetterScreen {...baseProps} letterIsApproved letterApproval={letterApproval} />);
+    expect(screen.queryByRole('button', { name: 'Send for acknowledgement' })).not.toBeInTheDocument();
+  });
+
+  it('can coexist with Send from Compass when both handlers are given', () => {
+    const letterApproval = { by: 'Jo', at: new Date().toISOString() };
+    render(<LetterScreen {...baseProps} letterIsApproved letterApproval={letterApproval} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Send from Compass' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeInTheDocument();
+  });
+});

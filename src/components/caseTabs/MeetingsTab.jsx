@@ -1,4 +1,19 @@
 import { isGrievanceCase } from '../../lib/caseStage';
+import { isTerminalStatus, signatureStatusLabel } from '../../lib/eSignature';
+
+// Integrations & Workflow Automation (Phase 5, IP27, §21) — badge colour
+// per widened signing_requests status. sent/opened are both "still
+// waiting" (amber); signed/acknowledged are both a real completion
+// (green); declined/expired are their own distinct, honest states —
+// neither one gets folded into "pending" or silently hidden.
+const SIGN_STATUS_STYLE = {
+  sent: { color: "#B87520", bg: "#FEF5E7" },
+  opened: { color: "#B87520", bg: "#FEF5E7" },
+  signed: { color: "#1A7A4A", bg: "#E8F5EE" },
+  acknowledged: { color: "#1A7A4A", bg: "#E8F5EE" },
+  declined: { color: "#C84B2F", bg: "#FEF0EB" },
+  expired: { color: "#6B6375", bg: "#F5F1EA" },
+};
 
 // IP18, §12 — display text for an unresolved post-meeting suggestion,
 // matching the exact task-name wording taskFieldsForSuggestion
@@ -92,9 +107,8 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
           {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":"#B87520",background:m.riskScore.rating==="HIGH"?"#FEF0EB":"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
-          {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Signed</span>}
-          {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>Pending signature</span>}
-          {m.signStatus==="pending"&&<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,signStatus:"signed"}:mt)}:x))} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
+          {m.signStatus&&SIGN_STATUS_STYLE[m.signStatus]&&<span style={{fontSize:10,color:SIGN_STATUS_STYLE[m.signStatus].color,background:SIGN_STATUS_STYLE[m.signStatus].bg,borderRadius:4,padding:"2px 7px",fontWeight:600}}>{signatureStatusLabel(m.signStatus)}{(m.signStatus==="sent"||m.signStatus==="opened")?" — awaiting signature":""}</span>}
+          {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,signStatus:"signed"}:mt)}:x))} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
           {m.notetakerNotesStatus==="submitted"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes awaiting review</span>}
           {m.notetakerNotesStatus==="reviewed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes reviewed</span>}
           {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}

@@ -1,5 +1,17 @@
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
+import { signatureStatusLabel } from '../lib/eSignature';
+
+// Integrations & Workflow Automation (Phase 5, IP27, §21) — same widened
+// signing_requests status vocabulary as MeetingsTab.jsx's own badge.
+const SIGN_STATUS_STYLE = {
+  sent: { color: "#B87520", bg: "#FEF5E7" },
+  opened: { color: "#B87520", bg: "#FEF5E7" },
+  signed: { color: "#1A7A4A", bg: "#E8F5EE" },
+  acknowledged: { color: "#1A7A4A", bg: "#E8F5EE" },
+  declined: { color: "#C84B2F", bg: "#FEF0EB" },
+  expired: { color: "#6B6375", bg: "#F5F1EA" },
+};
 
 export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, deleteEmployeeRecord, confirmDialog, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, promptDialog }) {
   const empName = activePerson;
@@ -154,8 +166,7 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                 {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":"#B87520",background:m.riskScore.rating==="HIGH"?"#FEF0EB":"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
-                {m.signStatus==="signed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Signed</span>}
-                {m.signStatus==="pending"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>Pending signature</span>}
+                {m.signStatus&&SIGN_STATUS_STYLE[m.signStatus]&&<span style={{fontSize:10,color:SIGN_STATUS_STYLE[m.signStatus].color,background:SIGN_STATUS_STYLE[m.signStatus].bg,borderRadius:4,padding:"2px 7px",fontWeight:600}}>{signatureStatusLabel(m.signStatus)}{(m.signStatus==="sent"||m.signStatus==="opened")?" — awaiting signature":""}</span>}
                 {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:empName,date:m.date,manager:m.manager||""}));setScreen(SCREENS.REVIEW);}}
                   style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View</button>}
               </div>

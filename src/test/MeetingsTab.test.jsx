@@ -161,3 +161,53 @@ describe('MeetingsTab — meeting completion automation (Phase 5, IP18)', () => 
     expect(screen.queryByText('Not actioned during the meeting')).not.toBeInTheDocument();
   });
 });
+
+// Integrations & Workflow Automation (Phase 5, IP27, §21) — the widened
+// signing_requests status vocabulary (sent/opened/signed/acknowledged/
+// declined/expired), replacing the old pending/signed-only badge.
+describe('MeetingsTab — e-signature status badges (Phase 5, IP27)', () => {
+  it.each([
+    ['sent', 'Sent — awaiting signature'],
+    ['opened', 'Opened — awaiting signature'],
+    ['signed', 'Signed'],
+    ['acknowledged', 'Acknowledged'],
+    ['declined', 'Declined'],
+    ['expired', 'Expired'],
+  ])('shows the right badge text for signStatus "%s"', (signStatus, expectedText) => {
+    const cs = caseWithMeeting({ signStatus, signId: 'sign-1' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText(expectedText)).toBeInTheDocument();
+  });
+
+  it('shows no badge at all when the meeting was never sent for signature', () => {
+    const cs = caseWithMeeting({});
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.queryByText(/awaiting signature/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Signed')).not.toBeInTheDocument();
+  });
+
+  it('shows the manual "Mark signed" override for every non-terminal status, never for a terminal one', () => {
+    ['sent', 'opened'].forEach(signStatus => {
+      const cs = caseWithMeeting({ signStatus, signId: 'sign-1' });
+      const { unmount } = render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+      expect(screen.getByRole('button', { name: 'Mark signed' })).toBeInTheDocument();
+      unmount();
+    });
+    ['signed', 'acknowledged', 'declined', 'expired'].forEach(signStatus => {
+      const cs = caseWithMeeting({ signStatus, signId: 'sign-1' });
+      const { unmount } = render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+      expect(screen.queryByRole('button', { name: 'Mark signed' })).not.toBeInTheDocument();
+      unmount();
+    });
+  });
+
+  it('clicking "Mark signed" saves the meeting with signStatus "signed"', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn();
+    const cs = caseWithMeeting({ signStatus: 'sent', signId: 'sign-1' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} saveCases={saveCases} />);
+    await user.click(screen.getByRole('button', { name: 'Mark signed' }));
+    const [savedCases] = saveCases.mock.calls[0];
+    expect(savedCases[0].meetings[0].signStatus).toBe('signed');
+  });
+});

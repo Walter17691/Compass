@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign Meeting Record - Compass HR</title>
+  <title>Sign Document - Compass HR</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
     <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,8 +21,11 @@
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-ghost { background: none; border: 1px solid #2A2A35; color: #888; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; }
     .btn-download { background: #7C5CFC; border: none; color: white; border-radius: 8px; padding: 12px 24px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 12px; }
+    .btn-decline { background: none; border: 1px solid #5A2A2A; color: #E8622A; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; }
+    textarea { width: 100%; background: #141418; border: 1px solid #2A2A35; border-radius: 8px; padding: 12px; font-size: 13px; color: #F2EDE4; font-family: inherit; resize: vertical; margin-bottom: 12px; }
     h2 { font-family: DM Serif Display, Georgia, serif; font-size: 20px; color: #F2EDE4; margin-bottom: 16px; font-weight: 400; }
     .signed-badge { display: inline-block; background: #0A2A0A; border: 1px solid #2A5A2A; color: #4CAF50; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 16px; }
+    .declined-badge { display: inline-block; background: #2A0A0A; border: 1px solid #5A2A2A; color: #E8622A; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 16px; }
   </style>
 </head>
 <body>
@@ -30,7 +33,7 @@
     <div class="logo">C</div>
     <div>
       <div style="font-size:16px;font-weight:600">Compass HR</div>
-      <div style="font-size:11px;color:#666">Meeting Record — Electronic Signature</div>
+      <div style="font-size:11px;color:#666" id="page-subtitle">Electronic Signature</div>
     </div>
   </div>
 
@@ -38,77 +41,179 @@
     <div id="loading" style="text-align:center;padding:40px"><p style="color:#666">Loading document...</p></div>
     <div id="content" style="display:none">
       <div class="card">
-        <h2 id="meeting-type"></h2>
+        <h2 id="doc-type"></h2>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <div class="field"><div class="label">Employee</div><div class="value" id="employee-name"></div></div>
-          <div class="field"><div class="label">Meeting date</div><div class="value" id="meeting-date"></div></div>
-          <div class="field"><div class="label">Chair</div><div class="value" id="manager-name"></div></div>
+          <div class="field"><div class="label">Date</div><div class="value" id="meeting-date"></div></div>
+          <div class="field"><div class="label">Manager</div><div class="value" id="manager-name"></div></div>
           <div class="field"><div class="label">Status</div><div class="value" id="status-badge"></div></div>
         </div>
       </div>
 
       <div class="card">
-        <h2>Meeting Record</h2>
+        <h2 id="doc-content-heading">Document</h2>
         <div class="document" id="document-content"></div>
+      </div>
+
+      <!-- Integrations & Workflow Automation (Phase 5, IP27, §21) —
+           requires_signature:false (an outcome letter, agreed
+           adjustments) shows a plain Acknowledge button instead of the
+           signature canvas below; requires_signature:true (a meeting
+           record, unchanged from before) keeps the drawn signature. -->
+      <div id="ack-section" class="card" style="display:none">
+        <h2>Confirm receipt</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:16px">By acknowledging you confirm you have read and received this document.</p>
+        <button class="btn" id="ack-btn" onclick="submitAcknowledgement()">Acknowledge</button>
       </div>
 
       <div id="sign-section" class="card">
         <h2>Your Signature</h2>
-        <p style="font-size:13px;color:#666;margin-bottom:16px">By signing below you confirm you have read and received a copy of this meeting record. Your signature does not necessarily indicate agreement with its contents.</p>
+        <p style="font-size:13px;color:#666;margin-bottom:16px">By signing below you confirm you have read and received a copy of this document. Your signature does not necessarily indicate agreement with its contents.</p>
         <canvas id="sig-canvas" height="160"></canvas>
         <button class="btn-ghost" onclick="clearSig()">Clear signature</button>
         <button class="btn" id="submit-btn" onclick="submitSignature()">Submit signature</button>
       </div>
 
+      <div id="decline-section" class="card">
+        <button class="btn-decline" id="decline-toggle" onclick="toggleDecline()">Decline instead</button>
+        <div id="decline-form" style="display:none;margin-top:12px">
+          <div class="label" style="margin-bottom:8px">Reason (optional)</div>
+          <textarea id="decline-reason" rows="3" placeholder="Let your manager know why"></textarea>
+          <button class="btn" id="decline-submit-btn" onclick="submitDecline()" style="background:#E8622A">Confirm decline</button>
+        </div>
+      </div>
+
       <div id="signed-section" style="display:none" class="card">
         <div style="text-align:center;margin-bottom:24px">
-          <div class="signed-badge">✓ Signed</div>
-          <h2 style="margin-top:8px">Document signed successfully</h2>
-          <p style="color:#666;font-size:14px">Signed on <span id="signed-date"></span></p>
-          <button class="btn-download" onclick="downloadSigned()" style="margin-top:16px">Download signed record</button>
+          <div class="signed-badge" id="signed-badge">✓ Signed</div>
+          <h2 id="signed-heading" style="margin-top:8px">Document signed successfully</h2>
+          <p style="color:#666;font-size:14px" id="signed-when-line">Signed on <span id="signed-date"></span></p>
+          <button class="btn-download" id="download-btn" onclick="downloadSigned()" style="margin-top:16px">Download signed record</button>
         </div>
-        <div style="margin-top:16px;padding:16px;background:#141418;border-radius:8px;border:1px solid #2A2A35">
+        <div id="sig-image-wrap" style="margin-top:16px;padding:16px;background:#141418;border-radius:8px;border:1px solid #2A2A35">
           <div style="font-size:11px;color:#444;margin-bottom:8px">EMPLOYEE SIGNATURE</div>
           <img id="sig-image" style="max-width:300px;background:#fff;border-radius:4px;padding:8px"/>
+        </div>
+      </div>
+
+      <div id="declined-section" style="display:none" class="card">
+        <div style="text-align:center">
+          <div class="declined-badge">Declined</div>
+          <h2 style="margin-top:8px">You've declined this document</h2>
+          <p style="color:#666;font-size:14px">Your manager has been notified.</p>
+        </div>
+      </div>
+
+      <div id="expired-section" style="display:none" class="card">
+        <div style="text-align:center">
+          <h2>This link has expired</h2>
+          <p style="color:#666;font-size:14px" id="expired-contact"></p>
         </div>
       </div>
     </div>
   </div>
 
   <script>
+    // Integrations & Workflow Automation (Phase 5, IP27, §21) — widened
+    // from meeting records only, pending/signed only, to outcome letters,
+    // agreed adjustments, and consultation records, with a real status
+    // lifecycle: sent -> opened -> signed/acknowledged/declined, or
+    // expired. A plain, unbundled static page (Vite's public/ dir is
+    // served as-is, no ES module resolution) — the small amount of
+    // shared logic below (document-type labels) is duplicated rather
+    // than imported from src/lib/eSignature.js, which this file
+    // structurally cannot reach.
+    const DOCUMENT_TYPE_LABEL = {
+      meeting_record: 'Meeting Record',
+      outcome_letter: 'Outcome Letter',
+      adjustment_record: 'Agreed Adjustments',
+      consultation_record: 'Consultation Record',
+    };
+    function documentTypeLabel(type) { return DOCUMENT_TYPE_LABEL[type] || 'Document'; }
+
     const signId = window.location.pathname.split('/sign/')[1];
     let sigData = null;
     let docData = null;
 
     fetch('/api/signing?signId=' + signId)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
       .then(data => {
         docData = data;
         document.getElementById('loading').style.display = 'none';
         document.getElementById('content').style.display = 'block';
-        document.getElementById('meeting-type').textContent = data.meeting_type || 'Meeting Record';
+
+        const label = documentTypeLabel(data.document_type);
+        document.title = 'Sign ' + label + ' - Compass HR';
+        document.getElementById('page-subtitle').textContent = label + ' — Electronic Signature';
+        document.getElementById('doc-type').textContent = data.meeting_type || label;
+        document.getElementById('doc-content-heading').textContent = label;
         document.getElementById('employee-name').textContent = data.employee_name || '';
         document.getElementById('meeting-date').textContent = data.meeting_date || '';
         document.getElementById('manager-name').textContent = data.manager_name || '';
         document.getElementById('document-content').textContent = (data.document || '').replace(/^## /gm, '').replace(/^# /gm, '').replace(/\*\*/g, '');
-        if (data.status === 'signed') {
-          showSigned(data);
+
+        const expired = data.status !== 'signed' && data.status !== 'acknowledged' && data.status !== 'declined'
+          && data.expires_at && new Date() > new Date(data.expires_at);
+
+        if (data.status === 'signed' || data.status === 'acknowledged') {
+          showCompleted(data);
+        } else if (data.status === 'declined') {
+          showDeclined();
+        } else if (expired || data.status === 'expired') {
+          showExpired(data);
         } else {
-          document.getElementById('status-badge').innerHTML = '<span style="color:#E8622A">Awaiting signature</span>';
-          initCanvas();
+          // "Awaiting signature" kept verbatim for requires_signature
+          // (the pre-existing, still-real behaviour signature-sync.spec.js
+          // already asserts on) — only the new acknowledgement path gets
+          // distinct wording.
+          document.getElementById('status-badge').innerHTML = '<span style="color:#E8622A">Awaiting ' + (data.requires_signature === false ? 'acknowledgement' : 'signature') + '</span>';
+          if (data.requires_signature === false) {
+            document.getElementById('sign-section').style.display = 'none';
+            document.getElementById('ack-section').style.display = 'block';
+          } else {
+            document.getElementById('ack-section').style.display = 'none';
+            initCanvas();
+          }
         }
       })
       .catch(() => {
         document.getElementById('loading').innerHTML = '<p style="color:#E8622A">Document not found or link has expired.</p>';
       });
 
-    function showSigned(data) {
+    function hideActionSections() {
+      document.getElementById('ack-section').style.display = 'none';
       document.getElementById('sign-section').style.display = 'none';
+      document.getElementById('decline-section').style.display = 'none';
+    }
+
+    function showCompleted(data) {
+      hideActionSections();
       document.getElementById('signed-section').style.display = 'block';
-      document.getElementById('status-badge').innerHTML = '<span style="color:#4CAF50">✓ Signed</span>';
+      const acknowledged = data.status === 'acknowledged';
+      document.getElementById('status-badge').innerHTML = '<span style="color:#4CAF50">✓ ' + (acknowledged ? 'Acknowledged' : 'Signed') + '</span>';
+      document.getElementById('signed-badge').textContent = acknowledged ? '✓ Acknowledged' : '✓ Signed';
+      document.getElementById('signed-heading').textContent = 'Document ' + (acknowledged ? 'acknowledged' : 'signed') + ' successfully';
       const d = data.signed_at ? new Date(data.signed_at).toLocaleString('en-GB', {day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
       document.getElementById('signed-date').textContent = d;
-      if (data.signature) document.getElementById('sig-image').src = data.signature;
+      if (acknowledged || !data.signature) {
+        document.getElementById('sig-image-wrap').style.display = 'none';
+        document.getElementById('download-btn').style.display = acknowledged ? 'none' : 'block';
+      } else {
+        document.getElementById('sig-image').src = data.signature;
+      }
+    }
+
+    function showDeclined() {
+      hideActionSections();
+      document.getElementById('declined-section').style.display = 'block';
+      document.getElementById('status-badge').innerHTML = '<span style="color:#E8622A">Declined</span>';
+    }
+
+    function showExpired(data) {
+      hideActionSections();
+      document.getElementById('expired-section').style.display = 'block';
+      document.getElementById('status-badge').innerHTML = '<span style="color:#888">Expired</span>';
+      document.getElementById('expired-contact').textContent = 'Please contact ' + (data.manager_name || 'your manager') + ' for a new link.';
     }
 
     function downloadSigned() {
@@ -120,7 +225,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'signed-meeting-record.doc';
+      a.download = 'signed-document.doc';
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -172,9 +277,47 @@
         docData.signature = sigData;
         docData.signed_at = new Date().toISOString();
         docData.status = 'signed';
-        showSigned(docData);
+        showCompleted(docData);
       })
       .catch(() => { btn.disabled = false; btn.textContent = 'Submit signature'; alert('Something went wrong. Please try again.'); });
+    }
+
+    function submitAcknowledgement() {
+      const btn = document.getElementById('ack-btn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+      fetch('/api/signing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signId, acknowledged: true, signedAt: new Date().toISOString() })
+      })
+      .then(r => r.json())
+      .then(() => {
+        docData.signed_at = new Date().toISOString();
+        docData.status = 'acknowledged';
+        showCompleted(docData);
+      })
+      .catch(() => { btn.disabled = false; btn.textContent = 'Acknowledge'; alert('Something went wrong. Please try again.'); });
+    }
+
+    function toggleDecline() {
+      const form = document.getElementById('decline-form');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function submitDecline() {
+      const btn = document.getElementById('decline-submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+      const reason = document.getElementById('decline-reason').value;
+      fetch('/api/signing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signId, declined: true, declineReason: reason, signedAt: new Date().toISOString() })
+      })
+      .then(r => r.json())
+      .then(() => { showDeclined(); })
+      .catch(() => { btn.disabled = false; btn.textContent = 'Confirm decline'; alert('Something went wrong. Please try again.'); });
     }
   </script>
 </body>
