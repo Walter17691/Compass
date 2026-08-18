@@ -1,5 +1,15 @@
 import { isGrievanceCase } from '../../lib/caseStage';
 
+// IP18, §12 — display text for an unresolved post-meeting suggestion,
+// matching the exact task-name wording taskFieldsForSuggestion
+// (lib/meetingCompletion.js) uses once accepted, so what's shown here is
+// never a surprise once it becomes a real task.
+const SUGGESTION_LABEL = {
+  witness: s => `Potential witness: ${s.description}`,
+  evidence: s => `Evidence mentioned: ${s.description}`,
+  action: s => `Action: ${s.description}`,
+};
+
 // Absorbs the case view's former top-level "stage tabs" as an internal
 // sub-filter now that they're specifically about which meetings to show,
 // not which workspace tab is active. Grievance-typed cases get a single
@@ -10,7 +20,7 @@ import { isGrievanceCase } from '../../lib/caseStage';
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, setShowHandoffModal, setLetterOutput }) {
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -91,6 +101,20 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
         </div>
       </div>
       {!m.record&&(m.agenda||m.prepQuestions?.length>0||m.attendees?.length>0)&&<ScheduledMeetingDetails m={m}/>}
+      {m.record&&m.unresolvedSuggestions?.length>0&&(onAcceptSavedSuggestion||onDismissSavedSuggestion)&&(
+        <div style={{marginTop:8,background:"#FDF3E8",border:"1px solid #E8C088",borderRadius:8,padding:"10px 12px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#8A5A1E",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Not actioned during the meeting</div>
+          {m.unresolvedSuggestions.map((s,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"4px 0"}}>
+              <span style={{fontSize:12,color:"#1A1535"}}>{SUGGESTION_LABEL[s.kind]?.(s)||s.description}</span>
+              <div style={{display:"flex",gap:6,flexShrink:0}}>
+                <button onClick={()=>onAcceptSavedSuggestion?.(cs,m.id,s)} style={{fontSize:11,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>
+                <button onClick={()=>onDismissSavedSuggestion?.(cs,m.id,s)} style={{fontSize:11,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {m.notetakerNotesStatus==="submitted"&&(
         <div style={{marginTop:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:8,padding:"10px 12px"}}>
           <div style={{fontSize:11,color:"#9B9098",marginBottom:6}}>Submitted by {m.notetakerNotesSubmittedBy||"the notetaker"}{m.notetakerNotesSubmittedAt?" · "+fmtDate(m.notetakerNotesSubmittedAt):""}</div>

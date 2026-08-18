@@ -53,6 +53,7 @@ import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandB
 import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
 import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLetterSubject, matchReplyToSentLetters } from './lib/letterSend';
+import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/meetingCompletion';
 import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole } from './lib/roles';
@@ -943,6 +944,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     meetingActionSuggestions.filter(s=>s.status==="accepted" && !s.applied).forEach(s => {
       createCaseTask(caseId, { name:s.description, owner:s.suggestedOwner||"", dueDate:s.suggestedDueDate||"" });
     });
+  };
+
+  // IP18, §12 — the post-meeting counterpart to applyPendingMeetingSuggestions
+  // above: acting on (or dismissing) a suggestion that survived onto a
+  // SAVED meeting's own unresolvedSuggestions, from the Meetings tab,
+  // potentially long after the live session ended. taskFieldsForSuggestion
+  // (lib/meetingCompletion.js) is the same task-naming convention
+  // applyPendingMeetingSuggestions already uses, so a suggestion resolved
+  // here creates an identical task to one accepted live.
+  const acceptSavedMeetingSuggestion = (cs, meetingId, suggestion) => {
+    createCaseTask(cs.id, taskFieldsForSuggestion(suggestion));
+    saveCases(cases.map(x=>x.id===cs.id?{...x, meetings:x.meetings.map(m=>m.id===meetingId?{...m, unresolvedSuggestions:(m.unresolvedSuggestions||[]).filter(s=>s!==suggestion)}:m)}:x), cs.id);
+  };
+  const dismissSavedMeetingSuggestion = (cs, meetingId, suggestion) => {
+    saveCases(cases.map(x=>x.id===cs.id?{...x, meetings:x.meetings.map(m=>m.id===meetingId?{...m, unresolvedSuggestions:(m.unresolvedSuggestions||[]).filter(s=>s!==suggestion)}:m)}:x), cs.id);
   };
 
   const [meetingStartTime, setMeetingStartTime] = useState(null);
@@ -4969,6 +4985,11 @@ Please produce:
       savedBy: currentUser?.name || "HR Manager",
       signId: signId,
       signStatus: signStatus,
+      // IP18, §12 — anything still "pending" (never individually
+      // accepted or dismissed live) gets one more chance from the
+      // Meetings tab instead of silently vanishing with this session's
+      // meetingEvidenceSuggestions/meetingActionSuggestions state.
+      unresolvedSuggestions: snapshotUnresolvedSuggestions(meetingEvidenceSuggestions, meetingActionSuggestions),
     };
     const existing = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
     const caseId = existing ? existing.id : crypto.randomUUID();
@@ -6714,6 +6735,8 @@ Please produce:
           onDraftCorrespondence={startCaseCorrespondence}
           initialTab={caseViewInitialTab}
           clearInitialTab={()=>setCaseViewInitialTab(null)}
+          onAcceptSavedSuggestion={acceptSavedMeetingSuggestion}
+          onDismissSavedSuggestion={dismissSavedMeetingSuggestion}
           caseChatHistory={caseChatHistory}
           caseChatInput={caseChatInput}
           setCaseChatInput={setCaseChatInput}

@@ -109,3 +109,55 @@ describe('MeetingsTab — automatic meeting workspace (Phase 5, IP17)', () => {
     expect(screen.queryByText('Scheduled — not yet held')).not.toBeInTheDocument();
   });
 });
+
+describe('MeetingsTab — meeting completion automation (Phase 5, IP18)', () => {
+  const unresolvedSuggestions = [
+    { kind: 'witness', description: 'Sarah Jones' },
+    { kind: 'evidence', description: 'CCTV footage' },
+    { kind: 'action', description: 'Send the screenshots', suggestedOwner: 'Jo', suggestedDueDate: '20/08/2026' },
+  ];
+
+  it('lists each unresolved suggestion with its own Accept/Dismiss actions, once the meeting has a real record', () => {
+    const cs = caseWithMeeting({ record: 'Meeting notes here', unresolvedSuggestions });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} onAcceptSavedSuggestion={()=>{}} onDismissSavedSuggestion={()=>{}} />);
+
+    expect(screen.getByText('Not actioned during the meeting')).toBeInTheDocument();
+    expect(screen.getByText('Potential witness: Sarah Jones')).toBeInTheDocument();
+    expect(screen.getByText('Evidence mentioned: CCTV footage')).toBeInTheDocument();
+    expect(screen.getByText('Action: Send the screenshots')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Accept' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Dismiss' })).toHaveLength(3);
+  });
+
+  it('calls onAcceptSavedSuggestion with the case, meeting id and the exact suggestion clicked', async () => {
+    const user = userEvent.setup();
+    const onAcceptSavedSuggestion = vi.fn();
+    const cs = caseWithMeeting({ record: 'Meeting notes here', unresolvedSuggestions });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} onAcceptSavedSuggestion={onAcceptSavedSuggestion} onDismissSavedSuggestion={()=>{}} />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Accept' })[0]);
+    expect(onAcceptSavedSuggestion).toHaveBeenCalledWith(cs, 'm1', unresolvedSuggestions[0]);
+  });
+
+  it('calls onDismissSavedSuggestion with the case, meeting id and the exact suggestion clicked', async () => {
+    const user = userEvent.setup();
+    const onDismissSavedSuggestion = vi.fn();
+    const cs = caseWithMeeting({ record: 'Meeting notes here', unresolvedSuggestions });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} onAcceptSavedSuggestion={()=>{}} onDismissSavedSuggestion={onDismissSavedSuggestion} />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Dismiss' })[1]);
+    expect(onDismissSavedSuggestion).toHaveBeenCalledWith(cs, 'm1', unresolvedSuggestions[1]);
+  });
+
+  it('does not show the unresolved-suggestions card once there are none left', () => {
+    const cs = caseWithMeeting({ record: 'Meeting notes here', unresolvedSuggestions: [] });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} onAcceptSavedSuggestion={()=>{}} onDismissSavedSuggestion={()=>{}} />);
+    expect(screen.queryByText('Not actioned during the meeting')).not.toBeInTheDocument();
+  });
+
+  it('does not show the card for a scheduled-not-yet-held meeting even if unresolvedSuggestions is somehow present', () => {
+    const cs = caseWithMeeting({ record: null, unresolvedSuggestions });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} onAcceptSavedSuggestion={()=>{}} onDismissSavedSuggestion={()=>{}} />);
+    expect(screen.queryByText('Not actioned during the meeting')).not.toBeInTheDocument();
+  });
+});
