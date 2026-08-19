@@ -12,6 +12,7 @@ import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage, withStageTransitionStamp } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
+import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse } from './lib/themes';
 import {
   addPrepQuestion as addPrepQuestionHelper,
   updatePrepQuestionText as updatePrepQuestionTextHelper,
@@ -1253,6 +1254,41 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(data) setLocations(data);
   };
 
+  // Organisational ER Intelligence (Phase 6, OP6, §3) — the HR-editable
+  // theme taxonomy (organisationThemes) and its per-case assignments
+  // (caseThemes), both org-wide flat arrays loaded like allegations
+  // elsewhere in this file. themeSuggestions/themeSuggestionLoading are
+  // session-local AI output only (keyed by caseId), same posture as
+  // documentFindings — nothing is written to case_themes until a
+  // suggestion is confirmed. State declared here (not grouped with this
+  // file's other case-scoped state further down) specifically so
+  // loadOrganisationThemes/loadCaseThemes below can reference their own
+  // setters without a forward reference — same reasoning loadLocations
+  // above is declared here rather than alongside this file's other
+  // org-scoped loaders.
+  const [organisationThemes, setOrganisationThemes] = useState([]);
+  const [caseThemes, setCaseThemes] = useState([]);
+  const [themeSuggestions, setThemeSuggestions] = useState({}); // caseId -> string[]
+  const [themeSuggestionLoading, setThemeSuggestionLoading] = useState({}); // caseId -> bool
+
+  const loadOrganisationThemes = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('organisation_themes').select('*').eq('org_id', org.id).order('name', {ascending:true});
+      if(error) { console.error('loadOrganisationThemes', error); return; }
+      if(data) setOrganisationThemes(data.map(r=>({id:r.id, name:r.name, description:r.description||"", active:r.active, createdBy:r.created_by, createdAt:r.created_at})));
+    } catch(e) { console.error('loadOrganisationThemes', e); }
+  };
+
+  const loadCaseThemes = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('case_themes').select('*').eq('org_id', org.id);
+      if(error) { console.error('loadCaseThemes', error); return; }
+      if(data) setCaseThemes(data.map(r=>({id:r.id, caseId:r.case_id, themeId:r.theme_id, suggestedBy:r.suggested_by, confirmedBy:r.confirmed_by, confirmedAt:r.confirmed_at})));
+    } catch(e) { console.error('loadCaseThemes', e); }
+  };
+
   // Billing is priced per location — every add/remove needs to reach
   // Stripe too, not just the locations table, or the subscription quietly
   // drifts from what the org is actually using. Failing to sync isn't
@@ -1399,7 +1435,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -2761,6 +2797,95 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const deleteAllegationFromDB = async (allegationId) => {
     const { error } = await supabase.from('allegations').delete().eq('id', allegationId);
     if(error) { console.error('deleteAllegationFromDB', error); showToast("Couldn't delete allegation — "+error.message, "error"); }
+  };
+
+  // Organisational ER Intelligence (Phase 6, OP6, §3) — loadOrganisationThemes/
+  // loadCaseThemes themselves are declared earlier, alongside loadLocations
+  // (both called from the same org-load effect there — a function
+  // referenced by that effect needs to be declared before it, same
+  // reason loadLocations lives there and not down here with the rest of
+  // this file's org-scoped loaders).
+  //
+  // HR-only at the RLS layer (organisation_themes_2026-08-19.sql) — the
+  // taxonomy itself is curated, not a free-for-all list.
+  const addOrganisationTheme = async (name, description) => {
+    if(!org?.id || !name?.trim()) return null;
+    const existing = matchExistingTheme(organisationThemes, name);
+    if(existing) return existing;
+    const row = {id: crypto.randomUUID(), name: name.trim(), description: description||"", active: true, createdBy: user?.id||null, createdAt: new Date().toISOString()};
+    setOrganisationThemes(t=>[...t, row].sort((a,b)=>a.name.localeCompare(b.name)));
+    const { error } = await supabase.from('organisation_themes').insert({id: row.id, org_id: org.id, name: row.name, description: row.description||null, active: true, created_by: user?.id||null});
+    if(error) { console.error('addOrganisationTheme', error); showToast("Couldn't add theme — "+error.message, "error"); setOrganisationThemes(t=>t.filter(x=>x.id!==row.id)); return null; }
+    return row;
+  };
+
+  const updateOrganisationTheme = async (themeId, fields) => {
+    setOrganisationThemes(t=>t.map(x=>x.id===themeId?{...x, ...fields}:x));
+    const patch = {};
+    if(fields.name!==undefined) patch.name = fields.name;
+    if(fields.description!==undefined) patch.description = fields.description;
+    if(fields.active!==undefined) patch.active = fields.active;
+    const { error } = await supabase.from('organisation_themes').update(patch).eq('id', themeId);
+    if(error) { console.error('updateOrganisationTheme', error); showToast("Couldn't update theme — "+error.message, "error"); }
+  };
+
+  // Applies an EXISTING taxonomy theme to a case — open to anyone who
+  // can already access the case (case_themes' own RLS), whether typed
+  // manually or confirmed from an AI suggestion. suggestedBy records
+  // provenance only; both paths insert an already-confirmed row (no
+  // "pending" state in the DB — see the migration's own header).
+  const assignThemeToCase = async (cs, themeId, suggestedBy = "user") => {
+    if(caseThemes.some(t=>t.caseId===cs.id && t.themeId===themeId)) return;
+    const row = {id: crypto.randomUUID(), caseId: cs.id, themeId, suggestedBy, confirmedBy: user?.id||null, confirmedAt: new Date().toISOString()};
+    setCaseThemes(t=>[...t, row]);
+    const { error } = await withFkRetry(() => supabase.from('case_themes').insert({id: row.id, org_id: org.id, case_id: cs.id, theme_id: themeId, suggested_by: suggestedBy, confirmed_by: user?.id||null}));
+    if(error) { console.error('assignThemeToCase', error); showToast("Couldn't apply theme — "+error.message, "error"); setCaseThemes(t=>t.filter(x=>x.id!==row.id)); }
+  };
+
+  const removeThemeFromCase = async (caseThemeRowId) => {
+    setCaseThemes(t=>t.filter(x=>x.id!==caseThemeRowId));
+    const { error } = await supabase.from('case_themes').delete().eq('id', caseThemeRowId);
+    if(error) { console.error('removeThemeFromCase', error); showToast("Couldn't remove theme — "+error.message, "error"); }
+  };
+
+  // AI suggestion is ephemeral (themeSuggestions), same posture as
+  // documentFindings — nothing is written until confirmThemeSuggestion
+  // (or a manual assignThemeToCase call) actually runs.
+  const suggestThemesForCase = async (cs) => {
+    setThemeSuggestionLoading(l=>({...l, [cs.id]:true}));
+    try {
+      const prompt = buildThemeSuggestionPrompt(cs, organisationThemes);
+      const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        model:"claude-sonnet-4-6", max_tokens:300, stream:false,
+        messages:[{role:"user", content:prompt}],
+      })});
+      const data = await res.json();
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const suggestions = parseThemeSuggestionResponse(text);
+      setThemeSuggestions(s=>({...s, [cs.id]:suggestions}));
+      if(!suggestions.length) showToast("Compass found no clear themes to suggest for this case");
+    } catch(e) { console.error("suggestThemesForCase", e); showToast("Couldn't generate theme suggestions — "+e.message, "error"); }
+    setThemeSuggestionLoading(l=>({...l, [cs.id]:false}));
+  };
+
+  // Confirming a suggestion that matches an existing theme just applies
+  // it. A genuinely new name can only be auto-created by HR (matches
+  // organisation_themes' own INSERT policy) — anyone else sees the
+  // suggestion but can't confirm a brand-new name themselves, only ask
+  // HR to add it via the taxonomy manager.
+  const confirmThemeSuggestion = async (cs, suggestedName) => {
+    let theme = matchExistingTheme(organisationThemes, suggestedName);
+    if(!theme) {
+      if(!isHR) { showToast("Ask HR to add \""+suggestedName+"\" as a theme first"); return; }
+      theme = await addOrganisationTheme(suggestedName, "");
+      if(!theme) return;
+    }
+    await assignThemeToCase(cs, theme.id, "ai");
+    setThemeSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(n=>n!==suggestedName)}));
+  };
+
+  const dismissThemeSuggestion = (cs, suggestedName) => {
+    setThemeSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(n=>n!==suggestedName)}));
   };
 
   const createAllegation = (caseId, fields) => {
@@ -7047,6 +7172,15 @@ Please produce:
           onSendForSignature={sendDocumentForSignature}
           automationLevels={automationLevels}
           onResendReminder={resendSignatureReminder}
+          organisationThemes={organisationThemes}
+          caseThemes={caseThemes}
+          themeSuggestions={themeSuggestions}
+          themeSuggestionLoading={themeSuggestionLoading}
+          onSuggestThemes={suggestThemesForCase}
+          onConfirmThemeSuggestion={confirmThemeSuggestion}
+          onDismissThemeSuggestion={dismissThemeSuggestion}
+          onAssignExistingTheme={(cs, themeId)=>assignThemeToCase(cs, themeId, "user")}
+          onRemoveTheme={removeThemeFromCase}
           acceptDocumentFinding={acceptDocumentFinding}
           dismissDocumentFinding={dismissDocumentFinding}
           requestOverrideReason={requestOverrideReason}
@@ -7213,6 +7347,9 @@ Please produce:
           fmtDate={fmtDate}
           loadJsPDF={loadJsPDF}
           processTemplates={processTemplates}
+          organisationThemes={organisationThemes}
+          onAddOrganisationTheme={addOrganisationTheme}
+          onUpdateOrganisationTheme={updateOrganisationTheme}
         />
       )}
 

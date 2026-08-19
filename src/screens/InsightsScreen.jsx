@@ -5,6 +5,7 @@ import { SettingsNav } from './settings/SettingsNav';
 import { ManagerInsightsScreen } from './ManagerInsightsScreen';
 import { ErReportScreen } from './ErReportScreen';
 import { OrganisationalIntelligenceOverview } from '../components/OrganisationalIntelligenceOverview';
+import { ThemeTaxonomyManager } from '../components/ThemeTaxonomyManager';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -24,7 +25,7 @@ function ComingSoon({ label }) {
   );
 }
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, initialSection, clearInitialSection }) {
+export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, initialSection, clearInitialSection }) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
   // reachable as ErReportScreen already was; Manager Insights, Risk Map,
   // and Improvement Initiatives are HR-only, same restriction
@@ -49,7 +50,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
 
         <div style={{flex:1,minWidth:0}}>
           {active==="overview"&&<OrganisationalIntelligenceOverview cases={cases} dueSoon={dueSoon} hrReviewRequests={hrReviewRequests} processTemplates={processTemplates}/>}
-          {active==="trends"&&<ComingSoon label="Trends & Themes"/>}
+          {active==="trends"&&<ThemeTaxonomyManager organisationThemes={organisationThemes} isHR={isHR} onAdd={onAddOrganisationTheme} onUpdate={onUpdateOrganisationTheme}/>}
           {active==="manager"&&isHR&&(
             <ManagerInsightsScreen
               cases={cases}
