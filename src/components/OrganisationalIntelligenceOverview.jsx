@@ -4,6 +4,7 @@ import { computeStageDurations } from '../lib/processDashboard';
 import { extractThemeKeywords, computeInformalFormalSplit } from '../lib/orgIntelligence';
 import { DataQualityCaveat } from './DataQualityCaveat';
 import { SiteIntelligencePanel } from './SiteIntelligencePanel';
+import { BenchmarkingPanel } from './BenchmarkingPanel';
 
 const MIN_DURATION_SAMPLE = 3;
 
@@ -147,6 +148,7 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
       </div>
 
       <SiteIntelligencePanel overview={overview}/>
+      <BenchmarkingPanel overview={overview} cases={cases}/>
     </div>
   );
 }

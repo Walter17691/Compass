@@ -25,4 +25,9 @@ test('the Organisational Intelligence dashboard loads real org-wide stats', asyn
   // Organisational ER Intelligence (Phase 6, OP4, §5) — site intelligence,
   // reading org_insights_location_fix_2026-08-19.sql's nested breakdowns.
   await expect(page.getByText('Site intelligence', { exact: true })).toBeVisible();
+
+  // Organisational ER Intelligence (Phase 6, OP5, §14) — benchmarking,
+  // reading org_insights_benchmarking_2026-08-19.sql's new field.
+  await expect(page.getByText('Avg case duration by department', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sanction consistency by case type', { exact: true })).toBeVisible();
 });
