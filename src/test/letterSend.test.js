@@ -34,6 +34,21 @@ describe('buildSentLetterEvidenceItem (Phase 5, IP13)', () => {
     const item = buildSentLetterEvidenceItem({ type: 'evidence-request', recipient: 'x@y.com', body: 'text' });
     expect(item.addedBy).toBe('HR Manager');
   });
+
+  // Phase 5, IP27/IP31 — a letter sent for acknowledgement (App.jsx's
+  // sendLetterForAcknowledgement) carries a real signId; a plain "Send
+  // from Compass" email (sendLetterCoordinated) never does.
+  it('stamps signId/signStatus when a letter was sent for acknowledgement', () => {
+    const item = buildSentLetterEvidenceItem({ type: 'outcome', recipient: 'x@y.com', body: 'text', signId: 'sign-1' });
+    expect(item.signId).toBe('sign-1');
+    expect(item.signStatus).toBe('sent');
+  });
+
+  it('omits signId/signStatus entirely for a plain email send', () => {
+    const item = buildSentLetterEvidenceItem({ type: 'outcome', recipient: 'x@y.com', body: 'text' });
+    expect(item.signId).toBeUndefined();
+    expect(item.signStatus).toBeUndefined();
+  });
 });
 
 describe('findTaskToCompleteForSentLetter (Phase 5, IP13)', () => {

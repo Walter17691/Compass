@@ -44,7 +44,13 @@ export function buildLetterSubject({ type, meetingType, employeeName }) {
 // recipient are kept as their own fields (not just folded into the
 // record text) so matchReplyToSentLetters below can compare against
 // them directly rather than re-parsing free text.
-export function buildSentLetterEvidenceItem({ type, subject, recipient, body, addedBy }) {
+// signId: optional — only set when this letter went out through
+// sendDocumentForSignature (App.jsx's sendLetterForAcknowledgement, IP27)
+// rather than a plain Resend email (sendLetterCoordinated, IP13). Same
+// signId/signStatus field names meetings already use, so the same
+// widened-status badge logic (lib/eSignature.js) and Communications view
+// (IP31) can read either kind of sent item the same way.
+export function buildSentLetterEvidenceItem({ type, subject, recipient, body, addedBy, signId }) {
   const label = CORRESPONDENCE_TYPE_LABELS[type] || "Letter";
   const lines = [
     `Sent to: ${recipient}`,
@@ -63,6 +69,7 @@ export function buildSentLetterEvidenceItem({ type, subject, recipient, body, ad
     source: "sent_letter",
     subject,
     recipient,
+    ...(signId ? { signId, signStatus: "sent" } : {}),
   };
 }
 

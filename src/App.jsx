@@ -5584,7 +5584,7 @@ Please produce:
   // from the case's own record the letter has equally been sent either way.
   const sendLetterForAcknowledgement = async (to) => {
     const subject = buildLetterSubject({ type: activeLetter, meetingType: meetingType?.label, employeeName: caseInfo.employee });
-    const { success } = await sendDocumentForSignature({
+    const { success, signId } = await sendDocumentForSignature({
       document: letterOutput, employeeEmail: to,
       employeeName: caseInfo.employee||"Employee",
       managerName: caseInfo.manager||"HR Manager",
@@ -5597,7 +5597,7 @@ Please produce:
 
     const activeCase = cases.find(x=>x.id===activeCaseId);
     if(activeCase) {
-      const sentItem = buildSentLetterEvidenceItem({ type: activeLetter, subject, recipient: to, body: letterOutput, addedBy: currentUser?.name||"HR Manager" });
+      const sentItem = buildSentLetterEvidenceItem({ type: activeLetter, subject, recipient: to, body: letterOutput, addedBy: currentUser?.name||"HR Manager", signId });
       saveCases(cases.map(x=>x.id===activeCaseId?{...x, evidence:[...(x.evidence||[]), sentItem]}:x), activeCaseId);
       audit("Letter sent for acknowledgement", sentItem.name, activeCaseId);
       const matchingTask = findTaskToCompleteForSentLetter(caseTasks, activeCaseId, activeLetter);

@@ -11,6 +11,7 @@ import { MeetingsTab } from '../components/caseTabs/MeetingsTab';
 import { EvidenceTab } from '../components/caseTabs/EvidenceTab';
 import { PeopleTab } from '../components/caseTabs/PeopleTab';
 import { DocumentsTab } from '../components/caseTabs/DocumentsTab';
+import { CommunicationsTab } from '../components/caseTabs/CommunicationsTab';
 import { OutcomeTab } from '../components/caseTabs/OutcomeTab';
 import { AIAssistantTab } from '../components/caseTabs/AIAssistantTab';
 import { allegationsForCase } from '../lib/allegations';
@@ -37,6 +38,7 @@ const TABS = [
   { id:"people", label:"Participants" }, // "People" collides with the top-nav employee directory — this is who's involved in THIS case
   { id:"tasks", label:"Tasks" },
   { id:"documents", label:"Documents" },
+  { id:"communications", label:"Communications" },
   { id:"outcome", label:"Outcome" },
   { id:"ai", label:"AI Assistant" },
 ];
@@ -468,6 +470,9 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
           )}
           {activeTab==="documents"&&(
             <DocumentsTab cs={cs} setLetterOutput={setLetterOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} onGenerateHearingPack={onGenerateHearingPack} hearingPackGenerating={!!hearingPackGenerating?.[cs.id]} onDraftCorrespondence={onDraftCorrespondence}/>
+          )}
+          {activeTab==="communications"&&(
+            <CommunicationsTab cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource}/>
           )}
           {activeTab==="outcome"&&(
             <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal}/>
