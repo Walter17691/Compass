@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { computeStageDurations } from '../lib/processDashboard';
 import { extractThemeKeywords, computeInformalFormalSplit } from '../lib/orgIntelligence';
 import { DataQualityCaveat } from './DataQualityCaveat';
+import { SiteIntelligencePanel } from './SiteIntelligencePanel';
 
 const MIN_DURATION_SAMPLE = 3;
 
@@ -144,6 +145,8 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
           </div>
         </Panel>
       </div>
+
+      <SiteIntelligencePanel overview={overview}/>
     </div>
   );
 }

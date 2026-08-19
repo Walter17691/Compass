@@ -21,4 +21,8 @@ test('the Organisational Intelligence dashboard loads real org-wide stats', asyn
   await expect(page.getByText('Overdue cases', { exact: true })).toBeVisible();
   await expect(page.getByText('Cases by type', { exact: true })).toBeVisible();
   await expect(page.getByText('Repeat case themes', { exact: true })).toBeVisible();
+
+  // Organisational ER Intelligence (Phase 6, OP4, §5) — site intelligence,
+  // reading org_insights_location_fix_2026-08-19.sql's nested breakdowns.
+  await expect(page.getByText('Site intelligence', { exact: true })).toBeVisible();
 });
