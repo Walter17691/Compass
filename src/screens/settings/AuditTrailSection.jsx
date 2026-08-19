@@ -24,6 +24,15 @@ export function AuditTrailSection({ auditLog }) {
               <span style={{fontSize:11,color:"#1A1535",fontWeight:500}}>{e.action}</span>
               {e.detail&&<span style={{fontSize:11,color:"#6B6880",marginLeft:6}}>{e.detail}</span>}
               {e.user&&e.user!=="HR Manager"&&<span style={{fontSize:10,color:"#7C5CFC",marginLeft:6}}>· {e.user}</span>}
+              {/* Integrations & Workflow Automation (Phase 5, IP30, §29) —
+                  automation provenance: whether AI/Compass prepared the
+                  action with no human click, who approved it if a human
+                  did, and what data informed it. Only ever shown when
+                  present — an ordinary human-triggered entry (the vast
+                  majority) has none of these and renders exactly as before. */}
+              {e.aiPrepared&&<span style={{fontSize:9,fontWeight:700,letterSpacing:0.3,color:"#5B3FD4",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:4,padding:"1px 6px",marginLeft:6}}>AI-PREPARED</span>}
+              {e.approvedBy&&<span style={{fontSize:10,color:"#1A7A4A",marginLeft:6}}>· Approved by {e.approvedBy}</span>}
+              {e.dataUsed&&<div style={{fontSize:10,color:"#9B9098",marginTop:2}}>Data used: {e.dataUsed}</div>}
             </div>
           </div>
         ))}

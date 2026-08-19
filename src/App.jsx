@@ -242,7 +242,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const { data, error } = await supabase.from('audit_log').select('*').eq('org_id', org.id).order('created_at',{ascending:false}).limit(500);
-      if(!error && data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||"", caseId:r.case_id||null})));
+      if(!error && data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||"", caseId:r.case_id||null, aiPrepared:r.ai_prepared||false, approvedBy:r.approved_by||null, dataUsed:r.data_used||null})));
     } catch(e) { console.error("Load audit log error:", e); }
   };
   useEffect(() => { if(org?.id) loadAuditLog(); }, [org?.id]);
@@ -704,7 +704,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // and never persisted anywhere retrievable). Stamps reminderSentAt on
   // the meeting so automationRules.js's own cooldown check keeps this
   // from firing again on every render at Automate level.
-  const resendSignatureReminder = async (cs, meeting) => {
+  const resendSignatureReminder = async (cs, meeting, { level } = {}) => {
     if(!meeting?.signId) return { success:false };
     try {
       const statusRes = await fetch(`/api/signing?signId=${encodeURIComponent(meeting.signId)}`);
@@ -723,7 +723,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const data = await res.json();
       if(!data.success) { showToast("Failed to send reminder: "+(data.error||JSON.stringify(data)), "error"); return { success:false }; }
       saveCases(cases.map(x=>x.id===cs.id?{...x, meetings:(x.meetings||[]).map(m=>m.id===meeting.id?{...m, reminderSentAt:new Date().toISOString()}:m)}:x), cs.id);
-      audit("Signature reminder resent", meeting.type||"Meeting record", cs.id);
+      // Phase 5, IP30, §29 — the automation-provenance fields: Automate
+      // ran with no human click (aiPrepared:true, no approver); Prepare
+      // means this exact click on "Send reminder" *is* the approval.
+      audit("Signature reminder resent", meeting.type||"Meeting record", cs.id, {
+        aiPrepared: level === "automate",
+        approvedBy: level === "prepare" ? (currentUser?.name || "HR Manager") : null,
+        dataUsed: `${meeting.type||"Meeting"} record dated ${meeting.date||"unknown"}, unsigned since sent`,
+      });
       showToast("Reminder sent to "+request.employee_email);
       return { success:true };
     } catch(e) {
@@ -1871,8 +1878,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }
   };
   // ── Audit trail ──
-  const audit = (action, detail="", caseId=null) => {
+  // Integrations & Workflow Automation (Phase 5, IP30, §29) — meta is an
+  // optional {aiPrepared, approvedBy, dataUsed} for the automation-
+  // provenance fields the spec asks for on top of the existing generic
+  // action/detail/user/timestamp shape — every pre-existing call site
+  // (a human clicking an ordinary button) just omits it, same as before.
+  const audit = (action, detail="", caseId=null, meta={}) => {
     const userName = currentUser?.name || "HR Manager";
+    const { aiPrepared=false, approvedBy=null, dataUsed=null } = meta;
     const entry = {
       id: crypto.randomUUID(),
       ts: new Date().toISOString(),
@@ -1880,10 +1893,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       action,
       detail,
       caseId,
+      aiPrepared,
+      approvedBy,
+      dataUsed,
     };
     setAuditLog(p => [entry, ...p].slice(0, 500)); // optimistic — cloud is the source of truth on next load
     if(org?.id && user?.id) {
-      withFkRetry(() => supabase.from('audit_log').insert({ org_id: org.id, user_id: user.id, user_name: userName, action, detail, case_id: caseId }))
+      withFkRetry(() => supabase.from('audit_log').insert({ org_id: org.id, user_id: user.id, user_name: userName, action, detail, case_id: caseId, ai_prepared: aiPrepared, approved_by: approvedBy, data_used: dataUsed }))
         .then(({error}) => { if(error) console.error('Audit log sync failed:', error.message); });
     }
   };

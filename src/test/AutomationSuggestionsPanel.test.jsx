@@ -50,14 +50,14 @@ describe('AutomationSuggestionsPanel — automation levels (Phase 5, IP28)', () 
     render(<AutomationSuggestionsPanel suggestions={[suggestion]} automationLevels={{ unsigned_meeting_record_stale: 'prepare' }} cs={cs} onResendReminder={onResendReminder} />);
     const button = screen.getByRole('button', { name: 'Send reminder' });
     await user.click(button);
-    await waitFor(() => expect(onResendReminder).toHaveBeenCalledWith(cs, meeting));
+    await waitFor(() => expect(onResendReminder).toHaveBeenCalledWith(cs, meeting, { level: 'prepare' }));
   });
 
   it('auto-fires the reminder once at Automate level, with no button shown', async () => {
     const onResendReminder = vi.fn().mockResolvedValue({ success: true });
     render(<AutomationSuggestionsPanel suggestions={[suggestion]} automationLevels={{ unsigned_meeting_record_stale: 'automate' }} cs={cs} onResendReminder={onResendReminder} />);
     expect(screen.queryByRole('button', { name: 'Send reminder' })).not.toBeInTheDocument();
-    await waitFor(() => expect(onResendReminder).toHaveBeenCalledWith(cs, meeting));
+    await waitFor(() => expect(onResendReminder).toHaveBeenCalledWith(cs, meeting, { level: 'automate' }));
     expect(onResendReminder).toHaveBeenCalledTimes(1);
   });
 

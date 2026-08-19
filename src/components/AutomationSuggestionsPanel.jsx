@@ -22,10 +22,15 @@ export function AutomationSuggestionsPanel({ suggestions, automationLevels, cs, 
   const [sending, setSending] = useState({});
   const autoFiredRef = useRef(new Set());
 
-  const resend = async (ruleId, meetings) => {
+  // Integrations & Workflow Automation (Phase 5, IP30, §29) — level is
+  // passed through so the audit entry can record whether this was
+  // AI-prepared (Automate, no human click) or HR-approved (Prepare,
+  // this exact click is the approval) — the automation-provenance
+  // fields the spec asks for on top of the existing generic log.
+  const resend = async (ruleId, meetings, level) => {
     if (!onResendReminder || !cs) return;
     setSending(s => ({ ...s, [ruleId]: true }));
-    for (const m of meetings) await onResendReminder(cs, m);
+    for (const m of meetings) await onResendReminder(cs, m, { level });
     setSending(s => ({ ...s, [ruleId]: false }));
   };
 
@@ -43,7 +48,7 @@ export function AutomationSuggestionsPanel({ suggestions, automationLevels, cs, 
       const key = s.ruleId + "::" + s.meetings.map(m => m.id).join(",");
       if (autoFiredRef.current.has(key)) return;
       autoFiredRef.current.add(key);
-      resend(s.ruleId, s.meetings);
+      resend(s.ruleId, s.meetings, "automate");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestions, automationLevels, cs?.id]);
@@ -65,7 +70,7 @@ export function AutomationSuggestionsPanel({ suggestions, automationLevels, cs, 
               <div style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{s.label}</div>
               <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{s.reason}</div>
               {level==="prepare"&&s.meetings?.length>0&&(
-                <Btn variant="secondary" onClick={()=>resend(s.ruleId, s.meetings)} disabled={!!sending[s.ruleId]} style={{fontSize:11,padding:"5px 12px",marginTop:6}}>
+                <Btn variant="secondary" onClick={()=>resend(s.ruleId, s.meetings, "prepare")} disabled={!!sending[s.ruleId]} style={{fontSize:11,padding:"5px 12px",marginTop:6}}>
                   {sending[s.ruleId]?"Sending…":"Send reminder"}
                 </Btn>
               )}
