@@ -7,6 +7,25 @@ import { login } from './helpers.js';
 // to organisations via the Supabase client library, not an unproxied API
 // route, so this is genuinely achievable locally including a real
 // persistence check across a reload.
+//
+// saveAutomationLevel (App.jsx) updates local state synchronously, then
+// awaits the Supabase write — so the button's own description text
+// updates (and this test's assertion passes) the instant the click
+// handler runs, well before the network request resolves. A fixed
+// pacing delay (600ms, the shape other specs in this suite use) wasn't
+// enough here — this shared test-org's organisations row is under heavy,
+// constant write/read load from the rest of this session's E2E history,
+// and the trace for the first attempt at this test showed all three
+// PATCH requests finishing with network status -1 (aborted — the
+// browser context tore down while they were still in flight, not a
+// server-side rejection). Waiting for the actual response instead of a
+// guessed duration is the real fix.
+async function clickAndWaitForSave(page, locator) {
+  const responsePromise = page.waitForResponse(r => r.url().includes('/rest/v1/organisations') && r.request().method() === 'PATCH', { timeout: 15000 });
+  await locator.click();
+  await responsePromise;
+}
+
 test('changing an automation level persists across a reload, and the rule stays visible at every level', async ({ page }) => {
   await login(page);
 
@@ -14,14 +33,16 @@ test('changing an automation level persists across a reload, and the rule stays 
   await page.getByRole('button', { name: 'Automations', exact: true }).click();
   await expect(page.getByText('Chase signature on stale meeting records', { exact: true })).toBeVisible({ timeout: 10000 });
 
-  // Defaults to Suggest, with its own explanatory copy — the rule is
-  // never a black box at any level.
+  // Reset to a known starting level first — a previous run (or manual
+  // testing against this shared org) may have left this at something
+  // other than Suggest, and the assertion below needs a clean baseline.
+  await clickAndWaitForSave(page, page.getByRole('button', { name: 'Suggest', exact: true }));
   await expect(page.getByText(/Compass flags it for HR to review/)).toBeVisible();
 
-  await page.getByRole('button', { name: 'Prepare', exact: true }).click();
+  await clickAndWaitForSave(page, page.getByRole('button', { name: 'Prepare', exact: true }));
   await expect(page.getByText(/Compass drafts the action; HR reviews/)).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Automate', exact: true }).click();
+  await clickAndWaitForSave(page, page.getByRole('button', { name: 'Automate', exact: true }));
   await expect(page.getByText(/Compass performs the action automatically/)).toBeVisible({ timeout: 10000 });
 
   // The rule's own label/detail must still be visible at Automate —
