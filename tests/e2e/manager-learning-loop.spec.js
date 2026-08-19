@@ -30,7 +30,11 @@ test('sending HR guidance produces a real signal a Manager Capability Insight ca
   await page.getByPlaceholder('What should the investigator know?').fill('Investigator did not follow up on the CCTV lead HR flagged earlier.');
   await page.getByRole('button', { name: 'Send guidance', exact: true }).click();
 
-  await page.locator('aside, header').getByRole('button', { name: 'Performance Insights', exact: true }).click();
+  // Organisational ER Intelligence (Phase 6, OP1) moved this screen from
+  // its own sidebar row into the new Insights workspace's default HR
+  // tab (Manager Insights is HR-only, same restriction as before).
+  await page.locator('aside, header').getByRole('button', { name: 'Insights', exact: true }).click();
+  await page.getByRole('button', { name: 'Manager Insights', exact: true }).click();
   await expect(page.getByText('Manager Performance Insights', { exact: true })).toBeVisible({ timeout: 10000 });
 
   const generateBtn = page.getByRole('button', { name: 'Generate insight', exact: true });

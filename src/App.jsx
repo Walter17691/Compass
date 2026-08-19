@@ -98,12 +98,15 @@ const WellbeingScreen = lazy(() => import('./screens/WellbeingScreen').then(m =>
 const NewStarterScreen = lazy(() => import('./screens/NewStarterScreen').then(m => ({default: m.NewStarterScreen})));
 const OffboardingScreen = lazy(() => import('./screens/OffboardingScreen').then(m => ({default: m.OffboardingScreen})));
 const DevelopScreen = lazy(() => import('./screens/DevelopScreen').then(m => ({default: m.DevelopScreen})));
-const ErReportScreen = lazy(() => import('./screens/ErReportScreen').then(m => ({default: m.ErReportScreen})));
 const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
 const ConcernsScreen = lazy(() => import('./screens/ConcernsScreen').then(m => ({default: m.ConcernsScreen})));
 const ManagerPortalScreen = lazy(() => import('./screens/ManagerPortalScreen').then(m => ({default: m.ManagerPortalScreen})));
 const HrDelegatedWorkScreen = lazy(() => import('./screens/HrDelegatedWorkScreen').then(m => ({default: m.HrDelegatedWorkScreen})));
-const ManagerInsightsScreen = lazy(() => import('./screens/ManagerInsightsScreen').then(m => ({default: m.ManagerInsightsScreen})));
+// Organisational ER Intelligence (Phase 6, OP1) — replaces the separate
+// ManagerInsightsScreen/ErReportScreen lazy chunks above: both are now
+// reached only as tabs inside InsightsScreen, which imports them
+// directly, so they load together as one chunk with their new shared home.
+const InsightsScreen = lazy(() => import('./screens/InsightsScreen').then(m => ({default: m.InsightsScreen})));
 const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({default: m.SettingsScreen})));
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
@@ -7182,11 +7185,22 @@ Please produce:
         />
       )}
 
-      {/* ══ ER ANALYTICS ══ */}
-      {screen===SCREENS.ERREPORT&&(
-        <ErReportScreen
+      {/* Organisational ER Intelligence (Phase 6, OP1) — the new "Insights"
+          home; replaces the separate ER ANALYTICS (SCREENS.ERREPORT) and
+          Manager Performance Insights (SCREENS.MANAGER_INSIGHTS) route
+          blocks below, both now reached as tabs inside InsightsScreen. */}
+      {screen===SCREENS.INSIGHTS&&(
+        <InsightsScreen
+          isHR={isHR}
           cases={cases}
-          getCaseStage={getCaseStage}
+          caseAccess={caseAccess}
+          hrReviewRequests={hrReviewRequests}
+          auditLog={auditLog}
+          dueSoon={dueSoon}
+          caseTasks={caseTasks}
+          managerCapabilityInsights={managerCapabilityInsights}
+          generatingManagerInsight={generatingManagerInsight}
+          onGenerateManagerInsight={generateManagerCapabilityInsight}
           employeeRecords={employeeRecords}
           setReportNarrative={setReportNarrative}
           reportNarrative={reportNarrative}
@@ -7194,6 +7208,7 @@ Please produce:
           setActiveCaseStage={setActiveCaseStage}
           setScreen={setScreen}
           setActivePerson={setActivePerson}
+          getCaseStage={getCaseStage}
           getNextStep={getNextStep}
           fmtDate={fmtDate}
           loadJsPDF={loadJsPDF}
@@ -7276,21 +7291,6 @@ Please produce:
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           openHrInterventionModal={openHrInterventionModal}
-        />
-      )}
-
-      {/* Manager Enablement (Phase 4, MP20, §24) — "Manager Performance Insights" */}
-      {screen===SCREENS.MANAGER_INSIGHTS&&isHR&&(
-        <ManagerInsightsScreen
-          cases={cases}
-          caseAccess={caseAccess}
-          hrReviewRequests={hrReviewRequests}
-          auditLog={auditLog}
-          dueSoon={dueSoon}
-          caseTasks={caseTasks}
-          managerCapabilityInsights={managerCapabilityInsights}
-          generatingManagerInsight={generatingManagerInsight}
-          onGenerateManagerInsight={generateManagerCapabilityInsight}
         />
       )}
 

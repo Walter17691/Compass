@@ -37,16 +37,19 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     // to My People Actions: what's been delegated out, and to whom,
     // rather than a manager's own view of it.
     ...(isHR ? [{s:SCREENS.HR_DELEGATED_WORK, l:"Delegated Work"}] : []),
-    // Manager Enablement (Phase 4, MP20, §24) — closing, aggregating
-    // sibling to Delegated Work: trends over the same delegated
-    // investigations, not another per-case list.
-    ...(isHR ? [{s:SCREENS.MANAGER_INSIGHTS, l:"Performance Insights"}] : []),
+    // Organisational ER Intelligence (Phase 6, OP1) — one Insights
+    // destination replacing the former separate Performance Insights
+    // (Manager Enablement, MP20, §24, isHR-only) and Reports (open to
+    // every role) rows. Not itself isHR-gated — Reports must stay as
+    // widely reachable as it was before — InsightsScreen gates its own
+    // Manager Insights/Risk Map/Improvement Initiatives tabs internally,
+    // same as ManagerInsightsScreen was gated before this move.
+    {s:SCREENS.INSIGHTS, l:"Insights"},
     {s:SCREENS.ASK_COMPASS, l:"Ask Compass"},
     {s:SCREENS.CASES, l:"Cases"+(activeCaseCount>0?" ("+activeCaseCount+")":"")},
     {s:SCREENS.TASKS, l:"Tasks"},
     {s:SCREENS.CALENDAR, l:"Calendar"},
     {s:SCREENS.PEOPLE, l:"People"},
-    {s:SCREENS.ERREPORT, l:"Reports"},
     // The one destination every org member can reach regardless of role —
     // ConcernsScreen itself renders an intake-only view for non-HR and a
     // full triage queue for HR (concern_referrals_2026-08-12.sql's RLS

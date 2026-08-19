@@ -52,6 +52,12 @@ export const SCREENS = {
   CONCERNS:"concerns", ASK_COMPASS:"ask_compass", SAVE_EMAIL:"save_email",
   CALENDAR:"calendar", MANAGER_PORTAL:"manager_portal", HR_DELEGATED_WORK:"hr_delegated_work",
   MANAGER_INSIGHTS:"manager_insights", OPEN_EMPLOYEE:"open_employee",
+  // Organisational ER Intelligence (Phase 6, OP1) — the "Insights"
+  // workspace replacing the two flat Performance Insights/Reports rows;
+  // MANAGER_INSIGHTS/ERREPORT stay in this map since ManagerInsightsScreen/
+  // ErReportScreen are now reached only as tabs inside InsightsScreen,
+  // not their own sidebar destinations.
+  INSIGHTS:"insights",
 };
 
 // Phase 14 of the reasoning-layer build-out (manager self-service). Kept
