@@ -19,7 +19,15 @@ export const DEFAULT_STAGE_TARGET_DAYS = 10;
 // target_days on its template for a given process type, that value
 // replaces the default for that process type's own groups only, not
 // every group in the result.
-export function computeStageBottlenecks(cases, templates) {
+//
+// Organisational ER Intelligence (Phase 6, OP3) — split the average-
+// duration computation out from the over-target filter that used to be
+// baked into this one function, so OP3's dashboard ("avg investigation
+// duration") can read every stage's real average, not just the ones
+// currently breaching target. computeStageBottlenecks below is now a
+// thin filter over computeStageDurations, same exact behaviour as
+// before (verified by this file's own unmodified test suite).
+export function computeStageDurations(cases, templates) {
   const now = new Date();
   const byKey = {};
 
@@ -47,17 +55,20 @@ export function computeStageBottlenecks(cases, templates) {
     byKey[key].durations.push(Math.max(0, Math.floor((now - enteredAt) / (1000 * 60 * 60 * 24))));
   });
 
-  return Object.values(byKey)
-    .map(b => {
-      const avgDays = b.durations.reduce((a, d) => a + d, 0) / b.durations.length;
-      return {
-        processType: b.processType,
-        stage: b.stage,
-        caseCount: b.durations.length,
-        avgDays: Math.round(avgDays * 10) / 10,
-        targetDays: b.targetDays,
-      };
-    })
+  return Object.values(byKey).map(b => {
+    const avgDays = b.durations.reduce((a, d) => a + d, 0) / b.durations.length;
+    return {
+      processType: b.processType,
+      stage: b.stage,
+      caseCount: b.durations.length,
+      avgDays: Math.round(avgDays * 10) / 10,
+      targetDays: b.targetDays,
+    };
+  });
+}
+
+export function computeStageBottlenecks(cases, templates) {
+  return computeStageDurations(cases, templates)
     .filter(b => b.avgDays > b.targetDays)
     .sort((a, b) => b.avgDays - a.avgDays);
 }

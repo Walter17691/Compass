@@ -7212,6 +7212,7 @@ Please produce:
           getNextStep={getNextStep}
           fmtDate={fmtDate}
           loadJsPDF={loadJsPDF}
+          processTemplates={processTemplates}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { computeStageBottlenecks, DEFAULT_STAGE_TARGET_DAYS } from '../lib/processDashboard';
+import { computeStageBottlenecks, computeStageDurations, DEFAULT_STAGE_TARGET_DAYS } from '../lib/processDashboard';
 
 describe('computeStageBottlenecks', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-20T00:00:00.000Z')); });
@@ -64,6 +64,25 @@ describe('computeStageBottlenecks', () => {
 
   it('returns an empty array for no cases', () => {
     expect(computeStageBottlenecks([])).toEqual([]);
+  });
+});
+
+// Organisational ER Intelligence (Phase 6, OP3) — computeStageDurations is
+// the same underlying per-stage average this file already computed
+// internally, now exported without computeStageBottlenecks' "only if over
+// target" filter, so the Insights dashboard's "avg investigation duration"
+// can show the real average even when it's healthy.
+describe('computeStageDurations', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-20T00:00:00.000Z')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('includes a stage whose average time-in-stage is within target, unlike computeStageBottlenecks', () => {
+    const cases = [{ id: 'c1', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-18T00:00:00.000Z' } } }];
+    expect(computeStageBottlenecks(cases)).toEqual([]);
+    const [result] = computeStageDurations(cases);
+    expect(result.stage).toBe('Investigation');
+    expect(result.caseCount).toBe(1);
+    expect(result.avgDays).toBeLessThan(DEFAULT_STAGE_TARGET_DAYS);
   });
 
   // Process Intelligence (P18) — an org's process template can set its

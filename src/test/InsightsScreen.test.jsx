@@ -1,7 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { InsightsScreen } from '../screens/InsightsScreen.jsx';
+
+// The default "Organisational Intelligence" tab (OP3) fetches via
+// supabase.rpc — mocked here the same way
+// OrganisationalIntelligenceOverview.test.jsx mocks it, so this file
+// stays focused on tab navigation/gating, not the dashboard's own data.
+vi.mock('../supabase', () => ({ supabase: { rpc: () => new Promise(() => {}) } }));
+const { InsightsScreen } = await import('../screens/InsightsScreen.jsx');
 
 // Organisational ER Intelligence (Phase 6, OP1) — the new Insights home.
 // getCaseStage/getNextStep/fmtDate are the same minimal stand-ins
@@ -18,7 +24,7 @@ const requiredProps = {
 describe('InsightsScreen', () => {
   it('defaults to the Organisational Intelligence tab', () => {
     render(<InsightsScreen isHR={true} {...requiredProps}/>);
-    expect(screen.getByText(/being built as part of this phase/)).toBeInTheDocument();
+    expect(screen.getByText(/Loading organisational statistics/)).toBeInTheDocument();
   });
 
   it('shows Manager Insights, Risk Map, and Improvement Initiatives tabs only for HR', () => {
