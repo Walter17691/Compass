@@ -1,5 +1,6 @@
 import { Card } from '../../components/Primitives';
 import { AUTOMATABLE_RULE_IDS, AUTOMATION_LEVELS, AUTOMATION_LEVEL_DESCRIPTION, automationLevelLabel, getAutomationLevel } from '../../lib/automationLevels';
+import { NEVER_AUTOMATE_ACTIONS } from '../../lib/automationSafety';
 
 // Only rules with a real, safe administrative action behind them appear
 // here at all (lib/automationLevels.js's AUTOMATABLE_RULE_IDS) — the
@@ -43,6 +44,19 @@ export function AutomationsSection({ automationLevels, saveAutomationLevel }) {
           </div>
         );
       })}
+
+      {/* Integrations & Workflow Automation (Phase 5, IP29, §24) — shown
+          here for the same reason the rule detail above is: automation
+          is never a black box. These stay Prepare at most regardless of
+          what any picker above is set to — see automationLevels.js's
+          capLevelForSafety. */}
+      <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #F5F1EA"}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Never automated</div>
+        <p style={{fontSize:11,color:"#9B9098",marginBottom:8,lineHeight:1.6}}>Compass can draft these for HR to approve, but will never perform them automatically, regardless of any setting above:</p>
+        <ul style={{margin:0,paddingLeft:18,fontSize:11,color:"#9B9098",lineHeight:1.9}}>
+          {NEVER_AUTOMATE_ACTIONS.map(a=><li key={a.id}>{a.label}</li>)}
+        </ul>
+      </div>
     </Card>
   );
 }

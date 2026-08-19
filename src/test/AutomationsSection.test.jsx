@@ -30,3 +30,14 @@ describe('AutomationsSection (Phase 5, IP28)', () => {
     expect(screen.getByRole('button', { name: 'Automate' })).toBeInTheDocument();
   });
 });
+
+// Integrations & Workflow Automation (Phase 5, IP29, §24) — the
+// never-automate list is always visible here, regardless of any level
+// picked above, since it's a fixed constraint the picker can't override.
+describe('AutomationsSection — never-automate list (Phase 5, IP29)', () => {
+  it('lists every hard-listed action, unconditionally', () => {
+    render(<AutomationsSection automationLevels={{ unsigned_meeting_record_stale: 'automate' }} saveAutomationLevel={()=>{}} />);
+    ['Suspension', 'Disciplinary sanction', 'Dismissal', 'Rejecting a grievance', 'Rejecting an appeal', 'A discrimination determination', 'Redundancy selection', 'A contractual term change', 'High-impact outcome correspondence sent without approval']
+      .forEach(label => expect(screen.getByText(label)).toBeInTheDocument());
+  });
+});

@@ -4,6 +4,8 @@
 // modes, built directly on IP5's read-only Suggest-level rule engine
 // (lib/automationRules.js) rather than a second, parallel rule system.
 
+import { capLevelForSafety, RULE_ACTION_TYPE } from './automationSafety';
+
 export const AUTOMATION_LEVELS = ["suggest", "prepare", "automate"];
 export const DEFAULT_AUTOMATION_LEVEL = "suggest";
 
@@ -26,8 +28,7 @@ export const AUTOMATION_LEVEL_DESCRIPTION = {
 // stale, process_risk_open) are "look at this" prompts with no
 // automatable artifact — Suggest is their only level, by design, not
 // an oversight. An org's automation_levels config can never elevate a
-// rule not in this list — see getAutomationLevel below — so this list
-// is the actual safety boundary, not the org-editable JSONB.
+// rule not in this list — see getAutomationLevel below.
 export const AUTOMATABLE_RULE_IDS = ["unsigned_meeting_record_stale"];
 
 export function isAutomatable(ruleId) {
@@ -36,11 +37,16 @@ export function isAutomatable(ruleId) {
 
 // automationLevels: the org's own {ruleId: level} config (organisations.
 // automation_levels). Any ruleId not in AUTOMATABLE_RULE_IDS always
-// reads "suggest" regardless of what's stored against it.
+// reads "suggest" regardless of what's stored against it. The actual
+// safety boundary is capLevelForSafety below (Phase 5, IP29, §24) — an
+// org picking "Automate" for a rule whose real action type is on the
+// spec's never-automate list (lib/automationSafety.js) is silently
+// capped to "Prepare", never trusted at face value.
 export function getAutomationLevel(automationLevels, ruleId) {
   if (!isAutomatable(ruleId)) return DEFAULT_AUTOMATION_LEVEL;
   const level = automationLevels?.[ruleId];
-  return AUTOMATION_LEVELS.includes(level) ? level : DEFAULT_AUTOMATION_LEVEL;
+  const resolved = AUTOMATION_LEVELS.includes(level) ? level : DEFAULT_AUTOMATION_LEVEL;
+  return capLevelForSafety(resolved, RULE_ACTION_TYPE[ruleId]);
 }
 
 export function automationLevelLabel(level) {
