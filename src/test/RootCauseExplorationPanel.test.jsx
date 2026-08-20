@@ -1,0 +1,56 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+const rpcMock = vi.fn();
+vi.mock('../supabase', () => ({ supabase: { rpc: (...args) => rpcMock(...args) } }));
+
+const { RootCauseExplorationPanel } = await import('../components/RootCauseExplorationPanel.jsx');
+
+// Organisational ER Intelligence (Phase 6, OP8, §4)
+describe('RootCauseExplorationPanel', () => {
+  beforeEach(() => { rpcMock.mockReset(); });
+
+  it('shows a loading state, then the summary and review areas', async () => {
+    rpcMock.mockResolvedValue({
+      data: { current_count: 19, by_location: { Manchester: 6, Birmingham: 5 }, co_occurring_themes: [{ themeId: 't2', themeName: 'Rota changes', count: 4 }] },
+      error: null,
+    });
+    render(<RootCauseExplorationPanel themeId="t1" themeName="Management communication" onClose={()=>{}}/>);
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/appears in 19 cases this period/)).toBeInTheDocument());
+    expect(screen.getByText(/Manchester — 6/)).toBeInTheDocument();
+    expect(screen.getByText(/Rota changes/)).toBeInTheDocument();
+    expect(rpcMock).toHaveBeenCalledWith('org_theme_root_cause', { p_theme_id: 't1', p_period_days: 90 });
+  });
+
+  it('shows an empty state when there are no co-occurring themes', async () => {
+    rpcMock.mockResolvedValue({ data: { current_count: 3, by_location: {}, co_occurring_themes: [] }, error: null });
+    render(<RootCauseExplorationPanel themeId="t1" themeName="X" onClose={()=>{}}/>);
+    await waitFor(() => expect(screen.getByText('No commonly co-occurring themes found for this period.')).toBeInTheDocument());
+  });
+
+  it('shows an error state when the RPC fails', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: new Error('boom') });
+    render(<RootCauseExplorationPanel themeId="t1" themeName="X" onClose={()=>{}}/>);
+    await waitFor(() => expect(screen.getByText("Couldn't load root-cause data right now.")).toBeInTheDocument());
+  });
+
+  it('calls onClose when the close button is clicked', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    rpcMock.mockResolvedValue({ data: { current_count: 1, by_location: {}, co_occurring_themes: [] }, error: null });
+    render(<RootCauseExplorationPanel themeId="t1" themeName="X" onClose={onClose}/>);
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('re-fetches when themeId changes', async () => {
+    rpcMock.mockResolvedValue({ data: { current_count: 1, by_location: {}, co_occurring_themes: [] }, error: null });
+    const { rerender } = render(<RootCauseExplorationPanel themeId="t1" themeName="X" onClose={()=>{}}/>);
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(1));
+    rerender(<RootCauseExplorationPanel themeId="t2" themeName="Y" onClose={()=>{}}/>);
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(2));
+    expect(rpcMock).toHaveBeenLastCalledWith('org_theme_root_cause', { p_theme_id: 't2', p_period_days: 90 });
+  });
+});
