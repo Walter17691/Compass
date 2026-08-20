@@ -8,6 +8,7 @@ import { OrganisationalIntelligenceOverview } from '../components/Organisational
 import { ThemeTaxonomyManager } from '../components/ThemeTaxonomyManager';
 import { TrendsPanel } from '../components/TrendsPanel';
 import { EarlySignalsPanel } from '../components/EarlySignalsPanel';
+import { OrgEventsPanel } from '../components/OrgEventsPanel';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -27,16 +28,20 @@ function ComingSoon({ label }) {
   );
 }
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, initialSection, clearInitialSection }) {
+export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, initialSection, clearInitialSection }) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
-  // reachable as ErReportScreen already was; Manager Insights, Risk Map,
-  // and Improvement Initiatives are HR-only, same restriction
-  // ManagerInsightsScreen already had on its own sidebar row (§6, §13).
+  // reachable as ErReportScreen already was; Manager Insights, Org
+  // Events, Risk Map, and Improvement Initiatives are HR-only, same
+  // restriction ManagerInsightsScreen already had on its own sidebar
+  // row (§6, §13) — Org Events is viewable by any org member per its
+  // own RLS, but the tab itself stays behind isHR since logging/
+  // exploring correlation (its only real actions) are HR-only anyway.
   const sections = [
     {id:"overview", label:"Organisational Intelligence"},
     {id:"trends", label:"Trends & Themes"},
     {id:"early-signals", label:"Early Signals"},
     ...(isHR ? [{id:"manager", label:"Manager Insights"}] : []),
+    ...(isHR ? [{id:"org-events", label:"Organisational Events"}] : []),
     ...(isHR ? [{id:"risk-map", label:"Risk Map"}] : []),
     ...(isHR ? [{id:"improvement-initiatives", label:"Improvement Initiatives"}] : []),
     {id:"reports", label:"Reports"},
@@ -88,6 +93,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
               onGenerateManagerInsight={onGenerateManagerInsight}
             />
           )}
+          {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgEvents} isHR={isHR} onAddEvent={onAddOrgEvent}/>}
           {active==="risk-map"&&isHR&&<ComingSoon label="The Risk Map"/>}
           {active==="improvement-initiatives"&&isHR&&<ComingSoon label="Improvement Initiatives"/>}
           {active==="reports"&&(

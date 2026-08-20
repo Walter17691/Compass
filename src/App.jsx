@@ -1289,6 +1289,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error('loadCaseThemes', e); }
   };
 
+  // Organisational ER Intelligence (Phase 6, OP15, §11) — org-wide,
+  // HR-logged organisational events (org_events_2026-08-20.sql). Same
+  // declared-alongside-loadLocations reasoning as organisationThemes
+  // above — needed by the org-load effect without a forward reference.
+  const [orgEvents, setOrgEvents] = useState([]);
+
+  const loadOrgEvents = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('org_events').select('*').eq('org_id', org.id).order('event_date', {ascending:false});
+      if(error) { console.error('loadOrgEvents', error); return; }
+      if(data) setOrgEvents(data.map(r=>({id:r.id, eventDate:r.event_date, eventType:r.event_type, description:r.description, affectedLocations:r.affected_locations||[], createdBy:r.created_by, createdAt:r.created_at})));
+    } catch(e) { console.error('loadOrgEvents', e); }
+  };
+
   // Billing is priced per location — every add/remove needs to reach
   // Stripe too, not just the locations table, or the subscription quietly
   // drifts from what the org is actually using. Failing to sync isn't
@@ -1435,7 +1450,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -2886,6 +2901,20 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   const dismissThemeSuggestion = (cs, suggestedName) => {
     setThemeSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(n=>n!==suggestedName)}));
+  };
+
+  // Organisational ER Intelligence (Phase 6, OP15, §11) — HR-only at the
+  // RLS layer (org_events_2026-08-20.sql), same optimistic-insert-then-
+  // rollback-on-error shape as addOrganisationTheme above.
+  const addOrgEvent = async ({ eventDate, eventType, description, affectedLocations }) => {
+    if(!org?.id) return;
+    const row = { id: crypto.randomUUID(), eventDate, eventType, description, affectedLocations: affectedLocations||[], createdBy: user?.id||null, createdAt: new Date().toISOString() };
+    setOrgEvents(evs=>[row, ...evs]);
+    const { error } = await supabase.from('org_events').insert({
+      id: row.id, org_id: org.id, event_date: eventDate, event_type: eventType,
+      description, affected_locations: affectedLocations||[], created_by: user?.id||null,
+    });
+    if(error) { console.error('addOrgEvent', error); showToast("Couldn't log event — "+error.message, "error"); setOrgEvents(evs=>evs.filter(x=>x.id!==row.id)); }
   };
 
   const createAllegation = (caseId, fields) => {
@@ -7354,6 +7383,8 @@ Please produce:
           caseSignals={caseSignals}
           policies={policies}
           orgMembers={orgMembers}
+          orgEvents={orgEvents}
+          onAddOrgEvent={addOrgEvent}
         />
       )}
 
