@@ -47,4 +47,11 @@ test('the Organisational Intelligence dashboard loads real org-wide stats', asyn
   // analytics. Also no new RPC/migration — aggregates the existing
   // caseReadiness.js/guardrails.js per-case checks client-side.
   await expect(page.getByText('Case quality analytics', { exact: true })).toBeVisible();
+
+  // Organisational ER Intelligence (Phase 6, OP13, §10) — policy
+  // effectiveness. Also no new RPC/migration — aggregates by policy
+  // name from case_signals' own persisted sourceRefs (policies
+  // themselves are stored per-browser, not org-wide — see
+  // policyEffectiveness.js's own header for the full finding).
+  await expect(page.getByText('Policy effectiveness', { exact: true })).toBeVisible();
 });

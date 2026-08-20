@@ -8,6 +8,7 @@ import { BenchmarkingPanel } from './BenchmarkingPanel';
 import { ProcessBottlenecksPanel } from './ProcessBottlenecksPanel';
 import { AppealIntelligencePanel } from './AppealIntelligencePanel';
 import { CaseQualityAnalyticsPanel } from './CaseQualityAnalyticsPanel';
+import { PolicyEffectivenessPanel } from './PolicyEffectivenessPanel';
 
 const MIN_DURATION_SAMPLE = 3;
 
@@ -161,6 +162,8 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
       <AppealIntelligencePanel allegations={allegations} cases={cases} caseSignals={caseSignals}/>
 
       <CaseQualityAnalyticsPanel cases={cases} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} policies={policies} caseAccess={caseAccess} orgMembers={orgMembers}/>
+
+      <PolicyEffectivenessPanel caseSignals={caseSignals} hrReviewRequests={hrReviewRequests}/>
     </div>
   );
 }
