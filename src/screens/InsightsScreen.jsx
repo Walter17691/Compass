@@ -11,6 +11,7 @@ import { EarlySignalsPanel } from '../components/EarlySignalsPanel';
 import { OrgEventsPanel } from '../components/OrgEventsPanel';
 import { RiskMapPanel } from '../components/RiskMapPanel';
 import { ExecutiveBriefPanel } from '../components/ExecutiveBriefPanel';
+import { PeriodicReviewPanel } from '../components/PeriodicReviewPanel';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -101,6 +102,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
           {active==="reports"&&(
             <>
               <ExecutiveBriefPanel org={org} user={user} memberName={memberName} isHR={isHR}/>
+              <PeriodicReviewPanel org={org} user={user} memberName={memberName} isHR={isHR}/>
               <ErReportScreen
                 cases={cases}
                 getCaseStage={getCaseStage}
