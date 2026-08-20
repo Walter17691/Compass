@@ -9,6 +9,7 @@ import { ThemeTaxonomyManager } from '../components/ThemeTaxonomyManager';
 import { TrendsPanel } from '../components/TrendsPanel';
 import { EarlySignalsPanel } from '../components/EarlySignalsPanel';
 import { OrgEventsPanel } from '../components/OrgEventsPanel';
+import { RiskMapPanel } from '../components/RiskMapPanel';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -94,7 +95,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
             />
           )}
           {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgEvents} isHR={isHR} onAddEvent={onAddOrgEvent}/>}
-          {active==="risk-map"&&isHR&&<ComingSoon label="The Risk Map"/>}
+          {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents}/>}
           {active==="improvement-initiatives"&&isHR&&<ComingSoon label="Improvement Initiatives"/>}
           {active==="reports"&&(
             <ErReportScreen

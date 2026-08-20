@@ -67,4 +67,28 @@ describe('InsightsScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Early Signals' }));
     expect(screen.getByText(/Loading early signals/)).toBeInTheDocument();
   });
+
+  it('shows the Organisational Events tab only for HR', () => {
+    render(<InsightsScreen isHR={true} {...requiredProps}/>);
+    expect(screen.getByRole('button', { name: 'Organisational Events' })).toBeInTheDocument();
+  });
+
+  it('hides the Organisational Events tab for non-HR', () => {
+    render(<InsightsScreen isHR={false} {...requiredProps}/>);
+    expect(screen.queryByRole('button', { name: 'Organisational Events' })).not.toBeInTheDocument();
+  });
+
+  it('switches to the Organisational Events tab and renders the real OrgEventsPanel content', async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen isHR={true} {...requiredProps} orgEvents={[]}/>);
+    await user.click(screen.getByRole('button', { name: 'Organisational Events' }));
+    expect(screen.getByText('No organisational events logged yet.')).toBeInTheDocument();
+  });
+
+  it('switches to the Risk Map tab and renders the real RiskMapPanel content', async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen isHR={true} {...requiredProps}/>);
+    await user.click(screen.getByRole('button', { name: 'Risk Map' }));
+    expect(screen.getByText(/Loading risk map/)).toBeInTheDocument();
+  });
 });

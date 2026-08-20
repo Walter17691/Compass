@@ -1,0 +1,89 @@
+import { describe, it, expect } from 'vitest';
+import { computeSiteRiskFlags } from '../lib/riskMap';
+
+describe('computeSiteRiskFlags', () => {
+  it('flags a site with elevated case volume relative to the average', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 15, London: 5, 'Not specified': 100 },
+      locationDurations: {},
+      companyAvgDuration: null,
+      bottlenecks: [],
+      orgEvents: [],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    expect(manchester.flags.some(f => f.category === 'er_volume')).toBe(true);
+    const london = result.find(r => r.site === 'London');
+    expect(london.flags.some(f => f.category === 'er_volume')).toBe(false);
+  });
+
+  it('never includes "Not specified" as a site', () => {
+    const result = computeSiteRiskFlags({ locationCounts: { 'Not specified': 100 }, locationDurations: {}, companyAvgDuration: null, bottlenecks: [], orgEvents: [] });
+    expect(result).toEqual([]);
+  });
+
+  it('flags above-average case duration once the sample size is met', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 5, London: 5 },
+      locationDurations: { Manchester: { avg_days: 20, count: 4 } },
+      companyAvgDuration: 10,
+      bottlenecks: [],
+      orgEvents: [],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    expect(manchester.flags.some(f => f.category === 'case_delay')).toBe(true);
+  });
+
+  it('does not flag duration below the minimum sample size', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 5, London: 5 },
+      locationDurations: { Manchester: { avg_days: 20, count: 1 } },
+      companyAvgDuration: 10,
+      bottlenecks: [],
+      orgEvents: [],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    expect(manchester.flags.some(f => f.category === 'case_delay')).toBe(false);
+  });
+
+  it('flags a site appearing in any process bottleneck\'s location breakdown', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 5, London: 5 },
+      locationDurations: {},
+      companyAvgDuration: null,
+      bottlenecks: [{ stage: 'Investigation', byLocation: [{ location: 'Manchester', caseCount: 3 }] }],
+      orgEvents: [],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    const london = result.find(r => r.site === 'London');
+    expect(manchester.flags.some(f => f.category === 'process_risk')).toBe(true);
+    expect(london.flags.some(f => f.category === 'process_risk')).toBe(false);
+  });
+
+  it('flags a site named in a logged organisational event\'s affected locations', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 5, London: 5 },
+      locationDurations: {},
+      companyAvgDuration: null,
+      bottlenecks: [],
+      orgEvents: [{ affectedLocations: ['Manchester'] }],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    expect(manchester.flags.some(f => f.category === 'operational_change')).toBe(true);
+  });
+
+  it('sorts sites by flag count, most flags first', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 15, London: 5 },
+      locationDurations: {},
+      companyAvgDuration: null,
+      bottlenecks: [{ stage: 'x', byLocation: [{ location: 'Manchester', caseCount: 1 }] }],
+      orgEvents: [{ affectedLocations: ['Manchester'] }],
+    });
+    expect(result[0].site).toBe('Manchester');
+    expect(result[0].flags.length).toBeGreaterThan(result[1].flags.length);
+  });
+
+  it('returns an empty array for no location data', () => {
+    expect(computeSiteRiskFlags({ locationCounts: {}, locationDurations: {}, companyAvgDuration: null, bottlenecks: [], orgEvents: [] })).toEqual([]);
+  });
+});
