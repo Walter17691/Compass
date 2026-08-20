@@ -30,4 +30,11 @@ test('the Organisational Intelligence dashboard loads real org-wide stats', asyn
   // reading org_insights_benchmarking_2026-08-19.sql's new field.
   await expect(page.getByText('Avg case duration by department', { exact: true })).toBeVisible();
   await expect(page.getByText('Sanction consistency by case type', { exact: true })).toBeVisible();
+
+  // Organisational ER Intelligence (Phase 6, OP10, §7) — process
+  // bottlenecks by site. No new RPC/migration for this phase — reuses
+  // the already-loaded cases/employeeRecords arrays client-side, so no
+  // pending-migration caveat applies here unlike the RPC-backed panels
+  // above.
+  await expect(page.getByText('Process bottlenecks by site', { exact: true })).toBeVisible();
 });

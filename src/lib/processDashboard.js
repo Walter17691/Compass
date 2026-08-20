@@ -14,21 +14,17 @@ import { getTemplateForType } from './processTemplates';
 
 export const DEFAULT_STAGE_TARGET_DAYS = 10;
 
-// templates (P18) is optional — every existing call site keeps working
-// unmodified with the one uniform default; when an org has set a
-// target_days on its template for a given process type, that value
-// replaces the default for that process type's own groups only, not
-// every group in the result.
-//
-// Organisational ER Intelligence (Phase 6, OP3) — split the average-
-// duration computation out from the over-target filter that used to be
-// baked into this one function, so OP3's dashboard ("avg investigation
-// duration") can read every stage's real average, not just the ones
-// currently breaching target. computeStageBottlenecks below is now a
-// thin filter over computeStageDurations, same exact behaviour as
-// before (verified by this file's own unmodified test suite).
-export function computeStageDurations(cases, templates) {
+// Shared by computeStageDurations/computeStageBottlenecks (aggregate,
+// no location) and computeStageBottlenecksByLocation (Phase 6, OP10) —
+// both need the same per-case "days in this stage" computation; this is
+// the one place that logic lives, so it can't drift between the two
+// call sites. employeeRecords is optional and only used by the
+// location-aware caller — every case's own entry still carries a
+// location field either way, defaulting to "Not specified" without it.
+function groupCasesByStage(cases, templates, employeeRecords) {
   const now = new Date();
+  const employeeLocationMap = {};
+  (employeeRecords || []).forEach(r => { employeeLocationMap[r.name] = r.location || null; });
   const byKey = {};
 
   (cases || []).forEach(cs => {
@@ -50,17 +46,41 @@ export function computeStageDurations(cases, templates) {
     if (!byKey[key]) {
       const template = getTemplateForType(templates, processType.id);
       const targetDays = template?.target_days || DEFAULT_STAGE_TARGET_DAYS;
-      byKey[key] = { processType: processType.label, stage: stageLabel, targetDays, durations: [] };
+      byKey[key] = { processType: processType.label, stage: stageLabel, stageId: stage, targetDays, entries: [] };
     }
-    byKey[key].durations.push(Math.max(0, Math.floor((now - enteredAt) / (1000 * 60 * 60 * 24))));
+    const days = Math.max(0, Math.floor((now - enteredAt) / (1000 * 60 * 60 * 24)));
+    byKey[key].entries.push({
+      caseId: cs.id,
+      employeeName: cs.employeeName,
+      days,
+      location: employeeLocationMap[cs.employeeName] || "Not specified",
+    });
   });
 
+  return byKey;
+}
+
+// templates (P18) is optional — every existing call site keeps working
+// unmodified with the one uniform default; when an org has set a
+// target_days on its template for a given process type, that value
+// replaces the default for that process type's own groups only, not
+// every group in the result.
+//
+// Organisational ER Intelligence (Phase 6, OP3) — split the average-
+// duration computation out from the over-target filter that used to be
+// baked into this one function, so OP3's dashboard ("avg investigation
+// duration") can read every stage's real average, not just the ones
+// currently breaching target. computeStageBottlenecks below is now a
+// thin filter over computeStageDurations, same exact behaviour as
+// before (verified by this file's own unmodified test suite).
+export function computeStageDurations(cases, templates) {
+  const byKey = groupCasesByStage(cases, templates);
   return Object.values(byKey).map(b => {
-    const avgDays = b.durations.reduce((a, d) => a + d, 0) / b.durations.length;
+    const avgDays = b.entries.reduce((a, e) => a + e.days, 0) / b.entries.length;
     return {
       processType: b.processType,
       stage: b.stage,
-      caseCount: b.durations.length,
+      caseCount: b.entries.length,
       avgDays: Math.round(avgDays * 10) / 10,
       targetDays: b.targetDays,
     };
@@ -69,6 +89,50 @@ export function computeStageDurations(cases, templates) {
 
 export function computeStageBottlenecks(cases, templates) {
   return computeStageDurations(cases, templates)
+    .filter(b => b.avgDays > b.targetDays)
+    .sort((a, b) => b.avgDays - a.avgDays);
+}
+
+// Organisational ER Intelligence (Phase 6, OP10, §7) — extends
+// computeStageBottlenecks with a per-location breakdown and the
+// underlying cases, for drill-in. Only returns stages that are
+// genuinely bottlenecked overall (same avgDays > targetDays filter) —
+// a location breakdown of a stage that ISN'T a bottleneck isn't the
+// question §7 asks. Location comes from employeeRecords (the same
+// field org_insights_location_fix_2026-08-19.sql's SQL join already
+// established as the real, populated signal — cases.location_id is 0%
+// populated in this project's own data), matched client-side since this
+// reads the already-loaded, RLS-scoped cases/employeeRecords arrays
+// exactly like computeStageDurations itself always has.
+export function computeStageBottlenecksByLocation(cases, employeeRecords, templates) {
+  const byKey = groupCasesByStage(cases, templates, employeeRecords);
+
+  return Object.values(byKey)
+    .map(b => {
+      const avgDays = b.entries.reduce((a, e) => a + e.days, 0) / b.entries.length;
+      const byLocationMap = {};
+      b.entries.forEach(e => {
+        if (!byLocationMap[e.location]) byLocationMap[e.location] = [];
+        byLocationMap[e.location].push(e);
+      });
+      const byLocation = Object.entries(byLocationMap)
+        .map(([location, entries]) => ({
+          location,
+          caseCount: entries.length,
+          avgDays: Math.round((entries.reduce((a, e) => a + e.days, 0) / entries.length) * 10) / 10,
+          cases: entries.map(e => ({ caseId: e.caseId, employeeName: e.employeeName, days: e.days })),
+        }))
+        .sort((a, b) => b.avgDays - a.avgDays);
+      return {
+        processType: b.processType,
+        stage: b.stage,
+        stageId: b.stageId,
+        caseCount: b.entries.length,
+        avgDays: Math.round(avgDays * 10) / 10,
+        targetDays: b.targetDays,
+        byLocation,
+      };
+    })
     .filter(b => b.avgDays > b.targetDays)
     .sort((a, b) => b.avgDays - a.avgDays);
 }

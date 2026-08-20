@@ -52,7 +52,16 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
         <SettingsNav sections={sections} active={active} onChange={v=>{setActive(v); clearInitialSection?.();}} isMobile={false}/>
 
         <div style={{flex:1,minWidth:0}}>
-          {active==="overview"&&<OrganisationalIntelligenceOverview cases={cases} dueSoon={dueSoon} hrReviewRequests={hrReviewRequests} processTemplates={processTemplates}/>}
+          {active==="overview"&&(
+            <OrganisationalIntelligenceOverview
+              cases={cases}
+              dueSoon={dueSoon}
+              hrReviewRequests={hrReviewRequests}
+              processTemplates={processTemplates}
+              employeeRecords={employeeRecords}
+              onOpenCase={(caseId, stageId)=>{setActiveCaseId(caseId); setActiveCaseStage(stageId); setScreen(SCREENS.CASE_VIEW);}}
+            />
+          )}
           {active==="trends"&&(
             <>
               <TrendsPanel/>

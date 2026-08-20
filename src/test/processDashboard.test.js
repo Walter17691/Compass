@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { computeStageBottlenecks, computeStageDurations, DEFAULT_STAGE_TARGET_DAYS } from '../lib/processDashboard';
+import { computeStageBottlenecks, computeStageDurations, computeStageBottlenecksByLocation, DEFAULT_STAGE_TARGET_DAYS } from '../lib/processDashboard';
 
 describe('computeStageBottlenecks', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-20T00:00:00.000Z')); });
@@ -107,5 +107,68 @@ describe('computeStageDurations', () => {
     expect(results).toHaveLength(1);
     expect(results[0].processType).toBe('Grievance');
     expect(results[0].targetDays).toBe(DEFAULT_STAGE_TARGET_DAYS);
+  });
+});
+
+// Organisational ER Intelligence (Phase 6, OP10, §7) — extends
+// computeStageBottlenecks with a per-location breakdown, sharing the
+// same underlying per-case day computation (groupCasesByStage).
+describe('computeStageBottlenecksByLocation', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-20T00:00:00.000Z')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const employeeRecords = [
+    { name: 'Sam Employee', location: 'Manchester' },
+    { name: 'Jo Employee', location: 'London' },
+  ];
+
+  it('only includes stages that are genuinely bottlenecked overall', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-18T00:00:00.000Z' } } }];
+    expect(computeStageBottlenecksByLocation(cases, employeeRecords)).toEqual([]);
+  });
+
+  it('breaks a bottlenecked stage down by employee location', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } },
+      { id: 'c2', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-03T00:00:00.000Z' } } },
+      { id: 'c3', employeeName: 'Jo Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-05T00:00:00.000Z' } } },
+    ];
+    const [result] = computeStageBottlenecksByLocation(cases, employeeRecords);
+    expect(result.caseCount).toBe(3);
+    expect(result.byLocation).toHaveLength(2);
+    const manchester = result.byLocation.find(l => l.location === 'Manchester');
+    expect(manchester.caseCount).toBe(2);
+    expect(manchester.cases.map(c => c.caseId).sort()).toEqual(['c1', 'c2']);
+  });
+
+  it('defaults a case with no matching employee record to "Not specified"', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Unknown Person', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } },
+      { id: 'c2', employeeName: 'Unknown Person', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } },
+    ];
+    const [result] = computeStageBottlenecksByLocation(cases, employeeRecords);
+    expect(result.byLocation[0].location).toBe('Not specified');
+  });
+
+  it('sorts locations within a stage by avgDays, worst first', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } },
+      { id: 'c2', employeeName: 'Jo Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-07-01T00:00:00.000Z' } } },
+    ];
+    const [result] = computeStageBottlenecksByLocation(cases, employeeRecords);
+    expect(result.byLocation[0].location).toBe('London');
+  });
+
+  it('returns an empty array for no cases', () => {
+    expect(computeStageBottlenecksByLocation([], employeeRecords)).toEqual([]);
+  });
+
+  it('works without employeeRecords at all, defaulting every case to "Not specified"', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } },
+      { id: 'c2', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'investigation', timelineOverrides: { stageEnteredAt: { investigation: '2026-08-01T00:00:00.000Z' } } },
+    ];
+    const [result] = computeStageBottlenecksByLocation(cases);
+    expect(result.byLocation).toEqual([{ location: 'Not specified', caseCount: 2, avgDays: result.avgDays, cases: expect.any(Array) }]);
   });
 });
