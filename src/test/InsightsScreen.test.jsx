@@ -55,4 +55,16 @@ describe('InsightsScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Reports' }));
     expect(screen.getByText('HR Reports')).toBeInTheDocument();
   });
+
+  it('shows the Early Signals tab for both HR and non-HR', () => {
+    render(<InsightsScreen isHR={false} {...requiredProps}/>);
+    expect(screen.getByRole('button', { name: 'Early Signals' })).toBeInTheDocument();
+  });
+
+  it('switches to the Early Signals tab and renders the real EarlySignalsPanel content', async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen isHR={true} {...requiredProps}/>);
+    await user.click(screen.getByRole('button', { name: 'Early Signals' }));
+    expect(screen.getByText(/Loading early signals/)).toBeInTheDocument();
+  });
 });

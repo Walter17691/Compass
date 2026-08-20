@@ -97,4 +97,13 @@ test('tagging 3 cases with a new theme surfaces a trend and its root-cause explo
   await trendCard.getByRole('button', { name: 'Explore' }).click();
   await expect(page.getByText('Root-cause exploration — ' + themeName)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(new RegExp('"' + themeName + '" appears in 3 cases this period'))).toBeVisible({ timeout: 10000 });
+
+  // Organisational ER Intelligence (Phase 6, OP9, §12) — the same 3
+  // cases created above (all within the last few minutes) also fall
+  // inside Early Signals' shorter 6-week window, proving
+  // org_trend_detection()'s p_period_days parameterisation genuinely
+  // varies the result — not just that the RPC returns SOMETHING for
+  // any input.
+  await page.getByRole('button', { name: 'Early Signals', exact: true }).click();
+  await expect(page.getByText(new RegExp('Emerging theme: 3 cases.*refer to "' + themeName + '"'))).toBeVisible({ timeout: 10000 });
 });

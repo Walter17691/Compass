@@ -7,6 +7,7 @@ import { ErReportScreen } from './ErReportScreen';
 import { OrganisationalIntelligenceOverview } from '../components/OrganisationalIntelligenceOverview';
 import { ThemeTaxonomyManager } from '../components/ThemeTaxonomyManager';
 import { TrendsPanel } from '../components/TrendsPanel';
+import { EarlySignalsPanel } from '../components/EarlySignalsPanel';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -34,6 +35,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
   const sections = [
     {id:"overview", label:"Organisational Intelligence"},
     {id:"trends", label:"Trends & Themes"},
+    {id:"early-signals", label:"Early Signals"},
     ...(isHR ? [{id:"manager", label:"Manager Insights"}] : []),
     ...(isHR ? [{id:"risk-map", label:"Risk Map"}] : []),
     ...(isHR ? [{id:"improvement-initiatives", label:"Improvement Initiatives"}] : []),
@@ -57,6 +59,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
               <ThemeTaxonomyManager organisationThemes={organisationThemes} isHR={isHR} onAdd={onAddOrganisationTheme} onUpdate={onUpdateOrganisationTheme}/>
             </>
           )}
+          {active==="early-signals"&&<EarlySignalsPanel/>}
           {active==="manager"&&isHR&&(
             <ManagerInsightsScreen
               cases={cases}
