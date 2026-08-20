@@ -18,13 +18,13 @@ test('Generate brief produces a persisted narrative with supporting data, not an
   await expect(page.getByText('Generating…')).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('Generating…')).not.toBeVisible({ timeout: 30000 });
   await expect(page.getByText(/Couldn't generate the brief/)).not.toBeVisible();
-  await expect(page.getByText('Supporting data', { exact: true })).toBeVisible();
-  await expect(page.getByText(/total cases/)).toBeVisible();
+  await expect(page.getByText('Supporting data', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/\d+ total cases/).first()).toBeVisible();
 
   // Persistence: the brief must still be there after a reload, not just
   // held in local component state.
   await page.reload();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
-  await expect(page.getByText('Supporting data', { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Supporting data', { exact: true }).first()).toBeVisible({ timeout: 10000 });
 });
