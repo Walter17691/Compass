@@ -1,0 +1,61 @@
+import { describe, it, expect } from 'vitest';
+import { buildGlobalStatsContext, inferInsightsTab } from '../lib/globalAnalytics';
+
+const caseStats = { total_cases: 100, active_cases: 30 };
+
+describe('buildGlobalStatsContext', () => {
+  it('always includes the base org_case_stats data', () => {
+    const context = buildGlobalStatsContext(caseStats, null, null, null);
+    expect(context).toContain('ORG-WIDE CASE STATISTICS');
+    expect(context).toContain('"total_cases":100');
+  });
+
+  it('includes the overview breakdown when provided', () => {
+    const overview = { opened_in_period: 5, closed_in_period: 3, cases_by_location: { Manchester: 10 }, cases_by_department: {}, cases_by_manager: {}, avg_case_duration_days: 12, avg_duration_by_location: {} };
+    const context = buildGlobalStatsContext(caseStats, overview, null, null);
+    expect(context).toContain('ORG-WIDE BREAKDOWN');
+    expect(context).toContain('Manchester');
+  });
+
+  it('includes only significant trends, with the anti-attribution instruction', () => {
+    const trendData = {
+      by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: {} }, { caseType: 'flat', currentCount: 11, previousCount: 10, byLocation: {} }],
+      by_theme_trend: [],
+    };
+    const context = buildGlobalStatsContext(caseStats, null, trendData, null);
+    expect(context).toContain('SIGNIFICANT TRENDS');
+    expect(context).toContain('grievance');
+    expect(context).not.toContain('"caseType":"flat"');
+    expect(context).toContain('never state or imply a trend was caused');
+  });
+
+  it('omits the trends section entirely when nothing is significant', () => {
+    const trendData = { by_type_trend: [{ caseType: 'flat', currentCount: 11, previousCount: 10, byLocation: {} }], by_theme_trend: [] };
+    const context = buildGlobalStatsContext(caseStats, null, trendData, null);
+    expect(context).not.toContain('SIGNIFICANT TRENDS');
+  });
+
+  it('includes appeal intelligence only when there are real findings', () => {
+    const appealData = { totalFindings: 5, appealedCount: 1, appealRate: 20, outcomeCounts: {}, stageCounts: {}, commonGrounds: [] };
+    const context = buildGlobalStatsContext(caseStats, null, null, appealData);
+    expect(context).toContain('APPEAL INTELLIGENCE');
+  });
+
+  it('omits appeal intelligence when there are no findings yet', () => {
+    const appealData = { totalFindings: 0, appealedCount: 0, appealRate: null, outcomeCounts: {}, stageCounts: {}, commonGrounds: [] };
+    const context = buildGlobalStatsContext(caseStats, null, null, appealData);
+    expect(context).not.toContain('APPEAL INTELLIGENCE');
+  });
+});
+
+describe('inferInsightsTab', () => {
+  it('points to trends when a significant trend exists', () => {
+    const trendData = { by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: {} }], by_theme_trend: [] };
+    expect(inferInsightsTab(trendData)).toBe('trends');
+  });
+
+  it('falls back to the overview when nothing significant was found', () => {
+    expect(inferInsightsTab(null)).toBe('overview');
+    expect(inferInsightsTab({ by_type_trend: [], by_theme_trend: [] })).toBe('overview');
+  });
+});

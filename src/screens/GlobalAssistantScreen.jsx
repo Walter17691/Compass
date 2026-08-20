@@ -7,7 +7,7 @@ import { SCREENS } from '../constants';
 // sendGlobalChat classifies the question first (stats vs a specific
 // case vs general guidance) and routes it to a real scoped query before
 // answering — never guesses a number, never invents case detail.
-export function GlobalAssistantScreen({ chatHistory, chatInput, setChatInput, chatProcessing, sendChat, caseRef, setActiveCaseId, setActiveCaseStage, setScreen }) {
+export function GlobalAssistantScreen({ chatHistory, chatInput, setChatInput, chatProcessing, sendChat, caseRef, setActiveCaseId, setActiveCaseStage, setScreen, insightsTab, setInsightsSection }) {
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
       <div style={{maxWidth:800,margin:"0 auto",padding:"32px 32px"}}>
@@ -32,6 +32,13 @@ export function GlobalAssistantScreen({ chatHistory, chatInput, setChatInput, ch
             {chatProcessing && <div style={{fontSize:13,color:"#9B9098"}}>Thinking…</div>}
             {caseRef && !chatProcessing && (
               <button onClick={()=>{setActiveCaseId(caseRef);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,marginTop:4}}>Open this case →</button>
+            )}
+            {/* Organisational ER Intelligence (Phase 6, OP20, §20) — a
+                real drill-down into whichever Insights tab actually
+                grounded this answer (inferInsightsTab, lib/globalAnalytics.js),
+                not a generic "see more" link. */}
+            {insightsTab && !chatProcessing && (
+              <button onClick={()=>{setInsightsSection(insightsTab);setScreen(SCREENS.INSIGHTS);}} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,marginTop:4}}>View in Insights →</button>
             )}
           </div>
           <div style={{padding:"14px 20px",borderTop:"1px solid #F5F1EA",display:"flex",gap:8}}>

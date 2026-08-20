@@ -43,8 +43,22 @@ test('Ask Compass answers an org-wide stats question with a real, grounded numbe
   // which can collide with an unrelated sidebar notification (e.g. an
   // overdue DSAR item's own reference number) that happens to contain the
   // same digits as a substring.
+  // The AI now formats large totals with a thousands separator (the org
+  // has crossed 1,000 cases), so match either "1867" or "1,867" rather
+  // than a bare digit substring.
   const assistantBubble = page.locator('[data-role="assistant"]').last();
-  await expect(assistantBubble).toContainText(String(stats.total_cases), { timeout: 10000 });
+  await expect(assistantBubble).toContainText(new RegExp(String(stats.total_cases).replace(/\B(?=(\d{3})+(?!\d))/g, ',?')), { timeout: 10000 });
+
+  // Organisational ER Intelligence (Phase 6, OP20, §20) — every "stats"
+  // answer now also grounds itself in org_insights_overview()/
+  // org_trend_detection() and infers a real Insights tab to drill into
+  // (globalAnalytics.js's inferInsightsTab). Confirms the drill-down link
+  // both appears and actually routes into the Insights screen, not just
+  // that it's rendered inert.
+  const insightsLink = page.getByRole('button', { name: 'View in Insights →' });
+  await expect(insightsLink).toBeVisible({ timeout: 10000 });
+  await insightsLink.click();
+  await expect(page.getByRole('heading', { name: 'Insights' })).toBeVisible({ timeout: 10000 });
 });
 
 test('Ask Compass answers a specific-case question and links back to that case', async ({ page }) => {

@@ -53,6 +53,8 @@ import { isTerminalStatus, signatureStatusLabel } from './lib/eSignature';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
+import { buildGlobalStatsContext, inferInsightsTab } from './lib/globalAnalytics';
+import { computeAppealIntelligence } from './lib/appealIntelligence';
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
 import { buildHearingPackSections } from './lib/hearingPack';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
@@ -1981,6 +1983,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // directly on a specific Settings section instead of always Billing.
   const [settingsSection, setSettingsSection] = useState(null);
 
+  // Organisational ER Intelligence (Phase 6, OP20, §20) — same deep-link
+  // pattern as settingsSection above, for sendGlobalChat's own "View in
+  // Insights" drill-down after answering an org-wide stats question.
+  const [insightsSection, setInsightsSection] = useState(null);
+
   // ── Calendar integration (Google Calendar) ──
   const [calendarConnected, setCalendarConnected] = useState(false);
   useEffect(() => {
@@ -3722,6 +3729,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const [globalChatInput, setGlobalChatInput] = useState("");
   const [globalChatProcessing, setGlobalChatProcessing] = useState(false);
   const [globalChatCaseRef, setGlobalChatCaseRef] = useState(null);
+  const [globalChatInsightsTab, setGlobalChatInsightsTab] = useState(null);
 
   const sendGlobalChat = async () => {
     const question = globalChatInput.trim();
@@ -3731,12 +3739,13 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setGlobalChatHistory(updated);
     setGlobalChatProcessing(true);
     setGlobalChatCaseRef(null);
+    setGlobalChatInsightsTab(null);
     try {
       const classifyRes = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
         max_tokens:200,
         stream:false,
-        system:"You classify a question an HR professional is asking an organisation-wide assistant. Respond ONLY with valid JSON, no other text: {\"intent\":\"stats\"|\"case\"|\"general\",\"employeeName\":\"exact name mentioned, or null\"}. Use \"stats\" for questions about counts, totals, or breakdowns across cases (e.g. how many open cases, what mix of case types). Use \"case\" only when a specific named employee's case is being asked about. Use \"general\" for policy, process, or legal-guidance questions not about specific case data.",
+        system:"You classify a question an HR professional is asking an organisation-wide assistant. Respond ONLY with valid JSON, no other text: {\"intent\":\"stats\"|\"case\"|\"general\",\"employeeName\":\"exact name mentioned, or null\"}. Use \"stats\" for questions about counts, totals, or breakdowns across cases — including trend questions (e.g. \"why are grievances increasing\", \"what themes have emerged\"), location/site questions (e.g. \"which locations have the most overdue investigations\"), and appeal questions (e.g. \"why do appeals succeed\"), not just simple counts. Use \"case\" only when a specific named employee's case is being asked about. Use \"general\" for policy, process, or legal-guidance questions not about specific case data.",
         messages:[{role:"user", content:question}],
       })});
       const classifyData = await classifyRes.json();
@@ -3750,10 +3759,27 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
       let dataContext = "";
       let matchedCase = null;
+      let insightsTab = null;
       if(intent==="stats") {
-        const { data, error } = await supabase.rpc('org_case_stats');
-        if(error) console.error("org_case_stats", error);
-        else dataContext = "ORG-WIDE CASE STATISTICS (live database query, scoped to cases you have access to):\n"+JSON.stringify(data);
+        // Organisational ER Intelligence (Phase 6, OP20, §20) — beyond
+        // org_case_stats()'s basic counts, pull in OP2/OP4's richer
+        // breakdown, OP7's significant trends, and OP11's own
+        // client-side appeal intelligence (already-loaded allegations/
+        // caseSignals, no new RPC needed for that one) so genuinely
+        // answerable questions like "why are grievances increasing" or
+        // "which locations have the most overdue investigations" have
+        // real data behind them, not just total/active/closed counts.
+        const [statsResult, overviewResult, trendResult] = await Promise.all([
+          supabase.rpc('org_case_stats'),
+          supabase.rpc('org_insights_overview', { p_period_days: 90 }),
+          supabase.rpc('org_trend_detection', { p_period_days: 90 }),
+        ]);
+        if(statsResult.error) console.error("org_case_stats", statsResult.error);
+        if(overviewResult.error) console.error("org_insights_overview", overviewResult.error);
+        if(trendResult.error) console.error("org_trend_detection", trendResult.error);
+        const appealData = computeAppealIntelligence(allegations, cases, caseSignals);
+        dataContext = buildGlobalStatsContext(statsResult.data, overviewResult.data, trendResult.data, appealData);
+        insightsTab = inferInsightsTab(trendResult.data);
       } else if(intent==="case" && employeeName) {
         matchedCase = matchCaseByEmployeeName(cases, employeeName);
         dataContext = matchedCase
@@ -3775,6 +3801,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       if(text) setGlobalChatHistory(h=>[...h, {role:"assistant", content:text}]);
       if(matchedCase) setGlobalChatCaseRef(matchedCase.id);
+      if(intent==="stats" && text) setGlobalChatInsightsTab(insightsTab);
     } catch(e) { console.error("sendGlobalChat", e); showToast("Couldn't reach Compass — "+e.message, "error"); }
     setGlobalChatProcessing(false);
   };
@@ -7003,6 +7030,8 @@ Please produce:
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           setScreen={setScreen}
+          insightsTab={globalChatInsightsTab}
+          setInsightsSection={setInsightsSection}
         />
       )}
 
@@ -7388,6 +7417,8 @@ Please produce:
           org={org}
           user={user}
           memberName={member?.name||user?.email}
+          initialSection={insightsSection}
+          clearInitialSection={()=>setInsightsSection(null)}
         />
       )}
 
