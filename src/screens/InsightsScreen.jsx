@@ -6,6 +6,7 @@ import { ManagerInsightsScreen } from './ManagerInsightsScreen';
 import { ErReportScreen } from './ErReportScreen';
 import { OrganisationalIntelligenceOverview } from '../components/OrganisationalIntelligenceOverview';
 import { ThemeTaxonomyManager } from '../components/ThemeTaxonomyManager';
+import { TrendsPanel } from '../components/TrendsPanel';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -50,7 +51,12 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
 
         <div style={{flex:1,minWidth:0}}>
           {active==="overview"&&<OrganisationalIntelligenceOverview cases={cases} dueSoon={dueSoon} hrReviewRequests={hrReviewRequests} processTemplates={processTemplates}/>}
-          {active==="trends"&&<ThemeTaxonomyManager organisationThemes={organisationThemes} isHR={isHR} onAdd={onAddOrganisationTheme} onUpdate={onUpdateOrganisationTheme}/>}
+          {active==="trends"&&(
+            <>
+              <TrendsPanel/>
+              <ThemeTaxonomyManager organisationThemes={organisationThemes} isHR={isHR} onAdd={onAddOrganisationTheme} onUpdate={onUpdateOrganisationTheme}/>
+            </>
+          )}
           {active==="manager"&&isHR&&(
             <ManagerInsightsScreen
               cases={cases}
