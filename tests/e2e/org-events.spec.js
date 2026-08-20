@@ -25,7 +25,13 @@ test('HR can log an organisational event, it persists across a reload, and corre
   await page.getByRole('button', { name: 'Organisational Events', exact: true }).click();
   await expect(page.getByText(description, { exact: true })).toBeVisible({ timeout: 10000 });
 
-  const eventCard = page.locator('div').filter({ hasText: description }).filter({ has: page.getByRole('button', { name: 'Explore correlation' }) }).last();
-  await eventCard.getByRole('button', { name: 'Explore correlation' }).click();
-  await expect(eventCard.getByText(/before this event|Case volume|No cases recorded/)).toBeVisible({ timeout: 10000 });
+  // Every div ancestor containing the (unique) description text also
+  // contains the same single "Explore correlation" button/correlation
+  // text as a descendant — .first() just picks one path to the same
+  // underlying node each time, so this doesn't need to pin down one
+  // specific "card" div (nested-div structure makes that unreliable —
+  // hasText matches every ancestor, from the immediate wrapper up to
+  // the whole panel).
+  await page.locator('div').filter({ hasText: description }).getByRole('button', { name: 'Explore correlation' }).first().click();
+  await expect(page.locator('div').filter({ hasText: description }).getByText(/before this event|Case volume|No cases recorded/).first()).toBeVisible({ timeout: 10000 });
 });
