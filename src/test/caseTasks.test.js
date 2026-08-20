@@ -22,6 +22,18 @@ describe('addTask', () => {
     addTask(original, 'case1', { name: 'x' });
     expect(original).toEqual([]);
   });
+
+  // Organisational ER Intelligence (Phase 6, OP21, §17) — actions from
+  // insights create a case-less task carrying an insightRef instead.
+  it('creates an org-level task with a null caseId and a real insightRef when caseId is omitted', () => {
+    const result = addTask([], null, { name: 'Review rota policy', insightRef: 'Trend: grievance cases (last 90 days)' });
+    expect(result[0]).toMatchObject({ caseId: null, name: 'Review rota policy', insightRef: 'Trend: grievance cases (last 90 days)' });
+  });
+
+  it('defaults insightRef to null for an ordinary case-scoped task', () => {
+    const result = addTask([], 'case1', { name: 'x' });
+    expect(result[0].insightRef).toBeNull();
+  });
 });
 
 describe('tasksForCase', () => {

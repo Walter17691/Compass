@@ -67,4 +67,18 @@ describe('EarlySignalsPanel', () => {
     expect(screen.getByText('Current 6-week count')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
   });
+
+  // Organisational ER Intelligence (Phase 6, OP21, §17)
+  it('shows a Create action control only when createCaseTask is passed in', async () => {
+    rpcMock.mockResolvedValue({
+      data: { by_type_trend: [], by_theme_trend: [{ themeId: 't1', themeName: 'shift changes', currentCount: 5, previousCount: 1, byLocation: {} }] },
+      error: null,
+    });
+    render(<EarlySignalsPanel/>);
+    await waitFor(() => expect(screen.getByText('Emerging theme')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
+
+    render(<EarlySignalsPanel createCaseTask={vi.fn()}/>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create action' })).toBeInTheDocument());
+  });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { buildRootCauseSummary, buildReviewAreas } from '../lib/rootCauseExploration';
+import { CreateActionButton } from './CreateActionButton';
 
 // Organisational ER Intelligence (Phase 6, OP8, §4) — root-cause
 // exploration for one theme, opened from TrendsPanel's "Explore" button
@@ -8,7 +9,7 @@ import { buildRootCauseSummary, buildReviewAreas } from '../lib/rootCauseExplora
 // the specific themeId. Language throughout stays in "areas to
 // investigate" framing (rootCauseExploration.js's own doc comment) —
 // never a proven cause.
-export function RootCauseExplorationPanel({ themeId, themeName, onClose }) {
+export function RootCauseExplorationPanel({ themeId, themeName, createCaseTask, onClose }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
@@ -45,6 +46,7 @@ export function RootCauseExplorationPanel({ themeId, themeName, onClose }) {
               ))}
             </>
           )}
+          {createCaseTask && <CreateActionButton insightRef={`Root-cause exploration: ${themeName}`} createCaseTask={createCaseTask}/>}
         </>
       )}
     </div>

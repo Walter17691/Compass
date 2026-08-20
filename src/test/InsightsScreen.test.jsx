@@ -91,4 +91,16 @@ describe('InsightsScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Risk Map' }));
     expect(screen.getByText(/Loading risk map/)).toBeInTheDocument();
   });
+
+  // Organisational ER Intelligence (Phase 6, OP21, §17) — createCaseTask
+  // is a new optional prop threaded down into TrendsPanel/
+  // EarlySignalsPanel/RiskMapPanel (each covered directly in their own
+  // test files); this just confirms accepting and passing it through
+  // doesn't break InsightsScreen itself.
+  it('accepts a createCaseTask prop without breaking the Trends & Themes tab', async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen isHR={true} {...requiredProps} createCaseTask={vi.fn()}/>);
+    await user.click(screen.getByRole('button', { name: 'Trends & Themes' }));
+    expect(screen.getByText(/Loading trends/)).toBeInTheDocument();
+  });
 });

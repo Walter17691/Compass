@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const rpcMock = vi.fn();
 vi.mock('../supabase', () => ({ supabase: { rpc: (...args) => rpcMock(...args) } }));
@@ -40,5 +41,25 @@ describe('RiskMapPanel', () => {
     rpcMock.mockResolvedValue({ data: { cases_by_location: {}, avg_duration_by_location: {}, avg_case_duration_days: null }, error: null });
     render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
     await waitFor(() => expect(screen.getByText(/never a ranking and never based on protected characteristics/)).toBeInTheDocument());
+  });
+
+  // Organisational ER Intelligence (Phase 6, OP21, §17)
+  it('shows a Create action control per flag only when createCaseTask is passed in, with a site-and-flag insightRef', async () => {
+    const user = userEvent.setup();
+    const createCaseTask = vi.fn();
+    rpcMock.mockResolvedValue({
+      data: { cases_by_location: { Manchester: 15, London: 5 }, avg_duration_by_location: {}, avg_case_duration_days: 10 },
+      error: null,
+    });
+    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
+    await waitFor(() => expect(screen.getByText('Elevated case volume')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
+
+    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]} createCaseTask={createCaseTask}/>);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Create action' }).length).toBeGreaterThan(0));
+    await user.click(screen.getAllByRole('button', { name: 'Create action' })[0]);
+    await user.type(screen.getByPlaceholderText('Action to take…'), 'Review Manchester rota');
+    await user.click(screen.getByRole('button', { name: 'Save action' }));
+    expect(createCaseTask).toHaveBeenCalledWith(null, expect.objectContaining({ name: 'Review Manchester rota', insightRef: expect.stringContaining('Manchester') }));
   });
 });

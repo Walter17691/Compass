@@ -17,7 +17,7 @@ export function addTask(tasks, caseId, fields) {
   if (!name) return tasks;
   const task = {
     id: "task_" + Date.now(),
-    caseId,
+    caseId: caseId || null,
     name,
     owner: fields.owner || "",
     dueDate: fields.dueDate || "",
@@ -29,6 +29,11 @@ export function addTask(tasks, caseId, fields) {
     // checklist (investigationChecklist.js) or an ad-hoc HR/investigator
     // addition.
     source: fields.source || null,
+    // Organisational ER Intelligence (Phase 6, OP21, §17) — set only for
+    // an org-level action created directly from an Insights card
+    // (caseId null); a short free-text label naming which insight
+    // prompted it. Always null for an ordinary case-scoped task.
+    insightRef: fields.insightRef || null,
     createdAt: new Date().toISOString(),
   };
   return [...(tasks || []), task];

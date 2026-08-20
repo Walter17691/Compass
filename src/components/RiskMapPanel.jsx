@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { computeStageBottlenecksByLocation } from '../lib/processDashboard';
 import { computeSiteRiskFlags } from '../lib/riskMap';
+import { CreateActionButton } from './CreateActionButton';
 
 const FLAG_COLOR = {
   er_volume: "#B87520",
@@ -17,7 +18,7 @@ const FLAG_COLOR = {
 // (management capability, appeal vulnerability, policy confusion,
 // workforce communication) explicitly noted as covered elsewhere in
 // Insights at organisation level, not fabricated per site here.
-export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEvents }) {
+export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEvents, createCaseTask }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
 
@@ -61,8 +62,11 @@ export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEven
           {s.flags.length === 0
             ? <div style={{fontSize:12,color:"#9B9098"}}>No flags for this site.</div>
             : s.flags.map(f => (
-              <div key={f.category} style={{fontSize:12,color:"#1A1535",marginBottom:4}}>
-                <span style={{fontWeight:600,color:FLAG_COLOR[f.category]||"#1A1535"}}>{f.label}</span> — {f.detail}
+              <div key={f.category} style={{marginBottom:8}}>
+                <div style={{fontSize:12,color:"#1A1535"}}>
+                  <span style={{fontWeight:600,color:FLAG_COLOR[f.category]||"#1A1535"}}>{f.label}</span> — {f.detail}
+                </div>
+                {createCaseTask && <CreateActionButton insightRef={`Risk flag: ${s.site} — ${f.label}`} createCaseTask={createCaseTask}/>}
               </div>
             ))}
         </div>

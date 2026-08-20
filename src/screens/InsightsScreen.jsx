@@ -31,7 +31,7 @@ function ComingSoon({ label }) {
   );
 }
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, org, user, memberName, initialSection, clearInitialSection }) {
+export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, createCaseTask, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, org, user, memberName, initialSection, clearInitialSection }) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
   // reachable as ErReportScreen already was; Manager Insights, Org
   // Events, Risk Map, and Improvement Initiatives are HR-only, same
@@ -78,11 +78,11 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
           )}
           {active==="trends"&&(
             <>
-              <TrendsPanel/>
+              <TrendsPanel createCaseTask={createCaseTask}/>
               <ThemeTaxonomyManager organisationThemes={organisationThemes} isHR={isHR} onAdd={onAddOrganisationTheme} onUpdate={onUpdateOrganisationTheme}/>
             </>
           )}
-          {active==="early-signals"&&<EarlySignalsPanel/>}
+          {active==="early-signals"&&<EarlySignalsPanel createCaseTask={createCaseTask}/>}
           {active==="manager"&&isHR&&(
             <ManagerInsightsScreen
               cases={cases}
@@ -97,7 +97,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
             />
           )}
           {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgEvents} isHR={isHR} onAddEvent={onAddOrgEvent}/>}
-          {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents}/>}
+          {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents} createCaseTask={createCaseTask}/>}
           {active==="improvement-initiatives"&&isHR&&<ComingSoon label="Improvement Initiatives"/>}
           {active==="reports"&&(
             <>

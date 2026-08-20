@@ -53,4 +53,21 @@ describe('RootCauseExplorationPanel', () => {
     await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(2));
     expect(rpcMock).toHaveBeenLastCalledWith('org_theme_root_cause', { p_theme_id: 't2', p_period_days: 90 });
   });
+
+  // Organisational ER Intelligence (Phase 6, OP21, §17)
+  it('shows a Create action control only when createCaseTask is passed in, scoped to the explored theme', async () => {
+    const user = userEvent.setup();
+    const createCaseTask = vi.fn();
+    rpcMock.mockResolvedValue({ data: { current_count: 3, by_location: {}, co_occurring_themes: [] }, error: null });
+    render(<RootCauseExplorationPanel themeId="t1" themeName="Management communication" onClose={()=>{}}/>);
+    await waitFor(() => expect(screen.getByText(/appears in 3 cases/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
+
+    render(<RootCauseExplorationPanel themeId="t1" themeName="Management communication" createCaseTask={createCaseTask} onClose={()=>{}}/>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create action' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Create action' }));
+    await user.type(screen.getByPlaceholderText('Action to take…'), 'Schedule manager comms review');
+    await user.click(screen.getByRole('button', { name: 'Save action' }));
+    expect(createCaseTask).toHaveBeenCalledWith(null, expect.objectContaining({ name: 'Schedule manager comms review', insightRef: expect.stringContaining('Management communication') }));
+  });
 });

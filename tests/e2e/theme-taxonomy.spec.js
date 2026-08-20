@@ -103,6 +103,38 @@ test('tagging 3 cases with a new theme surfaces a trend and its root-cause explo
   await expect(page.getByText('3', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
 
+  // Organisational ER Intelligence (Phase 6, OP21, §17) — actions from
+  // insights. "Create action" generalises case_tasks (previously always
+  // case-scoped) to an org-level row via createCaseTask(null, fields);
+  // confirms it's a real, persisted row by finding it on the cross-case
+  // Tasks screen afterward, carrying the trend's own insightRef label in
+  // place of a case link.
+  const actionName = `Review ${themeName} pattern`;
+  const actionOwner = `E2E Owner ${Date.now()}`;
+  await trendCard.getByRole('button', { name: 'Create action' }).click();
+  await trendCard.getByPlaceholder('Action to take…').fill(actionName);
+  await trendCard.getByPlaceholder('Owner').fill(actionOwner);
+  const actionSaved = page.waitForResponse(r => r.url().includes('/rest/v1/case_tasks') && r.request().method() === 'POST');
+  await trendCard.getByRole('button', { name: 'Save action' }).click();
+  await actionSaved;
+  await expect(trendCard.getByText(/Action created/)).toBeVisible({ timeout: 10000 });
+
+  // The shared test org accumulates hundreds of real open tasks across
+  // every run, and undated tasks (this one has no due date) sort last —
+  // filtering by this action's own unique owner (rather than scrolling/
+  // paginating through the whole list) is what actually makes finding it
+  // deterministic.
+  await page.locator('aside, header').getByRole('button', { name: 'Tasks', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible({ timeout: 10000 });
+  await page.locator('select').filter({ has: page.getByRole('option', { name: 'All owners' }) }).selectOption(actionOwner);
+  const actionRow = page.locator('div').filter({ hasText: actionName }).filter({ has: page.getByRole('checkbox') }).last();
+  await expect(actionRow).toBeVisible();
+  await expect(actionRow.getByText(new RegExp('Trend: ' + themeName))).toBeVisible();
+
+  await page.getByRole('button', { name: 'Insights', exact: true }).click();
+  await page.getByRole('button', { name: 'Trends & Themes', exact: true }).click();
+  await expect(page.getByText(new RegExp(themeName + ' had no recorded cases'))).toBeVisible({ timeout: 10000 });
+
   await trendCard.getByRole('button', { name: 'Explore' }).click();
   await expect(page.getByText('Root-cause exploration — ' + themeName)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(new RegExp('"' + themeName + '" appears in 3 cases this period'))).toBeVisible({ timeout: 10000 });

@@ -37,6 +37,13 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
     if((a.status==="done")!==(b.status==="done")) return a.status==="done"?1:-1;
     const aOver = isOverdue(a.dueDate), bOver = isOverdue(b.dueDate);
     if(aOver!==bOver) return aOver?-1:1;
+    // Both-undated must return 0, not 1 — returning 1 unconditionally
+    // whenever a has no due date (regardless of b) made this comparator
+    // inconsistent for two undated tasks (comparator(a,b) and
+    // comparator(b,a) both evaluated to 1), which left their relative
+    // order effectively undefined once there were enough of them for the
+    // sort algorithm's internal merging to become order-sensitive.
+    if(!a.dueDate && !b.dueDate) return 0;
     if(!a.dueDate) return 1;
     if(!b.dueDate) return -1;
     return new Date(a.dueDate)-new Date(b.dueDate);
@@ -138,6 +145,11 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
                   <div style={{fontSize:14,fontWeight:500,color:"#1A1535",textDecoration:t.status==="done"?"line-through":"none",opacity:t.status==="done"?0.6:1}}>{t.name}</div>
                   <div style={{display:"flex",gap:8,alignItems:"center",marginTop:4,flexWrap:"wrap"}}>
                     {cs&&<button onClick={()=>openCase(cs.id)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",padding:0,fontFamily:"DM Sans,system-ui,sans-serif"}}>{cs.employeeName}</button>}
+                    {/* Organisational ER Intelligence (Phase 6, OP21, §17) — an
+                        action created from an Insights card has no case (t.caseId
+                        is null); insightRef names which insight prompted it in
+                        place of the case link every other row shows. */}
+                    {!cs&&t.insightRef&&<span style={{fontSize:11,color:"#7C5CFC"}}>{t.insightRef}</span>}
                     {t.owner&&<span style={{fontSize:11,color:"#9B9098"}}>· {t.owner}</span>}
                     {t.dueDate&&<span style={{fontSize:11,color:overdue?"#C84B2F":"#9B9098"}}>· Due {fmtDate(t.dueDate)}{overdue?" (overdue)":""}</span>}
                   </div>

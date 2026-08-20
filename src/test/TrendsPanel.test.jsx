@@ -88,4 +88,24 @@ describe('TrendsPanel', () => {
     expect(screen.getByText('13')).toBeInTheDocument();
     expect(screen.getByText(/^Period:/)).toBeInTheDocument();
   });
+
+  // Organisational ER Intelligence (Phase 6, OP21, §17)
+  it('shows a Create action control only when createCaseTask is passed in, and calls it with a real insightRef', async () => {
+    const user = userEvent.setup();
+    const createCaseTask = vi.fn();
+    rpcMock.mockResolvedValue({
+      data: { by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: {} }], by_theme_trend: [] },
+      error: null,
+    });
+    render(<TrendsPanel/>);
+    await waitFor(() => expect(screen.getByText(/grievance cases increased/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
+
+    render(<TrendsPanel createCaseTask={createCaseTask}/>);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Create action' }).length).toBeGreaterThan(0));
+    await user.click(screen.getAllByRole('button', { name: 'Create action' })[0]);
+    await user.type(screen.getByPlaceholderText('Action to take…'), 'Review shift patterns');
+    await user.click(screen.getByRole('button', { name: 'Save action' }));
+    expect(createCaseTask).toHaveBeenCalledWith(null, expect.objectContaining({ name: 'Review shift patterns', insightRef: expect.stringContaining('grievance') }));
+  });
 });

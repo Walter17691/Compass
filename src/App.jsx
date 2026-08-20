@@ -3542,6 +3542,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
         dueDate:r.due_date||"", priority:r.priority, status:r.status,
         createdBy:r.created_by, createdAt:r.created_at, source:r.source||null,
+        insightRef:r.insight_ref||null,
       })));
     } catch(e) { console.error('loadCaseTasks', e); }
   };
@@ -3549,9 +3550,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const saveCaseTaskToDB = async (task) => {
     if(!org?.id) return;
     const { error } = await withFkRetry(() => supabase.from('case_tasks').upsert({
-      id: task.id, case_id: task.caseId, org_id: org.id,
+      id: task.id, case_id: task.caseId||null, org_id: org.id,
       name: task.name, owner: task.owner||null, due_date: task.dueDate||null,
       priority: task.priority||'normal', status: task.status||'open', source: task.source||null,
+      insight_ref: task.insightRef||null,
       created_by: task.createdBy||user?.id||null, updated_at: new Date().toISOString(),
     }));
     if(error) { console.error('saveCaseTaskToDB', error); showToast("Couldn't save task to the cloud — "+error.message, "error"); }
@@ -7390,6 +7392,7 @@ Please produce:
           auditLog={auditLog}
           dueSoon={dueSoon}
           caseTasks={caseTasks}
+          createCaseTask={createCaseTask}
           managerCapabilityInsights={managerCapabilityInsights}
           generatingManagerInsight={generatingManagerInsight}
           onGenerateManagerInsight={generateManagerCapabilityInsight}

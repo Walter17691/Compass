@@ -37,8 +37,13 @@ test('a task added on a case appears on the cross-case Tasks screen and can be c
   await expect(page.getByText(/^Tasks \(1 open\)$/)).toBeVisible();
 
   // Same task shows up on the cross-case Tasks screen (top-nav destination).
+  // The shared test org accumulates hundreds of open, undated tasks
+  // across every run — filtering to this task's own case (rather than
+  // relying on it landing on the default list's first page) is what
+  // actually makes finding it deterministic.
   await page.locator('aside, header').getByRole('button', { name: 'Tasks', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible({ timeout: 10000 });
+  await page.locator('select').filter({ has: page.getByRole('option', { name: 'All cases' }) }).selectOption({ label: employeeName });
   const findTaskRow = () => page.locator('div')
     .filter({ hasText: taskName })
     .filter({ has: page.getByRole('button', { name: employeeName }) })
