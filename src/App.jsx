@@ -7350,6 +7350,8 @@ Please produce:
           organisationThemes={organisationThemes}
           onAddOrganisationTheme={addOrganisationTheme}
           onUpdateOrganisationTheme={updateOrganisationTheme}
+          allegations={allegations}
+          caseSignals={caseSignals}
         />
       )}
 

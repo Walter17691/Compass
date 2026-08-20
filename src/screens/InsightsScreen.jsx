@@ -27,7 +27,7 @@ function ComingSoon({ label }) {
   );
 }
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, initialSection, clearInitialSection }) {
+export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, initialSection, clearInitialSection }) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
   // reachable as ErReportScreen already was; Manager Insights, Risk Map,
   // and Improvement Initiatives are HR-only, same restriction
@@ -60,6 +60,8 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
               processTemplates={processTemplates}
               employeeRecords={employeeRecords}
               onOpenCase={(caseId, stageId)=>{setActiveCaseId(caseId); setActiveCaseStage(stageId); setScreen(SCREENS.CASE_VIEW);}}
+              allegations={allegations}
+              caseSignals={caseSignals}
             />
           )}
           {active==="trends"&&(

@@ -37,4 +37,9 @@ test('the Organisational Intelligence dashboard loads real org-wide stats', asyn
   // pending-migration caveat applies here unlike the RPC-backed panels
   // above.
   await expect(page.getByText('Process bottlenecks by site', { exact: true })).toBeVisible();
+
+  // Organisational ER Intelligence (Phase 6, OP11, §8) — appeal
+  // intelligence. Also no new RPC/migration — pure client-side
+  // aggregation over the already-loaded allegations/caseSignals arrays.
+  await expect(page.getByText('Appeal intelligence', { exact: true })).toBeVisible();
 });

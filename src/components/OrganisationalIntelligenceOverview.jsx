@@ -6,6 +6,7 @@ import { DataQualityCaveat } from './DataQualityCaveat';
 import { SiteIntelligencePanel } from './SiteIntelligencePanel';
 import { BenchmarkingPanel } from './BenchmarkingPanel';
 import { ProcessBottlenecksPanel } from './ProcessBottlenecksPanel';
+import { AppealIntelligencePanel } from './AppealIntelligencePanel';
 
 const MIN_DURATION_SAMPLE = 3;
 
@@ -53,7 +54,7 @@ function topEntries(obj, limit = 6) {
 // than re-deriving branching logic in SQL (see OP2's migration header
 // for the full reasoning). Appeal rate/appeal outcome rate are OP11's
 // job (Appeal Intelligence) — shown as a placeholder here, not guessed.
-export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase }) {
+export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, allegations, caseSignals }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
 
@@ -155,6 +156,8 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Process bottlenecks by site</div>
         <ProcessBottlenecksPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} onOpenCase={onOpenCase}/>
       </div>
+
+      <AppealIntelligencePanel allegations={allegations} cases={cases} caseSignals={caseSignals}/>
     </div>
   );
 }
