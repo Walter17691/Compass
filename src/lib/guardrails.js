@@ -73,6 +73,7 @@ function checkChairIndependence(cs) {
   const chair = discMeetings[0].manager;
   const invMeeting = (cs.meetings || []).find(m => m.type === "Investigation" && m.manager === chair);
   return {
+    id: "chair_independence",
     title: "Same person chaired the investigation and the disciplinary hearing",
     reasoning: `${chair} chaired both the investigation and the disciplinary hearing. The ACAS Code of Practice expects the investigating manager and the person deciding the outcome to be different people, so the decision can't be seen as pre-judged — consider whether a different manager should chair the hearing.`,
     sourceRefs: [invMeeting, discMeetings[0]].filter(Boolean).map(m => ({ kind: "meeting", id: m.id })),
@@ -90,6 +91,7 @@ function checkEvidenceAfterReport(cs) {
     .filter(e => { const d = parseFlexDate(e.date); return d && d > reportDate; });
   if (!late.length) return null;
   return {
+    id: "evidence_after_report",
     title: "Evidence added after the investigation report was concluded",
     reasoning: `${late.map(e => e.name).join(", ")} — added after the investigation report was concluded. Consider whether this evidence changes the findings before the case progresses.`,
     sourceRefs: late.map(e => ({ kind: "evidence", id: e.index })),
@@ -108,6 +110,7 @@ function checkAppealClauseMissing(cs, policies) {
   const m = risky[0];
   const policyRef = findPolicyClauseRef(policies, ["appeal"]);
   return {
+    id: "appeal_clause_missing",
     title: "Outcome letter may be missing the right of appeal",
     reasoning: `The letter attached to the ${m.type.toLowerCase()} on ${m.date} doesn't mention a right of appeal. ACAS-code outcome letters should normally set out the right to appeal and how to do so — worth checking before this is sent.`,
     sourceRefs: [{ kind: "meeting", id: m.id }, ...(policyRef ? [policyRef] : [])],
@@ -127,6 +130,7 @@ function checkAllegationResponseOpportunity(cs, caseAllegations, policies) {
   if (!unaddressed.length) return null;
   const policyRef = findPolicyClauseRef(policies, ["respond", "response", "opportunity to respond"]);
   return {
+    id: "employee_response_opportunity",
     title: unaddressed.length === 1 ? "An allegation has no recorded employee response" : `${unaddressed.length} allegations have no recorded employee response`,
     reasoning: `${unaddressed.length === 1 ? "This allegation hasn't" : "These allegations haven't"} been shown to have been put to the employee for a response yet: ${unaddressed.map(a => a.title).join(", ")}. Natural justice — and most disciplinary policies — expect the employee to have a genuine opportunity to respond to each allegation before findings are reached.`,
     sourceRefs: [...unaddressed.map(a => ({ kind: "allegation", id: a.id, label: a.title })), ...(policyRef ? [policyRef] : [])],
@@ -144,6 +148,7 @@ function checkWitnessEvidenceGaps(cs, caseAllegations) {
   const mentioning = caseAllegations.filter(a => (a.witnessEvidence || "").trim());
   if (!mentioning.length) return null;
   return {
+    id: "witness_evidence_gap",
     title: "Witness evidence referenced but no witness statement is on file",
     reasoning: `${mentioning.length === 1 ? "An allegation references" : mentioning.length + " allegations reference"} witness evidence, but no witness statement has been recorded on this case's evidence. Consider whether a formal witness interview is still needed.`,
     sourceRefs: mentioning.map(a => ({ kind: "allegation", id: a.id, label: a.title })),
@@ -161,6 +166,7 @@ function checkDecisionReasoningMissing(cs, caseAllegations) {
   const thin = caseAllegations.filter(a => isFindingStatus(a.status) && (a.decisionReasoning || "").trim().length < MIN_REASONING_LENGTH);
   if (!thin.length) return null;
   return {
+    id: "decision_reasoning_missing",
     title: "A finding was recorded with little or no reasoning",
     reasoning: `${thin.length === 1 ? "One finding" : thin.length + " findings"} — ${thin.map(a => a.title).join(", ")} — ${thin.length === 1 ? "has" : "have"} little or no reasoning recorded. A brief note on what the evidence showed makes the finding easier to defend later, at appeal or otherwise.`,
     sourceRefs: thin.map(a => ({ kind: "allegation", id: a.id, label: a.title })),
@@ -185,6 +191,7 @@ function checkReasoningIgnoresEmployeeResponse(cs, caseAllegations) {
   });
   if (!gaps.length) return null;
   return {
+    id: "reasoning_ignores_response",
     title: "A finding's reasoning may not address the employee's response",
     reasoning: `${gaps.length === 1 ? "One finding" : gaps.length + " findings"} — ${gaps.map(a => a.title).join(", ")} — ${gaps.length === 1 ? "has" : "have"} a recorded employee response, but the reasoning doesn't appear to reference any of it. Worth checking it genuinely engages with what the employee said, not just the evidence against them.`,
     sourceRefs: gaps.map(a => ({ kind: "allegation", id: a.id, label: a.title })),
@@ -206,6 +213,7 @@ function checkAppealManagerConflict(cs, caseAccess, orgMembers) {
   const originalDecisionMaker = cs.disciplinaryOfficer || lastDecisionMeeting?.manager;
   if (!originalDecisionMaker || appealManager.name !== originalDecisionMaker) return null;
   return {
+    id: "appeal_manager_conflict",
     title: "The Appeal Manager made the original decision",
     reasoning: `${appealManager.name} is assigned as Appeal Manager but also made the original decision being appealed. Natural justice expects the appeal to be heard by someone who wasn't involved in that decision — consider assigning a different manager to hear the appeal.`,
     sourceRefs: [],

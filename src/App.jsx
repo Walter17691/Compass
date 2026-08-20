@@ -7352,6 +7352,8 @@ Please produce:
           onUpdateOrganisationTheme={updateOrganisationTheme}
           allegations={allegations}
           caseSignals={caseSignals}
+          policies={policies}
+          orgMembers={orgMembers}
         />
       )}
 

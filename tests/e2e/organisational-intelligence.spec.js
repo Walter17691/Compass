@@ -42,4 +42,9 @@ test('the Organisational Intelligence dashboard loads real org-wide stats', asyn
   // intelligence. Also no new RPC/migration — pure client-side
   // aggregation over the already-loaded allegations/caseSignals arrays.
   await expect(page.getByText('Appeal intelligence', { exact: true })).toBeVisible();
+
+  // Organisational ER Intelligence (Phase 6, OP12, §9) — case quality
+  // analytics. Also no new RPC/migration — aggregates the existing
+  // caseReadiness.js/guardrails.js per-case checks client-side.
+  await expect(page.getByText('Case quality analytics', { exact: true })).toBeVisible();
 });
