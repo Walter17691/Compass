@@ -7385,6 +7385,9 @@ Please produce:
           orgMembers={orgMembers}
           orgEvents={orgEvents}
           onAddOrgEvent={addOrgEvent}
+          org={org}
+          user={user}
+          memberName={member?.name||user?.email}
         />
       )}
 

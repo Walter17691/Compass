@@ -10,6 +10,7 @@ import { TrendsPanel } from '../components/TrendsPanel';
 import { EarlySignalsPanel } from '../components/EarlySignalsPanel';
 import { OrgEventsPanel } from '../components/OrgEventsPanel';
 import { RiskMapPanel } from '../components/RiskMapPanel';
+import { ExecutiveBriefPanel } from '../components/ExecutiveBriefPanel';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -29,7 +30,7 @@ function ComingSoon({ label }) {
   );
 }
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, initialSection, clearInitialSection }) {
+export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, org, user, memberName, initialSection, clearInitialSection }) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
   // reachable as ErReportScreen already was; Manager Insights, Org
   // Events, Risk Map, and Improvement Initiatives are HR-only, same
@@ -98,20 +99,23 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
           {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents}/>}
           {active==="improvement-initiatives"&&isHR&&<ComingSoon label="Improvement Initiatives"/>}
           {active==="reports"&&(
-            <ErReportScreen
-              cases={cases}
-              getCaseStage={getCaseStage}
-              employeeRecords={employeeRecords}
-              setReportNarrative={setReportNarrative}
-              reportNarrative={reportNarrative}
-              setActiveCaseId={setActiveCaseId}
-              setActiveCaseStage={setActiveCaseStage}
-              setScreen={setScreen}
-              setActivePerson={setActivePerson}
-              getNextStep={getNextStep}
-              fmtDate={fmtDate}
-              loadJsPDF={loadJsPDF}
-            />
+            <>
+              <ExecutiveBriefPanel org={org} user={user} memberName={memberName} isHR={isHR}/>
+              <ErReportScreen
+                cases={cases}
+                getCaseStage={getCaseStage}
+                employeeRecords={employeeRecords}
+                setReportNarrative={setReportNarrative}
+                reportNarrative={reportNarrative}
+                setActiveCaseId={setActiveCaseId}
+                setActiveCaseStage={setActiveCaseStage}
+                setScreen={setScreen}
+                setActivePerson={setActivePerson}
+                getNextStep={getNextStep}
+                fmtDate={fmtDate}
+                loadJsPDF={loadJsPDF}
+              />
+            </>
           )}
 
           <div style={{marginTop:24}}>
