@@ -1,22 +1,27 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
-import { isSignificantTrend, describeTrend } from '../lib/trendDetection';
+import { isSignificantTrend, describeTrend, computePctChange } from '../lib/trendDetection';
 import { RootCauseExplorationPanel } from './RootCauseExplorationPanel';
+import { InsightEvidenceModal } from './InsightEvidenceModal';
 
-const TrendCard = ({ text, onExplore }) => (
+const TrendCard = ({ text, onExplore, onShowEvidence }) => (
   <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:10}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:6}}>
       <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.4px",textTransform:"uppercase"}}>Trend identified</div>
-      {onExplore && <button onClick={onExplore} style={{fontSize:11,background:"none",border:"1px solid #E0D8FF",borderRadius:6,padding:"3px 10px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>Explore</button>}
+      <div style={{display:"flex",gap:6,flexShrink:0}}>
+        <button onClick={onShowEvidence} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"3px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Show evidence</button>
+        {onExplore && <button onClick={onExplore} style={{fontSize:11,background:"none",border:"1px solid #E0D8FF",borderRadius:6,padding:"3px 10px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Explore</button>}
+      </div>
     </div>
     <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{text}</div>
   </div>
 );
 
-// Organisational ER Intelligence (Phase 6, OP7/OP8, §2/§4) — trend
-// detection plus, for theme trends specifically, a root-cause
-// exploration drill-in. Fetches org_trend_detection() (OP7's RPC,
-// extending OP2's foundation) and surfaces only SIGNIFICANT trends
+// Organisational ER Intelligence (Phase 6, OP7/OP8/OP17, §2/§4/§23) —
+// trend detection plus, for theme trends specifically, a root-cause
+// exploration drill-in and (OP17) a "Show evidence" drill-in for both
+// trend kinds. Fetches org_trend_detection() (OP7's RPC, extending
+// OP2's foundation) and surfaces only SIGNIFICANT trends
 // (isSignificantTrend's MIN_SAMPLE_SIZE + threshold guard) — a raw list
 // of every case type's count, most of them flat, would bury the pattern
 // worth flagging. "Explore" only appears on theme trend cards, not case
@@ -28,6 +33,7 @@ export function TrendsPanel() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const [exploringThemeId, setExploringThemeId] = useState(null);
+  const [evidenceFor, setEvidenceFor] = useState(null); // { label, entry } | null
 
   useEffect(() => {
     let cancelled = false;
@@ -52,9 +58,11 @@ export function TrendsPanel() {
     <div style={{marginBottom:24}}>
       <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Trends (last 90 days vs previous 90 days)</div>
       {!hasAny && <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>No significant trends identified in the current period.</div>}
-      {typeTrends.map(t => <TrendCard key={"type-"+t.caseType} text={describeTrend(t, t.caseType)}/>)}
+      {typeTrends.map(t => (
+        <TrendCard key={"type-"+t.caseType} text={describeTrend(t, t.caseType)} onShowEvidence={()=>setEvidenceFor({ label: t.caseType, entry: t })}/>
+      ))}
       {themeTrends.map(t => (
-        <TrendCard key={"theme-"+t.themeId} text={describeTrend(t, t.themeName)} onExplore={()=>setExploringThemeId(t.themeId)}/>
+        <TrendCard key={"theme-"+t.themeId} text={describeTrend(t, t.themeName)} onExplore={()=>setExploringThemeId(t.themeId)} onShowEvidence={()=>setEvidenceFor({ label: t.themeName, entry: t })}/>
       ))}
       {exploringTheme && (
         // key={themeId} forces a full remount when the explored theme
@@ -62,6 +70,19 @@ export function TrendsPanel() {
         // to reset stale state from the previous theme synchronously —
         // it always starts fresh from its own initial null/false state.
         <RootCauseExplorationPanel key={exploringTheme.themeId} themeId={exploringTheme.themeId} themeName={exploringTheme.themeName} onClose={()=>setExploringThemeId(null)}/>
+      )}
+      {evidenceFor && (
+        <InsightEvidenceModal
+          title={evidenceFor.label}
+          metrics={[
+            { label: "Current period count", value: evidenceFor.entry.currentCount },
+            { label: "Previous period count", value: evidenceFor.entry.previousCount },
+          ]}
+          period="last 90 days"
+          comparisonPeriod="previous 90 days"
+          confidenceNote={computePctChange(evidenceFor.entry.currentCount, evidenceFor.entry.previousCount) === null ? "This theme/type had no cases in the comparison period — treat the pattern as newly emerging, not a measured percentage change." : undefined}
+          onClose={()=>setEvidenceFor(null)}
+        />
       )}
     </div>
   );

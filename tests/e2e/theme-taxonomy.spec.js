@@ -94,6 +94,15 @@ test('tagging 3 cases with a new theme surfaces a trend and its root-cause explo
   await expect(page.getByText(new RegExp(themeName + ' had no recorded cases in the previous comparison period, and 3 in the current period'))).toBeVisible({ timeout: 10000 });
 
   const trendCard = page.locator('div').filter({ hasText: themeName }).filter({ has: page.getByRole('button', { name: 'Explore' }) }).last();
+
+  // Organisational ER Intelligence (Phase 6, OP17, §23) — "Show
+  // evidence" opens InsightEvidenceModal with this same trend's real
+  // underlying counts, not just the prose sentence already on the card.
+  await trendCard.getByRole('button', { name: 'Show evidence' }).click();
+  await expect(page.getByText('Current period count', { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('3', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+
   await trendCard.getByRole('button', { name: 'Explore' }).click();
   await expect(page.getByText('Root-cause exploration — ' + themeName)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(new RegExp('"' + themeName + '" appears in 3 cases this period'))).toBeVisible({ timeout: 10000 });

@@ -83,6 +83,18 @@ describe('computeSiteRiskFlags', () => {
     expect(result[0].flags.length).toBeGreaterThan(result[1].flags.length);
   });
 
+  it('does not flag elevated volume below the minimum sample size, even at a high multiplier', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 2, London: 1 },
+      locationDurations: {},
+      companyAvgDuration: null,
+      bottlenecks: [],
+      orgEvents: [],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    expect(manchester.flags.some(f => f.category === 'er_volume')).toBe(false);
+  });
+
   it('returns an empty array for no location data', () => {
     expect(computeSiteRiskFlags({ locationCounts: {}, locationDurations: {}, companyAvgDuration: null, bottlenecks: [], orgEvents: [] })).toEqual([]);
   });

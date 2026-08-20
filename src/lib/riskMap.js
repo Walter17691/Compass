@@ -26,6 +26,13 @@
 const VOLUME_MULTIPLIER = 1.5; // flag a site at >=150% of the average per-site case count
 const DURATION_INCREASE_PCT = 20; // same threshold trendDetection.js's own SIGNIFICANT_INCREASE_PCT uses
 const MIN_DURATION_SAMPLE = 3;
+// Organisational ER Intelligence (Phase 6, OP17, §24) — data-quality
+// floor for the volume flag specifically: without this, an org with
+// only a couple of sites and single-digit case counts could see "150%
+// of average" trip on noise (e.g. 2 cases vs an average of 1). The
+// other three flags already carry their own real floor (MIN_DURATION_SAMPLE,
+// or simply requiring a genuine bottleneck/logged event to exist).
+const MIN_VOLUME_SAMPLE = 3;
 
 export function computeSiteRiskFlags({ locationCounts, locationDurations, companyAvgDuration, bottlenecks, orgEvents }) {
   const sites = Object.keys(locationCounts || {}).filter(s => s !== "Not specified");
@@ -43,7 +50,7 @@ export function computeSiteRiskFlags({ locationCounts, locationDurations, compan
   return sites.map(site => {
     const flags = [];
     const count = locationCounts[site];
-    if (avgCount > 0 && count >= avgCount * VOLUME_MULTIPLIER) {
+    if (avgCount > 0 && count >= MIN_VOLUME_SAMPLE && count >= avgCount * VOLUME_MULTIPLIER) {
       flags.push({ category: "er_volume", label: "Elevated case volume", detail: `${count} cases vs an average of ${Math.round(avgCount * 10) / 10} per site` });
     }
 

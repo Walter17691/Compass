@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const rpcMock = vi.fn();
 vi.mock('../supabase', () => ({ supabase: { rpc: (...args) => rpcMock(...args) } }));
@@ -51,5 +52,19 @@ describe('EarlySignalsPanel', () => {
     rpcMock.mockResolvedValue({ data: null, error: new Error('boom') });
     render(<EarlySignalsPanel/>);
     await waitFor(() => expect(screen.getByText("Couldn't load early signal data right now.")).toBeInTheDocument());
+  });
+
+  it('opens InsightEvidenceModal with real counts when Show evidence is clicked', async () => {
+    const user = userEvent.setup();
+    rpcMock.mockResolvedValue({
+      data: { by_type_trend: [], by_theme_trend: [{ themeId: 't1', themeName: 'shift changes', currentCount: 5, previousCount: 1, byLocation: {} }] },
+      error: null,
+    });
+    render(<EarlySignalsPanel/>);
+    await waitFor(() => expect(screen.getByText('Emerging theme')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Show evidence' }));
+    expect(screen.getByText('shift changes')).toBeInTheDocument();
+    expect(screen.getByText('Current 6-week count')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
   });
 });

@@ -73,4 +73,19 @@ describe('TrendsPanel', () => {
     await waitFor(() => expect(screen.getByText('Root-cause exploration — Rota changes')).toBeInTheDocument());
     expect(rpcMock).toHaveBeenCalledWith('org_theme_root_cause', { p_theme_id: 't1', p_period_days: 90 });
   });
+
+  it('shows a Show evidence button on every trend card and opens InsightEvidenceModal with real metrics', async () => {
+    const user = userEvent.setup();
+    rpcMock.mockResolvedValue({
+      data: { by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: {} }], by_theme_trend: [] },
+      error: null,
+    });
+    render(<TrendsPanel/>);
+    await waitFor(() => expect(screen.getByText(/grievance cases increased/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Show evidence' }));
+    expect(screen.getByText('grievance')).toBeInTheDocument();
+    expect(screen.getByText('Current period count')).toBeInTheDocument();
+    expect(screen.getByText('13')).toBeInTheDocument();
+    expect(screen.getByText(/^Period:/)).toBeInTheDocument();
+  });
 });
