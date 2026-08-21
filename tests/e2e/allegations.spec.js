@@ -54,4 +54,30 @@ test('an allegation can be added, evidence linked with a stance, and its status 
   // .last() — the Evidence Matrix's status column also renders a
   // "Substantiated" badge for this allegation.
   await expect(page.locator('span').filter({ hasText: 'Substantiated' }).last()).toBeVisible();
+
+  // Phase 6.5 hardening (P0, Clusters 6+7) — investigatorFinding now
+  // persists on blur via a local draft (DraftTextarea) rather than on
+  // every keystroke, and the save itself now goes through
+  // saveAllegationToDB's optimistic-concurrency guard rather than a blind
+  // upsert (this is the allegation's 3rd save overall — creation and the
+  // status change above already ran the 1st/2nd, so this exercises the
+  // real conditional-update branch, not just the first-ever-save upsert
+  // fallback). Reloading proves the blur-triggered write actually reached
+  // Supabase, not just local component state.
+  const findingField = page.getByPlaceholder('What did the investigation itself conclude, before any hearing?');
+  await findingField.fill('Swipe records confirm the employee left site at 14:32 and did not return.');
+  await findingField.blur();
+  await page.waitForTimeout(500); // let the blur-triggered save reach Supabase before reloading
+  await page.reload();
+  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  // Wait for the list to settle (this shared test org has thousands of
+  // cases/allegations, so the post-reload fetch can re-render the list
+  // more than once) before clicking a specific row, same reasoning as the
+  // count assertion right after creation above.
+  await expect(page.getByText('Allegations (1)')).toBeVisible({ timeout: 15000 });
+  await page.getByText('Left site without authorisation').last().click();
+  // A textarea's content lives in its value, not as visible text — assert
+  // on the reloaded field's value, not getByText.
+  await expect(page.getByPlaceholder('What did the investigation itself conclude, before any hearing?'))
+    .toHaveValue('Swipe records confirm the employee left site at 14:32 and did not return.', { timeout: 10000 });
 });

@@ -38,6 +38,7 @@ import { InvestigationQualityCheckModal } from './components/InvestigationQualit
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
+import { conditionalUpdate } from './lib/optimisticSave';
 import { requestOverride, requestPolicyDeviation } from './lib/humanOverride';
 import { caseRoleLabel } from './lib/caseRoles';
 import { getProcessType, stageLabel } from './lib/processStages';
@@ -1864,6 +1865,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── Allegations (case-scoped issues under investigation) ──
   const [allegations, setAllegations] = useState([]);
+  // Phase 6.5 hardening (P0, Clusters 6+7) — refs, not state: two saves
+  // for the SAME allegation fired close together (e.g. creating it, then
+  // immediately changing its status) can both read the same pre-save
+  // updatedAt from React state, since state updates aren't synchronously
+  // visible to a function that already started running — the second save
+  // would then use a stale conflict-check baseline, comparing against a
+  // value neither actual writer produced, and falsely reject a later,
+  // unrelated edit as a "someone else changed this" conflict with no real
+  // second writer involved. allegationVersionRef is the single, always-
+  // synchronously-current source of truth for each row's last known
+  // updated_at (updated on every load and every successful save);
+  // allegationSaveQueueRef serialises same-row saves so each one only
+  // executes (and reads the version ref) after the previous one has
+  // actually finished, rather than racing it.
+  const allegationVersionRef = useRef({});
+  const allegationSaveQueueRef = useRef({});
 
   // ── Case tasks ──
   const [caseTasks, setCaseTasks] = useState([]);
@@ -2835,6 +2852,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const {data, error} = await supabase.from('allegations').select('*').eq('org_id', org.id).order('created_at', {ascending:true});
       if(error) { console.error('loadAllegations', error); return; }
+      // Keep the version ref in sync with every load, not just saves —
+      // otherwise a reload (e.g. after another save's conflict) could
+      // leave a stale ref value shadowing genuinely fresher data just
+      // fetched into React state.
+      if(data) data.forEach(r => { allegationVersionRef.current[r.id] = r.updated_at; });
       if(data) setAllegations(data.map(r=>({
         id:r.id, caseId:r.case_id, title:r.title, description:r.description||"",
         period:r.period||"", peopleInvolved:r.people_involved||"", status:r.status,
@@ -2843,14 +2865,26 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         decisionReasoning:r.decision_reasoning||"", decidedBy:r.decided_by||null, decidedAt:r.decided_at||null,
         appealOutcome:r.appeal_outcome||null, appealReasoning:r.appeal_reasoning||"",
         appealDecidedBy:r.appeal_decided_by||null, appealDecidedAt:r.appeal_decided_at||null,
-        createdBy:r.created_by, createdAt:r.created_at,
+        createdBy:r.created_by, createdAt:r.created_at, updatedAt:r.updated_at,
       })));
     } catch(e) { console.error('loadAllegations', e); }
   };
 
-  const saveAllegationToDB = async (allegation) => {
-    if(!org?.id) return;
-    const { error } = await withFkRetry(() => supabase.from('allegations').upsert({
+  // Phase 6.5 hardening (P0, Clusters 6+7) — previously a blind upsert on
+  // every keystroke (AllegationsPanel's textareas called onChange straight
+  // through to patchAllegation, no debounce), so two people editing
+  // different fields of the same allegation within the same window could
+  // silently clobber each other's changes — a full-row upsert, not a
+  // patch, so the loser's edit doesn't just "lose a race," it vanishes
+  // from the saved row entirely. AllegationsPanel now persists on blur
+  // (see DraftField there) instead of per keystroke, and this now does a
+  // conditionalUpdate (src/lib/optimisticSave.js, the same guard
+  // saveCaseToDB already uses) instead of an unconditional upsert — a
+  // stale write is rejected as a conflict and reloaded, never silently
+  // applied over someone else's more recent save.
+  const saveAllegationToDB = (allegation) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
       id: allegation.id, case_id: allegation.caseId, org_id: org.id,
       title: allegation.title, description: allegation.description||null,
       period: allegation.period||null, people_involved: allegation.peopleInvolved||null,
@@ -2861,9 +2895,30 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       decided_at: allegation.decidedAt||null,
       appeal_outcome: allegation.appealOutcome||null, appeal_reasoning: allegation.appealReasoning||null,
       appeal_decided_by: allegation.appealDecidedBy||null, appeal_decided_at: allegation.appealDecidedAt||null,
-      updated_at: new Date().toISOString(),
-    }));
-    if(error) { console.error('saveAllegationToDB', error); showToast("Couldn't save allegation to the cloud — "+error.message, "error"); }
+    };
+    // The actual write, deferred until this allegation's queue reaches it —
+    // reads the version ref (not allegation.updatedAt) at execution time,
+    // so a save queued behind an earlier one always checks against what
+    // that earlier save actually produced, never a value captured before
+    // it ran.
+    const run = async () => {
+      const updatedAt = allegationVersionRef.current[allegation.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withFkRetry(() => conditionalUpdate(supabase, 'allegations', allegation.id, updatedAt, {...fields, updated_at: nowIso}));
+      if(conflict) {
+        showToast("This allegation was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadAllegations();
+        return;
+      }
+      if(error) { console.error('saveAllegationToDB', error); showToast("Couldn't save allegation to the cloud — "+error.message, "error"); return; }
+      allegationVersionRef.current[allegation.id] = nowIso;
+      setAllegations(prev => prev.map(a => a.id===allegation.id ? {...a, updatedAt: nowIso} : a));
+    };
+    const queue = allegationSaveQueueRef.current;
+    const prevChain = queue[allegation.id] || Promise.resolve();
+    const thisChain = prevChain.then(run, run); // run even if the previous save in the chain errored — one failure shouldn't wedge every later save for this row
+    queue[allegation.id] = thisChain;
+    return thisChain;
   };
 
   const deleteAllegationFromDB = async (allegationId) => {

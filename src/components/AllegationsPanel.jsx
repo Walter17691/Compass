@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus, APPEAL_OUTCOMES, appealOutcomeMeta } from '../lib/allegations';
 import { computeOutcomeDistribution, computeSanctionDistribution, comparableCaseSummaries } from '../lib/outcomeConsistency';
 import { appealMeetingsForCase } from '../lib/appealReview';
@@ -22,6 +22,35 @@ const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom
 // tiny and local rather than a shared component since its only job is
 // to preserve the exact visual rhythm of the editable version it
 // replaces.
+// Phase 6.5 hardening (P0, Cluster 7) — these fields used to call
+// onCommit (patchAllegation, a full-row upsert) on every keystroke via
+// onChange. A local draft persists only on blur (or unmount, so
+// collapsing the row without a natural blur event doesn't drop the last
+// edit) — cuts write volume from one-per-character to one-per-field-edit,
+// and shrinks the window the paired optimistic-concurrency guard
+// (saveAllegationToDB) has to protect. Syncs from the incoming value only
+// when it actually changes, so an unrelated re-render never clobbers an
+// in-progress edit.
+function DraftTextarea({ value, onCommit, ...rest }) {
+  const [draft, setDraft] = useState(value || "");
+  const draftRef = useRef(draft);
+  const valueRef = useRef(value);
+  const onCommitRef = useRef(onCommit);
+  useEffect(() => { draftRef.current = draft; onCommitRef.current = onCommit; });
+
+  useEffect(() => {
+    if (value !== valueRef.current) { setDraft(value || ""); valueRef.current = value; }
+  }, [value]);
+
+  useEffect(() => () => {
+    if (draftRef.current !== (valueRef.current || "")) onCommitRef.current(draftRef.current);
+  }, []);
+
+  const commit = () => { if (draft !== (value || "")) { onCommit(draft); valueRef.current = draft; } };
+
+  return <textarea {...rest} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} />;
+}
+
 function ReadOnlyField({ label, value, placeholder }) {
   return (
     <div style={{marginBottom:12}}>
@@ -161,11 +190,11 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                     <>
                       <div style={{marginBottom:12}}>
                         <label style={labelStyle}>Investigator's finding — distinct from the decision-maker's reasoning below</label>
-                        <textarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.investigatorFinding||""} placeholder="What did the investigation itself conclude, before any hearing?" onChange={e=>patchAllegation(a.id, {investigatorFinding:e.target.value})} onBlur={e=>patchAllegation(a.id,{investigatorFinding:e.target.value})} />
+                        <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.investigatorFinding||""} placeholder="What did the investigation itself conclude, before any hearing?" onCommit={v=>patchAllegation(a.id,{investigatorFinding:v})} />
                       </div>
                       <div style={{marginBottom:12}}>
                         <label style={labelStyle}>Outstanding uncertainty</label>
-                        <textarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.outstandingUncertainty||""} placeholder="Anything still unclear or unresolved about this allegation?" onChange={e=>patchAllegation(a.id, {outstandingUncertainty:e.target.value})} onBlur={e=>patchAllegation(a.id,{outstandingUncertainty:e.target.value})} />
+                        <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.outstandingUncertainty||""} placeholder="Anything still unclear or unresolved about this allegation?" onCommit={v=>patchAllegation(a.id,{outstandingUncertainty:v})} />
                       </div>
                     </>
                   ) : (
@@ -195,7 +224,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                     <div style={{marginBottom:12,background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:12}}>
                       <label style={labelStyle}>Decision reasoning — why was this finding reached?</label>
                       {canDecide ? (
-                        <textarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF"}} rows={3} value={a.decisionReasoning||""} placeholder="Summarise what the evidence showed and why it supports this finding." onChange={e=>patchAllegation(a.id, {decisionReasoning:e.target.value})} onBlur={e=>patchAllegation(a.id,{decisionReasoning:e.target.value})} />
+                        <DraftTextarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF"}} rows={3} value={a.decisionReasoning||""} placeholder="Summarise what the evidence showed and why it supports this finding." onCommit={v=>patchAllegation(a.id,{decisionReasoning:v})} />
                       ) : (
                         <div style={{fontSize:13,color:a.decisionReasoning?"#1A1535":"#9B9098",padding:"8px 10px",background:"#FFFFFF",border:"1px solid #EDE5D8",borderRadius:6}}>{a.decisionReasoning||"Not yet recorded"}</div>
                       )}
@@ -225,7 +254,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                           {APPEAL_OUTCOMES.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
                         </select>
                         {a.appealOutcome && (
-                          <textarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF",marginTop:8}} rows={2} value={a.appealReasoning||""} placeholder="Reasoning for the appeal decision." onChange={e=>patchAllegation(a.id,{appealReasoning:e.target.value})} onBlur={e=>recordAppealOutcome(a.id, a.appealOutcome, e.target.value)} />
+                          <DraftTextarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF",marginTop:8}} rows={2} value={a.appealReasoning||""} placeholder="Reasoning for the appeal decision." onCommit={v=>recordAppealOutcome(a.id, a.appealOutcome, v)} />
                         )}
                         {a.appealDecidedAt && (
                           <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>
@@ -239,14 +268,14 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   {canDecide ? (
                     <div style={{marginBottom:12}}>
                       <label style={labelStyle}>Employee response</label>
-                      <textarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.employeeResponse||""} placeholder="What did the employee say about this allegation?" onChange={e=>patchAllegation(a.id, {employeeResponse:e.target.value})} onBlur={e=>patchAllegation(a.id,{employeeResponse:e.target.value})} />
+                      <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.employeeResponse||""} placeholder="What did the employee say about this allegation?" onCommit={v=>patchAllegation(a.id,{employeeResponse:v})} />
                     </div>
                   ) : (
                     <ReadOnlyField label="Employee response" value={a.employeeResponse} placeholder="Not yet recorded" />
                   )}
                   <div style={{marginBottom:14}}>
                     <label style={labelStyle}>Witness evidence summary</label>
-                    <textarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.witnessEvidence||""} onChange={e=>patchAllegation(a.id, {witnessEvidence:e.target.value})} onBlur={e=>patchAllegation(a.id,{witnessEvidence:e.target.value})} />
+                    <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.witnessEvidence||""} onCommit={v=>patchAllegation(a.id,{witnessEvidence:v})} />
                   </div>
 
                   <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Linked evidence ({linked.length})</div>
