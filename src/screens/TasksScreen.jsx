@@ -80,28 +80,28 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
         {showForm&&(
           <Card style={{marginBottom:20}}>
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Case</label>
-              <select value={form.caseId} onChange={e=>setForm(f=>({...f,caseId:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}>
+              <label htmlFor="new-task-case" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Case</label>
+              <select id="new-task-case" value={form.caseId} onChange={e=>setForm(f=>({...f,caseId:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}>
                 <option value="">Select a case…</option>
                 {cases.map(c=><option key={c.id} value={c.id}>{c.employeeName}{c.caseType?" — "+c.caseType:""}</option>)}
               </select>
             </div>
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Task</label>
-              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Chase signed witness statement" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
+              <label htmlFor="new-task-name" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Task</label>
+              <input id="new-task-name" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Chase signed witness statement" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
             </div>
             <div style={{display:"flex",gap:12,marginBottom:16}}>
               <div style={{flex:1}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Owner</label>
-                <input value={form.owner} onChange={e=>setForm(f=>({...f,owner:e.target.value}))} placeholder="Name" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
+                <label htmlFor="new-task-owner" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Owner</label>
+                <input id="new-task-owner" value={form.owner} onChange={e=>setForm(f=>({...f,owner:e.target.value}))} placeholder="Name" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
               </div>
               <div style={{flex:1}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Due date</label>
-                <input type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
+                <label htmlFor="new-task-due-date" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Due date</label>
+                <input id="new-task-due-date" type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
               </div>
               <div style={{flex:1}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Priority</label>
-                <select value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}>
+                <label htmlFor="new-task-priority" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Priority</label>
+                <select id="new-task-priority" value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}>
                   <option value="low">Low</option>
                   <option value="normal">Normal</option>
                   <option value="high">High</option>
@@ -113,15 +113,15 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
         )}
 
         <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-          <select value={filterCaseId} onChange={e=>setFilterCaseId(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+          <select aria-label="Filter by case" value={filterCaseId} onChange={e=>setFilterCaseId(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
             <option value="">All cases</option>
             {cases.map(c=><option key={c.id} value={c.id}>{c.employeeName}</option>)}
           </select>
-          <select value={filterOwner} onChange={e=>setFilterOwner(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+          <select aria-label="Filter by owner" value={filterOwner} onChange={e=>setFilterOwner(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
             <option value="">All owners</option>
             {owners.map(o=><option key={o} value={o}>{o}</option>)}
           </select>
-          <select value={filterPriority} onChange={e=>setFilterPriority(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+          <select aria-label="Filter by priority" value={filterPriority} onChange={e=>setFilterPriority(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
             <option value="">All priorities</option>
             <option value="low">Low</option>
             <option value="normal">Normal</option>
@@ -140,7 +140,7 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
           return (
             <Card key={t.id} style={{marginBottom:10,padding:16}}>
               <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                <input type="checkbox" checked={t.status==="done"} onChange={()=>toggleCaseTaskDone(t.id)} style={{marginTop:3,cursor:"pointer"}}/>
+                <input type="checkbox" aria-label={`Mark "${t.name}" done`} checked={t.status==="done"} onChange={()=>toggleCaseTaskDone(t.id)} style={{marginTop:3,cursor:"pointer"}}/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:14,fontWeight:500,color:"#1A1535",textDecoration:t.status==="done"?"line-through":"none",opacity:t.status==="done"?0.6:1}}>{t.name}</div>
                   <div style={{display:"flex",gap:8,alignItems:"center",marginTop:4,flexWrap:"wrap"}}>

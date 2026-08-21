@@ -28,19 +28,19 @@ function ConcernForm({ concernForm, setConcernForm, onSubmit, submitLabel="Submi
   return (
     <Card>
       <div style={{marginBottom:14}}>
-        <label style={labelStyle}>Employee's name</label>
-        <input style={inputStyle} value={concernForm.employeeName} placeholder="Who is this about?"
+        <label htmlFor="concern-employee-name" style={labelStyle}>Employee's name</label>
+        <input id="concern-employee-name" style={inputStyle} value={concernForm.employeeName} placeholder="Who is this about?"
           onChange={e=>setConcernForm(f=>({...f,employeeName:e.target.value}))} />
       </div>
       <div style={{marginBottom:14}}>
-        <label style={labelStyle}>What kind of concern is this?</label>
-        <select style={inputStyle} value={concernForm.concernType} onChange={e=>setConcernForm(f=>({...f,concernType:e.target.value}))}>
+        <label htmlFor="concern-type" style={labelStyle}>What kind of concern is this?</label>
+        <select id="concern-type" style={inputStyle} value={concernForm.concernType} onChange={e=>setConcernForm(f=>({...f,concernType:e.target.value}))}>
           {CONCERN_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
       </div>
       <div style={{marginBottom:16}}>
-        <label style={labelStyle}>Tell us what's happened</label>
-        <textarea style={{...inputStyle,resize:"vertical"}} rows={4} value={concernForm.description}
+        <label htmlFor="concern-description" style={labelStyle}>Tell us what's happened</label>
+        <textarea id="concern-description" style={{...inputStyle,resize:"vertical"}} rows={4} value={concernForm.description}
           placeholder="What happened? When? Who else was involved or witnessed it?"
           onChange={e=>setConcernForm(f=>({...f,description:e.target.value}))} />
       </div>
@@ -54,14 +54,14 @@ function ConcernForm({ concernForm, setConcernForm, onSubmit, submitLabel="Submi
       )}
 
       <div style={{marginBottom:16}}>
-        <label style={labelStyle}>Were there any witnesses? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-        <input style={inputStyle} value={concernForm.witnesses} placeholder="Names of anyone who saw or heard this"
+        <label htmlFor="concern-witnesses" style={labelStyle}>Were there any witnesses? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+        <input id="concern-witnesses" style={inputStyle} value={concernForm.witnesses} placeholder="Names of anyone who saw or heard this"
           onChange={e=>setConcernForm(f=>({...f,witnesses:e.target.value}))} />
       </div>
 
       <div style={{marginBottom:16}}>
-        <label style={labelStyle}>Do you have emails, messages, CCTV or other evidence? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-        <input style={{...inputStyle,marginBottom:8}} value={concernForm.evidenceDescription} placeholder="Briefly describe it"
+        <label htmlFor="concern-evidence-description" style={labelStyle}>Do you have emails, messages, CCTV or other evidence? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+        <input id="concern-evidence-description" style={{...inputStyle,marginBottom:8}} value={concernForm.evidenceDescription} placeholder="Briefly describe it"
           onChange={e=>setConcernForm(f=>({...f,evidenceDescription:e.target.value}))} />
         {concernForm.evidenceFiles.length>0 && (
           <div style={{marginBottom:8}}>

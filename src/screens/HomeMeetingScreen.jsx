@@ -63,8 +63,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           <p style={{fontSize:14,color:"#9B9098",margin:"0 0 32px"}}>Fill in the details — Compass handles the rest</p>
 
           <div style={FIELD_WRAP_STYLE}>
-            <label style={FIELD_LABEL_STYLE}>Your name (chair)</label>
-            <input autoFocus placeholder="e.g. Tom Norton"
+            <label htmlFor="meeting-chair-name" style={FIELD_LABEL_STYLE}>Your name (chair)</label>
+            <input id="meeting-chair-name" autoFocus placeholder="e.g. Tom Norton"
               value={meetingSetup.manager||""}
               onChange={e=>{
                 const val=e.target.value;
@@ -77,8 +77,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           </div>
 
           <div style={FIELD_WRAP_STYLE}>
-            <label style={FIELD_LABEL_STYLE}>Chair job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
-            <input placeholder="e.g. HR Manager"
+            <label htmlFor="meeting-chair-job-title" style={FIELD_LABEL_STYLE}>Chair job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
+            <input id="meeting-chair-job-title" placeholder="e.g. HR Manager"
               value={meetingSetup.chairJobTitle||""}
               onChange={e=>setMeetingSetup(p=>({...p,chairJobTitle:e.target.value}))}
               style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
@@ -87,8 +87,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           </div>
 
           <div style={FIELD_WRAP_STYLE}>
-            <label style={FIELD_LABEL_STYLE}>Notetaker <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
-            <input placeholder="Name of notetaker"
+            <label htmlFor="meeting-notetaker" style={FIELD_LABEL_STYLE}>Notetaker <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
+            <input id="meeting-notetaker" placeholder="Name of notetaker"
               value={meetingSetup.notetaker||""}
               onChange={e=>setMeetingSetup(p=>({...p,notetaker:e.target.value}))}
               style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
@@ -103,8 +103,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             </div>
           )}
           <div style={FIELD_WRAP_STYLE}>
-            <label style={FIELD_LABEL_STYLE}>{meetingSetup.linkedCaseId?"Witness name":"Employee name"}</label>
-            <input placeholder={meetingSetup.linkedCaseId?"e.g. John Smith (witness)":"e.g. Sarah Johnson"}
+            <label htmlFor="meeting-employee-name" style={FIELD_LABEL_STYLE}>{meetingSetup.linkedCaseId?"Witness name":"Employee name"}</label>
+            <input id="meeting-employee-name" placeholder={meetingSetup.linkedCaseId?"e.g. John Smith (witness)":"e.g. Sarah Johnson"}
               value={meetingSetup.employee}
               onChange={e=>{
                 const val=e.target.value;
@@ -122,8 +122,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
 
           {!meetingSetup.linkedCaseId&&(
             <div style={FIELD_WRAP_STYLE}>
-              <label style={FIELD_LABEL_STYLE}>Employee job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
-              <input placeholder="e.g. Sales Manager"
+              <label htmlFor="meeting-employee-job-title" style={FIELD_LABEL_STYLE}>Employee job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
+              <input id="meeting-employee-job-title" placeholder="e.g. Sales Manager"
                 value={meetingSetup.employeeJobTitle||""}
                 onChange={e=>setMeetingSetup(p=>({...p,employeeJobTitle:e.target.value}))}
                 style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
@@ -134,8 +134,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
 
           {!meetingSetup.linkedCaseId&&(
             <div style={FIELD_WRAP_STYLE}>
-              <label style={FIELD_LABEL_STYLE}>Link to case <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
-              <select value={activeCaseId||""} onChange={e=>{setActiveCaseId(e.target.value);const cs=cases.find(x=>x.id===e.target.value);if(cs){setMeetingSetup(p=>({...p,employee:cs.employeeName}));}}}
+              <label htmlFor="meeting-link-to-case" style={FIELD_LABEL_STYLE}>Link to case <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
+              <select id="meeting-link-to-case" value={activeCaseId||""} onChange={e=>{setActiveCaseId(e.target.value);const cs=cases.find(x=>x.id===e.target.value);if(cs){setMeetingSetup(p=>({...p,employee:cs.employeeName}));}}}
                 style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
                 <option value="">No case linked</option>
                 {cases.filter(cs=>getCaseStage(cs)!=="closed").map(cs=><option key={cs.id} value={cs.id}>{cs.employeeName} — {cs.caseType||"HR Matter"}</option>)}
@@ -145,15 +145,15 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
 
           {!meetingSetup.linkedCaseId&&meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
             <div style={FIELD_WRAP_STYLE}>
-              <label style={FIELD_LABEL_STYLE}>Representative / companion <span style={OPTIONAL_TAG_STYLE}>(optional — right to be accompanied, ERA 1999 s.10)</span></label>
+              <label htmlFor="meeting-representative-name" style={FIELD_LABEL_STYLE}>Representative / companion <span style={OPTIONAL_TAG_STYLE}>(optional — right to be accompanied, ERA 1999 s.10)</span></label>
               <div style={{display:"flex",gap:8}}>
-                <input placeholder="e.g. Jo Bloggs (if present)"
+                <input id="meeting-representative-name" placeholder="e.g. Jo Bloggs (if present)"
                   value={meetingSetup.representative||""}
                   onChange={e=>setMeetingSetup(p=>({...p,representative:e.target.value}))}
                   style={{flex:2,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
-                <select value={meetingSetup.representativeRole||"colleague"}
+                <select value={meetingSetup.representativeRole||"colleague"} aria-label="Representative's relationship"
                   onChange={e=>setMeetingSetup(p=>({...p,representativeRole:e.target.value}))}
                   style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 10px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
                   <option value="colleague">Colleague</option>
@@ -173,7 +173,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
 
           {!meetingSetup.linkedCaseId&&attendeesExpanded&&(
             <div style={FIELD_WRAP_STYLE}>
-              <label style={FIELD_LABEL_STYLE}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
+              <label htmlFor="meeting-new-participant-name" style={FIELD_LABEL_STYLE}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
               {isGroupMeeting&&<p style={{fontSize:12,color:"#9B9098",margin:"0 0 8px"}}>For a group consultation, list everyone else affected here — each can still get their own individual case afterwards.</p>}
               {(meetingSetup.participants||[]).length>0&&(
                 <div style={{marginBottom:8}}>
@@ -186,13 +186,13 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
                 </div>
               )}
               <div style={{display:"flex",gap:8}}>
-                <input placeholder="Name" value={newParticipantName}
+                <input id="meeting-new-participant-name" placeholder="Name" value={newParticipantName}
                   onChange={e=>setNewParticipantName(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addParticipant())}
                   style={{flex:2,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
-                <select value={newParticipantRole} onChange={e=>setNewParticipantRole(e.target.value)}
+                <select value={newParticipantRole} aria-label="Attendee's role" onChange={e=>setNewParticipantRole(e.target.value)}
                   style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 6px",fontSize:13,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
                   <option value="Affected employee">Affected employee</option>
                   <option value="Witness">Witness</option>
@@ -301,8 +301,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           )}
 
           <div style={{marginBottom:28}}>
-            <label style={FIELD_LABEL_STYLE}>Date</label>
-            <input type="date" value={meetingSetup.date}
+            <label htmlFor="meeting-date" style={FIELD_LABEL_STYLE}>Date</label>
+            <input id="meeting-date" type="date" value={meetingSetup.date}
               onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
               onClick={e=>e.currentTarget.showPicker?.()}
               style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",colorScheme:"light",cursor:"pointer"}}

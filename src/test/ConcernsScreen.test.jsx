@@ -27,3 +27,16 @@ describe('ConcernsScreen — autoOpenForm (Phase 5, IP10)', () => {
     expect(screen.getByText("Employee's name")).toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (Batch 13) — every text/select/textarea field here
+// had a visual <label> with no htmlFor/id association.
+describe('ConcernsScreen — field labelling (Phase 6.5, Batch 13)', () => {
+  it('associates every field with its real, visible label', () => {
+    render(<ConcernsScreen isHR={false} concernReferrals={[]} concernForm={EMPTY_CONCERN_FORM} setConcernForm={()=>{}} submitConcernReferral={()=>{}} concernSubmitted={false} setConcernSubmitted={()=>{}} screens={{}} autoOpenForm={false} clearAutoOpenForm={()=>{}} />);
+    expect(screen.getByLabelText("Employee's name")).toBeInTheDocument();
+    expect(screen.getByLabelText('What kind of concern is this?')).toBeInTheDocument();
+    expect(screen.getByLabelText("Tell us what's happened")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Were there any witnesses/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Do you have emails, messages, CCTV/)).toBeInTheDocument();
+  });
+});

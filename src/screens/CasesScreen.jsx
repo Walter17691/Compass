@@ -83,32 +83,32 @@ export function CasesScreen({ cases, locations, orgMembers, setIntake, setScreen
         )}
         {cases.length>0&&(
           <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-            <select value={filters.type} onChange={e=>setFilter("type", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+            <select aria-label="Filter by case type" value={filters.type} onChange={e=>setFilter("type", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
               <option value="">All types</option>
               {caseTypes.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
-            <select value={filters.stage} onChange={e=>setFilter("stage", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+            <select aria-label="Filter by stage" value={filters.stage} onChange={e=>setFilter("stage", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
               <option value="">All stages</option>
               {stages.map(s=><option key={s} value={s}>{STAGE_LABEL[s]||s}</option>)}
             </select>
-            <select value={filters.status} onChange={e=>setFilter("status", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+            <select aria-label="Filter by status" value={filters.status} onChange={e=>setFilter("status", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
               <option value="">All statuses</option>
               <option value="active">Active</option>
               <option value="closed">Closed</option>
             </select>
             {locations?.length>0&&(
-              <select value={filters.locationId} onChange={e=>setFilter("locationId", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+              <select aria-label="Filter by location" value={filters.locationId} onChange={e=>setFilter("locationId", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
                 <option value="">All locations</option>
                 {locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             )}
             {owners.length>0&&(
-              <select value={filters.ownerId} onChange={e=>setFilter("ownerId", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+              <select aria-label="Filter by owner" value={filters.ownerId} onChange={e=>setFilter("ownerId", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
                 <option value="">All owners</option>
                 {owners.map(id=><option key={id} value={id}>{(orgMembers||[]).find(m=>m.user_id===id)?.name || "Unknown"}</option>)}
               </select>
             )}
-            <select value={filters.priority} onChange={e=>setFilter("priority", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+            <select aria-label="Filter by priority" value={filters.priority} onChange={e=>setFilter("priority", e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
               <option value="">All priorities</option>
               <option value="low">Low</option>
               <option value="normal">Normal</option>
@@ -154,7 +154,7 @@ export function CasesScreen({ cases, locations, orgMembers, setIntake, setScreen
                       style={{background:closed?"#FDFAF5":"#FFFFFF",border:"1px solid",borderColor:closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:6,marginLeft:48,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
                       onMouseEnter={e=>{if(!closed){e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0";e.currentTarget.style.background=closed?"#FDFAF5":"#FFFFFF";}}>
-                      <input type="checkbox" checked={selected.has(cs.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(cs.id)} style={{cursor:"pointer",flexShrink:0}}/>
+                      <input type="checkbox" aria-label={`Select ${getProceedingTitle(cs)}`} checked={selected.has(cs.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(cs.id)} style={{cursor:"pointer",flexShrink:0}}/>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:closed?400:600,color:closed?"#9B9098":"#1A1535",marginBottom:3}}>{getProceedingTitle(cs)}</div>
                         <div style={{fontSize:11,color:"#9B9098",display:"flex",gap:8}}>
