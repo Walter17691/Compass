@@ -28,9 +28,14 @@ export function describeTrend(entry, label) {
   const locations = Object.entries(entry.byLocation || {})
     .filter(([loc]) => loc !== "Not specified")
     .sort((a, b) => b[1] - a[1]);
-  const locationText = locations.length
-    ? `concentrated across ${locations.length} location${locations.length === 1 ? "" : "s"} (${locations.map(([loc]) => loc).join(", ")})`
-    : "with no location breakdown available yet";
+  // "Concentrated ACROSS 1 location" doesn't read as English — "across"
+  // implies spread over multiple locations. A single location reads
+  // naturally as "concentrated at X" instead.
+  const locationText = locations.length === 0
+    ? "with no location breakdown available yet"
+    : locations.length === 1
+      ? `concentrated at ${locations[0][0]}`
+      : `concentrated across ${locations.length} locations (${locations.map(([loc]) => loc).join(", ")})`;
 
   if (pct === null) {
     return `Compass has identified a pattern: ${label} had no recorded cases in the previous comparison period, and ${entry.currentCount} in the current period, ${locationText}.`;

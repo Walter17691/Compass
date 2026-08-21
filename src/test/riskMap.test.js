@@ -103,7 +103,12 @@ describe('computeSiteRiskFlags', () => {
     expect(manchester.flags.some(f => f.category === 'operational_change')).toBe(true);
   });
 
-  it('sorts sites by flag count, most flags first', () => {
+  // Phase 6.5 hardening (Batch 11) — used to sort by flag count, most
+  // flags first, which is itself an implicit blended severity score
+  // (conflating flag COUNT with how bad a site's situation is) —
+  // contradicting RiskMapPanel's own "never a ranking" UI text. Now
+  // alphabetical, so a site's position never implies a verdict.
+  it('sorts sites alphabetically, not by flag count — never an implicit ranking', () => {
     const result = computeSiteRiskFlags({
       locationCounts: { Manchester: 15, London: 5 },
       locationDurations: {},
@@ -111,8 +116,10 @@ describe('computeSiteRiskFlags', () => {
       bottlenecks: [{ stage: 'x', byLocation: [{ location: 'Manchester', caseCount: 1 }] }],
       orgEvents: [{ affectedLocations: ['Manchester'] }],
     });
-    expect(result[0].site).toBe('Manchester');
-    expect(result[0].flags.length).toBeGreaterThan(result[1].flags.length);
+    expect(result.map(r => r.site)).toEqual(['London', 'Manchester']);
+    const manchester = result.find(r => r.site === 'Manchester');
+    const london = result.find(r => r.site === 'London');
+    expect(manchester.flags.length).toBeGreaterThan(london.flags.length);
   });
 
   it('does not flag elevated volume below the minimum sample size, even at a high multiplier', () => {

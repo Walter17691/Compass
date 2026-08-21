@@ -82,5 +82,12 @@ export function computeSiteRiskFlags({ locationCounts, locationDurations, compan
     }
 
     return { site, caseCount: count, flags };
-  }).sort((a, b) => b.flags.length - a.flags.length);
+  })
+    // Alphabetical, not by flag count — RiskMapPanel's own UI text says
+    // "never a ranking," but sorting by how many flags a site tripped
+    // is itself a crude blended score (conflating flag COUNT with
+    // severity), the exact thing this module's own header comment says
+    // it deliberately avoids. A site with one severe flag isn't
+    // "better" than a site with two mild ones.
+    .sort((a, b) => a.site.localeCompare(b.site));
 }

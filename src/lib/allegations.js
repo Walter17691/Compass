@@ -46,7 +46,7 @@ export function addAllegation(allegations, caseId, fields) {
   const title = (fields?.title || "").trim();
   if (!title) return allegations;
   const allegation = {
-    id: "alg_" + Date.now(),
+    id: "alg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
     caseId,
     title,
     description: fields.description || "",

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { addMilestone, toggleMilestone, removeMilestone, milestoneProgress, describeMilestoneProgress } from '../lib/improvementInitiatives';
 
 describe('addMilestone', () => {
@@ -10,6 +10,21 @@ describe('addMilestone', () => {
 
   it('ignores a blank label', () => {
     expect(addMilestone([], '   ')).toEqual([]);
+  });
+
+  // Phase 6.5 hardening (Batch 11) — id used to be a bare "milestone_" +
+  // Date.now(); two milestones added in the same millisecond got the
+  // same id, which toggleMilestone/removeMilestone match on — a real
+  // "toggling one toggles both" bug, not just a React key warning.
+  it('never collides on id, even for two milestones added in the same millisecond', () => {
+    const frozenNow = vi.spyOn(Date, 'now').mockReturnValue(1234567890);
+    try {
+      let result = addMilestone([], 'First milestone');
+      result = addMilestone(result, 'Second milestone');
+      expect(result[0].id).not.toBe(result[1].id);
+    } finally {
+      frozenNow.mockRestore();
+    }
   });
 
   it('does not mutate the input array', () => {

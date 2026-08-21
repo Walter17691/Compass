@@ -18,6 +18,20 @@ const baseProps = {
 // E2E coverage stops at "the button appears and opens the send modal",
 // never actually firing a real outbound email. This is where the button's
 // approval gating and click wiring are actually verified.
+// Phase 6.5 hardening (Batch 11) — the drawn-signature image had a bare
+// alt="Sig", meaningless to a screen reader.
+describe('LetterScreen — signature image alt text (Phase 6.5, Batch 11)', () => {
+  it('names the actual signer in the alt text, not a generic "Sig"', () => {
+    render(<LetterScreen {...baseProps} signature={{ type: 'draw', data: 'data:image/png;base64,xyz' }} />);
+    expect(screen.getByAltText('Signature of Jo')).toBeInTheDocument();
+  });
+
+  it('falls back to "HR Manager" when no manager name is set', () => {
+    render(<LetterScreen {...baseProps} caseInfo={{ employee: 'Sarah Jones' }} signature={{ type: 'draw', data: 'data:image/png;base64,xyz' }} />);
+    expect(screen.getByAltText('Signature of HR Manager')).toBeInTheDocument();
+  });
+});
+
 describe('LetterScreen — Send from Compass (Phase 5, IP13)', () => {
   it('renders "Send from Compass" disabled until the letter is approved', () => {
     render(<LetterScreen {...baseProps} letterIsApproved={false} onSendFromCompass={()=>{}} />);

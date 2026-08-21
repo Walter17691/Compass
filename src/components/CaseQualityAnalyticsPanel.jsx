@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { computeCaseQualityAnalytics, CASE_QUALITY_MIN_SAMPLE_SIZE } from '../lib/caseQualityAnalytics';
 import { DataQualityCaveat } from './DataQualityCaveat';
 
@@ -19,7 +20,13 @@ const BarRow = ({ label, value, max, color = "#C84B2F" }) => (
 // full data lineage) into "most frequent issue" rankings, no new
 // RPC/table needed.
 export function CaseQualityAnalyticsPanel({ cases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers }) {
-  const data = computeCaseQualityAnalytics(cases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers);
+  // computeCaseQualityAnalytics runs every readiness + guardrail check
+  // (13 checks) across every case — real cost on an org with thousands
+  // of cases, and cases/allegations don't change on every render.
+  const data = useMemo(
+    () => computeCaseQualityAnalytics(cases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers),
+    [cases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers]
+  );
 
   if (data.totalCases < CASE_QUALITY_MIN_SAMPLE_SIZE) {
     return (

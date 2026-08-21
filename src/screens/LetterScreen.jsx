@@ -56,7 +56,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                   <div style={{fontSize:10,color:"#999",marginBottom:6}}>Signed:</div>
                   {signature.type==="typed"
                     ?<div style={{fontFamily:"'Brush Script MT',cursive",fontSize:30,color:"#FFFFFF"}}>{signature.data}</div>
-                    :<img src={signature.data} alt="Sig" style={{maxHeight:55,maxWidth:180}}/>}
+                    :<img src={signature.data} alt={`Signature of ${caseInfo.manager||"HR Manager"}`} style={{maxHeight:55,maxWidth:180}}/>}
                   <div style={{fontSize:11,color:"#6B6375",marginTop:5}}>{caseInfo.manager||"HR Manager"} | {new Date().toLocaleDateString("en-GB")}</div>
                 </div>
               )}

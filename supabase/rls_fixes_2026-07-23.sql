@@ -149,9 +149,11 @@ create policy "hr_review_requests_same_org"
 -- ============================================================================
 -- Not touched, and why:
 --   - case_access, employee_records, meetings, profiles: already have a
---     single properly-named policy with no "allow all" sibling. Worth a
---     quick look at the actual USING clause on each to confirm it checks
---     org_id, but there's no urgent problem.
+--     single properly-named policy with no "allow all" sibling.
+--     case_access verified live (Phase 6.5 hardening): SELECT is
+--     org_id-scoped (my_org_ids()), INSERT/DELETE additionally require
+--     can_grant_case_access(case_id, org_id) — no enumeration gap.
+--     employee_records/meetings/profiles not re-verified at that pass.
 --
 -- Known residual gap (not fixed by this file):
 --   The invite-code check for joining an org (OrgSetup.jsx handleJoin)

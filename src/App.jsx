@@ -1533,15 +1533,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript.length]);
-
-
-
-
-  useEffect(()=>{
-    const handler = ()=>setIsMobile(window.innerWidth<768);
-    window.addEventListener("resize", handler);
-    return ()=>window.removeEventListener("resize", handler);
-  }, []);
   const [showLetterModal, setShowLetterModal] = useState(false);
   const [pendingLetterType, setPendingLetterType] = useState("outcome");
   const pendingLetterTypeRef = useRef("outcome");

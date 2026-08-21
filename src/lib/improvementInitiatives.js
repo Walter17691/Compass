@@ -9,7 +9,7 @@ export const INITIATIVE_STATUSES = ["active", "completed", "abandoned"];
 export function addMilestone(milestones, label, targetDate) {
   const trimmed = (label || "").trim();
   if (!trimmed) return milestones;
-  const milestone = { id: "milestone_" + Date.now(), label: trimmed, targetDate: targetDate || "", done: false };
+  const milestone = { id: "milestone_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), label: trimmed, targetDate: targetDate || "", done: false };
   return [...(milestones || []), milestone];
 }
 

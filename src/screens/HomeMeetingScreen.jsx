@@ -30,6 +30,16 @@ const FORMAL_MEETING_TYPES = MEETING_TYPES.filter(t => t.group !== "dev");
 // all — DevelopScreen was fully built and completely unreachable.
 const DEV_MEETING_TYPES = MEETING_TYPES.filter(t => t.group === "dev");
 
+// Phase 6.5 hardening (Batch 11) — these three exact style objects were
+// pasted inline 10/10/7 times respectively across this form's fields.
+// Deliberately NOT extracting the (also-repeated) input style too: its
+// occurrences have real, differing variants (flex vs width, different
+// padding/fontSize for select vs text fields) that would be easy to
+// homogenise incorrectly without visually re-verifying every field.
+const FIELD_WRAP_STYLE = {marginBottom:20};
+const FIELD_LABEL_STYLE = {display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7};
+const OPTIONAL_TAG_STYLE = {fontWeight:400,color:"#9B9098"};
+
 export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setMeetingActionSuggestions, setReviewOutput, setReviewOutputOriginal, setMeetingSummary, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, setDismissedCoachingTipKeys, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
@@ -52,8 +62,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"0 0 6px",letterSpacing:"-0.3px"}}>New meeting</h2>
           <p style={{fontSize:14,color:"#9B9098",margin:"0 0 32px"}}>Fill in the details — Compass handles the rest</p>
 
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Your name (chair)</label>
+          <div style={FIELD_WRAP_STYLE}>
+            <label style={FIELD_LABEL_STYLE}>Your name (chair)</label>
             <input autoFocus placeholder="e.g. Tom Norton"
               value={meetingSetup.manager||""}
               onChange={e=>{
@@ -66,8 +76,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
           </div>
 
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Chair job title <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+          <div style={FIELD_WRAP_STYLE}>
+            <label style={FIELD_LABEL_STYLE}>Chair job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
             <input placeholder="e.g. HR Manager"
               value={meetingSetup.chairJobTitle||""}
               onChange={e=>setMeetingSetup(p=>({...p,chairJobTitle:e.target.value}))}
@@ -76,8 +86,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
           </div>
 
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Notetaker <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+          <div style={FIELD_WRAP_STYLE}>
+            <label style={FIELD_LABEL_STYLE}>Notetaker <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
             <input placeholder="Name of notetaker"
               value={meetingSetup.notetaker||""}
               onChange={e=>setMeetingSetup(p=>({...p,notetaker:e.target.value}))}
@@ -92,8 +102,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               <div style={{fontSize:12,color:"#7C5CFC"}}>This interview will be saved as evidence in {meetingSetup.linkedCaseName} case</div>
             </div>
           )}
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>{meetingSetup.linkedCaseId?"Witness name":"Employee name"}</label>
+          <div style={FIELD_WRAP_STYLE}>
+            <label style={FIELD_LABEL_STYLE}>{meetingSetup.linkedCaseId?"Witness name":"Employee name"}</label>
             <input placeholder={meetingSetup.linkedCaseId?"e.g. John Smith (witness)":"e.g. Sarah Johnson"}
               value={meetingSetup.employee}
               onChange={e=>{
@@ -111,8 +121,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           </div>
 
           {!meetingSetup.linkedCaseId&&(
-            <div style={{marginBottom:20}}>
-              <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Employee job title <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+            <div style={FIELD_WRAP_STYLE}>
+              <label style={FIELD_LABEL_STYLE}>Employee job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
               <input placeholder="e.g. Sales Manager"
                 value={meetingSetup.employeeJobTitle||""}
                 onChange={e=>setMeetingSetup(p=>({...p,employeeJobTitle:e.target.value}))}
@@ -123,8 +133,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           )}
 
           {!meetingSetup.linkedCaseId&&(
-            <div style={{marginBottom:20}}>
-              <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Link to case <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+            <div style={FIELD_WRAP_STYLE}>
+              <label style={FIELD_LABEL_STYLE}>Link to case <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
               <select value={activeCaseId||""} onChange={e=>{setActiveCaseId(e.target.value);const cs=cases.find(x=>x.id===e.target.value);if(cs){setMeetingSetup(p=>({...p,employee:cs.employeeName}));}}}
                 style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}>
                 <option value="">No case linked</option>
@@ -134,8 +144,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           )}
 
           {!meetingSetup.linkedCaseId&&meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
-            <div style={{marginBottom:20}}>
-              <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Representative / companion <span style={{fontWeight:400,color:"#9B9098"}}>(optional — right to be accompanied, ERA 1999 s.10)</span></label>
+            <div style={FIELD_WRAP_STYLE}>
+              <label style={FIELD_LABEL_STYLE}>Representative / companion <span style={OPTIONAL_TAG_STYLE}>(optional — right to be accompanied, ERA 1999 s.10)</span></label>
               <div style={{display:"flex",gap:8}}>
                 <input placeholder="e.g. Jo Bloggs (if present)"
                   value={meetingSetup.representative||""}
@@ -154,16 +164,16 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           )}
 
           {!meetingSetup.linkedCaseId&&!attendeesExpanded&&(
-            <div style={{marginBottom:20}}>
+            <div style={FIELD_WRAP_STYLE}>
               <button onClick={()=>setShowAttendees(true)} style={{background:"none",border:"none",color:"#7C5CFC",fontSize:13,fontWeight:500,cursor:"pointer",padding:0}}>
-                + Add another attendee <span style={{fontWeight:400,color:"#9B9098"}}>(witness, observer — rare, optional)</span>
+                + Add another attendee <span style={OPTIONAL_TAG_STYLE}>(witness, observer — rare, optional)</span>
               </button>
             </div>
           )}
 
           {!meetingSetup.linkedCaseId&&attendeesExpanded&&(
-            <div style={{marginBottom:20}}>
-              <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+            <div style={FIELD_WRAP_STYLE}>
+              <label style={FIELD_LABEL_STYLE}>{isGroupMeeting?"Affected employees / other attendees":"Additional attendees"} <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
               {isGroupMeeting&&<p style={{fontSize:12,color:"#9B9098",margin:"0 0 8px"}}>For a group consultation, list everyone else affected here — each can still get their own individual case afterwards.</p>}
               {(meetingSetup.participants||[]).length>0&&(
                 <div style={{marginBottom:8}}>
@@ -195,8 +205,8 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             </div>
           )}
 
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Meeting type</label>
+          <div style={FIELD_WRAP_STYLE}>
+            <label style={FIELD_LABEL_STYLE}>Meeting type</label>
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",maxHeight:340,overflowY:"auto"}}>
               {FORMAL_MEETING_TYPES.map((t)=>(
                 <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
@@ -291,7 +301,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           )}
 
           <div style={{marginBottom:28}}>
-            <label style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7}}>Date</label>
+            <label style={FIELD_LABEL_STYLE}>Date</label>
             <input type="date" value={meetingSetup.date}
               onChange={e=>setMeetingSetup(p=>({...p,date:e.target.value}))}
               onClick={e=>e.currentTarget.showPicker?.()}

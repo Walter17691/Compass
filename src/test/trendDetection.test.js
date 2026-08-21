@@ -73,4 +73,20 @@ describe('describeTrend', () => {
     const entry = { currentCount: 13, previousCount: 10, byLocation: {} };
     expect(describeTrend(entry, 'Grievance')).toContain('no location breakdown available yet');
   });
+
+  // Phase 6.5 hardening (Batch 11) — "concentrated across 1 location"
+  // doesn't read as real English; "across" implies spread over multiple
+  // locations. A single location now reads "concentrated at X".
+  it('uses "concentrated at X" (not "across 1 location") when only one location is involved', () => {
+    const entry = { currentCount: 13, previousCount: 10, byLocation: { Manchester: 13 } };
+    const text = describeTrend(entry, 'Grievance');
+    expect(text).toContain('concentrated at Manchester');
+    expect(text).not.toContain('across 1 location');
+  });
+
+  it('still uses "concentrated across N locations" for two or more', () => {
+    const entry = { currentCount: 13, previousCount: 10, byLocation: { Manchester: 8, Leeds: 5 } };
+    const text = describeTrend(entry, 'Grievance');
+    expect(text).toContain('concentrated across 2 locations (Manchester, Leeds)');
+  });
 });

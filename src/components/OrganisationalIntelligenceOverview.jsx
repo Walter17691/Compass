@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase';
 import { computeStageDurations } from '../lib/processDashboard';
 import { computeInformalFormalSplit } from '../lib/orgIntelligence';
@@ -75,6 +75,24 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
     return () => { cancelled = true; };
   }, []);
 
+  // computeStageDurations/computeInformalFormalSplit both iterate every
+  // case (thousands, on a real org) — memoized so an unrelated re-render
+  // (e.g. this component's own overview/error state settling) doesn't
+  // recompute them from scratch every time. Neither depends on overview
+  // (RPC data), so these must stay ahead of the early returns below —
+  // React's Rules of Hooks require every hook to run on every render,
+  // in the same order, regardless of loading state.
+  const { investigationCaseCount, avgInvestigationDays } = useMemo(() => {
+    const investigationDurations = computeStageDurations(cases, processTemplates).filter(d => d.stage === "Investigation");
+    const caseCount = investigationDurations.reduce((sum, d) => sum + d.caseCount, 0);
+    const avgDays = caseCount > 0
+      ? Math.round((investigationDurations.reduce((sum, d) => sum + d.avgDays * d.caseCount, 0) / caseCount) * 10) / 10
+      : null;
+    return { investigationCaseCount: caseCount, avgInvestigationDays: avgDays };
+  }, [cases, processTemplates]);
+  const resolutionSplit = useMemo(() => computeInformalFormalSplit(cases), [cases]);
+  const themeFrequencies = useMemo(() => themeFrequency(caseThemes, organisationThemes), [caseThemes, organisationThemes]);
+
   if (error) {
     return <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"24px",fontSize:13,color:"#6B6375"}}>Couldn't load organisational statistics right now.</div>;
   }
@@ -82,16 +100,8 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
     return <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"24px",fontSize:13,color:"#6B6375"}}>Loading organisational statistics…</div>;
   }
 
-  const investigationDurations = computeStageDurations(cases, processTemplates).filter(d => d.stage === "Investigation");
-  const investigationCaseCount = investigationDurations.reduce((sum, d) => sum + d.caseCount, 0);
-  const avgInvestigationDays = investigationCaseCount > 0
-    ? Math.round((investigationDurations.reduce((sum, d) => sum + d.avgDays * d.caseCount, 0) / investigationCaseCount) * 10) / 10
-    : null;
-
   const overdueCaseIds = new Set((dueSoon || []).filter(d => d.overdue && d.caseId).map(d => d.caseId));
   const returnedForFurtherInvestigation = (hrReviewRequests || []).filter(r => r.step === "inv_report" && r.status === "returned").length;
-  const resolutionSplit = computeInformalFormalSplit(cases);
-  const themeFrequencies = themeFrequency(caseThemes, organisationThemes);
 
   const typeEntries = topEntries(overview.cases_by_type);
   const locationEntries = topEntries(overview.cases_by_location);
