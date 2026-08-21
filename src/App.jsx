@@ -2233,14 +2233,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // explains why — nobody else has authorised this app to read theirs).
   const [availabilityCheck, setAvailabilityCheck] = useState(null); // {checked, conflicts} | null
   const [availabilityChecking, setAvailabilityChecking] = useState(false);
+  // Request-generation counter — ScheduleMeetingModal fires a new check
+  // on every date/time/duration change, with no guarantee responses
+  // arrive in request order. Without this, quickly picking slot B right
+  // after slot A could let A's still-in-flight response land AFTER B's
+  // and silently overwrite the correct result with a stale one for a
+  // slot the user isn't even looking at anymore.
+  const availabilityRequestIdRef = useRef(0);
   const checkMeetingAvailability = async ({ startISO, endISO }) => {
+    const requestId = ++availabilityRequestIdRef.current;
     setAvailabilityChecking(true);
     try {
       const res = await authedFetch(`/api/calendar/check-availability?startISO=${encodeURIComponent(startISO)}&endISO=${encodeURIComponent(endISO)}`);
       const data = await res.json();
+      if (requestId !== availabilityRequestIdRef.current) return; // superseded by a later check
       setAvailabilityCheck(res.ok ? data : { checked:false, conflicts:[] });
-    } catch { setAvailabilityCheck({ checked:false, conflicts:[] }); }
-    setAvailabilityChecking(false);
+    } catch {
+      if (requestId !== availabilityRequestIdRef.current) return;
+      setAvailabilityCheck({ checked:false, conflicts:[] });
+    }
+    if (requestId === availabilityRequestIdRef.current) setAvailabilityChecking(false);
   };
 
   // ── Browser notifications ──
@@ -4645,9 +4657,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const res = await authedFetch("/api/graph-mail/list-messages");
       const data = await res.json();
+      // SaveEmailScreen's own load effect re-fires whenever inboxMessages
+      // is still null and inboxLoading is false — leaving inboxMessages
+      // at null on a failed fetch (as this used to) made that effect
+      // immediately true again the moment loading finished, retrying
+      // forever. Setting it to [] on failure (a real "loaded, empty"
+      // result, distinct from "never loaded") breaks the loop.
       if(res.ok) setInboxMessages(data.messages||[]);
-      else showToast(data.error||"Couldn't load your inbox", "error");
-    } catch(e) { showToast("Couldn't load your inbox", "error"); }
+      else { showToast(data.error||"Couldn't load your inbox", "error"); setInboxMessages([]); }
+    } catch(e) { showToast("Couldn't load your inbox", "error"); setInboxMessages([]); }
     setInboxLoading(false);
   };
   // ── Reply capture (Phase 5, IP14, §8) ──
@@ -7850,7 +7868,7 @@ Please produce:
           onCheckAvailability={checkMeetingAvailability}
           availabilityCheck={availabilityCheck}
           availabilityChecking={availabilityChecking}
-          clearAvailabilityCheck={()=>setAvailabilityCheck(null)}
+          clearAvailabilityCheck={()=>{availabilityRequestIdRef.current++; setAvailabilityCheck(null);}}
         />
       )}
       </Suspense>

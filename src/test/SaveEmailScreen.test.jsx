@@ -86,6 +86,39 @@ describe('SaveEmailScreen — Create New Concern / Ignore (Phase 5, IP10)', () =
   });
 });
 
+// Phase 6.5, Batch 4 — App.jsx's loadInboxMessages used to leave
+// inboxMessages at null on a failed fetch, which kept this exact effect's
+// guard condition true forever, retrying on every re-render. The fix sets
+// inboxMessages to [] on failure instead — these tests verify this
+// screen's own effect actually stops calling onLoadInbox once that
+// happens, from the consumer side (the loop lived in this effect, not in
+// App.jsx's fetch call itself).
+describe('SaveEmailScreen — inbox loading effect (Phase 6.5, Batch 4)', () => {
+  it('calls onLoadInbox once when connected and inboxMessages has never been loaded (null)', () => {
+    const onLoadInbox = vi.fn();
+    render(<SaveEmailScreen cases={cases} onExtract={()=>{}} onSave={()=>{}} onClear={()=>{}} mailConnected={true} inboxMessages={null} inboxLoading={false} onLoadInbox={onLoadInbox} />);
+    expect(onLoadInbox).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onLoadInbox again once inboxMessages is an empty array — the loop-breaking state a failed load now sets', () => {
+    const onLoadInbox = vi.fn();
+    render(<SaveEmailScreen cases={cases} onExtract={()=>{}} onSave={()=>{}} onClear={()=>{}} mailConnected={true} inboxMessages={[]} inboxLoading={false} onLoadInbox={onLoadInbox} />);
+    expect(onLoadInbox).not.toHaveBeenCalled();
+  });
+
+  it('does not call onLoadInbox while a load is already in flight', () => {
+    const onLoadInbox = vi.fn();
+    render(<SaveEmailScreen cases={cases} onExtract={()=>{}} onSave={()=>{}} onClear={()=>{}} mailConnected={true} inboxMessages={null} inboxLoading={true} onLoadInbox={onLoadInbox} />);
+    expect(onLoadInbox).not.toHaveBeenCalled();
+  });
+
+  it('does not call onLoadInbox when no mailbox is connected', () => {
+    const onLoadInbox = vi.fn();
+    render(<SaveEmailScreen cases={cases} onExtract={()=>{}} onSave={()=>{}} onClear={()=>{}} mailConnected={false} inboxMessages={null} inboxLoading={false} onLoadInbox={onLoadInbox} />);
+    expect(onLoadInbox).not.toHaveBeenCalled();
+  });
+});
+
 describe('SaveEmailScreen — reply capture (Phase 5, IP14)', () => {
   const replyMatch = { caseId: 'c1', name: 'Sent: Witness invitation', subject: 'Witness invitation - Sarah Jones', recipient: 'sarah@company.com', rawText: 'Reply text' };
 

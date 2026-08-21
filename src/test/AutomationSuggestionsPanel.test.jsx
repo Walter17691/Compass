@@ -75,4 +75,29 @@ describe('AutomationSuggestionsPanel — automation levels (Phase 5, IP28)', () 
     render(<AutomationSuggestionsPanel suggestions={[noMeetings]} automationLevels={{ unsigned_meeting_record_stale: 'prepare' }} cs={cs} onResendReminder={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Send reminder' })).not.toBeInTheDocument();
   });
+
+  // Phase 6.5, Batch 4 — the auto-fire dedup guard used to live in a
+  // useRef, which resets to empty on every remount (e.g. switching case
+  // tabs and back). Remounting with the exact same suggestion still
+  // present in props — genuinely possible in the real app, since
+  // reminderSentAt takes a moment to round-trip back through the data
+  // layer after the send — used to re-trigger a real duplicate
+  // automated reminder to the employee. Uses its own meeting id (m2,
+  // not the m1 the earlier tests in this file already fired) since the
+  // dedup guard is now intentionally module-scoped, not reset per test.
+  it('does not re-fire an automated reminder for the same suggestion across a remount', async () => {
+    const remountMeeting = { id: 'm2', type: 'Investigation' };
+    const remountSuggestion = { ruleId: 'unsigned_meeting_record_stale', category: 'signature', label: 'Chase signature on meeting record', reason: 'x', meetings: [remountMeeting] };
+    const onResendReminder = vi.fn().mockResolvedValue({ success: true });
+    const props = { suggestions: [remountSuggestion], automationLevels: { unsigned_meeting_record_stale: 'automate' }, cs, onResendReminder };
+
+    const { unmount } = render(<AutomationSuggestionsPanel {...props} />);
+    await waitFor(() => expect(onResendReminder).toHaveBeenCalledTimes(1));
+    unmount();
+
+    // Remount with the identical, still-not-yet-updated suggestion —
+    // simulates props not having caught up to the send yet.
+    render(<AutomationSuggestionsPanel {...props} />);
+    await waitFor(() => expect(onResendReminder).toHaveBeenCalledTimes(1));
+  });
 });

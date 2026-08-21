@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Btn } from './Primitives';
 import { getAutomationLevel, automationLevelLabel } from '../lib/automationLevels';
 
@@ -8,6 +8,19 @@ const CATEGORY_LABEL = {
   review: "Review",
   risk: "Risk",
 };
+
+// Module-scoped, not a per-component useRef — this panel remounts
+// (switching case tabs and back, or any parent re-render that gives it
+// a fresh key) well within the brief window between an automated
+// resend firing and its persisted reminderSentAt round-tripping back
+// through props. A useRef-based guard resets to empty on every
+// remount, re-opening that exact window and risking a genuine
+// duplicate reminder to the employee. Module scope survives the
+// remount; it's still scoped to this browser tab's session, cleared
+// only on a full page reload — same as the guard's own original intent
+// of covering just the gap until the next real evaluation confirms the
+// send.
+const firedAutomationKeys = new Set();
 
 // Integrations & Workflow Automation (Phase 5, IP5 + IP28, §22-23) —
 // IP5's read-only display, now honouring the org's own automation level
@@ -20,7 +33,6 @@ const CATEGORY_LABEL = {
 // change what happens next, never what HR gets told.
 export function AutomationSuggestionsPanel({ suggestions, automationLevels, cs, onResendReminder }) {
   const [sending, setSending] = useState({});
-  const autoFiredRef = useRef(new Set());
 
   // Integrations & Workflow Automation (Phase 5, IP30, §29) — level is
   // passed through so the audit entry can record whether this was
@@ -46,8 +58,8 @@ export function AutomationSuggestionsPanel({ suggestions, automationLevels, cs, 
       if (!s.meetings?.length || !onResendReminder || !cs) return;
       if (getAutomationLevel(automationLevels, s.ruleId) !== "automate") return;
       const key = s.ruleId + "::" + s.meetings.map(m => m.id).join(",");
-      if (autoFiredRef.current.has(key)) return;
-      autoFiredRef.current.add(key);
+      if (firedAutomationKeys.has(key)) return;
+      firedAutomationKeys.add(key);
       resend(s.ruleId, s.meetings, "automate");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
