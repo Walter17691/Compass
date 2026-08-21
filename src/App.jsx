@@ -223,7 +223,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!letterOutput) return;
     const approval = createLetterApproval(letterOutput, { by: currentUser?.name || member?.name, type: activeLetter });
     setLetterApproval(approval);
-    audit("AI-drafted letter approved for sending", `${caseInfo.employee||"Employee"} — ${meetingType?.label||""} (${activeLetter})`);
+    audit("AI-drafted letter approved for sending", `${caseInfo.employee||"Employee"} — ${meetingType?.label||""} (${activeLetter})`, activeCaseId);
   };
   const [riskScore, setRiskScore] = useState(null);
   const [riskProcessing, setRiskProcessing] = useState(false);
@@ -5388,12 +5388,13 @@ Please produce:
       savedBy: currentUser?.name || "HR Manager",
     };
     const existing = cases.find(c=>c.employeeName.toLowerCase()===employeeName.toLowerCase());
+    const devCaseId = existing ? existing.id : crypto.randomUUID();
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     } else {
-      saveCases([...cases,{id:crypto.randomUUID(), employeeName, email:s.caseInfo.email||"", createdAt:new Date().toISOString(), meetings:[meeting]}]);
+      saveCases([...cases,{id:devCaseId, employeeName, email:s.caseInfo.email||"", createdAt:new Date().toISOString(), meetings:[meeting]}]);
     }
-    audit("Development meeting saved", `${employeeName} — ${s.type}`);
+    audit("Development meeting saved", `${employeeName} — ${s.type}`, devCaseId);
     showToast("Meeting saved to case file");
     if(devLetter && org?.id) {
       authedFetch("/api/portal/notify-document", {
@@ -5519,7 +5520,7 @@ Please produce:
     generateEvidenceSuggestions(updatedCase, true);
     generateNextBestAction(updatedCase, true);
     applyPendingMeetingSuggestions(caseId);
-    audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`);
+    audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`, caseId);
     showToast("Meeting saved to case file");
     // The button that triggers this is labelled "Save and go to case →" —
     // it used to only save, never navigate, silently stranding the user on
@@ -6295,7 +6296,7 @@ Please produce:
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       if(text) {
         saveCases(cases.map(x=>x.id===caseId?{...x,investigationReport:text,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x));
-        audit("Investigation report generated", cs.employeeName);
+        audit("Investigation report generated", cs.employeeName, caseId);
         showToast("Investigation report generated");
         if(invMeetings.length>=2) generateInconsistencies(cs, true);
       } else {
