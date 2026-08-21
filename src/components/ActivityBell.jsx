@@ -3,10 +3,17 @@ import { ls, lsSet } from '../lib/storage';
 
 // Self-contained so it can drop into both the shared header (App.jsx) and
 // HomeScreen's separate nav without threading half a dozen props through
-// two different component trees.
-export function ActivityBell({ auditLog }) {
+// two different component trees. orgId namespaces the "last seen" cursor
+// per org (Phase 6.5 hardening) — without it, switching orgs would carry
+// one org's dismissal timestamp into another's activity feed, silently
+// mismarking real unread items as seen or vice versa. Compass itself
+// already fully remounts on org switch (see main.jsx's key={org.id}), so
+// this component gets a fresh mount either way; the namespacing is what
+// makes the freshly-read cursor the *correct* org's cursor.
+export function ActivityBell({ auditLog, orgId }) {
   const [show, setShow] = useState(false);
-  const [lastSeen, setLastSeen] = useState(() => ls("compass_last_seen_activity", null));
+  const lastSeenKey = `${orgId || "noorg"}:compass_last_seen_activity`;
+  const [lastSeen, setLastSeen] = useState(() => ls(lastSeenKey, null));
   const ref = useRef(null);
 
   useEffect(() => {
@@ -24,7 +31,7 @@ export function ActivityBell({ auditLog }) {
     setShow(v => !v);
     const now = new Date().toISOString();
     setLastSeen(now);
-    lsSet("compass_last_seen_activity", now);
+    lsSet(lastSeenKey, now);
   };
 
   return (

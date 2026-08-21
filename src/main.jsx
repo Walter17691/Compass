@@ -24,7 +24,11 @@ const LoadingFallback = () => (
   </div>
 )
 
-function Root() {
+// Named export so tests can render Root() directly without triggering the
+// createRoot(...).render(...) bootstrap side effect at the bottom of this
+// file (that line still runs exactly as before for the real app — this is
+// purely additive).
+export function Root() {
   const [user, setUser] = useState(null)
   // One user can belong to more than one org (e.g. an HR consultancy
   // running cases for several clients from one login) — memberships holds
@@ -45,6 +49,18 @@ function Root() {
   const switchOrg = (orgId) => {
     setActiveOrgId(orgId)
     localStorage.setItem('compass_active_org', orgId)
+    // The remounted Compass instance re-derives its initial screen/case
+    // from the URL (App.jsx's readNavFromUrl), which the switch itself
+    // doesn't touch — left alone, a deep link into a specific case would
+    // survive the switch and the new (correctly org-scoped, RLS-safe)
+    // instance would just show "Case not found" for an id that belongs
+    // to the org just left. Not a data leak either way, just avoidable.
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('screen') || params.has('case')) {
+      params.delete('screen'); params.delete('case')
+      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '')
+      window.history.replaceState({}, '', newUrl)
+    }
   }
 
   const loadOrg = async (u) => {
@@ -206,7 +222,19 @@ function Root() {
   return (
     <ErrorBoundary>
       <Suspense fallback={<LoadingFallback/>}>
+        {/* key={org.id} is load-bearing, not decorative: it forces React to
+            fully unmount and remount Compass on every org switch, rather
+            than re-rendering the same instance with new props. Compass owns
+            ~30 independent useState lists (cases, allegations, employee
+            records, wellbeing notes, currentUser, orgWebhookUrl, ...) with
+            no reset logic of its own — without this key, all of it would
+            silently survive a switch and render one org's data under
+            another org's identity. Any in-flight requests from the
+            discarded instance become orphaned closures: their eventual
+            setState calls land on an unmounted component and are inert,
+            they can't leak into the new instance's state. */}
         <Compass
+          key={org.id}
           user={user}
           org={org}
           member={member}

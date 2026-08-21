@@ -106,7 +106,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
             {currentUser?.name&&<div style={{fontSize:12,color:"#6B6375",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser.name}</div>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            <ActivityBell auditLog={auditLog}/>
+            <ActivityBell auditLog={auditLog} orgId={org?.id}/>
             {onSignOut&&<button onClick={onSignOut} title="Sign out" style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
           </div>
         </div>
@@ -125,7 +125,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {meetingType&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo?.employee||meetingType.label}</span>}
             {onOpenCommandBar&&<button onClick={onOpenCommandBar} aria-label="Command Bar" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><SearchIcon size={14}/></button>}
-            <ActivityBell auditLog={auditLog}/>
+            <ActivityBell auditLog={auditLog} orgId={org?.id}/>
             <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
           </div>
         </div>

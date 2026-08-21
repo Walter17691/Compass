@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react"
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES, CONCERN_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
-import { ls, lsSet } from './lib/storage';
+import { ls, lsSet, orgScopedKey } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
@@ -130,6 +130,29 @@ const EMPTY_CONCERN_FORM = {employeeName:"",concernType:"other",description:"",w
 export default function Compass({ user=null, org=null, member=null, availableOrgs=[], switchOrg=()=>{}, onJoinAnotherOrg=()=>{}, onSignOut=null }) {
   useFonts();
 
+  // Phase 6.5 hardening — tenant isolation. main.jsx now keys this whole
+  // component on org.id, so a React-state remount is guaranteed on every
+  // org switch; that alone doesn't help localStorage, since a fresh
+  // mount's useState(ls("compass_cases", [])) initialisers would just
+  // re-read whatever the PREVIOUS org last wrote under that same global
+  // key. orgLs/orgLsSet namespace every tenant-data key by the active
+  // org's id so a browser used across multiple orgs (an HR consultancy
+  // running cases for several clients from one login, per main.jsx's own
+  // Root() comment) can never seed one org's cases/employee records/
+  // wellbeing notes/branding assets from another org's cached copy.
+  // Deliberately NOT applied to compass_gdpr/compass_onboard(ed) — those
+  // are non-sensitive, no-PII UI-acknowledgement flags, not tenant data;
+  // namespacing them would just make the onboarding wizard re-appear
+  // needlessly per org for no privacy benefit.
+  // useCallback keeps these referentially stable across renders (they only
+  // change identity if org?.id itself changes, which — now that main.jsx
+  // fully remounts this component per org — never happens within one
+  // mounted instance's lifetime) so the two effects below that read
+  // localStorage through them can list them as real dependencies instead
+  // of tripping the exhaustive-deps lint rule.
+  const orgLs = useCallback((key, fallback) => ls(orgScopedKey(org?.id, key), fallback), [org?.id]);
+  const orgLsSet = useCallback((key, val) => lsSet(orgScopedKey(org?.id, key), val), [org?.id]);
+
   // ── Navigation ──
   // Screen (and, for case view, the case id) sync to the URL as query
   // params — previously "screen" was pure in-memory state with the whole
@@ -211,18 +234,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── PDF/Word ──
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [wordGenerating, setWordGenerating] = useState(false);
-  const [signature, setSignature] = useState(ls("compass_signature", null));
+  const [signature, setSignature] = useState(orgLs("compass_signature", null));
   const [showSigPad, setShowSigPad] = useState(false);
   const [pendingSend, setPendingSend] = useState(null);
 
   // ── Settings ──
-  const [letterhead, setLetterhead] = useState(ls("compass_letterhead", null));
-  const [wordTemplate, setWordTemplate] = useState(ls("compass_word_template", null));
-  const [policies, setPolicies] = useState(ls("compass_policies", []));
+  const [letterhead, setLetterhead] = useState(orgLs("compass_letterhead", null));
+  const [wordTemplate, setWordTemplate] = useState(orgLs("compass_word_template", null));
+  const [policies, setPolicies] = useState(orgLs("compass_policies", []));
   const [policyProcessing, setPolicyProcessing] = useState(false);
 
   // ── Cases ──
-  const [cases, setCases] = useState(ls("compass_cases", []));
+  const [cases, setCases] = useState(orgLs("compass_cases", []));
   const [viewMeeting, setViewMeeting] = useState(null);
   const [viewCaseId, setViewCaseId] = useState(null);
 
@@ -295,8 +318,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [casesView, setCasesView] = useState("list");
   const [dashSearch, setDashSearch] = useState("");
   const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
-  const [employeeRecords, setEmployeeRecords] = useState(ls("compass_employees", []));
-  const saveEmployeeRecords = u => { setEmployeeRecords(u); lsSet("compass_employees", u); };
+  const [employeeRecords, setEmployeeRecords] = useState(orgLs("compass_employees", []));
+  const saveEmployeeRecords = u => { setEmployeeRecords(u); orgLsSet("compass_employees", u); };
   const getEmployeeRecord = (name) => findEmployeeByName(employeeRecords, name);
   const upsertEmployeeRecord = (name, fields) => {
     if(!name) return;
@@ -514,7 +537,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Stored per meeting as letterTracking: [{letterId, sentAt, deliveredAt, acknowledgedAt}]
 
   // ── Reasonable adjustments ──
-  const [adjustments, setAdjustments] = useState(ls("compass_adjustments", {})); // {caseId: [{id, adjustment, agreed, review, done}]}
+  const [adjustments, setAdjustments] = useState(orgLs("compass_adjustments", {})); // {caseId: [{id, adjustment, agreed, review, done}]}
 
   // ── GDPR ──
   const [gdprAccepted, setGdprAccepted] = useState(ls("compass_gdpr", false));
@@ -1743,7 +1766,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   // New starter onboarding
-  const [starterTemplates, setStarterTemplates] = useState(ls("compass_starter_templates", [{
+  const [starterTemplates, setStarterTemplates] = useState(orgLs("compass_starter_templates", [{
     id:"default", name:"Standard Employee Onboarding", createdAt:new Date().toISOString(),
     phases:[
       { id:"pre", label:"Before day 1", tasks:[
@@ -1778,7 +1801,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       ]},
     ],
   }]));
-  const [starterInstances, setStarterInstances] = useState(ls("compass_starters", []));
+  const [starterInstances, setStarterInstances] = useState(orgLs("compass_starters", []));
   const [dsarRequests, setDsarRequests] = useState([]);
   const [activeStarter, setActiveStarter] = useState(null);
   const [starterView, setStarterView] = useState("list");
@@ -1786,7 +1809,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [newStarterForm, setNewStarterForm] = useState({name:"",role:"",department:"",manager:"",email:"",startDate:"",templateId:"default"});
 
   // ── Leaver offboarding ──
-  const [leaverTemplates, setLeaverTemplates] = useState(ls("compass_leaver_templates", [{
+  const [leaverTemplates, setLeaverTemplates] = useState(orgLs("compass_leaver_templates", [{
     id:"default", name:"Standard Employee Offboarding", createdAt:new Date().toISOString(),
     phases:[
       { id:"notice", label:"On notice received", tasks:[
@@ -1814,14 +1837,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       ]},
     ],
   }]));
-  const [leaverInstances, setLeaverInstances] = useState(ls("compass_leavers", []));
+  const [leaverInstances, setLeaverInstances] = useState(orgLs("compass_leavers", []));
   const [activeLeaver, setActiveLeaver] = useState(null);
   const [leaverView, setLeaverView] = useState("list");
   const [leaverAiProcessing, setLeaverAiProcessing] = useState(false);
   const [newLeaverForm, setNewLeaverForm] = useState({name:"",role:"",department:"",manager:"",email:"",lastWorkingDay:"",reason:"resignation",templateId:"default"});
 
   // ── Redundancy / consultation ──
-  const [redundancyCases, setRedundancyCases] = useState(ls("compass_redundancy", []));
+  const [redundancyCases, setRedundancyCases] = useState(orgLs("compass_redundancy", []));
   // case: {id, type:"individual"|"collective", reason, poolDescription, selectionCriteria:[{criterion,weight}],
   //         atRiskEmployees:[{id,name,role,dept,score,selected,consultationMeetings:[],outcome:"",redundancyPay:""}],
   //         collectiveInfo:{count,hrOneRequired,notifiedDate,electionDate,consultationStartDate},
@@ -1833,7 +1856,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [redundancyAiOutput, setRedundancyAiOutput] = useState("");
 
   // ── Mental health / wellbeing ──
-  const [wellbeingNotes, setWellbeingNotes] = useState(ls("compass_wellbeing", []));
+  const [wellbeingNotes, setWellbeingNotes] = useState(orgLs("compass_wellbeing", []));
   // note: {id, employeeName, type:"chat"|"eap"|"adjustment"|"crisis"|"return"|"checkin",
   //         date, manager, content, followUpDate, followUpDone, supportOffered, resources:[], confidential:true}
   const [activeWellbeing, setActiveWellbeing] = useState(null); // employee name being viewed
@@ -1926,7 +1949,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const prevById = new Map(cases.map(cs => [cs.id, cs]));
     const stamped = u.map(cs => withStageTransitionStamp(cs, prevById.get(cs.id) || null));
     setCases(stamped);
-    lsSet("compass_cases", stamped);
+    orgLsSet("compass_cases", stamped);
     if(org?.id) {
       if(changedId) {
         // Only sync the changed case
@@ -2273,13 +2296,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         if(!r.ok) { showToast("Couldn't delete organisation data: "+(d.error||"unknown error"), "error"); return; }
       } catch(e) { showToast("Couldn't delete organisation data: "+e.message, "error"); return; }
     }
-    ["compass_cases","compass_policies","compass_whistle","compass_users","compass_user","compass_vault","compass_adjustments","compass_signature","compass_letterhead","compass_word_template","compass_starters","compass_starter_templates","compass_leavers","compass_leaver_templates"].forEach(k=>localStorage.removeItem(k));
+    // Phase 6.5 — most of these keys are now org-scoped (orgLs/orgLsSet
+    // above); the legacy unscoped names (compass_whistle/users/user/vault)
+    // are dead — nothing in the codebase writes them anymore — removing
+    // them here is a harmless no-op kept for defence against any leftover
+    // browser state from before that rename.
+    [
+      "compass_cases","compass_policies","compass_adjustments","compass_signature","compass_letterhead",
+      "compass_word_template","compass_starters","compass_starter_templates","compass_leavers","compass_leaver_templates",
+    ].forEach(k=>localStorage.removeItem(orgScopedKey(org?.id, k)));
+    ["compass_whistle","compass_users","compass_user","compass_vault"].forEach(k=>localStorage.removeItem(k));
     try { window.location.reload(); } catch(e) {}
   };
 
   // ── New starter helpers ──
-  const saveStarterInstances = u => { setStarterInstances(u); lsSet("compass_starters", u); };
-  const saveStarterTemplates = u => { setStarterTemplates(u); lsSet("compass_starter_templates", u); };
+  const saveStarterInstances = u => { setStarterInstances(u); orgLsSet("compass_starters", u); };
+  const saveStarterTemplates = u => { setStarterTemplates(u); orgLsSet("compass_starter_templates", u); };
 
   const loadStarterInstances = async () => {
     if(!org?.id) return;
@@ -2308,8 +2340,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   // ── Leaver offboarding helpers ──
-  const saveLeaverInstances = u => { setLeaverInstances(u); lsSet("compass_leavers", u); };
-  const saveLeaverTemplates = u => { setLeaverTemplates(u); lsSet("compass_leaver_templates", u); };
+  const saveLeaverInstances = u => { setLeaverInstances(u); orgLsSet("compass_leavers", u); };
+  const saveLeaverTemplates = u => { setLeaverTemplates(u); orgLsSet("compass_leaver_templates", u); };
 
   const loadLeaverInstances = async () => {
     if(!org?.id) return;
@@ -2624,7 +2656,7 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
   };
 
   // ── Redundancy helpers ──
-  const saveRedundancyCases = u => { setRedundancyCases(u); lsSet("compass_redundancy", u); };
+  const saveRedundancyCases = u => { setRedundancyCases(u); orgLsSet("compass_redundancy", u); };
 
   const createRedundancyCase = (type, reason, poolDescription) => {
     const rc = {
@@ -2737,7 +2769,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // previously localStorage-only, meaning they never actually reached other
   // HR staff or devices despite the screen's own "confidential... restricted
   // to HR only" copy implying a shared record.
-  const saveWellbeingNotes = u => { setWellbeingNotes(u); lsSet("compass_wellbeing", u); };
+  const saveWellbeingNotes = u => { setWellbeingNotes(u); orgLsSet("compass_wellbeing", u); };
 
   const loadWellbeingNotes = async () => {
     if(!org?.id) return;
@@ -4753,12 +4785,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   useEffect(() => {
     if(screen !== SCREENS.RECORD) return;
     const hasContent = transcript.length > 0 || inputText.trim();
-    if(!hasContent) { lsSet("compass_meeting_draft", null); return; }
-    lsSet("compass_meeting_draft", {
+    if(!hasContent) { orgLsSet("compass_meeting_draft", null); return; }
+    orgLsSet("compass_meeting_draft", {
       transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes, prepQuestions,
       savedAt: new Date().toISOString(),
     });
-  }, [screen, transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes, prepQuestions]);
+  }, [screen, transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes, prepQuestions, orgLsSet]);
 
   // Warn on accidental tab close/refresh mid-meeting — the in-app "← Back"
   // button already confirms via cancelMeeting, but that doesn't cover
@@ -4777,7 +4809,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // Once, on load: offer to resume a meeting that never made it past the
   // crash-recovery window above.
   useEffect(() => {
-    const draft = ls("compass_meeting_draft", null);
+    const draft = orgLs("compass_meeting_draft", null);
     if(!draft) return;
     (async () => {
       const ok = await confirmDialog({
@@ -4799,10 +4831,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         setPrepQuestions(draft.prepQuestions || []);
         setScreen(SCREENS.RECORD);
       } else {
-        lsSet("compass_meeting_draft", null);
+        orgLsSet("compass_meeting_draft", null);
       }
     })();
-  }, []);
+    // orgLs/orgLsSet are genuinely safe to list here despite the "once on
+    // mount" intent — they're useCallback-stable for this component
+    // instance's entire lifetime (org?.id can't change without a full
+    // remount, see main.jsx's key={org.id}), so adding them doesn't risk
+    // a second run, it just satisfies exhaustive-deps honestly.
+  }, [orgLs, orgLsSet]);
 
   // Audit session starts
   useEffect(() => {
@@ -4828,7 +4865,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   const changePolicyCategory = (policyId, category) => {
-    setPolicies(p=>{const u=p.map(x=>x.id===policyId?{...x,category}:x);lsSet("compass_policies",u);return u;});
+    setPolicies(p=>{const u=p.map(x=>x.id===policyId?{...x,category}:x);orgLsSet("compass_policies",u);return u;});
   };
 
   // ── Speech ──
@@ -5119,7 +5156,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction("");
     setAiProcessing(true);
     // Generate next steps deadlines
-    lsSet("compass_meeting_draft", null); // transcript is now captured in the AI call in flight — the crash-recovery window has passed
+    orgLsSet("compass_meeting_draft", null); // transcript is now captured in the AI call in flight — the crash-recovery window has passed
     const baseDate = caseInfo.date ? new Date(caseInfo.date.split("/").reverse().join("-")) : new Date();
     const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days), done:false }));
     setNextSteps(steps);
@@ -5577,9 +5614,9 @@ Please produce:
   };
 
   // ── Settings handlers ──
-  const handleLetterheadUpload = e => { const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setLetterhead(ev.target.result);lsSet("compass_letterhead",ev.target.result);};r.readAsDataURL(f); };
-  const handleWordTemplateUpload = e => { const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const o={name:f.name,base64:ev.target.result};setWordTemplate(o);lsSet("compass_word_template",o);};r.readAsDataURL(f); };
-  const handleSaveSignature = sig => { setSignature(sig); setShowSigPad(false); lsSet("compass_signature",sig); if(pendingSend){const a=pendingSend;setPendingSend(null);setTimeout(()=>doSend(a,sig),100);} };
+  const handleLetterheadUpload = e => { const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setLetterhead(ev.target.result);orgLsSet("compass_letterhead",ev.target.result);};r.readAsDataURL(f); };
+  const handleWordTemplateUpload = e => { const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const o={name:f.name,base64:ev.target.result};setWordTemplate(o);orgLsSet("compass_word_template",o);};r.readAsDataURL(f); };
+  const handleSaveSignature = sig => { setSignature(sig); setShowSigPad(false); orgLsSet("compass_signature",sig); if(pendingSend){const a=pendingSend;setPendingSend(null);setTimeout(()=>doSend(a,sig),100);} };
   // Process Intelligence (P4) — one extra AI call per uploaded policy,
   // extracting its specific quotable clauses (short heading + a near-
   // verbatim excerpt) rather than leaving the whole document as one
@@ -5613,7 +5650,7 @@ Please produce:
         const name = file.name.replace(/\.[^.]+$/,"");
         const clauses = await indexPolicyClauses(name, content);
         const pol={id:Date.now().toString()+Math.random(),name,fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k",category:"other",clauses};
-        setPolicies(p=>{const u=[...p,pol];lsSet("compass_policies",u);return u;});
+        setPolicies(p=>{const u=[...p,pol];orgLsSet("compass_policies",u);return u;});
       } catch(err){showToast("Could not read "+file.name, "error");}
     }
     setPolicyProcessing(false); e.target.value="";
@@ -7343,7 +7380,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>lsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>orgLsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} />
       )}
 
       {/* ══ REVIEW ══ */}
@@ -7356,7 +7393,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} />
       )}
 
       {/* ══ DASHBOARD ══ */}
@@ -7631,6 +7668,7 @@ Please produce:
           wordTemplate={wordTemplate}
           setWordTemplate={setWordTemplate}
           lsSet={lsSet}
+          orgLsSet={orgLsSet}
           wordTemplateRef={wordTemplateRef}
           handleWordTemplateUpload={handleWordTemplateUpload}
           letterhead={letterhead}

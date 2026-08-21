@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { SCREENS } from '../constants';
-import { lsSet } from '../lib/storage';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement }) {
   const [showHistory, setShowHistory] = useState(false);
   return (
     <div>
@@ -46,7 +45,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button onClick={()=>setShowSigPad(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>{signature?"Change":"Add"}</button>
-                {signature&&<button onClick={()=>{setSignature(null);lsSet("compass_signature",null);}} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button>}
+                {signature&&<button onClick={onRemoveSignature||(()=>setSignature(null))} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button>}
               </div>
             </div>
 
