@@ -160,34 +160,79 @@ describe('comparableCaseSummaries (P14)', () => {
     expect(comparableCaseSummaries([], [], null, 'current-case')).toEqual([]);
   });
 
-  it('summarises each closed comparable case by finding, never by employee name', () => {
-    const cases = [closedMisconductCase('c1', { outcome: 'Final written warning', employeeName: 'Should Never Appear' })];
-    const allegations = [{ id: 'a1', caseId: 'c1', status: 'substantiated', decisionReasoning: 'CCTV footage confirmed the conduct.' }];
+  // Phase 6.5 hardening (Batch 7) — comparableCaseSummaries now enforces
+  // the same MIN_SAMPLE_SIZE floor as its siblings (computeOutcomeDistribution/
+  // computeSanctionDistribution): an individual anonymised summary is
+  // trivially re-identifiable when it's the only closed case of that
+  // type, even with no name/id shown. Every positive-path test below
+  // needs 3+ closed comparable cases to stay above that floor.
+  it('is empty below the sample-size floor, even for a single genuine comparable case', () => {
+    const cases = [closedMisconductCase('c1', { outcome: 'Final written warning' })];
+    const allegations = [{ id: 'a1', caseId: 'c1', status: 'substantiated', decisionReasoning: 'x' }];
+    expect(comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case')).toEqual([]);
+  });
+
+  it('summarises each closed comparable case by finding, never by employee name, once 3+ exist', () => {
+    const cases = [
+      closedMisconductCase('c1', { outcome: 'Final written warning', employeeName: 'Should Never Appear' }),
+      closedMisconductCase('c2', { outcome: 'Verbal warning' }),
+      closedMisconductCase('c3', { outcome: 'Dismissal' }),
+    ];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', status: 'substantiated', decisionReasoning: 'CCTV footage confirmed the conduct.' },
+      { id: 'a2', caseId: 'c2', status: 'substantiated', decisionReasoning: 'x' },
+      { id: 'a3', caseId: 'c3', status: 'substantiated', decisionReasoning: 'x' },
+    ];
     const result = comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case');
-    expect(result).toEqual([{
+    const c1Summary = result.find(r => r.key === 'c1');
+    expect(c1Summary).toEqual({
       key: 'c1',
       outcome: 'Final written warning',
       findings: [{ status: 'substantiated', label: 'Substantiated', reasoningExcerpt: 'CCTV footage confirmed the conduct.' }],
-    }]);
+    });
     expect(JSON.stringify(result)).not.toContain('Should Never Appear');
   });
 
   it('excludes the current case itself', () => {
-    const cases = [closedMisconductCase('current-case', { outcome: 'Final written warning' })];
-    const allegations = [{ id: 'a1', caseId: 'current-case', status: 'substantiated' }];
-    expect(comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case')).toEqual([]);
+    const cases = [
+      closedMisconductCase('current-case', { outcome: 'Final written warning' }),
+      closedMisconductCase('c2', { outcome: 'Verbal warning' }),
+      closedMisconductCase('c3', { outcome: 'Dismissal' }),
+    ];
+    const allegations = [
+      { id: 'a1', caseId: 'current-case', status: 'substantiated' },
+      { id: 'a2', caseId: 'c2', status: 'substantiated' },
+      { id: 'a3', caseId: 'c3', status: 'substantiated' },
+    ];
+    expect(comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case').some(r => r.key === 'current-case')).toBe(false);
   });
 
   it('excludes closed cases with no recorded findings yet', () => {
-    const cases = [closedMisconductCase('c1', { outcome: 'Final written warning' })];
-    expect(comparableCaseSummaries(cases, [], 'misconduct', 'current-case')).toEqual([]);
+    const cases = [
+      closedMisconductCase('c1', { outcome: 'Final written warning' }),
+      closedMisconductCase('c2', { outcome: 'Verbal warning' }),
+      closedMisconductCase('c3', { outcome: 'Dismissal' }),
+    ];
+    const allegations = [
+      { id: 'a2', caseId: 'c2', status: 'substantiated' },
+      { id: 'a3', caseId: 'c3', status: 'substantiated' },
+    ];
+    expect(comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case').some(r => r.key === 'c1')).toBe(false);
   });
 
   it('truncates a long reasoning excerpt to 220 characters', () => {
     const longReasoning = 'x'.repeat(500);
-    const cases = [closedMisconductCase('c1', { outcome: 'Final written warning' })];
-    const allegations = [{ id: 'a1', caseId: 'c1', status: 'substantiated', decisionReasoning: longReasoning }];
+    const cases = [
+      closedMisconductCase('c1', { outcome: 'Final written warning' }),
+      closedMisconductCase('c2', { outcome: 'Verbal warning' }),
+      closedMisconductCase('c3', { outcome: 'Dismissal' }),
+    ];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', status: 'substantiated', decisionReasoning: longReasoning },
+      { id: 'a2', caseId: 'c2', status: 'substantiated', decisionReasoning: 'x' },
+      { id: 'a3', caseId: 'c3', status: 'substantiated', decisionReasoning: 'x' },
+    ];
     const result = comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case');
-    expect(result[0].findings[0].reasoningExcerpt).toHaveLength(220);
+    expect(result.find(r => r.key === 'c1').findings[0].reasoningExcerpt).toHaveLength(220);
   });
 });

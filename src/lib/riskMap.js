@@ -36,9 +36,18 @@ const MIN_DURATION_SAMPLE = 3;
 // or simply requiring a genuine bottleneck/logged event to exist).
 const MIN_VOLUME_SAMPLE = 3;
 
-export function computeSiteRiskFlags({ locationCounts, locationDurations, companyAvgDuration, bottlenecks, orgEvents }) {
+export function computeSiteRiskFlags({ locationCounts, locationDurations, companyAvgDuration, companyAvgDurationSampleSize, bottlenecks, orgEvents }) {
   const sites = Object.keys(locationCounts || {}).filter(s => s !== "Not specified");
   if (!sites.length) return [];
+
+  // Phase 6.5 hardening (Batch 7) — the per-site duration flag already
+  // required the SITE's own count to clear MIN_DURATION_SAMPLE, but
+  // never checked whether the COMPANY-WIDE baseline it's being compared
+  // against was itself built on enough closed cases — an org with, say,
+  // one closed case company-wide would have every site's duration
+  // compared against a single-case "average," which isn't a real
+  // baseline at all.
+  const companyBaselineReliable = !!companyAvgDuration && (companyAvgDurationSampleSize ?? 0) >= MIN_DURATION_SAMPLE;
 
   const counts = sites.map(s => locationCounts[s]);
   const avgCount = counts.reduce((a, b) => a + b, 0) / counts.length;
@@ -57,7 +66,7 @@ export function computeSiteRiskFlags({ locationCounts, locationDurations, compan
     }
 
     const duration = locationDurations?.[site];
-    if (duration && duration.count >= MIN_DURATION_SAMPLE && companyAvgDuration) {
+    if (duration && duration.count >= MIN_DURATION_SAMPLE && companyBaselineReliable) {
       const pct = computePctChange(duration.avg_days, companyAvgDuration);
       if (pct >= DURATION_INCREASE_PCT) {
         flags.push({ category: "case_delay", label: "Above-average case duration", detail: `${duration.avg_days}d vs a company average of ${companyAvgDuration}d (+${pct}%)` });

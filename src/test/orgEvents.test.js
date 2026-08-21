@@ -43,10 +43,24 @@ describe('describeEventCorrelation', () => {
   });
 
   it('handles no data at all', () => {
-    expect(describeEventCorrelation({ before_count: 0, after_count: 0 })).toBe('No cases recorded in the windows before or after this event.');
+    expect(describeEventCorrelation({ before_count: 0, after_count: 0 })).toBe('Not enough cases recorded around this event to draw a meaningful comparison yet (0 before, 0 after).');
   });
 
   it('handles missing data gracefully', () => {
-    expect(describeEventCorrelation(null)).toBe('No cases recorded in the windows before or after this event.');
+    expect(describeEventCorrelation(null)).toBe('Not enough cases recorded around this event to draw a meaningful comparison yet (0 before, 0 after).');
+  });
+
+  // Phase 6.5 hardening (Batch 7) — below MIN_SAMPLE_SIZE (3, combined
+  // before+after), no correlation claim is made at all — a single case
+  // on either side isn't a real comparison.
+  it('declines to draw a correlation from too few combined cases, even a genuine 100% increase', () => {
+    const text = describeEventCorrelation({ before_count: 1, after_count: 1 });
+    expect(text).toBe('Not enough cases recorded around this event to draw a meaningful comparison yet (1 before, 1 after).');
+    expect(text).not.toContain('temporal correlation');
+  });
+
+  it('draws a correlation once the combined total reaches the sample-size floor', () => {
+    const text = describeEventCorrelation({ before_count: 1, after_count: 2 });
+    expect(text).toContain('temporal correlation worth reviewing');
   });
 });

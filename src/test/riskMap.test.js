@@ -21,11 +21,12 @@ describe('computeSiteRiskFlags', () => {
     expect(result).toEqual([]);
   });
 
-  it('flags above-average case duration once the sample size is met', () => {
+  it('flags above-average case duration once both the site and company-wide sample sizes are met', () => {
     const result = computeSiteRiskFlags({
       locationCounts: { Manchester: 5, London: 5 },
       locationDurations: { Manchester: { avg_days: 20, count: 4 } },
       companyAvgDuration: 10,
+      companyAvgDurationSampleSize: 3,
       bottlenecks: [],
       orgEvents: [],
     });
@@ -37,6 +38,37 @@ describe('computeSiteRiskFlags', () => {
     const result = computeSiteRiskFlags({
       locationCounts: { Manchester: 5, London: 5 },
       locationDurations: { Manchester: { avg_days: 20, count: 1 } },
+      companyAvgDuration: 10,
+      companyAvgDurationSampleSize: 3,
+      bottlenecks: [],
+      orgEvents: [],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    expect(manchester.flags.some(f => f.category === 'case_delay')).toBe(false);
+  });
+
+  // Phase 6.5 hardening (Batch 7) — the site's own sample was already
+  // checked; this proves the company-wide baseline's sample size is now
+  // checked too, independently. A site with plenty of its own closed
+  // cases shouldn't get flagged against a company average built on too
+  // few cases org-wide to mean anything.
+  it('does not flag duration when the company-wide baseline itself is below the minimum sample size', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 5, London: 5 },
+      locationDurations: { Manchester: { avg_days: 20, count: 4 } },
+      companyAvgDuration: 10,
+      companyAvgDurationSampleSize: 1,
+      bottlenecks: [],
+      orgEvents: [],
+    });
+    const manchester = result.find(r => r.site === 'Manchester');
+    expect(manchester.flags.some(f => f.category === 'case_delay')).toBe(false);
+  });
+
+  it('does not flag duration when the company-wide sample size is omitted entirely', () => {
+    const result = computeSiteRiskFlags({
+      locationCounts: { Manchester: 5, London: 5 },
+      locationDurations: { Manchester: { avg_days: 20, count: 4 } },
       companyAvgDuration: 10,
       bottlenecks: [],
       orgEvents: [],

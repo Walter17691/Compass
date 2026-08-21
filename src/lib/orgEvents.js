@@ -6,6 +6,14 @@
 
 import { computePctChange } from './trendDetection';
 
+// Phase 6.5 hardening (Batch 7) — same MIN_SAMPLE_SIZE floor used
+// throughout this phase (trendDetection.js's own isSignificantTrend,
+// outcomeConsistency.js, riskMap.js's MIN_VOLUME_SAMPLE): below this,
+// "case volume increased 100%" off a 0-before/1-after window is noise
+// dressed up as a finding, not a real temporal correlation worth
+// reviewing.
+const MIN_SAMPLE_SIZE = 3;
+
 export const ORG_EVENT_TYPES = [
   { id: "restructure", label: "Management restructure" },
   { id: "new_rota_system", label: "New rota system" },
@@ -25,8 +33,8 @@ export function orgEventTypeLabel(type) {
 export function describeEventCorrelation(data) {
   const before = data?.before_count ?? 0;
   const after = data?.after_count ?? 0;
-  if (before === 0 && after === 0) {
-    return "No cases recorded in the windows before or after this event.";
+  if (before + after < MIN_SAMPLE_SIZE) {
+    return `Not enough cases recorded around this event to draw a meaningful comparison yet (${before} before, ${after} after).`;
   }
   const pct = computePctChange(after, before);
   if (pct === null) {

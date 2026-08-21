@@ -41,6 +41,7 @@ export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEven
     locationCounts: overview.cases_by_location,
     locationDurations: overview.avg_duration_by_location,
     companyAvgDuration: overview.avg_case_duration_days,
+    companyAvgDurationSampleSize: overview.closed_cases_with_duration,
     bottlenecks,
     orgEvents,
   });

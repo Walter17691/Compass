@@ -67,6 +67,14 @@ export function computeSanctionDistribution(cases, caseType, excludeCaseId) {
 export function comparableCaseSummaries(cases, allegations, caseType, excludeCaseId) {
   if (!caseType) return [];
   const closedCases = (cases || []).filter(c => c.caseType === caseType && c.id !== excludeCaseId && getCaseStage(c) === "closed");
+  // Phase 6.5 hardening (Batch 7) — this function's siblings
+  // (computeOutcomeDistribution/computeSanctionDistribution) already
+  // enforce MIN_SAMPLE_SIZE for exactly the reason stated at the top of
+  // this file ("a '1 of 1 substantiated' comparison isn't a
+  // comparison"), but this one didn't: an individual anonymised summary
+  // is trivially re-identifiable when it's the only (or one of two)
+  // closed case of that type, even with no name/id shown.
+  if (closedCases.length < MIN_SAMPLE_SIZE) return [];
   return closedCases.map(c => {
     const findings = (allegations || []).filter(a => a.caseId === c.id && isFindingStatus(a.status));
     if (!findings.length) return null;
