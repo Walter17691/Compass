@@ -41,14 +41,20 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR }) {
   const [briefs, setBriefs] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  // Phase 6.5 hardening (Batch 8) — a failed load silently left briefs
+  // at its initial [], which the empty state below couldn't distinguish
+  // from "genuinely no briefs generated yet" — a real load failure
+  // (network blip, RLS issue) read to the user as "nothing here."
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!org?.id) return;
-      const { data, error: loadError } = await supabase.from('er_executive_briefs').select('*').eq('org_id', org.id).order('created_at', { ascending: false });
+      const { data, error: loadErr } = await supabase.from('er_executive_briefs').select('*').eq('org_id', org.id).order('created_at', { ascending: false });
       if (cancelled) return;
-      if (loadError) { console.error("loadExecutiveBriefs", loadError); return; }
+      if (loadErr) { console.error("loadExecutiveBriefs", loadErr); setLoadError(true); return; }
+      setLoadError(false);
       if (data) setBriefs(data);
     })();
     return () => { cancelled = true; };
@@ -95,7 +101,8 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR }) {
       </div>
 
       {error && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>{error}</div>}
-      {briefs.length === 0 && !generating && <div style={{fontSize:13,color:"#6B6375"}}>No executive brief generated yet.</div>}
+      {loadError && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>Couldn't load the executive brief history right now.</div>}
+      {briefs.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:"#6B6375"}}>No executive brief generated yet.</div>}
 
       {briefs.map(b => (
         <div key={b.id} style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid #F5F1EA"}}>

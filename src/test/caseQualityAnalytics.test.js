@@ -60,4 +60,33 @@ describe('computeCaseQualityAnalytics', () => {
     expect(result.totalCases).toBe(0);
     expect(result.issues).toEqual([]);
   });
+
+  // Phase 6.5 hardening (Batch 8) — readiness percentages used to divide
+  // by totalCases (all cases), not by the count of cases readiness was
+  // actually applicable to (those with allegations recorded). With 2 of
+  // 3 cases having no allegations at all, the old code understated a
+  // 100%-of-applicable-cases gap as 33%.
+  it('computes readiness percentages against cases readiness was applicable to, not against every case', () => {
+    const cases = [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', title: 'X', description: 'd' }, // no employeeResponse -> fails
+    ];
+    const result = computeCaseQualityAnalytics(cases, allegations, [], [], [], [], []);
+    const issue = result.issues.find(i => i.id === 'employee_responded');
+    expect(issue.count).toBe(1);
+    expect(issue.pct).toBe(100); // 1 of 1 applicable case, not 1 of 3 total cases
+  });
+
+  it('still computes guardrail percentages against every case, unaffected by how many had allegations', () => {
+    const cases = [
+      { id: 'c1', meetings: [{ type: 'Investigation', record: 'x' }] },
+      { id: 'c2' }, // no allegations, no meetings -> not applicable to readiness, no guardrail issue either
+      { id: 'c3' },
+    ];
+    const allegations = [{ id: 'a1', caseId: 'c1', title: 'X' }];
+    const result = computeCaseQualityAnalytics(cases, allegations, [], [], [], [], []);
+    const issue = result.issues.find(i => i.id === 'employee_response_opportunity');
+    expect(issue.count).toBe(1);
+    expect(issue.pct).toBe(Math.round((1 / 3) * 100)); // 1 of 3 total cases, not 1 of 1 applicable case
+  });
 });

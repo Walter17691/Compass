@@ -68,6 +68,15 @@ describe('ExecutiveBriefPanel', () => {
     expect(insertedRow.org_id).toBe('org1');
   });
 
+  // Phase 6.5 hardening (Batch 8) — a failed load used to silently leave
+  // briefs at [], indistinguishable from "genuinely no briefs yet."
+  it('shows a load-error message instead of the misleading empty state when the initial load fails', async () => {
+    fromMock.mockReturnValue(selectChain({ data: null, error: new Error('network error') }));
+    render(<ExecutiveBriefPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true}/>);
+    await waitFor(() => expect(screen.getByText("Couldn't load the executive brief history right now.")).toBeInTheDocument());
+    expect(screen.queryByText('No executive brief generated yet.')).not.toBeInTheDocument();
+  });
+
   it('shows an error message when generation fails', async () => {
     const user = userEvent.setup();
     fromMock.mockReturnValue(selectChain({ data: [], error: null }));

@@ -82,4 +82,13 @@ describe('PeriodicReviewPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Generate review' }));
     await waitFor(() => expect(screen.getByText(/Couldn't generate the review/)).toBeInTheDocument());
   });
+
+  // Phase 6.5 hardening (Batch 8) — a failed load used to silently leave
+  // reviews at [], indistinguishable from "genuinely no reviews yet."
+  it('shows a load-error message instead of the misleading empty state when the initial load fails', async () => {
+    fromMock.mockReturnValue(selectChain({ data: null, error: new Error('network error') }));
+    render(<PeriodicReviewPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true}/>);
+    await waitFor(() => expect(screen.getByText("Couldn't load the periodic review history right now.")).toBeInTheDocument());
+    expect(screen.queryByText('No periodic review generated yet.')).not.toBeInTheDocument();
+  });
 });

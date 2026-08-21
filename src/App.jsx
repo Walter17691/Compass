@@ -1910,6 +1910,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── Case signals (AI-copilot substrate: next-best-action, contradictions,
   // unanswered questions, procedural guardrails — see lib/caseSignals.js) ──
   const [caseSignals, setCaseSignals] = useState([]);
+  // Phase 6.5 hardening (Batch 8) — generateUnansweredQuestions/
+  // generateInconsistencies/generateAppealReview each capture caseSignals
+  // in a local `updated` variable BEFORE a slow AI call, then
+  // unconditionally setCaseSignals(updated) once it resolves — silently
+  // discarding any other caseSignals change (a dismiss, a guardrail
+  // sync, a different AI generation for another case) that happened
+  // during the await. Kept in sync on every render so those three can
+  // rebuild `updated` from the actual latest state instead, the same
+  // ref-for-post-await-freshness pattern allegationVersionRef already
+  // uses (Phase 6.5, P0).
+  const caseSignalsRef = useRef([]);
+  useEffect(() => { caseSignalsRef.current = caseSignals; }, [caseSignals]);
   const [nextActionLoading, setNextActionLoading] = useState({});
   // "Covered" topics aren't actionable, so — like caseOverview/
   // caseChatHistory — they're session-local, not persisted; only the
@@ -4093,8 +4105,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         if(policy && clause) sourceRefs = [{kind:"policy", id:policy.id, label:policy.name, clauseHeading:clause.heading, clauseText:clause.text}];
       }
 
-      const openPrior = openSignalsForCase(caseSignals, cs.id, "next_action");
-      const withoutStale = supersedeOpenSignalsOfType(caseSignals, cs.id, "next_action");
+      const openPrior = openSignalsForCase(caseSignalsRef.current, cs.id, "next_action");
+      const withoutStale = supersedeOpenSignalsOfType(caseSignalsRef.current, cs.id, "next_action");
       openPrior.forEach(s => { const updated = withoutStale.find(x=>x.id===s.id); if(updated) saveSignalToDB(updated); });
 
       const created = createSignal(withoutStale, cs.id, {
@@ -4131,8 +4143,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
       setUnansweredCovered(c=>({...c, [cs.id]: parsed.covered||[]}));
 
-      const openPrior = openSignalsForCase(caseSignals, cs.id, "unanswered_question");
-      let updated = supersedeOpenSignalsOfType(caseSignals, cs.id, "unanswered_question");
+      const openPrior = openSignalsForCase(caseSignalsRef.current, cs.id, "unanswered_question");
+      let updated = supersedeOpenSignalsOfType(caseSignalsRef.current, cs.id, "unanswered_question");
       openPrior.forEach(s => { const u = updated.find(x=>x.id===s.id); if(u) saveSignalToDB(u); });
       (parsed.stillToExplore||[]).forEach(q => {
         if(!q.question) return;
@@ -4172,7 +4184,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       const valid = (Array.isArray(parsed)?parsed:[]).filter(f=>meetingsWithRecords.some(m=>m.id===f.meetingId1) && meetingsWithRecords.some(m=>m.id===f.meetingId2));
 
-      let updated = caseSignals;
+      const base = caseSignalsRef.current;
+      let updated = base;
       valid.forEach(f => {
         const m1 = meetingsWithRecords.find(m=>m.id===f.meetingId1), m2 = meetingsWithRecords.find(m=>m.id===f.meetingId2);
         updated = createSignal(updated, cs.id, {
@@ -4184,7 +4197,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         });
       });
       setCaseSignals(updated);
-      updated.filter(s=>!caseSignals.includes(s)).forEach(saveSignalToDB);
+      updated.filter(s=>!base.includes(s)).forEach(saveSignalToDB);
       if(!silent && valid.length===0) showToast("No inconsistencies found");
     } catch(e) { console.error("generateInconsistencies", e); if(!silent) showToast("Couldn't check for inconsistencies — "+e.message, "error"); }
     if(!silent) setInconsistencyLoading(l=>({...l, [cs.id]:false}));
@@ -4249,8 +4262,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // signals (guardrails write that same type) — the exact same
       // "supersede stale, don't touch unrelated" split guardrails.js's
       // syncGuardrailSignals already relies on.
-      const priorOpen = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && s.status==="open" && s.title.startsWith("Appeal ground:"));
-      let updated = caseSignals;
+      const priorOpen = caseSignalsRef.current.filter(s=>s.caseId===cs.id && s.type==="process_risk" && s.status==="open" && s.title.startsWith("Appeal ground:"));
+      let updated = caseSignalsRef.current;
       priorOpen.forEach(s => { updated = setSignalStatus(updated, s.id, "resolved", null, "Superseded by a refreshed appeal review"); });
       priorOpen.forEach(s => { const u = updated.find(x=>x.id===s.id); if(u) saveSignalToDB(u); });
 

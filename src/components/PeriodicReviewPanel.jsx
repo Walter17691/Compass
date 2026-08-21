@@ -25,14 +25,19 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR }) {
   const [reviews, setReviews] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  // Phase 6.5 hardening (Batch 8) — same fix as ExecutiveBriefPanel: a
+  // failed load silently left reviews at its initial [], indistinguishable
+  // from "genuinely no reviews generated yet."
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!org?.id) return;
-      const { data, error: loadError } = await supabase.from('er_executive_briefs').select('*').eq('org_id', org.id).not('period_type', 'is', null).order('created_at', { ascending: false });
+      const { data, error: loadErr } = await supabase.from('er_executive_briefs').select('*').eq('org_id', org.id).not('period_type', 'is', null).order('created_at', { ascending: false });
       if (cancelled) return;
-      if (loadError) { console.error("loadPeriodicReviews", loadError); return; }
+      if (loadErr) { console.error("loadPeriodicReviews", loadErr); setLoadError(true); return; }
+      setLoadError(false);
       if (data) setReviews(data);
     })();
     return () => { cancelled = true; };
@@ -86,7 +91,8 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR }) {
       </div>
 
       {error && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>{error}</div>}
-      {reviews.length === 0 && !generating && <div style={{fontSize:13,color:"#6B6375"}}>No periodic review generated yet.</div>}
+      {loadError && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>Couldn't load the periodic review history right now.</div>}
+      {reviews.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:"#6B6375"}}>No periodic review generated yet.</div>}
 
       {reviews.map(r => (
         <div key={r.id} style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid #F5F1EA"}}>

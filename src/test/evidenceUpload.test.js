@@ -1,5 +1,73 @@
-import { describe, it, expect } from 'vitest';
-import { ensureEvidenceIds } from '../lib/evidenceUpload.js';
+import { describe, it, expect, vi } from 'vitest';
+import { ensureEvidenceIds, fmtBytes, readEvidenceFiles, MAX_EVIDENCE_SIZE } from '../lib/evidenceUpload.js';
+
+// Phase 6.5 hardening (Batch 8) — fmtBytes/readEvidenceFiles had no
+// coverage at all before this; only ensureEvidenceIds (added for the P0
+// evidence-by-stable-id fix) was tested.
+describe('fmtBytes', () => {
+  it('formats sub-megabyte sizes in KB, rounded', () => {
+    expect(fmtBytes(2048)).toBe('2KB');
+    expect(fmtBytes(1500)).toBe('1KB');
+  });
+
+  it('formats megabyte-and-above sizes in MB to one decimal place', () => {
+    expect(fmtBytes(1024 * 1024)).toBe('1.0MB');
+    expect(fmtBytes(2.5 * 1024 * 1024)).toBe('2.5MB');
+  });
+});
+
+describe('readEvidenceFiles', () => {
+  const makeFile = (name, type, sizeOverride) => {
+    const file = new File(['x'.repeat(10)], name, { type });
+    if (sizeOverride != null) Object.defineProperty(file, 'size', { value: sizeOverride });
+    return file;
+  };
+
+  it('reads a valid file into an evidence object with a stable id and dataUrl', async () => {
+    const [result] = await readEvidenceFiles([makeFile('note.txt', 'text/plain')], { addedBy: 'Jo Smith' });
+    expect(result.id).toBeTruthy();
+    expect(result.name).toBe('note.txt');
+    expect(result.type).toBe('text/plain');
+    expect(result.addedBy).toBe('Jo Smith');
+    expect(result.dataUrl).toMatch(/^data:/);
+  });
+
+  it('rejects a file over the size limit via onReject, without including it in the results', async () => {
+    const onReject = vi.fn();
+    const results = await readEvidenceFiles([makeFile('huge.pdf', 'application/pdf', MAX_EVIDENCE_SIZE + 1)], { onReject });
+    expect(results).toHaveLength(0);
+    expect(onReject).toHaveBeenCalledWith(expect.stringContaining('huge.pdf'));
+    expect(onReject).toHaveBeenCalledWith(expect.stringContaining('too large'));
+  });
+
+  it('rejects an unsupported file type via onReject, without including it in the results', async () => {
+    const onReject = vi.fn();
+    const results = await readEvidenceFiles([makeFile('script.exe', 'application/x-msdownload')], { onReject });
+    expect(results).toHaveLength(0);
+    expect(onReject).toHaveBeenCalledWith(expect.stringContaining('not supported'));
+  });
+
+  it('processes the rest of a multi-file batch even when one file is rejected', async () => {
+    const onReject = vi.fn();
+    const results = await readEvidenceFiles([
+      makeFile('good.txt', 'text/plain'),
+      makeFile('bad.exe', 'application/x-msdownload'),
+      makeFile('also-good.csv', 'text/csv'),
+    ], { onReject });
+    expect(results.map(r => r.name)).toEqual(['good.txt', 'also-good.csv']);
+    expect(onReject).toHaveBeenCalledTimes(1);
+  });
+
+  it('defaults addedBy to "HR Manager" when not given', async () => {
+    const [result] = await readEvidenceFiles([makeFile('note.txt', 'text/plain')]);
+    expect(result.addedBy).toBe('HR Manager');
+  });
+
+  it('assigns distinct ids across files in the same batch', async () => {
+    const results = await readEvidenceFiles([makeFile('a.txt', 'text/plain'), makeFile('b.txt', 'text/plain')]);
+    expect(results[0].id).not.toBe(results[1].id);
+  });
+});
 
 // Phase 6.5 hardening (P0, Cluster 8) — every evidence item needs a
 // stable id so documentFindings/allegation-linking/prep-question-linking
