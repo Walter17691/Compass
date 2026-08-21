@@ -22,7 +22,7 @@ import { ImprovementInitiativesPanel } from '../components/ImprovementInitiative
 // ManagerInsightsScreen/ErReportScreen unchanged — this phase gives them
 // a shared home, it does not rebuild them.
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, createCaseTask, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, improvementInitiatives, onAddImprovementInitiative, onUpdateImprovementInitiative, org, user, memberName, initialSection, clearInitialSection }) {
+export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, createCaseTask, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, caseThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, improvementInitiatives, onAddImprovementInitiative, onUpdateImprovementInitiative, org, user, memberName, initialSection, clearInitialSection }) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
   // reachable as ErReportScreen already was; Manager Insights, Org
   // Events, Risk Map, and Improvement Initiatives are HR-only, same
@@ -65,6 +65,8 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
               policies={policies}
               caseAccess={caseAccess}
               orgMembers={orgMembers}
+              caseThemes={caseThemes}
+              organisationThemes={organisationThemes}
             />
           )}
           {active==="trends"&&(
@@ -107,6 +109,8 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
                 getNextStep={getNextStep}
                 fmtDate={fmtDate}
                 loadJsPDF={loadJsPDF}
+                caseThemes={caseThemes}
+                organisationThemes={organisationThemes}
               />
             </>
           )}

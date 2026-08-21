@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { computeStageDurations } from '../lib/processDashboard';
-import { extractThemeKeywords, computeInformalFormalSplit } from '../lib/orgIntelligence';
+import { computeInformalFormalSplit } from '../lib/orgIntelligence';
+import { themeFrequency } from '../lib/themes';
 import { DataQualityCaveat } from './DataQualityCaveat';
 import { SiteIntelligencePanel } from './SiteIntelligencePanel';
 import { BenchmarkingPanel } from './BenchmarkingPanel';
@@ -56,7 +57,7 @@ function topEntries(obj, limit = 6) {
 // than re-deriving branching logic in SQL (see OP2's migration header
 // for the full reasoning). Appeal rate/appeal outcome rate are OP11's
 // job (Appeal Intelligence) — shown as a placeholder here, not guessed.
-export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers }) {
+export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
 
@@ -90,12 +91,18 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
   const overdueCaseIds = new Set((dueSoon || []).filter(d => d.overdue && d.caseId).map(d => d.caseId));
   const returnedForFurtherInvestigation = (hrReviewRequests || []).filter(r => r.step === "inv_report" && r.status === "returned").length;
   const resolutionSplit = computeInformalFormalSplit(cases);
-  const themeKeywords = extractThemeKeywords(cases);
+  const themeFrequencies = themeFrequency(caseThemes, organisationThemes);
 
   const typeEntries = topEntries(overview.cases_by_type);
   const locationEntries = topEntries(overview.cases_by_location);
   const departmentEntries = topEntries(overview.cases_by_department);
-  const managerEntries = topEntries(overview.cases_by_manager);
+  // cases_by_manager (still returned by org_insights_overview()) is
+  // deliberately never rendered here — a sorted, top-N bar chart of
+  // named managers by case volume is exactly the "score or rank an
+  // individual manager" pattern this phase's own cross-cutting
+  // constraint prohibits, the same reasoning managerInsights.js's
+  // "never a per-manager score" framing and riskMap.js's exclusion of
+  // "management capability" from its per-site flags already apply.
   const outcomeEntries = topEntries(overview.cases_by_outcome);
   const maxOf = entries => Math.max(1, ...entries.map(([,v])=>v));
 
@@ -134,18 +141,15 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
         <Panel title="Cases by department">
           {departmentEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(departmentEntries)} color="#1C5AA0"/>)}
         </Panel>
-        <Panel title="Cases by manager">
-          {managerEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(managerEntries)} color="#7C5CFC"/>)}
-        </Panel>
         <Panel title="Outcome types">
           {outcomeEntries.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recorded outcomes yet.</div>}
           {outcomeEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(outcomeEntries)} color="#C84B2F"/>)}
         </Panel>
         <Panel title="Repeat case themes">
-          {themeKeywords.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>Not enough case description text to identify recurring themes yet.</div>}
+          {themeFrequencies.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recurring themes tagged across 2+ cases yet.</div>}
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {themeKeywords.map(t=>(
-              <span key={t.keyword} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:20,padding:"3px 10px"}}>{t.keyword} · {t.count} case{t.count===1?"":"s"}</span>
+            {themeFrequencies.map(t=>(
+              <span key={t.themeId} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:20,padding:"3px 10px"}}>{t.name} · {t.count} case{t.count===1?"":"s"}</span>
             ))}
           </div>
         </Panel>

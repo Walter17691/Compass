@@ -4,13 +4,14 @@ import { DateInput } from '../components/DateInput';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { compileSubjectData } from '../lib/dsarCompile';
 import { useLoadMore } from '../hooks/useLoadMore';
+import { daysBetween } from '../lib/dateMath';
 
 const STATUS_LABEL = { received:"Received", in_progress:"In progress", ready_to_send:"Ready to send", completed:"Completed" };
 
 function daysUntil(dueDate) {
   const due = new Date(dueDate); due.setHours(0,0,0,0);
   const today = new Date(); today.setHours(0,0,0,0);
-  return Math.ceil((due-today)/(1000*60*60*24));
+  return daysBetween(today, due);
 }
 
 function downloadJson(data, filename) {
@@ -21,10 +22,10 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, updateDsarRequest, extendDsarRequest, promptDialog }) {
+function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, hrReviewRequests, auditLog, updateDsarRequest, extendDsarRequest, promptDialog }) {
   const [compiled, setCompiled] = useState(null);
 
-  const compile = () => setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances }));
+  const compile = () => setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, hrReviewRequests, auditLog }));
 
   const days = daysUntil(req.dueDate);
   const overdue = days < 0;
@@ -102,7 +103,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, setScreen }) {
+export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, hrReviewRequests, auditLog, setScreen }) {
   const [form, setForm] = useState({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   const [showForm, setShowForm] = useState(false);
 
@@ -156,7 +157,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
         ):visibleRequests.map(req=>(
-          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
+          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} hrReviewRequests={hrReviewRequests} auditLog={auditLog} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
         ))}
         {hasMore&&(
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>

@@ -17,7 +17,20 @@ async function supabaseRequest(path, options = {}) {
 // table that holds case/employee content; it deliberately leaves
 // organisations, org_members, locations and calendar/portal connections
 // alone.
-const ORG_SCOPED_TABLES = ['cases', 'starter_instances', 'dsar_requests', 'hr_review_requests', 'audit_log'];
+//
+// Phase 6.5 hardening (Batch 5) — added wellbeing_notes, concern_referrals,
+// leaver_instances and case_tasks. Verified against the live schema's real
+// FK cascade rules before changing anything: allegations, case_signals and
+// case_themes all have a NOT NULL case_id with ON DELETE CASCADE from
+// cases, so they're already fully erased for free the moment this
+// handler's own `cases` delete runs — adding them here would be inert.
+// case_tasks is the one exception: case_id is nullable (org-level actions
+// with no linked case, added by OP21), so an org-level task would have
+// silently survived the cases cascade with no case row left to trigger
+// it. wellbeing_notes and leaver_instances have no case_id at all, and
+// concern_referrals.linked_case_id is ON DELETE SET NULL, not CASCADE —
+// none of the three were reachable through any other table's cascade.
+const ORG_SCOPED_TABLES = ['cases', 'starter_instances', 'dsar_requests', 'hr_review_requests', 'audit_log', 'wellbeing_notes', 'concern_referrals', 'leaver_instances', 'case_tasks'];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

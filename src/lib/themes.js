@@ -12,6 +12,31 @@ export function activeThemes(organisationThemes) {
   return (organisationThemes || []).filter(t => t.active);
 }
 
+// Phase 6.5 hardening (Batch 5) — replaces orgIntelligence.js's
+// extractThemeKeywords as the "repeat case themes" signal everywhere it
+// was used (OrganisationalIntelligenceOverview's dashboard panel,
+// ErReportScreen's AI-summary prompt and its own "recurring themes"
+// chip list). That function did raw regex word-extraction over case
+// description/title TEXT with only a generic stopword filter — no
+// defence against a real person's name appearing 2+ times across
+// different case descriptions (a commonly-named witness, a manager
+// mentioned in several complaints) and surfacing as an org-wide
+// "theme," including inside AI-generated executive-summary prose. This
+// counts HR-curated case_themes tags instead — never raw case text, so
+// there's no name-leak surface at all.
+export function themeFrequency(caseThemes, organisationThemes, minCaseCount = 2) {
+  const countByThemeId = {};
+  (caseThemes || []).forEach(t => { countByThemeId[t.themeId] = (countByThemeId[t.themeId] || 0) + 1; });
+  return Object.entries(countByThemeId)
+    .filter(([, count]) => count >= minCaseCount)
+    .map(([themeId, count]) => ({
+      themeId,
+      name: (organisationThemes || []).find(t => t.id === themeId)?.name || "Unknown theme",
+      count,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
 // Case-insensitive, trimmed — an AI suggestion of "Rota Changes" should
 // match an existing "rota changes" theme rather than proposing a
 // near-duplicate.

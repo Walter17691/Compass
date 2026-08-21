@@ -9,11 +9,30 @@
 // (over-redacting). A human has to look at each flagged line before the
 // response goes out — see reviewed_flagged_sections in
 // supabase/dsar_2026-07-24.sql, which gates the DSAR request's status.
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [] } = {}) {
+// Phase 6.5 hardening (Batch 5) — added wellbeingNotes, concernReferrals,
+// allegations, caseSignals, hrReviewRequests and auditLog. A DSAR response
+// must cover everything Compass holds about the named individual, not
+// just what happens to be embedded on the case object itself (meetings/
+// evidence) — these six live in their own tables/state, keyed by
+// employeeName (wellbeing notes, concern referrals — both about the
+// subject, not necessarily submitted by them) or by caseId (allegations,
+// case signals, HR review requests, audit log — scoped to the subject's
+// own cases, the same boundary subjectCases itself already draws).
+export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], hrReviewRequests = [], auditLog = [] } = {}) {
   const employeeRecord = employeeRecords.find(r => r.name === employeeName) || null;
   const subjectCases = cases.filter(c => c.employeeName === employeeName);
+  const subjectCaseIds = new Set(subjectCases.map(c => c.id));
   const onboarding = starterInstances.filter(s => s.name === employeeName);
   const offboarding = leaverInstances.filter(s => s.name === employeeName);
+  const subjectWellbeingNotes = wellbeingNotes.filter(n => n.employeeName === employeeName);
+  const subjectConcernReferrals = concernReferrals.filter(r => r.employeeName === employeeName);
+  const subjectAllegations = allegations.filter(a => subjectCaseIds.has(a.caseId));
+  const subjectCaseSignals = caseSignals.filter(s => subjectCaseIds.has(s.caseId));
+  // hr_review_requests isn't remapped to camelCase at load time
+  // (App.jsx's loadHrReviews keeps the raw DB row shape) — case_id here,
+  // not caseId, matching every other consumer of this state.
+  const subjectHrReviewRequests = hrReviewRequests.filter(r => subjectCaseIds.has(r.case_id));
+  const subjectAuditLog = auditLog.filter(a => a.caseId && subjectCaseIds.has(a.caseId));
 
   const otherNames = new Set();
   employeeRecords.forEach(r => { if (r.name && r.name !== employeeName) otherNames.add(r.name); });
@@ -37,6 +56,18 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     });
   });
 
+  subjectWellbeingNotes.forEach(n => scanText(n.content, { field: 'wellbeingNote.content', wellbeingNoteId: n.id, date: n.date }));
+  subjectConcernReferrals.forEach(r => {
+    scanText(r.description, { field: 'concernReferral.description', concernReferralId: r.id });
+    scanText(r.witnesses, { field: 'concernReferral.witnesses', concernReferralId: r.id });
+    scanText(r.evidenceDescription, { field: 'concernReferral.evidenceDescription', concernReferralId: r.id });
+  });
+  subjectAllegations.forEach(a => {
+    ['description', 'peopleInvolved', 'employeeResponse', 'witnessEvidence', 'investigatorFinding', 'outstandingUncertainty', 'decisionReasoning', 'appealReasoning'].forEach(field => {
+      scanText(a[field], { field: `allegation.${field}`, caseId: a.caseId, allegationId: a.id });
+    });
+  });
+
   // Evidence files (photos, PDFs, CCTV, witness statements) are binary/opaque
   // content that can't be text-scanned for third-party mentions the way
   // meeting records/transcripts are above. Rather than silently bundling raw
@@ -57,6 +88,12 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     cases: casesForExport,
     onboarding,
     offboarding,
+    wellbeingNotes: subjectWellbeingNotes,
+    concernReferrals: subjectConcernReferrals,
+    allegations: subjectAllegations,
+    caseSignals: subjectCaseSignals,
+    hrReviewRequests: subjectHrReviewRequests,
+    auditLog: subjectAuditLog,
     flaggedThirdPartyMentions: flagged,
     evidenceRequiringReview,
     compiledAt: new Date().toISOString(),

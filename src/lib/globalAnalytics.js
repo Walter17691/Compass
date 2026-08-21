@@ -16,12 +16,18 @@ export function buildGlobalStatsContext(caseStats, overview, trendData, appealDa
   const parts = ["ORG-WIDE CASE STATISTICS (live database query, scoped to cases you have access to):\n" + JSON.stringify(caseStats)];
 
   if (overview) {
-    parts.push("ORG-WIDE BREAKDOWN — last 90 days (by site/department/manager, avg case duration):\n" + JSON.stringify({
+    // cases_by_manager is deliberately excluded — this phase's own
+    // cross-cutting constraint is "never score or rank an individual
+    // employee or manager," and handing a per-manager case-count
+    // breakdown to the assistant would let it answer "which manager has
+    // the most cases" directly, the exact thing every other insight in
+    // this phase (managerInsights.js, riskMap.js, caseQualityAnalytics.js)
+    // is deliberately built to avoid.
+    parts.push("ORG-WIDE BREAKDOWN — last 90 days (by site/department, avg case duration):\n" + JSON.stringify({
       opened_in_period: overview.opened_in_period,
       closed_in_period: overview.closed_in_period,
       cases_by_location: overview.cases_by_location,
       cases_by_department: overview.cases_by_department,
-      cases_by_manager: overview.cases_by_manager,
       avg_case_duration_days: overview.avg_case_duration_days,
       avg_duration_by_location: overview.avg_duration_by_location,
     }));

@@ -7604,6 +7604,7 @@ Please produce:
           loadJsPDF={loadJsPDF}
           processTemplates={processTemplates}
           organisationThemes={organisationThemes}
+          caseThemes={caseThemes}
           onAddOrganisationTheme={addOrganisationTheme}
           onUpdateOrganisationTheme={updateOrganisationTheme}
           allegations={allegations}
@@ -7835,6 +7836,12 @@ Please produce:
           employeeRecords={employeeRecords}
           starterInstances={starterInstances}
           leaverInstances={leaverInstances}
+          wellbeingNotes={wellbeingNotes}
+          concernReferrals={concernReferrals}
+          allegations={allegations}
+          caseSignals={caseSignals}
+          hrReviewRequests={hrReviewRequests}
+          auditLog={auditLog}
           setScreen={setScreen}
         />
       )}

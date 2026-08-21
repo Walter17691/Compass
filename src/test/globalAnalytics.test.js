@@ -17,6 +17,17 @@ describe('buildGlobalStatsContext', () => {
     expect(context).toContain('Manchester');
   });
 
+  // Phase 6.5, Batch 5 — a per-manager case-count breakdown would let
+  // the assistant answer "which manager has the most cases" directly,
+  // the exact thing this phase's own cross-cutting constraint ("never
+  // score or rank an individual employee or manager") prohibits.
+  it('never includes a per-manager breakdown, even when the RPC data has one', () => {
+    const overview = { opened_in_period: 5, closed_in_period: 3, cases_by_location: {}, cases_by_department: {}, cases_by_manager: { 'Jo Smith': 12 }, avg_case_duration_days: 12, avg_duration_by_location: {} };
+    const context = buildGlobalStatsContext(caseStats, overview, null, null);
+    expect(context).not.toContain('cases_by_manager');
+    expect(context).not.toContain('Jo Smith');
+  });
+
   it('includes only significant trends, with the anti-attribution instruction', () => {
     const trendData = {
       by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: {} }, { caseType: 'flat', currentCount: 11, previousCount: 10, byLocation: {} }],

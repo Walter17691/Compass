@@ -29,6 +29,21 @@ describe('OrganisationalIntelligenceOverview', () => {
     expect(rpcMock).toHaveBeenCalledWith('org_insights_overview', { p_period_days: expect.any(Number) });
   });
 
+  // Phase 6.5, Batch 5 — a per-manager case-count bar chart is exactly
+  // the "score or rank an individual manager" pattern this phase's own
+  // cross-cutting constraint prohibits (managerInsights.js and
+  // riskMap.js are both deliberately built to avoid it too). The RPC
+  // still returns cases_by_manager (baseOverview above includes it,
+  // matching the real shape); this proves the component never renders
+  // it, even though the data is present.
+  it('never renders a per-manager breakdown, even though the RPC returns cases_by_manager', async () => {
+    rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    await waitFor(() => expect(screen.getByText('Open cases').parentElement).toHaveTextContent('4'));
+    expect(screen.queryByText('Cases by manager')).not.toBeInTheDocument();
+    expect(screen.queryByText('Jo Smith')).not.toBeInTheDocument();
+  });
+
   it('shows an error state when the RPC fails', async () => {
     rpcMock.mockResolvedValue({ data: null, error: new Error('boom') });
     render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
@@ -72,5 +87,21 @@ describe('OrganisationalIntelligenceOverview', () => {
     render(<OrganisationalIntelligenceOverview cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText('Informal resolution')).toBeInTheDocument());
     expect(screen.getByText('1 formal')).toBeInTheDocument();
+  });
+
+  // Phase 6.5, Batch 5 — "Repeat case themes" now renders HR-curated
+  // case_themes tags (themeFrequency), not raw extracted case text.
+  it('shows recurring themes tagged across 2+ cases, by name', async () => {
+    rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+    const caseThemes = [{ caseId: 'c1', themeId: 't1' }, { caseId: 'c2', themeId: 't1' }];
+    const organisationThemes = [{ id: 't1', name: 'Rota changes', active: true }];
+    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={caseThemes} organisationThemes={organisationThemes}/>);
+    await waitFor(() => expect(screen.getByText('Rota changes · 2 cases')).toBeInTheDocument());
+  });
+
+  it('shows the empty state when no theme has been tagged on 2+ cases', async () => {
+    rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={[]} organisationThemes={[]}/>);
+    await waitFor(() => expect(screen.getByText('No recurring themes tagged across 2+ cases yet.')).toBeInTheDocument());
   });
 });
