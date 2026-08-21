@@ -1,6 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 import { getUserEmail } from '../cron/_supabase.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
@@ -9,20 +9,21 @@ const APP_URL = 'https://compass-lemon-iota.vercel.app';
 // (api/portal/_case-detail.js) — but until now nothing told the employee a
 // new one had appeared. Best-effort: if this employee has no portal account,
 // this is a silent no-op, not an error — most employees never get one.
+//
+// Deliberately any org member, not HR-only — unlike _invite.js/_accounts.js
+// (real admin actions), this fires as a routine part of normal casework
+// (any manager/investigator adding a document to their own case), the
+// same scope send-letter.js already uses for the equivalent action.
 export async function notifyDocument(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
 
   const { orgId, orgName, employeeName, documentType } = req.body || {};
   if (!orgId || !employeeName) return res.status(400).json({ error: 'orgId and employeeName are required' });
 
-  try {
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=id`);
-    const members = await memberRes.json();
-    if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
 
+  try {
     const accountRes = await supabaseRequest(`employee_portal_accounts?org_id=eq.${encodeURIComponent(orgId)}&employee_name=eq.${encodeURIComponent(employeeName)}&select=user_id`);
     const [account] = await accountRes.json();
     if (!account) return res.status(200).json({ success: true, notified: false }); // no portal account — nothing to do

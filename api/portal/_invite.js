@@ -1,28 +1,32 @@
 import crypto from 'crypto';
 import { supabaseRequest } from './_supabase.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgRole } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
+import { isHrRole } from '../../src/lib/roles.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
 export async function invite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
-
   const { orgId, orgName, employeeName, email } = req.body;
   if (!orgId || !employeeName || !email) {
     return res.status(400).json({ error: 'orgId, employeeName and email are required' });
   }
 
-  try {
-    // The caller must actually be HR staff in this org — otherwise anyone
-    // could invite any email into any org's employee portal.
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=id`);
-    const members = await memberRes.json();
-    if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
+  // Phase 6.5 hardening (P0) — previously checked org MEMBERSHIP only,
+  // never role, despite this exact intent already being stated in a
+  // comment here — any non-HR member could invite any email, including
+  // their own, into another employee's portal identity, then read that
+  // employee's confidential case documents via the portal's own
+  // (correctly org/employee-scoped) endpoints. isHrRole is the same
+  // predicate _revoke-access.js's own equivalent check effectively
+  // implements by hand for this same table, and the one the client's own
+  // UI gating already uses — importing it keeps both in agreement.
+  const auth = await requireOrgRole(req, res, orgId, isHrRole);
+  if (!auth) return;
 
+  try {
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
@@ -33,7 +37,7 @@ export async function invite(req, res) {
         employee_name: employeeName,
         email,
         token,
-        created_by: caller.id,
+        created_by: auth.caller.id,
         expires_at: expiresAt,
       }),
     });

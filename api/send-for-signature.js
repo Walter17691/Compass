@@ -1,15 +1,35 @@
-import { verifyCaller } from './_auth.js';
+import { requireOrgMembership } from './_auth.js';
+import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 import { documentTypeLabel } from '../src/lib/eSignature.js';
+
+// Phase 6.5 hardening (P0) — two issues, both closed the same way
+// send-letter.js's sibling fix does: (1) verified only that some real
+// session was calling, with no org-membership check or rate limit —
+// anyone with a valid Supabase token on the whole project could send an
+// arbitrary email from Compass's own verified domain; (2) the signing
+// link's host came straight from the request body (appUrl) and was only
+// HTML-escaped, not validated, so a forged appUrl pointed the "Review
+// and Sign" button at an attacker-controlled page while keeping every
+// other visual/domain cue authentic. APP_URL is now fixed, matching the
+// same hardcoded constant api/portal/_invite.js already uses for its own
+// equivalent link — the real signing round-trip (api/signing.js) isn't
+// proxied by the local dev server anyway (see signature-sync.spec.js's
+// own comment), so this always pointed at the deployed app in practice.
+const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { employeeEmail, employeeName, managerName, meetingType, meetingDate, documentType, requiresSignature, signId, orgId } = req.body;
 
-  const { employeeEmail, employeeName, managerName, meetingType, meetingDate, documentType, requiresSignature, signId, appUrl } = req.body;
-  const signingUrl = `${appUrl}/sign/${signId}`;
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
+
+  const withinLimit = await checkRateLimit(`send-for-signature:${auth.caller.id}`, 20, 300);
+  if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
+
+  const signingUrl = `${APP_URL}/sign/${signId}`;
   // Integrations & Workflow Automation (Phase 5, IP27, §21) — generalised
   // from a hardcoded "meeting record" subject/body to any of the widened
   // document types (outcome letter, agreed adjustments, consultation

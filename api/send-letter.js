@@ -1,13 +1,25 @@
-import { verifyCaller } from './_auth.js';
+import { requireOrgMembership } from './_auth.js';
+import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 
+// Phase 6.5 hardening (P0) — previously verified only that SOME real
+// Supabase session was calling (any authenticated identity on the whole
+// project, including an employee portal account, not just this org's own
+// staff), with no org-membership check and no rate limit, sending from
+// Compass's own verified domain with a caller-controlled recipient/
+// subject/body. requireOrgMembership closes the "any authenticated
+// identity" gap; the rate limit caps abuse even from a legitimate but
+// compromised account, the same pattern api/chat.js already uses.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { to, subject, body, orgId, employeeName, meetingType, managerName, date } = req.body;
 
-  const { to, subject, body, employeeName, meetingType, managerName, date } = req.body;
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
+
+  const withinLimit = await checkRateLimit(`send-letter:${auth.caller.id}`, 20, 300);
+  if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
   try {
     const response = await fetch('https://api.resend.com/emails', {

@@ -1,5 +1,5 @@
 import { supabaseRequest } from './_supabase.js';
-import { verifyCaller } from './_auth.js';
+import { requireOrgMembership } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
 import { computeExpiresAt, isExpired, isTerminalStatus, documentTypeLabel } from '../src/lib/eSignature.js';
 
@@ -91,8 +91,15 @@ export default async function handler(req, res) {
         // to anyone. The sign_id is also generated here, not trusted from
         // the client, since it's the entire access-control boundary for the
         // signature step above.
-        const caller = await verifyCaller(req);
-        if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+        //
+        // Phase 6.5 hardening (P0) — requireOrgMembership both verifies the
+        // caller is real AND that they actually belong to the org they
+        // claim this document is for, storing org_id on the new row so
+        // api/portal/_signatures.js can later scope a portal user's own
+        // "pending signature" list to their own org, not every org's.
+        const { orgId } = req.body;
+        const auth = await requireOrgMembership(req, res, orgId);
+        if (!auth) return;
 
         const newSignId = crypto.randomUUID();
         const r = await supabaseRequest('signing_requests', {
@@ -103,6 +110,7 @@ export default async function handler(req, res) {
             meeting_type: meetingType, meeting_date: meetingDate,
             document_type: documentType || 'meeting_record',
             requires_signature: requiresSignature !== false,
+            org_id: orgId,
             status: 'sent', expires_at: computeExpiresAt(), created_at: new Date().toISOString(),
           })
         });

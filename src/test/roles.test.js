@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLES, ROLE_LABELS, roleLabel, isHrRole, hasConfidentialOversight, canSeeAllOrgCases } from '../lib/roles';
+import { ROLES, ROLE_LABELS, roleLabel, isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation } from '../lib/roles';
 
 describe('ROLES / ROLE_LABELS', () => {
   it('has exactly 7 roles', () => {
@@ -67,5 +67,28 @@ describe('canSeeAllOrgCases (Phase 4, MP1)', () => {
   it('is false for no role at all', () => {
     expect(canSeeAllOrgCases(null)).toBe(false);
     expect(canSeeAllOrgCases(undefined)).toBe(false);
+  });
+});
+
+// Phase 6.5 hardening — mirrors can_access_case_location() in
+// supabase/manager_enablement_case_access_2026-08-13.sql exactly.
+describe('canAccessCaseLocation', () => {
+  it('is true for every non-location_manager role, regardless of location', () => {
+    expect(canAccessCaseLocation('hr_director', null, 'loc-1')).toBe(true);
+    expect(canAccessCaseLocation('line_manager', ['loc-2'], 'loc-1')).toBe(true);
+    expect(canAccessCaseLocation('investigator', [], 'loc-1')).toBe(true);
+  });
+
+  it('is true for a location_manager with no locations assigned yet', () => {
+    expect(canAccessCaseLocation('location_manager', null, 'loc-1')).toBe(true);
+    expect(canAccessCaseLocation('location_manager', [], 'loc-1')).toBe(true);
+  });
+
+  it('is true for a location_manager whose assigned locations include the case\'s own', () => {
+    expect(canAccessCaseLocation('location_manager', ['loc-1', 'loc-2'], 'loc-1')).toBe(true);
+  });
+
+  it('is false for a location_manager with a real, non-matching assigned-locations list — the one real restriction this function enforces', () => {
+    expect(canAccessCaseLocation('location_manager', ['loc-2', 'loc-3'], 'loc-1')).toBe(false);
   });
 });

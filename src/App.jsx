@@ -684,7 +684,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // meeting, advance an OH step, or just show a toast).
   const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true }) => {
     if(!employeeEmail||!document) return { success:false };
-    const appUrl = window.location.origin;
 
     // Store document in Supabase via API. Authenticated — this step creates
     // the signing request and mints its sign_id server-side, unlike the
@@ -696,7 +695,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       body: JSON.stringify({
         document, employeeEmail, employeeName, managerName, managerEmail,
         meetingType: documentLabel, meetingDate: documentDate,
-        documentType, requiresSignature,
+        documentType, requiresSignature, orgId: org?.id,
       })
     });
     if(!storeRes.ok) {
@@ -711,7 +710,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       body: JSON.stringify({
         employeeEmail, employeeName, managerName,
         meetingType: documentLabel, meetingDate: documentDate,
-        documentType, requiresSignature, signId, appUrl,
+        documentType, requiresSignature, signId, orgId: org?.id,
       })
     });
     const data = await res.json();
@@ -5840,6 +5839,7 @@ Please produce:
         to,
         subject,
         body: letterOutput,
+        orgId: org?.id,
         employeeName: caseInfo.employee||"Employee",
         meetingType: meetingType?.label||"Meeting",
         managerName: caseInfo.manager||"HR Manager",
@@ -6461,6 +6461,7 @@ Please produce:
         body:JSON.stringify({
           to:email,
           subject:(meetingType?.label||"Meeting")+" Record - "+caseInfo.employee,
+          orgId: org?.id,
           html:"<div style='font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px'><h2 style='color:#7C5CFC'>Compass HR</h2><h3>"+( meetingType?.label||"Meeting")+" Record</h3><p><strong>Employee:</strong> "+caseInfo.employee+"</p><p><strong>Date:</strong> "+caseInfo.date+"</p><hr/><div style='white-space:pre-wrap;font-size:14px;line-height:1.6'>"+reviewOutput+"</div><p style='color:#999;font-size:12px;margin-top:20px'>Sent via Compass HR | Private and Confidential</p></div>"
         })});
       showToast("Record shared with "+email);

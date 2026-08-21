@@ -41,3 +41,18 @@ export function hasConfidentialOversight(role) {
 export function canSeeAllOrgCases(role) {
   return isHrRole(role) || hasConfidentialOversight(role);
 }
+
+// Phase 6.5 hardening — client-side mirror of can_access_case_location()
+// in supabase/manager_enablement_case_access_2026-08-13.sql /
+// role_expansion_2026-08-09.sql, added so api/cron/_digest.js (which runs
+// on the service-role key and so has no RLS of its own to lean on) can
+// replicate the real per-recipient visibility rule instead of a looser
+// approximation. Only a location_manager with a real, non-empty assigned-
+// locations list is filtered by location at all — everyone else
+// (including a location_manager with no locations assigned yet) sees
+// every location, matching the SQL function's own documented reasoning.
+export function canAccessCaseLocation(role, memberLocationIds, caseLocationId) {
+  if (role !== "location_manager") return true;
+  if (!memberLocationIds || memberLocationIds.length === 0) return true;
+  return memberLocationIds.includes(caseLocationId);
+}

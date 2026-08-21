@@ -2,6 +2,7 @@ import { supabaseRequest, getUserEmail } from './_supabase.js';
 import { postWebhook } from './_notify.js';
 import { computeDueSoon } from '../../src/lib/deadlines.js';
 import { mapCaseRow } from '../../src/lib/caseMapping.js';
+import { isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation } from '../../src/lib/roles.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -50,19 +51,52 @@ async function sendDigestEmail(email, items) {
 // This job runs with the service-role key, which bypasses RLS entirely —
 // unlike every in-app view of dueSoon (the overdue banner, cases list),
 // which Postgres RLS already scopes to cases the logged-in user can see.
-// A confidential case (confidential_cases_2026-07-26.sql) is restricted to
-// its creator, anyone granted case_access, and hr_directors — nobody else,
-// including other hr_managers in the same org. Without this check, every
-// opted-in org member would get emailed the employee name and deadline for
-// a confidential case they have no right to see, and a configured Slack/
-// Teams webhook (one shared, org-wide destination with no per-user
-// boundary at all) would broadcast it to everyone who can read that
-// channel.
-export function isAuthorisedFor(deadline, member, caseAccessByCase) {
-  if (!deadline.confidential) return true;
-  if (member.role === 'hr_director') return true;
-  if (deadline.createdBy && deadline.createdBy === member.user_id) return true;
-  return (caseAccessByCase.get(deadline.caseId) || new Set()).has(member.user_id);
+//
+// Phase 6.5 hardening (P0) — this used to check only the confidential
+// flag (creator/case_access/hr_director), which is real but incomplete:
+// it's just one of three RLS policies actually layered on cases.SELECT.
+// The other two apply regardless of confidentiality — a location_manager
+// or line_manager only sees cases they created, own, or hold case_access
+// on (manager_enablement_case_access_2026-08-13.sql's own restrictive
+// policy, deliberately narrowing even NON-confidential visibility), and
+// a location_manager with real assigned locations is further filtered to
+// their own sites (can_access_case_location()). Without this, every
+// opted-in member — regardless of role or location — got emailed every
+// non-confidential deadline org-wide, which real in-app browsing (RLS-
+// protected) would never show them. This function now mirrors all three
+// policies exactly; see src/lib/roles.js's canAccessCaseLocation/
+// canSeeAllOrgCases/hasConfidentialOversight for the individual pieces.
+//
+// wellbeing deadlines have no case behind them at all — wellbeing_notes'
+// own RLS is narrower still (is_hr_role: hr_manager/hr_director only,
+// NOT legal_reviewer/auditor, unlike case confidentiality's broader
+// oversight set) and gets its own branch rather than being forced
+// through the case-shaped checks below. DSAR/leaver/redundancy
+// deadlines (also caseId-less) are genuinely org-wide with no further
+// restriction, matching dsar_requests/leaver_instances' own real RLS.
+export function isAuthorisedFor(deadline, member, caseAccessByCase, casesById = new Map()) {
+  if (deadline.category === 'wellbeing') return isHrRole(member.role);
+  if (!deadline.caseId) return true;
+
+  const cs = casesById.get(deadline.caseId);
+  if (!cs) return false; // can't verify against real case data — fail closed
+
+  const hasCaseAccess = (caseAccessByCase.get(deadline.caseId) || new Set()).has(member.user_id);
+
+  // Mirrors "Users can access cases in their org or assigned to them" (PERMISSIVE).
+  const locationOk = canAccessCaseLocation(member.role, member.location_ids, cs.locationId);
+  if (!(locationOk || hasCaseAccess)) return false;
+
+  // Mirrors "Non-oversight members restricted to their own assigned
+  // cases" (RESTRICTIVE) — applies to every case, confidential or not.
+  const ownershipOk = canSeeAllOrgCases(member.role) || cs.createdBy === member.user_id || cs.ownerId === member.user_id || hasCaseAccess;
+  if (!ownershipOk) return false;
+
+  // Mirrors "Confidential cases restricted to authorised staff" (RESTRICTIVE).
+  if (deadline.confidential) {
+    return cs.createdBy === member.user_id || hasCaseAccess || hasConfidentialOversight(member.role);
+  }
+  return true;
 }
 
 export async function runDigest() {
@@ -84,8 +118,13 @@ export async function runDigest() {
     const urgent = dueSoon.filter(isUrgent);
     if (urgent.length === 0) continue;
 
-    const membersRes = await supabaseRequest(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id,role`);
+    // location_ids added for canAccessCaseLocation; casesById gives
+    // isAuthorisedFor the same location_id/owner_id/created_by every
+    // other RLS-equivalent check in this codebase reads off the raw row.
+    const membersRes = await supabaseRequest(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id,role,location_ids`);
     const members = await membersRes.json();
+
+    const casesById = new Map(rows.map(r => [r.id, { locationId: r.location_id, ownerId: r.owner_id, createdBy: r.created_by }]));
 
     const caseAccessRes = await supabaseRequest(`case_access?org_id=eq.${org.id}&select=case_id,user_id`);
     const caseAccessRows = await caseAccessRes.json();
@@ -96,7 +135,7 @@ export async function runDigest() {
     }
 
     for (const member of members) {
-      const authorised = urgent.filter(d => isAuthorisedFor(d, member, caseAccessByCase));
+      const authorised = urgent.filter(d => isAuthorisedFor(d, member, caseAccessByCase, casesById));
       if (authorised.length === 0) continue;
       const email = await getUserEmail(member.user_id);
       if (!email) continue;

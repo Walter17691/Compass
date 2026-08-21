@@ -1,5 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgRole } from '../_auth.js';
+import { isHrRole } from '../../src/lib/roles.js';
 
 // Until now there was no way to remove someone's Employee Portal access,
 // ever — not manually from Settings, not as part of offboarding. A
@@ -13,20 +14,17 @@ import { verifyCaller } from '../_auth.js';
 export async function revokeAccess(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
-
   const { orgId, employeeName } = req.body || {};
   if (!orgId || !employeeName) return res.status(400).json({ error: 'orgId and employeeName are required' });
 
-  try {
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=role`);
-    const [callerMember] = await memberRes.json();
-    if (!callerMember) return res.status(403).json({ error: 'Not a member of this organisation' });
-    if (callerMember.role !== 'hr_director' && callerMember.role !== 'hr_manager') {
-      return res.status(403).json({ error: 'Only HR Directors and HR Managers can revoke portal access' });
-    }
+  // Phase 6.5 hardening — this was already correct (the first endpoint
+  // this whole check pattern was modelled on), just duplicated by hand;
+  // now routed through the shared helper so this and every other portal
+  // endpoint enforce the exact same membership+role logic from one place.
+  const auth = await requireOrgRole(req, res, orgId, isHrRole);
+  if (!auth) return;
 
+  try {
     const delRes = await supabaseRequest(`employee_portal_accounts?org_id=eq.${encodeURIComponent(orgId)}&employee_name=eq.${encodeURIComponent(employeeName)}`, { method: 'DELETE' });
     if (!delRes.ok) {
       console.error('revoke-access delete failed:', await delRes.text());
