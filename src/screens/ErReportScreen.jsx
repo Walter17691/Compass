@@ -2,6 +2,7 @@ import { SCREENS } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
 import { useLoadMore } from '../hooks/useLoadMore';
 import { themeFrequency } from '../lib/themes';
+import { daysBetween } from '../lib/dateMath';
 
 export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes }) {
   // ── Core data calculations ──
@@ -48,7 +49,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
   const resTimes = closedCases.filter(cs=>(cs.meetings||[]).length>0).map(cs=>{
     const dates=(cs.meetings||[]).map(m=>new Date(m.savedAt||m.date||0)).filter(d=>!isNaN(d)).sort((a,b)=>a-b);
     if(dates.length<2) return null;
-    return Math.round((dates[dates.length-1]-dates[0])/(1000*60*60*24));
+    return daysBetween(dates[0], dates[dates.length-1]);
   }).filter(Boolean);
   const avgResolution = resTimes.length?Math.round(resTimes.reduce((a,b)=>a+b,0)/resTimes.length):null;
 
@@ -56,6 +57,14 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
   // genuinely supports an apples-to-apples comparison (no snapshot/
   // history table exists, so anything relying on "state as of N days ago"
   // beyond what a timestamp already tells us would just be fabricated).
+  // Phase 6.5 hardening (Batch 12) — this raw ms-based DAY_MS diff is
+  // deliberately kept for the *window-threshold* checks below (daysAgo
+  // compared against fixed 30/60/28-day boundaries): those are rolling
+  // elapsed-time windows, not calendar-day counts meant for display, and
+  // the DST-driven fractional error (~1 hour either side) is negligible
+  // against a 28+ day threshold. Only the actual calendar-day COUNTS
+  // shown to the user (resolution time, days open) were switched to
+  // dateMath.daysBetween — see those call sites below.
   const DAY_MS = 1000*60*60*24;
   const openedInWindow = (startDaysAgo, endDaysAgo) => cases.filter(cs=>{
     const d = new Date(cs.dateReceived||cs.createdAt||0);
@@ -74,7 +83,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
       const closedDate = dates[dates.length-1];
       const daysAgo = (now-closedDate)/DAY_MS;
       if(daysAgo<endDaysAgo || daysAgo>=startDaysAgo) return null;
-      return Math.round((closedDate-dates[0])/DAY_MS);
+      return daysBetween(dates[0], closedDate);
     }).filter(t=>t!==null);
     return times.length ? Math.round(times.reduce((a,b)=>a+b,0)/times.length) : null;
   };
@@ -381,7 +390,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
                   const stage=getCaseStage(cs);
                   const next=getNextStep(cs);
                   const opened=new Date(cs.dateReceived||cs.createdAt||0);
-                  const daysOpen=Math.ceil((new Date()-opened)/(1000*60*60*24));
+                  const daysOpen=daysBetween(opened, new Date());
                   const rec=employeeRecordsMap[cs.employeeName]||{};
                   const stageColors={open:"#9B9098",investigation:"#7C5CFC",disciplinary:"#C84B2F",appeal:"#B87520",closed:"#1A7A4A"};
                   return (

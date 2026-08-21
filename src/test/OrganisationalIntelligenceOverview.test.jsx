@@ -119,4 +119,22 @@ describe('OrganisationalIntelligenceOverview', () => {
     expect(siteCard).toHaveTextContent('No data yet.');
     expect(deptCard).toHaveTextContent('No data yet.');
   });
+
+  // Phase 6.5 hardening (Batch 12) — daysSinceMonthStart (the RPC's own
+  // p_period_days) used to be a raw Math.ceil((now-startOfMonth)/
+  // 86400000), which overcounts by a day across the UK autumn clock
+  // change (25-hour local day). 30 Oct 2026 is 29 real calendar days
+  // into the month, crossing the 25 Oct transition — the old code would
+  // have sent 30.
+  it('computes p_period_days as the correct calendar-day count across a DST transition, not off by one', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 9, 30, 12, 0, 0));
+    try {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('org_insights_overview', { p_period_days: 29 }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

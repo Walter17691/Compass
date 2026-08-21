@@ -1,4 +1,5 @@
 import { SCREENS } from '../constants';
+import { daysBetween } from '../lib/dateMath';
 import { getCurrentRisk } from '../lib/caseStage';
 import { openReferrals } from '../lib/concernReferrals';
 import { topOpenSignalsOrgWide, signalTypeMeta } from '../lib/caseSignals';
@@ -93,7 +94,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
               ))}
               {staleCases.slice(0,3).map((cs,i)=>{
                 const lastUpdated=cs.updatedAt||cs.createdAt;
-                const daysAgo=Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24));
+                const daysAgo=daysBetween(lastUpdated, Date.now());
                 return (
                   <button key={"stale"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · No activity in ${daysAgo} days`} style={{fontSize:12,color:"#6B6375",background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
                     {cs.employeeName} · No activity in {daysAgo}d
@@ -216,7 +217,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                       const stage=getCaseStage(cs);
                       const st=statusMap[cs.stage||stage]||statusMap.open;
                       const lastUpdated=cs.updatedAt||cs.createdAt;
-                      const daysAgo=lastUpdated?Math.floor((Date.now()-new Date(lastUpdated))/(1000*60*60*24)):null;
+                      const daysAgo=lastUpdated?daysBetween(lastUpdated, Date.now()):null;
                       return (
                         <div key={cs.id}
                           onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}

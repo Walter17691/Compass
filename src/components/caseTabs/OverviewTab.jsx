@@ -27,6 +27,14 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
   const riskItems = computeCaseRisk(cs, { allegations, caseSignals, cases, auditLog, wellbeingNotes, dueSoon });
   const automationSuggestions = evaluateAutomationRules(cs, { caseTasks, caseSignals });
   const processTemplate = getTemplateForType(processTemplates, getProcessType(cs.caseType).id);
+  // Phase 6.5 hardening (Batch 12) — deliberately NOT switched to
+  // dateMath.daysBetween: this is a fractional-YEARS estimate (divided
+  // by 365.25, itself already an approximation), not a calendar-day
+  // count for display — the DST-driven error here (~1 hour out of
+  // ~8766) is immaterial next to the 365.25 approximation it's already
+  // built on, and this feeds estimateExposure, whose own age-banding
+  // formula is flagged (task #201) as awaiting employment-law review
+  // before further changes.
   const yearsService = (() => {
     if(!empRecord?.startDate) return null;
     const start = new Date(empRecord.startDate.includes("/") ? empRecord.startDate.split("/").reverse().join("-") : empRecord.startDate);

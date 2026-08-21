@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { computeStageDurations } from '../lib/processDashboard';
 import { computeInformalFormalSplit } from '../lib/orgIntelligence';
 import { themeFrequency } from '../lib/themes';
+import { daysBetween } from '../lib/dateMath';
 import { DataQualityCaveat } from './DataQualityCaveat';
 import { SiteIntelligencePanel } from './SiteIntelligencePanel';
 import { BenchmarkingPanel } from './BenchmarkingPanel';
@@ -66,7 +67,7 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
     (async () => {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const daysSinceMonthStart = Math.max(1, Math.ceil((now - startOfMonth) / (1000*60*60*24)));
+      const daysSinceMonthStart = Math.max(1, daysBetween(startOfMonth, now));
       const { data, error: rpcError } = await supabase.rpc('org_insights_overview', { p_period_days: daysSinceMonthStart });
       if (cancelled) return;
       if (rpcError) { console.error("org_insights_overview", rpcError); setError(true); }
