@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react"
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES, CONCERN_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
+import { fetchAllPages } from './lib/paginatedFetch';
 import { ls, lsSet, orgScopedKey } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
@@ -359,8 +360,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadEmployeeRecords = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('employee_records').select('*').eq('org_id', org.id);
-      if(data) setEmployeeRecords(data.map(r=>({name:r.name,jobTitle:r.job_title,startDate:r.start_date,location:r.location,employeeNumber:r.employee_number||"",department:r.department||"",manager:r.manager||"",status:r.status||"",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
+      // Phase 6.5 hardening (Batch 6) — same unpaginated-select bug as
+      // loadCasesFromDB, and equally real here: this org's real
+      // employee_records count already exceeds the common single-request
+      // row cap, so this was silently dropping real employees from the
+      // roster. Same fix, paged on a stable order (id, the primary key).
+      const { data, error } = await fetchAllPages((from, to) => supabase.from('employee_records').select('*').eq('org_id', org.id).order('id', { ascending: true }).range(from, to));
+      if (error) console.error('loadEmployeeRecords', error);
+      setEmployeeRecords(data.map(r=>({name:r.name,jobTitle:r.job_title,startDate:r.start_date,location:r.location,employeeNumber:r.employee_number||"",department:r.department||"",manager:r.manager||"",status:r.status||"",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
     } catch(e) { console.error('loadEmployeeRecords', e); }
   };
 
@@ -1125,16 +1132,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // the moment anyone saved it. manager being nulled the same way
       // also undid MP19's "take over case" reassignment on the very next
       // save.
-      const query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority').eq('org_id', org.id);
-      const { data, error } = await query;
-  if(!error && data) {
-        // ensureEvidenceIds — see saveCases' own use of it (Phase 6.5
-        // hardening, P0, Cluster 8): backfills a stable id onto any
-        // evidence item that predates this fix, here so a legacy case's
-        // evidence has real ids from the moment it's loaded, not only
-        // after its next save.
-        setCases(data.map(mapCaseRow).map(ensureEvidenceIds));
-      }
+      // Phase 6.5 hardening (Batch 6) — PostgREST caps a single request's
+      // rows regardless of any .limit() short of paginating (this org's
+      // real case count, 1929, already exceeds the common 1000-row
+      // default, so this was silently dropping real cases from view, not
+      // a theoretical risk). .order() is required, not cosmetic:
+      // range-based pagination (fetchAllPages) needs a stable row order
+      // across requests, or rows can be skipped or duplicated between
+      // pages.
+      const { data, error } = await fetchAllPages((from, to) => supabase.from('cases')
+        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority')
+        .eq('org_id', org.id)
+        .order('created_at', { ascending: false })
+        .range(from, to));
+      if (error) console.error("Load cases error:", error);
+      // ensureEvidenceIds — see saveCases' own use of it (Phase 6.5
+      // hardening, P0, Cluster 8): backfills a stable id onto any
+      // evidence item that predates this fix, here so a legacy case's
+      // evidence has real ids from the moment it's loaded, not only
+      // after its next save.
+      setCases(data.map(mapCaseRow).map(ensureEvidenceIds));
     } catch(e) { console.error("Load cases error:", e); }
   };
 
