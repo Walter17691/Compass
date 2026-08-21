@@ -18,14 +18,21 @@
 import { openSignalsForCase } from './caseSignals';
 import { tasksForCase } from './caseTasks';
 import { isTerminalStatus } from './eSignature';
+import { parseFlexDate } from './dateMath';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Elapsed-time (not calendar-day) diff, kept as its own function rather
+// than dateMath.js's daysBetween — recentlyReminded below needs a true
+// rolling 24h cooldown, not a "which calendar day" comparison, so it
+// still floor-divides raw milliseconds. Only the parsing itself is
+// shared with dateMath.js now, since case_tasks.due_date and meeting
+// dates can be UK-format "DD/MM/YYYY" text, which the old bare
+// `new Date(iso)` here would have silently mis-parsed as MM/DD/YYYY.
 function daysSince(iso, now) {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return null;
-  return Math.floor((now.getTime() - then) / DAY_MS);
+  const then = parseFlexDate(iso);
+  if (!then) return null;
+  return Math.floor((now.getTime() - then.getTime()) / DAY_MS);
 }
 
 // Integrations & Workflow Automation (Phase 5, IP28, §22-23) — a meeting
@@ -70,9 +77,9 @@ export const AUTOMATION_RULES = [
   {
     id: "overdue_task",
     category: "task",
-    when: ({ caseTasks, cs, now }) => tasksForCase(caseTasks, cs.id).some(t => t.status !== "done" && t.dueDate && new Date(t.dueDate).getTime() < now.getTime()),
+    when: ({ caseTasks, cs, now }) => tasksForCase(caseTasks, cs.id).some(t => t.status !== "done" && parseFlexDate(t.dueDate)?.getTime() < now.getTime()),
     then: ({ caseTasks, cs, now }) => {
-      const overdue = tasksForCase(caseTasks, cs.id).filter(t => t.status !== "done" && t.dueDate && new Date(t.dueDate).getTime() < now.getTime());
+      const overdue = tasksForCase(caseTasks, cs.id).filter(t => t.status !== "done" && parseFlexDate(t.dueDate)?.getTime() < now.getTime());
       return {
         label: overdue.length === 1 ? "Review overdue task" : `Review ${overdue.length} overdue tasks`,
         reason: overdue.length === 1 ? `"${overdue[0].name}" was due ${overdue[0].dueDate}.` : `${overdue.length} case tasks are past their due date.`,

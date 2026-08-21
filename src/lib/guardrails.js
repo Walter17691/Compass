@@ -15,6 +15,7 @@
 
 import { isFindingStatus } from './allegations';
 import { currentRoleHolder } from './caseRoles';
+import { parseFlexDate } from './dateMath';
 
 // Process Intelligence (P6) — plain keyword search over P4's already-
 // indexed clauses, not an AI call: still no LLM in this file. Returns
@@ -49,17 +50,6 @@ export function allegationPolicyClauseRef(allegation, policies) {
   const words = significantWords((allegation?.title || "") + " " + (allegation?.description || ""));
   if (!words.length) return null;
   return findPolicyClauseRef(policies, words);
-}
-
-function parseFlexDate(str) {
-  if (!str) return null;
-  if (typeof str === "string" && str.includes("/")) {
-    const p = str.split("/");
-    const d = new Date(p[2], p[1] - 1, p[0]);
-    return isNaN(d) ? null : d;
-  }
-  const d = new Date(str);
-  return isNaN(d) ? null : d;
 }
 
 // Natural-justice / ACAS Code concern: the person who investigated

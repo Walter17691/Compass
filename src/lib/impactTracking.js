@@ -11,6 +11,7 @@
 // direction — so it needs its own significance gate, not a reused one
 // that would filter out the very outcome this is looking for.
 import { computePctChange } from './trendDetection';
+import { daysBetween } from './dateMath';
 
 export const MIN_DAYS_SINCE_COMPLETION = 7;
 // A real prior baseline is needed to say anything meaningful about
@@ -19,10 +20,15 @@ export const MIN_DAYS_SINCE_COMPLETION = 7;
 // dropping toward zero, which must never itself suppress the result.
 const MIN_PRIOR_SAMPLE = 3;
 
+// Was its own Math.floor((now-then)/DAY_MS): an unparseable/invalid
+// dateIso silently produced NaN (Math.max(0, NaN) is NaN, not 0), which
+// defeated ImpactView's own `if (days === null) return null` guard and
+// rendered "Not enough time has passed... (NaN of 7 days)". Delegating
+// to the shared, DST-safe dateMath.daysBetween restores the
+// null-on-invalid contract every other consumer in this phase relies on.
 export function daysSince(dateIso, now = new Date()) {
-  if (!dateIso) return null;
-  const then = new Date(dateIso);
-  return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)));
+  const diff = daysBetween(dateIso, now);
+  return diff === null ? null : Math.max(0, diff);
 }
 
 export function findMetricTrendEntry(trendData, metricKind, metricValue) {

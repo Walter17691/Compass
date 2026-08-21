@@ -23,6 +23,8 @@
 // and Workforce communication (no real per-site signal exists for this
 // anywhere in the app) stay covered organisation-wide elsewhere in
 // Insights, not force-fit into a fabricated per-site number.
+import { computePctChange } from './trendDetection';
+
 const VOLUME_MULTIPLIER = 1.5; // flag a site at >=150% of the average per-site case count
 const DURATION_INCREASE_PCT = 20; // same threshold trendDetection.js's own SIGNIFICANT_INCREASE_PCT uses
 const MIN_DURATION_SAMPLE = 3;
@@ -56,7 +58,7 @@ export function computeSiteRiskFlags({ locationCounts, locationDurations, compan
 
     const duration = locationDurations?.[site];
     if (duration && duration.count >= MIN_DURATION_SAMPLE && companyAvgDuration) {
-      const pct = Math.round(((duration.avg_days - companyAvgDuration) / companyAvgDuration) * 100);
+      const pct = computePctChange(duration.avg_days, companyAvgDuration);
       if (pct >= DURATION_INCREASE_PCT) {
         flags.push({ category: "case_delay", label: "Above-average case duration", detail: `${duration.avg_days}d vs a company average of ${companyAvgDuration}d (+${pct}%)` });
       }

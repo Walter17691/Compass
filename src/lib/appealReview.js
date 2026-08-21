@@ -4,16 +4,7 @@
 // (it needs a real Claude call), same split as every other AI-copilot
 // feature this build-out added.
 
-function parseFlexDate(str) {
-  if (!str) return null;
-  if (typeof str === "string" && str.includes("/")) {
-    const p = str.split("/");
-    const d = new Date(p[2], p[1] - 1, p[0]);
-    return isNaN(d) ? null : d;
-  }
-  const d = new Date(str);
-  return isNaN(d) ? null : d;
-}
+import { parseFlexDate } from './dateMath';
 
 // Evidence added after the original finding was recorded (Phase 16's
 // decidedAt) is exactly what an appeal review needs surfaced — it wasn't

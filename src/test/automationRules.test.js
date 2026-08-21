@@ -113,4 +113,23 @@ describe('evaluateAutomationRules', () => {
     const suggestions = evaluateAutomationRules(cs, { caseTasks, now: NOW });
     expect(suggestions.map(s => s.ruleId).sort()).toEqual(['overdue_task', 'unsigned_meeting_record_stale']);
   });
+
+  // Phase 6.5, Batch 2 — daysSince/the overdue_task rule used a bare
+  // `new Date(iso)`, which mis-parses a UK-format "DD/MM/YYYY" due date
+  // as MM/DD/YYYY. "01/09/2026" (1 Sept 2026, genuinely in the future
+  // relative to NOW) was previously parsed as 9 Jan 2026 — already
+  // passed — and wrongly flagged as overdue.
+  it('does not flag a future UK-format due date as overdue', () => {
+    const cs = { id: 'c1', meetings: [] };
+    const caseTasks = [{ id: 't1', caseId: 'c1', name: 'Future task', status: 'open', dueDate: '01/09/2026' }];
+    expect(evaluateAutomationRules(cs, { caseTasks, now: NOW })).toEqual([]);
+  });
+
+  it('correctly flags a genuinely overdue UK-format due date', () => {
+    const cs = { id: 'c1', meetings: [] };
+    const caseTasks = [{ id: 't1', caseId: 'c1', name: 'Overdue UK task', status: 'open', dueDate: '10/08/2026' }];
+    const suggestions = evaluateAutomationRules(cs, { caseTasks, now: NOW });
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].ruleId).toBe('overdue_task');
+  });
 });

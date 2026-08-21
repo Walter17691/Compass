@@ -121,4 +121,22 @@ describe('computeDelegatedWork', () => {
     const [row] = computeDelegatedWork(cases, caseAccess, orgMembers, caseTasks, allegations, today);
     expect(row.paused).toBe(false);
   });
+
+  // Phase 6.5, Batch 2 — tasksOverdue used to compare t.dueDate < todayIso
+  // as plain strings. A UK-format "DD/MM/YYYY" due date that's genuinely
+  // in the future can still lexicographically sort before an ISO
+  // "YYYY-MM-DD" today string (e.g. "01/09/2026" < "2026-08-14" because
+  // '0' < '2'), so a real not-yet-due task got wrongly counted as
+  // overdue.
+  it('does not miscount a future UK-format due date as overdue', () => {
+    const ukTasks = [{ id: 't1', caseId: 'c1', name: 'Send follow-up', status: 'open', dueDate: '01/09/2026' }];
+    const [row] = computeDelegatedWork(cases, caseAccess, orgMembers, ukTasks, [], today);
+    expect(row.tasksOverdue).toBe(0);
+  });
+
+  it('correctly counts a genuinely overdue UK-format due date', () => {
+    const ukTasks = [{ id: 't1', caseId: 'c1', name: 'Send follow-up', status: 'open', dueDate: '01/08/2026' }];
+    const [row] = computeDelegatedWork(cases, caseAccess, orgMembers, ukTasks, [], today);
+    expect(row.tasksOverdue).toBe(1);
+  });
 });

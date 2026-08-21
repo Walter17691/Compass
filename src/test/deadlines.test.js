@@ -533,3 +533,50 @@ describe('computeDueSoon — paused cases (MP19)', () => {
     expect(computeDueSoon(cases, [], today)).toHaveLength(1);
   });
 });
+
+describe('computeDueSoon — DST safety (Phase 6.5, Batch 2)', () => {
+  // UK clocks go back on Sunday 25 October 2026 — that local day is 25
+  // hours long. The old Math.ceil((deadlineDate-start)/86400000) diff
+  // inflated the count across this boundary, making a deadline one day
+  // away read as two days away instead.
+  it('reports exactly 1 day left for a deadline the day after the autumn-back transition', () => {
+    const dsarRequests = [{ id: '1', employeeName: 'Jane Doe', dueDate: '2026-10-26' }];
+    const today = new Date(2026, 9, 25);
+    const [d] = computeDueSoon([], dsarRequests, today);
+    expect(d.daysLeft).toBe(1);
+    expect(d.overdue).toBe(false);
+  });
+
+  // Spring-forward (Sunday 29 March 2026, a 23-hour local day) undercounts
+  // instead — the opposite failure mode.
+  it('reports exactly 1 day left for a deadline the day after the spring-forward transition', () => {
+    const dsarRequests = [{ id: '1', employeeName: 'Jane Doe', dueDate: '2026-03-30' }];
+    const today = new Date(2026, 2, 29);
+    const [d] = computeDueSoon([], dsarRequests, today);
+    expect(d.daysLeft).toBe(1);
+    expect(d.overdue).toBe(false);
+  });
+});
+
+describe('computeDueSoon — shared dateMath parsing (Phase 6.5, Batch 2)', () => {
+  const today = new Date(2026, 7, 10);
+
+  it('parses a UK-format next-step deadline the same as before consolidating onto dateMath.parseFlexDate', () => {
+    const cases = [{
+      id: 'c1', employeeName: 'Sam', meetings: [
+        { id: 'm1', type: 'Meeting', nextSteps: [{ step: 'Send letter', deadline: '12/08/2026', done: false }] },
+      ],
+    }];
+    const [d] = computeDueSoon(cases, [], today);
+    expect(d.label).toBe('Send letter');
+    expect(d.daysLeft).toBe(2);
+  });
+
+  it('parses a UK-format case task due date the same way', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', meetings: [] }];
+    const caseTasks = [{ id: 't1', caseId: 'c1', name: 'Chase reference', status: 'open', dueDate: '12/08/2026' }];
+    const [d] = computeDueSoon(cases, [], today, caseTasks);
+    expect(d.label).toBe('Task due: Chase reference');
+    expect(d.daysLeft).toBe(2);
+  });
+});

@@ -1,4 +1,5 @@
 import { getCaseStage } from './caseStage.js';
+import { parseFlexDate, daysBetween, addWorkingDays as addWorkingDaysDate } from './dateMath.js';
 
 // UK statutory & ACAS deadline rules. Pure — no React, no I/O — so it can
 // run client-side (App.jsx's dueSoon effect) and server-side (the digest
@@ -34,15 +35,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
   start.setHours(0,0,0,0);
   const due = [];
 
-  const workingDaysFromDate = (dateStr, days) => {
-    let start;
-    if(dateStr && dateStr.includes('/')) { const p=dateStr.split('/'); start=new Date(p[2],p[1]-1,p[0]); }
-    else { start=new Date(dateStr); }
-    if(isNaN(start)) return null;
-    let count=0; let d=new Date(start);
-    while(count<days){ d.setDate(d.getDate()+1); const day=d.getDay(); if(day!==0&&day!==6) count++; }
-    return d;
-  };
+  const workingDaysFromDate = (dateStr, days) => addWorkingDaysDate(dateStr, days);
 
   // caseId/createdBy/confidential ride along on every case-based deadline so
   // downstream consumers that leave Compass's own RLS-protected boundary —
@@ -54,7 +47,13 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
   const addDeadline = (employeeName, label, deadlineDate, category, key, meta={}) => {
     if(!deadlineDate||isNaN(deadlineDate)) return;
     deadlineDate.setHours(0,0,0,0);
-    const diff = Math.ceil((deadlineDate-start)/(1000*60*60*24));
+    // DST-safe: a raw (deadlineDate-start)/86400000 ms diff is wrong
+    // across a UK clock-change boundary (a local calendar day is 23 or
+    // 25 hours long on the transition day), which previously made a
+    // deadline's daysLeft count silently off by one right at that
+    // boundary. daysBetween normalises both sides to UTC Y/M/D first,
+    // sidestepping the DST artifact entirely.
+    const diff = daysBetween(start, deadlineDate);
     if(diff<=14) due.push({employeeName,label,category,key,deadlineDate:deadlineDate.toLocaleDateString("en-GB"),daysLeft:Math.max(0,diff),daysOverdue:diff<0?Math.abs(diff):0,overdue:diff<0,confidential:false,caseId:null,createdBy:null,...meta});
   };
 
@@ -67,8 +66,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // Manual next steps
     meetings.forEach(m => {
       (m.nextSteps||[]).filter(s=>!s.done&&s.deadline).forEach(s => {
-        const parts=s.deadline.split("/");
-        const dl=parts.length===3?new Date(parts[2],parts[1]-1,parts[0]):new Date(s.deadline);
+        const dl=parseFlexDate(s.deadline);
         addDeadline(cs.employeeName, s.step||"Next step due", dl, "next_step", `${cs.id}:nextstep:${m.id}:${s.step}`, caseMeta);
       });
     });
@@ -105,9 +103,9 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
       if(invMeetings.length>0) {
         const first = invMeetings[0];
         const startStr = first.savedAt||first.date;
-        if(startStr) {
-          let mStart; if(startStr.includes('/')) { const p=startStr.split('/'); mStart=new Date(p[2],p[1]-1,p[0]); } else mStart=new Date(startStr);
-          const daysSince = Math.ceil((start-mStart)/(1000*60*60*24));
+        const mStart = parseFlexDate(startStr);
+        if(mStart) {
+          const daysSince = daysBetween(mStart, start);
           if(daysSince>21) { const dl=new Date(mStart); dl.setDate(dl.getDate()+28); addDeadline(cs.employeeName,"Investigation overrunning — consider concluding (ACAS guidance)",dl,"investigation",`${cs.id}:investigation`, caseMeta); }
         }
       }
@@ -135,9 +133,9 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // Pending signature chase — 7 days
     evidence.filter(e=>e.signStatus==="pending"&&e.signId).forEach(e => {
       const sent=e.sentAt||e.date;
-      if(sent) {
-        const sentDate=new Date(sent);
-        const daysPending=Math.ceil((start-sentDate)/(1000*60*60*24));
+      const sentDate=parseFlexDate(sent);
+      if(sentDate) {
+        const daysPending=daysBetween(sentDate, start);
         if(daysPending>7) { const dl=new Date(sentDate); dl.setDate(dl.getDate()+7); addDeadline(cs.employeeName,"Signature pending "+daysPending+" days — consider chasing",dl,"signature",`${cs.id}:signature:${e.id||e.signId}`, caseMeta); }
       }
     });
@@ -174,7 +172,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     if(task.status==="done"||!task.dueDate) return;
     const cs = cases.find(c=>c.id===task.caseId);
     if(cs && getCaseStage(cs)==="closed") return;
-    const dl = task.dueDate.includes('/') ? (()=>{ const p=task.dueDate.split('/'); return new Date(p[2],p[1]-1,p[0]); })() : new Date(task.dueDate);
+    const dl = parseFlexDate(task.dueDate);
     addDeadline(cs?.employeeName||"Unassigned case", "Task due: "+task.name, dl, "task", `task:${task.id}`, cs ? { confidential: !!cs.confidential, caseId: cs.id, createdBy: cs.createdBy||null } : {});
   });
 

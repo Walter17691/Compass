@@ -15,6 +15,14 @@ describe('daysSince', () => {
   it('returns null when there is no date', () => {
     expect(daysSince(null)).toBeNull();
   });
+
+  // Phase 6.5, Batch 2 — the old Math.floor((now-then)/DAY_MS) leaked NaN
+  // (not null) for an unparseable date, defeating ImpactView's own
+  // `days === null` guard and rendering "NaN of 7 days".
+  it('returns null, never NaN, for an unparseable date', () => {
+    const now = new Date('2026-08-21T12:00:00Z');
+    expect(daysSince('not a real date', now)).toBeNull();
+  });
 });
 
 describe('findMetricTrendEntry', () => {

@@ -1,5 +1,6 @@
 import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './investigationChecklist';
 import { allegationsForCase } from './allegations';
+import { parseFlexDate } from './dateMath';
 
 // Manager Enablement (Phase 4, MP18, §14) — HR Delegated Work dashboard.
 // Deterministic only, same style as guardrails.js: no AI call, just a
@@ -18,11 +19,13 @@ export function computeHrAttentionFlag(cs, caseAllegations, checklistTasks, targ
     reasons.push("Interviews are complete but an allegation is still unreviewed.");
   }
   if (targetCompletionDate && !cs.investigationReport) {
-    const target = new Date(targetCompletionDate);
-    const todayMidnight = new Date(today);
-    todayMidnight.setHours(0, 0, 0, 0);
-    target.setHours(0, 0, 0, 0);
-    if (target < todayMidnight) reasons.push("Target completion date has passed with no investigation report yet.");
+    const target = parseFlexDate(targetCompletionDate);
+    if (target) {
+      const todayMidnight = new Date(today);
+      todayMidnight.setHours(0, 0, 0, 0);
+      target.setHours(0, 0, 0, 0);
+      if (target < todayMidnight) reasons.push("Target completion date has passed with no investigation report yet.");
+    }
   }
   return { flagged: reasons.length > 0, reasons };
 }
@@ -33,7 +36,8 @@ export function computeHrAttentionFlag(cs, caseAllegations, checklistTasks, targ
 // data MP1/MP7/MP8/MP10 already produce; nothing new is computed beyond
 // the attention flag above.
 export function computeDelegatedWork(cases, caseAccess, orgMembers, caseTasks, allegations, today = new Date()) {
-  const todayIso = new Date(today).toISOString().split("T")[0];
+  const todayMidnight = new Date(today);
+  todayMidnight.setHours(0, 0, 0, 0);
   return (caseAccess || [])
     .filter(a => a.role === "investigator")
     .map(access => {
@@ -43,7 +47,16 @@ export function computeDelegatedWork(cases, caseAccess, orgMembers, caseTasks, a
       const checklistTasks = investigationChecklistTasks(caseTasks, cs.id);
       const checklistDone = checklistTasks.filter(t => t.status === "done").length;
       const meetingsCompleted = (cs.meetings || []).filter(m => (m.type || "").toLowerCase().includes("investigation") && m.record).length;
-      const tasksOverdue = (caseTasks || []).filter(t => t.caseId === cs.id && t.status !== "done" && t.dueDate && t.dueDate < todayIso).length;
+      // Was a string comparison (t.dueDate < todayIso) — silently wrong
+      // whenever dueDate is UK-format "DD/MM/YYYY" text, since lexical
+      // order of that format doesn't match chronological order at all.
+      const tasksOverdue = (caseTasks || []).filter(t => {
+        if (t.caseId !== cs.id || t.status === "done" || !t.dueDate) return false;
+        const due = parseFlexDate(t.dueDate);
+        if (!due) return false;
+        due.setHours(0, 0, 0, 0);
+        return due < todayMidnight;
+      }).length;
       const caseAllegations = allegationsForCase(allegations, cs.id);
       // Manager Enablement (Phase 4, MP19, §15) — a paused case never
       // gets flagged for attention (HR paused it deliberately; a

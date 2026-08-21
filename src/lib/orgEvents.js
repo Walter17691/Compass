@@ -4,6 +4,8 @@
 // spec's own required framing: "There is a temporal correlation worth
 // reviewing," not "the change caused the increase."
 
+import { computePctChange } from './trendDetection';
+
 export const ORG_EVENT_TYPES = [
   { id: "restructure", label: "Management restructure" },
   { id: "new_rota_system", label: "New rota system" },
@@ -26,10 +28,10 @@ export function describeEventCorrelation(data) {
   if (before === 0 && after === 0) {
     return "No cases recorded in the windows before or after this event.";
   }
-  if (before === 0) {
+  const pct = computePctChange(after, before);
+  if (pct === null) {
     return `No cases were recorded in the period before this event, and ${after} in the period after. There is a temporal correlation worth reviewing.`;
   }
-  const pct = Math.round(((after - before) / before) * 100);
   if (pct === 0) {
     return `Case volume was unchanged (${before} before, ${after} after this event).`;
   }
