@@ -13,16 +13,22 @@ import { useState } from 'react';
 // back in TasksScreen in place of a case link for these rows.
 //
 // "Link to Improvement Initiative" — the plan's third capability
-// alongside Create Action / Assign Owner / Set Due Date — is deferred to
-// OP22, which introduces the improvement_initiatives table this would
-// reference; it can't be wired before that table exists.
-export function CreateActionButton({ insightRef, createCaseTask }) {
+// alongside Create Action / Assign Owner / Set Due Date — wires up once
+// improvementInitiatives (OP22, improvement_initiatives_2026-08-20.sql)
+// is passed in; omitted entirely (rather than shown empty) when no
+// active initiatives exist yet, matching every other optional-affordance
+// pattern in this phase (e.g. CreateActionButton itself only rendering
+// when createCaseTask is passed).
+export function CreateActionButton({ insightRef, createCaseTask, improvementInitiatives }) {
   const [open, setOpen] = useState(false);
   const [created, setCreated] = useState(false);
   const [name, setName] = useState("");
   const [owner, setOwner] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState("normal");
+  const [initiativeId, setInitiativeId] = useState("");
+
+  const activeInitiatives = (improvementInitiatives || []).filter(i => i.status === "active");
 
   if (created) {
     return <div style={{fontSize:11,color:"#3C8C5C",marginTop:6}}>Action created ✓ — see Tasks</div>;
@@ -36,7 +42,7 @@ export function CreateActionButton({ insightRef, createCaseTask }) {
 
   const submit = () => {
     if (!name.trim()) return;
-    createCaseTask(null, { name, owner, dueDate, priority, insightRef });
+    createCaseTask(null, { name, owner, dueDate, priority, insightRef, improvementInitiativeId: initiativeId || null });
     setCreated(true);
   };
 
@@ -52,6 +58,12 @@ export function CreateActionButton({ insightRef, createCaseTask }) {
           <option value="high">High</option>
         </select>
       </div>
+      {activeInitiatives.length > 0 && (
+        <select value={initiativeId} onChange={e=>setInitiativeId(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:8}}>
+          <option value="">No improvement initiative</option>
+          {activeInitiatives.map(i => <option key={i.id} value={i.id}>{i.title}</option>)}
+        </select>
+      )}
       <div style={{display:"flex",gap:6}}>
         <button onClick={submit} disabled={!name.trim()} style={{fontSize:11,background:name.trim()?"#7C5CFC":"#E8E0D0",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",cursor:name.trim()?"pointer":"not-allowed",fontFamily:"DM Sans,system-ui,sans-serif"}}>Save action</button>
         <button onClick={()=>setOpen(false)} style={{fontSize:11,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>

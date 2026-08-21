@@ -5,7 +5,7 @@ import { describeEarlySignal, buildSuggestedReview, EARLY_SIGNAL_WINDOW_DAYS } f
 import { InsightEvidenceModal } from './InsightEvidenceModal';
 import { CreateActionButton } from './CreateActionButton';
 
-const SignalCard = ({ entry, onShowEvidence, createCaseTask }) => (
+const SignalCard = ({ entry, onShowEvidence, createCaseTask, improvementInitiatives }) => (
   <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:10}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:6}}>
       <div style={{fontSize:11,fontWeight:700,color:"#B87520",letterSpacing:"0.4px",textTransform:"uppercase"}}>Emerging theme</div>
@@ -13,7 +13,7 @@ const SignalCard = ({ entry, onShowEvidence, createCaseTask }) => (
     </div>
     <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6,marginBottom:6}}>{describeEarlySignal(entry)}</div>
     <div style={{fontSize:12,color:"#6B6375"}}>{buildSuggestedReview(entry.themeName)}</div>
-    {createCaseTask && <CreateActionButton insightRef={`Early signal: ${entry.themeName} theme (last 6 weeks)`} createCaseTask={createCaseTask}/>}
+    {createCaseTask && <CreateActionButton insightRef={`Early signal: ${entry.themeName} theme (last 6 weeks)`} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
   </div>
 );
 
@@ -28,7 +28,7 @@ const SignalCard = ({ entry, onShowEvidence, createCaseTask }) => (
 // ("what's just starting to show up") than a 90-day trend ("what's
 // meaningfully shifted this quarter"). "Show evidence" (OP17) opens
 // InsightEvidenceModal with the real underlying counts and window.
-export function EarlySignalsPanel({ createCaseTask } = {}) {
+export function EarlySignalsPanel({ createCaseTask, improvementInitiatives } = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const [evidenceFor, setEvidenceFor] = useState(null);
@@ -54,7 +54,7 @@ export function EarlySignalsPanel({ createCaseTask } = {}) {
       <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Early signals (last 6 weeks vs previous 6 weeks)</div>
       {signals.length === 0
         ? <div style={{fontSize:13,color:"#6B6375"}}>No emerging themes identified in the current 6-week window.</div>
-        : signals.map(s => <SignalCard key={s.themeId} entry={s} onShowEvidence={()=>setEvidenceFor(s)} createCaseTask={createCaseTask}/>)}
+        : signals.map(s => <SignalCard key={s.themeId} entry={s} onShowEvidence={()=>setEvidenceFor(s)} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>)}
       {evidenceFor && (
         <InsightEvidenceModal
           title={evidenceFor.themeName}

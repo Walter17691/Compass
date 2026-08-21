@@ -1,0 +1,146 @@
+import { useState } from 'react';
+import { INITIATIVE_STATUSES, addMilestone, toggleMilestone, removeMilestone, describeMilestoneProgress } from '../lib/improvementInitiatives';
+import { tasksForInitiative } from '../lib/caseTasks';
+
+const STATUS_COLOR = { active: "#7C5CFC", completed: "#3C8C5C", abandoned: "#9B9098" };
+const STATUS_LABEL = { active: "Active", completed: "Completed", abandoned: "Abandoned" };
+const inputStyle = { fontSize: 13, border: "1px solid #E8E0D0", borderRadius: 8, padding: "7px 10px", fontFamily: "DM Sans,system-ui,sans-serif", color: "#1A1535" };
+
+function InitiativeCard({ initiative, isHR, caseTasks, onUpdate, expanded, onToggleExpand }) {
+  const [milestoneLabel, setMilestoneLabel] = useState("");
+  const [milestoneDate, setMilestoneDate] = useState("");
+  const [outcomeDraft, setOutcomeDraft] = useState(initiative.outcome || "");
+  const linkedActions = tasksForInitiative(caseTasks, initiative.id);
+
+  return (
+    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+        <div>
+          <div style={{fontSize:14,fontWeight:600,color:"#1A1535"}}>{initiative.title}</div>
+          <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>
+            <span style={{color:STATUS_COLOR[initiative.status]||"#9B9098",fontWeight:700,textTransform:"uppercase",letterSpacing:0.4}}>{STATUS_LABEL[initiative.status]||initiative.status}</span>
+            {initiative.owner && ` · ${initiative.owner}`}
+            {initiative.targetCompletion && ` · Target: ${initiative.targetCompletion}`}
+          </div>
+        </div>
+        <button onClick={onToggleExpand} style={{fontSize:11,background:"none",border:"1px solid #E0D8FF",borderRadius:6,padding:"3px 10px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>{expanded?"Hide details":"View details"}</button>
+      </div>
+      <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6,marginTop:8}}>{initiative.problemIdentified}</div>
+      {initiative.supportingInsights?.length > 0 && (
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+          {initiative.supportingInsights.map((s,i) => <span key={i} style={{fontSize:11,color:"#7C5CFC",background:"#F5F3FF",borderRadius:6,padding:"2px 8px"}}>{s}</span>)}
+        </div>
+      )}
+      {!expanded && <div style={{fontSize:12,color:"#6B6375",marginTop:8}}>{describeMilestoneProgress(initiative.milestones)}</div>}
+
+      {expanded && (
+        <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Milestones</div>
+          {(initiative.milestones||[]).length === 0 && <div style={{fontSize:12,color:"#9B9098",marginBottom:8}}>No milestones set yet.</div>}
+          {(initiative.milestones||[]).map(m => (
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <input type="checkbox" checked={m.done} disabled={!isHR} onChange={()=>onUpdate(initiative.id,{milestones:toggleMilestone(initiative.milestones,m.id)})} style={{cursor:isHR?"pointer":"default"}}/>
+              <span style={{fontSize:12,color:"#1A1535",textDecoration:m.done?"line-through":"none",opacity:m.done?0.6:1,flex:1}}>{m.label}{m.targetDate?` — ${m.targetDate}`:""}</span>
+              {isHR && <button onClick={()=>onUpdate(initiative.id,{milestones:removeMilestone(initiative.milestones,m.id)})} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>}
+            </div>
+          ))}
+          {isHR && (
+            <div style={{display:"flex",gap:6,marginTop:8,marginBottom:16,flexWrap:"wrap"}}>
+              <input value={milestoneLabel} onChange={e=>setMilestoneLabel(e.target.value)} placeholder="New milestone" style={{...inputStyle,flex:"2 1 160px"}}/>
+              <input type="date" value={milestoneDate} onChange={e=>setMilestoneDate(e.target.value)} style={{...inputStyle,flex:"1 1 130px"}}/>
+              <button
+                onClick={()=>{ if(!milestoneLabel.trim()) return; onUpdate(initiative.id,{milestones:addMilestone(initiative.milestones,milestoneLabel,milestoneDate)}); setMilestoneLabel(""); setMilestoneDate(""); }}
+                disabled={!milestoneLabel.trim()}
+                style={{fontSize:12,background:milestoneLabel.trim()?"#7C5CFC":"#E8E0D0",border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontWeight:600,cursor:milestoneLabel.trim()?"pointer":"default",fontFamily:"DM Sans,system-ui,sans-serif"}}
+              >Add milestone</button>
+            </div>
+          )}
+
+          <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Linked actions ({linkedActions.length})</div>
+          {linkedActions.length === 0 && <div style={{fontSize:12,color:"#9B9098",marginBottom:8}}>No actions linked yet — link one when creating an action from an Insights card.</div>}
+          {linkedActions.map(t => (
+            <div key={t.id} style={{fontSize:12,color:"#1A1535",padding:"4px 0",borderBottom:"1px solid #F5F1EA"}}>
+              {t.name}{t.owner?` · ${t.owner}`:""}{t.dueDate?` · Due ${t.dueDate}`:""} {t.status==="done" && <span style={{color:"#3C8C5C"}}>(done)</span>}
+            </div>
+          ))}
+
+          {isHR && (
+            <div style={{marginTop:16}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+                <label style={{fontSize:11,color:"#9B9098"}}>Status</label>
+                <select value={initiative.status} onChange={e=>onUpdate(initiative.id,{status:e.target.value})} style={inputStyle}>
+                  {INITIATIVE_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                </select>
+              </div>
+              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Outcome</label>
+              <textarea value={outcomeDraft} onChange={e=>setOutcomeDraft(e.target.value)} placeholder="What happened once this was implemented…" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
+              <button onClick={()=>onUpdate(initiative.id,{outcome:outcomeDraft})} disabled={outcomeDraft===(initiative.outcome||"")} style={{fontSize:12,background:outcomeDraft===(initiative.outcome||"")?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:outcomeDraft===(initiative.outcome||"")?"default":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Save outcome</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Organisational ER Intelligence (Phase 6, OP22, §18) — Improvement
+// Initiatives. HR-only create/edit at the RLS layer too
+// (improvement_initiatives_2026-08-20.sql) — isHR here only gates UI
+// controls, same pattern OrgEventsPanel/ThemeTaxonomyManager already
+// established. Any org member can see what's underway; only HR manages
+// it. Linked actions are org-level case_tasks (OP21) carrying this
+// initiative's id — created from an Insights card's "Create action"
+// control, not from here, so this panel only ever displays them.
+export function ImprovementInitiativesPanel({ improvementInitiatives, isHR, onAdd, onUpdate, caseTasks }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [problemIdentified, setProblemIdentified] = useState("");
+  const [supportingInsights, setSupportingInsights] = useState("");
+  const [owner, setOwner] = useState("");
+  const [targetCompletion, setTargetCompletion] = useState("");
+
+  const sorted = [...(improvementInitiatives || [])].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const submit = () => {
+    if (!title.trim() || !problemIdentified.trim()) return;
+    onAdd({
+      title: title.trim(),
+      problemIdentified: problemIdentified.trim(),
+      supportingInsights: supportingInsights.split(",").map(s => s.trim()).filter(Boolean),
+      owner, targetCompletion,
+    });
+    setTitle(""); setProblemIdentified(""); setSupportingInsights(""); setOwner(""); setTargetCompletion(""); setShowForm(false);
+  };
+
+  return (
+    <div>
+      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Improvement initiatives</div>
+      <div style={{fontSize:12,color:"#6B6375",marginBottom:16,maxWidth:560}}>A real, HR-owned response to a pattern surfaced elsewhere in Insights — the problem identified, an owner, milestones, and (once implemented) what actually happened.</div>
+
+      {sorted.length === 0 && <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>No improvement initiatives yet.</div>}
+      {sorted.map(i => (
+        <InitiativeCard key={i.id} initiative={i} isHR={isHR} caseTasks={caseTasks} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)}/>
+      ))}
+
+      {isHR && (showForm ? (
+        <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 18px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:10}}>New initiative</div>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
+          <textarea value={problemIdentified} onChange={e=>setProblemIdentified(e.target.value)} placeholder="Problem identified" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
+          <input value={supportingInsights} onChange={e=>setSupportingInsights(e.target.value)} placeholder="Supporting insights (comma-separated, optional)" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
+          <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+            <input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="Owner" style={{...inputStyle,flex:1,minWidth:120}}/>
+            <input type="date" value={targetCompletion} onChange={e=>setTargetCompletion(e.target.value)} style={{...inputStyle,flex:1,minWidth:150}}/>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={submit} disabled={!title.trim()||!problemIdentified.trim()} style={{fontSize:12,background:title.trim()&&problemIdentified.trim()?"#7C5CFC":"#E8E0D0",border:"none",borderRadius:8,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:title.trim()&&problemIdentified.trim()?"pointer":"default",fontFamily:"DM Sans,system-ui,sans-serif"}}>Create initiative</button>
+            <button onClick={()=>setShowForm(false)} style={{fontSize:12,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={()=>setShowForm(true)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New initiative</button>
+      ))}
+    </div>
+  );
+}

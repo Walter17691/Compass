@@ -103,4 +103,13 @@ describe('InsightsScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Trends & Themes' }));
     expect(screen.getByText(/Loading trends/)).toBeInTheDocument();
   });
+
+  // Organisational ER Intelligence (Phase 6, OP22, §18)
+  it('switches to the Improvement Initiatives tab and renders the real panel content', async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen isHR={true} {...requiredProps} improvementInitiatives={[]}/>);
+    await user.click(screen.getByRole('button', { name: 'Improvement Initiatives' }));
+    expect(screen.getByText('No improvement initiatives yet.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ New initiative' })).toBeInTheDocument();
+  });
 });

@@ -9,7 +9,7 @@ import { CreateActionButton } from './CreateActionButton';
 // the specific themeId. Language throughout stays in "areas to
 // investigate" framing (rootCauseExploration.js's own doc comment) —
 // never a proven cause.
-export function RootCauseExplorationPanel({ themeId, themeName, createCaseTask, onClose }) {
+export function RootCauseExplorationPanel({ themeId, themeName, createCaseTask, improvementInitiatives, onClose }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
@@ -46,7 +46,7 @@ export function RootCauseExplorationPanel({ themeId, themeName, createCaseTask, 
               ))}
             </>
           )}
-          {createCaseTask && <CreateActionButton insightRef={`Root-cause exploration: ${themeName}`} createCaseTask={createCaseTask}/>}
+          {createCaseTask && <CreateActionButton insightRef={`Root-cause exploration: ${themeName}`} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
         </>
       )}
     </div>

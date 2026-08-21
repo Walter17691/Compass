@@ -5,7 +5,7 @@ import { RootCauseExplorationPanel } from './RootCauseExplorationPanel';
 import { InsightEvidenceModal } from './InsightEvidenceModal';
 import { CreateActionButton } from './CreateActionButton';
 
-const TrendCard = ({ text, insightRef, onExplore, onShowEvidence, createCaseTask }) => (
+const TrendCard = ({ text, insightRef, onExplore, onShowEvidence, createCaseTask, improvementInitiatives }) => (
   <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:10}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:6}}>
       <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.4px",textTransform:"uppercase"}}>Trend identified</div>
@@ -15,7 +15,7 @@ const TrendCard = ({ text, insightRef, onExplore, onShowEvidence, createCaseTask
       </div>
     </div>
     <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{text}</div>
-    {createCaseTask && <CreateActionButton insightRef={insightRef} createCaseTask={createCaseTask}/>}
+    {createCaseTask && <CreateActionButton insightRef={insightRef} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
   </div>
 );
 
@@ -31,7 +31,7 @@ const TrendCard = ({ text, insightRef, onExplore, onShowEvidence, createCaseTask
 // coherent case-type equivalent (org_theme_root_cause_2026-08-20.sql's
 // own header explains why). Rendered above ThemeTaxonomyManager in the
 // same "Trends & Themes" tab.
-export function TrendsPanel({ createCaseTask } = {}) {
+export function TrendsPanel({ createCaseTask, improvementInitiatives } = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const [exploringThemeId, setExploringThemeId] = useState(null);
@@ -61,17 +61,17 @@ export function TrendsPanel({ createCaseTask } = {}) {
       <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Trends (last 90 days vs previous 90 days)</div>
       {!hasAny && <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>No significant trends identified in the current period.</div>}
       {typeTrends.map(t => (
-        <TrendCard key={"type-"+t.caseType} text={describeTrend(t, t.caseType)} insightRef={`Trend: ${t.caseType} cases (last 90 days)`} createCaseTask={createCaseTask} onShowEvidence={()=>setEvidenceFor({ label: t.caseType, entry: t })}/>
+        <TrendCard key={"type-"+t.caseType} text={describeTrend(t, t.caseType)} insightRef={`Trend: ${t.caseType} cases (last 90 days)`} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives} onShowEvidence={()=>setEvidenceFor({ label: t.caseType, entry: t })}/>
       ))}
       {themeTrends.map(t => (
-        <TrendCard key={"theme-"+t.themeId} text={describeTrend(t, t.themeName)} insightRef={`Trend: ${t.themeName} theme (last 90 days)`} createCaseTask={createCaseTask} onExplore={()=>setExploringThemeId(t.themeId)} onShowEvidence={()=>setEvidenceFor({ label: t.themeName, entry: t })}/>
+        <TrendCard key={"theme-"+t.themeId} text={describeTrend(t, t.themeName)} insightRef={`Trend: ${t.themeName} theme (last 90 days)`} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives} onExplore={()=>setExploringThemeId(t.themeId)} onShowEvidence={()=>setEvidenceFor({ label: t.themeName, entry: t })}/>
       ))}
       {exploringTheme && (
         // key={themeId} forces a full remount when the explored theme
         // changes, so RootCauseExplorationPanel's own effect never needs
         // to reset stale state from the previous theme synchronously —
         // it always starts fresh from its own initial null/false state.
-        <RootCauseExplorationPanel key={exploringTheme.themeId} themeId={exploringTheme.themeId} themeName={exploringTheme.themeName} createCaseTask={createCaseTask} onClose={()=>setExploringThemeId(null)}/>
+        <RootCauseExplorationPanel key={exploringTheme.themeId} themeId={exploringTheme.themeId} themeName={exploringTheme.themeName} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives} onClose={()=>setExploringThemeId(null)}/>
       )}
       {evidenceFor && (
         <InsightEvidenceModal

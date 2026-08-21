@@ -34,6 +34,11 @@ export function addTask(tasks, caseId, fields) {
     // (caseId null); a short free-text label naming which insight
     // prompted it. Always null for an ordinary case-scoped task.
     insightRef: fields.insightRef || null,
+    // Organisational ER Intelligence (Phase 6, OP22, §18) — optionally
+    // links an org-level action to the improvement_initiatives row it
+    // supports (OP21's own "Link to Improvement Initiative" capability,
+    // deferred until this table existed). Always null otherwise.
+    improvementInitiativeId: fields.improvementInitiativeId || null,
     createdAt: new Date().toISOString(),
   };
   return [...(tasks || []), task];
@@ -61,4 +66,9 @@ export const HR_NOTE_SOURCES = ["hr_guidance", "hr_question", "hr_witness_reques
 
 export function hrNoteTasks(tasks, caseId) {
   return tasksForCase(tasks, caseId).filter(t => HR_NOTE_SOURCES.includes(t.source));
+}
+
+// Organisational ER Intelligence (Phase 6, OP22, §18)
+export function tasksForInitiative(tasks, initiativeId) {
+  return (tasks || []).filter(t => t.improvementInitiativeId === initiativeId);
 }

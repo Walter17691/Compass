@@ -39,4 +39,35 @@ describe('CreateActionButton', () => {
     expect(screen.getByRole('button', { name: 'Create action' })).toBeInTheDocument();
     expect(createCaseTask).not.toHaveBeenCalled();
   });
+
+  // Organisational ER Intelligence (Phase 6, OP22, §18)
+  it('omits the initiative dropdown entirely when there are no active initiatives', async () => {
+    const user = userEvent.setup();
+    render(<CreateActionButton insightRef="x" createCaseTask={vi.fn()} improvementInitiatives={[{ id: 'init1', title: 'Done thing', status: 'completed' }]}/>);
+    await user.click(screen.getByRole('button', { name: 'Create action' }));
+    expect(screen.queryByText('No improvement initiative')).not.toBeInTheDocument();
+  });
+
+  it('lets an active initiative be linked, defaulting to none', async () => {
+    const user = userEvent.setup();
+    const createCaseTask = vi.fn();
+    const initiatives = [{ id: 'init1', title: 'Reduce Manchester grievances', status: 'active' }];
+    render(<CreateActionButton insightRef="Trend: grievance cases" createCaseTask={createCaseTask} improvementInitiatives={initiatives}/>);
+    await user.click(screen.getByRole('button', { name: 'Create action' }));
+    await user.type(screen.getByPlaceholderText('Action to take…'), 'Review rota policy');
+    await user.selectOptions(screen.getByText('No improvement initiative').closest('select'), 'init1');
+    await user.click(screen.getByRole('button', { name: 'Save action' }));
+    expect(createCaseTask).toHaveBeenCalledWith(null, expect.objectContaining({ improvementInitiativeId: 'init1' }));
+  });
+
+  it('links no initiative when left as the default', async () => {
+    const user = userEvent.setup();
+    const createCaseTask = vi.fn();
+    const initiatives = [{ id: 'init1', title: 'Reduce Manchester grievances', status: 'active' }];
+    render(<CreateActionButton insightRef="x" createCaseTask={createCaseTask} improvementInitiatives={initiatives}/>);
+    await user.click(screen.getByRole('button', { name: 'Create action' }));
+    await user.type(screen.getByPlaceholderText('Action to take…'), 'Review rota policy');
+    await user.click(screen.getByRole('button', { name: 'Save action' }));
+    expect(createCaseTask).toHaveBeenCalledWith(null, expect.objectContaining({ improvementInitiativeId: null }));
+  });
 });

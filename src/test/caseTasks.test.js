@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addTask, updateTask, toggleTaskDone, removeTask, tasksForCase, hrNoteTasks } from '../lib/caseTasks';
+import { addTask, updateTask, toggleTaskDone, removeTask, tasksForCase, hrNoteTasks, tasksForInitiative } from '../lib/caseTasks';
 
 describe('addTask', () => {
   it('adds a task scoped to the given case, defaulting priority and status', () => {
@@ -33,6 +33,17 @@ describe('addTask', () => {
   it('defaults insightRef to null for an ordinary case-scoped task', () => {
     const result = addTask([], 'case1', { name: 'x' });
     expect(result[0].insightRef).toBeNull();
+  });
+
+  // Organisational ER Intelligence (Phase 6, OP22, §18)
+  it('links an org-level task to an improvement initiative when improvementInitiativeId is given', () => {
+    const result = addTask([], null, { name: 'x', insightRef: 'Trend: x', improvementInitiativeId: 'init1' });
+    expect(result[0].improvementInitiativeId).toBe('init1');
+  });
+
+  it('defaults improvementInitiativeId to null', () => {
+    const result = addTask([], 'case1', { name: 'x' });
+    expect(result[0].improvementInitiativeId).toBeNull();
   });
 });
 
@@ -95,5 +106,17 @@ describe('hrNoteTasks', () => {
   it('excludes a matching-source task on a different case', () => {
     const tasks = [{ id: 't1', caseId: 'c2', source: 'hr_guidance' }];
     expect(hrNoteTasks(tasks, 'c1')).toEqual([]);
+  });
+});
+
+// Organisational ER Intelligence (Phase 6, OP22, §18)
+describe('tasksForInitiative', () => {
+  it('filters to only tasks linked to the given initiative', () => {
+    const all = [
+      { id: 't1', improvementInitiativeId: 'init1' },
+      { id: 't2', improvementInitiativeId: 'init2' },
+      { id: 't3', improvementInitiativeId: null },
+    ];
+    expect(tasksForInitiative(all, 'init1').map(t => t.id)).toEqual(['t1']);
   });
 });

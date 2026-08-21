@@ -18,7 +18,7 @@ const FLAG_COLOR = {
 // (management capability, appeal vulnerability, policy confusion,
 // workforce communication) explicitly noted as covered elsewhere in
 // Insights at organisation level, not fabricated per site here.
-export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEvents, createCaseTask }) {
+export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEvents, createCaseTask, improvementInitiatives }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
 
@@ -66,7 +66,7 @@ export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEven
                 <div style={{fontSize:12,color:"#1A1535"}}>
                   <span style={{fontWeight:600,color:FLAG_COLOR[f.category]||"#1A1535"}}>{f.label}</span> — {f.detail}
                 </div>
-                {createCaseTask && <CreateActionButton insightRef={`Risk flag: ${s.site} — ${f.label}`} createCaseTask={createCaseTask}/>}
+                {createCaseTask && <CreateActionButton insightRef={`Risk flag: ${s.site} — ${f.label}`} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
               </div>
             ))}
         </div>

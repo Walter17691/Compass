@@ -12,6 +12,7 @@ import { OrgEventsPanel } from '../components/OrgEventsPanel';
 import { RiskMapPanel } from '../components/RiskMapPanel';
 import { ExecutiveBriefPanel } from '../components/ExecutiveBriefPanel';
 import { PeriodicReviewPanel } from '../components/PeriodicReviewPanel';
+import { ImprovementInitiativesPanel } from '../components/ImprovementInitiativesPanel';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -19,19 +20,9 @@ import { PeriodicReviewPanel } from '../components/PeriodicReviewPanel';
 // {id,label} sub-nav rail exactly as-is rather than inventing new nav
 // chrome. "Manager Insights" and "Reports" mount the existing
 // ManagerInsightsScreen/ErReportScreen unchanged — this phase gives them
-// a shared home, it does not rebuild them. The other four tabs land
-// their real content in later OP phases (OP3 dashboard, OP7-9 trends,
-// OP16 risk map, OP22 improvement initiatives); until then they show a
-// plain "not built yet" placeholder rather than a fake empty dashboard.
-function ComingSoon({ label }) {
-  return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"32px 24px",textAlign:"center"}}>
-      <div style={{fontSize:14,color:"#6B6375"}}>{label} is being built as part of this phase and isn't available yet.</div>
-    </div>
-  );
-}
+// a shared home, it does not rebuild them.
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, createCaseTask, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, org, user, memberName, initialSection, clearInitialSection }) {
+export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, createCaseTask, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, improvementInitiatives, onAddImprovementInitiative, onUpdateImprovementInitiative, org, user, memberName, initialSection, clearInitialSection }) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
   // reachable as ErReportScreen already was; Manager Insights, Org
   // Events, Risk Map, and Improvement Initiatives are HR-only, same
@@ -78,11 +69,11 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
           )}
           {active==="trends"&&(
             <>
-              <TrendsPanel createCaseTask={createCaseTask}/>
+              <TrendsPanel createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>
               <ThemeTaxonomyManager organisationThemes={organisationThemes} isHR={isHR} onAdd={onAddOrganisationTheme} onUpdate={onUpdateOrganisationTheme}/>
             </>
           )}
-          {active==="early-signals"&&<EarlySignalsPanel createCaseTask={createCaseTask}/>}
+          {active==="early-signals"&&<EarlySignalsPanel createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
           {active==="manager"&&isHR&&(
             <ManagerInsightsScreen
               cases={cases}
@@ -97,8 +88,8 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
             />
           )}
           {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgEvents} isHR={isHR} onAddEvent={onAddOrgEvent}/>}
-          {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents} createCaseTask={createCaseTask}/>}
-          {active==="improvement-initiatives"&&isHR&&<ComingSoon label="Improvement Initiatives"/>}
+          {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
+          {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel improvementInitiatives={improvementInitiatives} isHR={isHR} onAdd={onAddImprovementInitiative} onUpdate={onUpdateImprovementInitiative} caseTasks={caseTasks}/>}
           {active==="reports"&&(
             <>
               <ExecutiveBriefPanel org={org} user={user} memberName={memberName} isHR={isHR}/>

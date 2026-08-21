@@ -1306,6 +1306,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error('loadOrgEvents', e); }
   };
 
+  // Organisational ER Intelligence (Phase 6, OP22, §18) — Improvement
+  // Initiatives (improvement_initiatives_2026-08-20.sql). Same
+  // declared-alongside-loadLocations reasoning as orgEvents above.
+  const [improvementInitiatives, setImprovementInitiatives] = useState([]);
+
+  const loadImprovementInitiatives = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await supabase.from('improvement_initiatives').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      if(error) { console.error('loadImprovementInitiatives', error); return; }
+      if(data) setImprovementInitiatives(data.map(r=>({
+        id:r.id, title:r.title, problemIdentified:r.problem_identified, supportingInsights:r.supporting_insights||[],
+        owner:r.owner||"", targetCompletion:r.target_completion||"", status:r.status, milestones:r.milestones||[],
+        outcome:r.outcome||"", createdBy:r.created_by, createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadImprovementInitiatives', e); }
+  };
+
   // Billing is priced per location — every add/remove needs to reach
   // Stripe too, not just the locations table, or the subscription quietly
   // drifts from what the org is actually using. Failing to sync isn't
@@ -1452,7 +1470,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
+  useEffect(()=>{ if(org?.id){ loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -2924,6 +2942,41 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(error) { console.error('addOrgEvent', error); showToast("Couldn't log event — "+error.message, "error"); setOrgEvents(evs=>evs.filter(x=>x.id!==row.id)); }
   };
 
+  // Organisational ER Intelligence (Phase 6, OP22, §18) — HR-only at the
+  // RLS layer (improvement_initiatives_2026-08-20.sql), same
+  // optimistic-insert-then-rollback-on-error shape as addOrgEvent above.
+  const addImprovementInitiative = async ({ title, problemIdentified, supportingInsights, owner, targetCompletion }) => {
+    if(!org?.id) return;
+    const row = {
+      id: crypto.randomUUID(), title, problemIdentified, supportingInsights: supportingInsights||[],
+      owner: owner||"", targetCompletion: targetCompletion||"", status: "active", milestones: [], outcome: "",
+      createdBy: user?.id||null, createdAt: new Date().toISOString(),
+    };
+    setImprovementInitiatives(list=>[row, ...list]);
+    const { error } = await supabase.from('improvement_initiatives').insert({
+      id: row.id, org_id: org.id, title, problem_identified: problemIdentified,
+      supporting_insights: supportingInsights||[], owner: owner||null, target_completion: targetCompletion||null,
+      status: "active", milestones: [], created_by: user?.id||null,
+    });
+    if(error) { console.error('addImprovementInitiative', error); showToast("Couldn't create initiative — "+error.message, "error"); setImprovementInitiatives(list=>list.filter(x=>x.id!==row.id)); }
+  };
+
+  // Optimistic-update-then-rollback shape, same as toggleCaseTaskDone —
+  // milestones/status/outcome are all edited from the same expandable
+  // card (ImprovementInitiativesPanel.jsx), so one generic updater
+  // covers all three rather than three near-duplicate functions.
+  const updateImprovementInitiative = async (initiativeId, fields) => {
+    const previous = improvementInitiatives.find(i=>i.id===initiativeId);
+    if(!previous) return;
+    setImprovementInitiatives(list=>list.map(i=>i.id===initiativeId?{...i,...fields}:i));
+    const dbFields = { updated_at: new Date().toISOString() };
+    if('milestones' in fields) dbFields.milestones = fields.milestones;
+    if('status' in fields) dbFields.status = fields.status;
+    if('outcome' in fields) dbFields.outcome = fields.outcome;
+    const { error } = await supabase.from('improvement_initiatives').update(dbFields).eq('id', initiativeId);
+    if(error) { console.error('updateImprovementInitiative', error); showToast("Couldn't save change — "+error.message, "error"); setImprovementInitiatives(list=>list.map(i=>i.id===initiativeId?previous:i)); }
+  };
+
   const createAllegation = (caseId, fields) => {
     const updated = addAllegation(allegations, caseId, fields);
     if(updated===allegations) return;
@@ -3542,7 +3595,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
         dueDate:r.due_date||"", priority:r.priority, status:r.status,
         createdBy:r.created_by, createdAt:r.created_at, source:r.source||null,
-        insightRef:r.insight_ref||null,
+        insightRef:r.insight_ref||null, improvementInitiativeId:r.improvement_initiative_id||null,
       })));
     } catch(e) { console.error('loadCaseTasks', e); }
   };
@@ -3553,7 +3606,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       id: task.id, case_id: task.caseId||null, org_id: org.id,
       name: task.name, owner: task.owner||null, due_date: task.dueDate||null,
       priority: task.priority||'normal', status: task.status||'open', source: task.source||null,
-      insight_ref: task.insightRef||null,
+      insight_ref: task.insightRef||null, improvement_initiative_id: task.improvementInitiativeId||null,
       created_by: task.createdBy||user?.id||null, updated_at: new Date().toISOString(),
     }));
     if(error) { console.error('saveCaseTaskToDB', error); showToast("Couldn't save task to the cloud — "+error.message, "error"); }
@@ -7417,6 +7470,9 @@ Please produce:
           orgMembers={orgMembers}
           orgEvents={orgEvents}
           onAddOrgEvent={addOrgEvent}
+          improvementInitiatives={improvementInitiatives}
+          onAddImprovementInitiative={addImprovementInitiative}
+          onUpdateImprovementInitiative={updateImprovementInitiative}
           org={org}
           user={user}
           memberName={member?.name||user?.email}
