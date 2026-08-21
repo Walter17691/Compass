@@ -1320,6 +1320,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         id:r.id, title:r.title, problemIdentified:r.problem_identified, supportingInsights:r.supporting_insights||[],
         owner:r.owner||"", targetCompletion:r.target_completion||"", status:r.status, milestones:r.milestones||[],
         outcome:r.outcome||"", createdBy:r.created_by, createdAt:r.created_at,
+        completedAt:r.completed_at||null, metricKind:r.metric_kind||null, metricValue:r.metric_value||null,
       })));
     } catch(e) { console.error('loadImprovementInitiatives', e); }
   };
@@ -2962,17 +2963,28 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   // Optimistic-update-then-rollback shape, same as toggleCaseTaskDone —
-  // milestones/status/outcome are all edited from the same expandable
-  // card (ImprovementInitiativesPanel.jsx), so one generic updater
-  // covers all three rather than three near-duplicate functions.
+  // milestones/status/outcome/metric are all edited from the same
+  // expandable card (ImprovementInitiativesPanel.jsx), so one generic
+  // updater covers all of them rather than near-duplicate functions.
+  //
+  // Organisational ER Intelligence (Phase 6, OP23, §19) — completedAt is
+  // stamped here, once, the first time status actually transitions to
+  // 'completed' (never on a later edit that happens to also touch
+  // status, and never overwritten by a subsequent unrelated edit) — the
+  // real anchor date impactTracking.js's before/after comparison needs.
   const updateImprovementInitiative = async (initiativeId, fields) => {
     const previous = improvementInitiatives.find(i=>i.id===initiativeId);
     if(!previous) return;
-    setImprovementInitiatives(list=>list.map(i=>i.id===initiativeId?{...i,...fields}:i));
+    const justCompleted = fields.status === 'completed' && previous.status !== 'completed';
+    const nextFields = justCompleted ? { ...fields, completedAt: new Date().toISOString() } : fields;
+    setImprovementInitiatives(list=>list.map(i=>i.id===initiativeId?{...i,...nextFields}:i));
     const dbFields = { updated_at: new Date().toISOString() };
-    if('milestones' in fields) dbFields.milestones = fields.milestones;
-    if('status' in fields) dbFields.status = fields.status;
-    if('outcome' in fields) dbFields.outcome = fields.outcome;
+    if('milestones' in nextFields) dbFields.milestones = nextFields.milestones;
+    if('status' in nextFields) dbFields.status = nextFields.status;
+    if('outcome' in nextFields) dbFields.outcome = nextFields.outcome;
+    if('metricKind' in nextFields) dbFields.metric_kind = nextFields.metricKind;
+    if('metricValue' in nextFields) dbFields.metric_value = nextFields.metricValue;
+    if('completedAt' in nextFields) dbFields.completed_at = nextFields.completedAt;
     const { error } = await supabase.from('improvement_initiatives').update(dbFields).eq('id', initiativeId);
     if(error) { console.error('updateImprovementInitiative', error); showToast("Couldn't save change — "+error.message, "error"); setImprovementInitiatives(list=>list.map(i=>i.id===initiativeId?previous:i)); }
   };

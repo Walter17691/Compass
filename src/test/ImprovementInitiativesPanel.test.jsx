@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ImprovementInitiativesPanel } from '../components/ImprovementInitiativesPanel.jsx';
+
+const rpcMock = vi.fn();
+vi.mock('../supabase', () => ({ supabase: { rpc: (...args) => rpcMock(...args) } }));
+
+const { ImprovementInitiativesPanel } = await import('../components/ImprovementInitiativesPanel.jsx');
 
 const baseInitiative = {
   id: 'init1', title: 'Reduce Manchester grievances', problemIdentified: 'Grievance volume rising at Manchester.',
@@ -11,6 +15,8 @@ const baseInitiative = {
 
 // Organisational ER Intelligence (Phase 6, OP22, §18)
 describe('ImprovementInitiativesPanel', () => {
+  beforeEach(() => { rpcMock.mockReset(); });
+
   it('shows an empty state when there are no initiatives', () => {
     render(<ImprovementInitiativesPanel improvementInitiatives={[]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
     expect(screen.getByText('No improvement initiatives yet.')).toBeInTheDocument();
@@ -95,5 +101,76 @@ describe('ImprovementInitiativesPanel', () => {
     await user.type(screen.getByPlaceholderText('What happened once this was implemented…'), 'Grievance volume dropped after the rota change.');
     await user.click(saveOutcomeBtn);
     expect(onUpdate).toHaveBeenCalledWith('init1', { outcome: 'Grievance volume dropped after the rota change.' });
+  });
+
+  // Organisational ER Intelligence (Phase 6, OP23, §19)
+  describe('metric selection and impact tracking', () => {
+    const cases = [{ id: 'c1', caseType: 'grievance' }, { id: 'c2', caseType: 'misconduct' }, { id: 'c3', caseType: 'grievance' }];
+    const organisationThemes = [{ id: 'th1', name: 'Rota changes', active: true }, { id: 'th2', name: 'Retired theme', active: false }];
+
+    it('lets HR set which metric this initiative addresses', async () => {
+      const user = userEvent.setup();
+      const onUpdate = vi.fn();
+      render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      await user.selectOptions(screen.getByDisplayValue('Not set'), 'case_type');
+      expect(onUpdate).toHaveBeenCalledWith('init1', { metricKind: 'case_type', metricValue: null });
+    });
+
+    it('offers real distinct case types once case_type is selected as the metric kind', async () => {
+      const user = userEvent.setup();
+      const onUpdate = vi.fn();
+      const withKind = { ...baseInitiative, metricKind: 'case_type' };
+      render(<ImprovementInitiativesPanel improvementInitiatives={[withKind]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      await user.selectOptions(screen.getByText('Select a case type…').closest('select'), 'grievance');
+      expect(onUpdate).toHaveBeenCalledWith('init1', { metricKind: 'case_type', metricValue: 'grievance' });
+    });
+
+    it('only offers active themes for a theme metric', async () => {
+      const user = userEvent.setup();
+      const withKind = { ...baseInitiative, metricKind: 'theme' };
+      render(<ImprovementInitiativesPanel improvementInitiatives={[withKind]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      expect(screen.getByText('Rota changes')).toBeInTheDocument();
+      expect(screen.queryByText('Retired theme')).not.toBeInTheDocument();
+    });
+
+    it('shows no Impact section until the initiative is completed with a metric set', async () => {
+      const user = userEvent.setup();
+      const withKindOnly = { ...baseInitiative, metricKind: 'case_type', metricValue: 'grievance', status: 'active' };
+      render(<ImprovementInitiativesPanel improvementInitiatives={[withKindOnly]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      expect(screen.queryByText('Impact')).not.toBeInTheDocument();
+    });
+
+    it('shows a "not enough time" message when completed too recently', async () => {
+      const user = userEvent.setup();
+      const recentlyCompleted = {
+        ...baseInitiative, status: 'completed', metricKind: 'case_type', metricValue: 'grievance',
+        completedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      };
+      render(<ImprovementInitiativesPanel improvementInitiatives={[recentlyCompleted]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      expect(screen.getByText(/Not enough time has passed since completion/)).toBeInTheDocument();
+      expect(rpcMock).not.toHaveBeenCalled();
+    });
+
+    it('fetches and shows a real impact comparison once enough time has passed, visible to non-HR too', async () => {
+      const user = userEvent.setup();
+      rpcMock.mockResolvedValue({
+        data: { by_type_trend: [{ caseType: 'grievance', currentCount: 2, previousCount: 8, byLocation: {} }], by_theme_trend: [] },
+        error: null,
+      });
+      const completed = {
+        ...baseInitiative, status: 'completed', metricKind: 'case_type', metricValue: 'grievance',
+        completedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      };
+      render(<ImprovementInitiativesPanel improvementInitiatives={[completed]} isHR={false} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      await waitFor(() => expect(screen.getByText(/grievance rates decreased/)).toBeInTheDocument());
+      expect(screen.getByText(/not a confirmed causal outcome/)).toBeInTheDocument();
+      expect(rpcMock).toHaveBeenCalledWith('org_trend_detection', { p_period_days: 30 });
+    });
   });
 });

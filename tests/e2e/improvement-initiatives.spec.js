@@ -65,8 +65,12 @@ test('HR can create an initiative, it persists across a reload, and milestones/s
   await milestoneToggled;
   await expect(initiativeCard().getByRole('checkbox').first()).toBeChecked();
 
+  // Scoped to the option set unique to the Status select — the Metric
+  // this initiative addresses selector (OP23, §19) also renders a
+  // <select> in this card, so ".first()" alone no longer reliably picks
+  // the Status control.
   const statusChanged = page.waitForResponse(r => r.url().includes('/rest/v1/improvement_initiatives') && r.request().method() === 'PATCH');
-  await initiativeCard().locator('select').first().selectOption('completed');
+  await initiativeCard().locator('select').filter({ has: page.getByRole('option', { name: 'Completed' }) }).first().selectOption('completed');
   await statusChanged;
   await expect(initiativeCard().getByText('Completed', { exact: true }).first()).toBeVisible();
 

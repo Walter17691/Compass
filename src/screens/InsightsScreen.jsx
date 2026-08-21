@@ -89,7 +89,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
           )}
           {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgEvents} isHR={isHR} onAddEvent={onAddOrgEvent}/>}
           {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
-          {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel improvementInitiatives={improvementInitiatives} isHR={isHR} onAdd={onAddImprovementInitiative} onUpdate={onUpdateImprovementInitiative} caseTasks={caseTasks}/>}
+          {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel improvementInitiatives={improvementInitiatives} isHR={isHR} onAdd={onAddImprovementInitiative} onUpdate={onUpdateImprovementInitiative} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes}/>}
           {active==="reports"&&(
             <>
               <ExecutiveBriefPanel org={org} user={user} memberName={memberName} isHR={isHR}/>

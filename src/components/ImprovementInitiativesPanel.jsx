@@ -1,16 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 import { INITIATIVE_STATUSES, addMilestone, toggleMilestone, removeMilestone, describeMilestoneProgress } from '../lib/improvementInitiatives';
 import { tasksForInitiative } from '../lib/caseTasks';
+import { activeThemes } from '../lib/themes';
+import { daysSince, findMetricTrendEntry, hasEnoughDataForImpact, describeImpact, MIN_DAYS_SINCE_COMPLETION } from '../lib/impactTracking';
 
 const STATUS_COLOR = { active: "#7C5CFC", completed: "#3C8C5C", abandoned: "#9B9098" };
 const STATUS_LABEL = { active: "Active", completed: "Completed", abandoned: "Abandoned" };
 const inputStyle = { fontSize: 13, border: "1px solid #E8E0D0", borderRadius: 8, padding: "7px 10px", fontFamily: "DM Sans,system-ui,sans-serif", color: "#1A1535" };
 
-function InitiativeCard({ initiative, isHR, caseTasks, onUpdate, expanded, onToggleExpand }) {
+// Organisational ER Intelligence (Phase 6, OP23, §19) — impact tracking.
+// Reuses org_trend_detection() (OP7's RPC) with p_period_days set to the
+// real number of days since this initiative's completedAt — see
+// impactTracking.js's own header for why that's a genuine reuse of the
+// existing trend engine rather than a new RPC. Visible to everyone (not
+// HR-gated) once a metric is set and the initiative is completed, same
+// org-wide-read pattern as the initiative itself.
+function ImpactView({ initiative }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
+  const days = daysSince(initiative.completedAt);
+
+  useEffect(() => {
+    if (days === null || days < MIN_DAYS_SINCE_COMPLETION) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_period_days: Math.max(days, 1) });
+      if (cancelled) return;
+      if (rpcError) { console.error("org_trend_detection", rpcError); setError(true); }
+      else setData(data);
+    })();
+    return () => { cancelled = true; };
+  }, [initiative.completedAt, days]);
+
+  if (days === null) return null;
+  if (days < MIN_DAYS_SINCE_COMPLETION) return <div style={{fontSize:12,color:"#9B9098"}}>Not enough time has passed since completion to assess impact yet ({days} of {MIN_DAYS_SINCE_COMPLETION} days).</div>;
+  if (error) return <div style={{fontSize:12,color:"#6B6375"}}>Couldn't load impact data right now.</div>;
+  if (!data) return <div style={{fontSize:12,color:"#6B6375"}}>Loading impact…</div>;
+
+  const entry = findMetricTrendEntry(data, initiative.metricKind, initiative.metricValue);
+  if (!hasEnoughDataForImpact(entry)) return <div style={{fontSize:12,color:"#9B9098"}}>Not enough case volume before completion to assess impact.</div>;
+
+  const label = initiative.metricKind === "theme" ? (entry.themeName || initiative.metricValue) : initiative.metricValue;
+  return <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{describeImpact(label, entry, days)}</div>;
+}
+
+function InitiativeCard({ initiative, isHR, caseTasks, cases, organisationThemes, onUpdate, expanded, onToggleExpand }) {
   const [milestoneLabel, setMilestoneLabel] = useState("");
   const [milestoneDate, setMilestoneDate] = useState("");
   const [outcomeDraft, setOutcomeDraft] = useState(initiative.outcome || "");
   const linkedActions = tasksForInitiative(caseTasks, initiative.id);
+  const caseTypeOptions = [...new Set((cases||[]).map(c=>c.caseType).filter(Boolean))].sort();
+  const themeOptions = activeThemes(organisationThemes);
+  const showImpact = initiative.status === "completed" && initiative.metricKind && initiative.metricValue;
 
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
@@ -32,6 +74,7 @@ function InitiativeCard({ initiative, isHR, caseTasks, onUpdate, expanded, onTog
         </div>
       )}
       {!expanded && <div style={{fontSize:12,color:"#6B6375",marginTop:8}}>{describeMilestoneProgress(initiative.milestones)}</div>}
+      {!expanded && showImpact && <div style={{fontSize:12,color:"#3C8C5C",marginTop:4}}>Impact tracked — view details for the current comparison.</div>}
 
       {expanded && (
         <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
@@ -66,6 +109,27 @@ function InitiativeCard({ initiative, isHR, caseTasks, onUpdate, expanded, onTog
 
           {isHR && (
             <div style={{marginTop:16}}>
+              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Metric this initiative addresses (for impact tracking)</label>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                <select value={initiative.metricKind||""} onChange={e=>onUpdate(initiative.id,{metricKind:e.target.value||null,metricValue:null})} style={inputStyle}>
+                  <option value="">Not set</option>
+                  <option value="case_type">Case type</option>
+                  <option value="theme">Theme</option>
+                </select>
+                {initiative.metricKind==="case_type" && (
+                  <select value={initiative.metricValue||""} onChange={e=>onUpdate(initiative.id,{metricKind:"case_type",metricValue:e.target.value||null})} style={inputStyle}>
+                    <option value="">Select a case type…</option>
+                    {caseTypeOptions.map(ct => <option key={ct} value={ct}>{ct}</option>)}
+                  </select>
+                )}
+                {initiative.metricKind==="theme" && (
+                  <select value={initiative.metricValue||""} onChange={e=>onUpdate(initiative.id,{metricKind:"theme",metricValue:e.target.value||null})} style={inputStyle}>
+                    <option value="">Select a theme…</option>
+                    {themeOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                )}
+              </div>
+
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
                 <label style={{fontSize:11,color:"#9B9098"}}>Status</label>
                 <select value={initiative.status} onChange={e=>onUpdate(initiative.id,{status:e.target.value})} style={inputStyle}>
@@ -75,6 +139,13 @@ function InitiativeCard({ initiative, isHR, caseTasks, onUpdate, expanded, onTog
               <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Outcome</label>
               <textarea value={outcomeDraft} onChange={e=>setOutcomeDraft(e.target.value)} placeholder="What happened once this was implemented…" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
               <button onClick={()=>onUpdate(initiative.id,{outcome:outcomeDraft})} disabled={outcomeDraft===(initiative.outcome||"")} style={{fontSize:12,background:outcomeDraft===(initiative.outcome||"")?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:outcomeDraft===(initiative.outcome||"")?"default":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Save outcome</button>
+            </div>
+          )}
+
+          {showImpact && (
+            <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Impact</div>
+              <ImpactView initiative={initiative}/>
             </div>
           )}
         </div>
@@ -91,7 +162,7 @@ function InitiativeCard({ initiative, isHR, caseTasks, onUpdate, expanded, onTog
 // it. Linked actions are org-level case_tasks (OP21) carrying this
 // initiative's id — created from an Insights card's "Create action"
 // control, not from here, so this panel only ever displays them.
-export function ImprovementInitiativesPanel({ improvementInitiatives, isHR, onAdd, onUpdate, caseTasks }) {
+export function ImprovementInitiativesPanel({ improvementInitiatives, isHR, onAdd, onUpdate, caseTasks, cases, organisationThemes }) {
   const [expandedId, setExpandedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -120,7 +191,7 @@ export function ImprovementInitiativesPanel({ improvementInitiatives, isHR, onAd
 
       {sorted.length === 0 && <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>No improvement initiatives yet.</div>}
       {sorted.map(i => (
-        <InitiativeCard key={i.id} initiative={i} isHR={isHR} caseTasks={caseTasks} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)}/>
+        <InitiativeCard key={i.id} initiative={i} isHR={isHR} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)}/>
       ))}
 
       {isHR && (showForm ? (
