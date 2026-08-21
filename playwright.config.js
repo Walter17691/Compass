@@ -10,6 +10,12 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false, // tests share one Supabase test-org account; serialize to avoid cross-test data races
+  // Phase 6.5 hardening (P1) — fullyParallel:false only serialises tests
+  // within one spec file; without a worker cap, Playwright still runs
+  // multiple spec files concurrently by default, which races them against
+  // the same shared test org this comment's own stated intent assumed was
+  // already prevented. workers:1 is what actually enforces it.
+  workers: 1,
   retries: 0,
   reporter: 'list',
   use: {

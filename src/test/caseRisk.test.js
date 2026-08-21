@@ -131,6 +131,19 @@ describe('computeCaseRisk — outstanding grievance', () => {
     expect(computeCaseRisk(baseCase, { cases }).find(i => i.category === 'outstanding_grievance')).toBeUndefined();
   });
 
+  // Phase 6.5 hardening (P2) — was reading raw c.stage, which a case can
+  // never have explicitly set even once genuinely resolved (a signed
+  // outcome letter closes it via getCaseStage's own inference, same as
+  // every other module in the codebase resolves stage).
+  it('does not flag a grievance resolved via a signed outcome letter with no explicit stage field set', () => {
+    const resolvedGrievance = {
+      id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance',
+      meetings: [{ type: 'Grievance Hearing', letterOutput: 'Outcome: not upheld', signStatus: 'signed' }],
+    };
+    const cases = [baseCase, resolvedGrievance];
+    expect(computeCaseRisk(baseCase, { cases }).find(i => i.category === 'outstanding_grievance')).toBeUndefined();
+  });
+
   it('does not flag a different employee’s grievance', () => {
     const cases = [baseCase, { id: 'case2', employeeName: 'Someone Else', caseType: 'grievance', stage: 'investigation' }];
     expect(computeCaseRisk(baseCase, { cases }).find(i => i.category === 'outstanding_grievance')).toBeUndefined();

@@ -121,19 +121,30 @@ describe('computeGuardrailChecks — allegation response opportunity (P6)', () =
     const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', date: '01/08/2026' }] };
     const allegations = [{ id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: '' }];
     const checks = computeGuardrailChecks(cs, allegations);
-    const flagged = checks.find(c => c.title === 'An allegation has no recorded employee response');
+    const flagged = checks.find(c => c.title === 'Allegations have no recorded employee response');
     expect(flagged).toBeTruthy();
+    expect(flagged.reasoning).toContain('This allegation');
     expect(flagged.sourceRefs).toEqual([{ kind: 'allegation', id: 'a1', label: 'Unauthorised absence' }]);
   });
 
-  it('pluralises the title for more than one unaddressed allegation', () => {
+  // Phase 6.5 hardening (P1) — title is stable regardless of count now
+  // (matching every other check in this file); the count only ever
+  // appears in reasoning. Previously the title itself pluralised/embedded
+  // the count, which broke syncGuardrailSignals' dedup-by-title contract:
+  // dismissing this signal at one count, then having the count change,
+  // spawned what looked like a brand-new signal instead of respecting
+  // the dismissal — and permanently stranded it, since the dismissed
+  // title could never match the new count-bearing title again.
+  it('keeps the same stable title regardless of how many allegations are unaddressed — only reasoning mentions the count', () => {
     const cs = { ...baseCase, meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', date: '01/08/2026' }] };
     const allegations = [
       { id: 'a1', caseId: 'case1', title: 'Unauthorised absence', employeeResponse: '' },
       { id: 'a2', caseId: 'case1', title: 'Late timesheets', employeeResponse: '' },
     ];
     const checks = computeGuardrailChecks(cs, allegations);
-    expect(checks.find(c => c.title === '2 allegations have no recorded employee response')).toBeTruthy();
+    const flagged = checks.find(c => c.title === 'Allegations have no recorded employee response');
+    expect(flagged).toBeTruthy();
+    expect(flagged.reasoning).toContain('These 2 allegations');
   });
 
   it('does not flag a brand-new case with no investigation/disciplinary meeting held yet — nothing has failed to happen', () => {

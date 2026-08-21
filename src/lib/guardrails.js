@@ -129,10 +129,20 @@ function checkAllegationResponseOpportunity(cs, caseAllegations, policies) {
   const unaddressed = caseAllegations.filter(a => !(a.employeeResponse || "").trim());
   if (!unaddressed.length) return null;
   const policyRef = findPolicyClauseRef(policies, ["respond", "response", "opportunity to respond"]);
+  // Phase 6.5 hardening (P1) — title was previously unaddressed.length===1
+  // ? "An allegation..." : "${unaddressed.length} allegations...", the one
+  // check in this file that embeds a variable count in title instead of
+  // reasoning. syncGuardrailSignals (App.jsx) dedupes by exact title
+  // match, so a title that changes as the count changes breaks HR's own
+  // dismissal of this signal (the count shifting re-spawns it as a
+  // "new" signal) and, worse, permanently strands the signal at whatever
+  // count it was dismissed at — it can never re-fire at that exact count
+  // again, since the dismissed signal's title now permanently matches. A
+  // stable title, matching every other check in this file, fixes both.
   return {
     id: "employee_response_opportunity",
-    title: unaddressed.length === 1 ? "An allegation has no recorded employee response" : `${unaddressed.length} allegations have no recorded employee response`,
-    reasoning: `${unaddressed.length === 1 ? "This allegation hasn't" : "These allegations haven't"} been shown to have been put to the employee for a response yet: ${unaddressed.map(a => a.title).join(", ")}. Natural justice — and most disciplinary policies — expect the employee to have a genuine opportunity to respond to each allegation before findings are reached.`,
+    title: "Allegations have no recorded employee response",
+    reasoning: `${unaddressed.length === 1 ? "This allegation hasn't" : `These ${unaddressed.length} allegations haven't`} been shown to have been put to the employee for a response yet: ${unaddressed.map(a => a.title).join(", ")}. Natural justice — and most disciplinary policies — expect the employee to have a genuine opportunity to respond to each allegation before findings are reached.`,
     sourceRefs: [...unaddressed.map(a => ({ kind: "allegation", id: a.id, label: a.title })), ...(policyRef ? [policyRef] : [])],
   };
 }

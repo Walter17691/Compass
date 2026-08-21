@@ -8,7 +8,7 @@ export default defineConfig([
   globalIgnores(['dist']),
   {
     files: ['**/*.{js,jsx}'],
-    ignores: ['api/**/*.js', 'tests/e2e/**/*.js', 'vite.config.js', 'playwright.config.js'],
+    ignores: ['api/**/*.js', 'tests/e2e/**/*.js', 'vite.config.js', 'playwright.config.js', 'src/test/**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -28,6 +28,22 @@ export default defineConfig([
     extends: [js.configs.recommended],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  {
+    // src/test/** runs under vitest on Node with a jsdom environment
+    // (vite.config.js), so both DOM globals (document, window — via
+    // jsdom/testing-library) and real Node globals (process, Buffer) are
+    // legitimate here, not undefined variables.
+    files: ['src/test/**/*.{js,jsx}'],
+    extends: [
+      js.configs.recommended,
+      reactHooks.configs.flat.recommended,
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
 ])

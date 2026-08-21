@@ -13,6 +13,7 @@
 import { openSignalsForCase } from './caseSignals';
 import { newEvidenceSinceFinding, parseAppealGroundReasoning } from './appealReview';
 import { getProcessType } from './processStages';
+import { getCaseStage } from './caseStage';
 
 // Guardrail check titles are deliberately stable/fixed text
 // (guardrails.js's own header comment) — matching against them here is
@@ -88,7 +89,15 @@ export function computeCaseRisk(cs, { allegations = [], caseSignals = [], cases 
   // Outstanding grievance — the same employee has another, still-open
   // grievance-type case elsewhere. A real natural-justice/retaliation-
   // perception concern if this case's own process continues regardless.
-  const grievanceElsewhere = cases.find(c => c.id !== cs.id && c.employeeName === cs.employeeName && getProcessType(c.caseType).id === "grievance" && c.stage !== "closed");
+  //
+  // Phase 6.5 hardening (P2) — uses getCaseStage(c), not raw c.stage: a
+  // case can be resolved (signed outcome letter, meeting-derived closure)
+  // without ever having its stage field explicitly set, the same reason
+  // every other module in this codebase resolves stage through this
+  // function rather than reading the field directly. Reading c.stage
+  // here meant an already-closed grievance could permanently, un-
+  // dismissably flag this risk against an unrelated current case.
+  const grievanceElsewhere = cases.find(c => c.id !== cs.id && c.employeeName === cs.employeeName && getProcessType(c.caseType).id === "grievance" && getCaseStage(c) !== "closed");
   if (grievanceElsewhere) {
     items.push(riskItem("outstanding_grievance", "This employee has another open grievance", null, [{ kind: "case", id: grievanceElsewhere.id, label: grievanceElsewhere.employeeName }]));
   }
