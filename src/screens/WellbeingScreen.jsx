@@ -108,7 +108,7 @@ export function WellbeingScreen({ wellbeingNotes, activeWellbeing, wellbeingView
                     <div style={{fontSize:14,color:"#1A1535",fontWeight:activeWellbeing===emp?600:400}}>{emp}</div>
                     <div style={{fontSize:10,color:"#6B6880",marginTop:2}}>{empNotes.length} note{empNotes.length!==1?"s":""}</div>
                   </div>
-                  {hasOverdue&&<div style={{width:7,height:7,borderRadius:"50%",background:"#D4882A"}}/>}
+                  {hasOverdue&&<div role="img" aria-label="Has an overdue follow-up" title="Has an overdue follow-up" style={{width:7,height:7,borderRadius:"50%",background:"#D4882A"}}/>}
                 </button>
               );
             })}

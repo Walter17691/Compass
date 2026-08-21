@@ -49,11 +49,11 @@ export function ProcessChecklistPanel({ template }) {
             </div>
           </div>
         )}
-        {(policyLabel||template.target_days)&&(
+        {(policyLabel||template.target_days>0)&&(
           <div style={{fontSize:12,color:"#9B9098",paddingTop:hasDocs||hasMeetings||hasRoles?10:0,borderTop:hasDocs||hasMeetings||hasRoles?"1px solid #F5F1EA":"none"}}>
             {policyLabel&&<span>Linked policy: <strong style={{color:"#1A1535"}}>{policyLabel}</strong></span>}
-            {policyLabel&&template.target_days&&<span> · </span>}
-            {template.target_days&&<span>Target: <strong style={{color:"#1A1535"}}>{template.target_days} days per stage</strong></span>}
+            {policyLabel&&template.target_days>0&&<span> · </span>}
+            {template.target_days>0&&<span>Target: <strong style={{color:"#1A1535"}}>{template.target_days} days per stage</strong></span>}
           </div>
         )}
       </div>

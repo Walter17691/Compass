@@ -69,7 +69,7 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
           const isLast = i === OH_PROCESS_STEPS.length - 1;
           return (
             <div key={step.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 0",borderBottom:isLast?"none":"1px solid #F5F1EA"}}>
-              <span style={{width:9,height:9,borderRadius:"50%",background:STATUS_DOT[status],marginTop:5,flexShrink:0}} />
+              <span role="img" aria-label={status==="done"?"Done":status==="current"?"Current step":"Upcoming"} title={status==="done"?"Done":status==="current"?"Current step":"Upcoming"} style={{width:9,height:9,borderRadius:"50%",background:STATUS_DOT[status],marginTop:5,flexShrink:0}} />
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
                   <span style={{fontSize:13,fontWeight:status==="current"?600:400,color:status==="upcoming"?"#9B9098":"#1A1535"}}>{step.label}</span>

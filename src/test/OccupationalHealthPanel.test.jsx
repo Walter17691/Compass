@@ -15,6 +15,17 @@ describe('OccupationalHealthPanel (Phase 5, IP22)', () => {
     expect(screen.getByRole('button', { name: 'Mark done' })).toBeInTheDocument();
   });
 
+  // Phase 6.5 hardening (Batch 9) — the step status dot was color-only
+  // (done/current/upcoming), with no text backup for anyone who can't
+  // distinguish the colors.
+  it('gives every status dot a real text label, not color alone', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: { concern_identified: '2026-01-01T00:00:00.000Z' } } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" />);
+    expect(screen.getAllByLabelText('Done').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('Current step').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('Upcoming').length).toBeGreaterThan(0);
+  });
+
   it('renders nothing for a closed case with no OH process ever started', () => {
     const { container } = render(<OccupationalHealthPanel cs={makeCase()} cases={[makeCase()]} saveCases={()=>{}} stage="closed" />);
     expect(container).toBeEmptyDOMElement();

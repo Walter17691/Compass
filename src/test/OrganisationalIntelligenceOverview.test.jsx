@@ -104,4 +104,19 @@ describe('OrganisationalIntelligenceOverview', () => {
     render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={[]} organisationThemes={[]}/>);
     await waitFor(() => expect(screen.getByText('No recurring themes tagged across 2+ cases yet.')).toBeInTheDocument());
   });
+
+  // Phase 6.5 hardening (Batch 9) — "Cases by site" and "Cases by
+  // department" used to render a completely blank panel when there was
+  // no data at all, unlike their siblings ("Cases by type"/"Outcome
+  // types"), which already had a "No data yet." message.
+  it('shows "No data yet." for Cases by site and Cases by department when there is no data at all', async () => {
+    const emptyOverview = { ...baseOverview, cases_by_location: {}, cases_by_department: {} };
+    rpcMock.mockResolvedValue({ data: emptyOverview, error: null });
+    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    await waitFor(() => expect(screen.getByText('Cases by site').closest('div')).toBeInTheDocument());
+    const siteCard = screen.getByText('Cases by site').parentElement;
+    const deptCard = screen.getByText('Cases by department').parentElement;
+    expect(siteCard).toHaveTextContent('No data yet.');
+    expect(deptCard).toHaveTextContent('No data yet.');
+  });
 });

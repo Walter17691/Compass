@@ -157,11 +157,11 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
               full formatted dialogue. */}
           {meetingSummary&&(
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:16}}>
-              <div onClick={()=>setShowSummary(s=>!s)}
-                style={{padding:"12px 20px",borderBottom:showSummary?"1px solid #EDE5D8":"none",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5",cursor:"pointer"}}>
+              <button onClick={()=>setShowSummary(s=>!s)} aria-expanded={showSummary}
+                style={{width:"100%",padding:"12px 20px",border:"none",borderBottom:showSummary?"1px solid #EDE5D8":"none",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#FDFAF5",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
                 <span style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase"}}>Meeting summary</span>
                 <span style={{fontSize:11,color:"#7C5CFC",fontWeight:500}}>{showSummary?"Hide":"Show"}</span>
-              </div>
+              </button>
               {showSummary&&(
                 <div style={{padding:"20px 24px"}}>
                   <div style={{fontSize:13,lineHeight:1.8,color:"#3D3560"}}><MDRenderer text={meetingSummary}/></div>

@@ -40,13 +40,25 @@ describe('OrgEventsPanel', () => {
     render(<OrgEventsPanel orgEvents={[]} isHR={true} onAddEvent={onAddEvent}/>);
     await user.type(screen.getByPlaceholderText('Description'), 'New rota system launched');
     await user.type(screen.getByPlaceholderText('Affected locations (comma-separated, optional)'), 'Manchester, Leeds');
-    const dateInput = document.querySelector('input[type="date"]');
-    await user.type(dateInput, '2026-06-15');
+    await user.type(screen.getByLabelText('Event date'), '2026-06-15');
     await user.click(screen.getByRole('button', { name: 'Log event' }));
     expect(onAddEvent).toHaveBeenCalledWith({
       eventDate: '2026-06-15', eventType: 'restructure', description: 'New rota system launched', affectedLocations: ['Manchester', 'Leeds'],
     });
     expect(screen.getByPlaceholderText('Description')).toHaveValue('');
+  });
+
+  // Phase 6.5 hardening (Batch 9) — the date/type fields had no label or
+  // placeholder at all (previously only reachable via a raw
+  // document.querySelector in this very test file); description/
+  // affected-locations relied on placeholder text alone, not a reliable
+  // accessible name for assistive tech.
+  it('labels every "Log an event" field with a real accessible name', () => {
+    render(<OrgEventsPanel orgEvents={[]} isHR={true} onAddEvent={vi.fn()}/>);
+    expect(screen.getByLabelText('Event date')).toBeInTheDocument();
+    expect(screen.getByLabelText('Event type')).toBeInTheDocument();
+    expect(screen.getByLabelText('Description')).toBeInTheDocument();
+    expect(screen.getByLabelText('Affected locations (comma-separated, optional)')).toBeInTheDocument();
   });
 
   it('disables Log event until date and description are filled', () => {

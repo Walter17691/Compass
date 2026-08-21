@@ -98,4 +98,19 @@ describe('ManagerPortalScreen', () => {
     expect(setActiveCaseId).toHaveBeenCalledWith('c1');
     expect(setScreen).toHaveBeenCalled();
   });
+
+  // Phase 6.5 hardening (Batch 9) — clickable rows were plain
+  // <div onClick>, keyboard-unreachable with no accessible role. A
+  // clickable row is now a real <button>; a display-only row (no
+  // onClick given, e.g. concerns submitted) stays a plain <div>.
+  it('renders a clickable row as a real, keyboard-reachable button', () => {
+    render(<ManagerPortalScreen {...baseProps} />);
+    expect(screen.getAllByText('Sam Employee')[0].closest('button')).not.toBeNull();
+  });
+
+  it('renders a display-only row (concerns submitted, no click target) as a plain non-button element', () => {
+    const concernReferrals = [{ id: 'ref1', employeeName: 'Sam Employee', submittedBy: 'u1', status: 'new', createdAt: '2026-08-14T00:00:00Z' }];
+    render(<ManagerPortalScreen {...baseProps} concernReferrals={concernReferrals} />);
+    expect(screen.getByText('New').closest('button')).toBeNull();
+  });
 });

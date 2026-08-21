@@ -58,7 +58,13 @@ function TemplateEditor({ processType, template, saveProcessTemplate }) {
       default_tasks: draft.default_tasks.filter(t => t.name?.trim()),
       suggested_role_ids: draft.suggested_role_ids,
       policy_category: draft.policy_category || null,
-      target_days: draft.target_days ? Number(draft.target_days) : null,
+      // The number input's own min="1" isn't hard-enforced (this isn't a
+      // <form> submit, so nothing blocks a directly-typed "0" or
+      // negative value from reaching here) — clamp to null rather than
+      // persist a target that isn't a real target, and that
+      // ProcessChecklistPanel's own truthy check used to render as a
+      // bare "0" instead of hiding the line entirely.
+      target_days: Number(draft.target_days) > 0 ? Number(draft.target_days) : null,
     });
     setDirty(false);
   };
@@ -69,13 +75,13 @@ function TemplateEditor({ processType, template, saveProcessTemplate }) {
   return (
     <div style={{ marginTop: 16, borderTop: "1px solid #E8E0D0", paddingTop: 16, display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
-        <label style={labelStyle}>Required documents <span style={{ fontWeight: 400, textTransform: "none" }}>(one per line)</span></label>
-        <textarea rows={3} value={draft.required_documents} onChange={e => update({ required_documents: e.target.value })} placeholder={"e.g. Investigation report\nSigned meeting notes"} style={{ ...inputStyle, resize: "vertical" }} />
+        <label htmlFor={`required-documents-${processType.id}`} style={labelStyle}>Required documents <span style={{ fontWeight: 400, textTransform: "none" }}>(one per line)</span></label>
+        <textarea id={`required-documents-${processType.id}`} rows={3} value={draft.required_documents} onChange={e => update({ required_documents: e.target.value })} placeholder={"e.g. Investigation report\nSigned meeting notes"} style={{ ...inputStyle, resize: "vertical" }} />
       </div>
 
       <div>
-        <label style={labelStyle}>Suggested meetings <span style={{ fontWeight: 400, textTransform: "none" }}>(one per line)</span></label>
-        <textarea rows={3} value={draft.suggested_meetings} onChange={e => update({ suggested_meetings: e.target.value })} placeholder={"e.g. Investigation meeting\nDisciplinary hearing"} style={{ ...inputStyle, resize: "vertical" }} />
+        <label htmlFor={`suggested-meetings-${processType.id}`} style={labelStyle}>Suggested meetings <span style={{ fontWeight: 400, textTransform: "none" }}>(one per line)</span></label>
+        <textarea id={`suggested-meetings-${processType.id}`} rows={3} value={draft.suggested_meetings} onChange={e => update({ suggested_meetings: e.target.value })} placeholder={"e.g. Investigation meeting\nDisciplinary hearing"} style={{ ...inputStyle, resize: "vertical" }} />
       </div>
 
       <div>
@@ -108,15 +114,15 @@ function TemplateEditor({ processType, template, saveProcessTemplate }) {
 
       <div style={{ display: "flex", gap: 16 }}>
         <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Linked policy</label>
-          <select value={draft.policy_category} onChange={e => update({ policy_category: e.target.value })} style={inputStyle}>
+          <label htmlFor={`policy-category-${processType.id}`} style={labelStyle}>Linked policy</label>
+          <select id={`policy-category-${processType.id}`} value={draft.policy_category} onChange={e => update({ policy_category: e.target.value })} style={inputStyle}>
             <option value="">None</option>
             {POLICY_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </div>
         <div style={{ width: 160 }}>
-          <label style={labelStyle}>Target days per stage</label>
-          <input type="number" min="1" value={draft.target_days} onChange={e => update({ target_days: e.target.value })} placeholder={String(DEFAULT_STAGE_TARGET_DAYS)} style={inputStyle} />
+          <label htmlFor={`target-days-${processType.id}`} style={labelStyle}>Target days per stage</label>
+          <input id={`target-days-${processType.id}`} type="number" min="1" value={draft.target_days} onChange={e => update({ target_days: e.target.value })} placeholder={String(DEFAULT_STAGE_TARGET_DAYS)} style={inputStyle} />
         </div>
       </div>
 

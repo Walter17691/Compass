@@ -136,9 +136,11 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
           {typeEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(typeEntries)}/>)}
         </Panel>
         <Panel title="Cases by site">
+          {locationEntries.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
           {locationEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(locationEntries)} color="#B87520"/>)}
         </Panel>
         <Panel title="Cases by department">
+          {departmentEntries.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
           {departmentEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(departmentEntries)} color="#1C5AA0"/>)}
         </Panel>
         <Panel title="Outcome types">

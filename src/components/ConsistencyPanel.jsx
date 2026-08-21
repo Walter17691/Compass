@@ -72,10 +72,10 @@ export function ConsistencyPanel({ cs, sanctionDistribution, comparableCases, co
           <div style={{fontSize:11,color:"#9B9098",marginBottom:6}}>Comparable closed cases ({comparableCases.length}) — anonymised, no employee names</div>
           {comparableCases.map(c=>(
             <div key={c.key} style={{border:"1px solid #EDE5D8",borderRadius:6,marginBottom:6,overflow:"hidden"}}>
-              <div onClick={()=>setExpandedKey(k=>k===c.key?null:c.key)} style={{padding:"8px 10px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:"#1A1535"}}>
+              <button onClick={()=>setExpandedKey(k=>k===c.key?null:c.key)} aria-expanded={expandedKey===c.key} style={{width:"100%",background:"none",border:"none",padding:"8px 10px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,color:"#1A1535",fontFamily:"inherit",textAlign:"left"}}>
                 <span>{cs.caseType} — {c.outcome||"No recorded outcome"}</span>
                 <span style={{color:"#7C5CFC",fontSize:11}}>{expandedKey===c.key?"Hide":"View"}</span>
-              </div>
+              </button>
               {expandedKey===c.key && (
                 <div style={{padding:"8px 10px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5"}}>
                   {c.findings.map((f,i)=>(

@@ -20,8 +20,13 @@ const SectionCard = ({ title, count, children, empty }) => (
   </Card>
 );
 
-const Row = ({ onClick, children }) => (
-  <div onClick={onClick} style={{padding:"9px 0",borderBottom:"1px solid #F5F1EA",cursor:onClick?"pointer":"default"}}>{children}</div>
+// Doubles as a plain display row (no onClick) and a clickable one — only
+// the clickable case is real interactive content that needs a real
+// button, so this branches rather than always rendering one.
+const Row = ({ onClick, children }) => onClick ? (
+  <button onClick={onClick} style={{width:"100%",background:"none",border:"none",padding:"9px 0",borderBottom:"1px solid #F5F1EA",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>{children}</button>
+) : (
+  <div style={{padding:"9px 0",borderBottom:"1px solid #F5F1EA"}}>{children}</div>
 );
 
 // Manager Enablement (Phase 4, MP16, §1) — "My People Actions". Built

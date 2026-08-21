@@ -186,14 +186,15 @@ export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCase
             const key = dateKey(day);
             const items = byDate[key]||[];
             const isToday = key===todayKey;
+            const CellTag = items.length ? 'button' : 'div';
             return (
-              <div key={i} onClick={()=>items.length&&setSelectedDate(key)} style={{background:"#FFFFFF",minHeight:90,padding:6,cursor:items.length?"pointer":"default",boxSizing:"border-box",outline:isToday?"2px solid #7C5CFC":"none",outlineOffset:-2}}>
+              <CellTag key={i} onClick={items.length?()=>setSelectedDate(key):undefined} style={{width:"100%",background:"#FFFFFF",border:"none",minHeight:90,padding:6,cursor:items.length?"pointer":"default",boxSizing:"border-box",outline:isToday?"2px solid #7C5CFC":"none",outlineOffset:-2,fontFamily:"inherit",textAlign:"left"}}>
                 <div style={{fontSize:11,color:isToday?"#7C5CFC":"#9B9098",fontWeight:isToday?700:400,marginBottom:4}}>{day}</div>
                 {items.slice(0,3).map((it,idx)=>(
                   <div key={idx} title={it.label} style={{fontSize:10,color:"#FFFFFF",background:CATEGORY_COLOR[it.category]||"#6B6375",borderRadius:4,padding:"1px 5px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.employeeName}</div>
                 ))}
                 {items.length>3&&<div style={{fontSize:10,color:"#9B9098"}}>+{items.length-3} more</div>}
-              </div>
+              </CellTag>
             );
           })}
         </div>
@@ -204,13 +205,16 @@ export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCase
               <div style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{selectedDate}</div>
               <button onClick={()=>setSelectedDate(null)} aria-label="Close" style={{background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontSize:16}}>×</button>
             </div>
-            {selectedItems.map((it,i)=>(
-              <div key={i} onClick={()=>openCase(it)} style={{padding:"8px 10px",borderRadius:8,marginBottom:6,background:it.overdue?"#FEF0EB":"#FDFAF5",cursor:it.caseId?"pointer":"default"}}>
-                <div style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{it.employeeName}</div>
-                <div style={{fontSize:12,color:"#6B6375"}}>{it.label}</div>
-                {it.overdue&&<div style={{fontSize:11,color:"#C84B2F",marginTop:2}}>{it.daysOverdue} day{it.daysOverdue===1?"":"s"} overdue</div>}
-              </div>
-            ))}
+            {selectedItems.map((it,i)=>{
+              const ItemTag = it.caseId ? 'button' : 'div';
+              return (
+                <ItemTag key={i} onClick={it.caseId?()=>openCase(it):undefined} style={{width:"100%",background:it.overdue?"#FEF0EB":"#FDFAF5",border:"none",padding:"8px 10px",borderRadius:8,marginBottom:6,cursor:it.caseId?"pointer":"default",fontFamily:"inherit",textAlign:"left"}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535"}}>{it.employeeName}</div>
+                  <div style={{fontSize:12,color:"#6B6375"}}>{it.label}</div>
+                  {it.overdue&&<div style={{fontSize:11,color:"#C84B2F",marginTop:2}}>{it.daysOverdue} day{it.daysOverdue===1?"":"s"} overdue</div>}
+                </ItemTag>
+              );
+            })}
           </div>
         )}
       </div>

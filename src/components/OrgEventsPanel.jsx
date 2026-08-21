@@ -69,13 +69,13 @@ export function OrgEventsPanel({ orgEvents, isHR, onAddEvent }) {
         <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 18px"}}>
           <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:10}}>Log an event</div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            <input type="date" value={eventDate} onChange={e=>setEventDate(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-            <select value={eventType} onChange={e=>setEventType(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <input type="date" value={eventDate} onChange={e=>setEventDate(e.target.value)} aria-label="Event date" style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+            <select value={eventType} onChange={e=>setEventType(e.target.value)} aria-label="Event type" style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}>
               {ORG_EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </div>
-          <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Description" rows={2} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:8,resize:"vertical"}}/>
-          <input value={affectedLocations} onChange={e=>setAffectedLocations(e.target.value)} placeholder="Affected locations (comma-separated, optional)" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:10}}/>
+          <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Description" aria-label="Description" rows={2} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:8,resize:"vertical"}}/>
+          <input value={affectedLocations} onChange={e=>setAffectedLocations(e.target.value)} placeholder="Affected locations (comma-separated, optional)" aria-label="Affected locations (comma-separated, optional)" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:10}}/>
           <button
             onClick={()=>{
               if(!eventDate.trim()||!description.trim()) return;

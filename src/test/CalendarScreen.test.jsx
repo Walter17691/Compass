@@ -110,3 +110,54 @@ describe('CalendarScreen — smart scheduling (Phase 5, IP16)', () => {
     expect(screen.getByText(/Policy requires 48 hours' notice/)).toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (Batch 9) — the month-grid day cell and the
+// selected-day item row were both plain <div onClick>, keyboard-
+// unreachable, with no accessible role at all. Both now render as a
+// real <button> whenever they're genuinely interactive (a day with
+// items, an item with a linked case), and a plain <div> when they're
+// not (an empty day, an item with no case to open) — never a button
+// that does nothing.
+describe('CalendarScreen — day cell and item accessibility (Phase 6.5, Batch 9)', () => {
+  it('renders a day with deadlines as a real button, opening the day detail on click', async () => {
+    const user = userEvent.setup();
+    const todayKey = new Date().toLocaleDateString('en-GB');
+    const dueSoon = [{ employeeName: 'Sarah Jones', label: 'Investigation overrunning', category: 'investigation', deadlineDate: todayKey, caseId: 'c1', overdue: false, daysOverdue: 0 }];
+    render(<CalendarScreen cases={cases} dueSoon={dueSoon} setScreen={()=>{}} screens={{}} setActiveCaseId={()=>{}} setActiveCaseStage={()=>{}} />);
+    const dayButton = screen.getByText('Sarah Jones').closest('button');
+    expect(dayButton).not.toBeNull();
+    await user.click(dayButton);
+    expect(screen.getByText(todayKey)).toBeInTheDocument();
+  });
+
+  it('renders an empty day (no deadlines) as a plain non-interactive cell, not a button', () => {
+    render(<CalendarScreen cases={cases} dueSoon={[]} setScreen={()=>{}} screens={{}} setActiveCaseId={()=>{}} setActiveCaseStage={()=>{}} />);
+    // With no dueSoon items at all, no day cell in the grid should be a button.
+    const gridButtons = screen.queryAllByRole('button').filter(b => /^\d+$/.test(b.textContent));
+    expect(gridButtons).toHaveLength(0);
+  });
+
+  it('renders a selected-day item with a linked case as a real button that opens the case', async () => {
+    const user = userEvent.setup();
+    const todayKey = new Date().toLocaleDateString('en-GB');
+    const dueSoon = [{ employeeName: 'Sarah Jones', label: 'Investigation overrunning', category: 'investigation', deadlineDate: todayKey, caseId: 'c1', overdue: false, daysOverdue: 0 }];
+    const setActiveCaseId = vi.fn();
+    const setScreen = vi.fn();
+    render(<CalendarScreen cases={cases} dueSoon={dueSoon} setScreen={setScreen} screens={{ CASE_VIEW: 'case-view' }} setActiveCaseId={setActiveCaseId} setActiveCaseStage={()=>{}} />);
+    await user.click(screen.getByText('Sarah Jones').closest('button'));
+    const itemButton = screen.getByText('Investigation overrunning').closest('button');
+    expect(itemButton).not.toBeNull();
+    await user.click(itemButton);
+    expect(setActiveCaseId).toHaveBeenCalledWith('c1');
+    expect(setScreen).toHaveBeenCalledWith('case-view');
+  });
+
+  it('renders a selected-day item with no linked case as a plain, non-clickable row', async () => {
+    const user = userEvent.setup();
+    const todayKey = new Date().toLocaleDateString('en-GB');
+    const dueSoon = [{ employeeName: 'DSAR request', label: 'DSAR response due', category: 'dsar', deadlineDate: todayKey, caseId: null, overdue: false, daysOverdue: 0 }];
+    render(<CalendarScreen cases={cases} dueSoon={dueSoon} setScreen={()=>{}} screens={{}} setActiveCaseId={()=>{}} setActiveCaseStage={()=>{}} />);
+    await user.click(screen.getByText('DSAR request').closest('button'));
+    expect(screen.getByText('DSAR response due').closest('button')).toBeNull();
+  });
+});

@@ -197,12 +197,12 @@ export function ImprovementInitiativesPanel({ improvementInitiatives, isHR, onAd
       {isHR && (showForm ? (
         <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 18px"}}>
           <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:10}}>New initiative</div>
-          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
-          <textarea value={problemIdentified} onChange={e=>setProblemIdentified(e.target.value)} placeholder="Problem identified" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
-          <input value={supportingInsights} onChange={e=>setSupportingInsights(e.target.value)} placeholder="Supporting insights (comma-separated, optional)" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title" aria-label="Initiative title" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
+          <textarea value={problemIdentified} onChange={e=>setProblemIdentified(e.target.value)} placeholder="Problem identified" aria-label="Problem identified" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
+          <input value={supportingInsights} onChange={e=>setSupportingInsights(e.target.value)} placeholder="Supporting insights (comma-separated, optional)" aria-label="Supporting insights (comma-separated, optional)" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
           <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
-            <input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="Owner" style={{...inputStyle,flex:1,minWidth:120}}/>
-            <input type="date" value={targetCompletion} onChange={e=>setTargetCompletion(e.target.value)} style={{...inputStyle,flex:1,minWidth:150}}/>
+            <input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="Owner" aria-label="Owner" style={{...inputStyle,flex:1,minWidth:120}}/>
+            <input type="date" value={targetCompletion} onChange={e=>setTargetCompletion(e.target.value)} aria-label="Target completion date" style={{...inputStyle,flex:1,minWidth:150}}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={submit} disabled={!title.trim()||!problemIdentified.trim()} style={{fontSize:12,background:title.trim()&&problemIdentified.trim()?"#7C5CFC":"#E8E0D0",border:"none",borderRadius:8,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:title.trim()&&problemIdentified.trim()?"pointer":"default",fontFamily:"DM Sans,system-ui,sans-serif"}}>Create initiative</button>

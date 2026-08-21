@@ -36,6 +36,21 @@ describe('ImprovementInitiativesPanel', () => {
     expect(screen.queryByRole('button', { name: '+ New initiative' })).not.toBeInTheDocument();
   });
 
+  // Phase 6.5 hardening (Batch 9) — every "New initiative" field relied
+  // on placeholder text alone, which isn't a reliable accessible name
+  // for assistive tech. Proves each field is now reachable by its real
+  // accessible label, not just its placeholder.
+  it('labels every "New initiative" field with a real accessible name', async () => {
+    const user = userEvent.setup();
+    render(<ImprovementInitiativesPanel improvementInitiatives={[]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+    await user.click(screen.getByRole('button', { name: '+ New initiative' }));
+    expect(screen.getByLabelText('Initiative title')).toBeInTheDocument();
+    expect(screen.getByLabelText('Problem identified')).toBeInTheDocument();
+    expect(screen.getByLabelText('Supporting insights (comma-separated, optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Owner')).toBeInTheDocument();
+    expect(screen.getByLabelText('Target completion date')).toBeInTheDocument();
+  });
+
   it('creates an initiative with comma-separated supporting insights split into an array', async () => {
     const user = userEvent.setup();
     const onAdd = vi.fn();
