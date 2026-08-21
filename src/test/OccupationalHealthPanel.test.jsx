@@ -96,8 +96,12 @@ describe('OccupationalHealthPanel (Phase 5, IP22)', () => {
   });
 });
 
+// Phase 6.5 hardening (P0, Cluster 8) — selectedEvidenceId/findingsKey are
+// now keyed by the evidence item's own stable id (evidence.id), not its
+// array position, so this whole describe block's fixtures carry an id and
+// select by/assert on it instead of a numeric index.
 describe('OccupationalHealthPanel — OH report intelligence (Phase 5, IP23)', () => {
-  const analysableEvidence = { name: 'OH Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA', size: 1000 };
+  const analysableEvidence = { id: 'ev1', name: 'OH Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA', size: 1000 };
 
   it('omits the "let Compass suggest findings" section when the case has no analysable evidence', () => {
     const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [] });
@@ -105,28 +109,28 @@ describe('OccupationalHealthPanel — OH report intelligence (Phase 5, IP23)', (
     expect(screen.queryByText(/let Compass suggest findings/)).not.toBeInTheDocument();
   });
 
-  it('lists analysable evidence and calls onAnalyseOhReport with the selected index', async () => {
+  it('lists analysable evidence and calls onAnalyseOhReport with the selected evidence id', async () => {
     const user = userEvent.setup();
     const onAnalyseOhReport = vi.fn();
     const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [analysableEvidence] });
     render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onAnalyseOhReport={onAnalyseOhReport} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}} />);
     const analyseButton = screen.getByRole('button', { name: 'Analyse OH report' });
     expect(analyseButton).toBeDisabled();
-    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev1');
     expect(analyseButton).toBeEnabled();
     await user.click(analyseButton);
-    expect(onAnalyseOhReport).toHaveBeenCalledWith(cs, 0);
+    expect(onAnalyseOhReport).toHaveBeenCalledWith(cs, 'ev1');
   });
 
   it('shows an "Analysing..." disabled state while loading', async () => {
     const user = userEvent.setup();
     const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [analysableEvidence] });
-    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}} ohReportAnalysisLoading={{ 'c1::0': true }} />);
-    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}} ohReportAnalysisLoading={{ 'c1::ev1': true }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev1');
     expect(screen.getByRole('button', { name: 'Analysing...' })).toBeDisabled();
   });
 
-  it('renders open findings for the selected evidence and accepting/dismissing calls the right handler with (cs, index, finding)', async () => {
+  it('renders open findings for the selected evidence and accepting/dismissing calls the right handler with (cs, evidenceId, finding)', async () => {
     const user = userEvent.setup();
     const onAcceptOhFinding = vi.fn();
     const onDismissOhFinding = vi.fn();
@@ -134,31 +138,46 @@ describe('OccupationalHealthPanel — OH report intelligence (Phase 5, IP23)', (
     const finding = { id: 'oh_finding_1', type: 'adjustment', description: 'Reduced hours for 4 weeks', reasoning: 'Report recommends it', status: 'open' };
     render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
       onAnalyseOhReport={()=>{}} onAcceptOhFinding={onAcceptOhFinding} onDismissOhFinding={onDismissOhFinding}
-      ohReportFindings={{ 'c1::0': [finding] }} />);
-    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+      ohReportFindings={{ 'c1::ev1': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev1');
     expect(screen.getByText('Adjustment')).toBeInTheDocument();
     expect(screen.getByText('Reduced hours for 4 weeks')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Accept' }));
-    expect(onAcceptOhFinding).toHaveBeenCalledWith(cs, 0, finding);
+    expect(onAcceptOhFinding).toHaveBeenCalledWith(cs, 'ev1', finding);
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(onDismissOhFinding).toHaveBeenCalledWith(cs, 0, finding);
+    expect(onDismissOhFinding).toHaveBeenCalledWith(cs, 'ev1', finding);
   });
 
   it('only shows findings scoped to the currently selected evidence item', async () => {
     const user = userEvent.setup();
-    const secondEvidence = { name: 'Other Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,BBBB', size: 1000 };
+    const secondEvidence = { id: 'ev2', name: 'Other Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,BBBB', size: 1000 };
     const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [analysableEvidence, secondEvidence] });
     const finding = { id: 'oh_finding_1', type: 'restriction', description: 'No heavy lifting', status: 'open' };
     render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
       onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
-      ohReportFindings={{ 'c1::0': [finding] }} />);
-    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '1');
+      ohReportFindings={{ 'c1::ev1': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev2');
+    expect(screen.queryByText('No heavy lifting')).not.toBeInTheDocument();
+  });
+
+  it('deleting a different, unselected evidence item never reassigns findings to the wrong item (Cluster 8 regression)', async () => {
+    const user = userEvent.setup();
+    const secondEvidence = { id: 'ev2', name: 'Other Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,BBBB', size: 1000 };
+    const finding = { id: 'oh_finding_1', type: 'restriction', description: 'No heavy lifting', status: 'open' };
+    // ev1 (index 0) is deleted; ev2 (was index 1) is now at index 0 — an
+    // index-keyed lookup would now wrongly resolve "index 0" to ev2's
+    // findings. An id-keyed lookup for ev1's own findings must not.
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [secondEvidence] });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
+      onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
+      ohReportFindings={{ 'c1::ev1': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev2');
     expect(screen.queryByText('No heavy lifting')).not.toBeInTheDocument();
   });
 });
 
 describe('OccupationalHealthPanel — due-date preview on task-shaped findings (Phase 5, IP24)', () => {
-  const analysableEvidence = { name: 'OH Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA', size: 1000 };
+  const analysableEvidence = { id: 'ev1', name: 'OH Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA', size: 1000 };
 
   it('shows a parsed due date next to an adjustment/restriction/further_information finding with a commitment', async () => {
     const user = userEvent.setup();
@@ -166,8 +185,8 @@ describe('OccupationalHealthPanel — due-date preview on task-shaped findings (
     const finding = { id: 'f1', type: 'adjustment', description: 'Provide a standing desk within 2 weeks', status: 'open' };
     render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
       onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
-      ohReportFindings={{ 'c1::0': [finding] }} />);
-    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+      ohReportFindings={{ 'c1::ev1': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev1');
     expect(screen.getByText(/^Due \d{4}-\d{2}-\d{2}$/)).toBeInTheDocument();
   });
 
@@ -177,8 +196,8 @@ describe('OccupationalHealthPanel — due-date preview on task-shaped findings (
     const finding = { id: 'f1', type: 'restriction', description: 'No heavy lifting', status: 'open' };
     render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
       onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
-      ohReportFindings={{ 'c1::0': [finding] }} />);
-    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+      ohReportFindings={{ 'c1::ev1': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev1');
     expect(screen.queryByText(/^Due \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
   });
 
@@ -188,8 +207,8 @@ describe('OccupationalHealthPanel — due-date preview on task-shaped findings (
     const finding = { id: 'f1', type: 'review_date', date: '2026-10-01', status: 'open' };
     render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health"
       onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}}
-      ohReportFindings={{ 'c1::0': [finding] }} />);
-    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), '0');
+      ohReportFindings={{ 'c1::ev1': [finding] }} />);
+    await user.selectOptions(screen.getByText('Select the OH report...').closest('select'), 'ev1');
     expect(screen.queryByText(/^Due \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
   });
 });

@@ -43,7 +43,7 @@ export function EvidenceMatrixPanel({ cs, allegations, suggestions, suggestionsL
           <div style={{fontSize:11,fontWeight:600,color:"#5B3FD4",marginBottom:8}}>Suggested links — confirm or reject each one</div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {suggestions.map((s,i)=>{
-              const ev = evidence[s.evidenceIndex];
+              const ev = evidence.find(e=>e.id===s.evidenceId);
               const allegation = allegations.find(a=>a.id===s.allegationId);
               if (!ev || !allegation) return null;
               return (

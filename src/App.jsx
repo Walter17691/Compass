@@ -45,7 +45,7 @@ import { getProcessType, stageLabel } from './lib/processStages';
 import { buildEscalationContext } from './lib/escalation';
 import { EscalateToHrModal } from './screens/EscalateToHrModal';
 import { getTemplateForType, resolveDefaultTaskDueDate } from './lib/processTemplates';
-import { readEvidenceFiles } from './lib/evidenceUpload';
+import { readEvidenceFiles, ensureEvidenceIds } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
@@ -191,7 +191,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [prepNotes, setPrepNotes] = useState("");
   // Meeting Intelligence Phase 2 (M1) — structured, editable pre-meeting
   // questions alongside the free-text prep pack: {id, text, category,
-  // essential, reasoning, linkedAllegationId, linkedEvidenceIndex, source}.
+  // essential, reasoning, linkedAllegationId, linkedEvidenceId, source}.
   // source is "ai" for AI-generated or "user" for manually added. Session-
   // local like prepNotes — not written to the DB until the meeting itself
   // saves.
@@ -1128,7 +1128,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const query = supabase.from('cases').select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority').eq('org_id', org.id);
       const { data, error } = await query;
   if(!error && data) {
-        setCases(data.map(mapCaseRow));
+        // ensureEvidenceIds — see saveCases' own use of it (Phase 6.5
+        // hardening, P0, Cluster 8): backfills a stable id onto any
+        // evidence item that predates this fix, here so a legacy case's
+        // evidence has real ids from the moment it's loaded, not only
+        // after its next save.
+        setCases(data.map(mapCaseRow).map(ensureEvidenceIds));
       }
     } catch(e) { console.error("Load cases error:", e); }
   };
@@ -1963,7 +1968,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // of the many call sites that set cs.stage (or just change data a
     // heuristic infers a new stage from) triggered it.
     const prevById = new Map(cases.map(cs => [cs.id, cs]));
-    const stamped = u.map(cs => withStageTransitionStamp(cs, prevById.get(cs.id) || null));
+    const stamped = u.map(cs => ensureEvidenceIds(withStageTransitionStamp(cs, prevById.get(cs.id) || null)));
     setCases(stamped);
     orgLsSet("compass_cases", stamped);
     if(org?.id) {
@@ -2178,7 +2183,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const questions = (Array.isArray(parsed.questions)?parsed.questions:[]).map((q,i)=>({
         id:"pq_"+Date.now()+"_"+i, text:q.text||"", category:q.category||"general", essential:!!q.essential, reasoning:q.reasoning||"",
         linkedAllegationId: caseAllegations.some(a=>a.id===q.allegationId) ? q.allegationId : null,
-        linkedEvidenceIndex:null, source:"ai", status:"not_asked", statusSource:"ai",
+        linkedEvidenceId:null, source:"ai", status:"not_asked", statusSource:"ai",
       })).filter(q=>q.text.trim());
       return { agenda: parsed.agenda||"", questions };
     } catch(e) { console.error("generateMeetingWorkspace", e); return { agenda:"", questions:[] }; }
@@ -4355,14 +4360,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
-      const valid = (Array.isArray(parsed)?parsed:[]).filter(s=>unlinked.some(ev=>ev.index===s.evidenceIndex) && caseAllegations.some(a=>a.id===s.allegationId));
+      // Phase 6.5 hardening (P0, Cluster 8) — the LLM is only ever asked
+      // for an index into THIS SAME unlinked array from THIS SAME call,
+      // resolved immediately into the evidence item's own stable id here
+      // — evidenceSuggestions (session-local state) stores evidenceId,
+      // never the index itself, so a later delete elsewhere on the case
+      // can't make an already-generated suggestion point at the wrong
+      // evidence item.
+      const valid = (Array.isArray(parsed)?parsed:[])
+        .filter(s=>unlinked.some(ev=>ev.index===s.evidenceIndex) && caseAllegations.some(a=>a.id===s.allegationId))
+        .map(s=>({ ...s, evidenceId: unlinked.find(ev=>ev.index===s.evidenceIndex).id }));
       setEvidenceSuggestions(s=>({...s, [cs.id]:valid}));
     } catch(e) { console.error("generateEvidenceSuggestions", e); if(!silent) showToast("Couldn't generate evidence suggestions — "+e.message, "error"); }
     if(!silent) setEvidenceSuggestionsLoading(l=>({...l, [cs.id]:false}));
   };
 
   const acceptEvidenceSuggestion = (cs, suggestion) => {
-    saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:linkEvidenceToAllegation(x.evidence||[], suggestion.evidenceIndex, suggestion.allegationId, suggestion.stance)}:x));
+    saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:linkEvidenceToAllegation(x.evidence||[], suggestion.evidenceId, suggestion.allegationId, suggestion.stance)}:x));
     setEvidenceSuggestions(s=>({...s, [cs.id]:(s[cs.id]||[]).filter(sug=>sug!==suggestion)}));
   };
 
@@ -4386,15 +4400,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // shapes from the original spec into, so this deliberately only
   // implements the four finding types that map onto something that
   // already exists.
-  const [documentFindings, setDocumentFindings] = useState({}); // `${caseId}::${evidenceIndex}` -> [{id,type,...,status}]
+  // Phase 6.5 hardening (P0, Cluster 8) — keyed by the evidence item's own
+  // stable id (src/lib/evidenceUpload.js), not array position — deleting
+  // a different evidence item can no longer silently reassign these
+  // session-local findings to the wrong document.
+  const [documentFindings, setDocumentFindings] = useState({}); // `${caseId}::${evidenceId}` -> [{id,type,...,status}]
   const [documentAnalysisLoading, setDocumentAnalysisLoading] = useState({});
 
-  const analyseEvidenceDocument = async (cs, evidenceIndex) => {
-    const ev = (cs.evidence||[])[evidenceIndex];
+  const analyseEvidenceDocument = async (cs, evidenceId) => {
+    const ev = (cs.evidence||[]).find(e=>e.id===evidenceId);
     if(!ev || !canAnalyseEvidence(ev)) return;
     const content = buildAnalysisContent(ev);
     if(!content) return;
-    const key = `${cs.id}::${evidenceIndex}`;
+    const key = `${cs.id}::${evidenceId}`;
     setDocumentAnalysisLoading(l=>({...l, [key]:true}));
     try {
       const caseAllegations = allegationsForCase(allegations, cs.id);
@@ -4423,20 +4441,20 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setDocumentAnalysisLoading(l=>({...l, [key]:false}));
   };
 
-  const acceptDocumentFinding = (cs, evidenceIndex, finding) => {
-    const key = `${cs.id}::${evidenceIndex}`;
+  const acceptDocumentFinding = (cs, evidenceId, finding) => {
+    const key = `${cs.id}::${evidenceId}`;
     if(finding.type==="witness") {
       createCaseTask(cs.id, {name:`Interview ${finding.name} as a potential witness`});
     } else if(finding.type==="action") {
       createCaseTask(cs.id, {name:finding.description, dueDate: parseCommitmentDueDate(finding.description)||"", owner: suggestTaskOwner(cs, orgMembers)});
     } else if(finding.type==="allegation_link") {
-      saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:linkEvidenceToAllegation(x.evidence||[], evidenceIndex, finding.allegationId, finding.stance)}:x));
+      saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:linkEvidenceToAllegation(x.evidence||[], evidenceId, finding.allegationId, finding.stance)}:x));
     } else if(finding.type==="inconsistency") {
-      const ev = (cs.evidence||[])[evidenceIndex];
+      const ev = (cs.evidence||[]).find(e=>e.id===evidenceId);
       const created = createSignal(caseSignals, cs.id, {
         type:"inconsistency", title:"Potential inconsistency: "+(ev?.name||"uploaded document"),
         reasoning:finding.description+(finding.reasoning?" — "+finding.reasoning:""),
-        sourceRefs:[{kind:"evidence", id:evidenceIndex, label:ev?.name}],
+        sourceRefs:[{kind:"evidence", id:evidenceId, label:ev?.name}],
         source:"ai",
       });
       setCaseSignals(created);
@@ -4445,8 +4463,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setDocumentFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"accepted"}:f)}));
   };
 
-  const dismissDocumentFinding = (cs, evidenceIndex, finding) => {
-    const key = `${cs.id}::${evidenceIndex}`;
+  const dismissDocumentFinding = (cs, evidenceId, finding) => {
+    const key = `${cs.id}::${evidenceId}`;
     setDocumentFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"dismissed"}:f)}));
   };
 
@@ -4458,15 +4476,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // process, not the evidence-allegation/case-signal write paths the
   // generic finding types use, so mixing the two vocabularies into one
   // map would make both harder to reason about for no real benefit.
-  const [ohReportFindings, setOhReportFindings] = useState({}); // `${caseId}::${evidenceIndex}` -> [{id,type,...,status}]
+  const [ohReportFindings, setOhReportFindings] = useState({}); // `${caseId}::${evidenceId}` -> [{id,type,...,status}]
   const [ohReportAnalysisLoading, setOhReportAnalysisLoading] = useState({});
 
-  const analyseOhReport = async (cs, evidenceIndex) => {
-    const ev = (cs.evidence||[])[evidenceIndex];
+  const analyseOhReport = async (cs, evidenceId) => {
+    const ev = (cs.evidence||[]).find(e=>e.id===evidenceId);
     if(!ev || !canAnalyseEvidence(ev)) return;
     const content = buildAnalysisContent(ev);
     if(!content) return;
-    const key = `${cs.id}::${evidenceIndex}`;
+    const key = `${cs.id}::${evidenceId}`;
     setOhReportAnalysisLoading(l=>({...l, [key]:true}));
     try {
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
@@ -4489,8 +4507,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setOhReportAnalysisLoading(l=>({...l, [key]:false}));
   };
 
-  const acceptOhFinding = (cs, evidenceIndex, finding) => {
-    const key = `${cs.id}::${evidenceIndex}`;
+  const acceptOhFinding = (cs, evidenceId, finding) => {
+    const key = `${cs.id}::${evidenceId}`;
     const taskName = ohFindingTaskName(finding);
     if(taskName) {
       createCaseTask(cs.id, {name: taskName, dueDate: parseCommitmentDueDate(finding.description)||"", owner: suggestTaskOwner(cs, orgMembers)});
@@ -4500,8 +4518,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setOhReportFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"accepted"}:f)}));
   };
 
-  const dismissOhFinding = (cs, evidenceIndex, finding) => {
-    const key = `${cs.id}::${evidenceIndex}`;
+  const dismissOhFinding = (cs, evidenceId, finding) => {
+    const key = `${cs.id}::${evidenceId}`;
     setOhReportFindings(s=>({...s, [key]:(s[key]||[]).map(f=>f.id===finding.id?{...f,status:"dismissed"}:f)}));
   };
 
@@ -5065,7 +5083,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         essential: !!q.essential,
         reasoning: q.reasoning||"",
         linkedAllegationId: null,
-        linkedEvidenceIndex: null,
+        linkedEvidenceId: null,
         source: "ai",
         status: "not_asked",
         statusSource: "ai",
@@ -5125,7 +5143,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const movePrepQuestion = (id, direction) => setPrepQuestions(qs => movePrepQuestionHelper(qs, id, direction));
   const togglePrepQuestionEssential = (id) => setPrepQuestions(qs => togglePrepQuestionEssentialHelper(qs, id));
   const linkPrepQuestionToAllegation = (id, allegationId) => setPrepQuestions(qs => linkPrepQuestionToAllegationHelper(qs, id, allegationId));
-  const linkPrepQuestionToEvidence = (id, evidenceIndex) => setPrepQuestions(qs => linkPrepQuestionToEvidenceHelper(qs, id, evidenceIndex));
+  const linkPrepQuestionToEvidence = (id, evidenceId) => setPrepQuestions(qs => linkPrepQuestionToEvidenceHelper(qs, id, evidenceId));
   // Manual status override (M2) — always source:"user", so
   // updateMeetingIntelligence's next live pass leaves this question alone
   // rather than silently reverting the user's own correction.

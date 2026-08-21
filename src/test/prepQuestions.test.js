@@ -83,20 +83,25 @@ describe('linkPrepQuestionToAllegation', () => {
   });
 });
 
+// Phase 6.5 hardening (P0, Cluster 8) — linked by the evidence item's own
+// stable id, not array position (was linkedEvidenceIndex) — a delete
+// elsewhere on the case's evidence could otherwise silently repoint an
+// already-linked prep question at a different item.
 describe('linkPrepQuestionToEvidence', () => {
-  it('sets the linked evidence index as a number', () => {
-    const qs = [{ id: 'a', linkedEvidenceIndex: null }];
-    expect(linkPrepQuestionToEvidence(qs, 'a', '2')[0].linkedEvidenceIndex).toBe(2);
+  it('sets the linked evidence id', () => {
+    const qs = [{ id: 'a', linkedEvidenceId: null }];
+    expect(linkPrepQuestionToEvidence(qs, 'a', 'ev2')[0].linkedEvidenceId).toBe('ev2');
   });
 
   it('treats an empty string as clearing the link', () => {
-    const qs = [{ id: 'a', linkedEvidenceIndex: 2 }];
-    expect(linkPrepQuestionToEvidence(qs, 'a', '')[0].linkedEvidenceIndex).toBeNull();
+    const qs = [{ id: 'a', linkedEvidenceId: 'ev2' }];
+    expect(linkPrepQuestionToEvidence(qs, 'a', '')[0].linkedEvidenceId).toBeNull();
   });
 
-  it('index 0 is a valid link, not treated as empty', () => {
-    const qs = [{ id: 'a', linkedEvidenceIndex: null }];
-    expect(linkPrepQuestionToEvidence(qs, 'a', '0')[0].linkedEvidenceIndex).toBe(0);
+  it('treats null/undefined as clearing the link too', () => {
+    const qs = [{ id: 'a', linkedEvidenceId: 'ev2' }];
+    expect(linkPrepQuestionToEvidence(qs, 'a', null)[0].linkedEvidenceId).toBeNull();
+    expect(linkPrepQuestionToEvidence(qs, 'a', undefined)[0].linkedEvidenceId).toBeNull();
   });
 });
 

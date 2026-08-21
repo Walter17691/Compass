@@ -143,36 +143,48 @@ describe('appealOutcomeMeta', () => {
   });
 });
 
+// Phase 6.5 hardening (P0, Cluster 8) — matched by the evidence item's own
+// stable id, not array position, so a delete elsewhere on the case's
+// evidence can never silently reassign a link to the wrong item.
 describe('evidence linking', () => {
   const evidence = [
-    { name: 'photo.jpg', type: 'image/jpeg' },
-    { name: 'statement.txt', type: 'text/plain' },
+    { id: 'ev1', name: 'photo.jpg', type: 'image/jpeg' },
+    { id: 'ev2', name: 'statement.txt', type: 'text/plain' },
   ];
 
-  it('links an evidence item by index with a stance', () => {
-    const result = linkEvidenceToAllegation(evidence, 1, 'alg_1', 'supports');
+  it('links an evidence item by id with a stance', () => {
+    const result = linkEvidenceToAllegation(evidence, 'ev2', 'alg_1', 'supports');
     expect(result[1]).toMatchObject({ allegationId: 'alg_1', stance: 'supports' });
     expect(result[0]).toEqual(evidence[0]);
   });
 
   it('defaults stance to neutral when omitted', () => {
-    const result = linkEvidenceToAllegation(evidence, 0, 'alg_1');
+    const result = linkEvidenceToAllegation(evidence, 'ev1', 'alg_1');
     expect(result[0].stance).toBe('neutral');
   });
 
+  it('does not touch an item whose id does not match — deleting/reordering unrelated items can never repoint a link', () => {
+    const result = linkEvidenceToAllegation(evidence, 'ev2', 'alg_1', 'supports');
+    expect(result[0]).toEqual(evidence[0]); // ev1 untouched even though it's still at index 0
+    const reordered = [evidence[1], evidence[0]]; // ev2 now at index 0
+    const resultAfterReorder = linkEvidenceToAllegation(reordered, 'ev2', 'alg_1', 'supports');
+    expect(resultAfterReorder.find(e => e.id === 'ev2').allegationId).toBe('alg_1');
+    expect(resultAfterReorder.find(e => e.id === 'ev1').allegationId).toBeUndefined();
+  });
+
   it('unlinks by removing allegationId/stance, not the evidence item', () => {
-    const linked = linkEvidenceToAllegation(evidence, 0, 'alg_1', 'contradicts');
-    const result = unlinkEvidenceFromAllegation(linked, 0);
+    const linked = linkEvidenceToAllegation(evidence, 'ev1', 'alg_1', 'contradicts');
+    const result = unlinkEvidenceFromAllegation(linked, 'ev1');
     expect(result).toHaveLength(2);
     expect(result[0].allegationId).toBeUndefined();
     expect(result[0].stance).toBeUndefined();
     expect(result[0].name).toBe('photo.jpg');
   });
 
-  it('evidenceForAllegation returns only linked items, tagged with their original index', () => {
-    const linked = linkEvidenceToAllegation(evidence, 1, 'alg_1', 'supports');
+  it('evidenceForAllegation returns only linked items, each still carrying its own real id', () => {
+    const linked = linkEvidenceToAllegation(evidence, 'ev2', 'alg_1', 'supports');
     const result = evidenceForAllegation(linked, 'alg_1');
-    expect(result).toEqual([{ name: 'statement.txt', type: 'text/plain', allegationId: 'alg_1', stance: 'supports', index: 1 }]);
+    expect(result).toEqual([{ id: 'ev2', name: 'statement.txt', type: 'text/plain', allegationId: 'alg_1', stance: 'supports' }]);
   });
 });
 

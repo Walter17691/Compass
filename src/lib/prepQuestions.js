@@ -1,8 +1,12 @@
 // Pure helpers for a meeting's editable pre-meeting question list (Meeting
 // Intelligence Phase 2, M1/M2). Session-local, same lifecycle as
 // prepNotes — not persisted to Supabase on their own; a question object is:
-// {id, text, category, essential, reasoning, linkedAllegationId, linkedEvidenceIndex, source, status, statusSource}.
+// {id, text, category, essential, reasoning, linkedAllegationId, linkedEvidenceId, source, status, statusSource}.
 // source is "ai" (from generatePrepQuestions) or "user" (manually added).
+// linkedEvidenceId is keyed by the evidence item's own stable id (Phase
+// 6.5 hardening, P0, Cluster 8) — was linkedEvidenceIndex (array
+// position), which a delete elsewhere on the case's evidence could
+// silently repoint at the wrong item.
 // status is one of QUESTION_STATUSES below; statusSource tracks whether
 // the live AI pass or the user themselves set it — updateMeetingIntelligence
 // (App.jsx) never overwrites a status the user set manually.
@@ -23,7 +27,7 @@ export function addPrepQuestion(questions) {
   return [...(questions || []), {
     id: "pq_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
     text: "", category: "general", essential: false, reasoning: "",
-    linkedAllegationId: null, linkedEvidenceIndex: null, source: "user",
+    linkedAllegationId: null, linkedEvidenceId: null, source: "user",
     status: "not_asked", statusSource: "ai",
   }];
 }
@@ -56,9 +60,9 @@ export function linkPrepQuestionToAllegation(questions, id, allegationId) {
   return (questions || []).map(q => q.id === id ? { ...q, linkedAllegationId: allegationId || null } : q);
 }
 
-export function linkPrepQuestionToEvidence(questions, id, evidenceIndex) {
-  const idx = evidenceIndex === "" || evidenceIndex === null || evidenceIndex === undefined ? null : Number(evidenceIndex);
-  return (questions || []).map(q => q.id === id ? { ...q, linkedEvidenceIndex: idx } : q);
+export function linkPrepQuestionToEvidence(questions, id, evidenceId) {
+  const value = evidenceId === "" || evidenceId === null || evidenceId === undefined ? null : evidenceId;
+  return (questions || []).map(q => q.id === id ? { ...q, linkedEvidenceId: value } : q);
 }
 
 // source: "user" for a manual override (RecordScreen's status picker) or

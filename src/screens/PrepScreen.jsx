@@ -40,10 +40,10 @@ function PrepQuestionRow({ q, index, total, linkedCaseAllegations, linkedCaseEvi
               </select>
             )}
             {linkedCaseEvidence.length>0&&(
-              <select value={q.linkedEvidenceIndex??""} onChange={e=>onLinkEvidence(e.target.value)}
+              <select value={q.linkedEvidenceId??""} onChange={e=>onLinkEvidence(e.target.value)}
                 style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:5,padding:"2px 4px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                 <option value="">Link to evidence…</option>
-                {linkedCaseEvidence.map((ev,i)=><option key={i} value={i}>{ev.name}</option>)}
+                {linkedCaseEvidence.map(ev=><option key={ev.id} value={ev.id}>{ev.name}</option>)}
               </select>
             )}
           </div>

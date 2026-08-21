@@ -24,13 +24,17 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}><div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Evidence & witness statements</div></div>
       <div style={{padding:"16px"}}>
         {(cs.evidence||[]).length===0&&<div style={{fontSize:13,color:"#9B9098",marginBottom:12}}>No evidence added yet</div>}
-        {(cs.evidence||[]).map((ev,i)=>{
-          const findingsKey = `${cs.id}::${i}`;
+        {(cs.evidence||[]).map(ev=>{
+          // Phase 6.5 hardening (P0, Cluster 8) — keyed by the evidence
+          // item's own stable id, not its array position, so deleting a
+          // different evidence item can never silently reassign these
+          // findings to the wrong document (see src/lib/evidenceUpload.js).
+          const findingsKey = `${cs.id}::${ev.id}`;
           const findings = (documentFindings[findingsKey]||[]).filter(f=>f.status==="open");
           const analysed = findingsKey in documentFindings;
           const loading = !!documentAnalysisLoading[findingsKey];
           return (
-          <div key={i} style={{padding:"10px 0",borderBottom:"1px solid #F5F1EA"}}>
+          <div key={ev.id} style={{padding:"10px 0",borderBottom:"1px solid #F5F1EA"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:13,color:"#1A1535",fontWeight:500}}>{ev.name}</div>
@@ -43,10 +47,10 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
               {ev.dataUrl&&<a href={ev.dataUrl} download={ev.name} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>Download</a>}
               {ev.record&&<button onClick={()=>{setReviewOutput(ev.record);setScreen(screens.REVIEW);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
               {canAnalyseEvidence(ev)&&!analysed&&(
-                <button onClick={()=>onAnalyseEvidence?.(i)} disabled={loading} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"1px solid #DDD9F5",borderRadius:4,padding:"3px 8px",cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{loading?"Analysing…":"Analyse document"}</button>
+                <button onClick={()=>onAnalyseEvidence?.(ev.id)} disabled={loading} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"1px solid #DDD9F5",borderRadius:4,padding:"3px 8px",cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{loading?"Analysing…":"Analyse document"}</button>
               )}
-              {ev.type==="Witness statement"&&(ev.signStatus==="signed"?<span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"3px 8px",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Signed</span>:<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map((e,j)=>j===i?{...e,signStatus:"signed"}:e)}:x))} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>)}
-              <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter((_,j)=>j!==i)}:x))} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
+              {ev.type==="Witness statement"&&(ev.signStatus==="signed"?<span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"3px 8px",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Signed</span>:<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map(e=>e.id===ev.id?{...e,signStatus:"signed"}:e)}:x))} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>)}
+              <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter(e=>e.id!==ev.id)}:x))} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
             </div>
             </div>
             {/* Phase 7 — Intelligent Document Ingestion. Only ever shown
@@ -72,8 +76,8 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
                       {f.type==="action"&&parseCommitmentDueDate(f.description)&&<div style={{fontSize:11,color:"#5B3FD4",marginTop:2}}>Due {parseCommitmentDueDate(f.description)}</div>}
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
-                      <button onClick={()=>onAcceptFinding?.(i,f)} style={{fontSize:11,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>
-                      <button onClick={()=>onDismissFinding?.(i,f)} style={{fontSize:11,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                      <button onClick={()=>onAcceptFinding?.(ev.id,f)} style={{fontSize:11,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>
+                      <button onClick={()=>onDismissFinding?.(ev.id,f)} style={{fontSize:11,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
                     </div>
                   </div>
                 ))}

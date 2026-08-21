@@ -14,9 +14,9 @@ export function deriveDocumentsForCase(cs) {
     docs.push({ kind: "report", label: "Investigation report", date: cs.investigationReportDate, content: cs.investigationReport });
   }
 
-  (cs.evidence || []).forEach((ev, index) => {
+  (cs.evidence || []).forEach(ev => {
     if (ev.type === "Witness statement") return;
-    docs.push({ kind: "evidence", label: ev.name, date: ev.date, evidenceIndex: index, dataUrl: ev.dataUrl, size: ev.size, type: ev.type });
+    docs.push({ kind: "evidence", label: ev.name, date: ev.date, evidenceId: ev.id, dataUrl: ev.dataUrl, size: ev.size, type: ev.type });
   });
 
   return docs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));

@@ -96,13 +96,13 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
     setShowNew(false);
   };
 
-  const linkEvidence = (allegationId, evidenceIndex, stance) => {
-    if(evidenceIndex==="") return;
-    saveCases(cases.map(x => x.id===cs.id ? { ...x, evidence: linkEvidenceToAllegation(x.evidence||[], Number(evidenceIndex), allegationId, stance) } : x));
+  const linkEvidence = (allegationId, evidenceId, stance) => {
+    if(evidenceId==="") return;
+    saveCases(cases.map(x => x.id===cs.id ? { ...x, evidence: linkEvidenceToAllegation(x.evidence||[], evidenceId, allegationId, stance) } : x));
   };
 
-  const unlinkEvidence = (evidenceIndex) => {
-    saveCases(cases.map(x => x.id===cs.id ? { ...x, evidence: unlinkEvidenceFromAllegation(x.evidence||[], evidenceIndex) } : x));
+  const unlinkEvidence = (evidenceId) => {
+    saveCases(cases.map(x => x.id===cs.id ? { ...x, evidence: unlinkEvidenceFromAllegation(x.evidence||[], evidenceId) } : x));
   };
 
   const removeAllegationConfirm = async (allegation) => {
@@ -280,19 +280,19 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
 
                   <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Linked evidence ({linked.length})</div>
                   {linked.map(ev => (
-                    <div key={ev.index} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F5F1EA",gap:8}}>
+                    <div key={ev.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F5F1EA",gap:8}}>
                       <div style={{fontSize:12,color:"#1A1535",flex:1,minWidth:0}}>{ev.name}</div>
-                      <select value={ev.stance||"neutral"} onChange={e=>linkEvidence(a.id, ev.index, e.target.value)} style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 6px",color:"#6B6375"}}>
+                      <select value={ev.stance||"neutral"} onChange={e=>linkEvidence(a.id, ev.id, e.target.value)} style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 6px",color:"#6B6375"}}>
                         {EVIDENCE_STANCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </select>
-                      <button onClick={()=>unlinkEvidence(ev.index)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Unlink</button>
+                      <button onClick={()=>unlinkEvidence(ev.id)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Unlink</button>
                     </div>
                   ))}
                   {evidence.filter(ev=>!ev.allegationId).length>0 && (
                     <div style={{marginTop:10,display:"flex",gap:8,alignItems:"center"}}>
-                      <select defaultValue="" onChange={e=>{ const idx=e.target.value; linkEvidence(a.id, idx, "supports"); e.target.value=""; }} style={{...inputStyle,fontSize:12}}>
+                      <select defaultValue="" onChange={e=>{ const evId=e.target.value; linkEvidence(a.id, evId, "supports"); e.target.value=""; }} style={{...inputStyle,fontSize:12}}>
                         <option value="" disabled>Link existing evidence...</option>
-                        {evidence.map((ev,i)=>!ev.allegationId && <option key={i} value={i}>{ev.name}</option>)}
+                        {evidence.map(ev=>!ev.allegationId && <option key={ev.id} value={ev.id}>{ev.name}</option>)}
                       </select>
                     </div>
                   )}

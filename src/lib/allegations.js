@@ -112,15 +112,23 @@ export function setAppealOutcome(allegations, allegationId, outcome, reasoning, 
 // ── Evidence linking ──
 // Evidence itself stays nested JSONB on cases.evidence (no migration
 // needed) — these just add/clear the optional allegationId/stance fields
-// on one evidence item, by index within that case's evidence array.
+// on one evidence item, matched by its own stable id.
+//
+// Phase 6.5 hardening (P0, Cluster 8) — these were previously matched by
+// array position (evidenceIndex), so deleting one evidence item silently
+// reassigned every later item's allegation link to the wrong document.
+// Every evidence item now carries a real id (src/lib/evidenceUpload.js —
+// stamped at upload time, backfilled for legacy items via
+// ensureEvidenceIds), so matching by id is possible everywhere an index
+// used to be the only option.
 
-export function linkEvidenceToAllegation(evidence, evidenceIndex, allegationId, stance) {
-  return (evidence || []).map((ev, i) => i === evidenceIndex ? { ...ev, allegationId, stance: stance || "neutral" } : ev);
+export function linkEvidenceToAllegation(evidence, evidenceId, allegationId, stance) {
+  return (evidence || []).map(ev => ev.id === evidenceId ? { ...ev, allegationId, stance: stance || "neutral" } : ev);
 }
 
-export function unlinkEvidenceFromAllegation(evidence, evidenceIndex) {
-  return (evidence || []).map((ev, i) => {
-    if (i !== evidenceIndex) return ev;
+export function unlinkEvidenceFromAllegation(evidence, evidenceId) {
+  return (evidence || []).map(ev => {
+    if (ev.id !== evidenceId) return ev;
     const rest = { ...ev };
     delete rest.allegationId;
     delete rest.stance;
@@ -129,5 +137,5 @@ export function unlinkEvidenceFromAllegation(evidence, evidenceIndex) {
 }
 
 export function evidenceForAllegation(evidence, allegationId) {
-  return (evidence || []).map((ev, index) => ({ ...ev, index })).filter(ev => ev.allegationId === allegationId);
+  return (evidence || []).filter(ev => ev.allegationId === allegationId);
 }

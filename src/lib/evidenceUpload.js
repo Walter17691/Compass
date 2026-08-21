@@ -31,7 +31,25 @@ export async function readEvidenceFiles(files, { addedBy = "HR Manager", onRejec
     if (f.size > MAX_EVIDENCE_SIZE) { onReject?.(`${f.name} is too large (max 15MB) — link to it externally instead`); continue; }
     if (f.type && !ALLOWED_EVIDENCE_TYPES.includes(f.type)) { onReject?.(`${f.name}: file type not supported`); continue; }
     const dataUrl = await readFileAsDataUrl(f);
-    results.push({ name: f.name, type: f.type || "Document", size: f.size, date: new Date().toLocaleDateString("en-GB"), addedBy, dataUrl });
+    results.push({ id: crypto.randomUUID(), name: f.name, type: f.type || "Document", size: f.size, date: new Date().toLocaleDateString("en-GB"), addedBy, dataUrl });
   }
   return results;
+}
+
+// Phase 6.5 hardening (P0, Cluster 8) — evidence items were previously
+// referenced by their array position (documentFindings/ohReportFindings
+// keys, allegation-linking, analyse/accept/dismiss handlers all took an
+// index), so deleting one evidence item silently reassigned every later
+// item's findings/allegation-link to the wrong document. readEvidenceFiles
+// above now stamps a real id on every NEW item; this backfills a stable
+// id onto any OLDER evidence item that predates that change, the single
+// time any of that case's evidence next gets saved (via saveCases, the
+// one funnel every evidence mutation already goes through — see its own
+// withStageTransitionStamp comment for the established pattern this
+// follows). Returns the exact same case reference when nothing needed
+// backfilling, matching withStageTransitionStamp's own contract — saveCases'
+// bulk-save path relies on reference equality to skip unchanged cases.
+export function ensureEvidenceIds(cs) {
+  if (!cs.evidence || !cs.evidence.length || cs.evidence.every(ev => ev.id)) return cs;
+  return { ...cs, evidence: cs.evidence.map(ev => ev.id ? ev : { ...ev, id: crypto.randomUUID() }) };
 }

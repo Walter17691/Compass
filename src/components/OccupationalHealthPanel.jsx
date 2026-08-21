@@ -24,7 +24,7 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
   const [recommendationsDraft, setRecommendationsDraft] = useState(ohProcess?.recommendations || "");
   const [reviewDateDraft, setReviewDateDraft] = useState(ohProcess?.reviewDate || "");
   const [consentChecked, setConsentChecked] = useState(false);
-  const [selectedEvidenceIndex, setSelectedEvidenceIndex] = useState("");
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
   const [adjustmentEmailDraft, setAdjustmentEmailDraft] = useState("");
   const [sendingAdjustment, setSendingAdjustment] = useState(false);
 
@@ -39,13 +39,16 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
     setRecommendationsDraft(ohProcess?.recommendations || "");
     setReviewDateDraft(ohProcess?.reviewDate || "");
     setConsentChecked(false);
-    setSelectedEvidenceIndex("");
+    setSelectedEvidenceId("");
     setAdjustmentEmailDraft("");
   }
 
-  const analysableEvidence = (cs.evidence||[]).map((ev,i)=>({ev,i})).filter(({ev})=>canAnalyseEvidence(ev));
-  const findingsKey = `${cs.id}::${selectedEvidenceIndex}`;
-  const findings = (selectedEvidenceIndex!==""&&ohReportFindings?.[findingsKey])||[];
+  // Phase 6.5 hardening (P0, Cluster 8) — findingsKey/selectedEvidenceId
+  // are keyed by the evidence item's own stable id, not array position
+  // (see src/lib/evidenceUpload.js/allegations.js's own equivalent fix).
+  const analysableEvidence = (cs.evidence||[]).filter(canAnalyseEvidence);
+  const findingsKey = `${cs.id}::${selectedEvidenceId}`;
+  const findings = (selectedEvidenceId!==""&&ohReportFindings?.[findingsKey])||[];
   const openFindings = findings.filter(f=>f.status==="open");
   const analysing = !!ohReportAnalysisLoading?.[findingsKey];
 
@@ -100,12 +103,12 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                       <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
                         <div style={{fontSize:11,fontWeight:600,color:"#9B9098",marginBottom:6}}>Or let Compass suggest findings from the uploaded report</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <select value={selectedEvidenceIndex} onChange={e=>setSelectedEvidenceIndex(e.target.value)}
+                          <select value={selectedEvidenceId} onChange={e=>setSelectedEvidenceId(e.target.value)}
                             style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                             <option value="">Select the OH report...</option>
-                            {analysableEvidence.map(({ev,i})=><option key={i} value={i}>{ev.name}</option>)}
+                            {analysableEvidence.map(ev=><option key={ev.id} value={ev.id}>{ev.name}</option>)}
                           </select>
-                          <Btn variant="secondary" onClick={()=>onAnalyseOhReport(cs, Number(selectedEvidenceIndex))} disabled={selectedEvidenceIndex===""||analysing}>{analysing?"Analysing...":"Analyse OH report"}</Btn>
+                          <Btn variant="secondary" onClick={()=>onAnalyseOhReport(cs, selectedEvidenceId)} disabled={selectedEvidenceId===""||analysing}>{analysing?"Analysing...":"Analyse OH report"}</Btn>
                         </div>
 
                         {openFindings.length>0&&(
@@ -120,8 +123,8 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                                     on the resulting task, parsed from the finding's own text. */}
                                 {OH_TASK_FINDING_TYPES.includes(finding.type)&&parseCommitmentDueDate(finding.description)&&<div style={{fontSize:11,color:"#5B3FD4",marginTop:2}}>Due {parseCommitmentDueDate(finding.description)}</div>}
                                 <div style={{display:"flex",gap:8,marginTop:8}}>
-                                  <Btn onClick={()=>onAcceptOhFinding(cs, Number(selectedEvidenceIndex), finding)} style={{fontSize:12,padding:"6px 14px"}}>Accept</Btn>
-                                  <Btn variant="ghost" onClick={()=>onDismissOhFinding(cs, Number(selectedEvidenceIndex), finding)} style={{fontSize:12,padding:"6px 14px"}}>Dismiss</Btn>
+                                  <Btn onClick={()=>onAcceptOhFinding(cs, selectedEvidenceId, finding)} style={{fontSize:12,padding:"6px 14px"}}>Accept</Btn>
+                                  <Btn variant="ghost" onClick={()=>onDismissOhFinding(cs, selectedEvidenceId, finding)} style={{fontSize:12,padding:"6px 14px"}}>Dismiss</Btn>
                                 </div>
                               </div>
                             ))}
