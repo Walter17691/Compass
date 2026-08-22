@@ -56,7 +56,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
       </div>
 
       <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
-        <select value={req.status} onChange={e=>updateDsarRequest(req.id, {status:e.target.value})} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
+        <select aria-label={`Status for ${req.employeeName}'s DSAR request`} value={req.status} onChange={e=>updateDsarRequest(req.id, {status:e.target.value})} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
           {Object.entries(STATUS_LABEL).filter(([v])=>v!=="completed"||req.reviewedFlaggedSections).map(([v,l])=><option key={v} value={v}>{l}</option>)}
         </select>
         <Btn variant="secondary" onClick={compile}>{compiled?"Recompile data":"Compile data"}</Btn>
@@ -134,13 +134,13 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
         {showForm&&(
           <Card style={{marginBottom:20}}>
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Employee name</label>
-              <input list="dsar-employee-names" value={form.employeeName} onChange={e=>setForm(p=>({...p,employeeName:e.target.value}))} placeholder="e.g. Ada Lovelace" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
+              <label htmlFor="dsar-form-employee-name" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Employee name</label>
+              <input id="dsar-form-employee-name" list="dsar-employee-names" value={form.employeeName} onChange={e=>setForm(p=>({...p,employeeName:e.target.value}))} placeholder="e.g. Ada Lovelace" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
               <datalist id="dsar-employee-names">{employeeRecords.map(r=><option key={r.name} value={r.name}/>)}</datalist>
             </div>
             <div style={{marginBottom:12}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Requested by (optional, if different from employee)</label>
-              <input value={form.requestedBy} onChange={e=>setForm(p=>({...p,requestedBy:e.target.value}))} placeholder="e.g. their solicitor" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
+              <label htmlFor="dsar-form-requested-by" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Requested by (optional, if different from employee)</label>
+              <input id="dsar-form-requested-by" value={form.requestedBy} onChange={e=>setForm(p=>({...p,requestedBy:e.target.value}))} placeholder="e.g. their solicitor" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
             </div>
             <div style={{marginBottom:16}}>
               <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Date received</label>
