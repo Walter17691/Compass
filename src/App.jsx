@@ -7339,138 +7339,54 @@ Please produce:
 {/* ══ CASE VIEW ══ */}
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(
         <CaseViewScreen
-          cases={cases}
-          activeCaseId={activeCaseId}
-          setScreen={setScreen}
-          confirmDialog={confirmDialog}
-          getCaseStage={getCaseStage}
-          getNextStep={getNextStep}
-          fmtDate={fmtDate}
-          getProceedingTitle={getProceedingTitle}
-          getCaseStatus={getCaseStatus}
-          setMeetingSetup={setMeetingSetup}
-          getEmployeeRecord={getEmployeeRecord}
-          orgMembers={orgMembers}
-          setCaseInfo={setCaseInfo}
-          activeCaseStage={activeCaseStage}
-          setActiveCaseStage={setActiveCaseStage}
-          saveCases={saveCases}
-          setReviewOutput={setReviewOutput}
-          setMeetingType={setMeetingType}
-          showAppealInput={showAppealInput}
-          setShowAppealInput={setShowAppealInput}
-          appealText={appealText}
-          setAppealText={setAppealText}
-          setShowHandoffModal={setShowHandoffModal}
-          setShowReassignModal={setShowReassignModal}
-          setShowAssignInvestigatorModal={setShowAssignInvestigatorModal}
-          setShowOutcomeModal={setShowOutcomeModal}
-          showToast={showToast}
-          currentUser={currentUser}
-          setLetterOutput={setLetterOutput}
-          setShowSignModal={setShowSignModal}
-          handleLetter={handleLetter}
-          letterOutput={letterOutput}
-          aiProcessing={aiProcessing}
-          aiError={aiError}
-          toggleNextStepDone={toggleNextStepDone}
-          concludeInvestigation={concludeInvestigation}
-          concludingInvestigation={concludingInvestigation}
-          attemptSubmitInvestigation={attemptSubmitInvestigation}
-          openEscalateModal={openEscalateModal}
-          openHrInterventionModal={openHrInterventionModal}
-          allegations={allegations}
-          createAllegation={createAllegation}
-          patchAllegation={patchAllegation}
-          changeAllegationStatus={changeAllegationStatus}
-          deleteAllegation={deleteAllegation}
-          auditLog={auditLog}
-          wellbeingNotes={wellbeingNotes}
-          dueSoon={dueSoon}
-          processTemplates={processTemplates}
-          caseTasks={caseTasks}
-          createCaseTask={createCaseTask}
-          toggleCaseTaskDone={toggleCaseTaskDone}
-          deleteCaseTask={deleteCaseTask}
-          onGenerateHearingPack={handleGenerateHearingPack}
-          hearingPackGenerating={hearingPackGenerating}
-          onDraftCorrespondence={startCaseCorrespondence}
+          shell={{
+            cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
+            getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
+            setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
+            setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
+            createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
+            generateInvestigationPlan, investigationPlanLoading,
+          }}
+          header={{
+            showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,
+            setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
+            aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, attemptSubmitInvestigation,
+            openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
+            changesSinceView: changesSinceView[activeCaseId], changesSummary: changesSummary[activeCaseId],
+            changesSummaryLoading: changesSummaryLoading[activeCaseId],
+          }}
           initialTab={caseViewInitialTab}
           clearInitialTab={()=>setCaseViewInitialTab(null)}
-          onAcceptSavedSuggestion={acceptSavedMeetingSuggestion}
-          onDismissSavedSuggestion={dismissSavedMeetingSuggestion}
-          caseChatHistory={caseChatHistory}
-          caseChatInput={caseChatInput}
-          setCaseChatInput={setCaseChatInput}
-          caseChatProcessing={caseChatProcessing}
-          sendCaseChat={sendCaseChat}
-          caseOverview={caseOverview}
-          caseOverviewLoading={caseOverviewLoading}
-          generateCaseOverview={generateCaseOverview}
-          caseOverviewSources={caseOverviewSources}
-          caseSignals={caseSignals}
-          changeSignalStatus={changeSignalStatus}
-          generateNextBestAction={generateNextBestAction}
-          nextActionLoading={nextActionLoading}
-          unansweredCovered={unansweredCovered}
-          unansweredLoading={unansweredLoading}
-          generateUnansweredQuestions={generateUnansweredQuestions}
-          evidenceSuggestions={evidenceSuggestions}
-          evidenceSuggestionsLoading={evidenceSuggestionsLoading}
-          generateEvidenceSuggestions={generateEvidenceSuggestions}
-          acceptEvidenceSuggestion={acceptEvidenceSuggestion}
-          rejectEvidenceSuggestion={rejectEvidenceSuggestion}
-          toggleTimelineExclude={toggleTimelineExclude}
-          editTimelineDescription={editTimelineDescription}
-          generateTimelineRelevance={generateTimelineRelevance}
-          timelineRelevanceLoading={timelineRelevanceLoading}
-          loadJsPDF={loadJsPDF}
-          generateInconsistencies={generateInconsistencies}
-          inconsistencyLoading={inconsistencyLoading}
-          linkSignalToAllegation={linkSignalToAllegation}
-          isHR={isHR}
-          caseAccess={caseAccess}
-          assignInvestigator={assignInvestigator}
-          generateInvestigationPlan={generateInvestigationPlan}
-          investigationPlanLoading={investigationPlanLoading}
-          generateAppealReview={generateAppealReview}
-          appealReviewLoading={appealReviewLoading?.[activeCaseId]}
-          recordAppealOutcome={recordAppealOutcome}
-          changesSinceView={changesSinceView[activeCaseId]}
-          changesSummary={changesSummary[activeCaseId]}
-          changesSummaryLoading={changesSummaryLoading[activeCaseId]}
-          documentFindings={documentFindings}
-          documentAnalysisLoading={documentAnalysisLoading}
-          analyseEvidenceDocument={analyseEvidenceDocument}
-          ohReportFindings={ohReportFindings}
-          ohReportAnalysisLoading={ohReportAnalysisLoading}
-          onAnalyseOhReport={analyseOhReport}
-          onAcceptOhFinding={acceptOhFinding}
-          onDismissOhFinding={dismissOhFinding}
-          onSendForSignature={sendDocumentForSignature}
-          automationLevels={automationLevels}
-          onResendReminder={resendSignatureReminder}
-          organisationThemes={organisationThemes}
-          caseThemes={caseThemes}
-          themeSuggestions={themeSuggestions}
-          themeSuggestionLoading={themeSuggestionLoading}
-          onSuggestThemes={suggestThemesForCase}
-          onConfirmThemeSuggestion={confirmThemeSuggestion}
-          onDismissThemeSuggestion={dismissThemeSuggestion}
-          onAssignExistingTheme={(cs, themeId)=>assignThemeToCase(cs, themeId, "user")}
-          onRemoveTheme={removeThemeFromCase}
-          acceptDocumentFinding={acceptDocumentFinding}
-          dismissDocumentFinding={dismissDocumentFinding}
-          requestOverrideReason={requestOverrideReason}
-          requestPolicyDeviationReason={requestPolicyDeviationReason}
-          assignCaseRole={assignCaseRole}
-          hrReviewRequests={hrReviewRequests}
-          respondToReview={respondToReview}
-          resolveInvestigationReview={resolveInvestigationReview}
-          policies={policies}
-          consistencyReview={consistencyReview}
-          consistencyReviewLoading={consistencyReviewLoading}
-          generateConsistencyReview={generateConsistencyReview}
+          deleteCaseTask={deleteCaseTask}
+          overview={{
+            linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole,
+            hrReviewRequests, respondToReview, resolveInvestigationReview, wellbeingNotes, dueSoon,
+            processTemplates, unansweredCovered, unansweredLoading, generateUnansweredQuestions,
+            generateInconsistencies, inconsistencyLoading, ohReportFindings, ohReportAnalysisLoading,
+            onAnalyseOhReport: analyseOhReport, onAcceptOhFinding: acceptOhFinding, onDismissOhFinding: dismissOhFinding,
+            onSendForSignature: sendDocumentForSignature, automationLevels, onResendReminder: resendSignatureReminder,
+          }}
+          timeline={{ toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF }}
+          allegationsTab={{
+            createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, evidenceSuggestions,
+            evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion,
+            generateAppealReview, appealReviewLoading: appealReviewLoading?.[activeCaseId], recordAppealOutcome,
+            policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview,
+          }}
+          meetingsTab={{ activeCaseStage, setActiveCaseStage, onAcceptSavedSuggestion: acceptSavedMeetingSuggestion, onDismissSavedSuggestion: dismissSavedMeetingSuggestion }}
+          evidenceTab={{ documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding }}
+          documentsTab={{ onGenerateHearingPack: handleGenerateHearingPack, hearingPackGenerating, onDraftCorrespondence: startCaseCorrespondence }}
+          themesTab={{
+            organisationThemes, caseThemes, themeSuggestions, themeSuggestionLoading,
+            onSuggestThemes: suggestThemesForCase, onConfirmThemeSuggestion: confirmThemeSuggestion,
+            onDismissThemeSuggestion: dismissThemeSuggestion,
+            onAssignExistingTheme: (cs, themeId)=>assignThemeToCase(cs, themeId, "user"),
+            onRemoveTheme: removeThemeFromCase,
+          }}
+          aiTab={{
+            caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat,
+            caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources,
+          }}
         />
       )}
 {/* ══ INTAKE ══ */}

@@ -45,7 +45,39 @@ const TABS = [
   { id:"ai", label:"AI Assistant" },
 ];
 
-export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate, getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers, setCaseInfo, activeCaseStage, setActiveCaseStage, saveCases, setReviewOutput, setMeetingType, showAppealInput, setShowAppealInput, appealText, setAppealText, setShowHandoffModal, setShowReassignModal, setShowAssignInvestigatorModal, generateInvestigationPlan, investigationPlanLoading, setShowOutcomeModal, showToast, currentUser, setLetterOutput, setShowSignModal, handleLetter, letterOutput, aiProcessing, aiError, toggleNextStepDone, concludeInvestigation, concludingInvestigation, attemptSubmitInvestigation, openEscalateModal, openHrInterventionModal, allegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, auditLog, caseTasks, createCaseTask, toggleCaseTaskDone, deleteCaseTask, caseChatHistory, caseChatInput, setCaseChatInput, caseChatProcessing, sendCaseChat, caseOverview, caseOverviewLoading, generateCaseOverview, caseOverviewSources, caseSignals, changeSignalStatus, generateNextBestAction, nextActionLoading, unansweredCovered, unansweredLoading, generateUnansweredQuestions, evidenceSuggestions, evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF, generateInconsistencies, inconsistencyLoading, linkSignalToAllegation, isHR, caseAccess, assignInvestigator, generateAppealReview, appealReviewLoading, recordAppealOutcome, changesSinceView, changesSummary, changesSummaryLoading, documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, requestOverrideReason, requestPolicyDeviationReason, assignCaseRole, hrReviewRequests, respondToReview, resolveInvestigationReview, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, wellbeingNotes, dueSoon, processTemplates, onGenerateHearingPack, hearingPackGenerating, onDraftCorrespondence, initialTab, clearInitialTab, onAcceptSavedSuggestion, onDismissSavedSuggestion, ohReportFindings, ohReportAnalysisLoading, onAnalyseOhReport, onAcceptOhFinding, onDismissOhFinding, onSendForSignature, automationLevels, onResendReminder, organisationThemes, caseThemes, themeSuggestions, themeSuggestionLoading, onSuggestThemes, onConfirmThemeSuggestion, onDismissThemeSuggestion, onAssignExistingTheme, onRemoveTheme }) {
+// Phase 6.5 hardening (Batch 10b, task #205) — was 132 individually
+// destructured props (2 of them, concludeInvestigation/assignInvestigator,
+// entirely dead — never read anywhere in this file, removed here), the
+// single worst offender in the whole codebase. This file's own body is
+// far denser than OverviewTab's or SettingsScreen's (15+ handler closures
+// referencing dozens of these names across ~450 lines), so cross-cutting
+// props (shell/header — read throughout the function body, not just
+// passed to one child) are re-destructured flat immediately below rather
+// than accessed as group.field everywhere, which would otherwise touch
+// nearly every line. Props that belong to exactly one tab component
+// (overview/timeline/allegationsTab/meetingsTab/evidenceTab/documentsTab/
+// themesTab/aiTab) are referenced as group.field only at that tab's own
+// single JSX call site, same pattern as OverviewTab/SettingsScreen.
+export function CaseViewScreen({
+  shell = {}, header = {}, initialTab, clearInitialTab, deleteCaseTask,
+  overview = {}, timeline = {}, allegationsTab = {}, meetingsTab = {},
+  evidenceTab = {}, documentsTab = {}, themesTab = {}, aiTab = {},
+}) {
+  const {
+    cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
+    getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
+    setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
+    setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
+    createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
+    generateInvestigationPlan, investigationPlanLoading,
+  } = shell;
+  const {
+    showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,
+    setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
+    aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, attemptSubmitInvestigation,
+    openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
+    changesSinceView, changesSummary, changesSummaryLoading,
+  } = header;
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -453,25 +485,25 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             <OverviewTab cs={cs}
               caseCtx={{ cases, saveCases, stage, currentRisk, empRecord, repeatCount }}
               shell={{ setScreen, screens, confirmDialog }}
-              caseData={{ caseSignals, caseTasks: caseTaskList, allegations, auditLog, wellbeingNotes, dueSoon, processTemplates, caseAccess, orgMembers, hrReviewRequests }}
-              caseActions={{ changeSignalStatus, createCaseTask, onAskWhy: setWhySignal, linkSignalToAllegation, requestOverrideReason, requestPolicyDeviationReason }}
-              caseIntel={{ unansweredCovered, unansweredLoading, generateUnansweredQuestions, generateInconsistencies, inconsistencyLoading: inconsistencyLoading?.[cs.id] }}
-              oh={{ ohReportFindings, ohReportAnalysisLoading, onAnalyseOhReport, onAcceptOhFinding, onDismissOhFinding, onSendForSignature }}
-              review={{ isApprover: isHR, respondToReview, resolveInvestigationReview, assignCaseRole }}
-              automation={{ automationLevels, onResendReminder }}
+              caseData={{ caseSignals, caseTasks: caseTaskList, allegations, auditLog, wellbeingNotes: overview.wellbeingNotes, dueSoon: overview.dueSoon, processTemplates: overview.processTemplates, caseAccess, orgMembers, hrReviewRequests: overview.hrReviewRequests }}
+              caseActions={{ changeSignalStatus, createCaseTask, onAskWhy: setWhySignal, linkSignalToAllegation: overview.linkSignalToAllegation, requestOverrideReason: overview.requestOverrideReason, requestPolicyDeviationReason: overview.requestPolicyDeviationReason }}
+              caseIntel={{ unansweredCovered: overview.unansweredCovered, unansweredLoading: overview.unansweredLoading, generateUnansweredQuestions: overview.generateUnansweredQuestions, generateInconsistencies: overview.generateInconsistencies, inconsistencyLoading: overview.inconsistencyLoading?.[cs.id] }}
+              oh={{ ohReportFindings: overview.ohReportFindings, ohReportAnalysisLoading: overview.ohReportAnalysisLoading, onAnalyseOhReport: overview.onAnalyseOhReport, onAcceptOhFinding: overview.onAcceptOhFinding, onDismissOhFinding: overview.onDismissOhFinding, onSendForSignature: overview.onSendForSignature }}
+              review={{ isApprover: isHR, respondToReview: overview.respondToReview, resolveInvestigationReview: overview.resolveInvestigationReview, assignCaseRole: overview.assignCaseRole }}
+              automation={{ automationLevels: overview.automationLevels, onResendReminder: overview.onResendReminder }}
             />
           )}
           {activeTab==="timeline"&&(
-            <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={toggleTimelineExclude} onEditDescription={editTimelineDescription} onGenerateRelevance={generateTimelineRelevance} relevanceLoading={timelineRelevanceLoading?.[cs.id]} loadJsPDF={loadJsPDF}/>
+            <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={timeline.toggleTimelineExclude} onEditDescription={timeline.editTimelineDescription} onGenerateRelevance={timeline.generateTimelineRelevance} relevanceLoading={timeline.timelineRelevanceLoading?.[cs.id]} loadJsPDF={timeline.loadJsPDF}/>
           )}
           {activeTab==="allegations"&&(
-            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={createAllegation} patchAllegation={patchAllegation} changeAllegationStatus={changeAllegationStatus} deleteAllegation={deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={generateEvidenceSuggestions} acceptEvidenceSuggestion={acceptEvidenceSuggestion} rejectEvidenceSuggestion={rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={generateAppealReview} appealReviewLoading={appealReviewLoading} recordAppealOutcome={recordAppealOutcome} policies={policies} consistencyReview={consistencyReview?.[cs.id]} consistencyReviewLoading={consistencyReviewLoading?.[cs.id]} generateConsistencyReview={generateConsistencyReview} canDecide={canDecide}/>
+            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide}/>
           )}
           {activeTab==="meetings"&&(
-            <MeetingsTab cs={cs} cases={cases} saveCases={saveCases} activeCaseStage={activeCaseStage} setActiveCaseStage={setActiveCaseStage} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} orgMembers={orgMembers} setScreen={setScreen} screens={screens} setReviewOutput={setReviewOutput} setMeetingType={setMeetingType} meetingTypes={MEETING_TYPES} fmtDate={fmtDate} attemptSubmitInvestigation={attemptSubmitInvestigation} concludingInvestigation={concludingInvestigation} setShowHandoffModal={setShowHandoffModal} setLetterOutput={setLetterOutput} onAcceptSavedSuggestion={onAcceptSavedSuggestion} onDismissSavedSuggestion={onDismissSavedSuggestion}/>
+            <MeetingsTab cs={cs} cases={cases} saveCases={saveCases} activeCaseStage={meetingsTab.activeCaseStage} setActiveCaseStage={meetingsTab.setActiveCaseStage} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} orgMembers={orgMembers} setScreen={setScreen} screens={screens} setReviewOutput={setReviewOutput} setMeetingType={setMeetingType} meetingTypes={MEETING_TYPES} fmtDate={fmtDate} attemptSubmitInvestigation={attemptSubmitInvestigation} concludingInvestigation={concludingInvestigation} setShowHandoffModal={setShowHandoffModal} setLetterOutput={setLetterOutput} onAcceptSavedSuggestion={meetingsTab.onAcceptSavedSuggestion} onDismissSavedSuggestion={meetingsTab.onDismissSavedSuggestion}/>
           )}
           {activeTab==="evidence"&&(
-            <EvidenceTab cs={cs} cases={cases} saveCases={saveCases} currentUser={currentUser} showToast={showToast} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} orgMembers={orgMembers} allegations={caseAllegations} documentFindings={documentFindings} documentAnalysisLoading={documentAnalysisLoading} onAnalyseEvidence={(evidenceId)=>analyseEvidenceDocument(cs, evidenceId)} onAcceptFinding={(evidenceId, finding)=>acceptDocumentFinding(cs, evidenceId, finding)} onDismissFinding={(evidenceId, finding)=>dismissDocumentFinding(cs, evidenceId, finding)}/>
+            <EvidenceTab cs={cs} cases={cases} saveCases={saveCases} currentUser={currentUser} showToast={showToast} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} orgMembers={orgMembers} allegations={caseAllegations} documentFindings={evidenceTab.documentFindings} documentAnalysisLoading={evidenceTab.documentAnalysisLoading} onAnalyseEvidence={(evidenceId)=>evidenceTab.analyseEvidenceDocument(cs, evidenceId)} onAcceptFinding={(evidenceId, finding)=>evidenceTab.acceptDocumentFinding(cs, evidenceId, finding)} onDismissFinding={(evidenceId, finding)=>evidenceTab.dismissDocumentFinding(cs, evidenceId, finding)}/>
           )}
           {activeTab==="people"&&(
             <PeopleTab cs={cs}/>
@@ -480,19 +512,19 @@ export function CaseViewScreen({ cases, activeCaseId, setScreen, confirmDialog, 
             <CaseTasksPanel cs={cs} tasks={caseTaskList} createCaseTask={createCaseTask} toggleCaseTaskDone={toggleCaseTaskDone} deleteCaseTask={deleteCaseTask} fmtDate={fmtDate} isHR={isHR} onGeneratePlan={()=>generateInvestigationPlan(cs)} planLoading={!!investigationPlanLoading[cs.id]}/>
           )}
           {activeTab==="documents"&&(
-            <DocumentsTab cs={cs} setLetterOutput={setLetterOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} onGenerateHearingPack={onGenerateHearingPack} hearingPackGenerating={!!hearingPackGenerating?.[cs.id]} onDraftCorrespondence={onDraftCorrespondence}/>
+            <DocumentsTab cs={cs} setLetterOutput={setLetterOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} onGenerateHearingPack={documentsTab.onGenerateHearingPack} hearingPackGenerating={!!documentsTab.hearingPackGenerating?.[cs.id]} onDraftCorrespondence={documentsTab.onDraftCorrespondence}/>
           )}
           {activeTab==="communications"&&(
             <CommunicationsTab cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource}/>
           )}
           {activeTab==="themes"&&(
-            <ThemesTab cs={cs} organisationThemes={organisationThemes} caseThemes={caseThemes} suggestions={themeSuggestions?.[cs.id]} suggesting={!!themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={onSuggestThemes} onConfirmSuggestion={onConfirmThemeSuggestion} onDismissSuggestion={onDismissThemeSuggestion} onAssignExisting={onAssignExistingTheme} onRemove={onRemoveTheme}/>
+            <ThemesTab cs={cs} organisationThemes={themesTab.organisationThemes} caseThemes={themesTab.caseThemes} suggestions={themesTab.themeSuggestions?.[cs.id]} suggesting={!!themesTab.themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={themesTab.onSuggestThemes} onConfirmSuggestion={themesTab.onConfirmThemeSuggestion} onDismissSuggestion={themesTab.onDismissThemeSuggestion} onAssignExisting={themesTab.onAssignExistingTheme} onRemove={themesTab.onRemoveTheme}/>
           )}
           {activeTab==="outcome"&&(
             <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal}/>
           )}
           {activeTab==="ai"&&(
-            <AIAssistantTab cs={cs} chatHistory={caseChatHistory[cs.id]||[]} chatInput={caseChatInput} setChatInput={setCaseChatInput} chatProcessing={caseChatProcessing} sendChat={()=>sendCaseChat(cs)} overview={caseOverview[cs.id]} overviewLoading={!!caseOverviewLoading[cs.id]} generateOverview={()=>generateCaseOverview(cs)} overviewSources={caseOverviewSources?.[cs.id]} onAskWhy={setWhySignal}/>
+            <AIAssistantTab cs={cs} chatHistory={aiTab.caseChatHistory[cs.id]||[]} chatInput={aiTab.caseChatInput} setChatInput={aiTab.setCaseChatInput} chatProcessing={aiTab.caseChatProcessing} sendChat={()=>aiTab.sendCaseChat(cs)} overview={aiTab.caseOverview[cs.id]} overviewLoading={!!aiTab.caseOverviewLoading[cs.id]} generateOverview={()=>aiTab.generateCaseOverview(cs)} overviewSources={aiTab.caseOverviewSources?.[cs.id]} onAskWhy={setWhySignal}/>
           )}
         </div>
       </div>
