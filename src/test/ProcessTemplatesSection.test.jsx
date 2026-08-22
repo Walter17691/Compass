@@ -42,3 +42,18 @@ describe('ProcessTemplatesSection', () => {
     expect(saveProcessTemplate).toHaveBeenCalledWith('misconduct', expect.objectContaining({ target_days: null }));
   });
 });
+
+// Phase 6.5 hardening (Batch 13) — the per-default-task name/owner/day-offset
+// row had no accessible name at all (three bare inputs/selects side by side
+// with only a shared group-level label above the whole list).
+describe('ProcessTemplatesSection — default task row labelling (Phase 6.5, Batch 13)', () => {
+  it('labels each default task row\'s name, owner, and day-offset fields', async () => {
+    const user = userEvent.setup();
+    render(<ProcessTemplatesSection processTemplates={[]} saveProcessTemplate={vi.fn()}/>);
+    await user.click(screen.getByText('Misconduct'));
+    await user.click(screen.getByText('+ Add default task'));
+    expect(screen.getByLabelText('Task 1 name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task 1 owner')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task 1 day offset')).toBeInTheDocument();
+  });
+});

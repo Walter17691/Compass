@@ -88,11 +88,11 @@ function TemplateEditor({ processType, template, saveProcessTemplate }) {
         <label style={labelStyle}>Default tasks <span style={{ fontWeight: 400, textTransform: "none" }}>(created automatically on every new case of this type)</span></label>
         {draft.default_tasks.map((t, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <input value={t.name} onChange={e => updateTask(i, { name: e.target.value })} placeholder="Task" style={{ flex: 1, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 10px", fontSize: 12, color: "#1A1535", outline: "none" }} />
-            <select value={t.owner} onChange={e => updateTask(i, { owner: e.target.value })} style={{ width: 110, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 6px", fontSize: 11, color: "#1A1535", outline: "none" }}>
+            <input aria-label={`Task ${i + 1} name`} value={t.name} onChange={e => updateTask(i, { name: e.target.value })} placeholder="Task" style={{ flex: 1, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 10px", fontSize: 12, color: "#1A1535", outline: "none" }} />
+            <select aria-label={`Task ${i + 1} owner`} value={t.owner} onChange={e => updateTask(i, { owner: e.target.value })} style={{ width: 110, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 6px", fontSize: 11, color: "#1A1535", outline: "none" }}>
               {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
-            <input type="number" value={t.dayOffset} onChange={e => updateTask(i, { dayOffset: parseInt(e.target.value) || 0 })} title="Days after the case is created"
+            <input aria-label={`Task ${i + 1} day offset`} type="number" value={t.dayOffset} onChange={e => updateTask(i, { dayOffset: parseInt(e.target.value) || 0 })} title="Days after the case is created"
               style={{ width: 56, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 6px", fontSize: 11, color: "#1A1535", outline: "none", textAlign: "center" }} />
             <button onClick={() => removeTask(i)} aria-label="Remove task" style={{ background: "none", border: "none", color: "#9B9098", cursor: "pointer", display: "flex", padding: 4, flexShrink: 0 }}><CrossIcon size={11} /></button>
           </div>
