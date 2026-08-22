@@ -9,6 +9,7 @@ import SubscribeGate from './SubscribeGate.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
 import { isSubscribed } from './lib/plan.js'
+import { clearAllOrgScopedData } from './lib/storage.js'
 
 // These are mutually exclusive top-level views — a session only ever
 // renders one of them, so splitting them out keeps (say) an HR user's
@@ -186,7 +187,14 @@ export function Root() {
     </div>
   )
 
-  const signOut = async () => { await supabase.auth.signOut(); setUser(null); setMemberships([]); setPortalAccount(null) }
+  // Phase 6.5 hardening (High, security review) — previously left every
+  // org-scoped localStorage cache (cases, wellbeing notes, employee
+  // records, meeting drafts, ...) sitting in the browser after sign-out.
+  // On a shared/kiosk device the next person to sign in would have this
+  // rendered from stale cache before any RLS-scoped fetch overwrote it —
+  // clearAllOrgScopedData() (src/lib/storage.js) is the single list this
+  // and the in-app "Delete all data" flow both now share.
+  const signOut = async () => { await supabase.auth.signOut(); clearAllOrgScopedData(); setUser(null); setMemberships([]); setPortalAccount(null) }
 
   if (!user) {
     // A pending portal invite means this person followed an employee

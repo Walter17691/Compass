@@ -1,6 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { requireOrgMembership } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
+import { checkRateLimit } from './_rateLimit.js';
 import { computeExpiresAt, isExpired, isTerminalStatus, documentTypeLabel } from '../src/lib/eSignature.js';
 
 // signing_requests has zero client-facing RLS policies by design (same
@@ -34,6 +35,16 @@ export default async function handler(req, res) {
 
     try {
       if (signature || acknowledged || declined) {
+        // Phase 6.5 hardening (security review) — this path has no session
+        // to rate-limit by caller id (the signer is external, unauthenticated
+        // by design), so it's keyed by the sign_id itself instead: caps
+        // repeated actioning attempts against one specific request, the
+        // realistic abuse shape for a public write endpoint, without
+        // affecting any other signer's own link.
+        if (signId) {
+          const withinLimit = await checkRateLimit(`sign-action:${signId}`, 20, 300);
+          if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
+        }
         // The signer here is the external employee/manager, not a logged-in
         // Compass user — the unguessable sign_id is the auth boundary, by
         // design (see file comment). But the notification email content
@@ -100,6 +111,9 @@ export default async function handler(req, res) {
         const { orgId } = req.body;
         const auth = await requireOrgMembership(req, res, orgId);
         if (!auth) return;
+
+        const withinLimit = await checkRateLimit(`signing-create:${auth.caller.id}`, 20, 300);
+        if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
         const newSignId = crypto.randomUUID();
         const r = await supabaseRequest('signing_requests', {

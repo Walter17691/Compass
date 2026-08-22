@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { supabaseRequest } from './_supabase.js';
 import { requireOrgRole } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
+import { checkRateLimit } from '../_rateLimit.js';
 import { isHrRole } from '../../src/lib/roles.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
@@ -25,6 +26,9 @@ export async function invite(req, res) {
   // UI gating already uses — importing it keeps both in agreement.
   const auth = await requireOrgRole(req, res, orgId, isHrRole);
   if (!auth) return;
+
+  const withinLimit = await checkRateLimit(`portal-invite:${auth.caller.id}`, 20, 300);
+  if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
   try {
     const token = crypto.randomUUID();

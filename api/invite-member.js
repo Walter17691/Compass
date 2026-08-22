@@ -1,5 +1,6 @@
 import { verifyCaller } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
+import { checkRateLimit } from './_rateLimit.js';
 
 // Mirrors src/lib/roles.js's ROLE_LABELS — kept inline rather than
 // imported since api/ functions are a separate deployment bundle from
@@ -36,6 +37,9 @@ export default async function handler(req, res) {
     if (callerMember.role !== 'hr_director' && callerMember.role !== 'hr_manager') {
       return res.status(403).json({ error: 'Only HR Directors and HR Managers can invite team members' });
     }
+
+    const withinLimit = await checkRateLimit(`invite-member:${caller.id}`, 20, 300);
+    if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
     const appUrl = 'https://compass-lemon-iota.vercel.app';
     const inviteLink = `${appUrl}?invite=${inviteCode}`;

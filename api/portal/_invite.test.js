@@ -13,11 +13,14 @@ function mockRes() {
 // (api/_auth.js), tested at the helper level in api/_auth.test.js — this
 // file tests the actual endpoint end-to-end: a real, org-member-but-non-HR
 // caller must be rejected, and a real HR caller must succeed.
-function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], insertOk = true, emailOk = true } = {}) {
+function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], insertOk = true, emailOk = true, rateLimitOk = true } = {}) {
   global.fetch = vi.fn((url) => {
     const u = String(url);
     if (u.includes('/auth/v1/user')) {
       return Promise.resolve({ ok: authOk, json: () => Promise.resolve(authUser) });
+    }
+    if (u.includes('check_rate_limit')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(rateLimitOk) });
     }
     if (u.includes('/rest/v1/org_members')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
@@ -88,5 +91,12 @@ describe('portal invite — role authorization', () => {
     const res = mockRes();
     await invite(req({ orgId: 'org-1' }), res);
     expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects once the caller\'s rate limit is exceeded', async () => {
+    stubFetch({ members: [{ role: 'hr_manager' }], rateLimitOk: false });
+    const res = mockRes();
+    await invite(req(), res);
+    expect(res.statusCode).toBe(429);
   });
 });

@@ -4,7 +4,7 @@ import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, D
 import { streamClaude } from './lib/streamClaude';
 import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
 import { fetchAllPages } from './lib/paginatedFetch';
-import { ls, lsSet, orgScopedKey } from './lib/storage';
+import { ls, lsSet, orgScopedKey, clearAllOrgScopedData } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
@@ -2363,16 +2363,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         if(!r.ok) { showToast("Couldn't delete organisation data: "+(d.error||"unknown error"), "error"); return; }
       } catch(e) { showToast("Couldn't delete organisation data: "+e.message, "error"); return; }
     }
-    // Phase 6.5 — most of these keys are now org-scoped (orgLs/orgLsSet
-    // above); the legacy unscoped names (compass_whistle/users/user/vault)
-    // are dead — nothing in the codebase writes them anymore — removing
-    // them here is a harmless no-op kept for defence against any leftover
-    // browser state from before that rename.
-    [
-      "compass_cases","compass_policies","compass_adjustments","compass_signature","compass_letterhead",
-      "compass_word_template","compass_starters","compass_starter_templates","compass_leavers","compass_leaver_templates",
-    ].forEach(k=>localStorage.removeItem(orgScopedKey(org?.id, k)));
-    ["compass_whistle","compass_users","compass_user","compass_vault"].forEach(k=>localStorage.removeItem(k));
+    // Phase 6.5 hardening (High, security review) — was missing
+    // compass_wellbeing/compass_employees/compass_redundancy/
+    // compass_meeting_draft entirely, so "Delete all data" left wellbeing/
+    // health notes, employee records, redundancy case data, and any live
+    // meeting transcript draft still sitting in localStorage. Now shares
+    // the single complete list (src/lib/storage.js) sign-out itself also
+    // uses, instead of a second, independently-maintained one that drifted.
+    clearAllOrgScopedData();
     try { window.location.reload(); } catch(e) {}
   };
 

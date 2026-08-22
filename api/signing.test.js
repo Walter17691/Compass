@@ -18,13 +18,16 @@ function mockRes() {
 // NOT org-scoped by design: the signer is an external, unauthenticated
 // party, and the unguessable sign_id itself is the access boundary — see
 // this file's own header comment. These tests cover both paths.
-function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], signingRequest = null, insertOk = true, patchOk = true } = {}) {
+function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], signingRequest = null, insertOk = true, patchOk = true, rateLimitOk = true } = {}) {
   const calls = [];
   global.fetch = vi.fn((url, options = {}) => {
     const u = String(url);
     calls.push({ url: u, method: options.method, body: options.body });
     if (u.includes('/auth/v1/user')) {
       return Promise.resolve({ ok: authOk, json: () => Promise.resolve(authUser) });
+    }
+    if (u.includes('check_rate_limit')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(rateLimitOk) });
     }
     if (u.includes('/rest/v1/org_members')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
@@ -78,6 +81,13 @@ describe('api/signing — create (POST, no signId)', () => {
     const payload = JSON.parse(insert.body);
     expect(payload.org_id).toBe('org-1');
   });
+
+  it('rejects creation once the caller\'s rate limit is exceeded', async () => {
+    stubFetch({ members: [{ role: 'hr_manager' }], rateLimitOk: false });
+    const res = mockRes();
+    await handler({ method: 'POST', headers: { authorization: 'Bearer good' }, body: createBody }, res);
+    expect(res.statusCode).toBe(429);
+  });
 });
 
 describe('api/signing — sign/acknowledge/decline (POST with signId)', () => {
@@ -112,6 +122,13 @@ describe('api/signing — sign/acknowledge/decline (POST with signId)', () => {
     await handler({ method: 'POST', headers: {}, body: { signId: 's1', signature: 'data:...', signedAt: new Date().toISOString() } }, res);
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  it('rejects repeated actioning of the same sign_id once its own rate limit is exceeded — caps brute-force/abuse against one public link', async () => {
+    stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null }, rateLimitOk: false });
+    const res = mockRes();
+    await handler({ method: 'POST', headers: {}, body: { signId: 's1', signature: 'data:...', signedAt: new Date().toISOString() } }, res);
+    expect(res.statusCode).toBe(429);
   });
 });
 

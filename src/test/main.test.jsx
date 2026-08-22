@@ -48,7 +48,7 @@ function FakeInsightsPanel({ orgId }) {
 
 let instanceCounter = 0;
 vi.mock('../App.jsx', () => ({
-  default: function FakeCompass({ org, member, availableOrgs, switchOrg }) {
+  default: function FakeCompass({ org, member, availableOrgs, switchOrg, onSignOut }) {
     // Lazy useState initialisers only run once per mount — exactly the
     // shape App.jsx's real currentUser/orgWebhookUrl state uses. If the
     // remount ever stopped happening, these would keep the previous
@@ -73,6 +73,7 @@ vi.mock('../App.jsx', () => ({
             (correctly org-scoped) mounted instance at all. */}
         <button onClick={()=>setLastSavedOrgId(org.id)}>Save case</button>
         {availableOrgs.map(o => <button key={o.id} onClick={()=>switchOrg(o.id)}>Switch to {o.name}</button>)}
+        <button onClick={onSignOut}>Sign out</button>
       </div>
     );
   },
@@ -198,5 +199,68 @@ describe('Root — org switch tenant isolation (Phase 6.5, P0)', () => {
 
     expect(window.location.search).not.toContain('case=');
     expect(window.location.search).not.toContain('screen=');
+  });
+});
+
+// Phase 6.5 hardening (High, security review) — shared-device sign-out.
+// Previously signOut() only cleared Supabase's own session; every
+// org-scoped localStorage cache (cases, wellbeing notes, employee
+// records, meeting drafts, ...) was left behind for whoever used the
+// browser next. clearAllOrgScopedData() (src/lib/storage.js) is now
+// called as part of sign-out itself.
+describe('Root — shared-device sign-out clears cached ER data (Phase 6.5, High)', () => {
+  beforeEach(() => { instanceCounter = 0; localStorage.clear(); vi.clearAllMocks();
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: { user: FAKE_USER } } });
+    supabaseMock.from.mockImplementation((table) => ({ select: () => ({ eq: () => Promise.resolve(table === 'org_members' ? { data: MEMBERSHIPS } : { data: [] }) }) }));
+  });
+
+  it('wipes every cached sensitive key for the active org when signing out', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('org-a:compass_wellbeing', JSON.stringify([{ employeeName: 'Sam', content: 'confidential health note' }]));
+    localStorage.setItem('org-a:compass_employees', JSON.stringify([{ name: 'Sam' }]));
+    localStorage.setItem('org-a:compass_cases', JSON.stringify([{ id: 'case-a' }]));
+
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByTestId('org-id')).toHaveTextContent('org-a'));
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(localStorage.getItem('org-a:compass_wellbeing')).toBeNull();
+    expect(localStorage.getItem('org-a:compass_employees')).toBeNull();
+    expect(localStorage.getItem('org-a:compass_cases')).toBeNull();
+  });
+
+  it('actually calls supabase.auth.signOut, not just a local state reset', async () => {
+    const user = userEvent.setup();
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByTestId('org-id')).toHaveTextContent('org-a'));
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(supabaseMock.auth.signOut).toHaveBeenCalled();
+  });
+
+  it('returns to the login screen after signing out, not a stale authenticated view', async () => {
+    const user = userEvent.setup();
+    supabaseMock.auth.getSession.mockResolvedValueOnce({ data: { session: { user: FAKE_USER } } })
+      .mockResolvedValue({ data: { session: null } });
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByTestId('org-id')).toHaveTextContent('org-a'));
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(screen.getByPlaceholderText('you@company.com')).toBeInTheDocument());
+  });
+
+  it('clears cached data for every org this browser has used, not just the currently active one', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('org-a:compass_cases', JSON.stringify([{ id: 'case-a' }]));
+    localStorage.setItem('org-b:compass_wellbeing', JSON.stringify([{ employeeName: 'Other org employee' }]));
+
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByTestId('org-id')).toHaveTextContent('org-a'));
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(localStorage.getItem('org-a:compass_cases')).toBeNull();
+    expect(localStorage.getItem('org-b:compass_wellbeing')).toBeNull();
   });
 });

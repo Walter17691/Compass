@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ls, lsSet, orgScopedKey } from '../lib/storage.js';
+import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, SENSITIVE_ORG_SCOPED_KEYS } from '../lib/storage.js';
 
 describe('ls / lsSet', () => {
   beforeEach(() => {
@@ -56,5 +56,55 @@ describe('ls / lsSet through orgScopedKey — cross-tenant isolation', () => {
   it('a fresh, never-visited org reads its own empty fallback, not another org\'s cached data', () => {
     lsSet(orgScopedKey('org-a', 'compass_cases'), [{ id: 'case-a' }]);
     expect(ls(orgScopedKey('org-c', 'compass_cases'), [])).toEqual([]);
+  });
+});
+
+// Phase 6.5 hardening (High, security review) — shared-device sign-out.
+// clearAllOrgScopedData() is what main.jsx's signOut() now calls before
+// tearing down the session, and what App.jsx's "Delete all data" GDPR
+// flow now shares instead of its own second, previously-incomplete list.
+describe('clearAllOrgScopedData', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('clears every known-sensitive key for a single org', () => {
+    for (const key of SENSITIVE_ORG_SCOPED_KEYS) lsSet(orgScopedKey('org-a', key), ['sensitive data']);
+    clearAllOrgScopedData();
+    for (const key of SENSITIVE_ORG_SCOPED_KEYS) expect(localStorage.getItem(orgScopedKey('org-a', key))).toBeNull();
+  });
+
+  it('clears wellbeing notes, employee records, redundancy data, and meeting drafts specifically — the exact gap in the previous deleteAllData list', () => {
+    lsSet(orgScopedKey('org-a', 'compass_wellbeing'), [{ employeeName: 'Sam', content: 'confidential health note' }]);
+    lsSet(orgScopedKey('org-a', 'compass_employees'), [{ name: 'Sam', dateOfBirth: '1990-01-01' }]);
+    lsSet(orgScopedKey('org-a', 'compass_redundancy'), [{ id: 'r1' }]);
+    lsSet(orgScopedKey('org-a', 'compass_meeting_draft'), { transcript: 'live meeting notes' });
+    clearAllOrgScopedData();
+    expect(localStorage.getItem(orgScopedKey('org-a', 'compass_wellbeing'))).toBeNull();
+    expect(localStorage.getItem(orgScopedKey('org-a', 'compass_employees'))).toBeNull();
+    expect(localStorage.getItem(orgScopedKey('org-a', 'compass_redundancy'))).toBeNull();
+    expect(localStorage.getItem(orgScopedKey('org-a', 'compass_meeting_draft'))).toBeNull();
+  });
+
+  it('clears sensitive data for EVERY org this browser has ever used, not just one — the shared/kiosk-device scenario', () => {
+    lsSet(orgScopedKey('org-a', 'compass_cases'), [{ id: 'case-a' }]);
+    lsSet(orgScopedKey('org-b', 'compass_wellbeing'), [{ employeeName: 'Other org employee' }]);
+    clearAllOrgScopedData();
+    expect(localStorage.getItem(orgScopedKey('org-a', 'compass_cases'))).toBeNull();
+    expect(localStorage.getItem(orgScopedKey('org-b', 'compass_wellbeing'))).toBeNull();
+  });
+
+  it('clears legacy pre-org-scoping keys defensively, even though nothing writes them anymore', () => {
+    localStorage.setItem('compass_user', '{"name":"Stale User"}');
+    localStorage.setItem('compass_vault', '{}');
+    clearAllOrgScopedData();
+    expect(localStorage.getItem('compass_user')).toBeNull();
+    expect(localStorage.getItem('compass_vault')).toBeNull();
+  });
+
+  it('does not touch unrelated, non-sensitive keys (e.g. compass_gdpr, an unscoped UI-acknowledgement flag)', () => {
+    localStorage.setItem('compass_gdpr', 'true');
+    localStorage.setItem('some_other_apps_key', 'unrelated');
+    clearAllOrgScopedData();
+    expect(localStorage.getItem('compass_gdpr')).toBe('true');
+    expect(localStorage.getItem('some_other_apps_key')).toBe('unrelated');
   });
 });

@@ -16,3 +16,58 @@ export function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') 
 export function orgScopedKey(orgId, key) {
   return `${orgId || "noorg"}:${key}`;
 }
+
+// Phase 6.5 hardening (High, security review) — every org-scoped key
+// App.jsx caches via orgLs/orgLsSet. Single source of truth for "what
+// counts as sensitive ER data cached client-side," used both to wipe
+// everything on sign-out and by the "Delete all data" GDPR flow — those
+// two previously kept their own separate, drifted lists; deleteAllData's
+// own list (App.jsx) was missing compass_wellbeing, compass_employees,
+// compass_redundancy, and compass_meeting_draft entirely, so clicking
+// "Delete all data" left wellbeing/health notes, employee records,
+// redundancy case data, and any live meeting transcript draft sitting in
+// localStorage regardless. Sign-out had NO localStorage cleanup at all
+// before this — on a shared/kiosk browser, the next person to sign in
+// (to the same org or a different one) would have this data sitting
+// readable in localStorage the instant the app mounted, before any
+// RLS-scoped fetch had a chance to overwrite it with THEIR own
+// authorised data (several of these — cases, wellbeing notes, employee
+// records — seed their React state straight from this cache on mount).
+export const SENSITIVE_ORG_SCOPED_KEYS = [
+  "compass_cases", "compass_wellbeing", "compass_employees", "compass_redundancy",
+  "compass_meeting_draft", "compass_adjustments", "compass_signature", "compass_letterhead",
+  "compass_word_template", "compass_starters", "compass_starter_templates",
+  "compass_leavers", "compass_leaver_templates", "compass_policies",
+];
+// Pre-dates org-scoping entirely — nothing in the codebase writes these
+// anymore (confirmed by grep), but a browser that used an older build
+// before that rename could still have one sitting in storage.
+const LEGACY_UNSCOPED_KEYS = ["compass_whistle", "compass_users", "compass_user", "compass_vault"];
+
+// Clears every org's cached copy of the keys above, not just the
+// current org — a browser shared across multiple orgs (an HR
+// consultancy running cases for several clients from one login, per
+// App.jsx's own orgLs/orgLsSet comment) must not leave a PREVIOUS org's
+// data behind just because the next session happens to land on a
+// different one. orgId never contains a colon (always a uuid or the
+// "noorg" fallback), so splitting each real key on its first colon
+// reliably recovers the original key name to check against the
+// sensitive set, regardless of which org wrote it.
+export function clearAllOrgScopedData() {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const sensitive = new Set(SENSITIVE_ORG_SCOPED_KEYS);
+    Object.keys(localStorage).forEach(k => {
+      const idx = k.indexOf(':');
+      const suffix = idx === -1 ? k : k.slice(idx + 1);
+      if (sensitive.has(suffix)) localStorage.removeItem(k);
+    });
+    LEGACY_UNSCOPED_KEYS.forEach(k => localStorage.removeItem(k));
+  } catch(e) {
+    // Unlike ls/lsSet's own best-effort silence, a failure here means a
+    // sign-out or "delete all data" action did NOT actually clear
+    // sensitive cached data as the caller believes it did — worth a
+    // console trace to investigate, not a silent no-op.
+    console.error('clearAllOrgScopedData failed:', e);
+  }
+}
