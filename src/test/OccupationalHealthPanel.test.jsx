@@ -260,3 +260,35 @@ describe('OccupationalHealthPanel — send agreed adjustments for signature (Pha
     expect(screen.queryByText(/send the agreed adjustments/)).not.toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (Batch 13) — the recommendations textarea, the OH
+// report select, and the adjustment-signature email field had no
+// accessible name at all; the review date field had a visual label with
+// no htmlFor/id association.
+describe('OccupationalHealthPanel — field labelling (Phase 6.5, Batch 13)', () => {
+  const analysableEvidence = { id: 'ev1', name: 'OH Report.pdf', type: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA', size: 1000 };
+
+  it('gives the recommendations textarea an accessible name on the hr_review step', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" />);
+    expect(screen.getByLabelText('OH report recommendations')).toBeInTheDocument();
+  });
+
+  it('gives the OH report select an accessible name', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: {} }, evidence: [analysableEvidence] });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onAnalyseOhReport={()=>{}} onAcceptOhFinding={()=>{}} onDismissOhFinding={()=>{}} />);
+    expect(screen.getByLabelText('Select the OH report')).toBeInTheDocument();
+  });
+
+  it('gives the adjustment-signature email field an accessible name', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'adjustments_considered', history: {}, recommendations: 'Standing desk for 4 weeks.' } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" onSendForSignature={()=>{}} />);
+    expect(screen.getByLabelText('Employee email for signature')).toBeInTheDocument();
+  });
+
+  it('labels the review date field on the review_date step', () => {
+    const cs = makeCase({ ohProcess: { currentStep: 'review_date', history: {} } });
+    render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="occupational_health" />);
+    expect(screen.getByLabelText('Review date')).toBeInTheDocument();
+  });
+});

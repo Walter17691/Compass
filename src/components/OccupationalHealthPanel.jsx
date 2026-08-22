@@ -95,7 +95,7 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
 
                 {status==="current"&&step.id==="hr_review"&&(
                   <div style={{marginTop:8}}>
-                    <textarea value={recommendationsDraft} onChange={e=>setRecommendationsDraft(e.target.value)} rows={3} placeholder="What did the OH report recommend?"
+                    <textarea aria-label="OH report recommendations" value={recommendationsDraft} onChange={e=>setRecommendationsDraft(e.target.value)} rows={3} placeholder="What did the OH report recommend?"
                       style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box",resize:"vertical"}} />
                     <Btn onClick={()=>advance("recommendations", { recommendations: recommendationsDraft })} disabled={!recommendationsDraft.trim()} style={{marginTop:6}}>Save recommendations</Btn>
 
@@ -103,7 +103,7 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                       <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
                         <div style={{fontSize:11,fontWeight:600,color:"#9B9098",marginBottom:6}}>Or let Compass suggest findings from the uploaded report</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <select value={selectedEvidenceId} onChange={e=>setSelectedEvidenceId(e.target.value)}
+                          <select aria-label="Select the OH report" value={selectedEvidenceId} onChange={e=>setSelectedEvidenceId(e.target.value)}
                             style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                             <option value="">Select the OH report...</option>
                             {analysableEvidence.map(ev=><option key={ev.id} value={ev.id}>{ev.name}</option>)}
@@ -150,7 +150,7 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                       <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #F5F1EA"}}>
                         <div style={{fontSize:11,fontWeight:600,color:"#9B9098",marginBottom:6}}>Or send the agreed adjustments for the employee to sign</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <input value={adjustmentEmailDraft} onChange={e=>setAdjustmentEmailDraft(e.target.value)} placeholder="employee@company.com"
+                          <input aria-label="Employee email for signature" value={adjustmentEmailDraft} onChange={e=>setAdjustmentEmailDraft(e.target.value)} placeholder="employee@company.com"
                             style={{flex:1,minWidth:180,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}} />
                           <Btn variant="secondary" disabled={!adjustmentEmailDraft.includes("@")||sendingAdjustment} onClick={async ()=>{
                             setSendingAdjustment(true);
@@ -172,8 +172,8 @@ export function OccupationalHealthPanel({ cs, cases, saveCases, stage, ohReportF
                 {step.id==="review_date"&&status==="current"&&(
                   <div style={{display:"flex",gap:8,alignItems:"flex-end",marginTop:8}}>
                     <div>
-                      <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Review date</label>
-                      <input type="date" value={reviewDateDraft} onChange={e=>setReviewDateDraft(e.target.value)}
+                      <label htmlFor="oh-review-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Review date</label>
+                      <input id="oh-review-date" type="date" value={reviewDateDraft} onChange={e=>setReviewDateDraft(e.target.value)}
                         style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}} />
                     </div>
                     <Btn onClick={()=>advance("review_date", { reviewDate: reviewDateDraft })} disabled={!reviewDateDraft}>{ohProcess?.reviewDate?"Update review date":"Confirm review date"}</Btn>
