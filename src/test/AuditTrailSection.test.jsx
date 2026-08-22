@@ -31,4 +31,11 @@ describe('AuditTrailSection — automation provenance (Phase 5, IP30)', () => {
     expect(screen.getByText('· Approved by Jo Smith')).toBeInTheDocument();
     expect(screen.queryByText('AI-PREPARED')).not.toBeInTheDocument();
   });
+
+  // Phase 6.5 hardening (Batch 13) — the search field relied on
+  // placeholder text alone, with no other accessible name.
+  it('labels the search field', () => {
+    render(<AuditTrailSection auditLog={[]} />);
+    expect(screen.getByLabelText('Search audit trail')).toBeInTheDocument();
+  });
 });

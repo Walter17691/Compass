@@ -42,7 +42,7 @@ export function GlobalAssistantScreen({ chatHistory, chatInput, setChatInput, ch
             )}
           </div>
           <div style={{padding:"14px 20px",borderTop:"1px solid #F5F1EA",display:"flex",gap:8}}>
-            <input value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!chatProcessing)sendChat();}} placeholder="Ask Compass anything about your cases…" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 13px",color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+            <input aria-label="Ask Compass" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!chatProcessing)sendChat();}} placeholder="Ask Compass anything about your cases…" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 13px",color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
             <button onClick={sendChat} disabled={chatProcessing||!chatInput.trim()} style={{fontSize:13,background:chatProcessing||!chatInput.trim()?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:chatProcessing||!chatInput.trim()?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask</button>
           </div>
         </div>

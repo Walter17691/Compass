@@ -55,7 +55,7 @@ export function SignaturePad({ onSave, onClose }) {
           </>
         ) : (
           <div style={{marginBottom:16}}>
-            <input value={typed} onChange={e=>setTyped(e.target.value)} placeholder="Type your name"
+            <input aria-label="Type your name" value={typed} onChange={e=>setTyped(e.target.value)} placeholder="Type your name"
               style={{width:"100%",background:"#fff",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:28,fontFamily:"'Brush Script MT',cursive",color:"#FFFFFF",outline:"none",boxSizing:"border-box"}} />
             {typed && <div style={{background:"#fff",borderRadius:8,border:"1px solid #E8E0D0",padding:"10px 16px",marginTop:8}}><div style={{fontFamily:"'Brush Script MT',cursive",fontSize:32,color:"#FFFFFF"}}>{typed}</div></div>}
           </div>

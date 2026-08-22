@@ -22,7 +22,7 @@ export function PeopleScreen({ cases, setActivePerson, setScreen, setCaseInfo, s
           <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>People</h2>
           <p style={{fontSize:13,color:"#9B9098",margin:0}}>All employees with meeting history</p>
         </div>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search people…"
+        <input aria-label="Search people" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search people…"
           style={{padding:"8px 12px",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",width:200}}/>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>

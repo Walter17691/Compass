@@ -23,8 +23,8 @@ export function HrInterventionModal({ cs, setShowHrInterventionModal, onSendGuid
         <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>{cs?.employeeName}</div>
 
         <div style={{marginBottom:16}}>
-          <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Note</label>
-          <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="What should the investigator know?"
+          <label htmlFor="hr-intervention-note" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Note</label>
+          <textarea id="hr-intervention-note" rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="What should the investigator know?"
             style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820",boxSizing:"border-box",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
         </div>
 

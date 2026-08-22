@@ -8,6 +8,7 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
     <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
       <input
+        aria-label="Search"
         autoFocus
         placeholder="Search cases, records, letters, employees, evidence, DSARs..."
         value={searchQuery}

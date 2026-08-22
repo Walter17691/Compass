@@ -92,3 +92,12 @@ describe('LetterScreen — Send for acknowledgement (Phase 5, IP27)', () => {
     expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (Batch 13) — the letter-editing textarea had no
+// accessible name at all.
+describe('LetterScreen — field labelling (Phase 6.5, Batch 13)', () => {
+  it('labels the letter text field while editing', () => {
+    render(<LetterScreen {...baseProps} editingLetter={true} />);
+    expect(screen.getByLabelText('Letter text')).toBeInTheDocument();
+  });
+});

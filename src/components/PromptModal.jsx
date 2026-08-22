@@ -24,10 +24,10 @@ export function PromptModal({ title, message, fields, confirmLabel="Save", cance
         <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:24}}>
           {fields.map((f,i)=>(
             <div key={f.key}>
-              <label style={{display:"block",fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>
+              <label htmlFor={`prompt-modal-${f.key}`} style={{display:"block",fontSize:12,fontWeight:600,color:"#1A1535",marginBottom:6}}>
                 {f.label}{f.required&&<span style={{color:"#C84B2F"}}> *</span>}
               </label>
-              <input autoFocus={i===0} type={f.type||"text"} value={values[f.key]||""} placeholder={f.placeholder||""}
+              <input id={`prompt-modal-${f.key}`} autoFocus={i===0} type={f.type||"text"} value={values[f.key]||""} placeholder={f.placeholder||""}
                 onChange={e=>setValues(v=>({...v,[f.key]:e.target.value}))}
                 onKeyDown={e=>{ if(e.key==="Enter"&&canConfirm) onConfirm(values); }}
                 style={{width:"100%",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>

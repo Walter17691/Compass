@@ -33,7 +33,7 @@ export function InconsistenciesPanel({ cs, signals, loading, onCheck, changeSign
                 ]}
               />
               {signal.status==="open" && allegations.length>0 && (
-                <select defaultValue="" onChange={e=>{if(e.target.value){onLinkAllegation(signal, e.target.value); e.target.value="";}}}
+                <select aria-label={`Link "${signal.title}" to allegation`} defaultValue="" onChange={e=>{if(e.target.value){onLinkAllegation(signal, e.target.value); e.target.value="";}}}
                   style={{marginTop:6,fontSize:11,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px",color:"#6B6375"}}>
                   <option value="" disabled>Link to allegation…</option>
                   {allegations.map(a=><option key={a.id} value={a.id}>{a.title}</option>)}

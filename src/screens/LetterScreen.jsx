@@ -32,7 +32,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               </button>
             </div>
             {editingLetter&&(
-              <textarea value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
+              <textarea aria-label="Letter text" value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
                 style={{width:"100%",minHeight:400,background:"#FDFAF5",border:"1px solid #7C5CFC33",borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"DM Serif Display,Georgia,serif",marginBottom:12}}/>
             )}
             {/* Sig bar */}

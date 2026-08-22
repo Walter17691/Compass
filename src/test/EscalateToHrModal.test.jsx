@@ -43,4 +43,11 @@ describe('EscalateToHrModal', () => {
     expect(escalateToHr).not.toHaveBeenCalled();
     expect(setShowEscalateModal).toHaveBeenCalledWith(false);
   });
+
+  // Phase 6.5 hardening (Batch 13) — the note field had a visual label
+  // with no htmlFor/id association.
+  it('labels the note field', () => {
+    render(<EscalateToHrModal caseName="Sam Employee" setShowEscalateModal={() => {}} escalateToHr={() => {}} />);
+    expect(screen.getByLabelText(/What do you need help with/)).toBeInTheDocument();
+  });
 });

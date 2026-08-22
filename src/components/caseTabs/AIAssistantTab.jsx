@@ -51,7 +51,7 @@ export function AIAssistantTab({ cs, chatHistory, chatInput, setChatInput, chatP
           ))}
           {chatProcessing && <div style={{fontSize:13,color:"#9B9098",marginBottom:10}}>Thinking…</div>}
           <div style={{display:"flex",gap:8,marginTop:8}}>
-            <input value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!chatProcessing)sendChat();}} placeholder="e.g. What evidence supports the first allegation?" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+            <input aria-label="Ask about this case" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!chatProcessing)sendChat();}} placeholder="e.g. What evidence supports the first allegation?" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
             <button onClick={sendChat} disabled={chatProcessing||!chatInput.trim()} style={{fontSize:13,background:chatProcessing||!chatInput.trim()?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"9px 18px",color:"#fff",fontWeight:600,cursor:chatProcessing||!chatInput.trim()?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask</button>
           </div>
         </div>

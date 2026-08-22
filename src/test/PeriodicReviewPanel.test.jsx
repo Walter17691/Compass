@@ -91,4 +91,13 @@ describe('PeriodicReviewPanel', () => {
     await waitFor(() => expect(screen.getByText("Couldn't load the periodic review history right now.")).toBeInTheDocument());
     expect(screen.queryByText('No periodic review generated yet.')).not.toBeInTheDocument();
   });
+
+  // Phase 6.5 hardening (Batch 13) — the review-period select had no
+  // accessible name at all.
+  it('labels the review-period select', async () => {
+    fromMock.mockReturnValue(selectChain({ data: [], error: null }));
+    render(<PeriodicReviewPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true}/>);
+    await waitFor(() => expect(screen.getByText('No periodic review generated yet.')).toBeInTheDocument());
+    expect(screen.getByLabelText('Review period')).toBeInTheDocument();
+  });
 });

@@ -111,4 +111,13 @@ describe('SignaturePad', () => {
     await user.click(screen.getByRole('button', { name: 'Skip' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // Phase 6.5 hardening (Batch 13) — the typed-name field relied on
+  // placeholder text alone, with no other accessible name.
+  it('labels the typed-name field in type mode', async () => {
+    const user = userEvent.setup();
+    render(<SignaturePad onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.click(screen.getByRole('button', { name: 'Type' }));
+    expect(screen.getByLabelText('Type your name')).toBeInTheDocument();
+  });
 });

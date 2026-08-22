@@ -75,4 +75,11 @@ describe('ThemesTab', () => {
     expect(screen.queryByRole('option', { name: 'Retired theme' })).not.toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Bullying' })).toBeInTheDocument();
   });
+
+  // Phase 6.5 hardening (Batch 13) — the "add existing theme" picker
+  // had no accessible name at all.
+  it('labels the "add existing theme" picker', () => {
+    render(<ThemesTab cs={cs} organisationThemes={organisationThemes} caseThemes={[]} suggestions={[]} suggesting={false} isHR={true} onSuggest={()=>{}} onConfirmSuggestion={()=>{}} onDismissSuggestion={()=>{}} onAssignExisting={()=>{}} onRemove={()=>{}}/>);
+    expect(screen.getByLabelText('Add existing theme')).toBeInTheDocument();
+  });
 });

@@ -80,7 +80,7 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR }) {
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Periodic ER review</div>
         {isHR && (
           <div style={{display:"flex",gap:8}}>
-            <select value={periodType} onChange={e=>setPeriodType(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <select aria-label="Review period" value={periodType} onChange={e=>setPeriodType(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}>
               {PERIOD_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
             <button onClick={generate} disabled={generating} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"8px 18px",color:"#fff",fontWeight:600,cursor:generating?"default":"pointer",opacity:generating?0.7:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>

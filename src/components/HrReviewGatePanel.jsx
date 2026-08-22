@@ -29,7 +29,7 @@ export function HrReviewGatePanel({ cs, hrReviewRequests, resolveInvestigationRe
             {r.status!=="pending"&&r.reviewed_by_name&&<div style={{fontSize:11,color:"#9B9098",marginTop:2}}>By {r.reviewed_by_name}{r.comments?": "+r.comments:""}</div>}
             {r.status==="pending"&&isHR&&r===pending&&(
               <div style={{marginTop:10}}>
-                <textarea value={comments} onChange={e=>setComments(e.target.value)} placeholder="Comments (optional)" rows={2}
+                <textarea aria-label="Review comments" value={comments} onChange={e=>setComments(e.target.value)} placeholder="Comments (optional)" rows={2}
                   style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535",boxSizing:"border-box",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:8}}/>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   {INVESTIGATION_REVIEW_STATUSES.map(s=>(

@@ -94,6 +94,7 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
         {/* Notepad */}
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <textarea
+            aria-label="Notepad"
             ref={inputRef}
             value={inputText}
             style={{flex:1,background:"transparent",border:"none",padding:"40px 48px",fontSize:16,lineHeight:1.9,outline:"none",color:"#1A1535",resize:"none",fontFamily:"DM Sans,system-ui,sans-serif",letterSpacing:"0.1px"}}

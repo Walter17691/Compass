@@ -21,8 +21,8 @@ export function EscalateToHrModal({ caseName, setShowEscalateModal, escalateToHr
         <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>HR will see the case's stage, latest meeting, and evidence automatically — you don't need to explain the background, just what you need help with.{caseName?" About "+caseName+".":""}</div>
 
         <div style={{marginBottom:20}}>
-          <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>What do you need help with? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-          <textarea rows={4} value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. The employee is disputing the evidence and I'm not sure how to proceed"
+          <label htmlFor="escalate-hr-note" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>What do you need help with? <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+          <textarea id="escalate-hr-note" rows={4} value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. The employee is disputing the evidence and I'm not sure how to proceed"
             style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820",boxSizing:"border-box",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
         </div>
 

@@ -65,7 +65,7 @@ export function ThemesTab({ cs, organisationThemes, caseThemes, suggestions, sug
 
         {available.length>0 && (
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <select value={pickerValue} onChange={e=>setPickerValue(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1A1535"}}>
+            <select aria-label="Add existing theme" value={pickerValue} onChange={e=>setPickerValue(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1A1535"}}>
               <option value="">Add an existing theme…</option>
               {available.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
             </select>

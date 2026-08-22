@@ -14,7 +14,7 @@ export function AuditTrailSection({ auditLog }) {
         <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Audit trail</h3><p style={{fontSize:12,color:"#6B6375",margin:0}}>Every action timestamped and logged.</p></div>
         <span style={{fontSize:11,color:"#6B6880"}}>{auditLog.length} entries</span>
       </div>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search audit trail…"
+      <input aria-label="Search audit trail" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search audit trail…"
         style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",fontSize:12,border:"1px solid #E8E0D0",borderRadius:8,background:"#FDFAF5",color:"#1A1535",outline:"none",marginBottom:12}}/>
       <div style={{maxHeight:420,overflowY:"auto"}}>
         {visible.map((e,i)=>(

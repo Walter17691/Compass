@@ -70,4 +70,12 @@ describe('HrReviewGatePanel', () => {
     expect(statuses[0]).toHaveTextContent('Awaiting HR review');
     expect(statuses[1]).toHaveTextContent('Returned for further investigation');
   });
+
+  // Phase 6.5 hardening (Batch 13) — the review comments field relied on
+  // placeholder text alone, with no other accessible name.
+  it('labels the review comments field for a pending request', () => {
+    const hrReviewRequests = [{ id: 'r1', case_id: 'c1', step: 'inv_report', status: 'pending', requested_at: '2026-08-14T10:00:00Z' }];
+    render(<HrReviewGatePanel cs={cs} hrReviewRequests={hrReviewRequests} resolveInvestigationReview={noop} isHR={true} />);
+    expect(screen.getByLabelText('Review comments')).toBeInTheDocument();
+  });
 });

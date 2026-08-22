@@ -26,8 +26,8 @@ export function ReassignCaseModal({ cases, activeCaseId, currentUser, orgMembers
         ):(
           <>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>New case owner</label>
-              <select value={selectedMemberId||eligible[0]?.id||""} onChange={e=>setSelectedMemberId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820"}}>
+              <label htmlFor="reassign-case-owner" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>New case owner</label>
+              <select id="reassign-case-owner" value={selectedMemberId||eligible[0]?.id||""} onChange={e=>setSelectedMemberId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820"}}>
                 {eligible.map(m=><option key={m.id} value={m.id}>{m.name} {m.job_title?"("+m.job_title+")":""}</option>)}
               </select>
             </div>

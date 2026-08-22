@@ -38,4 +38,11 @@ describe('GlobalAssistantScreen', () => {
     expect(screen.getByRole('button', { name: 'Open this case →' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View in Insights →' })).toBeInTheDocument();
   });
+
+  // Phase 6.5 hardening (Batch 13) — the chat input relied on placeholder
+  // text alone, with no other accessible name.
+  it('labels the chat input', () => {
+    render(<GlobalAssistantScreen {...baseProps} />);
+    expect(screen.getByLabelText('Ask Compass')).toBeInTheDocument();
+  });
 });

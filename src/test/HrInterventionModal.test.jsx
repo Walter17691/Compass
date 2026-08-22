@@ -92,4 +92,11 @@ describe('HrInterventionModal', () => {
     await user.click(screen.getByRole('button', { name: 'Pause investigation' }));
     expect(onTogglePause).toHaveBeenCalledTimes(1);
   });
+
+  // Phase 6.5 hardening (Batch 13) — the note field had a visual label
+  // with no htmlFor/id association.
+  it('labels the note field', () => {
+    render(<HrInterventionModal cs={cs} setShowHrInterventionModal={()=>{}} onSendGuidance={()=>{}} onReturnForFurtherWork={()=>{}} onTakeOver={()=>{}} onTogglePause={()=>{}} onReassign={()=>{}} />);
+    expect(screen.getByLabelText('Note')).toBeInTheDocument();
+  });
 });
