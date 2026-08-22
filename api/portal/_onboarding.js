@@ -26,11 +26,20 @@ export async function onboarding(req, res) {
     const account = accounts[0];
     if (!account) return res.status(404).json({ error: 'No portal account for this user' });
 
+    // Phase 6.5 hardening (security review) — same class of bug as
+    // _case-list.js/_case-detail.js: org_id+name alone lets two same-named
+    // new starters in one org see each other's onboarding checklist.
+    // starter_instances carries its own `email` column; require it to
+    // match the portal account's employee_email rather than falling back
+    // to a name-only match when either is missing.
+    const accountEmail = (account.employee_email || '').trim().toLowerCase();
+    if (!accountEmail) return res.status(200).json({ starter: null });
+
     const starterRes = await supabaseRequest(
-      `starter_instances?org_id=eq.${account.org_id}&name=eq.${encodeURIComponent(account.employee_name)}&select=id,tasks`
+      `starter_instances?org_id=eq.${account.org_id}&name=eq.${encodeURIComponent(account.employee_name)}&select=id,tasks,email`
     );
     const starters = await starterRes.json();
-    const starter = starters[0];
+    const starter = starters.find(s => (s.email || '').trim().toLowerCase() === accountEmail);
 
     if (!starter) return res.status(200).json({ starter: null });
     return res.status(200).json({ starter: { id: starter.id, tasks: (starter.tasks || []).map(toSafeTask) } });

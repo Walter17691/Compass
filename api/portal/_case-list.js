@@ -18,15 +18,22 @@ export async function caseList(req, res) {
     );
     let cases = await casesRes.json();
 
-    // Name alone isn't a reliable identity key — two employees can share a
-    // name within one org. Disambiguate by email when we have one on both
-    // sides (the account's email was verified against the invite at accept
-    // time); a case with no email on file is left in rather than dropped,
-    // since omitting it silently would hide real cases from the employee.
-    if (account.employee_email) {
-      const accountEmail = account.employee_email.trim().toLowerCase();
-      cases = cases.filter(c => !c.employee_email || c.employee_email.trim().toLowerCase() === accountEmail);
-    }
+    // Phase 6.5 hardening (P0, security review) — name alone isn't a
+    // reliable ownership boundary: two employees can share a name within
+    // one org. Disambiguate by email (the account's was verified against
+    // the invite at accept time — see _accept-invite.js). Previously, a
+    // case with no employee_email on file was left IN rather than
+    // dropped, on the reasoning that omitting it would silently hide a
+    // real case — but that's exactly backwards for confidential HR case
+    // data: it meant any case missing an employee_email (an incomplete
+    // record, not an unusual one) was exposed to every same-named portal
+    // user in the org, including ones it has nothing to do with. Fail
+    // closed instead — a case with no email on file, or a portal account
+    // with no email on file, is excluded rather than shown.
+    const accountEmail = (account.employee_email || '').trim().toLowerCase();
+    cases = accountEmail
+      ? cases.filter(c => c.employee_email && c.employee_email.trim().toLowerCase() === accountEmail)
+      : [];
 
     // Curated response only — no meetings/evidence/notes leave this endpoint.
     const curated = cases.map(c => ({

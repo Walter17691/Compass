@@ -30,14 +30,18 @@ export async function caseDetail(req, res) {
 
     // Ownership check — this case must actually belong to this portal
     // account's org and employee, not just any case id the caller happens
-    // to pass in. Name alone can collide between two employees in the same
-    // org, so also require the emails to match whenever both are on file
-    // (see _case-list.js for why a missing email on either side doesn't
-    // block the match).
-    const sameEmployee = cs.employee_name === account.employee_name && (
-      !account.employee_email || !cs.employee_email ||
-      cs.employee_email.trim().toLowerCase() === account.employee_email.trim().toLowerCase()
-    );
+    // to pass in. Phase 6.5 hardening (P0, security review) — name alone
+    // can collide between two employees in the same org, so email is the
+    // real disambiguator (see _case-list.js for the fuller reasoning);
+    // previously a missing email on EITHER side let the match through,
+    // which meant any case record incomplete enough to lack an
+    // employee_email — not an unusual state — was readable by every
+    // same-named portal user in the org, confidential cases included.
+    // Both emails must be present and equal; missing on either side
+    // fails closed (403), never falls through to a name-only match.
+    const accountEmail = (account.employee_email || '').trim().toLowerCase();
+    const caseEmail = (cs.employee_email || '').trim().toLowerCase();
+    const sameEmployee = cs.employee_name === account.employee_name && !!accountEmail && !!caseEmail && accountEmail === caseEmail;
     if (cs.org_id !== account.org_id || !sameEmployee) {
       return res.status(403).json({ error: 'You do not have access to this case' });
     }

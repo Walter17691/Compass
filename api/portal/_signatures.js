@@ -1,6 +1,10 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
 
+function normEmail(e) {
+  return (e || '').trim().toLowerCase();
+}
+
 export async function signatures(req, res) {
   try {
     const caller = await verifyCaller(req);
@@ -11,21 +15,24 @@ export async function signatures(req, res) {
     const account = accounts[0];
     if (!account) return res.status(404).json({ error: 'No portal account for this user' });
 
+    // Phase 6.5 hardening (P0, security review) — employee_name is not a
+    // real ownership boundary: two employees can share a name, in the
+    // same org or a different one. org_id closes the cross-tenant leak;
+    // requiring a matching employee_email (rather than employee_name)
+    // closes the same-org name-collision leak too — signing_requests and
+    // employee_portal_accounts both carry employee_email specifically
+    // for this disambiguation (automation_levels_2026-08-18.sql /
+    // add_employee_email_to_portal_accounts). A portal account with no
+    // email on file (shouldn't happen via the normal invite flow, which
+    // requires one — see _accept-invite.js) can't be disambiguated at
+    // all, so this fails closed rather than falling back to name-only
+    // matching.
+    const accountEmail = normEmail(account.employee_email);
+
     if (req.method === 'GET') {
-      // Phase 6.5 hardening (P0) — was matched by employee_name alone
-      // across the WHOLE platform, so a portal user at one org could see
-      // (and, on the POST path below, forge a signature onto) another
-      // org's pending documents purely by sharing a name with someone at
-      // a different company. account.org_id scopes this to the caller's
-      // own org; signing_requests_org_scope_2026-08-21.sql adds the
-      // column this needs. Also fixes a stale status filter — the
-      // e-signature status lifecycle widened to sent/opened/signed/
-      // acknowledged/declined/expired (esignature_expansion_2026-08-18.sql,
-      // api/signing.js), but this query was never updated off the old
-      // pending/signed vocabulary, so it silently returned nothing for
-      // any request created since that change.
+      if (!accountEmail) return res.status(200).json({ pending: [] });
       const pendingRes = await supabaseRequest(
-        `signing_requests?org_id=eq.${encodeURIComponent(account.org_id)}&employee_name=eq.${encodeURIComponent(account.employee_name)}&status=in.(sent,opened)&select=sign_id,document,meeting_type,meeting_date,status`
+        `signing_requests?org_id=eq.${encodeURIComponent(account.org_id)}&employee_email=eq.${encodeURIComponent(accountEmail)}&status=in.(sent,opened)&select=sign_id,document,meeting_type,meeting_date,status`
       );
       const pending = await pendingRes.json();
       return res.status(200).json({ pending });
@@ -34,17 +41,18 @@ export async function signatures(req, res) {
     if (req.method === 'POST') {
       const { signId, signature } = req.body;
       if (!signId || !signature) return res.status(400).json({ error: 'signId and signature are required' });
+      if (!accountEmail) return res.status(403).json({ error: 'You do not have access to this signature request' });
 
       // Ownership check — the pending request must actually belong to
-      // this portal account's org AND employee_name, not any sign_id the
-      // caller happens to pass in. org_id is the load-bearing addition
-      // here: employee_name alone previously let a same-named portal
-      // user at a DIFFERENT org attach their own signature to this one's
-      // document.
-      const reqRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=org_id,employee_name,status`);
+      // this portal account's org AND employee_email, not any sign_id the
+      // caller happens to pass in. Both org_id and employee_email must be
+      // present and matching — a missing email on either side fails
+      // closed (403), never falls through to a permissive match.
+      const reqRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=org_id,employee_email,status`);
       const reqs = await reqRes.json();
       const existing = reqs[0];
-      if (!existing || existing.org_id !== account.org_id || existing.employee_name !== account.employee_name) {
+      const existingEmail = normEmail(existing?.employee_email);
+      if (!existing || !existingEmail || existing.org_id !== account.org_id || existingEmail !== accountEmail) {
         return res.status(403).json({ error: 'You do not have access to this signature request' });
       }
       if (existing.status === 'signed' || existing.status === 'acknowledged' || existing.status === 'declined') return res.status(400).json({ error: 'Already signed' });
