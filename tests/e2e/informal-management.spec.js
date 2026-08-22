@@ -43,7 +43,7 @@ test('dealing with a concern informally launches a real conversation and closes 
   await page.getByRole('button', { name: 'End meeting' }).click();
   await expect(page.getByText('Processing...')).not.toBeVisible({ timeout: 60000 });
 
-  const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && r.request().method() === 'POST');
+  const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && ['POST','PATCH'].includes(r.request().method()));
   await page.getByRole('button', { name: 'Save and go to case →' }).click();
   await caseSaved;
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });

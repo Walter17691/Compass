@@ -25,7 +25,7 @@ test('combining the type and date-opened filters on the Cases list narrows resul
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
 
   // Narrow by date AND type together from the start.
-  await page.getByLabel('From').fill(today);
+  await page.getByLabel('From', { exact: true }).fill(today);
   await page.getByLabel('Filter by case type').selectOption('grievance');
   await expect(page.getByText(employeeName)).toBeVisible({ timeout: 10000 });
 
@@ -38,5 +38,5 @@ test('combining the type and date-opened filters on the Cases list narrows resul
   await expect(page.getByText(employeeName)).toBeVisible();
 
   await page.getByRole('button', { name: /Clear filters/ }).click();
-  await expect(page.getByLabel('From')).toHaveValue('');
+  await expect(page.getByLabel('From', { exact: true })).toHaveValue('');
 });

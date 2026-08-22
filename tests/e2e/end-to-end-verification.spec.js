@@ -92,7 +92,7 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
   await page.getByText('Unauthorised absence').last().click();
-  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
   await statusSaved;
 
@@ -101,13 +101,13 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   // kept separate from the decision-maker's reasoning.
   const findingField = page.getByPlaceholder(/What did the investigation itself conclude/);
   await expect(findingField).toBeVisible({ timeout: 10000 });
-  const findingSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const findingSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await findingField.fill('Swipe-card records confirm the employee was absent from site for the full shift with no prior notice given.');
   await findingField.blur();
   await findingSaved;
 
   const reasoningField = page.getByPlaceholder(/Summarise what the evidence showed/);
-  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await reasoningField.fill('The swipe-card evidence is unambiguous and was not disputed at the hearing; substantiated on the balance of probabilities.');
   await reasoningField.blur();
   await reasoningSaved;

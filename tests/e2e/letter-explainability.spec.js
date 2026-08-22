@@ -42,7 +42,7 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
   await page.getByText('Unauthorised absence').last().click();
-  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
   await statusSaved;
   // Diagnostic checkpoint (matching consistency-check.spec.js's own
@@ -52,7 +52,7 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
   const reasoningField = page.getByPlaceholder(/Summarise what the evidence showed/);
   await expect(reasoningField).toBeVisible({ timeout: 10000 });
-  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await reasoningField.fill('Reviewed swipe-card records confirming the absence was unauthorised.');
   await reasoningField.blur();
   await reasoningSaved;
@@ -60,7 +60,7 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await page.getByRole('button', { name: '← Cases' }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   const today = new Date().toISOString().split('T')[0];
-  await page.getByLabel('From').fill(today);
+  await page.getByLabel('From', { exact: true }).fill(today);
   await page.getByLabel('Filter by case type').selectOption(caseType);
   await revealCase(page, employeeName);
   await page.getByText(employeeName).locator('xpath=following::input[@type="checkbox"][1]').click();

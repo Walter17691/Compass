@@ -29,11 +29,11 @@ test('decision reasoning reaches Ask Compass through the hardened case context',
   await expect(page.getByText('Allegations (1)')).toBeVisible();
 
   await page.getByText('Unauthorised absence').last().click();
-  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
   await statusSaved;
   const reasoningField = page.getByPlaceholder(/Summarise what the evidence showed/);
-  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   // A distinctive, made-up detail (an exact badge-out time) that has no
   // plausible source other than this exact field reaching the AI's
   // context — a generic-sounding reasoning string wouldn't prove

@@ -56,7 +56,7 @@ test('a raised concern can be triaged into a real formal case', async ({ page })
   await expect(referralCard.getByText('Compass summary', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(referralCard.getByText('Compass is analysing this concern…')).not.toBeVisible();
 
-  const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && r.request().method() === 'POST');
+  const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && ['POST','PATCH'].includes(r.request().method()));
   await referralCard.getByRole('button', { name: 'Open formal case' }).click();
   await caseSaved;
 

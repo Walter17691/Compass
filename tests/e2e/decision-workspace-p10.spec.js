@@ -51,14 +51,14 @@ test('an allegation shows a policy citation from its own title, and records inve
   // visible regardless of status (no finding needs to be recorded yet).
   const investigatorField = page.getByPlaceholder(/What did the investigation itself conclude/);
   await expect(investigatorField).toBeVisible();
-  const investigatorSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const investigatorSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await investigatorField.fill('Swipe-card records confirm the employee was off-site without prior authorisation.');
   await investigatorField.blur();
   await investigatorSaved;
 
   // Outstanding uncertainty.
   const uncertaintyField = page.getByPlaceholder(/Anything still unclear or unresolved/);
-  const uncertaintySaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const uncertaintySaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await uncertaintyField.fill('Not yet confirmed whether the employee attempted to call in sick.');
   await uncertaintyField.blur();
   await uncertaintySaved;

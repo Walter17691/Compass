@@ -33,7 +33,7 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   // changeAllegationStatus save fire-and-forget (optimistic local state
   // first, same pattern as every other cloud-synced entity in this app),
   // and the reload just below would otherwise race a save still in flight.
-  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
   await statusSaved;
 
@@ -61,7 +61,7 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   // name) since there's 1 allegation on the case.
   await page.getByRole('button', { name: /^Allegations/ }).click();
   await page.getByText('Unauthorised absence').last().click();
-  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await reasoningField.fill('Swipe-card records and CCTV footage confirm the employee left the site at 14:32 without authorisation or prior agreement from their manager.');
   await reasoningField.blur();
   await reasoningSaved;

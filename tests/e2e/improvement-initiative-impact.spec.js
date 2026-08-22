@@ -43,7 +43,7 @@ test('impact tracking compares real case volume before vs after an initiative re
     await page.getByRole('combobox').nth(2).selectOption('grievance');
     const createBtn = page.getByRole('button', { name: 'Create case', exact: true });
     await expect(createBtn).toBeEnabled();
-    const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && r.request().method() === 'POST');
+    const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && ['POST','PATCH'].includes(r.request().method()));
     await createBtn.click();
     await caseSaved;
     await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });

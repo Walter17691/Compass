@@ -51,19 +51,19 @@ test('the outcome letter prompt is grounded in the case\'s own allegation findin
   await expect(page.getByText('Allegations (1)')).toBeVisible();
   await page.getByText('Unauthorised absence').last().click();
 
-  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
   await statusSaved;
 
   const reasoningField = page.getByPlaceholder(/Summarise what the evidence showed/);
   await expect(reasoningField).toBeVisible();
-  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await reasoningField.fill('DISTINCTIVE_REASONING_swipe_card_records_confirm_unauthorised_absence');
   await reasoningField.blur();
   await reasoningSaved;
 
   const responseField = page.getByPlaceholder(/What did the employee say/);
-  const responseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && r.request().method() === 'POST');
+  const responseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await responseField.fill('DISTINCTIVE_MITIGATION_employee_cited_a_family_emergency_that_day');
   await responseField.blur();
   await responseSaved;
