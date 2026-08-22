@@ -166,8 +166,9 @@ export default function Login({ onLogin }) {
           {mode === 'signup' && (
             <>
               <div style={{ marginBottom: 16 }}>
-                <label style={label}>Your name</label>
+                <label htmlFor="login-name" style={label}>Your name</label>
                 <input
+                  id="login-name"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="Jane Smith"
@@ -177,8 +178,9 @@ export default function Login({ onLogin }) {
                 />
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={label}>Company name</label>
+                <label htmlFor="login-company" style={label}>Company name</label>
                 <input
+                  id="login-company"
                   value={company}
                   onChange={e => setCompany(e.target.value)}
                   placeholder="Acme Ltd"
@@ -192,8 +194,9 @@ export default function Login({ onLogin }) {
 
           {/* Email */}
           <div style={{ marginBottom: 16 }}>
-            <label style={label}>Email address</label>
+            <label htmlFor="login-email" style={label}>Email address</label>
             <input
+              id="login-email"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -208,9 +211,10 @@ export default function Login({ onLogin }) {
           {/* Password */}
           {mode !== 'reset' && (
             <div style={{ marginBottom: 8 }}>
-              <label style={label}>Password</label>
+              <label htmlFor="login-password" style={label}>Password</label>
               <div style={{ position: "relative" }}>
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
