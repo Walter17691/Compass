@@ -161,3 +161,20 @@ describe('CalendarScreen — day cell and item accessibility (Phase 6.5, Batch 9
     expect(screen.getByText('DSAR response due').closest('button')).toBeNull();
   });
 });
+
+// Phase 6.5 hardening (Batch 13) — every field in the schedule-meeting
+// modal had a visual <label> with no htmlFor/id association.
+describe('CalendarScreen — schedule-meeting field labelling (Phase 6.5, Batch 13)', () => {
+  it('associates every field in the modal with its own visible label', async () => {
+    const user = userEvent.setup();
+    render(<CalendarScreen cases={cases} setScreen={()=>{}} screens={{}} setActiveCaseId={()=>{}} setActiveCaseStage={()=>{}} onScheduleMeeting={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '+ Schedule meeting' }));
+    expect(screen.getByLabelText('Case (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Meeting type')).toBeInTheDocument();
+    expect(screen.getByLabelText('Date')).toBeInTheDocument();
+    expect(screen.getByLabelText('Start time')).toBeInTheDocument();
+    expect(screen.getByLabelText('Duration')).toBeInTheDocument();
+    expect(screen.getByLabelText('Attendees (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Description (optional)')).toBeInTheDocument();
+  });
+});

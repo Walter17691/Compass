@@ -58,29 +58,29 @@ function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMember
       <div onClick={e=>e.stopPropagation()} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:24,width:"100%",maxWidth:460,boxSizing:"border-box"}}>
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 16px",fontWeight:400}}>Schedule a meeting</h3>
 
-        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Case (optional)</label>
-        <select value={form.caseId} onChange={e=>setForm(f=>({...f,caseId:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}>
+        <label htmlFor="schedule-meeting-case" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Case (optional)</label>
+        <select id="schedule-meeting-case" value={form.caseId} onChange={e=>setForm(f=>({...f,caseId:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}>
           <option value="">No linked case</option>
           {cases.map(c=><option key={c.id} value={c.id}>{c.employeeName} — {c.caseType||"HR matter"}</option>)}
         </select>
 
-        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Meeting type</label>
-        <select value={form.meetingType} onChange={e=>setForm(f=>({...f,meetingType:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}>
+        <label htmlFor="schedule-meeting-type" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Meeting type</label>
+        <select id="schedule-meeting-type" value={form.meetingType} onChange={e=>setForm(f=>({...f,meetingType:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}>
           {MEETING_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
 
         <div style={{display:"flex",gap:10,marginBottom:12}}>
           <div style={{flex:1}}>
-            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Date</label>
-            <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}/>
+            <label htmlFor="schedule-meeting-date" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Date</label>
+            <input id="schedule-meeting-date" type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}/>
           </div>
           <div style={{flex:1}}>
-            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Start time</label>
-            <input type="time" value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}/>
+            <label htmlFor="schedule-meeting-start-time" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Start time</label>
+            <input id="schedule-meeting-start-time" type="time" value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}/>
           </div>
           <div style={{width:110}}>
-            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Duration</label>
-            <select value={form.durationMinutes} onChange={e=>setForm(f=>({...f,durationMinutes:Number(e.target.value)}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}>
+            <label htmlFor="schedule-meeting-duration" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Duration</label>
+            <select id="schedule-meeting-duration" value={form.durationMinutes} onChange={e=>setForm(f=>({...f,durationMinutes:Number(e.target.value)}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",boxSizing:"border-box"}}>
               {[15,30,45,60,90,120].map(m=><option key={m} value={m}>{m} min</option>)}
             </select>
           </div>
@@ -104,8 +104,8 @@ function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMember
           )
         )}
 
-        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Attendees (optional)</label>
-        <input value={form.attendees} onChange={e=>setForm(f=>({...f,attendees:e.target.value}))} placeholder="sarah@company.com, rep@union.org" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
+        <label htmlFor="schedule-meeting-attendees" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Attendees (optional)</label>
+        <input id="schedule-meeting-attendees" value={form.attendees} onChange={e=>setForm(f=>({...f,attendees:e.target.value}))} placeholder="sarah@company.com, rep@union.org" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
         {attendeeSuggestion&&(newSuggestedEmails.length>0||attendeeSuggestion.roleNotes.length>0)&&(
           <div style={{background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"8px 12px",marginBottom:12}}>
             {newSuggestedEmails.length>0&&(
@@ -117,8 +117,8 @@ function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMember
           </div>
         )}
 
-        <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Description (optional)</label>
-        <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:16,resize:"vertical",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+        <label htmlFor="schedule-meeting-description" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Description (optional)</label>
+        <textarea id="schedule-meeting-description" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:16,resize:"vertical",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
 
         <div style={{display:"flex",gap:10}}>
           <button onClick={async()=>{ if(await onSubmit(form)) onClose(); }} disabled={!canSubmit} style={{flex:1,fontSize:13,background:!canSubmit?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"10px 18px",color:"#fff",fontWeight:600,cursor:!canSubmit?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{scheduling?"Scheduling…":"Schedule"}</button>
