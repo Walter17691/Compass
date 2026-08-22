@@ -48,18 +48,18 @@ export function CreateActionButton({ insightRef, createCaseTask, improvementInit
 
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E0D8FF",borderRadius:8,padding:"10px 12px",marginTop:8}}>
-      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Action to take…" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",marginBottom:6,fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+      <input aria-label="Action to take" value={name} onChange={e=>setName(e.target.value)} placeholder="Action to take…" style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",marginBottom:6,fontFamily:"DM Sans,system-ui,sans-serif"}}/>
       <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
-        <input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="Owner" style={{flex:1,minWidth:90,fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-        <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={{flex:1,minWidth:120,fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-        <select value={priority} onChange={e=>setPriority(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <input aria-label="Owner" value={owner} onChange={e=>setOwner(e.target.value)} placeholder="Owner" style={{flex:1,minWidth:90,fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+        <input aria-label="Due date" type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={{flex:1,minWidth:120,fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+        <select aria-label="Priority" value={priority} onChange={e=>setPriority(e.target.value)} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}>
           <option value="low">Low</option>
           <option value="normal">Normal</option>
           <option value="high">High</option>
         </select>
       </div>
       {activeInitiatives.length > 0 && (
-        <select value={initiativeId} onChange={e=>setInitiativeId(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:8}}>
+        <select aria-label="Improvement initiative" value={initiativeId} onChange={e=>setInitiativeId(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 8px",boxSizing:"border-box",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:8}}>
           <option value="">No improvement initiative</option>
           {activeInitiatives.map(i => <option key={i.id} value={i.id}>{i.title}</option>)}
         </select>

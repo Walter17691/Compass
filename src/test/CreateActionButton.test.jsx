@@ -70,4 +70,18 @@ describe('CreateActionButton', () => {
     await user.click(screen.getByRole('button', { name: 'Save action' }));
     expect(createCaseTask).toHaveBeenCalledWith(null, expect.objectContaining({ improvementInitiativeId: null }));
   });
+
+  // Phase 6.5 hardening (Batch 13) — every field in this compact inline
+  // form had only a placeholder or no text at all, no accessible name.
+  it('gives every field an accessible name', async () => {
+    const user = userEvent.setup();
+    const initiatives = [{ id: 'init1', title: 'Reduce Manchester grievances', status: 'active' }];
+    render(<CreateActionButton insightRef="x" createCaseTask={vi.fn()} improvementInitiatives={initiatives}/>);
+    await user.click(screen.getByRole('button', { name: 'Create action' }));
+    expect(screen.getByLabelText('Action to take')).toBeInTheDocument();
+    expect(screen.getByLabelText('Owner')).toBeInTheDocument();
+    expect(screen.getByLabelText('Due date')).toBeInTheDocument();
+    expect(screen.getByLabelText('Priority')).toBeInTheDocument();
+    expect(screen.getByLabelText('Improvement initiative')).toBeInTheDocument();
+  });
 });
