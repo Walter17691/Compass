@@ -115,12 +115,12 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                         {label:"Consultation start date",k:"consultationStartDate",type:"date"},
                       ].map(f=>(
                         <div key={f.k} style={{marginBottom:10}}>
-                          <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.label}</label>
+                          <label htmlFor={`redundancy-collective-${f.k}`} style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.label}</label>
                           {f.type==="checkbox"
-                            ?<input type="checkbox" checked={activeRedundancy.collectiveInfo?.[f.k]||false}
+                            ?<input id={`redundancy-collective-${f.k}`} type="checkbox" checked={activeRedundancy.collectiveInfo?.[f.k]||false}
                               onChange={e=>updateRedundancyCase({collectiveInfo:{...activeRedundancy.collectiveInfo,[f.k]:e.target.checked}})}
                               style={{accentColor:"#7C5CFC",width:16,height:16}} />
-                            :<input type={f.type||"text"} placeholder={f.ph} value={activeRedundancy.collectiveInfo?.[f.k]||""}
+                            :<input id={`redundancy-collective-${f.k}`} type={f.type||"text"} placeholder={f.ph} value={activeRedundancy.collectiveInfo?.[f.k]||""}
                               onChange={e=>updateRedundancyCase({collectiveInfo:{...activeRedundancy.collectiveInfo,[f.k]:e.target.value}})}
                               style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,color:"#1A1535",outline:"none",width:"100%",boxSizing:"border-box"}} />}
                         </div>
@@ -149,14 +149,14 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                         Total: {activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)}% {Math.abs(activeRedundancy.selectionCriteria.reduce((t,c)=>t+c.weight,0)-100)>1?"(must equal 100%)":<CheckIcon size={11} />}
                       </span>
                     </div>
-                    {activeRedundancy.selectionCriteria.map(c=>(
+                    {activeRedundancy.selectionCriteria.map((c,idx)=>(
                       <div key={c.id} style={{background:"#FDFAF5",borderRadius:7,padding:"12px 14px",marginBottom:8}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,gap:8}}>
-                          <input value={c.criterion} placeholder="Criterion name"
+                          <input aria-label={`Criterion ${idx+1} name`} value={c.criterion} placeholder="Criterion name"
                             onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,criterion:e.target.value}:x)})}
                             style={{flex:1,background:"none",border:"none",fontSize:14,color:"#1A1535",fontWeight:500,outline:"none",padding:"2px 0"}} />
                           <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                            <input type="number" min="0" max="100" value={c.weight}
+                            <input aria-label={`Criterion ${idx+1} weight percentage`} type="number" min="0" max="100" value={c.weight}
                               onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,weight:parseInt(e.target.value)||0}:x)})}
                               style={{width:56,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 8px",fontSize:12,color:"#1A1535",outline:"none",textAlign:"center"}} />
                             <span style={{fontSize:11,color:"#6B6880"}}>%</span>
@@ -166,7 +166,7 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                             </button>
                           </div>
                         </div>
-                        <input value={c.description||""} placeholder="Description (what this measures, how it's assessed)"
+                        <input aria-label={`Criterion ${idx+1} description`} value={c.description||""} placeholder="Description (what this measures, how it's assessed)"
                           onChange={e=>updateRedundancyCase({selectionCriteria:activeRedundancy.selectionCriteria.map(x=>x.id===c.id?{...x,description:e.target.value}:x)})}
                           style={{width:"100%",background:"none",border:"none",fontSize:11,color:"#6B6880",outline:"none",padding:"2px 0",boxSizing:"border-box"}} />
                       </div>
@@ -277,7 +277,7 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                         </div>
                       </div>
                       <div style={{fontSize:11,color:"#6B6880",marginBottom:8}}>{emp.consultationMeetings?.length||0} consultation meeting{(emp.consultationMeetings?.length||0)!==1?"s":""} recorded</div>
-                      <textarea placeholder={`Notes from consultation with ${emp.name}...`}
+                      <textarea aria-label={`Consultation notes for ${emp.name}`} placeholder={`Notes from consultation with ${emp.name}...`}
                         value={emp.consultationNotes||""}
                         onChange={e=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(x=>x.id===emp.id?{...x,consultationNotes:e.target.value}:x)})}
                         rows={3}
@@ -299,8 +299,8 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                     <div key={emp.id} style={{background:"#FDFAF5",borderRadius:8,padding:"14px",marginBottom:10,border:"1px solid #E8E0D0"}}>
                       <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:8}}>{emp.name}</div>
                       <div style={{marginBottom:10}}>
-                        <label style={{display:"block",fontSize:10,color:"#6B6880",fontWeight:600,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>Statutory redundancy pay</label>
-                        <input placeholder="e.g. £3,450 (1.5 weeks × £2,300/week × 1 year)" value={emp.redundancyPay||""}
+                        <label htmlFor={`redundancy-pay-${emp.id}`} style={{display:"block",fontSize:10,color:"#6B6880",fontWeight:600,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>Statutory redundancy pay</label>
+                        <input id={`redundancy-pay-${emp.id}`} placeholder="e.g. £3,450 (1.5 weeks × £2,300/week × 1 year)" value={emp.redundancyPay||""}
                           onChange={e=>updateRedundancyCase({atRiskEmployees:activeRedundancy.atRiskEmployees.map(x=>x.id===emp.id?{...x,redundancyPay:e.target.value}:x)})}
                           style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"7px 10px",fontSize:12,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
                       </div>
