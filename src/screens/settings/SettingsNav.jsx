@@ -4,7 +4,7 @@
 // <select> on mobile, where a sidebar has nowhere to go.
 export function SettingsNav({ sections, active, onChange, isMobile }) {
   if(isMobile) return (
-    <select value={active} onChange={e=>onChange(e.target.value)}
+    <select aria-label="Settings section" value={active} onChange={e=>onChange(e.target.value)}
       style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:20,fontFamily:"DM Sans,system-ui,sans-serif"}}>
       {sections.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
     </select>

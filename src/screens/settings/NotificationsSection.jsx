@@ -56,11 +56,11 @@ export function NotificationsSection({ dueSoon, caseTasks, createCaseTask, reque
         <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Team chat notifications</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Post a count of overdue/near-term deadlines into a Slack or Teams channel via an incoming webhook — never employee names or case details, since anyone in that channel can read it. Those stay in the daily email digest and in Compass itself.</p>
         <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
-          <select value={orgWebhookType} onChange={e=>saveOrgWebhook(webhookUrlDraft, e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",background:"#fff",color:"#1A1535"}}>
+          <select aria-label="Webhook type" value={orgWebhookType} onChange={e=>saveOrgWebhook(webhookUrlDraft, e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",background:"#fff",color:"#1A1535"}}>
             <option value="slack">Slack</option>
             <option value="teams">Microsoft Teams</option>
           </select>
-          <input value={webhookUrlDraft} onChange={e=>setWebhookUrlDraft(e.target.value)} onBlur={()=>saveOrgWebhook(webhookUrlDraft, orgWebhookType)} placeholder="https://hooks.slack.com/services/..." style={{flex:1,minWidth:240,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",color:"#1A1535"}}/>
+          <input aria-label="Webhook URL" value={webhookUrlDraft} onChange={e=>setWebhookUrlDraft(e.target.value)} onBlur={()=>saveOrgWebhook(webhookUrlDraft, orgWebhookType)} placeholder="https://hooks.slack.com/services/..." style={{flex:1,minWidth:240,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",color:"#1A1535"}}/>
         </div>
         <Btn variant="secondary" onClick={sendTestWebhook} disabled={!webhookUrlDraft}>Send test message</Btn>
       </Card>

@@ -29,7 +29,7 @@ export function PoliciesSection({ policies, setPolicies, policyFileRef, handlePo
                     )}
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-                    <select value={p.category||"other"} onChange={e=>changePolicyCategory(p.id, e.target.value)} style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 6px",color:"#6B6375"}}>
+                    <select aria-label={`Category for ${p.name}`} value={p.category||"other"} onChange={e=>changePolicyCategory(p.id, e.target.value)} style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 6px",color:"#6B6375"}}>
                       {POLICY_CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
                     </select>
                     <Btn variant="danger" onClick={()=>{const u=policies.filter(x=>x.id!==p.id);setPolicies(u);lsSet("compass_policies",u);}} style={{padding:"2px 10px",fontSize:11}}>Remove</Btn>
