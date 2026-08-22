@@ -5,53 +5,23 @@ import { OverviewTab } from '../components/caseTabs/OverviewTab.jsx';
 // Phase 6.5 hardening (Batch 13) — the risk/exposure and key-dates fields
 // each had a visual <label> with no htmlFor/id association. Had no test
 // coverage at all before this.
+//
+// Phase 6.5 hardening (Batch 10b, task #205) — OverviewTab's 43 flat
+// props are now 9 grouped objects (cs stays flat). Each group defaults
+// to {} in the component itself.
 const noop = () => {};
 const cs = { id: 'c1', caseType: 'misconduct', employeeName: 'Sam Employee' };
 
 const baseProps = {
   cs,
-  cases: [cs],
-  saveCases: noop,
-  stage: 'investigation',
-  currentRisk: null,
-  empRecord: null,
-  repeatCount: 0,
-  confirmDialog: noop,
-  setScreen: noop,
-  screens: {},
-  caseSignals: [],
-  caseTasks: [],
-  unansweredCovered: [],
-  unansweredLoading: false,
-  generateUnansweredQuestions: noop,
-  createCaseTask: noop,
-  changeSignalStatus: noop,
-  onAskWhy: noop,
-  allegations: [],
-  generateInconsistencies: noop,
-  inconsistencyLoading: false,
-  linkSignalToAllegation: noop,
-  requestOverrideReason: noop,
-  requestPolicyDeviationReason: noop,
-  caseAccess: [],
-  orgMembers: [],
-  assignCaseRole: noop,
-  hrReviewRequests: [],
-  respondToReview: noop,
-  resolveInvestigationReview: noop,
-  isApprover: false,
-  auditLog: [],
-  wellbeingNotes: [],
-  dueSoon: [],
-  processTemplates: [],
-  ohReportFindings: [],
-  ohReportAnalysisLoading: false,
-  onAnalyseOhReport: noop,
-  onAcceptOhFinding: noop,
-  onDismissOhFinding: noop,
-  onSendForSignature: noop,
-  automationLevels: {},
-  onResendReminder: noop,
+  caseCtx: { cases: [cs], saveCases: noop, stage: 'investigation', currentRisk: null, empRecord: null, repeatCount: 0 },
+  shell: { setScreen: noop, screens: {}, confirmDialog: noop },
+  caseData: { caseSignals: [], caseTasks: [], allegations: [], auditLog: [], wellbeingNotes: [], dueSoon: [], processTemplates: [], caseAccess: [], orgMembers: [], hrReviewRequests: [] },
+  caseActions: { changeSignalStatus: noop, createCaseTask: noop, onAskWhy: noop, linkSignalToAllegation: noop, requestOverrideReason: noop, requestPolicyDeviationReason: noop },
+  caseIntel: { unansweredCovered: [], unansweredLoading: false, generateUnansweredQuestions: noop, generateInconsistencies: noop, inconsistencyLoading: false },
+  oh: { ohReportFindings: [], ohReportAnalysisLoading: false, onAnalyseOhReport: noop, onAcceptOhFinding: noop, onDismissOhFinding: noop, onSendForSignature: noop },
+  review: { isApprover: false, respondToReview: noop, resolveInvestigationReview: noop, assignCaseRole: noop },
+  automation: { automationLevels: {}, onResendReminder: noop },
 };
 
 describe('OverviewTab — field labelling (Phase 6.5, Batch 13)', () => {
@@ -67,7 +37,7 @@ describe('OverviewTab — field labelling (Phase 6.5, Batch 13)', () => {
 
   it('labels the OH report received date field once a referral date is set', () => {
     const csWithReferral = { ...cs, ohReferralDate: '2026-01-01' };
-    render(<OverviewTab {...baseProps} cs={csWithReferral} cases={[csWithReferral]} />);
+    render(<OverviewTab {...baseProps} cs={csWithReferral} caseCtx={{ ...baseProps.caseCtx, cases: [csWithReferral] }} />);
     expect(screen.getByLabelText('OH report received')).toBeInTheDocument();
   });
 });
