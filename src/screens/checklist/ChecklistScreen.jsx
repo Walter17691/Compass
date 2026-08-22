@@ -66,18 +66,18 @@ export function ChecklistScreen({
               {k:dateFieldKey,l:dateFieldLabel,req:dateFieldReq,type:"date"},
             ].map(f=>(
               <div key={f.k}>
-                <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>{f.l}{f.req&&<span style={{color:"#C84B2F"}}> *</span>}</label>
+                <label htmlFor={`checklist-form-${f.k}`} style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>{f.l}{f.req&&<span style={{color:"#C84B2F"}}> *</span>}</label>
                 {f.type==="date"
-                  ?<DateInput value={form[f.k]||""} onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))} />
-                  :<input type={f.type||"text"} placeholder={f.ph} value={form[f.k]||""} onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))}
+                  ?<DateInput id={`checklist-form-${f.k}`} value={form[f.k]||""} onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))} />
+                  :<input id={`checklist-form-${f.k}`} type={f.type||"text"} placeholder={f.ph} value={form[f.k]||""} onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))}
                     style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />}
               </div>
             ))}
           </div>
           {renderExtraFormFields?.()}
           <div style={{marginBottom:16}}>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Template</label>
-            <select value={form.templateId} onChange={e=>setForm(p=>({...p,templateId:e.target.value}))}
+            <label htmlFor="checklist-form-template" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Template</label>
+            <select id="checklist-form-template" value={form.templateId} onChange={e=>setForm(p=>({...p,templateId:e.target.value}))}
               style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
               {templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
@@ -218,7 +218,7 @@ export function ChecklistScreen({
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
                             <div style={{display:"flex",alignItems:"center",gap:5}}>
                               <div style={{width:6,height:6,borderRadius:"50%",background:ownerColor,flexShrink:0}}/>
-                              <select value={task.owner} onChange={e=>reassignTaskOwner(active.id,task.id,e.target.value)}
+                              <select aria-label={`Owner for ${task.task}`} value={task.owner} onChange={e=>reassignTaskOwner(active.id,task.id,e.target.value)}
                                 style={{fontSize:10,color:"#6B6880",background:"none",border:"none",outline:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>
                                 {Object.keys(ownerColors).map(o=><option key={o} value={o}>{o}</option>)}
                               </select>
@@ -229,7 +229,7 @@ export function ChecklistScreen({
                           </div>
                           {task.note&&<div style={{fontSize:11,color:"#6B6375",marginTop:4,fontStyle:"italic"}}>{task.note}</div>}
                         </div>
-                        <input placeholder="Add note..." value={task.note||""} onChange={e=>updateTaskNote(active.id,task.id,e.target.value)}
+                        <input aria-label={`Note for ${task.task}`} placeholder="Add note..." value={task.note||""} onChange={e=>updateTaskNote(active.id,task.id,e.target.value)}
                           style={{background:"none",border:"none",borderBottom:"1px solid #E8E0D0",color:"#6B6880",fontSize:11,outline:"none",width:140,padding:"2px 4px"}}/>
                         <button onClick={()=>removeTask(active.id,task.id)} title="Remove task"
                           style={{background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontSize:14,padding:"0 2px",flexShrink:0,marginTop:2}}>×</button>
@@ -237,7 +237,7 @@ export function ChecklistScreen({
                     );
                   })}
                   <div style={{display:"flex",gap:8,paddingTop:10,alignItems:"center"}}>
-                    <input placeholder="+ Add task..." value={newTaskText[phase.label]||""}
+                    <input aria-label={`Add task to ${phase.label}`} placeholder="+ Add task..." value={newTaskText[phase.label]||""}
                       onChange={e=>setNewTaskText(p=>({...p,[phase.label]:e.target.value}))}
                       onKeyDown={e=>{ if(e.key==="Enter"&&newTaskText[phase.label]?.trim()){ addTask(active.id,phase.label,newTaskText[phase.label]); setNewTaskText(p=>({...p,[phase.label]:""})); } }}
                       style={{flex:1,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 10px",fontSize:12,outline:"none",color:"#1A1535"}}/>
