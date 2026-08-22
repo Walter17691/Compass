@@ -48,8 +48,8 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
       sidebarLine2={s => `Reason: ${REASON_LABELS[s.reason]||"Not specified"}`}
       renderExtraFormFields={() => (
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Reason for leaving</label>
-          <select value={newLeaverForm.reason} onChange={e=>setNewLeaverForm(p=>({...p,reason:e.target.value}))}
+          <label htmlFor="offboarding-reason" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Reason for leaving</label>
+          <select id="offboarding-reason" value={newLeaverForm.reason} onChange={e=>setNewLeaverForm(p=>({...p,reason:e.target.value}))}
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
             {Object.entries(REASON_LABELS).map(([k,l])=><option key={k} value={k}>{l}</option>)}
           </select>
@@ -59,10 +59,10 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
         <>
           <Card style={{marginBottom:12}}>
             <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,marginBottom:10,textTransform:"uppercase"}}>Exit interview</div>
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Date</label>
-            <DateInput value={active.exitInterviewDate||""} onChange={e=>updateLeaverExitInterview(active.id,{exitInterviewDate:e.target.value})} />
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",margin:"12px 0 5px"}}>Notes</label>
-            <textarea placeholder="What did they say? Reasons for leaving, feedback, anything to follow up on..."
+            <label htmlFor="offboarding-exit-interview-date" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Date</label>
+            <DateInput id="offboarding-exit-interview-date" value={active.exitInterviewDate||""} onChange={e=>updateLeaverExitInterview(active.id,{exitInterviewDate:e.target.value})} />
+            <label htmlFor="offboarding-exit-interview-notes" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",margin:"12px 0 5px"}}>Notes</label>
+            <textarea id="offboarding-exit-interview-notes" placeholder="What did they say? Reasons for leaving, feedback, anything to follow up on..."
               value={active.exitInterviewNotes||""}
               onChange={e=>updateLeaverExitInterview(active.id,{exitInterviewNotes:e.target.value})}
               rows={5}

@@ -169,3 +169,18 @@ describe('SaveEmailScreen — reply capture (Phase 5, IP14)', () => {
     expect(screen.queryByText(/Needs HR review/)).not.toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (Batch 13) — the "paste the email" textarea and
+// the "choose a case" select had visual labels with no htmlFor/id
+// association.
+describe('SaveEmailScreen — field labelling (Phase 6.5, Batch 13)', () => {
+  it('labels the paste-email textarea', () => {
+    render(<SaveEmailScreen cases={cases} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} />);
+    expect(screen.getByLabelText('Paste the email')).toBeInTheDocument();
+  });
+
+  it('labels the case-selection field', () => {
+    render(<SaveEmailScreen cases={cases} extraction={{ employeeName: 'Sarah Jones', matchConfidence: 'none' }} onSave={()=>{}} onClear={()=>{}} onExtract={()=>{}} />);
+    expect(screen.getByLabelText('Choose a case to file this under')).toBeInTheDocument();
+  });
+});

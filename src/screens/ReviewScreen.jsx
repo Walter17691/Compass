@@ -81,7 +81,7 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
         <div>
           {/* Ask Compass / Edit bar */}
           <div style={{display:"flex",gap:8,marginBottom:16}}>
-            <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)}
+            <input aria-label="Ask Compass or edit the record" value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"){const q=askCompassInput;setAskCompassInput("");askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}}
               placeholder='Ask Compass or edit the record... e.g. "What should I do next?" or "Make section 2 more formal"'
               style={{flex:1,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}
@@ -136,7 +136,7 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 return <div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={meetingPart.trim()}/></div>;
               })()}
               {reviewOutput&&editingRecord&&(
-                <textarea value={reviewOutput} onChange={e=>setReviewOutput(e.target.value)}
+                <textarea aria-label="Meeting record" value={reviewOutput} onChange={e=>setReviewOutput(e.target.value)}
                   style={{width:"100%",minHeight:400,background:"none",border:"none",outline:"none",fontSize:14,lineHeight:1.9,color:"#1A1535",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
               )}
               {aiError&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}

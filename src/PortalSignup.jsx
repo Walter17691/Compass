@@ -92,14 +92,14 @@ export default function PortalSignup({ onLogin }) {
           {message && <div style={{ background: C.successBg, border: `1px solid #A8D5B5`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.success, marginBottom: 16 }}>{message}</div>}
 
           <div style={{ marginBottom: 16 }}>
-            <label style={label}>Email address</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" style={inp()}
+            <label htmlFor="portal-signup-email" style={label}>Email address</label>
+            <input id="portal-signup-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" style={inp()}
               onFocus={e => e.target.style.borderColor = C.accent} onBlur={e => e.target.style.borderColor = C.border}
               onKeyDown={e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleSignup())} />
           </div>
           <div style={{ marginBottom: 20 }}>
-            <label style={label}>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'} style={inp()}
+            <label htmlFor="portal-signup-password" style={label}>Password</label>
+            <input id="portal-signup-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'} style={inp()}
               onFocus={e => e.target.style.borderColor = C.accent} onBlur={e => e.target.style.borderColor = C.border}
               onKeyDown={e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleSignup())} />
           </div>

@@ -52,4 +52,13 @@ describe('ThemeTaxonomyManager', () => {
     await user.click(screen.getByRole('button', { name: 'Reactivate' }));
     expect(onUpdate).toHaveBeenCalledWith('t2', { active: true });
   });
+
+  // Phase 6.5 hardening (Batch 13) — the new-theme name and description
+  // fields relied on placeholder text alone, with no other accessible
+  // name.
+  it('labels the new theme name and description fields', () => {
+    render(<ThemeTaxonomyManager organisationThemes={[]} isHR={true} onAdd={()=>{}} onUpdate={()=>{}}/>);
+    expect(screen.getByLabelText('New theme name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Theme description')).toBeInTheDocument();
+  });
 });

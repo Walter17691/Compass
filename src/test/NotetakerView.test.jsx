@@ -97,4 +97,13 @@ describe('NotetakerView', () => {
 
     expect(createCaseTask).toHaveBeenCalledWith('c1', { name: 'Chase the CCTV footage', owner: 'Robin Notetaker' });
   });
+
+  // Phase 6.5 hardening (Batch 13) — the notes textarea and the new-
+  // action field relied on placeholder text alone, with no other
+  // accessible name.
+  it('labels the notes and new-action fields', () => {
+    render(<NotetakerView cs={baseCase} cases={[baseCase]} saveCases={() => {}} createCaseTask={() => {}} openQuestions={[]} currentUser={{ name: 'Robin Notetaker' }} fmtDate={d => d} setScreen={() => {}} screens={screens} />);
+    expect(screen.getByLabelText('Notes')).toBeInTheDocument();
+    expect(screen.getByLabelText('New action')).toBeInTheDocument();
+  });
 });

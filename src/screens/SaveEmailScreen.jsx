@@ -100,8 +100,8 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
 
         {!replyMatch && !extraction && !extractionLoading && (
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:20}}>
-            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Paste the email</label>
-            <textarea value={rawText} onChange={e=>setRawText(e.target.value)} rows={12} placeholder={"From: manager@company.com\nSubject: Re: absence on 5 August\n\nHi HR, following up on..."} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
+            <label htmlFor="save-email-raw-text" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Paste the email</label>
+            <textarea id="save-email-raw-text" value={rawText} onChange={e=>setRawText(e.target.value)} rows={12} placeholder={"From: manager@company.com\nSubject: Re: absence on 5 August\n\nHi HR, following up on..."} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",color:"#1A1535",outline:"none",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
             <button onClick={()=>onExtract(rawText)} disabled={!rawText.trim()} style={{marginTop:10,fontSize:13,background:!rawText.trim()?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"9px 18px",color:"#fff",fontWeight:600,cursor:!rawText.trim()?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Read this email</button>
           </div>
         )}
@@ -139,10 +139,10 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
               </div>
             )}
 
-            <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>
+            <label htmlFor="save-email-target-case" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>
               {matchedCase ? `Suggested case: ${matchedCase.employeeName}${extraction.matchConfidence==="medium"?" (please confirm — not an exact name match)":""}` : "Choose a case to file this under"}
             </label>
-            <select value={targetCaseId} onChange={e=>setSelectedCaseId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}>
+            <select id="save-email-target-case" value={targetCaseId} onChange={e=>setSelectedCaseId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}>
               <option value="">Select a case…</option>
               {cases.map(c=>(
                 <option key={c.id} value={c.id}>{c.employeeName} — {c.caseType||"HR matter"}</option>

@@ -51,4 +51,13 @@ describe('AddRoleForm', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     expect(onAdd).not.toHaveBeenCalled();
   });
+
+  // Phase 6.5 hardening (Batch 13) — the title field relied on
+  // placeholder text alone, and the level select had no accessible
+  // name at all.
+  it('labels the title field and the level select', () => {
+    render(<AddRoleForm onAdd={() => {}} />);
+    expect(screen.getByLabelText('Role title')).toBeInTheDocument();
+    expect(screen.getByLabelText('Role access level')).toBeInTheDocument();
+  });
 });

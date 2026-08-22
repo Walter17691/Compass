@@ -35,8 +35,8 @@ export function ThemeTaxonomyManager({ organisationThemes, isHR, onAdd, onUpdate
 
       {isHR && (
         <div style={{display:"flex",gap:8,flexWrap:"wrap",paddingTop:16,borderTop:sorted.length?"1px solid #F5F1EA":"none"}}>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="New theme name" style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",flex:"1 1 160px",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-          <input value={description} onChange={e=>setDescription(e.target.value)} placeholder="Description (optional)" style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",flex:"2 1 220px",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+          <input aria-label="New theme name" value={name} onChange={e=>setName(e.target.value)} placeholder="New theme name" style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",flex:"1 1 160px",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+          <input aria-label="Theme description" value={description} onChange={e=>setDescription(e.target.value)} placeholder="Description (optional)" style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",flex:"2 1 220px",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
           <button onClick={()=>{ if(name.trim()){ onAdd(name, description); setName(""); setDescription(""); } }} disabled={!name.trim()} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:name.trim()?"pointer":"default",opacity:name.trim()?1:0.5,fontFamily:"DM Sans,system-ui,sans-serif"}}>Add theme</button>
         </div>
       )}

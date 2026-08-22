@@ -83,7 +83,7 @@ export function NotetakerView({ cs, cases, saveCases, createCaseTask, openQuesti
                 </>
               ) : (
                 <>
-                  <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Type your notes here..." rows={8}
+                  <textarea aria-label="Notes" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Type your notes here..." rows={8}
                     style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif",resize:"vertical",boxSizing:"border-box",marginBottom:10}}/>
                   <div style={{display:"flex",gap:8}}>
                     <button onClick={()=>saveMeetingField({notetakerNotes:notes})} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Save draft</button>
@@ -96,7 +96,7 @@ export function NotetakerView({ cs, cases, saveCases, createCaseTask, openQuesti
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
               <div style={{fontSize:11,color:"#9B9098",fontWeight:700,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Actions</div>
               <div style={{display:"flex",gap:8}}>
-                <input value={actionText} onChange={e=>setActionText(e.target.value)} placeholder="e.g. Chase the missing document"
+                <input aria-label="New action" value={actionText} onChange={e=>setActionText(e.target.value)} placeholder="e.g. Chase the missing document"
                   style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
                 <button onClick={addAction} disabled={!actionText.trim()} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:actionText.trim()?"pointer":"not-allowed",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>+ Add</button>
               </div>
