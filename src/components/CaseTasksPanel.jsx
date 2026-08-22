@@ -42,12 +42,12 @@ export function CaseTasksPanel({ cs, tasks, createCaseTask, toggleCaseTaskDone, 
         {showNew && (
           <div style={{background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:14,marginBottom:tasks.length>0?14:0}}>
             <div style={{marginBottom:10}}>
-              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Task" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+              <input aria-label="Task" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Task" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
             </div>
             <div style={{display:"flex",gap:8,marginBottom:12}}>
-              <input value={form.owner} onChange={e=>setForm(f=>({...f,owner:e.target.value}))} placeholder="Owner" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-              <input type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))} style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-              <select value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535"}}>
+              <input aria-label="Owner" value={form.owner} onChange={e=>setForm(f=>({...f,owner:e.target.value}))} placeholder="Owner" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+              <input aria-label="Due date" type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))} style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535",boxSizing:"border-box",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
+              <select aria-label="Priority" value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",color:"#1A1535"}}>
                 <option value="low">Low</option>
                 <option value="normal">Normal</option>
                 <option value="high">High</option>
@@ -59,7 +59,7 @@ export function CaseTasksPanel({ cs, tasks, createCaseTask, toggleCaseTaskDone, 
         {tasks.length===0 && !showNew && <div style={{fontSize:13,color:"#9B9098"}}>No tasks yet.</div>}
         {sorted.map(t => (
           <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #F5F1EA"}}>
-            <input type="checkbox" checked={t.status==="done"} onChange={()=>toggleCaseTaskDone(t.id)} style={{cursor:"pointer"}}/>
+            <input aria-label={`Mark "${t.name}" done`} type="checkbox" checked={t.status==="done"} onChange={()=>toggleCaseTaskDone(t.id)} style={{cursor:"pointer"}}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:13,color:"#1A1535",textDecoration:t.status==="done"?"line-through":"none",opacity:t.status==="done"?0.6:1}}>
                 {t.name}
