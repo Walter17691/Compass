@@ -43,7 +43,7 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
               {editingMember===m.id&&locations.length>0&&(
                 <div style={{background:"#F5F1EA",borderRadius:8,padding:"10px 14px",marginTop:4}}>
                   <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
-                  <select value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
+                  <select aria-label={`Role for ${m.name||"Unknown"}`} value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
                     style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:12}}>
                     {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
@@ -72,11 +72,11 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
 
         <div style={{borderTop:"1px solid #E8E0D0",paddingTop:16}}>
           <div style={{fontSize:11,color:"#6B6375",marginBottom:12,fontWeight:600}}>Invite new member</div>
-          <input placeholder="Full name" value={inviteForm.name} onChange={e=>setInviteForm(p=>({...p,name:e.target.value}))}
+          <input aria-label="Full name" placeholder="Full name" value={inviteForm.name} onChange={e=>setInviteForm(p=>({...p,name:e.target.value}))}
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
-          <input placeholder="Email address" type="email" value={inviteForm.email} onChange={e=>setInviteForm(p=>({...p,email:e.target.value}))}
+          <input aria-label="Email address" placeholder="Email address" type="email" value={inviteForm.email} onChange={e=>setInviteForm(p=>({...p,email:e.target.value}))}
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
-          <select value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value}))}
+          <select aria-label="Role" value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value}))}
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:12}}>
             {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
