@@ -43,4 +43,13 @@ describe('DateInput', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(seenValue).toBe('2026-08-01');
   });
+
+  // Phase 6.5 hardening (Batch 13) — callers need to pair this component
+  // with a real <label htmlFor>; without forwarding id, that association
+  // was impossible for any screen using DateInput instead of a raw
+  // <input type="date">.
+  it('forwards id onto the underlying input so a <label htmlFor> can target it', () => {
+    render(<DateInput id="meeting-date" value="2026-07-23" onChange={() => {}} />);
+    expect(screen.getByDisplayValue('2026-07-23')).toHaveAttribute('id', 'meeting-date');
+  });
 });

@@ -47,10 +47,10 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
               {k:"reviewPeriod",l:"Review period",ph:"e.g. Jan – Dec 2024"},
             ].map(f=>(
               <div key={f.k} style={{marginBottom:12}}>
-                <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.l}{f.req&&<span style={{color:"#C84B2F"}}> *</span>}</label>
+                <label htmlFor={`dev-case-info-${f.k}`} style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:4}}>{f.l}{f.req&&<span style={{color:"#C84B2F"}}> *</span>}</label>
                 {f.type==="date"
-                  ?<DateInput value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))} />
-                  :<input type={f.type||"text"} placeholder={f.ph} value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))}
+                  ?<DateInput id={`dev-case-info-${f.k}`} value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))} />
+                  :<input id={`dev-case-info-${f.k}`} type={f.type||"text"} placeholder={f.ph} value={s.caseInfo[f.k]||""} onChange={e=>setDevSession(ds=>({...ds,caseInfo:{...ds.caseInfo,[f.k]:e.target.value}}))}
                     style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535"}} />}
               </div>
             ))}
@@ -61,8 +61,8 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
             <p style={{fontSize:11,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>The employee fills this in before the meeting. Their answers will sit alongside the manager assessment.</p>
             {cfg?.selfAssessmentPrompts?.map((q,i)=>(
               <div key={i} style={{marginBottom:14}}>
-                <label style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
-                <textarea value={s.selfAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,selfAssessment:{...ds.selfAssessment,[i]:e.target.value}}))}
+                <label htmlFor={`dev-self-assessment-${i}`} style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                <textarea id={`dev-self-assessment-${i}`} value={s.selfAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,selfAssessment:{...ds.selfAssessment,[i]:e.target.value}}))}
                   placeholder="Employee answer..." rows={2}
                   style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
               </div>
@@ -99,16 +99,16 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
 
             {cfg?.managerPrompts?.map((q,i)=>(
               <div key={i} style={{marginBottom:14}}>
-                <label style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
-                <textarea value={s.managerAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,managerAssessment:{...ds.managerAssessment,[i]:e.target.value}}))}
+                <label htmlFor={`dev-manager-assessment-${i}`} style={{display:"block",fontSize:12,color:"#3D3560",marginBottom:5,lineHeight:1.5}}>{i+1}. {q}</label>
+                <textarea id={`dev-manager-assessment-${i}`} value={s.managerAssessment[i]||""} onChange={e=>setDevSession(ds=>({...ds,managerAssessment:{...ds.managerAssessment,[i]:e.target.value}}))}
                   placeholder="Your assessment..." rows={2}
                   style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
               </div>
             ))}
 
             <div style={{marginBottom:14}}>
-              <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Agreed outcome</label>
-              <select value={s.outcome} onChange={e=>setDevSession(ds=>({...ds,outcome:e.target.value}))}
+              <label htmlFor="dev-outcome" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Agreed outcome</label>
+              <select id="dev-outcome" value={s.outcome} onChange={e=>setDevSession(ds=>({...ds,outcome:e.target.value}))}
                 style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none"}}>
                 <option value="">Select outcome...</option>
                 {cfg?.outcomeOptions?.map(o=><option key={o} value={o}>{o}</option>)}
@@ -116,8 +116,8 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
             </div>
 
             <div style={{marginBottom:16}}>
-              <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Development plan / actions</label>
-              <textarea value={s.devPlan||""} onChange={e=>setDevSession(ds=>({...ds,devPlan:e.target.value}))}
+              <label htmlFor="dev-plan" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Development plan / actions</label>
+              <textarea id="dev-plan" value={s.devPlan||""} onChange={e=>setDevSession(ds=>({...ds,devPlan:e.target.value}))}
                 placeholder="Training agreed, coaching, support, resources..." rows={3}
                 style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535"}} ></textarea>
             </div>
@@ -157,7 +157,7 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
                   ))}
                   <span style={{fontSize:10,color:"#5A5570",lineHeight:"28px",marginLeft:6}}>{["","Below","Developing","Meeting","Exceeding","Exceptional"][obj.rating]}</span>
                 </div>
-                <input value={obj.note||""} onChange={e=>setDevSession(ds=>({...ds,objectives:ds.objectives.map((x,j)=>j===i?{...x,note:e.target.value}:x)}))}
+                <input aria-label={`Notes on progress for ${obj.label}`} value={obj.note||""} onChange={e=>setDevSession(ds=>({...ds,objectives:ds.objectives.map((x,j)=>j===i?{...x,note:e.target.value}:x)}))}
                   placeholder="Notes on progress..."
                   style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:5,padding:"6px 10px",fontSize:11,outline:"none",color:"#1A1535"}} />
               </div>
