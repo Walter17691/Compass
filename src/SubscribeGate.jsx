@@ -143,9 +143,9 @@ export default function SubscribeGate({ org, syncing, onCancel, onSignOut }) {
 
             <TierTable/>
 
-            <input style={inputStyle} placeholder="Phone number (optional)" value={phone} onChange={e=>setPhone(e.target.value)} />
-            <input style={inputStyle} placeholder="Best time to call (optional)" value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} />
-            <textarea style={{...inputStyle,resize:"vertical",minHeight:70}} placeholder="Anything we should know before the call? (optional)" value={notes} onChange={e=>setNotes(e.target.value)} />
+            <input aria-label="Phone number" style={inputStyle} placeholder="Phone number (optional)" value={phone} onChange={e=>setPhone(e.target.value)} />
+            <input aria-label="Best time to call" style={inputStyle} placeholder="Best time to call (optional)" value={preferredTime} onChange={e=>setPreferredTime(e.target.value)} />
+            <textarea aria-label="Anything we should know before the call?" style={{...inputStyle,resize:"vertical",minHeight:70}} placeholder="Anything we should know before the call? (optional)" value={notes} onChange={e=>setNotes(e.target.value)} />
 
             {error && <div style={{background:"#FDF0ED",border:"1px solid #F0C9BE",borderRadius:8,padding:"10px 14px",color:"#B0392A",fontSize:13,marginBottom:16}}>{error}</div>}
 
