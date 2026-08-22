@@ -53,14 +53,14 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
           </div>
           <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
             <div>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Weekly pay (£, gross)</label>
-              <input type="number" min="0" value={cs.estimatedWeeklyPay||""} placeholder="For exposure estimate"
+              <label htmlFor="overview-weekly-pay" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Weekly pay (£, gross)</label>
+              <input id="overview-weekly-pay" type="number" min="0" value={cs.estimatedWeeklyPay||""} placeholder="For exposure estimate"
                 onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,estimatedWeeklyPay:e.target.value?Number(e.target.value):null}:x))}
                 style={{width:150,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
             </div>
             <div>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Age (optional)</label>
-              <input type="number" min="16" max="80" value={cs.estimatedAgeAtDismissal||""} placeholder="Assumes 22-40"
+              <label htmlFor="overview-age-at-dismissal" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Age (optional)</label>
+              <input id="overview-age-at-dismissal" type="number" min="16" max="80" value={cs.estimatedAgeAtDismissal||""} placeholder="Assumes 22-40"
                 onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,estimatedAgeAtDismissal:e.target.value?Number(e.target.value):null}:x))}
                 style={{width:110,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
             </div>
@@ -79,26 +79,26 @@ export function OverviewTab({ cs, cases, saveCases, stage, currentRisk, empRecor
           <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Key dates</div>
           <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
             <div>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Fit note expires</label>
-              <input type="date" value={cs.fitNoteEndDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,fitNoteEndDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              <label htmlFor="overview-fit-note-end-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Fit note expires</label>
+              <input id="overview-fit-note-end-date" type="date" value={cs.fitNoteEndDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,fitNoteEndDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
             </div>
             <div>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Probation review</label>
-              <input type="date" value={cs.probationReviewDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,probationReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              <label htmlFor="overview-probation-review-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Probation review</label>
+              <input id="overview-probation-review-date" type="date" value={cs.probationReviewDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,probationReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
             </div>
             <div>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH referral date</label>
-              <input type="date" value={cs.ohReferralDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,ohReferralDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              <label htmlFor="overview-oh-referral-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH referral date</label>
+              <input id="overview-oh-referral-date" type="date" value={cs.ohReferralDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,ohReferralDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
             </div>
             {cs.ohReferralDate&&(
               <div>
-                <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH report received</label>
-                <input type="date" value={cs.ohReportReceivedDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,ohReportReceivedDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+                <label htmlFor="overview-oh-report-received-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH report received</label>
+                <input id="overview-oh-report-received-date" type="date" value={cs.ohReportReceivedDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,ohReportReceivedDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
               </div>
             )}
             <div>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Suspension review</label>
-              <input type="date" value={cs.suspensionReviewDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,suspensionReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              <label htmlFor="overview-suspension-review-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Suspension review</label>
+              <input id="overview-suspension-review-date" type="date" value={cs.suspensionReviewDate||""} onChange={e=>saveCases(cases.map(x=>x.id===cs.id?{...x,suspensionReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
             </div>
           </div>
         </div>
