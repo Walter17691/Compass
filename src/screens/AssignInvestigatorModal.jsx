@@ -41,8 +41,8 @@ export function AssignInvestigatorModal({ cases, activeCaseId, allegations, orgM
         ):(
           <>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Investigator</label>
-              <select value={selectedMemberId} onChange={e=>setSelectedMemberId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820"}}>
+              <label htmlFor="assign-investigator-member" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Investigator</label>
+              <select id="assign-investigator-member" value={selectedMemberId} onChange={e=>setSelectedMemberId(e.target.value)} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820"}}>
                 {eligible.map(m=><option key={m.id} value={m.user_id}>{m.name} {m.job_title?"("+m.job_title+")":""}</option>)}
               </select>
             </div>
@@ -62,14 +62,14 @@ export function AssignInvestigatorModal({ cases, activeCaseId, allegations, orgM
             )}
 
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Target completion date <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-              <input type="date" value={targetCompletionDate} onChange={e=>setTargetCompletionDate(e.target.value)}
+              <label htmlFor="assign-investigator-target-date" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Target completion date <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+              <input id="assign-investigator-target-date" type="date" value={targetCompletionDate} onChange={e=>setTargetCompletionDate(e.target.value)}
                 style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820",boxSizing:"border-box"}}/>
             </div>
 
             <div style={{marginBottom:20}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Scope note <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-              <textarea rows={3} value={scopeNote} onChange={e=>setScopeNote(e.target.value)} placeholder="Anything specific they should focus on or avoid"
+              <label htmlFor="assign-investigator-scope-note" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Scope note <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+              <textarea id="assign-investigator-scope-note" rows={3} value={scopeNote} onChange={e=>setScopeNote(e.target.value)} placeholder="Anything specific they should focus on or avoid"
                 style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",background:"#fff",color:"#1C1820",boxSizing:"border-box",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
             </div>
 

@@ -61,4 +61,14 @@ describe('AssignInvestigatorModal', () => {
     expect(screen.getByText('No team members found. Add one in Organisation Settings first.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Assign investigator' })).not.toBeInTheDocument();
   });
+
+  // Phase 6.5 hardening (Batch 13) — the investigator select, target
+  // completion date, and scope note fields had visual labels with no
+  // htmlFor/id association.
+  it('labels the investigator select, target completion date, and scope note fields', () => {
+    render(<AssignInvestigatorModal {...baseProps} assignInvestigator={() => {}} />);
+    expect(screen.getByLabelText('Investigator')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Target completion date/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Scope note/)).toBeInTheDocument();
+  });
 });
