@@ -24,7 +24,7 @@ test('an allegation with no recorded employee response is flagged with a policy 
     mimeType: 'text/plain',
     buffer: Buffer.from('Disciplinary Policy\n\nEmployees must be given a fair opportunity to respond to each allegation before any finding is reached.'),
   });
-  await expect(page.locator('select').last()).toBeVisible({ timeout: 45000 });
+  await expect(page.getByLabel(`Category for ${policyFileName}`)).toBeVisible({ timeout: 45000 });
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
   const employeeName = `E2E GuardrailAction ${Date.now()}`;
@@ -99,7 +99,7 @@ test('an allegation with no recorded employee response is flagged with a policy 
   // neither panel renders it and the locator matches zero elements.
   await signalCard.getByRole('button', { name: 'Proceed anyway' }).click();
   await expect(deviationPrompt).toBeVisible({ timeout: 5000 });
-  await deviationPrompt.locator('input').first().fill('Response will be taken at the disciplinary hearing itself.');
+  await deviationPrompt.getByLabel('What will actually happen').fill('Response will be taken at the disciplinary hearing itself.');
   await deviationPrompt.getByRole('button', { name: 'Record and proceed', exact: true }).click();
   await expect(page.getByText('An allegation has no recorded employee response')).not.toBeVisible({ timeout: 10000 });
 });

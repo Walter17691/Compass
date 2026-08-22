@@ -26,15 +26,15 @@ test('combining the type and date-opened filters on the Cases list narrows resul
 
   // Narrow by date AND type together from the start.
   await page.getByLabel('From').fill(today);
-  await page.locator('select').first().selectOption('grievance');
+  await page.getByLabel('Filter by case type').selectOption('grievance');
   await expect(page.getByText(employeeName)).toBeVisible({ timeout: 10000 });
 
   // Same date range, wrong type — the grievance case should disappear.
-  await page.locator('select').first().selectOption('misconduct');
+  await page.getByLabel('Filter by case type').selectOption('misconduct');
   await expect(page.getByText(employeeName)).not.toBeVisible();
 
   // Switch back to the right type — it reappears.
-  await page.locator('select').first().selectOption('grievance');
+  await page.getByLabel('Filter by case type').selectOption('grievance');
   await expect(page.getByText(employeeName)).toBeVisible();
 
   await page.getByRole('button', { name: /Clear filters/ }).click();

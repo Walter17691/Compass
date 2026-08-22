@@ -33,7 +33,7 @@ test('a policy clause cited by Next Best Action renders as a distinct citation c
       'Where an employee has an unauthorised absence from a shift, the line manager must contact the employee within 24 hours to establish the reason for the absence before any further step is taken.'
     ),
   });
-  await expect(page.locator('select').last()).toBeVisible({ timeout: 45000 });
+  await expect(page.getByLabel(`Category for ${policyFileName}`)).toBeVisible({ timeout: 45000 });
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
   const employeeName = `E2E PolicyNBA ${Date.now()}`;

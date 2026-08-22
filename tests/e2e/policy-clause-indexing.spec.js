@@ -28,8 +28,9 @@ test('an uploaded policy is indexed into quotable clauses, visible inline in the
     ),
   });
 
-  const row = page.locator('div').filter({ hasText: policyName }).filter({ has: page.locator('select') }).last();
-  await expect(row.locator('select')).toBeVisible({ timeout: 45000 });
+  const select = page.getByLabel(`Category for ${policyName}`);
+  await expect(select).toBeVisible({ timeout: 45000 });
+  const row = page.locator('div').filter({ hasText: policyName }).filter({ has: select }).last();
 
   const clausesToggle = row.getByRole('button', { name: /clauses? indexed/ });
   await expect(clausesToggle).toBeVisible();
@@ -49,12 +50,13 @@ test('the policy category list includes Reasonable Adjustments and Hybrid Workin
   await page.getByRole('button', { name: /View all policies & templates/ }).click();
   await expect(page.getByRole('heading', { name: 'Company policies' })).toBeVisible({ timeout: 10000 });
 
+  const policyName = `E2E CategoryCheck ${Date.now()}`;
   await page.locator('input[type="file"]').setInputFiles({
-    name: `E2E CategoryCheck ${Date.now()}.txt`,
+    name: `${policyName}.txt`,
     mimeType: 'text/plain',
     buffer: Buffer.from('Placeholder policy text.'),
   });
-  const select = page.locator('select').last();
+  const select = page.getByLabel(`Category for ${policyName}`);
   await expect(select).toBeVisible({ timeout: 45000 });
   await expect(select.locator('option', { hasText: 'Reasonable Adjustments' })).toHaveCount(1);
   await expect(select.locator('option', { hasText: 'Hybrid Working' })).toHaveCount(1);

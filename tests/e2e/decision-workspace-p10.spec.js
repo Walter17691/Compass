@@ -23,7 +23,7 @@ test('an allegation shows a policy citation from its own title, and records inve
     mimeType: 'text/plain',
     buffer: Buffer.from('Attendance Policy\n\nUnauthorised absence\n\nAny unauthorised absence from work must be reported to a line manager within 24 hours.'),
   });
-  await expect(page.locator('select').last()).toBeVisible({ timeout: 45000 });
+  await expect(page.getByLabel(`Category for ${policyFileName}`)).toBeVisible({ timeout: 45000 });
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
   const employeeName = `E2E DecisionWorkspace ${Date.now()}`;

@@ -61,7 +61,7 @@ test('a change made after the first view shows up as a dismissible banner on the
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   const today = new Date().toISOString().split('T')[0];
   await page.getByLabel('From').fill(today);
-  await page.locator('select').first().selectOption('misconduct');
+  await page.getByLabel('Filter by case type').selectOption('misconduct');
   await revealCase(page, employeeName);
   const checkbox = page.getByText(employeeName).locator('xpath=following::input[@type="checkbox"][1]');
   await checkbox.locator('xpath=..').click();

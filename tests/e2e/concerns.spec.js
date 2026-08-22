@@ -24,7 +24,7 @@ test('a raised concern can be triaged into a real formal case', async ({ page })
 
   await page.getByRole('button', { name: '+ Raise a concern' }).click();
   await page.getByPlaceholder("Who is this about?").fill(employeeName);
-  await page.locator('select').first().selectOption('conduct');
+  await page.getByLabel('What kind of concern is this?').selectOption('conduct');
   await page.getByPlaceholder(/What happened/).fill('Repeatedly left site during shift without authorisation, witnessed by two colleagues.');
   // Manager Enablement (Phase 4, MP4) — the description above mentions a
   // witness with no name given yet, so the live, advisory gap hint should

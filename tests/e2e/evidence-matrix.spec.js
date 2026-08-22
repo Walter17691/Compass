@@ -31,7 +31,7 @@ test('Evidence matrix shows a manually-linked item and an AI-suggested link once
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Car park altercation');
-  await page.locator('textarea').first().fill('Alleged altercation in the staff car park on 6 August.');
+  await page.getByLabel('Description').fill('Alleged altercation in the staff car park on 6 August.');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (2)')).toBeVisible();
 

@@ -19,7 +19,7 @@ test('Case readiness reflects real gaps and expands into a checklist', async ({ 
   await page.getByRole('button', { name: 'Allegations', exact: true }).click();
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
-  await page.locator('textarea').first().fill('Left shift early without authorisation on 5 August.');
+  await page.getByLabel('Description').fill('Left shift early without authorisation on 5 August.');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
 
   // 3 of 5 checks met: allegations recorded, no open questions, no open

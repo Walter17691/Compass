@@ -65,7 +65,7 @@ test('appeal review: generating a review creates a signal, and recording the out
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   const today = new Date().toISOString().split('T')[0];
   await page.getByLabel('From').fill(today);
-  await page.locator('select').first().selectOption('capability');
+  await page.getByLabel('Filter by case type').selectOption('capability');
   await revealCase(page, employeeName);
   await page.getByText(employeeName).locator('xpath=following::input[@type="checkbox"][1]').click();
   // bulkClose's own DB write is fire-and-forget (not awaited by the
@@ -146,7 +146,7 @@ test('appeal review: generating a review creates a signal, and recording the out
   await page.locator('aside, header').getByRole('button', { name: /^Cases/ }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   await page.getByLabel('From').fill(today);
-  await page.locator('select').first().selectOption('capability');
+  await page.getByLabel('Filter by case type').selectOption('capability');
   await revealCase(page, employeeName);
   // The broader "div hasText+has(checkbox)" group filter used earlier in
   // this suite (appeal-detection.spec.js) gets ambiguous at this org's

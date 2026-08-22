@@ -21,7 +21,7 @@ test('a newly raised, untriaged concern shows up on Home\'s Needs attention stri
 
   await page.getByRole('button', { name: '+ Raise a concern' }).click();
   await page.getByPlaceholder("Who is this about?").fill(employeeName);
-  await page.locator('select').first().selectOption('conduct');
+  await page.getByLabel('What kind of concern is this?').selectOption('conduct');
   await page.getByPlaceholder(/What happened/).fill('Persistently arrives late without explanation.');
   const saveResponse = page.waitForResponse(r => r.url().includes('/rest/v1/concern_referrals') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Submit concern' }).click();

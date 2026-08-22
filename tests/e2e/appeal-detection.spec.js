@@ -33,7 +33,7 @@ test('appealing a closed case detects the appeal, links to the right case, and r
   await page.getByRole('button', { name: '← Cases' }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   await page.getByLabel('From').fill(today);
-  await page.locator('select').first().selectOption('capability');
+  await page.getByLabel('Filter by case type').selectOption('capability');
   // CasesScreen's per-case row title (getProceedingTitle) doesn't include
   // the employee name at all — only the group heading above it does — so
   // the checkbox for this employee's case is the first one appearing
@@ -82,7 +82,7 @@ test('appealing a closed case detects the appeal, links to the right case, and r
   await page.locator('aside, header').getByRole('button', { name: /^Cases/ }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   await page.getByLabel('From').fill(today);
-  await page.locator('select').first().selectOption('capability');
+  await page.getByLabel('Filter by case type').selectOption('capability');
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
   // The group wrapper (employee heading + checkbox + case row) is the
   // only div containing both the employee heading and a checkbox, since

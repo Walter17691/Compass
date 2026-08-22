@@ -73,6 +73,6 @@ test('a new onboarding template can be created and edited, then offered on the s
   // its own "Onboarding" tab-style button with the same accessible name.
   await page.locator('aside, header').getByRole('button', { name: 'Onboarding', exact: true }).click();
   await page.getByRole('button', { name: '+ Add starter' }).click();
-  const templateSelect = page.locator('select').last();
+  const templateSelect = page.getByLabel('Template');
   await expect(templateSelect.locator(`option`, { hasText: templateName })).toHaveCount(1);
 });

@@ -61,7 +61,7 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   const today = new Date().toISOString().split('T')[0];
   await page.getByLabel('From').fill(today);
-  await page.locator('select').first().selectOption(caseType);
+  await page.getByLabel('Filter by case type').selectOption(caseType);
   await revealCase(page, employeeName);
   await page.getByText(employeeName).locator('xpath=following::input[@type="checkbox"][1]').click();
   const closeSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && ['PATCH', 'POST'].includes(r.request().method()));

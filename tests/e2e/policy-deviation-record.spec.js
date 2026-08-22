@@ -23,7 +23,7 @@ test('proceeding past a policy-cited guardrail records a structured policy devia
     mimeType: 'text/plain',
     buffer: Buffer.from('Disciplinary Policy\n\nEmployees must be given a fair opportunity to respond to each allegation before any finding is reached.'),
   });
-  await expect(page.locator('select').last()).toBeVisible({ timeout: 45000 });
+  await expect(page.getByLabel(`Category for ${policyFileName}`)).toBeVisible({ timeout: 45000 });
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
   const employeeName = `E2E PolicyDeviation ${Date.now()}`;
@@ -76,8 +76,8 @@ test('proceeding past a policy-cited guardrail records a structured policy devia
 
   const actualText = 'Response will be taken at the disciplinary hearing itself';
   const reasonText = 'Employee was unavailable for a separate response meeting before the hearing';
-  await deviationPrompt.locator('input').first().fill(actualText);
-  await deviationPrompt.locator('input').nth(1).fill(reasonText);
+  await deviationPrompt.getByLabel('What will actually happen').fill(actualText);
+  await deviationPrompt.getByLabel('Reason (optional)').fill(reasonText);
   await deviationPrompt.getByRole('button', { name: 'Record and proceed', exact: true }).click();
   await expect(deviationPrompt).not.toBeVisible();
   await expect(page.getByText('An allegation has no recorded employee response')).not.toBeVisible({ timeout: 10000 });
