@@ -71,13 +71,13 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Timeline ({entries.length})</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {people.length>1 && (
-            <select value={personFilter} onChange={e=>setPersonFilter(e.target.value)} style={selectStyle}>
+            <select aria-label="Filter by person" value={personFilter} onChange={e=>setPersonFilter(e.target.value)} style={selectStyle}>
               <option value="">All people</option>
               {people.map(p=><option key={p} value={p}>{p}</option>)}
             </select>
           )}
           {caseAllegations.length>0 && (
-            <select value={allegationFilter} onChange={e=>setAllegationFilter(e.target.value)} style={selectStyle}>
+            <select aria-label="Filter by allegation" value={allegationFilter} onChange={e=>setAllegationFilter(e.target.value)} style={selectStyle}>
               <option value="">All allegations</option>
               {caseAllegations.map(a=><option key={a.id} value={a.id}>{a.title}</option>)}
             </select>
@@ -131,7 +131,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
                 </div>
                 {isEditing ? (
                   <div style={{marginTop:4,display:"flex",gap:6}}>
-                    <input value={editText} onChange={ev=>setEditText(ev.target.value)} style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px"}}/>
+                    <input aria-label={`Edit description for ${meta.label} entry`} value={editText} onChange={ev=>setEditText(ev.target.value)} style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px"}}/>
                     <Btn variant="secondary" style={{padding:"4px 10px",fontSize:11}} onClick={()=>{onEditDescription(cs,e.key,editText);setEditingKey(null);}}>Save</Btn>
                     <Btn variant="ghost" style={{padding:"4px 10px",fontSize:11}} onClick={()=>setEditingKey(null)}>Cancel</Btn>
                   </div>
