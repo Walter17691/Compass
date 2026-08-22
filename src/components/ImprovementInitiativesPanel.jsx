@@ -82,15 +82,15 @@ function InitiativeCard({ initiative, isHR, caseTasks, cases, organisationThemes
           {(initiative.milestones||[]).length === 0 && <div style={{fontSize:12,color:"#9B9098",marginBottom:8}}>No milestones set yet.</div>}
           {(initiative.milestones||[]).map(m => (
             <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-              <input type="checkbox" checked={m.done} disabled={!isHR} onChange={()=>onUpdate(initiative.id,{milestones:toggleMilestone(initiative.milestones,m.id)})} style={{cursor:isHR?"pointer":"default"}}/>
+              <input aria-label={`Mark "${m.label}" done`} type="checkbox" checked={m.done} disabled={!isHR} onChange={()=>onUpdate(initiative.id,{milestones:toggleMilestone(initiative.milestones,m.id)})} style={{cursor:isHR?"pointer":"default"}}/>
               <span style={{fontSize:12,color:"#1A1535",textDecoration:m.done?"line-through":"none",opacity:m.done?0.6:1,flex:1}}>{m.label}{m.targetDate?` — ${m.targetDate}`:""}</span>
               {isHR && <button onClick={()=>onUpdate(initiative.id,{milestones:removeMilestone(initiative.milestones,m.id)})} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>}
             </div>
           ))}
           {isHR && (
             <div style={{display:"flex",gap:6,marginTop:8,marginBottom:16,flexWrap:"wrap"}}>
-              <input value={milestoneLabel} onChange={e=>setMilestoneLabel(e.target.value)} placeholder="New milestone" style={{...inputStyle,flex:"2 1 160px"}}/>
-              <input type="date" value={milestoneDate} onChange={e=>setMilestoneDate(e.target.value)} style={{...inputStyle,flex:"1 1 130px"}}/>
+              <input aria-label="New milestone" value={milestoneLabel} onChange={e=>setMilestoneLabel(e.target.value)} placeholder="New milestone" style={{...inputStyle,flex:"2 1 160px"}}/>
+              <input aria-label="New milestone target date" type="date" value={milestoneDate} onChange={e=>setMilestoneDate(e.target.value)} style={{...inputStyle,flex:"1 1 130px"}}/>
               <button
                 onClick={()=>{ if(!milestoneLabel.trim()) return; onUpdate(initiative.id,{milestones:addMilestone(initiative.milestones,milestoneLabel,milestoneDate)}); setMilestoneLabel(""); setMilestoneDate(""); }}
                 disabled={!milestoneLabel.trim()}
@@ -109,21 +109,21 @@ function InitiativeCard({ initiative, isHR, caseTasks, cases, organisationThemes
 
           {isHR && (
             <div style={{marginTop:16}}>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Metric this initiative addresses (for impact tracking)</label>
+              <label htmlFor={`initiative-metric-kind-${initiative.id}`} style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Metric this initiative addresses (for impact tracking)</label>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-                <select value={initiative.metricKind||""} onChange={e=>onUpdate(initiative.id,{metricKind:e.target.value||null,metricValue:null})} style={inputStyle}>
+                <select id={`initiative-metric-kind-${initiative.id}`} value={initiative.metricKind||""} onChange={e=>onUpdate(initiative.id,{metricKind:e.target.value||null,metricValue:null})} style={inputStyle}>
                   <option value="">Not set</option>
                   <option value="case_type">Case type</option>
                   <option value="theme">Theme</option>
                 </select>
                 {initiative.metricKind==="case_type" && (
-                  <select value={initiative.metricValue||""} onChange={e=>onUpdate(initiative.id,{metricKind:"case_type",metricValue:e.target.value||null})} style={inputStyle}>
+                  <select aria-label="Case type value" value={initiative.metricValue||""} onChange={e=>onUpdate(initiative.id,{metricKind:"case_type",metricValue:e.target.value||null})} style={inputStyle}>
                     <option value="">Select a case type…</option>
                     {caseTypeOptions.map(ct => <option key={ct} value={ct}>{ct}</option>)}
                   </select>
                 )}
                 {initiative.metricKind==="theme" && (
-                  <select value={initiative.metricValue||""} onChange={e=>onUpdate(initiative.id,{metricKind:"theme",metricValue:e.target.value||null})} style={inputStyle}>
+                  <select aria-label="Theme value" value={initiative.metricValue||""} onChange={e=>onUpdate(initiative.id,{metricKind:"theme",metricValue:e.target.value||null})} style={inputStyle}>
                     <option value="">Select a theme…</option>
                     {themeOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
@@ -131,13 +131,13 @@ function InitiativeCard({ initiative, isHR, caseTasks, cases, organisationThemes
               </div>
 
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-                <label style={{fontSize:11,color:"#9B9098"}}>Status</label>
-                <select value={initiative.status} onChange={e=>onUpdate(initiative.id,{status:e.target.value})} style={inputStyle}>
+                <label htmlFor={`initiative-status-${initiative.id}`} style={{fontSize:11,color:"#9B9098"}}>Status</label>
+                <select id={`initiative-status-${initiative.id}`} value={initiative.status} onChange={e=>onUpdate(initiative.id,{status:e.target.value})} style={inputStyle}>
                   {INITIATIVE_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
                 </select>
               </div>
-              <label style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Outcome</label>
-              <textarea value={outcomeDraft} onChange={e=>setOutcomeDraft(e.target.value)} placeholder="What happened once this was implemented…" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
+              <label htmlFor={`initiative-outcome-${initiative.id}`} style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Outcome</label>
+              <textarea id={`initiative-outcome-${initiative.id}`} value={outcomeDraft} onChange={e=>setOutcomeDraft(e.target.value)} placeholder="What happened once this was implemented…" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
               <button onClick={()=>onUpdate(initiative.id,{outcome:outcomeDraft})} disabled={outcomeDraft===(initiative.outcome||"")} style={{fontSize:12,background:outcomeDraft===(initiative.outcome||"")?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:outcomeDraft===(initiative.outcome||"")?"default":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Save outcome</button>
             </div>
           )}

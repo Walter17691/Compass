@@ -188,4 +188,50 @@ describe('ImprovementInitiativesPanel', () => {
       expect(rpcMock).toHaveBeenCalledWith('org_trend_detection', { p_period_days: 30 });
     });
   });
+
+  // Phase 6.5 hardening (Batch 13) — the milestone checkbox, new-milestone
+  // fields, metric-value selects, status select, and outcome textarea
+  // either had no accessible name at all or a visual label with no
+  // htmlFor/id association.
+  describe('field labelling (Phase 6.5, Batch 13)', () => {
+    const cases = [{ id: 'c1', caseType: 'grievance' }];
+    const organisationThemes = [{ id: 'th1', name: 'Rota changes', active: true }];
+
+    it('names the milestone done checkbox after the milestone', async () => {
+      const user = userEvent.setup();
+      const withMilestone = { ...baseInitiative, milestones: [{ id: 'm1', label: 'Draft policy', targetDate: '', done: false }] };
+      render(<ImprovementInitiativesPanel improvementInitiatives={[withMilestone]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      expect(screen.getByLabelText('Mark "Draft policy" done')).toBeInTheDocument();
+    });
+
+    it('labels the new-milestone label and target-date fields', async () => {
+      const user = userEvent.setup();
+      render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      expect(screen.getByLabelText('New milestone')).toBeInTheDocument();
+      expect(screen.getByLabelText('New milestone target date')).toBeInTheDocument();
+    });
+
+    it('labels the metric-kind select, status select, and outcome textarea', async () => {
+      const user = userEvent.setup();
+      render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      expect(screen.getByLabelText(/Metric this initiative addresses/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Status')).toBeInTheDocument();
+      expect(screen.getByLabelText('Outcome')).toBeInTheDocument();
+    });
+
+    it('labels the case-type and theme metric-value selects once a metric kind is chosen', async () => {
+      const user = userEvent.setup();
+      const withCaseType = { ...baseInitiative, metricKind: 'case_type' };
+      const { rerender } = render(<ImprovementInitiativesPanel improvementInitiatives={[withCaseType]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      await user.click(screen.getByRole('button', { name: 'View details' }));
+      expect(screen.getByLabelText('Case type value')).toBeInTheDocument();
+
+      const withTheme = { ...baseInitiative, metricKind: 'theme' };
+      rerender(<ImprovementInitiativesPanel improvementInitiatives={[withTheme]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      expect(screen.getByLabelText('Theme value')).toBeInTheDocument();
+    });
+  });
 });
