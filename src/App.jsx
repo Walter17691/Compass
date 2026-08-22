@@ -39,7 +39,7 @@ import { InvestigationQualityCheckModal } from './components/InvestigationQualit
 import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
-import { conditionalUpdate } from './lib/optimisticSave';
+import { conditionalUpdate, enqueueSave, withTransientRetry } from './lib/optimisticSave';
 import { requestOverride, requestPolicyDeviation } from './lib/humanOverride';
 import { caseRoleLabel } from './lib/caseRoles';
 import { getProcessType, stageLabel } from './lib/processStages';
@@ -1815,6 +1815,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     ],
   }]));
   const [starterInstances, setStarterInstances] = useState(orgLs("compass_starters", []));
+  // Phase 6.5 hardening (P0, data-integrity review) — updateStarterTaskNote
+  // wrote straight through to a blind upsert on every keystroke (the
+  // ChecklistScreen note input's onChange), of the ENTIRE tasks array —
+  // the same per-keystroke-write + stale-full-array-replacement pattern
+  // Clusters 6/7 already fixed for allegations, now closed the same way:
+  // same conditionalUpdate guard, same enqueueSave ordering, same
+  // version ref populated from loaded rows and every successful save.
+  const starterVersionRef = useRef({});
+  const starterSaveQueueRef = useRef({});
   const [dsarRequests, setDsarRequests] = useState([]);
   const [activeStarter, setActiveStarter] = useState(null);
   const [starterView, setStarterView] = useState("list");
@@ -1851,6 +1860,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     ],
   }]));
   const [leaverInstances, setLeaverInstances] = useState(orgLs("compass_leavers", []));
+  // Phase 6.5 hardening (P0, data-integrity review) — same fix as
+  // starterVersionRef/starterSaveQueueRef above, for updateLeaverTaskNote's
+  // identical per-keystroke pattern.
+  const leaverVersionRef = useRef({});
+  const leaverSaveQueueRef = useRef({});
   const [activeLeaver, setActiveLeaver] = useState(null);
   const [leaverView, setLeaverView] = useState("list");
   const [leaverAiProcessing, setLeaverAiProcessing] = useState(false);
@@ -2370,26 +2384,49 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const {data} = await supabase.from('starter_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
-      if(data) setStarterInstances(data.map(r=>({
-        id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
-        email:r.email, startDate:r.start_date, templateId:r.template_id, templateName:r.template_name,
-        tasks:r.tasks||[], aiCustomised:r.ai_customised, createdBy:r.created_by, createdAt:r.created_at,
-      })));
+      if(data) {
+        data.forEach(r => { starterVersionRef.current[r.id] = r.updated_at; });
+        setStarterInstances(data.map(r=>({
+          id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
+          email:r.email, startDate:r.start_date, templateId:r.template_id, templateName:r.template_name,
+          tasks:r.tasks||[], aiCustomised:r.ai_customised, createdBy:r.created_by, createdAt:r.created_at,
+        })));
+      }
     } catch(e) { console.error('loadStarterInstances', e); }
   };
 
-  const saveStarterInstanceToDB = async (instance) => {
-    if(!org?.id) return;
-    const { error } = await supabase.from('starter_instances').upsert({
-      id: instance.id,
-      org_id: org.id,
+  // Phase 6.5 hardening (P0, data-integrity review) — was a blind upsert of
+  // the entire tasks array with no version guard and no ordering between
+  // saves for the same instance. updateStarterTaskNote fires this on every
+  // keystroke of the checklist note field (see ChecklistScreen.jsx's own
+  // DraftInput fix, which now debounces the UI side) — without a queue,
+  // two saves for the same instance racing over the network could land
+  // out of order, and the LATER-arriving response's full tasks snapshot
+  // would silently win even if it was actually the OLDER edit, discarding
+  // whatever the newer save had added/changed. Same conditionalUpdate +
+  // enqueueSave + withTransientRetry shape as saveAllegationToDB.
+  const saveStarterInstanceToDB = (instance) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
+      id: instance.id, org_id: org.id,
       name: instance.name, role: instance.role||null, department: instance.department||null,
       manager: instance.manager||null, email: instance.email||null, start_date: instance.startDate||null,
       template_id: instance.templateId||null, template_name: instance.templateName||null,
       tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised, created_by: instance.createdBy||null,
-      updated_at: new Date().toISOString(),
-    });
-    if(error) { console.error('saveStarterInstanceToDB', error); showToast("Couldn't save onboarding record — "+error.message, "error"); }
+    };
+    const run = async () => {
+      const updatedAt = starterVersionRef.current[instance.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withTransientRetry(() => conditionalUpdate(supabase, 'starter_instances', instance.id, updatedAt, {...fields, updated_at: nowIso}));
+      if(conflict) {
+        showToast("This onboarding checklist was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadStarterInstances();
+        return;
+      }
+      if(error) { console.error('saveStarterInstanceToDB', error); showToast("Couldn't save onboarding record — "+error.message, "error"); return; }
+      starterVersionRef.current[instance.id] = nowIso;
+    };
+    return enqueueSave(starterSaveQueueRef.current, instance.id, run);
   };
 
   // ── Leaver offboarding helpers ──
@@ -2400,22 +2437,27 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const {data} = await supabase.from('leaver_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
-      if(data) setLeaverInstances(data.map(r=>({
-        id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
-        email:r.email, lastWorkingDay:r.last_working_day, reason:r.reason,
-        templateId:r.template_id, templateName:r.template_name,
-        tasks:r.tasks||[], aiCustomised:r.ai_customised,
-        exitInterviewNotes:r.exit_interview_notes, exitInterviewDate:r.exit_interview_date,
-        createdBy:r.created_by, createdAt:r.created_at,
-      })));
+      if(data) {
+        data.forEach(r => { leaverVersionRef.current[r.id] = r.updated_at; });
+        setLeaverInstances(data.map(r=>({
+          id:r.id, name:r.name, role:r.role, department:r.department, manager:r.manager,
+          email:r.email, lastWorkingDay:r.last_working_day, reason:r.reason,
+          templateId:r.template_id, templateName:r.template_name,
+          tasks:r.tasks||[], aiCustomised:r.ai_customised,
+          exitInterviewNotes:r.exit_interview_notes, exitInterviewDate:r.exit_interview_date,
+          createdBy:r.created_by, createdAt:r.created_at,
+        })));
+      }
     } catch(e) { console.error('loadLeaverInstances', e); }
   };
 
-  const saveLeaverInstanceToDB = async (instance) => {
-    if(!org?.id) return;
-    const { error } = await supabase.from('leaver_instances').upsert({
-      id: instance.id,
-      org_id: org.id,
+  // Phase 6.5 hardening (P0, data-integrity review) — same fix as
+  // saveStarterInstanceToDB above, for updateLeaverTaskNote's identical
+  // per-keystroke pattern.
+  const saveLeaverInstanceToDB = (instance) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
+      id: instance.id, org_id: org.id,
       name: instance.name, role: instance.role||null, department: instance.department||null,
       manager: instance.manager||null, email: instance.email||null, last_working_day: instance.lastWorkingDay||null,
       reason: instance.reason||null,
@@ -2423,9 +2465,20 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised,
       exit_interview_notes: instance.exitInterviewNotes||null, exit_interview_date: instance.exitInterviewDate||null,
       created_by: instance.createdBy||null,
-      updated_at: new Date().toISOString(),
-    });
-    if(error) { console.error('saveLeaverInstanceToDB', error); showToast("Couldn't save offboarding record — "+error.message, "error"); }
+    };
+    const run = async () => {
+      const updatedAt = leaverVersionRef.current[instance.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withTransientRetry(() => conditionalUpdate(supabase, 'leaver_instances', instance.id, updatedAt, {...fields, updated_at: nowIso}));
+      if(conflict) {
+        showToast("This offboarding checklist was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadLeaverInstances();
+        return;
+      }
+      if(error) { console.error('saveLeaverInstanceToDB', error); showToast("Couldn't save offboarding record — "+error.message, "error"); return; }
+      leaverVersionRef.current[instance.id] = nowIso;
+    };
+    return enqueueSave(leaverSaveQueueRef.current, instance.id, run);
   };
 
   // ── Employee Portal access management ──
@@ -2907,18 +2960,20 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } catch(e) { console.error('loadAllegations', e); }
   };
 
-  // Phase 6.5 hardening (P0, Clusters 6+7) — previously a blind upsert on
-  // every keystroke (AllegationsPanel's textareas called onChange straight
-  // through to patchAllegation, no debounce), so two people editing
-  // different fields of the same allegation within the same window could
-  // silently clobber each other's changes — a full-row upsert, not a
-  // patch, so the loser's edit doesn't just "lose a race," it vanishes
-  // from the saved row entirely. AllegationsPanel now persists on blur
-  // (see DraftField there) instead of per keystroke, and this now does a
-  // conditionalUpdate (src/lib/optimisticSave.js, the same guard
-  // saveCaseToDB already uses) instead of an unconditional upsert — a
-  // stale write is rejected as a conflict and reloaded, never silently
-  // applied over someone else's more recent save.
+  // Phase 6.5 hardening (P0, Clusters 6+7; retry added in the data-integrity
+  // review pass) — previously a blind upsert on every keystroke
+  // (AllegationsPanel's textareas called onChange straight through to
+  // patchAllegation, no debounce), so two people editing different fields
+  // of the same allegation within the same window could silently clobber
+  // each other's changes — a full-row upsert, not a patch, so the loser's
+  // edit doesn't just "lose a race," it vanishes from the saved row
+  // entirely. AllegationsPanel now persists on blur (see DraftTextarea
+  // there) instead of per keystroke, and this now does a conditionalUpdate
+  // (src/lib/optimisticSave.js, the same guard saveCaseToDB already uses)
+  // instead of an unconditional upsert — a stale write is rejected as a
+  // conflict and reloaded, never silently applied over someone else's more
+  // recent save. enqueueSave/withTransientRetry (same module) add ordering
+  // and one retry on a genuine transient failure.
   const saveAllegationToDB = (allegation) => {
     if(!org?.id) return Promise.resolve();
     const fields = {
@@ -2937,11 +2992,14 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // reads the version ref (not allegation.updatedAt) at execution time,
     // so a save queued behind an earlier one always checks against what
     // that earlier save actually produced, never a value captured before
-    // it ran.
+    // it ran. withTransientRetry gives a genuine network blip one retry
+    // before surfacing an error — a conflict is never retried this way,
+    // since trying the same stale write again wouldn't resolve it; the
+    // reload path below is the correct response to that instead.
     const run = async () => {
       const updatedAt = allegationVersionRef.current[allegation.id];
       const nowIso = new Date().toISOString();
-      const { error, conflict } = await withFkRetry(() => conditionalUpdate(supabase, 'allegations', allegation.id, updatedAt, {...fields, updated_at: nowIso}));
+      const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'allegations', allegation.id, updatedAt, {...fields, updated_at: nowIso})));
       if(conflict) {
         showToast("This allegation was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
         loadAllegations();
@@ -2951,11 +3009,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       allegationVersionRef.current[allegation.id] = nowIso;
       setAllegations(prev => prev.map(a => a.id===allegation.id ? {...a, updatedAt: nowIso} : a));
     };
-    const queue = allegationSaveQueueRef.current;
-    const prevChain = queue[allegation.id] || Promise.resolve();
-    const thisChain = prevChain.then(run, run); // run even if the previous save in the chain errored — one failure shouldn't wedge every later save for this row
-    queue[allegation.id] = thisChain;
-    return thisChain;
+    return enqueueSave(allegationSaveQueueRef.current, allegation.id, run);
   };
 
   const deleteAllegationFromDB = async (allegationId) => {

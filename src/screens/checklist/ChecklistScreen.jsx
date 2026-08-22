@@ -1,8 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Btn, Card, Badge } from '../../components/Primitives';
 import { DateInput } from '../../components/DateInput';
 import { CheckIcon } from '../../components/Icons';
 import { useLoadMore } from '../../hooks/useLoadMore';
+
+// Phase 6.5 hardening (P0, data-integrity review) — the per-task note
+// field called updateTaskNote straight through onChange, a database
+// write on every keystroke of the WHOLE tasks array (see
+// updateStarterTaskNote/updateLeaverTaskNote in App.jsx) — the exact
+// same pattern AllegationsPanel.jsx's own DraftTextarea already fixed
+// for allegation fields (Clusters 6/7). Same shape here: a local draft
+// persists only on blur or unmount (so collapsing/navigating away
+// without a natural blur doesn't drop the last edit), never per
+// keystroke.
+function DraftInput({ value, onCommit, ...rest }) {
+  const [draft, setDraft] = useState(value || "");
+  const draftRef = useRef(draft);
+  const valueRef = useRef(value);
+  const onCommitRef = useRef(onCommit);
+  useEffect(() => { draftRef.current = draft; onCommitRef.current = onCommit; });
+
+  useEffect(() => {
+    if (value !== valueRef.current) { setDraft(value || ""); valueRef.current = value; }
+  }, [value]);
+
+  useEffect(() => () => {
+    if (draftRef.current !== (valueRef.current || "")) onCommitRef.current(draftRef.current);
+  }, []);
+
+  const commit = () => { if (draft !== (value || "")) { onCommit(draft); valueRef.current = draft; } };
+
+  return <input {...rest} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} />;
+}
 
 // Shared by NewStarterScreen (onboarding) and OffboardingScreen (used to be
 // two ~230-line hand-copied files that had already drifted — offboarding
@@ -229,7 +258,7 @@ export function ChecklistScreen({
                           </div>
                           {task.note&&<div style={{fontSize:11,color:"#6B6375",marginTop:4,fontStyle:"italic"}}>{task.note}</div>}
                         </div>
-                        <input aria-label={`Note for ${task.task}`} placeholder="Add note..." value={task.note||""} onChange={e=>updateTaskNote(active.id,task.id,e.target.value)}
+                        <DraftInput aria-label={`Note for ${task.task}`} placeholder="Add note..." value={task.note||""} onCommit={v=>updateTaskNote(active.id,task.id,v)}
                           style={{background:"none",border:"none",borderBottom:"1px solid #E8E0D0",color:"#6B6880",fontSize:11,outline:"none",width:140,padding:"2px 4px"}}/>
                         <button onClick={()=>removeTask(active.id,task.id)} title="Remove task"
                           style={{background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontSize:14,padding:"0 2px",flexShrink:0,marginTop:2}}>×</button>

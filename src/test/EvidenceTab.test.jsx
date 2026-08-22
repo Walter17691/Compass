@@ -70,4 +70,28 @@ describe('EvidenceTab — findings keyed by evidence id, not array position', ()
     await user.click(screen.getByRole('button', { name: 'Accept' }));
     expect(onAcceptFinding).toHaveBeenCalledWith('ev2', findings['c1::ev2'][0]);
   });
+
+  // Task's own required scenario: A, B, C evidence; analyse B; delete A;
+  // confirm B retains B's analysis; confirm C never displays B's analysis.
+  it('A/B/C evidence: analysing B and then deleting A leaves B\'s analysis intact and never leaks onto C', () => {
+    const threeItemCase = {
+      id: 'c1', employeeName: 'Sarah Jones',
+      evidence: [
+        { id: 'evA', name: 'a.txt', type: 'text/plain', size: 10, date: '2026-01-01' },
+        { id: 'evB', name: 'b.txt', type: 'text/plain', size: 20, date: '2026-01-02' },
+        { id: 'evC', name: 'c.txt', type: 'text/plain', size: 30, date: '2026-01-03' },
+      ],
+    };
+    const findings = {
+      'c1::evB': [{ id: 'fB', type: 'inconsistency', description: 'B\'s own finding', status: 'open' }],
+    };
+    // "Delete A" — A is simply no longer in cs.evidence; B and C are untouched.
+    const afterDeletingA = { id: 'c1', employeeName: 'Sarah Jones', evidence: [threeItemCase.evidence[1], threeItemCase.evidence[2]] };
+    render(<EvidenceTab cs={afterDeletingA} cases={[afterDeletingA]} saveCases={()=>{}} fmtDate={fmtDate} documentFindings={findings} />);
+
+    // B retains its own analysis, and it appears exactly once — never
+    // duplicated onto C's row.
+    expect(screen.getAllByText('Potential inconsistency: B\'s own finding')).toHaveLength(1);
+    expect(screen.getByText('c.txt')).toBeInTheDocument();
+  });
 });

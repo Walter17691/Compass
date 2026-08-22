@@ -61,6 +61,37 @@ describe('buildHearingPackSections', () => {
     expect(sections.evidence).toEqual([{ name: 'CCTV clip', type: 'Video', date: '2026-07-03', addedBy: 'HR Manager' }]);
   });
 
+  // Task's own required scenario: with several evidence items and several
+  // allegations, each allegation's evidence section must include the
+  // correct document (matched by id via evidenceForAllegation), and
+  // reordering the evidence array must not corrupt which document lands
+  // under which allegation.
+  it('includes the correct linked document per allegation among several, and survives evidence reordering', () => {
+    const allegations = [
+      { id: 'a1', caseId: 'c1', title: 'Late arrivals', description: '' },
+      { id: 'a2', caseId: 'c1', title: 'Missing till float', description: '' },
+    ];
+    const evidence = [
+      { id: 'evA', name: 'Clock-in log', type: 'Document', date: '2026-07-02', allegationId: 'a1' },
+      { id: 'evB', name: 'Till reconciliation', type: 'Document', date: '2026-07-04', allegationId: 'a2' },
+      { id: 'evC', name: 'Unrelated memo', type: 'Document', date: '2026-07-05' },
+    ];
+    const cs = { ...baseCase, evidence };
+    const sections = buildHearingPackSections(cs, { allegations });
+    const byTitle = t => sections.allegations.find(a => a.title === t);
+    expect(byTitle('Late arrivals').evidence).toEqual([{ name: 'Clock-in log', type: 'Document', date: '2026-07-02' }]);
+    expect(byTitle('Missing till float').evidence).toEqual([{ name: 'Till reconciliation', type: 'Document', date: '2026-07-04' }]);
+
+    // Reordering evidence (e.g. after a delete/re-add elsewhere in the
+    // app) must produce the exact same associations, matched by id, not
+    // by position.
+    const reordered = { ...cs, evidence: [evidence[2], evidence[1], evidence[0]] };
+    const reorderedSections = buildHearingPackSections(reordered, { allegations });
+    const reorderedByTitle = t => reorderedSections.allegations.find(a => a.title === t);
+    expect(reorderedByTitle('Late arrivals').evidence).toEqual([{ name: 'Clock-in log', type: 'Document', date: '2026-07-02' }]);
+    expect(reorderedByTitle('Missing till float').evidence).toEqual([{ name: 'Till reconciliation', type: 'Document', date: '2026-07-04' }]);
+  });
+
   it('includes only policies whose category matches the case type', () => {
     const policies = [
       { name: 'Disciplinary Policy', category: 'disciplinary', clauses: [{ heading: 'Notice', text: '5 days notice' }] },

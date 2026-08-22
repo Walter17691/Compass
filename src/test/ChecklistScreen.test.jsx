@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ChecklistScreen } from '../screens/checklist/ChecklistScreen.jsx';
 
 // Phase 6.5 hardening (Batch 13) — the new-instance form fields
@@ -44,5 +45,43 @@ describe('ChecklistScreen — field labelling (Phase 6.5, Batch 13)', () => {
     expect(screen.getByLabelText('Owner for Send welcome email')).toBeInTheDocument();
     expect(screen.getByLabelText('Note for Send welcome email')).toBeInTheDocument();
     expect(screen.getByLabelText('Add task to Week 1')).toBeInTheDocument();
+  });
+});
+
+// Phase 6.5 hardening (P0, data-integrity review) — the per-task note
+// field used to call updateTaskNote (a database write of the whole tasks
+// array) on every keystroke via onChange. Now persists only on blur, via
+// a local draft (DraftInput in ChecklistScreen.jsx) — same fix, same
+// test shape, as AllegationsPanel's own DraftTextarea coverage.
+describe('ChecklistScreen — debounced note persistence (no per-keystroke writes)', () => {
+  const active = {
+    id: 'i1', name: 'Sam Employee', role: '', department: '',
+    tasks: [{ id: 'task1', task: 'Send welcome email', owner: 'HR', note: 'Initial note', done: false, phaseLabel: 'Week 1' }],
+  };
+
+  it('does not call updateTaskNote while typing, and calls it exactly once on blur', async () => {
+    const user = userEvent.setup();
+    const updateTaskNote = vi.fn();
+    render(<ChecklistScreen {...baseProps} active={active} view="instance" updateTaskNote={updateTaskNote} />);
+
+    const field = screen.getByLabelText('Note for Send welcome email');
+    await user.click(field);
+    await user.type(field, ' plus more');
+    expect(updateTaskNote).not.toHaveBeenCalled();
+
+    await user.tab(); // blur
+    expect(updateTaskNote).toHaveBeenCalledTimes(1);
+    expect(updateTaskNote).toHaveBeenCalledWith('i1', 'task1', 'Initial note plus more');
+  });
+
+  it('does not call updateTaskNote on blur if the value never actually changed', async () => {
+    const user = userEvent.setup();
+    const updateTaskNote = vi.fn();
+    render(<ChecklistScreen {...baseProps} active={active} view="instance" updateTaskNote={updateTaskNote} />);
+
+    const field = screen.getByLabelText('Note for Send welcome email');
+    await user.click(field);
+    await user.tab(); // blur with no edits
+    expect(updateTaskNote).not.toHaveBeenCalled();
   });
 });

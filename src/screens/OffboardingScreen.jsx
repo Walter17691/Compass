@@ -1,6 +1,35 @@
+import { useState, useEffect, useRef } from 'react';
 import { ChecklistScreen } from './checklist/ChecklistScreen';
 import { Btn, Card } from '../components/Primitives';
 import { DateInput } from '../components/DateInput';
+
+// Phase 6.5 hardening (P0, data-integrity review) — exit-interview notes
+// called updateLeaverExitInterview (a full leaver_instances upsert)
+// straight through onChange, a database write on every keystroke of a
+// free-text field — same pattern as ChecklistScreen.jsx's own per-task
+// note field (see its DraftInput). Same fix here: a local draft persists
+// only on blur or unmount. Defined at module scope (not inside
+// OffboardingScreen) so its local draft state survives re-renders of the
+// renderExtraSidebar render-prop that uses it.
+function DraftTextarea({ value, onCommit, ...rest }) {
+  const [draft, setDraft] = useState(value || "");
+  const draftRef = useRef(draft);
+  const valueRef = useRef(value);
+  const onCommitRef = useRef(onCommit);
+  useEffect(() => { draftRef.current = draft; onCommitRef.current = onCommit; });
+
+  useEffect(() => {
+    if (value !== valueRef.current) { setDraft(value || ""); valueRef.current = value; }
+  }, [value]);
+
+  useEffect(() => () => {
+    if (draftRef.current !== (valueRef.current || "")) onCommitRef.current(draftRef.current);
+  }, []);
+
+  const commit = () => { if (draft !== (value || "")) { onCommit(draft); valueRef.current = draft; } };
+
+  return <textarea {...rest} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} />;
+}
 
 const REASON_LABELS = {
   resignation: "Resignation",
@@ -62,11 +91,11 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
             <label htmlFor="offboarding-exit-interview-date" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Date</label>
             <DateInput id="offboarding-exit-interview-date" value={active.exitInterviewDate||""} onChange={e=>updateLeaverExitInterview(active.id,{exitInterviewDate:e.target.value})} />
             <label htmlFor="offboarding-exit-interview-notes" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",margin:"12px 0 5px"}}>Notes</label>
-            <textarea id="offboarding-exit-interview-notes" placeholder="What did they say? Reasons for leaving, feedback, anything to follow up on..."
+            <DraftTextarea id="offboarding-exit-interview-notes" placeholder="What did they say? Reasons for leaving, feedback, anything to follow up on..."
               value={active.exitInterviewNotes||""}
-              onChange={e=>updateLeaverExitInterview(active.id,{exitInterviewNotes:e.target.value})}
+              onCommit={v=>updateLeaverExitInterview(active.id,{exitInterviewNotes:v})}
               rows={5}
-              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535",boxSizing:"border-box"}} ></textarea>
+              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 10px",fontSize:12,outline:"none",resize:"vertical",color:"#1A1535",boxSizing:"border-box"}} />
           </Card>
           {hasPortalAccess&&(
             <Card style={{marginBottom:12}}>
