@@ -129,18 +129,18 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
               </div>
             )}
 
-            <label style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
-            <input placeholder="e.g. Sarah Jones" value={userName} onChange={e=>setUserName(e.target.value)} style={inp}/>
+            <label htmlFor="org-setup-user-name" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+            <input id="org-setup-user-name" placeholder="e.g. Sarah Jones" value={userName} onChange={e=>setUserName(e.target.value)} style={inp}/>
 
             {mode==='create'?(
               <>
-                <label style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Organisation name</label>
-                <input placeholder="e.g. Acme Ltd HR Team" value={orgName} onChange={e=>setOrgName(e.target.value)} style={inp}/>
+                <label htmlFor="org-setup-org-name" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Organisation name</label>
+                <input id="org-setup-org-name" placeholder="e.g. Acme Ltd HR Team" value={orgName} onChange={e=>setOrgName(e.target.value)} style={inp}/>
               </>
             ):(
               <>
-                <label style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Invite code</label>
-                <input placeholder="e.g. ABC123" value={inviteCode} onChange={e=>setInviteCode(e.target.value)} style={{...inp,textTransform:"uppercase",letterSpacing:2}}/>
+                <label htmlFor="org-setup-invite-code" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Invite code</label>
+                <input id="org-setup-invite-code" placeholder="e.g. ABC123" value={inviteCode} onChange={e=>setInviteCode(e.target.value)} style={{...inp,textTransform:"uppercase",letterSpacing:2}}/>
                 <div style={{fontSize:11,color:MUTED,margin:"-6px 0 12px"}}>You'll join as a Location Manager — an HR Director can grant broader access afterward from Settings.</div>
               </>
             )}
