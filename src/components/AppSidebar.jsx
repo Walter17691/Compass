@@ -64,7 +64,10 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     // supabase/wellbeing_notes_2026-08-09.sql) — a non-HR role has no
     // database access to them, so don't even show the link.
     ...(isHR ? [{s:SCREENS.WELLBEING, l:"Wellbeing"}] : []),
-    {s:SCREENS.DSAR, l:"DSAR"},
+    // DSAR requests are RLS-restricted to HR staff (see
+    // supabase/dsar_hr_only_access_2026-08-22.sql) — same reasoning as
+    // Wellbeing above.
+    ...(isHR ? [{s:SCREENS.DSAR, l:"DSAR"}] : []),
     {s:SCREENS.SAVE_EMAIL, l:"Save email to case"},
   ];
   const allNavItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];
