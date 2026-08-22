@@ -23,7 +23,7 @@ function PrepQuestionRow({ q, index, total, linkedCaseAllegations, linkedCaseEvi
           {q.essential?"★":"☆"}
         </button>
         <div style={{flex:1,minWidth:0}}>
-          <input value={q.text} onChange={e=>onUpdateText(e.target.value)} placeholder="Question text..."
+          <input aria-label={`Question ${index+1} text`} value={q.text} onChange={e=>onUpdateText(e.target.value)} placeholder="Question text..."
             style={{width:"100%",fontSize:13,color:"#1A1535",border:"none",background:"none",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}/>
           <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4,flexWrap:"wrap"}}>
             <span style={{fontSize:10,fontWeight:600,color:"#6B6880",background:"#F0EAD8",borderRadius:4,padding:"1px 6px",textTransform:"uppercase",letterSpacing:0.3}}>{CATEGORY_LABEL[q.category]||"General"}</span>
@@ -33,14 +33,14 @@ function PrepQuestionRow({ q, index, total, linkedCaseAllegations, linkedCaseEvi
               </button>
             )}
             {linkedCaseAllegations.length>0&&(
-              <select value={q.linkedAllegationId||""} onChange={e=>onLinkAllegation(e.target.value)}
+              <select aria-label={`Link question ${index+1} to allegation`} value={q.linkedAllegationId||""} onChange={e=>onLinkAllegation(e.target.value)}
                 style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:5,padding:"2px 4px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                 <option value="">Link to allegation…</option>
                 {linkedCaseAllegations.map(a=><option key={a.id} value={a.id}>{a.title}</option>)}
               </select>
             )}
             {linkedCaseEvidence.length>0&&(
-              <select value={q.linkedEvidenceId??""} onChange={e=>onLinkEvidence(e.target.value)}
+              <select aria-label={`Link question ${index+1} to evidence`} value={q.linkedEvidenceId??""} onChange={e=>onLinkEvidence(e.target.value)}
                 style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:5,padding:"2px 4px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                 <option value="">Link to evidence…</option>
                 {linkedCaseEvidence.map(ev=><option key={ev.id} value={ev.id}>{ev.name}</option>)}
@@ -72,8 +72,8 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
       <p style={{fontSize:14,color:"#6B6880",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
 
       <div style={{textAlign:"left",marginBottom:16}}>
-        <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#C84B2F"}}>*</span></label>
-        <select value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
+        <label htmlFor="prep-meeting-type" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#C84B2F"}}>*</span></label>
+        <select id="prep-meeting-type" value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
           style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#1C1820":"#9B9098",boxSizing:"border-box"}}>
           <option value="" disabled>Select meeting type...</option>
           <option disabled style={{color:"#6B6880"}}>── ER Meetings ──</option>
@@ -88,8 +88,8 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
       </div>
 
       <div style={{textAlign:"left",marginBottom:16}}>
-        <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#C84B2F"}}>*</span></label>
-        <input autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
+        <label htmlFor="prep-employee-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#C84B2F"}}>*</span></label>
+        <input id="prep-employee-name" autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
           onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
           style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
       </div>
@@ -100,15 +100,15 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
       </div>
 
       <div style={{textAlign:"left",marginBottom:16}}>
-        <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
-        <input placeholder="Chair / HR manager name" value={caseInfo.manager}
+        <label htmlFor="prep-manager-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+        <input id="prep-manager-name" placeholder="Chair / HR manager name" value={caseInfo.manager}
           onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
           style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
       </div>
 
       <div style={{textAlign:"left",marginBottom:32}}>
-        <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
-        <textarea value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
+        <label htmlFor="prep-background" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
+        <textarea id="prep-background" value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
           placeholder="Previous warnings, allegations, relevant history, reasonable adjustments..."
           rows={4} style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
       </div>
