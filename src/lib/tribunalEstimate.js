@@ -3,8 +3,25 @@
 // Statutory caps below update every April in line with RPI; these are the
 // last figures confirmed and should be checked against
 // gov.uk/employment-tribunal-compensation-limits before being relied on.
+import { daysSince } from './dateMath.js';
+
 const STATUTORY_WEEK_PAY_CAP = 700; // basic award week's-pay cap
 const COMPENSATORY_AWARD_CAP = 115115; // ordinary unfair dismissal cap
+
+// Phase 6.5 hardening — the two caps above were previously a silent
+// staleness risk: nothing forced anyone to notice when a new April
+// uprating had passed them by. CAPS_AS_OF is the date the two figures
+// above were last confirmed against gov.uk; STALE_AFTER_DAYS (~13
+// months) gives one annual cycle plus slack for the update to actually
+// land, rather than firing the moment a new tax year starts. Update
+// CAPS_AS_OF whenever the caps themselves are next verified/changed.
+export const CAPS_AS_OF = "2026-08-22";
+const STALE_AFTER_DAYS = 395;
+
+export function capsAreStale(now = new Date()) {
+  const days = daysSince(CAPS_AS_OF, now);
+  return days == null ? false : days > STALE_AFTER_DAYS;
+}
 
 // Discrimination and whistleblowing dismissals are not subject to the
 // compensatory award cap (Equality Act 2010 / ERA 1996 s.124(1A)).
@@ -57,5 +74,6 @@ export function estimateExposure({ weeklyPay, ageAtDismissal, yearsService, case
     totalLow: basic + comp.low,
     totalHigh: basic + comp.high,
     ageAssumed: !ageAtDismissal,
+    capsStale: capsAreStale(),
   };
 }

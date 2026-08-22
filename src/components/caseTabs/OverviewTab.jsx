@@ -1,4 +1,5 @@
 import { estimateExposure } from '../../lib/tribunalEstimate';
+import { WarningIcon } from '../Icons';
 import { openSignalsForCase } from '../../lib/caseSignals';
 import { computeCaseRisk } from '../../lib/caseRisk';
 import { evaluateAutomationRules } from '../../lib/automationRules';
@@ -79,6 +80,7 @@ export function OverviewTab({
             <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
               <div style={{fontSize:13,color:"#1A1535"}}>Indicative exposure: <strong>{fmtGBP(exposure.totalLow)} – {fmtGBP(exposure.totalHigh)}</strong>{exposure.compensatoryUncapped&&<span style={{color:"#C84B2F"}}> (compensatory award uncapped)</span>}</div>
               <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>Basic award {fmtGBP(exposure.basicAward)} + compensatory range {fmtGBP(exposure.compensatoryLow)}–{fmtGBP(exposure.compensatoryHigh)}.{exposure.ageAssumed?" Assumes age 22-40 band — enter age for a more accurate estimate.":""} Indicative only — not legal advice, statutory caps change annually.</div>
+              {exposure.capsStale&&<div style={{fontSize:11,color:"#C84B2F",marginTop:4,fontWeight:600,display:"flex",alignItems:"center",gap:5}}><WarningIcon size={12} color="#C84B2F" style={{flexShrink:0}}/>These statutory caps haven't been re-verified against gov.uk in over a year — they may be out of date. Check gov.uk/employment-tribunal-compensation-limits before relying on this figure.</div>}
             </div>
           )}
         </div>

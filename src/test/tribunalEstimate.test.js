@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estimateExposure } from '../lib/tribunalEstimate.js';
+import { estimateExposure, capsAreStale, CAPS_AS_OF } from '../lib/tribunalEstimate.js';
 
 describe('estimateExposure', () => {
   it('returns null when no weekly pay is given', () => {
@@ -47,5 +47,26 @@ describe('estimateExposure', () => {
     const r = estimateExposure({ weeklyPay: 500, ageAtDismissal: 30, yearsService: 3, caseType: 'Grievance' });
     expect(r.totalLow).toBe(r.basicAward + r.compensatoryLow);
     expect(r.totalHigh).toBe(r.basicAward + r.compensatoryHigh);
+  });
+
+  it('is not stale right after CAPS_AS_OF', () => {
+    expect(capsAreStale(new Date(CAPS_AS_OF))).toBe(false);
+  });
+
+  it('is not stale a few months after CAPS_AS_OF', () => {
+    const sixMonthsLater = new Date(CAPS_AS_OF);
+    sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+    expect(capsAreStale(sixMonthsLater)).toBe(false);
+  });
+
+  it('is stale more than ~13 months after CAPS_AS_OF', () => {
+    const fourteenMonthsLater = new Date(CAPS_AS_OF);
+    fourteenMonthsLater.setMonth(fourteenMonthsLater.getMonth() + 14);
+    expect(capsAreStale(fourteenMonthsLater)).toBe(true);
+  });
+
+  it('surfaces capsStale on the exposure result', () => {
+    const fresh = estimateExposure({ weeklyPay: 500, ageAtDismissal: 30, yearsService: 3 });
+    expect(fresh.capsStale).toBe(false);
   });
 });
