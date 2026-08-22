@@ -72,27 +72,27 @@ function TemplateEditor({ kind, templates, saveTemplates, promptDialog, confirmD
             {expanded && (
               <div style={{ marginTop: 16, borderTop: "1px solid #E8E0D0", paddingTop: 16 }}>
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#6B6880", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 5 }}>Template name</label>
-                  <input value={tpl.name} onChange={e => updateTemplate(tpl.id, { name: e.target.value })}
+                  <label htmlFor={`template-name-${tpl.id}`} style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#6B6880", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 5 }}>Template name</label>
+                  <input id={`template-name-${tpl.id}`} value={tpl.name} onChange={e => updateTemplate(tpl.id, { name: e.target.value })}
                     style={{ width: "100%", background: "#FDFAF5", border: "1px solid #E8E0D0", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#1A1535", outline: "none", boxSizing: "border-box" }} />
                 </div>
 
-                {tpl.phases.map(ph => (
+                {tpl.phases.map((ph,phIdx) => (
                   <div key={ph.id} style={{ background: "#FDFAF5", border: "1px solid #E8E0D0", borderRadius: 8, padding: 12, marginBottom: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      <input value={ph.label} onChange={e => updatePhase(tpl, ph.id, { label: e.target.value })}
+                      <input aria-label={`Phase ${phIdx+1} name`} value={ph.label} onChange={e => updatePhase(tpl, ph.id, { label: e.target.value })}
                         style={{ flex: 1, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "#1A1535", outline: "none" }} />
                       <button onClick={() => removePhase(tpl, ph.id)} aria-label="Remove phase" style={{ background: "none", border: "none", color: "#9B9098", cursor: "pointer", display: "flex", padding: 4 }}><CrossIcon size={12} /></button>
                     </div>
-                    {ph.tasks.map(t => (
+                    {ph.tasks.map((t,tIdx) => (
                       <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                        <input value={t.task} onChange={e => updateTask(tpl, ph.id, t.id, { task: e.target.value })} placeholder="Task"
+                        <input aria-label={`Phase ${phIdx+1} task ${tIdx+1} name`} value={t.task} onChange={e => updateTask(tpl, ph.id, t.id, { task: e.target.value })} placeholder="Task"
                           style={{ flex: 1, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 10px", fontSize: 12, color: "#1A1535", outline: "none" }} />
-                        <select value={t.owner} onChange={e => updateTask(tpl, ph.id, t.id, { owner: e.target.value })}
+                        <select aria-label={`Phase ${phIdx+1} task ${tIdx+1} owner`} value={t.owner} onChange={e => updateTask(tpl, ph.id, t.id, { owner: e.target.value })}
                           style={{ width: 110, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 6px", fontSize: 11, color: "#1A1535", outline: "none" }}>
                           {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
-                        <input type="number" value={t.day} onChange={e => updateTask(tpl, ph.id, t.id, { day: parseInt(e.target.value) || 0 })} title="Day offset from start/last day (negative = before)"
+                        <input aria-label={`Phase ${phIdx+1} task ${tIdx+1} day offset`} type="number" value={t.day} onChange={e => updateTask(tpl, ph.id, t.id, { day: parseInt(e.target.value) || 0 })} title="Day offset from start/last day (negative = before)"
                           style={{ width: 56, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 6px", fontSize: 11, color: "#1A1535", outline: "none", textAlign: "center" }} />
                         <button onClick={() => removeTask(tpl, ph.id, t.id)} aria-label="Remove task" style={{ background: "none", border: "none", color: "#9B9098", cursor: "pointer", display: "flex", padding: 4, flexShrink: 0 }}><CrossIcon size={11} /></button>
                       </div>
