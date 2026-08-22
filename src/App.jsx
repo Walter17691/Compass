@@ -7604,46 +7604,32 @@ Please produce:
       {screen===SCREENS.INSIGHTS&&(
         <InsightsScreen
           isHR={isHR}
-          cases={cases}
-          caseAccess={caseAccess}
-          hrReviewRequests={hrReviewRequests}
-          auditLog={auditLog}
-          dueSoon={dueSoon}
-          caseTasks={caseTasks}
-          createCaseTask={createCaseTask}
-          managerCapabilityInsights={managerCapabilityInsights}
-          generatingManagerInsight={generatingManagerInsight}
-          onGenerateManagerInsight={generateManagerCapabilityInsight}
-          employeeRecords={employeeRecords}
-          setReportNarrative={setReportNarrative}
-          reportNarrative={reportNarrative}
-          setActiveCaseId={setActiveCaseId}
-          setActiveCaseStage={setActiveCaseStage}
-          setScreen={setScreen}
-          setActivePerson={setActivePerson}
-          getCaseStage={getCaseStage}
-          getNextStep={getNextStep}
-          fmtDate={fmtDate}
-          loadJsPDF={loadJsPDF}
-          processTemplates={processTemplates}
-          organisationThemes={organisationThemes}
-          caseThemes={caseThemes}
-          onAddOrganisationTheme={addOrganisationTheme}
-          onUpdateOrganisationTheme={updateOrganisationTheme}
-          allegations={allegations}
-          caseSignals={caseSignals}
-          policies={policies}
-          orgMembers={orgMembers}
-          orgEvents={orgEvents}
-          onAddOrgEvent={addOrgEvent}
-          improvementInitiatives={improvementInitiatives}
-          onAddImprovementInitiative={addImprovementInitiative}
-          onUpdateImprovementInitiative={updateImprovementInitiative}
-          org={org}
-          user={user}
-          memberName={member?.name||user?.email}
-          initialSection={insightsSection}
-          clearInitialSection={()=>setInsightsSection(null)}
+          deepLink={{
+            initialSection: insightsSection,
+            clearInitialSection: ()=>setInsightsSection(null),
+          }}
+          caseData={{
+            cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks,
+            allegations, caseSignals, employeeRecords, policies, orgMembers, processTemplates,
+          }}
+          orgIntel={{
+            organisationThemes, caseThemes, orgEvents, improvementInitiatives,
+            managerCapabilityInsights, generatingManagerInsight,
+          }}
+          orgIntelActions={{
+            onAddOrganisationTheme: addOrganisationTheme,
+            onUpdateOrganisationTheme: updateOrganisationTheme,
+            onAddOrgEvent: addOrgEvent,
+            onAddImprovementInitiative: addImprovementInitiative,
+            onUpdateImprovementInitiative: updateImprovementInitiative,
+            onGenerateManagerInsight: generateManagerCapabilityInsight,
+            createCaseTask,
+          }}
+          reporting={{
+            reportNarrative, setReportNarrative, getCaseStage, getNextStep, fmtDate, loadJsPDF,
+            org, user, memberName: member?.name||user?.email,
+          }}
+          nav={{ setScreen, setActiveCaseId, setActiveCaseStage, setActivePerson }}
         />
       )}
 

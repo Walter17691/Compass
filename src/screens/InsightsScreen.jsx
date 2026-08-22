@@ -22,7 +22,15 @@ import { ImprovementInitiativesPanel } from '../components/ImprovementInitiative
 // ManagerInsightsScreen/ErReportScreen unchanged — this phase gives them
 // a shared home, it does not rebuild them.
 
-export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, auditLog, dueSoon, caseTasks, createCaseTask, managerCapabilityInsights, generatingManagerInsight, onGenerateManagerInsight, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getCaseStage, getNextStep, fmtDate, loadJsPDF, processTemplates, organisationThemes, caseThemes, onAddOrganisationTheme, onUpdateOrganisationTheme, allegations, caseSignals, policies, orgMembers, orgEvents, onAddOrgEvent, improvementInitiatives, onAddImprovementInitiative, onUpdateImprovementInitiative, org, user, memberName, initialSection, clearInitialSection }) {
+export function InsightsScreen({
+  isHR,
+  deepLink = {},
+  caseData = {},
+  orgIntel = {},
+  orgIntelActions = {},
+  reporting = {},
+  nav = {},
+}) {
   // Reports and the org-wide dashboard/trends tabs stay as widely
   // reachable as ErReportScreen already was; Manager Insights, Org
   // Events, Risk Map, and Improvement Initiatives are HR-only, same
@@ -40,7 +48,7 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
     ...(isHR ? [{id:"improvement-initiatives", label:"Improvement Initiatives"}] : []),
     {id:"reports", label:"Reports"},
   ];
-  const [active, setActive] = useState(initialSection && sections.some(s=>s.id===initialSection) ? initialSection : "overview");
+  const [active, setActive] = useState(deepLink.initialSection && sections.some(s=>s.id===deepLink.initialSection) ? deepLink.initialSection : "overview");
 
   return (
     <div style={{maxWidth:1080,margin:"0 auto",padding:"40px 20px"}}>
@@ -48,75 +56,75 @@ export function InsightsScreen({ isHR, cases, caseAccess, hrReviewRequests, audi
       <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px"}}>What your Employee Relations data is telling you across every case — patterns, themes, and where to focus.</p>
 
       <div style={{display:"flex",gap:32,alignItems:"flex-start"}}>
-        <SettingsNav sections={sections} active={active} onChange={v=>{setActive(v); clearInitialSection?.();}} isMobile={false}/>
+        <SettingsNav sections={sections} active={active} onChange={v=>{setActive(v); deepLink.clearInitialSection?.();}} isMobile={false}/>
 
         <div style={{flex:1,minWidth:0}}>
           {active==="overview"&&(
             <OrganisationalIntelligenceOverview
-              cases={cases}
-              dueSoon={dueSoon}
-              hrReviewRequests={hrReviewRequests}
-              processTemplates={processTemplates}
-              employeeRecords={employeeRecords}
-              onOpenCase={(caseId, stageId)=>{setActiveCaseId(caseId); setActiveCaseStage(stageId); setScreen(SCREENS.CASE_VIEW);}}
-              allegations={allegations}
-              caseSignals={caseSignals}
-              caseTasks={caseTasks}
-              policies={policies}
-              caseAccess={caseAccess}
-              orgMembers={orgMembers}
-              caseThemes={caseThemes}
-              organisationThemes={organisationThemes}
+              cases={caseData.cases}
+              dueSoon={caseData.dueSoon}
+              hrReviewRequests={caseData.hrReviewRequests}
+              processTemplates={caseData.processTemplates}
+              employeeRecords={caseData.employeeRecords}
+              onOpenCase={(caseId, stageId)=>{nav.setActiveCaseId(caseId); nav.setActiveCaseStage(stageId); nav.setScreen(SCREENS.CASE_VIEW);}}
+              allegations={caseData.allegations}
+              caseSignals={caseData.caseSignals}
+              caseTasks={caseData.caseTasks}
+              policies={caseData.policies}
+              caseAccess={caseData.caseAccess}
+              orgMembers={caseData.orgMembers}
+              caseThemes={orgIntel.caseThemes}
+              organisationThemes={orgIntel.organisationThemes}
             />
           )}
           {active==="trends"&&(
             <>
-              <TrendsPanel createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>
-              <ThemeTaxonomyManager organisationThemes={organisationThemes} isHR={isHR} onAdd={onAddOrganisationTheme} onUpdate={onUpdateOrganisationTheme}/>
+              <TrendsPanel createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>
+              <ThemeTaxonomyManager organisationThemes={orgIntel.organisationThemes} isHR={isHR} onAdd={orgIntelActions.onAddOrganisationTheme} onUpdate={orgIntelActions.onUpdateOrganisationTheme}/>
             </>
           )}
-          {active==="early-signals"&&<EarlySignalsPanel createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
+          {active==="early-signals"&&<EarlySignalsPanel createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>}
           {active==="manager"&&isHR&&(
             <ManagerInsightsScreen
-              cases={cases}
-              caseAccess={caseAccess}
-              hrReviewRequests={hrReviewRequests}
-              auditLog={auditLog}
-              dueSoon={dueSoon}
-              caseTasks={caseTasks}
-              managerCapabilityInsights={managerCapabilityInsights}
-              generatingManagerInsight={generatingManagerInsight}
-              onGenerateManagerInsight={onGenerateManagerInsight}
+              cases={caseData.cases}
+              caseAccess={caseData.caseAccess}
+              hrReviewRequests={caseData.hrReviewRequests}
+              auditLog={caseData.auditLog}
+              dueSoon={caseData.dueSoon}
+              caseTasks={caseData.caseTasks}
+              managerCapabilityInsights={orgIntel.managerCapabilityInsights}
+              generatingManagerInsight={orgIntel.generatingManagerInsight}
+              onGenerateManagerInsight={orgIntelActions.onGenerateManagerInsight}
             />
           )}
-          {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgEvents} isHR={isHR} onAddEvent={onAddOrgEvent}/>}
-          {active==="risk-map"&&isHR&&<RiskMapPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} orgEvents={orgEvents} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
-          {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel improvementInitiatives={improvementInitiatives} isHR={isHR} onAdd={onAddImprovementInitiative} onUpdate={onUpdateImprovementInitiative} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes}/>}
+          {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgIntel.orgEvents} isHR={isHR} onAddEvent={orgIntelActions.onAddOrgEvent}/>}
+          {active==="risk-map"&&isHR&&<RiskMapPanel cases={caseData.cases} employeeRecords={caseData.employeeRecords} processTemplates={caseData.processTemplates} orgEvents={orgIntel.orgEvents} createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>}
+          {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel improvementInitiatives={orgIntel.improvementInitiatives} isHR={isHR} onAdd={orgIntelActions.onAddImprovementInitiative} onUpdate={orgIntelActions.onUpdateImprovementInitiative} caseTasks={caseData.caseTasks} cases={caseData.cases} organisationThemes={orgIntel.organisationThemes}/>}
           {active==="reports"&&(
             <>
-              <ExecutiveBriefPanel org={org} user={user} memberName={memberName} isHR={isHR}/>
-              <PeriodicReviewPanel org={org} user={user} memberName={memberName} isHR={isHR}/>
+              <ExecutiveBriefPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR}/>
+              <PeriodicReviewPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR}/>
               <ErReportScreen
-                cases={cases}
-                getCaseStage={getCaseStage}
-                employeeRecords={employeeRecords}
-                setReportNarrative={setReportNarrative}
-                reportNarrative={reportNarrative}
-                setActiveCaseId={setActiveCaseId}
-                setActiveCaseStage={setActiveCaseStage}
-                setScreen={setScreen}
-                setActivePerson={setActivePerson}
-                getNextStep={getNextStep}
-                fmtDate={fmtDate}
-                loadJsPDF={loadJsPDF}
-                caseThemes={caseThemes}
-                organisationThemes={organisationThemes}
+                cases={caseData.cases}
+                getCaseStage={reporting.getCaseStage}
+                employeeRecords={caseData.employeeRecords}
+                setReportNarrative={reporting.setReportNarrative}
+                reportNarrative={reporting.reportNarrative}
+                setActiveCaseId={nav.setActiveCaseId}
+                setActiveCaseStage={nav.setActiveCaseStage}
+                setScreen={nav.setScreen}
+                setActivePerson={nav.setActivePerson}
+                getNextStep={reporting.getNextStep}
+                fmtDate={reporting.fmtDate}
+                loadJsPDF={reporting.loadJsPDF}
+                caseThemes={orgIntel.caseThemes}
+                organisationThemes={orgIntel.organisationThemes}
               />
             </>
           )}
 
           <div style={{marginTop:24}}>
-            <Btn variant="ghost" onClick={()=>setScreen(SCREENS.HOME)}>← Back to home</Btn>
+            <Btn variant="ghost" onClick={()=>nav.setScreen(SCREENS.HOME)}>← Back to home</Btn>
           </div>
         </div>
       </div>

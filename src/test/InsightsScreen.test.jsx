@@ -12,14 +12,25 @@ const { InsightsScreen } = await import('../screens/InsightsScreen.jsx');
 // Organisational ER Intelligence (Phase 6, OP1) — the new Insights home.
 // getCaseStage/getNextStep/fmtDate are the same minimal stand-ins
 // ErReportScreen's/ManagerInsightsScreen's own tests already use.
+//
+// Phase 6.5 hardening (Batch 10b, task #205) — InsightsScreen's 41 flat
+// props are now 7 grouped objects (isHR stays flat). This fixture is
+// deliberately partial — every group defaults to {} in the component
+// itself, so a test only needs to supply what it actually exercises.
 const getCaseStage = () => "open";
-const requiredProps = {
+const caseData = {
   cases: [], caseAccess: [], hrReviewRequests: [], auditLog: [], dueSoon: [], caseTasks: [],
-  employeeRecords: [], setReportNarrative: () => {}, reportNarrative: "",
-  setActiveCaseId: () => {}, setActiveCaseStage: () => {}, setScreen: () => {},
-  setActivePerson: () => {}, getCaseStage, getNextStep: () => null, fmtDate: d => d,
-  loadJsPDF: () => {},
+  employeeRecords: [],
 };
+const reporting = {
+  setReportNarrative: () => {}, reportNarrative: "",
+  getCaseStage, getNextStep: () => null, fmtDate: d => d, loadJsPDF: () => {},
+};
+const nav = {
+  setActiveCaseId: () => {}, setActiveCaseStage: () => {}, setScreen: () => {},
+  setActivePerson: () => {},
+};
+const requiredProps = { caseData, reporting, nav };
 
 describe('InsightsScreen', () => {
   it('defaults to the Organisational Intelligence tab', () => {
@@ -80,7 +91,7 @@ describe('InsightsScreen', () => {
 
   it('switches to the Organisational Events tab and renders the real OrgEventsPanel content', async () => {
     const user = userEvent.setup();
-    render(<InsightsScreen isHR={true} {...requiredProps} orgEvents={[]}/>);
+    render(<InsightsScreen isHR={true} {...requiredProps} orgIntel={{ orgEvents: [] }}/>);
     await user.click(screen.getByRole('button', { name: 'Organisational Events' }));
     expect(screen.getByText('No organisational events logged yet.')).toBeInTheDocument();
   });
@@ -99,7 +110,7 @@ describe('InsightsScreen', () => {
   // doesn't break InsightsScreen itself.
   it('accepts a createCaseTask prop without breaking the Trends & Themes tab', async () => {
     const user = userEvent.setup();
-    render(<InsightsScreen isHR={true} {...requiredProps} createCaseTask={vi.fn()}/>);
+    render(<InsightsScreen isHR={true} {...requiredProps} orgIntelActions={{ createCaseTask: vi.fn() }}/>);
     await user.click(screen.getByRole('button', { name: 'Trends & Themes' }));
     expect(screen.getByText(/Loading trends/)).toBeInTheDocument();
   });
@@ -107,7 +118,7 @@ describe('InsightsScreen', () => {
   // Organisational ER Intelligence (Phase 6, OP22, §18)
   it('switches to the Improvement Initiatives tab and renders the real panel content', async () => {
     const user = userEvent.setup();
-    render(<InsightsScreen isHR={true} {...requiredProps} improvementInitiatives={[]}/>);
+    render(<InsightsScreen isHR={true} {...requiredProps} orgIntel={{ improvementInitiatives: [] }}/>);
     await user.click(screen.getByRole('button', { name: 'Improvement Initiatives' }));
     expect(screen.getByText('No improvement initiatives yet.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ New initiative' })).toBeInTheDocument();
