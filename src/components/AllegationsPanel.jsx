@@ -125,21 +125,21 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
         {showNew && (
           <div style={{background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:14,marginBottom:allegations.length>0?14:0}}>
             <div style={{marginBottom:10}}>
-              <label style={labelStyle}>Title</label>
-              <input style={inputStyle} value={newForm.title} placeholder="e.g. Unauthorised absence on 5 August" onChange={e=>setNewForm(f=>({...f,title:e.target.value}))} />
+              <label htmlFor="new-allegation-title" style={labelStyle}>Title</label>
+              <input id="new-allegation-title" style={inputStyle} value={newForm.title} placeholder="e.g. Unauthorised absence on 5 August" onChange={e=>setNewForm(f=>({...f,title:e.target.value}))} />
             </div>
             <div style={{marginBottom:10}}>
-              <label style={labelStyle}>Description</label>
-              <textarea style={{...inputStyle,resize:"vertical"}} rows={2} value={newForm.description} onChange={e=>setNewForm(f=>({...f,description:e.target.value}))} />
+              <label htmlFor="new-allegation-description" style={labelStyle}>Description</label>
+              <textarea id="new-allegation-description" style={{...inputStyle,resize:"vertical"}} rows={2} value={newForm.description} onChange={e=>setNewForm(f=>({...f,description:e.target.value}))} />
             </div>
             <div style={{display:"flex",gap:10,marginBottom:12}}>
               <div style={{flex:1}}>
-                <label style={labelStyle}>Period / date</label>
-                <input style={inputStyle} value={newForm.period} placeholder="5 August 2026" onChange={e=>setNewForm(f=>({...f,period:e.target.value}))} />
+                <label htmlFor="new-allegation-period" style={labelStyle}>Period / date</label>
+                <input id="new-allegation-period" style={inputStyle} value={newForm.period} placeholder="5 August 2026" onChange={e=>setNewForm(f=>({...f,period:e.target.value}))} />
               </div>
               <div style={{flex:1}}>
-                <label style={labelStyle}>People involved</label>
-                <input style={inputStyle} value={newForm.peopleInvolved} placeholder="Names, witnesses" onChange={e=>setNewForm(f=>({...f,peopleInvolved:e.target.value}))} />
+                <label htmlFor="new-allegation-people" style={labelStyle}>People involved</label>
+                <input id="new-allegation-people" style={inputStyle} value={newForm.peopleInvolved} placeholder="Names, witnesses" onChange={e=>setNewForm(f=>({...f,peopleInvolved:e.target.value}))} />
               </div>
             </div>
             <button onClick={submitNew} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Add allegation</button>
@@ -177,8 +177,8 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
 
                   {canDecide ? (
                     <div style={{marginBottom:12}}>
-                      <label style={labelStyle}>Status</label>
-                      <select value={a.status} onChange={e=>changeAllegationStatus(a.id, e.target.value)} style={{...inputStyle,width:"auto"}}>
+                      <label htmlFor={`allegation-status-${a.id}`} style={labelStyle}>Status</label>
+                      <select id={`allegation-status-${a.id}`} value={a.status} onChange={e=>changeAllegationStatus(a.id, e.target.value)} style={{...inputStyle,width:"auto"}}>
                         {ALLEGATION_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </select>
                     </div>
@@ -189,12 +189,12 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   {canDecide ? (
                     <>
                       <div style={{marginBottom:12}}>
-                        <label style={labelStyle}>Investigator's finding — distinct from the decision-maker's reasoning below</label>
-                        <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.investigatorFinding||""} placeholder="What did the investigation itself conclude, before any hearing?" onCommit={v=>patchAllegation(a.id,{investigatorFinding:v})} />
+                        <label htmlFor={`allegation-investigator-finding-${a.id}`} style={labelStyle}>Investigator's finding — distinct from the decision-maker's reasoning below</label>
+                        <DraftTextarea id={`allegation-investigator-finding-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.investigatorFinding||""} placeholder="What did the investigation itself conclude, before any hearing?" onCommit={v=>patchAllegation(a.id,{investigatorFinding:v})} />
                       </div>
                       <div style={{marginBottom:12}}>
-                        <label style={labelStyle}>Outstanding uncertainty</label>
-                        <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.outstandingUncertainty||""} placeholder="Anything still unclear or unresolved about this allegation?" onCommit={v=>patchAllegation(a.id,{outstandingUncertainty:v})} />
+                        <label htmlFor={`allegation-outstanding-uncertainty-${a.id}`} style={labelStyle}>Outstanding uncertainty</label>
+                        <DraftTextarea id={`allegation-outstanding-uncertainty-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.outstandingUncertainty||""} placeholder="Anything still unclear or unresolved about this allegation?" onCommit={v=>patchAllegation(a.id,{outstandingUncertainty:v})} />
                       </div>
                     </>
                   ) : (
@@ -222,9 +222,9 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
 
                   {isFindingStatus(a.status) && (
                     <div style={{marginBottom:12,background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:12}}>
-                      <label style={labelStyle}>Decision reasoning — why was this finding reached?</label>
+                      <label htmlFor={`allegation-decision-reasoning-${a.id}`} style={labelStyle}>Decision reasoning — why was this finding reached?</label>
                       {canDecide ? (
-                        <DraftTextarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF"}} rows={3} value={a.decisionReasoning||""} placeholder="Summarise what the evidence showed and why it supports this finding." onCommit={v=>patchAllegation(a.id,{decisionReasoning:v})} />
+                        <DraftTextarea id={`allegation-decision-reasoning-${a.id}`} style={{...inputStyle,resize:"vertical",background:"#FFFFFF"}} rows={3} value={a.decisionReasoning||""} placeholder="Summarise what the evidence showed and why it supports this finding." onCommit={v=>patchAllegation(a.id,{decisionReasoning:v})} />
                       ) : (
                         <div style={{fontSize:13,color:a.decisionReasoning?"#1A1535":"#9B9098",padding:"8px 10px",background:"#FFFFFF",border:"1px solid #EDE5D8",borderRadius:6}}>{a.decisionReasoning||"Not yet recorded"}</div>
                       )}
@@ -248,13 +248,13 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                         <AppealGroundCard key={s.id} signal={s} onAskWhy={()=>onAskWhy?.(s)} />
                       ))}
                       <div style={{marginTop:10}}>
-                        <label style={labelStyle}>Appeal outcome — recorded by the chair, never Compass</label>
-                        <select value={a.appealOutcome||""} onChange={e=>recordAppealOutcome(a.id, e.target.value, a.appealReasoning||"")} style={{...inputStyle,width:"auto"}}>
+                        <label htmlFor={`allegation-appeal-outcome-${a.id}`} style={labelStyle}>Appeal outcome — recorded by the chair, never Compass</label>
+                        <select id={`allegation-appeal-outcome-${a.id}`} value={a.appealOutcome||""} onChange={e=>recordAppealOutcome(a.id, e.target.value, a.appealReasoning||"")} style={{...inputStyle,width:"auto"}}>
                           <option value="" disabled>Not yet decided</option>
                           {APPEAL_OUTCOMES.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
                         </select>
                         {a.appealOutcome && (
-                          <DraftTextarea style={{...inputStyle,resize:"vertical",background:"#FFFFFF",marginTop:8}} rows={2} value={a.appealReasoning||""} placeholder="Reasoning for the appeal decision." onCommit={v=>recordAppealOutcome(a.id, a.appealOutcome, v)} />
+                          <DraftTextarea aria-label="Appeal decision reasoning" style={{...inputStyle,resize:"vertical",background:"#FFFFFF",marginTop:8}} rows={2} value={a.appealReasoning||""} placeholder="Reasoning for the appeal decision." onCommit={v=>recordAppealOutcome(a.id, a.appealOutcome, v)} />
                         )}
                         {a.appealDecidedAt && (
                           <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>
@@ -267,22 +267,22 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
 
                   {canDecide ? (
                     <div style={{marginBottom:12}}>
-                      <label style={labelStyle}>Employee response</label>
-                      <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.employeeResponse||""} placeholder="What did the employee say about this allegation?" onCommit={v=>patchAllegation(a.id,{employeeResponse:v})} />
+                      <label htmlFor={`allegation-employee-response-${a.id}`} style={labelStyle}>Employee response</label>
+                      <DraftTextarea id={`allegation-employee-response-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.employeeResponse||""} placeholder="What did the employee say about this allegation?" onCommit={v=>patchAllegation(a.id,{employeeResponse:v})} />
                     </div>
                   ) : (
                     <ReadOnlyField label="Employee response" value={a.employeeResponse} placeholder="Not yet recorded" />
                   )}
                   <div style={{marginBottom:14}}>
-                    <label style={labelStyle}>Witness evidence summary</label>
-                    <DraftTextarea style={{...inputStyle,resize:"vertical"}} rows={2} value={a.witnessEvidence||""} onCommit={v=>patchAllegation(a.id,{witnessEvidence:v})} />
+                    <label htmlFor={`allegation-witness-evidence-${a.id}`} style={labelStyle}>Witness evidence summary</label>
+                    <DraftTextarea id={`allegation-witness-evidence-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.witnessEvidence||""} onCommit={v=>patchAllegation(a.id,{witnessEvidence:v})} />
                   </div>
 
                   <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Linked evidence ({linked.length})</div>
                   {linked.map(ev => (
                     <div key={ev.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F5F1EA",gap:8}}>
                       <div style={{fontSize:12,color:"#1A1535",flex:1,minWidth:0}}>{ev.name}</div>
-                      <select value={ev.stance||"neutral"} onChange={e=>linkEvidence(a.id, ev.id, e.target.value)} style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 6px",color:"#6B6375"}}>
+                      <select aria-label={`Evidence stance for ${ev.name}`} value={ev.stance||"neutral"} onChange={e=>linkEvidence(a.id, ev.id, e.target.value)} style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 6px",color:"#6B6375"}}>
                         {EVIDENCE_STANCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </select>
                       <button onClick={()=>unlinkEvidence(ev.id)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Unlink</button>
@@ -290,7 +290,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   ))}
                   {evidence.filter(ev=>!ev.allegationId).length>0 && (
                     <div style={{marginTop:10,display:"flex",gap:8,alignItems:"center"}}>
-                      <select defaultValue="" onChange={e=>{ const evId=e.target.value; linkEvidence(a.id, evId, "supports"); e.target.value=""; }} style={{...inputStyle,fontSize:12}}>
+                      <select aria-label="Link existing evidence" defaultValue="" onChange={e=>{ const evId=e.target.value; linkEvidence(a.id, evId, "supports"); e.target.value=""; }} style={{...inputStyle,fontSize:12}}>
                         <option value="" disabled>Link existing evidence...</option>
                         {evidence.map(ev=>!ev.allegationId && <option key={ev.id} value={ev.id}>{ev.name}</option>)}
                       </select>

@@ -158,3 +158,56 @@ describe('AllegationsPanel — debounced persistence (no per-keystroke writes)',
     expect(patchAllegation).toHaveBeenCalledWith('a1', { investigatorFinding: 'Swipe-card records confirm the absence.!' });
   });
 });
+
+// Phase 6.5 hardening (Batch 13) — every field in this file had a visual
+// <label> with no htmlFor/id association, or (for filter-style selects and
+// the appeal-reasoning box) no adjacent label at all.
+describe('AllegationsPanel — field labelling (Phase 6.5, Batch 13)', () => {
+  it('labels the "new allegation" form fields', async () => {
+    const user = userEvent.setup();
+    render(<AllegationsPanel {...baseProps} allegations={[]} allAllegations={[]} />);
+    await user.click(screen.getByRole('button', { name: '+ Add allegation' }));
+    expect(screen.getByLabelText('Title')).toBeInTheDocument();
+    expect(screen.getByLabelText('Description')).toBeInTheDocument();
+    expect(screen.getByLabelText('Period / date')).toBeInTheDocument();
+    expect(screen.getByLabelText('People involved')).toBeInTheDocument();
+  });
+
+  it('labels the status select and the decision-workspace fields when canDecide is true', async () => {
+    render(<AllegationsPanel {...baseProps} canDecide={true} />);
+    await expandAllegation();
+    expect(screen.getByLabelText('Status')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Investigator's finding/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Outstanding uncertainty')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Decision reasoning/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Employee response')).toBeInTheDocument();
+    expect(screen.getByLabelText('Witness evidence summary')).toBeInTheDocument();
+  });
+
+  it('labels the appeal outcome select', async () => {
+    const csWithAppeal = { ...cs, meetings: [{ type: 'Disciplinary Appeal', record: {} }] };
+    render(<AllegationsPanel {...baseProps} cs={csWithAppeal} />);
+    await expandAllegation();
+    expect(screen.getByLabelText(/Appeal outcome/)).toBeInTheDocument();
+  });
+
+  it('gives the appeal reasoning box an aria-label when an outcome is already recorded', async () => {
+    const csWithAppeal = { ...cs, meetings: [{ type: 'Disciplinary Appeal', record: {} }] };
+    const decidedAllegation = { ...allegation, appealOutcome: 'upheld' };
+    render(<AllegationsPanel {...baseProps} cs={csWithAppeal} allegations={[decidedAllegation]} allAllegations={[decidedAllegation]} />);
+    await expandAllegation();
+    expect(screen.getByLabelText('Appeal decision reasoning')).toBeInTheDocument();
+  });
+
+  it('gives the per-evidence stance select and the "link existing evidence" select an aria-label', async () => {
+    const evidence = [
+      { id: 'e1', name: 'CCTV footage.mp4', allegationId: 'a1', stance: 'supports' },
+      { id: 'e2', name: 'Witness statement.pdf' },
+    ];
+    const csWithEvidence = { ...cs, evidence };
+    render(<AllegationsPanel {...baseProps} cs={csWithEvidence} cases={[csWithEvidence]} />);
+    await expandAllegation();
+    expect(screen.getByLabelText('Evidence stance for CCTV footage.mp4')).toBeInTheDocument();
+    expect(screen.getByLabelText('Link existing evidence')).toBeInTheDocument();
+  });
+});
