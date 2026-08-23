@@ -1,9 +1,13 @@
+import { useRef } from 'react';
 import { CompassLogo } from '../components/CompassLogo';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 export function OnboardingWizard({ onboardingStep, setOnboardingStep, org, currentUser, lsSet, setShowOnboarding, setShowCasePrompt, setShowAskCompass }) {
   const dismiss = () => { lsSet("compass_onboarded",true); setShowOnboarding(false); };
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, dismiss);
   return(
-    <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")dismiss();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div role="dialog" aria-modal="true" aria-label="Welcome to Compass" ref={containerRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#FFFFFF",borderRadius:20,width:"100%",maxWidth:520,overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.2)",position:"relative"}}>
         {/* Progress bar */}
         <div style={{height:4,background:"#F5F1EA"}}>
@@ -37,12 +41,17 @@ export function OnboardingWizard({ onboardingStep, setOnboardingStep, org, curre
             <>
               <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1C1820",marginBottom:8,fontWeight:400}}>Set up your organisation</div>
               <div style={{fontSize:13,color:"#6B6375",marginBottom:24}}>Tell us about your organisation so Compass can personalise your experience.</div>
+              {/* Read-only display, not an editable field — a <label> here
+                  would have no control to associate with (this app's own
+                  labelling convention is htmlFor pointing at a real
+                  input/select/textarea); a plain heading div is the
+                  correct element for "text describing the text below it". */}
               <div style={{marginBottom:16}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Organisation name</label>
+                <div style={{fontSize:12,fontWeight:600,color:"#1C1820",marginBottom:6}}>Organisation name</div>
                 <div style={{fontSize:13,color:"#1C1820",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px"}}>{org?.name||"Your organisation"}</div>
               </div>
               <div style={{marginBottom:24}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Your role</label>
+                <div style={{fontSize:12,fontWeight:600,color:"#1C1820",marginBottom:6}}>Your role</div>
                 <div style={{fontSize:13,color:"#1C1820",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px"}}>{currentUser?.name||"HR Manager"}</div>
               </div>
               <div style={{background:"#EDE8FF",borderRadius:10,padding:"14px 16px",marginBottom:24,fontSize:12,color:"#7C5CFC"}}>

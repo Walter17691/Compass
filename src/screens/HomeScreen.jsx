@@ -219,9 +219,9 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                       const lastUpdated=cs.updatedAt||cs.createdAt;
                       const daysAgo=lastUpdated?daysBetween(lastUpdated, Date.now()):null;
                       return (
-                        <div key={cs.id}
+                        <button key={cs.id} type="button"
                           onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                          style={{display:"flex",alignItems:"center",padding:"13px 18px",borderBottom:i<visible.length-1||filtered.length>CASE_PREVIEW_LIMIT?"1px solid #F5F1EA":"none",cursor:"pointer",transition:"background 0.1s"}}
+                          style={{width:"100%",display:"flex",alignItems:"center",padding:"13px 18px",border:"none",background:"none",cursor:"pointer",transition:"background 0.1s",textAlign:"left",font:"inherit",color:"inherit",borderBottom:i<visible.length-1||filtered.length>CASE_PREVIEW_LIMIT?"1px solid #F5F1EA":"none"}}
                           onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
                           onMouseLeave={e=>e.currentTarget.style.background="none"}>
                           <div style={{width:36,height:36,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#7C5CFC",flexShrink:0,marginRight:14}}>
@@ -239,7 +239,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                             <div style={{fontSize:11,color:"#1C1820",fontWeight:500}}>{daysAgo===null?"—":daysAgo===0?"Today":daysAgo===1?"Yesterday":fmtDate(lastUpdated)}</div>
                           </div>
                           <div style={{marginLeft:12,color:"#C4BAB0",fontSize:16,flexShrink:0}}>›</div>
-                        </div>
+                        </button>
                       );
                     })}
                     {filtered.length>CASE_PREVIEW_LIMIT&&(
@@ -284,7 +284,8 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                           <div style={{fontSize:10,fontWeight:600,color:isToday?"#7C5CFC":"#9B9098",letterSpacing:"0.5px",marginBottom:3}}>{d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</div>
                           <div style={{fontSize:16,fontWeight:700,color:isToday?"#7C5CFC":"#1C1820",marginBottom:4}}>{d.getDate()}</div>
                           {dayMeetings.slice(0,2).map((m,j)=>(
-                            <div key={j} onClick={e=>{e.stopPropagation();setActiveCaseId(m.caseId);setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:9,background:isToday?"#7C5CFC":"#EDE8FF",color:isToday?"#fff":"#7C5CFC",borderRadius:3,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer",fontWeight:500}}>{m.employeeName}</div>
+                            <button key={j} type="button" onClick={()=>{setActiveCaseId(m.caseId);setScreen(SCREENS.CASE_VIEW);}}
+                              style={{font:"inherit",display:"block",width:"100%",background:isToday?"#7C5CFC":"#EDE8FF",color:isToday?"#fff":"#7C5CFC",border:"none",borderRadius:3,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer",textAlign:"left",fontSize:9,fontWeight:500}}>{m.employeeName}</button>
                           ))}
                           {dayMeetings.length>2&&<div style={{fontSize:9,color:"#9B9098"}}>+{dayMeetings.length-2} more</div>}
                         </div>

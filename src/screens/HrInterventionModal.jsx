@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 // Manager Enablement (Phase 4, MP19, §15) — HR Intervention actions.
 // Reachable from CaseViewScreen's header and from MP18's Delegated Work
@@ -12,12 +13,14 @@ export function HrInterventionModal({ cs, setShowHrInterventionModal, onSendGuid
   const [note, setNote] = useState("");
   const close = () => setShowHrInterventionModal(false);
   const isPaused = !!cs?.investigationPaused;
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, close);
 
   return (
-    <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape") close();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div role="dialog" aria-modal="true" aria-labelledby="hr-intervention-title" ref={containerRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:520,maxHeight:"85vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-          <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>HR Intervention</div>
+          <div id="hr-intervention-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>HR Intervention</div>
           <button onClick={close} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1,padding:0,marginLeft:12}}>×</button>
         </div>
         <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>{cs?.employeeName}</div>

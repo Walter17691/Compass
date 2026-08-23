@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { Btn } from './Primitives';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 // Manager Enablement (Phase 4, MP10, §16) — same visual/interaction shape
 // as DecisionQualityCheckModal (P11)/MeetingQualityCheckModal (M9):
@@ -8,9 +10,10 @@ import { Btn } from './Primitives';
 // evidence mentioned but not linked, outstanding checklist steps) rather
 // than a meeting transcript's or a final decision's own gaps.
 export function InvestigationQualityCheckModal({ gaps = [], onGoBack, onCreateFollowUp, onProceed }) {
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, onProceed);
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="investigation-quality-title"
-      onKeyDown={e=>{ if(e.key==="Escape") onProceed(); }}
+    <div role="dialog" aria-modal="true" aria-labelledby="investigation-quality-title" ref={containerRef} tabIndex={-1}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:520,maxHeight:"80vh",overflowY:"auto"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#B87520",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Investigation Quality Check</div>

@@ -82,11 +82,16 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
             <p style={{fontSize:11,color:"#6B6880",margin:"0 0 16px",lineHeight:1.6}}>Complete your assessment of {s.caseInfo.employee||"the employee"}. Be specific and evidence-based.</p>
 
             {isAppraisal&&(
-              <div style={{marginBottom:16}}>
-                <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Overall rating</label>
+              // fieldset/legend for the group label — a set of toggle
+              // buttons has no single control for a bare <label> to
+              // associate with. aria-pressed conveys the selected rating
+              // to a screen reader, since colour/weight alone (the only
+              // signal before) carries nothing without sight.
+              <fieldset style={{marginBottom:16,border:"none",padding:0}}>
+                <legend style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,padding:0}}>Overall rating</legend>
                 <div style={{display:"flex",gap:8}}>
                   {["1","2","3","4","5"].map(r=>(
-                    <button key={r} onClick={()=>setDevSession(ds=>({...ds,rating:r}))}
+                    <button key={r} type="button" aria-pressed={s.rating===r} onClick={()=>setDevSession(ds=>({...ds,rating:r}))}
                       style={{flex:1,padding:"8px 4px",borderRadius:6,border:"1px solid",borderColor:s.rating===r?"#7C5CFC":"#E8E0D0",
                         background:s.rating===r?"#7C5CFC22":"#FDFAF5",color:s.rating===r?"#A98FFF":"#555",fontSize:13,fontWeight:s.rating===r?700:400,cursor:"pointer"}}>
                       {r}
@@ -94,7 +99,7 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
                   ))}
                 </div>
                 <div style={{fontSize:10,color:"#5A5570",marginTop:6}}>1=Below expectations · 3=Meets · 5=Outstanding</div>
-              </div>
+              </fieldset>
             )}
 
             {cfg?.managerPrompts?.map((q,i)=>(

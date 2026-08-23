@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { approvalActionForOutcome, approvalActionLabel } from '../lib/approvals';
 import { computeDecisionQualityGaps } from '../lib/decisionQuality';
 import { DecisionQualityCheckModal } from '../components/DecisionQualityCheckModal';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 const DISMISSAL_OUTCOMES = ["Dismissal with notice", "Summary dismissal (gross misconduct)"];
 
@@ -59,19 +60,26 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
     finalizeOutcome();
   };
 
+  const close = () => { setShowOutcomeModal(false); setOutcomeType(""); setOutcomeNotes(""); };
+  // Called unconditionally, ahead of the early return below (DecisionQuality
+  // CheckModal — itself now hook-managed too, active:false while it isn't
+  // showing) — the rules of hooks don't allow this after a conditional return.
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, close, !showQualityCheck);
+
   if(showQualityCheck) {
     return <DecisionQualityCheckModal gaps={qualityGaps} onGoBack={()=>setShowQualityCheck(false)} onCreateFollowUp={createQualityCheckFollowUp} onProceed={proceedPastQualityCheck} />;
   }
 
   return (
-    <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div role="dialog" aria-modal="true" aria-labelledby="outcome-modal-title" ref={containerRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
           <div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Issue disciplinary outcome</div>
+            <div id="outcome-modal-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Issue disciplinary outcome</div>
             <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>{cs?.employeeName}</div>
           </div>
-          <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
+          <button onClick={close} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
         </div>
         <div style={{marginBottom:16}}>
           <label htmlFor="outcome-type" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Outcome decision</label>
@@ -98,7 +106,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
           </div>
         )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button onClick={()=>{setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");}} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+          <button onClick={close} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
           <button disabled={!outcomeType} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
         </div>
       </div>

@@ -84,8 +84,8 @@ function TemplateEditor({ processType, template, saveProcessTemplate }) {
         <textarea id={`suggested-meetings-${processType.id}`} rows={3} value={draft.suggested_meetings} onChange={e => update({ suggested_meetings: e.target.value })} placeholder={"e.g. Investigation meeting\nDisciplinary hearing"} style={{ ...inputStyle, resize: "vertical" }} />
       </div>
 
-      <div>
-        <label style={labelStyle}>Default tasks <span style={{ fontWeight: 400, textTransform: "none" }}>(created automatically on every new case of this type)</span></label>
+      <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+        <legend style={{ ...labelStyle, padding: 0 }}>Default tasks <span style={{ fontWeight: 400, textTransform: "none" }}>(created automatically on every new case of this type)</span></legend>
         {draft.default_tasks.map((t, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <input aria-label={`Task ${i + 1} name`} value={t.name} onChange={e => updateTask(i, { name: e.target.value })} placeholder="Task" style={{ flex: 1, background: "#FFFFFF", border: "1px solid #E8E0D0", borderRadius: 5, padding: "6px 10px", fontSize: 12, color: "#1A1535", outline: "none" }} />
@@ -98,10 +98,10 @@ function TemplateEditor({ processType, template, saveProcessTemplate }) {
           </div>
         ))}
         <button onClick={addTask} style={{ width: "100%", background: "none", border: "1px dashed #E8E0D0", borderRadius: 6, padding: "6px", fontSize: 11, color: "#7C5CFC", cursor: "pointer", marginTop: 4 }}>+ Add default task</button>
-      </div>
+      </fieldset>
 
-      <div>
-        <label style={labelStyle}>Suggested roles to fill</label>
+      <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+        <legend style={{ ...labelStyle, padding: 0 }}>Suggested roles to fill</legend>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {CASE_ROLES.map(role => (
             <label key={role.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#1A1535", background: "#FDFAF5", border: "1px solid #E8E0D0", borderRadius: 20, padding: "4px 10px", cursor: "pointer" }}>
@@ -110,7 +110,7 @@ function TemplateEditor({ processType, template, saveProcessTemplate }) {
             </label>
           ))}
         </div>
-      </div>
+      </fieldset>
 
       <div style={{ display: "flex", gap: 16 }}>
         <div style={{ flex: 1 }}>

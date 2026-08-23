@@ -156,25 +156,35 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
                   const risk = !closed ? getCurrentRisk(cs) : null;
                   const riskStyle = risk ? RISK_STYLE[risk] : null;
                   return(
-                    <div key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                      style={{background:closed?"#FDFAF5":"#FFFFFF",border:"1px solid",borderColor:closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:6,marginLeft:48,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"all 0.15s"}}
+                    // A native <button> can't contain another interactive
+                    // control (the selection checkbox), so the checkbox
+                    // stays a sibling outside it — only the navigate-to-
+                    // case content (everything else in the row) becomes
+                    // the button, keyboard-reachable and Enter/Space-
+                    // activatable for free, unlike the div+onClick this
+                    // replaces.
+                    <div key={cs.id}
+                      style={{background:closed?"#FDFAF5":"#FFFFFF",border:"1px solid",borderColor:closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0",borderRadius:10,marginBottom:6,marginLeft:48,display:"flex",alignItems:"center",gap:12,transition:"all 0.15s"}}
                       onMouseEnter={e=>{if(!closed){e.currentTarget.style.borderColor="#7C5CFC";e.currentTarget.style.background="#FDFAFF";}}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=closed?"#EDE5D8":next?"#D4C9F5":"#E8E0D0";e.currentTarget.style.background=closed?"#FDFAF5":"#FFFFFF";}}>
-                      <input type="checkbox" aria-label={`Select ${getProceedingTitle(cs)}`} checked={selected.has(cs.id)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelected(cs.id)} style={{cursor:"pointer",flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:closed?400:600,color:closed?"#9B9098":"#1A1535",marginBottom:3}}>{getProceedingTitle(cs)}</div>
-                        <div style={{fontSize:11,color:"#9B9098",display:"flex",gap:8}}>
-                          <span>{(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</span>
-                          {cs.urgent&&<span style={{color:"#C84B2F",fontWeight:600}}>· URGENT</span>}
-                          {cs.confidential&&<span style={{color:"#B87520",fontWeight:600,display:"inline-flex",alignItems:"center",gap:3}}>· <LockIcon size={10} />Confidential</span>}
+                      <input type="checkbox" aria-label={`Select ${getProceedingTitle(cs)}`} checked={selected.has(cs.id)} onChange={()=>toggleSelected(cs.id)} style={{cursor:"pointer",flexShrink:0,marginLeft:16}}/>
+                      <button type="button" onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                        style={{flex:1,minWidth:0,padding:"14px 16px 14px 0",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"none",border:"none",textAlign:"left",font:"inherit",color:"inherit"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:closed?400:600,color:closed?"#9B9098":"#1A1535",marginBottom:3}}>{getProceedingTitle(cs)}</div>
+                          <div style={{fontSize:11,color:"#9B9098",display:"flex",gap:8}}>
+                            <span>{(cs.meetings||[]).length} meeting{(cs.meetings||[]).length!==1?"s":""}</span>
+                            {cs.urgent&&<span style={{color:"#C84B2F",fontWeight:600}}>· URGENT</span>}
+                            {cs.confidential&&<span style={{color:"#B87520",fontWeight:600,display:"inline-flex",alignItems:"center",gap:3}}>· <LockIcon size={10} />Confidential</span>}
+                          </div>
+                          {next&&!closed&&<div style={{fontSize:11,color:"#7C5CFC",fontWeight:500,marginTop:4}}>Next: {next.label}</div>}
                         </div>
-                        {next&&!closed&&<div style={{fontSize:11,color:"#7C5CFC",fontWeight:500,marginTop:4}}>Next: {next.label}</div>}
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                        {riskStyle&&<span style={{fontSize:10,fontWeight:700,color:riskStyle.color,background:riskStyle.bg,borderRadius:4,padding:"2px 7px"}}>{risk} RISK</span>}
-                        <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
-                        <span style={{color:"#C4BAB0",fontSize:16}}>›</span>
-                      </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          {riskStyle&&<span style={{fontSize:10,fontWeight:700,color:riskStyle.color,background:riskStyle.bg,borderRadius:4,padding:"2px 7px"}}>{risk} RISK</span>}
+                          <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"3px 10px"}}>{getCaseStatus(cs).label}</span>
+                          <span style={{color:"#C4BAB0",fontSize:16}}>›</span>
+                        </div>
+                      </button>
                     </div>
                   );
                 })}

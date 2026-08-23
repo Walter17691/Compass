@@ -58,8 +58,8 @@ export function PortalSignatures({ userId }) {
               <div style={{ fontSize: 13, color: "#3D3560", lineHeight: 1.7, whiteSpace: "pre-wrap", marginBottom: 12, maxHeight: 200, overflowY: "auto" }}>{p.document}</div>
               {signingId === p.sign_id ? (
                 <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#6B6880", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>Type your full name to sign</label>
-                  <input aria-label="Full name" value={typedName} onChange={e => setTypedName(e.target.value)} placeholder="Full name"
+                  <label htmlFor={`portal-signature-name-${p.sign_id}`} style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#6B6880", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>Type your full name to sign</label>
+                  <input id={`portal-signature-name-${p.sign_id}`} value={typedName} onChange={e => setTypedName(e.target.value)} placeholder="Full name"
                     style={{ width: "100%", background: "#FDFAF5", border: "1px solid #E8E0D0", borderRadius: 6, padding: "8px 12px", fontSize: 13, outline: "none", color: "#1A1535", marginBottom: 10, boxSizing: "border-box" }} />
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => submitSignature(p.sign_id)} disabled={submitting || !typedName.trim()}

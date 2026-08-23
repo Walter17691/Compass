@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { allegationsForCase } from '../lib/allegations';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 // Manager Enablement (Phase 4, MP7, §7) — replaces the old plain <select>
 // (CaseViewScreen.jsx) that called assignInvestigator with nothing but a
@@ -21,9 +22,11 @@ export function AssignInvestigatorModal({ cases, activeCaseId, allegations, orgM
   const [scopeNote, setScopeNote] = useState("");
   const close = () => setShowAssignInvestigatorModal(false);
   const toggleAllegation = (id) => setSelectedAllegationIds(ids => ids.includes(id) ? ids.filter(x=>x!==id) : [...ids, id]);
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, close);
 
   return (
-    <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape") close();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div role="dialog" aria-modal="true" ref={containerRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
           <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820"}}>Assign investigator</div>
@@ -48,8 +51,12 @@ export function AssignInvestigatorModal({ cases, activeCaseId, allegations, orgM
             </div>
 
             {caseAllegations.length>0&&(
-              <div style={{marginBottom:16}}>
-                <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Which allegations should they investigate?</label>
+              // A group of checkboxes has no single control for a <label>
+              // to associate with — fieldset/legend is the native HTML
+              // element for exactly this ("a label for a group of
+              // controls"), not a bare <label> with no htmlFor.
+              <fieldset style={{marginBottom:16,border:"none",padding:0}}>
+                <legend style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6,padding:0}}>Which allegations should they investigate?</legend>
                 <div style={{border:"1px solid #E8E0D0",borderRadius:8,padding:"4px 12px"}}>
                   {caseAllegations.map(a=>(
                     <label key={a.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #F5F1EA",cursor:"pointer"}}>
@@ -58,7 +65,7 @@ export function AssignInvestigatorModal({ cases, activeCaseId, allegations, orgM
                     </label>
                   ))}
                 </div>
-              </div>
+              </fieldset>
             )}
 
             <div style={{marginBottom:16}}>

@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { Btn } from './Primitives';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 // Process Intelligence (P11) — same visual/interaction shape as Meeting
 // Intelligence's MeetingQualityCheckModal (advisory only: every path out,
@@ -8,9 +10,10 @@ import { Btn } from './Primitives';
 // guardrails, an outcome with no documented rationale) rather than a
 // meeting transcript's own gaps.
 export function DecisionQualityCheckModal({ gaps = [], onGoBack, onCreateFollowUp, onProceed }) {
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, onProceed);
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="decision-quality-title"
-      onKeyDown={e=>{ if(e.key==="Escape") onProceed(); }}
+    <div role="dialog" aria-modal="true" aria-labelledby="decision-quality-title" ref={containerRef} tabIndex={-1}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:520,maxHeight:"80vh",overflowY:"auto"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#B87520",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Decision Quality Check</div>

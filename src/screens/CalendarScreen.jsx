@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MEETING_TYPES } from '../constants';
 import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod } from '../lib/meetingScheduling';
 import { CASE_TYPE_TO_POLICY_CATEGORY } from '../lib/hearingPack';
 import { getProcessType } from '../lib/processStages';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 // Process Intelligence (P16, §5) — the same computeDueSoon output the
 // overdue banner/Settings list/digest cron already read (lib/deadlines.js),
@@ -52,11 +53,23 @@ function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMember
   const relevantCategory = cs ? CASE_TYPE_TO_POLICY_CATEGORY[getProcessType(cs.caseType).id] : null;
   const clauseTexts = relevantCategory ? policies.filter(p => p.category === relevantCategory).flatMap(p => (p.clauses || []).map(c => c.text)) : [];
   const noticeCheck = times ? checkNoticePeriod(clauseTexts, { meetingISO: times.startISO }) : null;
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, onClose);
 
   return (
-    <div role="dialog" aria-modal="true" onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(26,21,53,0.35)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    // Phase 6.5 hardening (accessibility pass) — this modal previously had
+    // NO keyboard way to close at all (only a backdrop onClick, no Escape
+    // handling anywhere) — useModalA11y now adds Escape/focus-trap/
+    // initial-focus, and a real "Cancel" button exists inside (below).
+    // The backdrop's own onClick is a mouse-only convenience for clicking
+    // outside the dialog to dismiss it — not a substitute for either of
+    // those, so it deliberately isn't given its own keyboard handler,
+    // which would just add a confusing, invisible full-screen tab stop.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+    <div role="dialog" aria-modal="true" aria-labelledby="schedule-meeting-title" ref={containerRef} tabIndex={-1} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(26,21,53,0.35)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div onClick={e=>e.stopPropagation()} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:24,width:"100%",maxWidth:460,boxSizing:"border-box"}}>
-        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 16px",fontWeight:400}}>Schedule a meeting</h3>
+        <h3 id="schedule-meeting-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",margin:"0 0 16px",fontWeight:400}}>Schedule a meeting</h3>
 
         <label htmlFor="schedule-meeting-case" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Case (optional)</label>
         <select id="schedule-meeting-case" value={form.caseId} onChange={e=>setForm(f=>({...f,caseId:e.target.value}))} style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",marginBottom:12,boxSizing:"border-box"}}>

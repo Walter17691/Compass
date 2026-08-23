@@ -46,8 +46,8 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
           {/* New case form */}
           <Card>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 14px",fontWeight:600}}>Start new redundancy process</h3>
-            <div style={{marginBottom:14}}>
-              <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6}}>Process type</label>
+            <fieldset style={{marginBottom:14,border:"none",padding:0}}>
+              <legend style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6,padding:0}}>Process type</legend>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {[
                   {type:"individual",title:"Individual redundancy",sub:"Fewer than 20 redundancies · No minimum consultation period · ACAS Early Conciliation recommended"},
@@ -73,7 +73,7 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                   </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
           </Card>
         </div>
       )}

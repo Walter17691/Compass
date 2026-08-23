@@ -176,8 +176,8 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
               <input id="dsar-form-requested-by" value={form.requestedBy} onChange={e=>setForm(p=>({...p,requestedBy:e.target.value}))} placeholder="e.g. their solicitor" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
             </div>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Date received</label>
-              <DateInput value={form.receivedDate} onChange={e=>setForm(p=>({...p,receivedDate:e.target.value}))}/>
+              <label htmlFor="dsar-form-received-date" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Date received</label>
+              <DateInput id="dsar-form-received-date" value={form.receivedDate} onChange={e=>setForm(p=>({...p,receivedDate:e.target.value}))}/>
               <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>Due date will be calculated automatically as one calendar month from this date.</div>
             </div>
             <Btn onClick={submit} disabled={!form.employeeName.trim()||!form.receivedDate}>Log request</Btn>

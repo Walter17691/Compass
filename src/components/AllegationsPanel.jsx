@@ -154,14 +154,21 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
           const expanded = expandedId===a.id;
           return (
             <div key={a.id} style={{border:"1px solid #EDE5D8",borderRadius:8,marginTop:10,overflow:"hidden"}}>
-              <div style={{padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,cursor:"pointer",background:expanded?"#FDFAF5":"#FFFFFF"}} onClick={()=>setExpandedId(expanded?null:a.id)}>
+              <button type="button" aria-expanded={expanded} onClick={()=>setExpandedId(expanded?null:a.id)}
+                style={{width:"100%",padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,cursor:"pointer",background:expanded?"#FDFAF5":"#FFFFFF",border:"none",borderRadius:0,textAlign:"left",font:"inherit",color:"inherit"}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>{a.title}</div>
                   {a.period && <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{a.period}</div>}
                 </div>
                 <span style={{fontSize:10,fontWeight:600,color:meta.color,background:meta.bg,borderRadius:4,padding:"2px 8px",flexShrink:0}}>{meta.label}</span>
-              </div>
+              </button>
               {expanded && (
+                // Not itself interactive — inert content wrapper, present
+                // only so a click landing on it doesn't bubble up to a
+                // parent handler elsewhere (there is none directly above
+                // this any more now the toggle is a real button, but kept
+                // for defence against one being added later).
+                // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
                 <div style={{padding:"14px",borderTop:"1px solid #EDE5D8"}} onClick={e=>e.stopPropagation()}>
                   {a.description && <div style={{fontSize:13,color:"#1A1535",marginBottom:12}}>{a.description}</div>}
                   {a.peopleInvolved && <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>People involved: {a.peopleInvolved}</div>}
@@ -239,7 +246,8 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   {hasAppealMeeting && isFindingStatus(a.status) && (
                     <div style={{marginBottom:12,background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:12}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                        <label style={{...labelStyle,marginBottom:0}}>Appeal review</label>
+                        {/* Section heading, not a single control's label — the appeal outcome <select> below has its own real label. */}
+                        <div style={{...labelStyle,marginBottom:0}}>Appeal review</div>
                         <button onClick={()=>generateAppealReview(cs)} disabled={appealReviewLoading} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 10px",color:"#5B3FD4",cursor:appealReviewLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                           {appealReviewLoading?"Reviewing…":"Generate appeal review"}
                         </button>

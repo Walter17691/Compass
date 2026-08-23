@@ -72,6 +72,8 @@ import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
 import { useFonts } from './hooks/useFonts';
+import { useModalA11y } from './hooks/useModalA11y';
+import { addLoadIssue, removeLoadIssue } from './lib/dataLoadIssues';
 import { AppSidebar } from './components/AppSidebar';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
 import { MDRenderer } from './components/MDRenderer';
@@ -132,6 +134,39 @@ const EMPTY_CONCERN_FORM = {employeeName:"",concernType:"other",description:"",w
 
 export default function Compass({ user=null, org=null, member=null, availableOrgs=[], switchOrg=()=>{}, onJoinAnotherOrg=()=>{}, onSignOut=null }) {
   useFonts();
+
+  // Phase 6.5 hardening (accessibility/UX reliability pass) — none of
+  // this file's ~20 data loaders ever surfaced a failed fetch to the
+  // user; each one only console.error'd and left its own state at
+  // whatever it already was (usually [], the initial value), which every
+  // consuming screen renders as a genuine "No X yet" empty state. A
+  // network blip or an RLS/permission error was therefore
+  // indistinguishable from "this org really has none of this data" —
+  // dataLoadIssues/markLoadIssue collect which entities failed in the
+  // most recent load attempt so a single, persistent banner (rendered
+  // once, near the toast) can tell the user something actually went
+  // wrong, with a real Retry action, instead of silently rendering an
+  // empty list as fact. Declared at the very top of the component,
+  // ahead of every loader that references markLoadIssue/clearLoadIssue,
+  // since those loaders are themselves declared at many different points
+  // throughout this file.
+  const [dataLoadIssues, setDataLoadIssues] = useState([]);
+  const [loadBannerDismissed, setLoadBannerDismissed] = useState(false);
+  const markLoadIssue = (label) => setDataLoadIssues(prev => {
+    const next = addLoadIssue(prev, label);
+    // A genuinely new failure re-surfaces the banner even if the user
+    // dismissed an earlier one this session — dismissing isn't a
+    // standing "never tell me again," just "I've seen this specific
+    // problem."
+    if(next !== prev) setLoadBannerDismissed(false);
+    return next;
+  });
+  // A few loaders (audit log, cases) also refetch from their own
+  // independent effect — a window-focus refresh, for instance — outside
+  // loadOrgData's own batch reset. Clearing the specific label on THAT
+  // loader's own next success keeps the banner accurate without needing
+  // every independent refresh path to also reset the whole array.
+  const clearLoadIssue = (label) => setDataLoadIssues(prev => removeLoadIssue(prev, label));
 
   // Phase 6.5 hardening — tenant isolation. main.jsx now keys this whole
   // component on org.id, so a React-state remount is guaranteed on every
@@ -287,8 +322,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const { data, error } = await supabase.from('audit_log').select('*').eq('org_id', org.id).order('created_at',{ascending:false}).limit(500);
-      if(!error && data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||"", caseId:r.case_id||null, aiPrepared:r.ai_prepared||false, approvedBy:r.approved_by||null, dataUsed:r.data_used||null})));
-    } catch(e) { console.error("Load audit log error:", e); }
+      if(error) { console.error("Load audit log error:", error); markLoadIssue('audit log'); return; }
+      clearLoadIssue('audit log');
+      if(data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||"", caseId:r.case_id||null, aiPrepared:r.ai_prepared||false, approvedBy:r.approved_by||null, dataUsed:r.data_used||null})));
+    } catch(e) { console.error("Load audit log error:", e); markLoadIssue('audit log'); }
   };
   useEffect(() => { if(org?.id) loadAuditLog(); }, [org?.id]);
   // Pick up entries other team members logged while this tab was in the
@@ -310,8 +347,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const { data, error } = await supabase.from('integration_events').select('*').eq('org_id', org.id).order('created_at',{ascending:false}).limit(500);
-      if(!error && data) setIntegrationEvents(data);
-    } catch(e) { console.error("Load integration events error:", e); }
+      if(error) { console.error("Load integration events error:", error); markLoadIssue('integration events'); return; }
+      if(data) setIntegrationEvents(data);
+    } catch(e) { console.error("Load integration events error:", e); markLoadIssue('integration events'); }
   };
 
   // ── Search ──
@@ -380,9 +418,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // row cap, so this was silently dropping real employees from the
       // roster. Same fix, paged on a stable order (id, the primary key).
       const { data, error } = await fetchAllPages((from, to) => supabase.from('employee_records').select('*').eq('org_id', org.id).order('id', { ascending: true }).range(from, to));
-      if (error) console.error('loadEmployeeRecords', error);
+      if (error) { console.error('loadEmployeeRecords', error); markLoadIssue('employee records'); }
       setEmployeeRecords(data.map(r=>({name:r.name,jobTitle:r.job_title,startDate:r.start_date,location:r.location,employeeNumber:r.employee_number||"",department:r.department||"",manager:r.manager||"",status:r.status||"",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
-    } catch(e) { console.error('loadEmployeeRecords', e); }
+    } catch(e) { console.error('loadEmployeeRecords', e); markLoadIssue('employee records'); }
   };
 
   // Only removes the profile row (job title/start date/location) — case
@@ -544,16 +582,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadOrgRoles = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('org_roles').select('*').eq('org_id', org.id).order('access_level', {ascending:false});
+      const {data, error} = await supabase.from('org_roles').select('*').eq('org_id', org.id).order('access_level', {ascending:false});
+      if(error) { console.error('loadOrgRoles', error); markLoadIssue('roles'); return; }
       if(data) setOrgRoles(data);
-    } catch(e) { console.error('loadOrgRoles', e); }
+    } catch(e) { console.error('loadOrgRoles', e); markLoadIssue('roles'); }
   };
   const loadOrgMembers = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('org_members').select('*').eq('org_id', org.id);
+      const {data, error} = await supabase.from('org_members').select('*').eq('org_id', org.id);
+      if(error) { console.error('loadOrgMembers', error); markLoadIssue('team members'); return; }
       if(data) setOrgMembers(data);
-    } catch(e) { console.error('loadOrgMembers', e); }
+    } catch(e) { console.error('loadOrgMembers', e); markLoadIssue('team members'); }
   };
   // ── Letter tracking ──
   // Stored per meeting as letterTracking: [{letterId, sentAt, deliveredAt, acknowledgedAt}]
@@ -1159,14 +1199,23 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         .eq('org_id', org.id)
         .order('created_at', { ascending: false })
         .range(from, to));
-      if (error) console.error("Load cases error:", error);
+      // Phase 6.5 hardening (accessibility/UX reliability pass) — a
+      // failed fetch used to be logged and then IGNORED: this still fell
+      // through to setCases with whatever fetchAllPages had accumulated
+      // before the error (often []), silently presenting a load failure
+      // as "this org has zero cases" — CasesScreen's own casesLoading
+      // fix (Batch 6) already stops that from being confused with "still
+      // loading", but did nothing for the case where loading genuinely
+      // finished, badly. markLoadIssue surfaces it via the shared banner.
+      if (error) { console.error("Load cases error:", error); markLoadIssue('cases'); }
+      else clearLoadIssue('cases');
       // ensureEvidenceIds — see saveCases' own use of it (Phase 6.5
       // hardening, P0, Cluster 8): backfills a stable id onto any
       // evidence item that predates this fix, here so a legacy case's
       // evidence has real ids from the moment it's loaded, not only
       // after its next save.
       setCases(data.map(mapCaseRow).map(ensureEvidenceIds));
-    } catch(e) { console.error("Load cases error:", e); }
+    } catch(e) { console.error("Load cases error:", e); markLoadIssue('cases'); }
     // finally, not just the success path — an error still means the
     // FIRST load attempt has resolved (however it went), so the "still
     // loading" state shouldn't persist forever on a failure. Only ever
@@ -1269,8 +1318,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── Team members ──
   const loadTeamMembers = async () => {
     if(!org?.id) return;
-    const { data } = await supabase.from('org_members').select('*').eq('org_id', org.id);
-    if(data) setTeamMembers(data);
+    try {
+      const { data, error } = await supabase.from('org_members').select('*').eq('org_id', org.id);
+      if(error) { console.error('loadTeamMembers', error); markLoadIssue('team members'); return; }
+      if(data) setTeamMembers(data);
+    } catch(e) { console.error('loadTeamMembers', e); markLoadIssue('team members'); }
   };
 
   const removeMember = async (member) => {
@@ -1319,8 +1371,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── Locations ──
   const loadLocations = async () => {
     if(!org?.id) return;
-    const { data } = await supabase.from('locations').select('*').eq('org_id', org.id);
-    if(data) setLocations(data);
+    try {
+      const { data, error } = await supabase.from('locations').select('*').eq('org_id', org.id);
+      if(error) { console.error('loadLocations', error); markLoadIssue('locations'); return; }
+      if(data) setLocations(data);
+    } catch(e) { console.error('loadLocations', e); markLoadIssue('locations'); }
   };
 
   // Organisational ER Intelligence (Phase 6, OP6, §3) — the HR-editable
@@ -1344,18 +1399,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const {data, error} = await supabase.from('organisation_themes').select('*').eq('org_id', org.id).order('name', {ascending:true});
-      if(error) { console.error('loadOrganisationThemes', error); return; }
+      if(error) { console.error('loadOrganisationThemes', error); markLoadIssue('themes'); return; }
       if(data) setOrganisationThemes(data.map(r=>({id:r.id, name:r.name, description:r.description||"", active:r.active, createdBy:r.created_by, createdAt:r.created_at})));
-    } catch(e) { console.error('loadOrganisationThemes', e); }
+    } catch(e) { console.error('loadOrganisationThemes', e); markLoadIssue('themes'); }
   };
 
   const loadCaseThemes = async () => {
     if(!org?.id) return;
     try {
       const {data, error} = await supabase.from('case_themes').select('*').eq('org_id', org.id);
-      if(error) { console.error('loadCaseThemes', error); return; }
+      if(error) { console.error('loadCaseThemes', error); markLoadIssue('case themes'); return; }
       if(data) setCaseThemes(data.map(r=>({id:r.id, caseId:r.case_id, themeId:r.theme_id, suggestedBy:r.suggested_by, confirmedBy:r.confirmed_by, confirmedAt:r.confirmed_at})));
-    } catch(e) { console.error('loadCaseThemes', e); }
+    } catch(e) { console.error('loadCaseThemes', e); markLoadIssue('case themes'); }
   };
 
   // Organisational ER Intelligence (Phase 6, OP15, §11) — org-wide,
@@ -1368,9 +1423,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const {data, error} = await supabase.from('org_events').select('*').eq('org_id', org.id).order('event_date', {ascending:false});
-      if(error) { console.error('loadOrgEvents', error); return; }
+      if(error) { console.error('loadOrgEvents', error); markLoadIssue('organisational events'); return; }
       if(data) setOrgEvents(data.map(r=>({id:r.id, eventDate:r.event_date, eventType:r.event_type, description:r.description, affectedLocations:r.affected_locations||[], createdBy:r.created_by, createdAt:r.created_at})));
-    } catch(e) { console.error('loadOrgEvents', e); }
+    } catch(e) { console.error('loadOrgEvents', e); markLoadIssue('organisational events'); }
   };
 
   // Organisational ER Intelligence (Phase 6, OP22, §18) — Improvement
@@ -1382,14 +1437,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const {data, error} = await supabase.from('improvement_initiatives').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
-      if(error) { console.error('loadImprovementInitiatives', error); return; }
+      if(error) { console.error('loadImprovementInitiatives', error); markLoadIssue('improvement initiatives'); return; }
       if(data) setImprovementInitiatives(data.map(r=>({
         id:r.id, title:r.title, problemIdentified:r.problem_identified, supportingInsights:r.supporting_insights||[],
         owner:r.owner||"", targetCompletion:r.target_completion||"", status:r.status, milestones:r.milestones||[],
         outcome:r.outcome||"", createdBy:r.created_by, createdAt:r.created_at,
         completedAt:r.completed_at||null, metricKind:r.metric_kind||null, metricValue:r.metric_value||null,
       })));
-    } catch(e) { console.error('loadImprovementInitiatives', e); }
+    } catch(e) { console.error('loadImprovementInitiatives', e); markLoadIssue('improvement initiatives'); }
   };
 
   // Billing is priced per location — every add/remove needs to reach
@@ -1424,8 +1479,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // type", whether or not a row already exists yet. ──
   const loadProcessTemplates = async () => {
     if(!org?.id) return;
-    const { data } = await supabase.from('process_templates').select('*').eq('org_id', org.id);
-    if(data) setProcessTemplates(data);
+    try {
+      const { data, error } = await supabase.from('process_templates').select('*').eq('org_id', org.id);
+      if(error) { console.error('loadProcessTemplates', error); markLoadIssue('process templates'); return; }
+      if(data) setProcessTemplates(data);
+    } catch(e) { console.error('loadProcessTemplates', e); markLoadIssue('process templates'); }
   };
 
   const saveProcessTemplate = async (processType, fields) => {
@@ -1440,8 +1498,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── HR Review Requests ──
   const loadHrReviews = async () => {
     if(!org?.id) return;
-    const { data } = await supabase.from('hr_review_requests').select('*').eq('org_id', org.id).order('requested_at', {ascending: false});
-    if(data) setHrReviewRequests(data);
+    try {
+      const { data, error } = await supabase.from('hr_review_requests').select('*').eq('org_id', org.id).order('requested_at', {ascending: false});
+      if(error) { console.error('loadHrReviews', error); markLoadIssue('HR review requests'); return; }
+      if(data) setHrReviewRequests(data);
+    } catch(e) { console.error('loadHrReviews', e); markLoadIssue('HR review requests'); }
   };
 
   // Manager Enablement (Phase 4, MP21, §25) — HR-only, same gating as
@@ -1455,7 +1516,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadManagerCapabilityInsights = async () => {
     if(!org?.id) return;
     const { data, error } = await supabase.from('manager_capability_insights').select('*').eq('org_id', org.id).order('created_at', {ascending: false});
-    if(error) { console.error('loadManagerCapabilityInsights', error); return; }
+    if(error) { console.error('loadManagerCapabilityInsights', error); markLoadIssue('manager capability insights'); return; }
     if(data) setManagerCapabilityInsights(data);
   };
 
@@ -1538,7 +1599,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
-  useEffect(()=>{ if(org?.id){ loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates(); if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); } } }, [org?.id, isHR, user?.id]);
+  const loadOrgData = () => {
+    if(!org?.id) return;
+    setDataLoadIssues([]);
+    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
+    if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); }
+  };
+  useEffect(loadOrgData, [org?.id, isHR, user?.id]);
 
   // Deliberately keyed only on transcript.length: this throttles the context
   // refresh to every 3rd utterance while recording. screen/transcript/updateLiveContext
@@ -1596,6 +1663,36 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setNewCasePriority("normal");
     setNewCaseEvidence([]);
   };
+
+  // Phase 6.5 hardening (accessibility pass) — App.jsx's own role="dialog"
+  // blocks (unlike the separate-component modals elsewhere in the app)
+  // are conditionally-rendered JSX inside this one giant component, not
+  // separate components each with their own mount lifecycle — so these
+  // calls have to live here, unconditionally, one per dialog, each gated
+  // by its own `active` flag rather than by mounting/unmounting. Grouped
+  // together rather than split next to each dialog's own state (which is
+  // itself scattered from line ~570 to ~1580) so the full set of dialogs
+  // this file owns is visible in one place. See useModalA11y's own header
+  // for what this replaces: a bare onKeyDown={Escape} on each dialog div
+  // with no Tab-focus trapping and no focus moved into the dialog on open.
+  const shareModalRef = useRef(null);
+  useModalA11y(shareModalRef, () => { setShowShareModal(false); setShareEmail(""); }, showShareModal);
+  const linkCaseModalRef = useRef(null);
+  useModalA11y(linkCaseModalRef, () => setShowLinkCase(false), showLinkCase && appealDetected);
+  const letterModalRef = useRef(null);
+  useModalA11y(letterModalRef, () => setShowLetterModal(false), showLetterModal);
+  const emailLetterModalRef = useRef(null);
+  useModalA11y(emailLetterModalRef, () => { setShowEmailLetter(false); setEmailLetterTo(""); }, showEmailLetter);
+  const inviteLinkModalRef = useRef(null);
+  useModalA11y(inviteLinkModalRef, () => setInviteLink(null), !!inviteLink);
+  const signModalRef = useRef(null);
+  useModalA11y(signModalRef, () => setShowSignModal(false), showSignModal);
+  const letterAckModalRef = useRef(null);
+  useModalA11y(letterAckModalRef, () => setShowLetterAckModal(false), showLetterAckModal);
+  const casePromptModalRef = useRef(null);
+  useModalA11y(casePromptModalRef, closeCasePrompt, showCasePrompt);
+  const onboardModalRef = useRef(null);
+  useModalA11y(onboardModalRef, () => { setShowOnboard(false); setOnboardDone(true); lsSet("compass_onboard", true); }, showOnboard && !showGdpr);
 
   const createCaseFromChat = () => {
     if(!casePromptName.trim()) return;
@@ -2455,7 +2552,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadStarterInstances = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('starter_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      const {data, error} = await supabase.from('starter_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      if(error) { console.error('loadStarterInstances', error); markLoadIssue('onboarding checklists'); return; }
       if(data) {
         data.forEach(r => { starterVersionRef.current[r.id] = r.updated_at; });
         setStarterInstances(data.map(r=>({
@@ -2464,7 +2562,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           tasks:r.tasks||[], aiCustomised:r.ai_customised, createdBy:r.created_by, createdAt:r.created_at,
         })));
       }
-    } catch(e) { console.error('loadStarterInstances', e); }
+    } catch(e) { console.error('loadStarterInstances', e); markLoadIssue('onboarding checklists'); }
   };
 
   // Phase 6.5 hardening (P0, data-integrity review) — was a blind upsert of
@@ -2508,7 +2606,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadLeaverInstances = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('leaver_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      const {data, error} = await supabase.from('leaver_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      if(error) { console.error('loadLeaverInstances', error); markLoadIssue('offboarding checklists'); return; }
       if(data) {
         data.forEach(r => { leaverVersionRef.current[r.id] = r.updated_at; });
         setLeaverInstances(data.map(r=>({
@@ -2520,7 +2619,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           createdBy:r.created_by, createdAt:r.created_at,
         })));
       }
-    } catch(e) { console.error('loadLeaverInstances', e); }
+    } catch(e) { console.error('loadLeaverInstances', e); markLoadIssue('offboarding checklists'); }
   };
 
   // Phase 6.5 hardening (P0, data-integrity review) — same fix as
@@ -2560,7 +2659,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const r = await authedFetch(`/api/portal/accounts?orgId=${encodeURIComponent(org.id)}`);
       const d = await r.json();
       if(r.ok) setPortalAccounts(d.accounts||[]);
-    } catch(e) { console.error('loadPortalAccounts', e); }
+      else { console.error('loadPortalAccounts', d.error); markLoadIssue('portal accounts'); }
+    } catch(e) { console.error('loadPortalAccounts', e); markLoadIssue('portal accounts'); }
   };
 
   const revokePortalAccess = async (employeeName) => {
@@ -2582,7 +2682,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadDsarRequests = async () => {
     if(!org?.id) return;
     try {
-      const {data} = await supabase.from('dsar_requests').select('*').eq('org_id', org.id);
+      const {data, error} = await supabase.from('dsar_requests').select('*').eq('org_id', org.id);
+      if(error) { console.error('loadDsarRequests', error); markLoadIssue('DSAR requests'); return; }
       if(data) setDsarRequests(data.map(r=>({
         id:r.id, employeeName:r.employee_name, requestedBy:r.requested_by,
         receivedDate:r.received_date, dueDate:r.due_date, status:r.status,
@@ -2590,7 +2691,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         reviewedFlaggedSections:r.reviewed_flagged_sections, createdAt:r.created_at,
         extended:r.extended, extensionReason:r.extension_reason, extendedAt:r.extended_at,
       })));
-    } catch(e) { console.error('loadDsarRequests', e); }
+    } catch(e) { console.error('loadDsarRequests', e); markLoadIssue('DSAR requests'); }
   };
 
   const createDsarRequest = async ({employeeName, requestedBy, receivedDate}) => {
@@ -2953,14 +3054,14 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return;
     try {
       const {data, error} = await supabase.from('wellbeing_notes').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
-      if(error) { console.error('loadWellbeingNotes', error); return; }
+      if(error) { console.error('loadWellbeingNotes', error); markLoadIssue('wellbeing notes'); return; }
       if(data) saveWellbeingNotes(data.map(r=>({
         id:r.id, employeeName:r.employee_name, type:r.type, date:r.date, manager:r.manager,
         content:r.content, supportOffered:r.support_offered, followUpDate:r.follow_up_date,
         followUpDone:r.follow_up_done, confidential:r.confidential,
         createdBy:r.created_by, createdAt:r.created_at,
       })));
-    } catch(e) { console.error('loadWellbeingNotes', e); }
+    } catch(e) { console.error('loadWellbeingNotes', e); markLoadIssue('wellbeing notes'); }
   };
 
   const saveWellbeingNoteToDB = async (note) => {
@@ -3022,7 +3123,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return;
     try {
       const {data, error} = await fetchAllPages((from, to) => supabase.from('allegations').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
-      if(error) { console.error('loadAllegations', error); return; }
+      if(error) { console.error('loadAllegations', error); markLoadIssue('allegations'); return; }
       // Keep the version ref in sync with every load, not just saves —
       // otherwise a reload (e.g. after another save's conflict) could
       // leave a stale ref value shadowing genuinely fresher data just
@@ -3305,7 +3406,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return;
     try {
       const {data, error} = await supabase.from('concern_referrals').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
-      if(error) { console.error('loadConcernReferrals', error); return; }
+      if(error) { console.error('loadConcernReferrals', error); markLoadIssue('concern referrals'); return; }
       if(data) setConcernReferrals(data.map(r=>({
         id:r.id, employeeName:r.employee_name, concernType:r.concern_type, description:r.description,
         witnesses:r.witnesses||"", discussedWithEmployee:!!r.discussed_with_employee, involvesSafetyOrWelfare:!!r.involves_safety_or_welfare,
@@ -3475,7 +3576,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return;
     try {
       const {data, error} = await supabase.from('case_access').select('*').eq('org_id', org.id);
-      if(error) { console.error('loadCaseAccess', error); return; }
+      if(error) { console.error('loadCaseAccess', error); markLoadIssue('case access grants'); return; }
       if(data) setCaseAccess(data.map(r=>({id:r.id, caseId:r.case_id, userId:r.user_id, role:r.role, grantedBy:r.granted_by, grantedAt:r.granted_at,
         // Manager Enablement (Phase 4, MP7) — only ever set on
         // role:"investigator" rows; null on every other role.
@@ -3837,7 +3938,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return;
     try {
       const {data, error} = await fetchAllPages((from, to) => supabase.from('case_signals').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
-      if(error) { console.error('loadCaseSignals', error); return; }
+      if(error) { console.error('loadCaseSignals', error); markLoadIssue('case signals'); return; }
       if(data) setCaseSignals(data.map(r=>({
         id:r.id, caseId:r.case_id, type:r.type, title:r.title, reasoning:r.reasoning||"",
         status:r.status, sourceRefs:r.source_refs||[], source:r.source,
@@ -3882,7 +3983,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return;
     try {
       const {data, error} = await fetchAllPages((from, to) => supabase.from('case_tasks').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
-      if(error) { console.error('loadCaseTasks', error); return; }
+      if(error) { console.error('loadCaseTasks', error); markLoadIssue('case tasks'); return; }
       if(data) setCaseTasks(data.map(r=>({
         id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
         dueDate:r.due_date||"", priority:r.priority, status:r.status,
@@ -6858,7 +6959,7 @@ Please produce:
       `}</style>
 
       {showShareModal&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowShareModal(false);setShareEmail("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={shareModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:420}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share meeting record</h3>
             <p style={{fontSize:13,color:"#9B9098",marginBottom:20}}>Send the meeting record to an email address</p>
@@ -6879,7 +6980,7 @@ Please produce:
       )}
 
       {showLinkCase&&appealDetected&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowLinkCase(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={linkCaseModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
             <div style={{fontSize:11,color:"#7C5CFC",fontWeight:600,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Appeal detected</div>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Link to an existing case?</h3>
@@ -6942,7 +7043,7 @@ Please produce:
       )}
 
       {showLetterModal&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowLetterModal(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={letterModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:24}}>How would you like to create the outcome letter?</p>
@@ -6964,13 +7065,13 @@ Please produce:
       )}
 
       {showEmailLetter&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowEmailLetter(false);setEmailLetterTo("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={emailLetterModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Email letter</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The letter will be sent as email body and also available to download as PDF.</p>
             <label htmlFor="email-letter-to" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Recipient email</label>
             <input id="email-letter-to" value={emailLetterTo} onChange={e=>setEmailLetterTo(e.target.value)}
-              placeholder="employee@company.com" autoFocus
+              placeholder="employee@company.com"
               style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={async()=>{
@@ -6987,7 +7088,7 @@ Please produce:
       )}
 
       {inviteLink&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setInviteLink(null);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={inviteLinkModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share invite with {inviteLink.name}</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>Share this link or invite code with {inviteLink.name} ({inviteLink.email}):</p>
@@ -7008,14 +7109,14 @@ Please produce:
       )}
 
       {showSignModal&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowSignModal(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={signModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Send for signature</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The employee will receive an email with a link to read and sign the meeting record.</p>
             <label htmlFor="sign-email" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
             <input id="sign-email" value={signEmail} onChange={e=>setSignEmail(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&signEmail.includes("@")&&(sendForSignature(signEmail),setShowSignModal(false),setSignEmail(""))}
-              placeholder="employee@company.com" autoFocus
+              placeholder="employee@company.com"
               style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>{if(signEmail.includes("@")){sendForSignature(signEmail);setShowSignModal(false);setSignEmail("");}}}
@@ -7030,14 +7131,14 @@ Please produce:
       )}
 
       {showLetterAckModal&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")setShowLetterAckModal(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={letterAckModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Send for acknowledgement</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The employee will receive an email with a link to read and acknowledge receipt of this letter.</p>
             <label htmlFor="letter-ack-email" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
             <input id="letter-ack-email" value={letterAckEmail} onChange={e=>setLetterAckEmail(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&letterAckEmail.includes("@")&&(sendLetterForAcknowledgement(letterAckEmail),setShowLetterAckModal(false),setLetterAckEmail(""))}
-              placeholder="employee@company.com" autoFocus
+              placeholder="employee@company.com"
               style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>{if(letterAckEmail.includes("@")){sendLetterForAcknowledgement(letterAckEmail);setShowLetterAckModal(false);setLetterAckEmail("");}}}
@@ -7055,7 +7156,7 @@ Please produce:
 
       {/* Case file prompt */}
       {showCasePrompt&&(
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape")closeCasePrompt();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div role="dialog" aria-modal="true" ref={casePromptModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
@@ -7149,7 +7250,10 @@ Please produce:
 
             {/* Evidence — staged locally and attached once the case is created below */}
             <div style={{marginBottom:20}}>
-              <label style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Evidence <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
+              {/* Section heading, not a single control's label — the
+                  dropzone below is its own labelled control
+                  (EvidenceDropzone's own aria-label). */}
+              <div style={{fontSize:12,fontWeight:600,color:"#1C1820",marginBottom:5}}>Evidence <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></div>
               {newCaseEvidence.map((ev,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F5F1EA"}}>
                   <span style={{fontSize:12,color:"#1A1535"}}>{ev.name}</span>
@@ -7252,6 +7356,26 @@ Please produce:
         </div>
       )}
 
+      {/* Phase 6.5 hardening (accessibility/UX reliability pass) — the
+          known issue: a failed org-data fetch previously left every
+          affected screen showing its normal "No X yet" empty state, with
+          zero visible signal that anything had gone wrong. role="status"
+          + aria-live so a screen-reader user is told this exists even
+          without looking at the screen; deliberately not auto-dismissing
+          like the toast above, since a data-load failure needs the user
+          to actually do something (retry), not just be transiently
+          informed. */}
+      {dataLoadIssues.length>0&&!loadBannerDismissed&&(
+        <div role="status" aria-live="polite" style={{position:"fixed",top:isMobile?16:24,left:"50%",transform:"translateX(-50%)",zIndex:3100,background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",maxWidth:isMobile?"calc(100vw - 32px)":480,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#C84B2F",flexShrink:0}}/>
+          <span style={{fontSize:13,color:"#1A1535",flex:1}}>
+            Couldn't load {dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.
+          </span>
+          <button onClick={loadOrgData} style={{fontSize:12,fontWeight:600,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",whiteSpace:"nowrap"}}>Retry</button>
+          <button onClick={()=>setLoadBannerDismissed(true)} aria-label="Dismiss" style={{background:"none",border:"none",color:"#9B9098",fontSize:16,lineHeight:1,cursor:"pointer",padding:0,flexShrink:0}}>×</button>
+        </div>
+      )}
+
       {confirmState&&(
         <ConfirmModal
           title={confirmState.title}
@@ -7314,7 +7438,7 @@ Please produce:
 
       {/* ── Onboarding overlay ── */}
       {showOnboard && !showGdpr && (
-        <div role="dialog" aria-modal="true" onKeyDown={e=>{if(e.key==="Escape"){setShowOnboard(false);setOnboardDone(true);lsSet("compass_onboard",true);}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1900,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div role="dialog" aria-modal="true" ref={onboardModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1900,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <Card style={{maxWidth:480,width:"100%"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
               <div style={{fontSize:10,color:"#6B6880",letterSpacing:1}}>{onboardStep+1} / {ONBOARD_STEPS.length}</div>

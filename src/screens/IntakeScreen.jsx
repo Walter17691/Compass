@@ -102,7 +102,12 @@ export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases })
               onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.background="#FDFAF5";}}/>
           </div>
           <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
-            <input type="checkbox" checked={intake.urgent} onChange={e=>setIntake(p=>({...p,urgent:e.target.checked}))}
+            {/* aria-label is a defensive, explicit accessible name — the
+                label's own implicit text-content computation (spans
+                nested inside a div) is reliable in real browsers/screen
+                readers, but this guarantees it regardless of nesting
+                depth or any future markup change here. */}
+            <input type="checkbox" aria-label="Mark as urgent" checked={intake.urgent} onChange={e=>setIntake(p=>({...p,urgent:e.target.checked}))}
               style={{width:16,height:16,accentColor:"#C84B2F",cursor:"pointer"}}/>
             <div>
               <span style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>Mark as urgent</span>

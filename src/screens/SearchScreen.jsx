@@ -9,7 +9,6 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
       <input
         aria-label="Search"
-        autoFocus
         placeholder="Search cases, records, letters, employees, evidence, DSARs..."
         value={searchQuery}
         onChange={e=>{setSearchQuery(e.target.value);runSearch(e.target.value);}}
@@ -68,7 +67,7 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
           <Card style={{background:"#F5F1EA"}}>
             <div style={{fontSize:11,color:"#6B6880",marginBottom:12,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Recent cases</div>
             {cases.slice(-5).reverse().map(c=>(
-              <div key={c.id} onClick={()=>setScreen(SCREENS.CASES)} style={{padding:"8px 0",borderBottom:"1px solid #1a1a1a",cursor:"pointer",fontSize:12,color:"#3D3560"}}>{c.employeeName}</div>
+              <button key={c.id} type="button" onClick={()=>setScreen(SCREENS.CASES)} style={{display:"block",width:"100%",padding:"8px 0",border:"none",borderBottom:"1px solid #1a1a1a",background:"none",cursor:"pointer",textAlign:"left",font:"inherit",fontSize:12,color:"#3D3560"}}>{c.employeeName}</button>
             ))}
             {cases.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No cases yet</div>}
           </Card>

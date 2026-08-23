@@ -64,7 +64,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
 
           <div style={FIELD_WRAP_STYLE}>
             <label htmlFor="meeting-chair-name" style={FIELD_LABEL_STYLE}>Your name (chair)</label>
-            <input id="meeting-chair-name" autoFocus placeholder="e.g. Tom Norton"
+            <input id="meeting-chair-name" placeholder="e.g. Tom Norton"
               value={meetingSetup.manager||""}
               onChange={e=>{
                 const val=e.target.value;
@@ -205,11 +205,11 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             </div>
           )}
 
-          <div style={FIELD_WRAP_STYLE}>
-            <label style={FIELD_LABEL_STYLE}>Meeting type</label>
+          <fieldset style={{border:"none",padding:0,...FIELD_WRAP_STYLE}}>
+            <legend style={{...FIELD_LABEL_STYLE,padding:0}}>Meeting type</legend>
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",maxHeight:340,overflowY:"auto"}}>
               {FORMAL_MEETING_TYPES.map((t)=>(
-                <button key={t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
+                <button key={t.id} type="button" aria-pressed={meetingSetup.type===t.id} onClick={()=>setMeetingSetup(p=>({...p,type:t.id}))}
                   style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",background:meetingSetup.type===t.id?"#F5F3FF":"#FFFFFF",border:"none",borderBottom:"1px solid #F5F1EA",borderLeft:`3px solid ${meetingSetup.type===t.id?"#7C5CFC":"transparent"}`,cursor:"pointer",textAlign:"left",transition:"all 0.1s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                   <div>
                     <div style={{fontSize:13,fontWeight:meetingSetup.type===t.id?600:400,color:meetingSetup.type===t.id?"#5B3FD4":"#1A1535"}}>{t.label}</div>
@@ -232,7 +232,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* ACAS guidance for the selected type */}
           {selectedType&&(

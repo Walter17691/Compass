@@ -27,9 +27,14 @@ export function PeopleScreen({ cases, setActivePerson, setScreen, setCaseInfo, s
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {people.map(p=>(
-          <div key={p.name} onClick={()=>{setActivePerson(p.name);setScreen(SCREENS.PERSON_VIEW);}}
-            style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
+          // "New meeting" is a real, separate control that must NOT
+          // trigger the row's own navigation — a native <button> can't
+          // nest another interactive control, so only the navigate-to-
+          // person content is the button; "New meeting" stays a sibling.
+          <div key={p.name}
+            style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <button type="button" onClick={()=>{setActivePerson(p.name);setScreen(SCREENS.PERSON_VIEW);}}
+              style={{flex:1,minWidth:0,padding:"16px 20px",cursor:"pointer",background:"none",border:"none",textAlign:"left",font:"inherit",color:"inherit"}}>
               <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>{p.name}</div>
               <div style={{fontSize:12,color:"#9B9098"}}>{p.meetings.length} meeting{p.meetings.length!==1?"s":""} · Last: {p.lastDate||"Unknown"}</div>
               <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
@@ -37,10 +42,10 @@ export function PeopleScreen({ cases, setActivePerson, setScreen, setCaseInfo, s
                   <span key={i} style={{fontSize:11,background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 8px",color:"#6B6375"}}>{m.type}</span>
                 ))}
               </div>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+            </button>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,padding:"16px 20px 16px 12px",flexShrink:0}}>
               {p.lastRisk&&<span style={{fontSize:11,fontWeight:600,color:p.lastRisk==="HIGH"?"#F04E37":p.lastRisk==="MEDIUM"?"#F59E0B":"#22C55E",background:p.lastRisk==="HIGH"?"rgba(240,78,55,0.1)":p.lastRisk==="MEDIUM"?"rgba(245,158,11,0.1)":"rgba(34,197,94,0.1)",padding:"3px 8px",borderRadius:4}}>{p.lastRisk} RISK</span>}
-              <button onClick={e=>{e.stopPropagation();setCaseInfo(p2=>({...p2,employee:p.name}));setMeetingSetup(s=>({...s,employee:p.name}));setScreen(SCREENS.HOME);}}
+              <button onClick={()=>{setCaseInfo(p2=>({...p2,employee:p.name}));setMeetingSetup(s=>({...s,employee:p.name}));setScreen(SCREENS.HOME);}}
                 style={{fontSize:11,background:"#7C5CFC",border:"none",borderRadius:5,padding:"4px 10px",color:"#fff",cursor:"pointer",fontWeight:500}}>New meeting</button>
             </div>
           </div>

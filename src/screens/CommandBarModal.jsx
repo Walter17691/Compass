@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 // Integrations & Workflow Automation (Phase 5, IP6/IP7, §25-26) — Command
 // Bar + multi-step workflows. Centred palette (Cmd/Ctrl+K), unlike
@@ -13,7 +14,6 @@ import { useEffect, useRef, useState } from 'react';
 // all-or-nothing Confirm, so a plan that got one step half-right doesn't
 // have to be thrown away and retyped just to drop that one step.
 export function CommandBarModal({ show, onClose, input, setInput, processing, plan, error, onSubmit, onConfirm }) {
-  const inputRef = useRef(null);
   const [excludedIndices, setExcludedIndices] = useState(new Set());
   // React's own recommended "reset state when a prop changes" pattern —
   // adjusting state directly during render, guarded by a comparison —
@@ -26,9 +26,14 @@ export function CommandBarModal({ show, onClose, input, setInput, processing, pl
     setExcludedIndices(new Set());
   }
 
-  useEffect(() => {
-    if (show) inputRef.current?.focus();
-  }, [show]);
+  // Phase 6.5 hardening (accessibility pass) — replaces a bare useEffect
+  // that only moved focus to the input on open: this modal had no
+  // role="dialog", no Escape handling, and no Tab trap at all, despite
+  // being reachable from anywhere via Cmd/Ctrl+K. useModalA11y's own
+  // initial-focus already lands on this same input (it's the first
+  // focusable element in the container), so nothing is lost.
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, onClose, show);
 
   if (!show) return null;
 
@@ -45,11 +50,13 @@ export function CommandBarModal({ show, onClose, input, setInput, processing, pl
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- mouse-only click-outside-to-dismiss convenience; useModalA11y (Escape/focus-trap) and the real Close button below are the actual keyboard paths.
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(26,21,53,0.35)",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:"12vh"}}>
-      <div onClick={e=>e.stopPropagation()} style={{width:520,maxWidth:"90vw",background:"#FFFFFF",borderRadius:16,boxShadow:"0 12px 48px rgba(0,0,0,0.2)",border:"1px solid #E8E0D0",overflow:"hidden"}}>
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events -- stops the backdrop's own onClick(onClose) firing when a click lands on the dialog content itself; not a control in its own right. */}
+      <div role="dialog" aria-modal="true" aria-label="Command Bar" ref={containerRef} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{width:520,maxWidth:"90vw",background:"#FFFFFF",borderRadius:16,boxShadow:"0 12px 48px rgba(0,0,0,0.2)",border:"1px solid #E8E0D0",overflow:"hidden"}}>
         <form onSubmit={e=>{e.preventDefault(); if(input.trim() && !processing) onSubmit(input.trim());}} style={{display:"flex",alignItems:"center",gap:10,padding:"14px 18px",borderBottom:(processing||plan||error)?"1px solid #E8E0D0":"none"}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C5CFC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} placeholder="Tell Compass what to do…" aria-label="Command Bar instruction"
+          <input value={input} onChange={e=>setInput(e.target.value)} placeholder="Tell Compass what to do…" aria-label="Command Bar instruction"
             style={{flex:1,border:"none",outline:"none",fontSize:15,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",background:"transparent"}}/>
           <button type="button" onClick={onClose} aria-label="Close" style={{background:"none",border:"none",cursor:"pointer",color:"#9B9098",fontSize:18,lineHeight:1,padding:2}}>×</button>
         </form>

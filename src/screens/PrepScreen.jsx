@@ -65,6 +65,12 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
   prepQuestions=[], linkedCaseAllegations=[], linkedCaseEvidence=[],
   onAddPrepQuestion, onUpdatePrepQuestionText, onRemovePrepQuestion, onMovePrepQuestion, onTogglePrepQuestionEssential, onLinkPrepQuestionToAllegation, onLinkPrepQuestionToEvidence,
 }) {
+  // Phase 6.5 hardening (accessibility pass) — the upload input inside is
+  // visually hidden but still keyboard-focusable (see its own comment
+  // below); this reuses the exact hover-border-highlight already built
+  // for mouse users as the keyboard-focus indicator too, same visual
+  // language, just a second trigger.
+  const [docInputFocused, setDocInputFocused] = useState(false);
   return (
     <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
       <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
@@ -89,14 +95,14 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
 
       <div style={{textAlign:"left",marginBottom:16}}>
         <label htmlFor="prep-employee-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#C84B2F"}}>*</span></label>
-        <input id="prep-employee-name" autoFocus placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
+        <input id="prep-employee-name" placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
           onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
           style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
       </div>
 
       <div style={{textAlign:"left",marginBottom:16}}>
-        <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
-        <DateInput value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
+        <label htmlFor="prep-meeting-date" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting date</label>
+        <DateInput id="prep-meeting-date" value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
       </div>
 
       <div style={{textAlign:"left",marginBottom:16}}>
@@ -122,7 +128,10 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
       </div>
 
       <div style={{textAlign:"left",marginBottom:24}}>
-        <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></label>
+        {/* Section heading — the upload control below is its own labelled
+            element (the wrapping <label>, which carries its own visible
+            "Click to upload" text as the file input's accessible name). */}
+        <div style={{fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Supporting document <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional — PDF, Word or text)</span></div>
         {bgDoc?(
           <div style={{display:"flex",alignItems:"center",gap:10,background:"#FFFFFF",border:"1px solid #7C5CFC33",borderRadius:8,padding:"12px 16px"}}>
             <span style={{fontSize:20}}>&#128196;</span>
@@ -133,10 +142,18 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
             <button onClick={()=>setBgDoc(null)} style={{background:"none",border:"none",color:"#6B6880",fontSize:18,cursor:"pointer"}}>&#10005;</button>
           </div>
         ):(
-          <label style={{display:"block",background:"#FFFFFF",border:"1px dashed #E8E0D0",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
+          <label style={{display:"block",background:"#FFFFFF",border:"1px dashed",borderColor:docInputFocused?"#7C5CFC44":"#E8E0D0",borderRadius:8,padding:"20px",textAlign:"center",cursor:"pointer"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor="#7C5CFC44"}
-            onMouseLeave={e=>e.currentTarget.style.borderColor="#E8E0D0"}>
-            <input type="file" accept=".pdf,.doc,.docx,.txt" style={{display:"none"}} onChange={async e=>{
+            onMouseLeave={e=>{if(!docInputFocused) e.currentTarget.style.borderColor="#E8E0D0";}}>
+            {/* Phase 6.5 hardening (accessibility pass) — was
+                style={{display:"none"}}, which removes an element from the
+                tab order entirely (see EvidenceDropzone.jsx's own comment
+                on the identical bug): a keyboard-only user had no way to
+                reach this control at all. */}
+            <input type="file" accept=".pdf,.doc,.docx,.txt"
+              onFocus={()=>setDocInputFocused(true)} onBlur={()=>setDocInputFocused(false)}
+              style={{position:"absolute",width:1,height:1,padding:0,margin:-1,overflow:"hidden",clip:"rect(0,0,0,0)",whiteSpace:"nowrap",border:0}}
+              onChange={async e=>{
               const file = e.target.files[0];
               if(!file) return;
               const name = file.name;

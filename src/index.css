@@ -61,6 +61,22 @@ input:focus, textarea:focus, select:focus {
 button { font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer; }
 ::placeholder { color: var(--text-3); }
 
+/* Phase 6.5 hardening (accessibility pass) — restores a visible
+   keyboard-focus indicator for buttons/links/programmatically-focusable
+   elements app-wide (input/textarea/select already get one from the
+   :focus rule above). box-shadow, not outline: many components across
+   this codebase set outline:"none" inline (over 100 occurrences), and an
+   inline style always wins over a stylesheet rule for that same
+   property — a global outline override here couldn't beat it.
+   box-shadow is a different property, so it isn't shadowed the same way.
+   :focus-visible (not :focus) so a mouse click still shows no ring,
+   matching how sighted mouse users already experience every button here
+   — only keyboard/programmatic focus gets the indicator. */
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  border-radius: 4px;
+}
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }

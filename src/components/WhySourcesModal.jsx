@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { Btn } from './Primitives';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 const KIND_LABEL = { meeting: "Meeting", evidence: "Evidence", allegation: "Allegation", document: "Document", transcript: "Meeting record", context: "Context", policy: "Policy" };
 
@@ -8,9 +10,10 @@ const KIND_LABEL = { meeting: "Meeting", evidence: "Evidence", allegation: "Alle
 // since different call sites — a single case's signals today, an org-wide
 // assistant's later — have different data available to resolve against.
 export function WhySourcesModal({ title, reasoning, sourceRefs = [], resolveRef, onClose }) {
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, onClose);
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="why-sources-title"
-      onKeyDown={e=>{ if(e.key==="Escape") onClose(); }}
+    <div role="dialog" aria-modal="true" aria-labelledby="why-sources-title" ref={containerRef} tabIndex={-1}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:520,maxHeight:"80vh",overflowY:"auto"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Why Compass is saying this</div>

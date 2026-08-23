@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { Btn } from './Primitives';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 // Organisational ER Intelligence (Phase 6, OP17, §23) — "Show Evidence"
 // for org-level insights. Visually consistent with WhySourcesModal (same
@@ -15,9 +17,10 @@ import { Btn } from './Primitives';
 // abstraction (built for case references, not aggregate numbers), this
 // is a small, purpose-built sibling component for exactly this shape.
 export function InsightEvidenceModal({ title, metrics = [], period, comparisonPeriod, themesUsed = [], confidenceNote, onClose }) {
+  const containerRef = useRef(null);
+  useModalA11y(containerRef, onClose);
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="insight-evidence-title"
-      onKeyDown={e=>{ if(e.key==="Escape") onClose(); }}
+    <div role="dialog" aria-modal="true" aria-labelledby="insight-evidence-title" ref={containerRef} tabIndex={-1}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Show evidence</div>

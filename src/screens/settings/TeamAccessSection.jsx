@@ -81,8 +81,8 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
             {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
           {locations.length>0&&(
-            <div style={{marginBottom:12}}>
-              <label style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Locations</label>
+            <fieldset style={{marginBottom:12,border:"none",padding:0}}>
+              <legend style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:8,padding:0}}>Locations</legend>
               <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                 {locations.map(l=>(
                   <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
@@ -95,7 +95,7 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
                   </label>
                 ))}
               </div>
-            </div>
+            </fieldset>
           )}
           <Btn onClick={inviteMember} disabled={inviting||!inviteForm.name.trim()||!inviteForm.email.trim()} style={{width:"100%"}}>
             {inviting?"Sending invite...":"Send invite"}
