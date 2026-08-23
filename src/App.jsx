@@ -2,7 +2,8 @@ import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES, CONCERN_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
-import { addWorkingDays, addCalendarMonth, toISODateLocal } from './lib/dates';
+import { addCalendarMonth, toISODateLocal } from './lib/dates';
+import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
 import { ls, lsSet, orgScopedKey, clearAllOrgScopedData } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
@@ -248,6 +249,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── Cases ──
   const [cases, setCases] = useState(orgLs("compass_cases", []));
+  // Phase 6.5 hardening (P1, reliability review) — cases seeds from a
+  // local cache (orgLs), so a returning user usually sees real (if
+  // slightly stale) data immediately. A first-ever load on a device, or
+  // right after "Delete all data"/sign-out clears that cache, starts
+  // from cases=[] — indistinguishable, until now, from "this org
+  // genuinely has zero cases," which CasesScreen renders as "No cases
+  // yet" with a call to action to create one. For a large org (several
+  // thousand cases, now correctly paginated across multiple round-trips
+  // rather than silently truncated — see loadCasesFromDB), that fetch
+  // can take a few real seconds; showing a false "no cases" empty state
+  // during that window risks someone clicking "Create first case" for an
+  // org that already has thousands.
+  const [casesLoading, setCasesLoading] = useState(true);
   const [viewMeeting, setViewMeeting] = useState(null);
   const [viewCaseId, setViewCaseId] = useState(null);
 
@@ -1153,6 +1167,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // after its next save.
       setCases(data.map(mapCaseRow).map(ensureEvidenceIds));
     } catch(e) { console.error("Load cases error:", e); }
+    // finally, not just the success path — an error still means the
+    // FIRST load attempt has resolved (however it went), so the "still
+    // loading" state shouldn't persist forever on a failure. Only ever
+    // clears the flag, never re-sets it true — the window-focus refetch
+    // below re-runs this same function on every tab focus, and that
+    // background refresh must never flash the UI back into a loading
+    // state once real data has already been shown once.
+    setCasesLoading(false);
   };
 
   const saveCaseToDB = async (caseObj) => {
@@ -2987,10 +3009,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // as wellbeing_notes/dsar_requests. RLS inherits case access rules via an
   // EXISTS join (see supabase/case_structure_2026-08-09.sql), so this loads
   // straight by org_id like every other org-scoped table.
+  // Phase 6.5 hardening (P1, reliability review) — same unpaginated-select
+  // truncation bug Batch 6 already fixed for cases/employee_records
+  // (src/lib/paginatedFetch.js's own header comment), found here too on a
+  // live-data review: this org's real allegations count (816) is already
+  // close enough to PostgREST's single-request row cap that it will
+  // silently start dropping real allegations from view without any code
+  // change at all, just from ordinary case volume growing. Fixed with the
+  // same fetchAllPages helper rather than a raised .limit(), which would
+  // just move the same failure to a slightly higher row count.
   const loadAllegations = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('allegations').select('*').eq('org_id', org.id).order('created_at', {ascending:true});
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('allegations').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
       if(error) { console.error('loadAllegations', error); return; }
       // Keep the version ref in sync with every load, not just saves —
       // otherwise a reload (e.g. after another save's conflict) could
@@ -3786,10 +3817,17 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   // ── Case signals ──
+  // Phase 6.5 hardening (P1, reliability review) — same truncation bug
+  // Batch 6 fixed for cases/employee_records, confirmed live and already
+  // ACTIVE here, not just a future risk: this org's real case_signals
+  // count (1,655) already exceeds the single-request row cap, so this
+  // was silently dropping real signals — including guardrail/next-best-
+  // action/inconsistency flags — from every case view whose signal
+  // happened to land past the cap.
   const loadCaseSignals = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('case_signals').select('*').eq('org_id', org.id).order('created_at', {ascending:true});
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('case_signals').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
       if(error) { console.error('loadCaseSignals', error); return; }
       if(data) setCaseSignals(data.map(r=>({
         id:r.id, caseId:r.case_id, type:r.type, title:r.title, reasoning:r.reasoning||"",
@@ -3825,10 +3863,16 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // — checklistTasks.js's nested {id, tasks:[...]} shape doesn't fit a flat,
   // cross-case-listable table, so these are new but deliberately small,
   // mirroring allegations' own CRUD shape rather than inventing a third pattern.
+  // Phase 6.5 hardening (P1, reliability review) — same truncation bug
+  // Batch 6 fixed for cases/employee_records, confirmed live and already
+  // ACTIVE here, not just a future risk: this org's real case_tasks count
+  // (1,263) already exceeds the single-request row cap, so real tasks —
+  // including due-soon/overdue deadline tracking, which reads this same
+  // state — were being silently dropped from view.
   const loadCaseTasks = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('case_tasks').select('*').eq('org_id', org.id).order('created_at', {ascending:true});
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('case_tasks').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
       if(error) { console.error('loadCaseTasks', error); return; }
       if(data) setCaseTasks(data.map(r=>({
         id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
@@ -5373,7 +5417,17 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // Generate next steps deadlines
     orgLsSet("compass_meeting_draft", null); // transcript is now captured in the AI call in flight — the crash-recovery window has passed
     const baseDate = caseInfo.date ? new Date(caseInfo.date.split("/").reverse().join("-")) : new Date();
-    const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days), done:false }));
+    // Phase 6.5 hardening (P1, reliability review) — was lib/dates.js's own
+    // addWorkingDays, a second, duplicate implementation of this same
+    // function with a real bug: it special-cased days===0 to return null
+    // instead of the same date, so NEXT_STEPS_MAP's "Note warning on HR
+    // record" step (days:0, constants.js) silently got no deadline at all
+    // on every Disciplinary meeting, and so never appeared in the overdue/
+    // due-soon feed. dateMath.js's addWorkingDays (the shared module this
+    // review consolidated four other date implementations onto) has no
+    // such special case and also — unlike the old dates.js version —
+    // parses DD/MM/YYYY, not just what `new Date()` itself accepts.
+    const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days)?.toLocaleDateString("en-GB")||null, done:false }));
     setNextSteps(steps);
     let fullRecord = "";
     try {
@@ -7539,7 +7593,7 @@ Please produce:
 
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
-        <CasesScreen cases={cases} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} />
+        <CasesScreen cases={cases} casesLoading={casesLoading} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} />
       )}
 
       {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}

@@ -25,3 +25,32 @@ describe('CasesScreen — field labelling (Phase 6.5, Batch 13)', () => {
     expect(screen.getByLabelText('Select Sam Employee')).toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (P1, reliability review) — a large org's real case
+// load now takes several sequential paginated requests (see
+// loadCasesFromDB's own fetchAllPages fix) rather than the previous
+// single, silently-truncating request. Without a distinct loading state,
+// an empty cases array during that window was indistinguishable from
+// "this org genuinely has zero cases," which showed a false "create your
+// first case" prompt to an org that may already have thousands.
+describe('CasesScreen — loading state (Phase 6.5, P1)', () => {
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, confirmDialog: noop, showToast: noop };
+
+  it('shows a loading indicator, not "No cases yet", while the first case load is still in flight', () => {
+    render(<CasesScreen {...baseProps} cases={[]} casesLoading={true} />);
+    expect(screen.getByText('Loading cases…')).toBeInTheDocument();
+    expect(screen.queryByText('No cases yet')).not.toBeInTheDocument();
+  });
+
+  it('shows the genuine empty state once loading has finished and there really are no cases', () => {
+    render(<CasesScreen {...baseProps} cases={[]} casesLoading={false} />);
+    expect(screen.getByText('No cases yet')).toBeInTheDocument();
+    expect(screen.queryByText('Loading cases…')).not.toBeInTheDocument();
+  });
+
+  it('shows neither empty state once real cases have loaded', () => {
+    render(<CasesScreen {...baseProps} cases={cases} casesLoading={false} />);
+    expect(screen.queryByText('No cases yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading cases…')).not.toBeInTheDocument();
+  });
+});

@@ -24,7 +24,7 @@ const STAGE_LABEL = { intake:"Intake", investigation:"Investigation", inv_report
 // created since the "+ New case" modal started writing cases.ownerId/
 // priority — older cases won't match either filter, same as any
 // additive-migration field.
-export function CasesScreen({ cases, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
+export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
   const [selected, setSelected] = useState(new Set());
   const [filters, setFilters] = useState({ type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" });
   const setFilter = (key, value) => setFilters(f=>({...f, [key]:value}));
@@ -74,7 +74,13 @@ export function CasesScreen({ cases, locations, orgMembers, setIntake, setScreen
             <button onClick={()=>setSelected(new Set())} style={{fontSize:12,background:"none",border:"none",color:"#C4BAB0",cursor:"pointer",marginLeft:"auto",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear</button>
           </div>
         )}
-        {cases.length===0&&(
+        {cases.length===0&&casesLoading&&(
+          <div style={{textAlign:"center",padding:"80px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
+            <span className="pu" style={{color:"#7C5CFC",fontSize:22}}>●</span>
+            <div style={{fontSize:14,color:"#9B9098",marginTop:12}}>Loading cases…</div>
+          </div>
+        )}
+        {cases.length===0&&!casesLoading&&(
           <div style={{textAlign:"center",padding:"80px 20px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",marginBottom:8}}>No cases yet</div>
             <div style={{fontSize:14,color:"#9B9098",marginBottom:24}}>Create a case to start managing HR proceedings</div>

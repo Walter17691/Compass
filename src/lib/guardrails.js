@@ -77,14 +77,21 @@ function checkEvidenceAfterReport(cs) {
   const reportDate = parseFlexDate(cs.investigationReportDate);
   if (!reportDate) return null;
   const late = (cs.evidence || [])
-    .map((e, index) => ({ ...e, index }))
     .filter(e => { const d = parseFlexDate(e.date); return d && d > reportDate; });
   if (!late.length) return null;
   return {
     id: "evidence_after_report",
     title: "Evidence added after the investigation report was concluded",
     reasoning: `${late.map(e => e.name).join(", ")} — added after the investigation report was concluded. Consider whether this evidence changes the findings before the case progresses.`,
-    sourceRefs: late.map(e => ({ kind: "evidence", id: e.index })),
+    // Phase 6.5 hardening (P1, reliability review) — was e.index (this
+    // evidence item's position in cs.evidence at the moment this check
+    // ran), the exact array-index-as-id pattern evidenceUpload.js's own
+    // ensureEvidenceIds (Cluster 8) was built to eliminate elsewhere:
+    // deleting or reordering an earlier evidence item would silently
+    // repoint this sourceRef at the wrong document. Every evidence item
+    // is guaranteed a real id by the time guardrails run (ensureEvidenceIds
+    // backfills on load/save), so there's no reason left to use the index.
+    sourceRefs: late.map(e => ({ kind: "evidence", id: e.id })),
   };
 }
 

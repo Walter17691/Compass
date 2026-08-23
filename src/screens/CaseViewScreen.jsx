@@ -18,6 +18,7 @@ import { AIAssistantTab } from '../components/caseTabs/AIAssistantTab';
 import { allegationsForCase } from '../lib/allegations';
 import { tasksForCase, hrNoteTasks } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
+import { resolveSignalRef as resolveSignalRefFor } from '../lib/resolveSignalRef';
 import { computeCaseReadiness } from '../lib/caseReadiness';
 import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
 import { investigationPlanTasks } from '../lib/investigationPlan';
@@ -223,17 +224,7 @@ export function CaseViewScreen({
     else if(linkTo.kind==="evidence") setActiveTab("evidence");
   };
 
-  const resolveSignalRef = (ref) => {
-    if(ref.kind==="meeting") { const m = meetings.find(x=>x.id===ref.id); return m ? {label:m.type||"Meeting", detail:null, date:m.date} : null; }
-    if(ref.kind==="allegation") { const a = caseAllegations.find(x=>x.id===ref.id); return a ? {label:a.title, detail:null, date:a.createdAt} : null; }
-    if(ref.kind==="evidence") { const e = (cs.evidence||[])[ref.id]; return e ? {label:e.name||"Evidence", detail:e.type||null, date:e.date||null} : null; }
-    // Self-contained refs (own label/detail already set, nothing to look
-    // up by id) — e.g. ConsistencyPanel's anonymised comparable-case
-    // count, where there's no specific case id that could be shown
-    // without defeating the anonymity.
-    if(ref.detail || ref.date) return ref;
-    return null;
-  };
+  const resolveSignalRef = (ref) => resolveSignalRefFor(ref, { meetings, allegations: caseAllegations, evidence: cs.evidence||[] });
 
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",flexDirection:"column"}}>

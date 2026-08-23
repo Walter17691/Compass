@@ -135,4 +135,20 @@ describe('addWorkingDays', () => {
   it('returns null for an unparseable input date', () => {
     expect(addWorkingDays('not a date', 5)).toBeNull();
   });
+
+  // Phase 6.5 hardening (P1, reliability review) — regression test for a
+  // real bug found in the now-removed duplicate lib/dates.js
+  // addWorkingDays, which special-cased days===0 to return null instead
+  // of the same date. NEXT_STEPS_MAP (constants.js) has a real days:0
+  // step ("Note warning on HR record" for Disciplinary meetings), which
+  // silently got no deadline at all — and so never appeared in the
+  // overdue/due-soon feed — until App.jsx switched to this shared
+  // implementation.
+  it('returns the same date, not null, for 0 working days', () => {
+    const result = addWorkingDays(new Date(2026, 7, 7), 0);
+    expect(result).not.toBeNull();
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(7);
+    expect(result.getDate()).toBe(7);
+  });
 });

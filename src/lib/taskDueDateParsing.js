@@ -7,6 +7,8 @@
 // acceptDocumentFinding (the "action" finding type) and IP23's
 // acceptOhFinding (adjustment/restriction/further_information).
 
+import { toISODateLocal } from './dates.js';
+
 const WORD_TO_NUM = { a:1, an:1, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12 };
 const UNIT_TO_DAYS = { day:1, week:7, fortnight:14, month:30 };
 const COMMITMENT_PATTERN = /\b(\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(day|week|fortnight|month)s?\b/i;
@@ -23,7 +25,13 @@ export function parseCommitmentDueDate(text, fromDate = new Date()) {
   const days = value * (UNIT_TO_DAYS[match[2].toLowerCase()] || 1);
   const due = new Date(fromDate.getTime());
   due.setDate(due.getDate() + days);
-  return due.toISOString().split("T")[0];
+  // Phase 6.5 hardening (P1, reliability review) — due.toISOString()
+  // converts to UTC first, same class of bug dates.js's own
+  // toISODateLocal was written to avoid: for any time between local
+  // midnight and 1am during BST (UTC+1), that UTC conversion silently
+  // rolls the date back one day. fromDate defaults to `new Date()`, so
+  // this fired for real on every commitment parsed in that window.
+  return toISODateLocal(due);
 }
 
 // Only ever a real, already-known name on the case — cs.ownerId resolved

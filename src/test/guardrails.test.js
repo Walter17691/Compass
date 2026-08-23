@@ -38,8 +38,8 @@ describe('computeGuardrailChecks — evidence after report', () => {
       ...baseCase,
       investigationReportDate: '2026-08-01T00:00:00.000Z',
       evidence: [
-        { name: 'Late CCTV clip', date: '05/08/2026' },
-        { name: 'Early witness note', date: '20/07/2026' },
+        { id: 'ev-late', name: 'Late CCTV clip', date: '05/08/2026' },
+        { id: 'ev-early', name: 'Early witness note', date: '20/07/2026' },
       ],
     };
     const checks = computeGuardrailChecks(cs, []);
@@ -47,7 +47,29 @@ describe('computeGuardrailChecks — evidence after report', () => {
     expect(flagged).toBeTruthy();
     expect(flagged.reasoning).toContain('Late CCTV clip');
     expect(flagged.reasoning).not.toContain('Early witness note');
-    expect(flagged.sourceRefs).toEqual([{ kind: 'evidence', id: 0 }]);
+    // Phase 6.5 hardening (P1, reliability review) — must be the evidence
+    // item's own stable id, not its array position (see guardrails.js's
+    // own comment on this check for why the index was unsafe).
+    expect(flagged.sourceRefs).toEqual([{ kind: 'evidence', id: 'ev-late' }]);
+  });
+
+  it('keeps pointing at the correct evidence item by id even if an earlier item is removed (regression: was array-index-based)', () => {
+    const cs = {
+      ...baseCase,
+      investigationReportDate: '2026-08-01T00:00:00.000Z',
+      // No item at index 0 that would be "late" — if the sourceRef were
+      // still index-based, removing the original index-0 item would make
+      // this test's own late item (now at index 0) get the right id only
+      // by coincidence. Asserting the id directly is what actually proves
+      // stability, regardless of position.
+      evidence: [
+        { id: 'ev-early-2', name: 'Early note', date: '10/07/2026' },
+        { id: 'ev-late-2', name: 'Late report addendum', date: '10/08/2026' },
+      ],
+    };
+    const checks = computeGuardrailChecks(cs, []);
+    const flagged = checks.find(c => c.title === 'Evidence added after the investigation report was concluded');
+    expect(flagged.sourceRefs).toEqual([{ kind: 'evidence', id: 'ev-late-2' }]);
   });
 
   it('does not flag when there is no investigation report yet', () => {

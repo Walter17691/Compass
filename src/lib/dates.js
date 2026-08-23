@@ -1,13 +1,10 @@
-export function addWorkingDays(date, days) {
-  if(days === 0) return null;
-  const d = new Date(date);
-  let added = 0;
-  while(added < days) {
-    d.setDate(d.getDate() + 1);
-    if(d.getDay() !== 0 && d.getDay() !== 6) added++;
-  }
-  return d.toLocaleDateString("en-GB");
-}
+// Phase 6.5 hardening (P1, reliability review) — this module's own
+// addWorkingDays was removed as a duplicate of dateMath.js's (the shared
+// module dateMath.js's header comment already consolidated four other
+// date implementations onto): this one didn't parse DD/MM/YYYY and had a
+// real bug where 0 working days returned null instead of the same date.
+// Working-day arithmetic now lives only in dateMath.js; this file keeps
+// the two calendar helpers with no equivalent there.
 
 // UK GDPR/DPA 2018 DSAR deadline: "one calendar month" from receipt (ICO
 // guidance) — the corresponding date in the next month, or the last day

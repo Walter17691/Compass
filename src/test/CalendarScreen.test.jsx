@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CalendarScreen } from '../screens/CalendarScreen.jsx';
 
@@ -94,6 +94,36 @@ describe('CalendarScreen — smart scheduling (Phase 5, IP16)', () => {
     await fillDateAndCase(user);
     await user.click(screen.getByRole('button', { name: '+ Add sarah@company.com' }));
     expect(screen.getByPlaceholderText('sarah@company.com, rep@union.org')).toHaveValue('sarah@company.com');
+  });
+
+  // Phase 6.5 hardening (P1, reliability review) — App.jsx's own
+  // checkMeetingAvailability guards against a stale response overwriting
+  // a newer one with a request-generation ref, but that guard only works
+  // because clearAvailabilityCheck() (which bumps the ref) is called
+  // BEFORE each new onCheckAvailability() fires — this is the piece of
+  // that contract that lives here, in the modal's own effect.
+  it('clears the previous availability result before firing a new check on every slot change', async () => {
+    const user = userEvent.setup();
+    const onCheckAvailability = vi.fn();
+    const clearAvailabilityCheck = vi.fn();
+    render(<CalendarScreen cases={cases} setScreen={()=>{}} screens={{}} setActiveCaseId={()=>{}} setActiveCaseStage={()=>{}} onScheduleMeeting={vi.fn()} onCheckAvailability={onCheckAvailability} clearAvailabilityCheck={clearAvailabilityCheck} />);
+    await fillDateAndCase(user);
+    expect(clearAvailabilityCheck).toHaveBeenCalled();
+    expect(onCheckAvailability).toHaveBeenCalled();
+
+    clearAvailabilityCheck.mockClear();
+    onCheckAvailability.mockClear();
+    // One atomic value-set (rather than user.type's keystroke-by-keystroke
+    // events, which fire the effect once per intermediate, often-invalid
+    // partial value) isolates exactly one slot change, matching what a
+    // real "pick a different time" click produces.
+    fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '15:00' } });
+    expect(clearAvailabilityCheck).toHaveBeenCalledTimes(1);
+    expect(onCheckAvailability).toHaveBeenCalledTimes(1);
+    // clearAvailabilityCheck must run first — it's what invalidates the
+    // superseded request (by bumping App.jsx's request-generation ref)
+    // before the new one is even issued.
+    expect(clearAvailabilityCheck.mock.invocationCallOrder[0]).toBeLessThan(onCheckAvailability.mock.invocationCallOrder[0]);
   });
 
   it('flags a policy notice-period violation when the meeting is too soon', async () => {

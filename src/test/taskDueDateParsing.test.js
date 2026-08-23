@@ -1,14 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { parseCommitmentDueDate, suggestTaskOwner } from '../lib/taskDueDateParsing.js';
 
 const FROM = new Date('2026-01-01T00:00:00.000Z');
+
+let originalTZ;
+beforeAll(() => { originalTZ = process.env.TZ; process.env.TZ = 'Europe/London'; });
+afterAll(() => { process.env.TZ = originalTZ; });
 
 describe('parseCommitmentDueDate (Phase 5, IP24)', () => {
   it('parses digit-number commitments across day/week/fortnight/month units', () => {
     expect(parseCommitmentDueDate('follow up in 10 days', FROM)).toBe('2026-01-11');
     expect(parseCommitmentDueDate('review in 2 weeks', FROM)).toBe('2026-01-15');
     expect(parseCommitmentDueDate('check in after 1 fortnight', FROM)).toBe('2026-01-15');
-    expect(parseCommitmentDueDate('review in 3 months', FROM)).toBe('2026-03-31');
+    // Phase 6.5 hardening (P1, reliability review) — was asserted as
+    // '2026-03-31' before this review's UTC-conversion fix (see this
+    // file's new BST regression test below): 90 days from 1 Jan 2026 is
+    // genuinely 1 April 2026 by calendar-day count (30 remaining Jan days
+    // + 28 Feb + 31 Mar + 1 = 90); the old expectation only "passed"
+    // because the previous due.toISOString() implementation rolled the
+    // true local date back by one once the window crossed into BST.
+    expect(parseCommitmentDueDate('review in 3 months', FROM)).toBe('2026-04-01');
   });
 
   it('parses word-number commitments, including "a"/"an"', () => {
@@ -31,6 +42,19 @@ describe('parseCommitmentDueDate (Phase 5, IP24)', () => {
   it('defaults fromDate to now when not given', () => {
     const result = parseCommitmentDueDate('review in 1 week');
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  // Phase 6.5 hardening (P1, reliability review) — regression test for a
+  // real bug: this function used to format with due.toISOString(), which
+  // converts to UTC first. During BST (UTC+1), any fromDate whose local
+  // time-of-day is between midnight and 1am converts to the PREVIOUS UTC
+  // day, silently backdating the parsed due date by one — the exact bug
+  // class dates.js's own toISODateLocal exists to avoid (see its header
+  // comment). 00:30 BST on 10 June 2026 is 23:30 UTC on 9 June.
+  it('does not roll the due date back a day for an early-morning BST time (UTC conversion bug)', () => {
+    const midnightBST = new Date(2026, 5, 10, 0, 30, 0); // 10 Jun 2026, 00:30 local (BST)
+    const result = parseCommitmentDueDate('follow up in 10 days', midnightBST);
+    expect(result).toBe('2026-06-20');
   });
 });
 
