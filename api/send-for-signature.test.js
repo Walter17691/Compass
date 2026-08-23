@@ -62,6 +62,19 @@ describe('send-for-signature — authorisation', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
   });
+
+  // Phase 6.5 hardening (production regression suite, integrations) —
+  // "failed send": Resend itself rejects the request (bad address,
+  // account issue, provider outage) — this must surface as a real error
+  // response, not a false { success: true }, since a signing request that
+  // silently never reached the employee is worse than an obvious failure.
+  it('surfaces a genuine error, not a false success, when the email provider rejects the send', async () => {
+    stubFetch({ members: [{ role: 'line_manager' }], emailOk: false });
+    const res = mockRes();
+    await handler(req(), res);
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe('send failed');
+  });
 });
 
 describe('send-for-signature — signing host is never caller-controlled', () => {

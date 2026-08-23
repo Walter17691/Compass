@@ -41,6 +41,10 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
   const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
@@ -75,6 +79,9 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await checkbox.locator('xpath=..').click();
   await page.getByRole('button', { name: 'Outcome', exact: true }).click();
   await page.getByRole('button', { name: 'Issue outcome →' }).click();
+  // .last() — the OutcomeTab card underneath the modal has the exact same
+  // heading text ("Issue disciplinary outcome"); the modal's own copy
+  // renders after it in the DOM.
   await expect(page.getByText('Issue disciplinary outcome', { exact: true }).last()).toBeVisible({ timeout: 10000 });
   const outcomeSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Select outcome…' }) });
   // Deliberately not a dismissal-type outcome — that triggers a separate

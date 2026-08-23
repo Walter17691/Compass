@@ -27,3 +27,16 @@ describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
     expect(screen.queryByRole('button', { name: 'Wellbeing' })).not.toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (production regression suite, privacy) — the
+// positive case for the same gate: HR genuinely does see the entry
+// point to confidential, RLS-restricted wellbeing data (this nav item's
+// hiding is client-side defense-in-depth on top of the real boundary,
+// wellbeing_notes_2026-08-09.sql's HR-only RLS policy — not itself the
+// enforcement).
+describe('AppSidebar — Wellbeing nav gating', () => {
+  it('shows the Wellbeing nav item for HR', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    expect(screen.getByRole('button', { name: 'Wellbeing' })).toBeInTheDocument();
+  });
+});

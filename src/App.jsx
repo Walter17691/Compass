@@ -7364,9 +7364,21 @@ Please produce:
           without looking at the screen; deliberately not auto-dismissing
           like the toast above, since a data-load failure needs the user
           to actually do something (retry), not just be transiently
-          informed. */}
+          informed.
+          Phase 6.5 hardening (production regression suite) — was
+          position:fixed, top-centered across the FULL viewport width,
+          which overlapped Home's own "+ New case"/"Start meeting"
+          buttons closely enough to intercept clicks meant for them (a
+          real bug for actual users, not just an E2E-testing artifact —
+          found when the existing E2E suite started failing on this
+          exact click). Stacked directly above the toast's own
+          bottom-right corner (not bottom-left: the sidebar's own
+          org-switcher/sign-out controls live there) with enough vertical
+          offset that the two never overlap even in the rare case both
+          are visible at once — the toast auto-dismisses in 3s, this one
+          doesn't. */}
       {dataLoadIssues.length>0&&!loadBannerDismissed&&(
-        <div role="status" aria-live="polite" style={{position:"fixed",top:isMobile?16:24,left:"50%",transform:"translateX(-50%)",zIndex:3100,background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",maxWidth:isMobile?"calc(100vw - 32px)":480,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <div role="status" aria-live="polite" style={{position:"fixed",bottom:isMobile?90:104,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3100,background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",maxWidth:isMobile?"calc(100vw - 32px)":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:"#C84B2F",flexShrink:0}}/>
           <span style={{fontSize:13,color:"#1A1535",flex:1}}>
             Couldn't load {dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.

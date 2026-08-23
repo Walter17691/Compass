@@ -91,6 +91,10 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
   const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');

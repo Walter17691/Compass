@@ -43,6 +43,11 @@ test('the AI case overview has an Ask why affordance sourced to its actual alleg
   // placeholder — proves sourceRefs was actually threaded through from
   // App.jsx's generateCaseOverview, not just an empty array.
   await expect(page.getByText('Allegation').first()).toBeVisible();
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches (plus the WhySourcesModal's own citation) are this
+  // case's own content, never another case's.
   await expect(page.getByText('Unauthorised absence').last()).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText('Why Compass is saying this')).not.toBeVisible();

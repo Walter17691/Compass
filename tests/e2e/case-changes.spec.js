@@ -72,12 +72,15 @@ test('a change made after the first view shows up as a dismissible banner on the
   // content check that would just race the AI summary call regardless.
   await expect(changesBanner).toBeVisible({ timeout: 15000 });
 
-  // Scoped to the whole page rather than re-using the broad "div hasText"
-  // banner locator for the click itself — that filter matches every
-  // ancestor div containing the banner text too (same ambiguity class
-  // fixed in appeal-review.spec.js), and this case has no AI signals of
-  // its own to produce a second "Dismiss" button (SignalCard's own),
-  // so a single global match is unambiguous here.
-  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  // Phase 6.5 hardening (production regression suite) — a bare, global
+  // "Dismiss" match also catches App.jsx's own load-issue banner ("×",
+  // aria-label="Dismiss"), which is unconditionally present on every
+  // local E2E run (loadPortalAccounts always fails locally — /api/portal
+  // isn't proxied by the dev server, see playwright.config.js's own
+  // comment). Scoping the click to changesBanner itself (which already
+  // uniquely resolves via hasText, per the comment above) targets this
+  // banner's own Dismiss button specifically, not whichever "Dismiss"
+  // happens to resolve first/only on the page.
+  await changesBanner.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(changesBanner).not.toBeVisible();
 });

@@ -49,6 +49,9 @@ test('issuing an outcome with an undecided allegation is flagged, and can be sen
 
   await caseTabBar.getByRole('button', { name: 'Outcome', exact: true }).click();
   await page.getByRole('button', { name: 'Issue outcome →' }).click();
+  // .last() — the OutcomeTab card underneath the modal has the exact same
+  // heading text ("Issue disciplinary outcome"); the modal's own copy
+  // renders after it in the DOM.
   await expect(page.getByText('Issue disciplinary outcome', { exact: true }).last()).toBeVisible({ timeout: 10000 });
   const outcomeSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Select outcome…' }) });
   await outcomeSelect.selectOption('No further action');
@@ -64,6 +67,9 @@ test('issuing an outcome with an undecided allegation is flagged, and can be sen
   // "Go back" — the outcome is not issued, OutcomeModal is still open.
   await qualityCheck.getByRole('button', { name: 'Go back' }).click();
   await expect(qualityCheck).not.toBeVisible();
+  // .last() — the OutcomeTab card underneath the modal has the exact same
+  // heading text ("Issue disciplinary outcome"); the modal's own copy
+  // renders after it in the DOM.
   await expect(page.getByText('Issue disciplinary outcome', { exact: true }).last()).toBeVisible();
 
   // Try again — this time "Create follow-up action": a real task is

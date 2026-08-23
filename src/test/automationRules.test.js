@@ -31,6 +31,32 @@ describe('evaluateAutomationRules', () => {
     expect(evaluateAutomationRules(cs, { now: NOW })).toEqual([]);
   });
 
+  // Phase 6.5 hardening (production regression suite, integrations) —
+  // "signature reminder retry": recentlyReminded's 24h cooldown only
+  // silences the rule temporarily, not permanently — a still-unsigned
+  // record must genuinely re-flag once the cooldown has elapsed,
+  // otherwise a case whose reminder failed to actually get the employee
+  // to sign would go silent forever after the first nudge.
+  it('re-flags a meeting once its reminder cooldown has elapsed and it is still unsigned', () => {
+    const cs = { id: 'c1', meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', signStatus: 'sent', signId: 'sign-1', date: '2026-08-08', reminderSentAt: '2026-08-14T11:59:00Z' }] };
+    const suggestions = evaluateAutomationRules(cs, { now: NOW });
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].ruleId).toBe('unsigned_meeting_record_stale');
+  });
+
+  it('stays silent for a reminder sent just under 24h ago', () => {
+    const cs = { id: 'c1', meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', signStatus: 'sent', signId: 'sign-1', date: '2026-08-08', reminderSentAt: '2026-08-14T12:01:00Z' }] };
+    expect(evaluateAutomationRules(cs, { now: NOW })).toEqual([]);
+  });
+
+  // A record that finally got signed must never re-trigger a reminder,
+  // regardless of how stale the original signature request looks — the
+  // "retry" only makes sense while a real signature is still outstanding.
+  it('never flags a reminder for a meeting whose signature has since completed', () => {
+    const cs = { id: 'c1', meetings: [{ id: 'm1', type: 'Investigation', record: 'notes', signStatus: 'signed', signId: 'sign-1', date: '2026-08-01', reminderSentAt: '2026-08-01T00:00:00Z' }] };
+    expect(evaluateAutomationRules(cs, { now: NOW })).toEqual([]);
+  });
+
   it('does not flag a meeting record unsigned for fewer than 5 days', () => {
     const cs = { id: 'c1', meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'pending', date: '2026-08-12' }] };
     expect(evaluateAutomationRules(cs, { now: NOW })).toEqual([]);

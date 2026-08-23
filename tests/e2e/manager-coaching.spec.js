@@ -27,8 +27,16 @@ test('wellbeing and outcome-language mentions surface a dismissible coaching tip
   await expect(page.getByText('Helpful reminder')).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(/occupational health referral or wellbeing support/)).toBeVisible();
 
-  // Dismissing removes just that one tip.
-  await page.getByRole('button', { name: 'Dismiss' }).click();
+  // Phase 6.5 hardening (production regression suite) — a bare, global
+  // "Dismiss" match also catches App.jsx's own load-issue banner ("×",
+  // aria-label="Dismiss"), unconditionally present on every local E2E run
+  // (loadPortalAccounts always fails locally — /api/portal isn't proxied
+  // by the dev server). Scoped to this tip's own container (.last() picks
+  // the innermost div matching both texts, not an outer wrapper that also
+  // happens to contain them) so the click always hits the coaching tip's
+  // own Dismiss button, never the unrelated global banner's.
+  const wellbeingTip = page.locator('div').filter({ hasText: 'Helpful reminder' }).filter({ hasText: /occupational health referral/ }).last();
+  await wellbeingTip.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(page.getByText(/occupational health referral/)).not.toBeVisible();
 
   await notepad.fill("Employee: I have been signed off with stress for the past two weeks. HR: We've already decided this is gross misconduct.");

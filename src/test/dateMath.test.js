@@ -98,6 +98,22 @@ describe('daysBetween — DST safety', () => {
     expect(daysBetween('garbage', new Date())).toBeNull();
     expect(daysBetween(new Date(), 'garbage')).toBeNull();
   });
+
+  // Phase 6.5 hardening (production regression suite, dates) — 2028 is a
+  // real leap year (divisible by 4, not by 100); the count must include
+  // 29 Feb as its own calendar day, not silently collapse it the way a
+  // naive month-length lookup table could.
+  it('counts 29 February as a real day in a leap year', () => {
+    expect(daysBetween(new Date(2028, 1, 27), new Date(2028, 2, 1))).toBe(3); // 27→28→29→1
+  });
+
+  it('does not count a 29th day in the equivalent non-leap-year window', () => {
+    expect(daysBetween(new Date(2026, 1, 27), new Date(2026, 2, 1))).toBe(2); // 27→28→1, no 29 Feb
+  });
+
+  it('counts correctly across a year boundary (31 Dec → 2 Jan)', () => {
+    expect(daysBetween(new Date(2026, 11, 31), new Date(2027, 0, 2))).toBe(2);
+  });
 });
 
 describe('daysSince', () => {
@@ -144,6 +160,26 @@ describe('addWorkingDays', () => {
   // silently got no deadline at all — and so never appeared in the
   // overdue/due-soon feed — until App.jsx switched to this shared
   // implementation.
+  // Phase 6.5 hardening (production regression suite, dates) — a naive
+  // day-of-month increment that forgets to roll the month/year over
+  // would produce an invalid date (e.g. "31 February") instead of
+  // genuinely crossing into the next month/year.
+  it('rolls over the month boundary correctly (Friday 30 Jan + 1 working day = Monday 2 Feb)', () => {
+    const result = addWorkingDays(new Date(2026, 0, 30), 1);
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(1); // February
+    expect(result.getDate()).toBe(2);
+    expect(result.getDay()).toBe(1); // Monday
+  });
+
+  it('rolls over the year boundary correctly, still skipping the weekend inside it (Thursday 31 Dec 2026 + 2 working days = Monday 4 Jan 2027)', () => {
+    const result = addWorkingDays(new Date(2026, 11, 31), 2);
+    expect(result.getFullYear()).toBe(2027);
+    expect(result.getMonth()).toBe(0); // January
+    expect(result.getDate()).toBe(4);
+    expect(result.getDay()).toBe(1); // Monday
+  });
+
   it('returns the same date, not null, for 0 working days', () => {
     const result = addWorkingDays(new Date(2026, 7, 7), 0);
     expect(result).not.toBeNull();

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { EvidenceTab } from '../components/caseTabs/EvidenceTab.jsx';
 
 const cs = { id: 'c1', employeeName: 'Sarah Jones', evidence: [{ id: 'ev1', name: 'note.txt', type: 'text/plain', size: 100, date: '2026-01-01' }] };
@@ -23,6 +24,37 @@ describe('EvidenceTab — due-date preview on action findings (Phase 5, IP24)', 
     const findings = { 'c1::ev1': [{ id: 'f1', type: 'inconsistency', description: 'Conflicts with the meeting record from 3 weeks ago', status: 'open' }] };
     render(<EvidenceTab cs={cs} cases={[cs]} saveCases={()=>{}} fmtDate={fmtDate} documentFindings={findings} />);
     expect(screen.queryByText(/^Due \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
+  });
+});
+
+// Phase 6.5 hardening (production regression suite) — the "Remove"
+// button itself, not just the id-keying logic it depends on being
+// correct downstream. Filters by the item's own real id
+// (evidenceUpload.js's ensureEvidenceIds guarantees every item has one),
+// never by array position.
+describe('EvidenceTab — deleting an evidence item', () => {
+  const threeItemCase = {
+    id: 'c1', employeeName: 'Sarah Jones',
+    evidence: [
+      { id: 'ev1', name: 'first.txt', type: 'text/plain', size: 50, date: '2026-01-01' },
+      { id: 'ev2', name: 'second.txt', type: 'text/plain', size: 60, date: '2026-01-02' },
+      { id: 'ev3', name: 'third.txt', type: 'text/plain', size: 70, date: '2026-01-03' },
+    ],
+  };
+
+  it('removes only the clicked item, by id, leaving the other two untouched and in order', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn();
+    render(<EvidenceTab cs={threeItemCase} cases={[threeItemCase]} saveCases={saveCases} fmtDate={fmtDate} documentFindings={{}} />);
+    // ev.name renders in its own inner div, a sibling-of-a-sibling of the
+    // action-buttons div (not an ancestor of it) — two levels up reaches
+    // the shared row wrapping both the name/meta content and the actions.
+    const secondRow = screen.getByText('second.txt').closest('div').parentElement.parentElement;
+    await user.click(within(secondRow).getByRole('button', { name: 'Remove' }));
+    expect(saveCases).toHaveBeenCalledTimes(1);
+    const updatedCases = saveCases.mock.calls[0][0];
+    const updatedCase = updatedCases.find(c => c.id === 'c1');
+    expect(updatedCase.evidence.map(e => e.id)).toEqual(['ev1', 'ev3']);
   });
 });
 

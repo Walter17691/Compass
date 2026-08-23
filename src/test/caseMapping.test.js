@@ -150,4 +150,39 @@ describe('mapCaseRow', () => {
     expect(result.createdBy).toBeNull();
     expect(result.createdAt).toBeNull();
   });
+
+  // Phase 6.5 hardening (production regression suite) — App.jsx's own
+  // loadCasesFromDB .select() list is hand-typed, not generated from
+  // mapCaseRow — the exact drift risk this file's own header comment
+  // describes ("a silent regression here... corrupts every case the app
+  // reads") applies just as much to the SELECT list quietly losing sync
+  // with the mapper as to the mapper itself breaking. This snapshot of
+  // that select list (copied from App.jsx's loadCasesFromDB) proves every
+  // selected column reaches SOME output field — if this test starts
+  // failing because the real select list changed, that's the signal to
+  // update this copy AND check mapCaseRow wasn't left behind.
+  it('maps every column loadCasesFromDB actually selects — a stale copy of its own select() list', () => {
+    const selectedColumns = 'id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority'.split(',');
+    const row = Object.fromEntries(selectedColumns.map(col => [col, `SENTINEL:${col}`]));
+    // meetings/evidence/next_steps/timeline_overrides genuinely aren't
+    // strings on a real row (jsonb/array columns) — a string sentinel for
+    // those would just get defaulted away by mapCaseRow's own `|| []`/
+    // `|| {}` fallbacks, which would defeat the point of this check for
+    // exactly those columns. Boolean/jsonb columns get a real value of
+    // their own type instead; everything else keeps the string sentinel.
+    row.meetings = [{ sentinel: true }]; row.evidence = [{ sentinel: true }]; row.next_steps = [{ sentinel: true }];
+    row.timeline_overrides = { sentinel: true }; row.confidential = true; row.investigation_paused = true;
+    const mapped = mapCaseRow(row);
+    const mappedValues = JSON.stringify(mapped);
+    for (const col of selectedColumns) {
+      if (['meetings', 'evidence', 'next_steps', 'timeline_overrides', 'confidential', 'investigation_paused'].includes(col)) continue;
+      expect(mappedValues, `column "${col}" was selected but its value never reached mapCaseRow's output`).toContain(`SENTINEL:${col}`);
+    }
+    expect(mapped.meetings).toEqual([{ sentinel: true }]);
+    expect(mapped.evidence).toEqual([{ sentinel: true }]);
+    expect(mapped.nextSteps).toEqual([{ sentinel: true }]);
+    expect(mapped.timelineOverrides).toEqual({ sentinel: true });
+    expect(mapped.confidential).toBe(true);
+    expect(mapped.investigationPaused).toBe(true);
+  });
 });

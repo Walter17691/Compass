@@ -4,9 +4,17 @@ import { expect } from '@playwright/test';
 // hardcoding credentials in spec files — set these against a dedicated
 // throwaway test-org account, never the real production org, since every
 // spec run creates real case/DSAR data against whatever account signs in.
-export async function login(page) {
-  const email = process.env.E2E_TEST_EMAIL;
-  const password = process.env.E2E_TEST_PASSWORD;
+//
+// Phase 6.5 hardening (production regression suite) — creds is an
+// optional {email, password} override for tests/e2e/tenant-isolation.spec.js,
+// which needs a genuinely different, real second tenant (E2E_TEST_EMAIL_2/
+// E2E_TEST_PASSWORD_2 — see .env's own comment for how that account was
+// provisioned and what it's a member of) to prove real cross-org
+// isolation, not just re-testing the same single org every other spec in
+// this suite already uses.
+export async function login(page, creds) {
+  const email = creds?.email || process.env.E2E_TEST_EMAIL;
+  const password = creds?.password || process.env.E2E_TEST_PASSWORD;
   if (!email || !password) {
     throw new Error('E2E_TEST_EMAIL and E2E_TEST_PASSWORD must be set — see tests/e2e/README.md');
   }
@@ -45,6 +53,28 @@ export async function login(page) {
   await dismissDialog('I understand — continue');
   await dismissDialog('Skip');
   await dismissDialog('Close');
+}
+
+// Phase 6.5 hardening (production regression suite) — the second
+// account's own credentials, exported once here rather than re-reading
+// process.env in every spec that needs them.
+export const SECOND_TENANT_CREDS = {
+  email: process.env.E2E_TEST_EMAIL_2,
+  password: process.env.E2E_TEST_PASSWORD_2,
+};
+
+export function hasSecondTenant() {
+  return !!(SECOND_TENANT_CREDS.email && SECOND_TENANT_CREDS.password);
+}
+
+// Signs the current session out and waits for the login screen to come
+// back — used by tests that need to switch between two genuinely
+// different accounts within one spec (Playwright doesn't persist
+// anything across a full sign-out the way it might across page.goto()
+// within the same authenticated session).
+export async function logout(page) {
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByPlaceholder('you@company.com')).toBeVisible({ timeout: 10000 });
 }
 
 // Process Intelligence (P1) — clicking "Proceed anyway" on any advisory

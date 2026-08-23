@@ -39,6 +39,10 @@ test('an allegation shows a policy citation from its own title, and records inve
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
 
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
 
   // Per-allegation policy citation — found via the allegation's own title,
@@ -68,6 +72,10 @@ test('an allegation shows a policy citation from its own title, and records inve
   await page.reload();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: /^Allegations/ }).click();
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
   await expect(page.getByPlaceholder(/What did the investigation itself conclude/)).toHaveValue('Swipe-card records confirm the employee was off-site without prior authorisation.');
   await expect(page.getByPlaceholder(/Anything still unclear or unresolved/)).toHaveValue('Not yet confirmed whether the employee attempted to call in sick.');

@@ -33,6 +33,10 @@ test('a case with no comparable closed-case history shows no outcome distributio
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
 
   await expect(page.locator('label:text-is("Status") + select')).toBeVisible();

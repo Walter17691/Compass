@@ -28,6 +28,10 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
 
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
   // Wait for the status change to actually land — patchAllegation/
   // changeAllegationStatus save fire-and-forget (optimistic local state
@@ -60,6 +64,10 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   // count badge ("Allegations1", no separating space in the accessible
   // name) since there's 1 allegation on the case.
   await page.getByRole('button', { name: /^Allegations/ }).click();
+  // .last() — the Evidence Matrix (rendered above the card list) also has
+  // an "Unauthorised absence" cell sharing this text with the allegation
+  // card's title; this page only ever shows the one case just navigated
+  // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
   const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
   await reasoningField.fill('Swipe-card records and CCTV footage confirm the employee left the site at 14:32 without authorisation or prior agreement from their manager.');
