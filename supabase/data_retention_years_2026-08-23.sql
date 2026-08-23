@@ -1,0 +1,32 @@
+-- ============================================================================
+-- Data retention policy field — 2026-08-23
+-- ============================================================================
+-- Phase 6.5 hardening (data-lifecycle review) — infrastructure only, no
+-- enforcement. Compass currently keeps every case/employee/wellbeing
+-- record indefinitely, with no way for an org to record how long they
+-- actually intend to keep records for. This gives HR somewhere to record
+-- that policy (Settings → Data & privacy → Data retention); nothing
+-- anywhere reads or acts on this value to actually delete or anonymise
+-- anything — that's deliberate. UK employment law retention periods vary
+-- by record type (see docs/DATA_INVENTORY.md's own recommendation on
+-- this), and automatically deleting real case evidence on a timer
+-- without a defined legal basis for exactly which record types and
+-- lengths apply risks destroying evidence an org may still need for a
+-- live tribunal claim or ongoing process — "do not automatically delete
+-- evidence simply because a retention feature is proposed" was this
+-- review's own explicit instruction. A genuine automated retention/
+-- anonymisation workflow (with a legal-hold exemption, and human review
+-- before anything is actually removed) is future work once that policy
+-- question has a real answer.
+--
+-- Nullable, no default — null means "no policy recorded," matching the
+-- product's actual current behaviour (keep everything) rather than
+-- silently implying a retention period exists when none has been set.
+--
+-- Purely additive and nullable — no existing row or query breaks.
+--
+-- HOW TO APPLY: paste into the Supabase SQL Editor and run.
+-- ============================================================================
+
+alter table public.organisations
+  add column if not exists data_retention_years integer;

@@ -154,3 +154,104 @@ describe('compileSubjectData — additional data sources (Phase 6.5, Batch 5)', 
     expect(result.auditLog).toEqual([]);
   });
 });
+
+// Phase 6.5 hardening (data-lifecycle review) — caseTasks (the "tasks"
+// category the wider data-inventory review names explicitly) and
+// signingRequests/portalAccounts (the two categories with zero
+// client-facing RLS — passed in already-fetched from
+// api/portal/_dsar-lookup.js, since this module has no way to query them
+// itself).
+describe('compileSubjectData — tasks, signing requests and portal access (Phase 6.5)', () => {
+  const extendedData = {
+    ...baseData,
+    caseTasks: [
+      { id: 't1', caseId: 'c1', name: 'Interview Ada' },
+      { id: 't2', caseId: 'c2', name: 'Unrelated task' },
+    ],
+    signingRequests: [
+      { sign_id: 'sr1', employee_name: 'Ada Lovelace', document: 'Investigation record — mentions Grace Hopper as chair.', status: 'signed' },
+      { sign_id: 'sr2', employee_name: 'Grace Hopper', document: 'Unrelated document', status: 'sent' },
+    ],
+    portalAccounts: [
+      { id: 'pa1', employee_name: 'Ada Lovelace', employee_email: 'ada@example.com' },
+      { id: 'pa2', employee_name: 'Grace Hopper', employee_email: 'grace@example.com' },
+    ],
+  };
+
+  it('includes only tasks on the subject\'s own cases', () => {
+    const result = compileSubjectData('Ada Lovelace', extendedData);
+    expect(result.caseTasks).toEqual([extendedData.caseTasks[0]]);
+  });
+
+  it('includes only the subject\'s own signing requests, matched by employee_name', () => {
+    const result = compileSubjectData('Ada Lovelace', extendedData);
+    expect(result.signingRequests).toEqual([extendedData.signingRequests[0]]);
+  });
+
+  it('flags a third-party name mentioned inside a signing request\'s document text', () => {
+    const result = compileSubjectData('Ada Lovelace', extendedData);
+    expect(result.flaggedThirdPartyMentions.some(f => f.field === 'signingRequest.document' && f.mentionedName === 'Grace Hopper')).toBe(true);
+  });
+
+  it('includes only the subject\'s own portal account', () => {
+    const result = compileSubjectData('Ada Lovelace', extendedData);
+    expect(result.portalAccounts).toEqual([extendedData.portalAccounts[0]]);
+  });
+
+  it('defaults tasks/signingRequests/portalAccounts to empty arrays when omitted', () => {
+    const result = compileSubjectData('Ada Lovelace', baseData);
+    expect(result.caseTasks).toEqual([]);
+    expect(result.signingRequests).toEqual([]);
+    expect(result.portalAccounts).toEqual([]);
+  });
+});
+
+// Phase 6.5 hardening (data-lifecycle review) — a name is not a stable
+// identity. The task's own required scenario: a DSAR for Employee A must
+// not include Employee B merely because they share a similar name.
+describe('compileSubjectData — same-name collision detection (Phase 6.5)', () => {
+  it('does not flag a collision for an ordinary, unambiguous subject', () => {
+    const result = compileSubjectData('Ada Lovelace', baseData);
+    expect(result.possibleNameCollision).toBe(false);
+  });
+
+  it('flags a collision when two employee_records rows share the exact same name', () => {
+    const data = {
+      ...baseData,
+      employeeRecords: [
+        { name: 'Sam Employee', jobTitle: 'Engineer', location: 'London' },
+        { name: 'Sam Employee', jobTitle: 'Sales', location: 'Manchester' },
+      ],
+    };
+    const result = compileSubjectData('Sam Employee', data);
+    expect(result.possibleNameCollision).toBe(true);
+  });
+
+  it('flags a collision when the subject\'s own cases carry more than one distinct employee_email', () => {
+    const data = {
+      ...baseData,
+      cases: [
+        { id: 'c1', employeeName: 'Sam Employee', employeeEmail: 'sam.london@acme.com', meetings: [] },
+        { id: 'c2', employeeName: 'Sam Employee', employeeEmail: 'sam.manchester@acme.com', meetings: [] },
+      ],
+    };
+    const result = compileSubjectData('Sam Employee', data);
+    expect(result.possibleNameCollision).toBe(true);
+    // Both cases are still included — the flag is a warning for HR to
+    // investigate before relying on the export, not a silent exclusion.
+    expect(result.cases).toHaveLength(2);
+  });
+
+  it('does not flag a collision when cases share the same email, or have no email on file at all', () => {
+    const data = {
+      ...baseData,
+      cases: [
+        { id: 'c1', employeeName: 'Sam Employee', employeeEmail: 'sam@acme.com', meetings: [] },
+        { id: 'c2', employeeName: 'Sam Employee', employeeEmail: 'sam@acme.com', meetings: [] },
+        { id: 'c3', employeeName: 'Sam Employee', meetings: [] },
+      ],
+    };
+    const result = compileSubjectData('Sam Employee', data);
+    expect(result.possibleNameCollision).toBe(false);
+  });
+});

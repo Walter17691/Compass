@@ -5,6 +5,8 @@ import { Btn, Card, Badge } from '../components/Primitives';
 import { compileSubjectData } from '../lib/dsarCompile';
 import { useLoadMore } from '../hooks/useLoadMore';
 import { daysBetween } from '../lib/dateMath';
+import { authedFetch } from '../lib/authedFetch';
+import { WarningIcon } from '../components/Icons';
 
 const STATUS_LABEL = { received:"Received", in_progress:"In progress", ready_to_send:"Ready to send", completed:"Completed" };
 
@@ -22,10 +24,33 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, hrReviewRequests, auditLog, updateDsarRequest, extendDsarRequest, promptDialog }) {
+function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgId, audit, updateDsarRequest, extendDsarRequest, promptDialog }) {
   const [compiled, setCompiled] = useState(null);
+  const [compiling, setCompiling] = useState(false);
 
-  const compile = () => setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, hrReviewRequests, auditLog }));
+  // Phase 6.5 hardening (data-lifecycle review) — signing_requests and
+  // employee_portal_accounts both have zero client-facing RLS by design
+  // (see api/portal/_dsar-lookup.js's own header comment), so a DSAR
+  // compile now needs one real network round-trip first — this used to
+  // be a purely synchronous, already-in-memory operation. Best-effort:
+  // if the lookup itself fails, the rest of the export still compiles
+  // rather than blocking the whole DSAR on one extra endpoint.
+  const compile = async () => {
+    setCompiling(true);
+    let signingRequests = [];
+    let portalAccounts = [];
+    try {
+      const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(orgId)}&employeeName=${encodeURIComponent(req.employeeName)}`);
+      if (r.ok) { const d = await r.json(); signingRequests = d.signingRequests || []; portalAccounts = d.portalAccounts || []; }
+    } catch (e) { console.error('dsar-lookup failed:', e.message); }
+    setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, signingRequests, portalAccounts }));
+    setCompiling(false);
+    // Phase 6.5 hardening (data-lifecycle review) — "DSAR generated" is
+    // one of the privacy actions this whole review was asked to make
+    // auditable. Just the fact and the subject's name — never any of the
+    // compiled record content itself.
+    audit?.("DSAR data compiled", req.employeeName);
+  };
 
   const days = daysUntil(req.dueDate);
   const overdue = days < 0;
@@ -59,15 +84,23 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
         <select aria-label={`Status for ${req.employeeName}'s DSAR request`} value={req.status} onChange={e=>updateDsarRequest(req.id, {status:e.target.value})} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
           {Object.entries(STATUS_LABEL).filter(([v])=>v!=="completed"||req.reviewedFlaggedSections).map(([v,l])=><option key={v} value={v}>{l}</option>)}
         </select>
-        <Btn variant="secondary" onClick={compile}>{compiled?"Recompile data":"Compile data"}</Btn>
-        {compiled&&<Btn variant="secondary" onClick={()=>downloadJson(compiled, `DSAR_${req.employeeName.replace(/\s+/g,"_")}_${req.receivedDate}.json`)}>Download response package</Btn>}
+        <Btn variant="secondary" onClick={compile} disabled={compiling}>{compiling?"Compiling…":compiled?"Recompile data":"Compile data"}</Btn>
+        {compiled&&<Btn variant="secondary" onClick={()=>{downloadJson(compiled, `DSAR_${req.employeeName.replace(/\s+/g,"_")}_${req.receivedDate}.json`);audit?.("DSAR response downloaded", req.employeeName);}}>Download response package</Btn>}
         {!req.extended&&req.status!=="completed"&&<Btn variant="ghost" onClick={handleExtend}>Extend deadline</Btn>}
       </div>
 
       {compiled&&(
         <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px"}}>
+          {compiled.possibleNameCollision&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF0EB",border:"1px solid #F0C4B0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#C84B2F" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#C84B2F"}}>
+                <strong>Possible name collision.</strong> More than one employee record or case email matches "{req.employeeName}" — this org may have two different people with this name. Verify every record below genuinely belongs to the same individual before sending this response; do not rely on the name match alone.
+              </div>
+            </div>
+          )}
           <div style={{fontSize:12,color:"#1A1535",marginBottom:8}}>
-            {compiled.cases.length} case{compiled.cases.length!==1?"s":""} · {compiled.onboarding.length} onboarding record{compiled.onboarding.length!==1?"s":""} · {compiled.offboarding.length} offboarding record{compiled.offboarding.length!==1?"s":""} · {compiled.employeeRecord?"employee record found":"no employee record on file"}
+            {compiled.cases.length} case{compiled.cases.length!==1?"s":""} · {compiled.onboarding.length} onboarding record{compiled.onboarding.length!==1?"s":""} · {compiled.offboarding.length} offboarding record{compiled.offboarding.length!==1?"s":""} · {compiled.caseTasks.length} task{compiled.caseTasks.length!==1?"s":""} · {compiled.signingRequests.length} signing request{compiled.signingRequests.length!==1?"s":""} · {compiled.portalAccounts.length} portal account{compiled.portalAccounts.length!==1?"s":""} · {compiled.employeeRecord?"employee record found":"no employee record on file"}
           </div>
           {compiled.flaggedThirdPartyMentions.length>0?(
             <div style={{marginBottom:10}}>
@@ -103,7 +136,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, hrReviewRequests, auditLog, setScreen }) {
+export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgId, audit, setScreen }) {
   const [form, setForm] = useState({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   const [showForm, setShowForm] = useState(false);
 
@@ -157,7 +190,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
         ):visibleRequests.map(req=>(
-          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} hrReviewRequests={hrReviewRequests} auditLog={auditLog} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
+          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
         ))}
         {hasMore&&(
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>

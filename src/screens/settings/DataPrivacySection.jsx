@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Btn, Card } from '../../components/Primitives';
 
-export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies, auditLog, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, lsSet }) {
+export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies, auditLog, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, lsSet, dataRetentionYears, saveDataRetentionYears }) {
+  const [retentionDraft, setRetentionDraft] = useState(dataRetentionYears ?? "");
   return (
     <>
       {isHR&&(
@@ -12,6 +14,18 @@ export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies
             <Btn onClick={exportPDF} variant="ghost" style={{flex:1}}>Export PDF</Btn>
           </div>
           <div style={{fontSize:11,color:"#5A5570",marginTop:10}}>CSV includes all cases, meetings, risk scores and dates. PDF includes full case summaries.</div>
+        </Card>
+      )}
+
+      {isHR&&(
+        <Card style={{marginBottom:12}}>
+          <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Data retention</div>
+          <p style={{fontSize:12,color:"#6B6880",marginBottom:14,lineHeight:1.6}}>Record how long your organisation intends to keep case and employee records for. This is informational only — Compass does not automatically delete or anonymise anything based on it. Retention periods vary by record type under UK employment law; take your own legal advice before setting a figure, and never rely on this to remove records subject to a live tribunal claim or ongoing process.</p>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <label htmlFor="data-retention-years" style={{fontSize:12,color:"#1A1535",flexShrink:0}}>Retention period (years)</label>
+            <input id="data-retention-years" type="number" min="0" placeholder="Not set" value={retentionDraft} onChange={e=>setRetentionDraft(e.target.value)} style={{width:80,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+            <Btn variant="secondary" onClick={()=>saveDataRetentionYears(retentionDraft)}>Save</Btn>
+          </div>
         </Card>
       )}
 

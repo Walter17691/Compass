@@ -18,8 +18,16 @@
 // subject, not necessarily submitted by them) or by caseId (allegations,
 // case signals, HR review requests, audit log — scoped to the subject's
 // own cases, the same boundary subjectCases itself already draws).
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], hrReviewRequests = [], auditLog = [] } = {}) {
-  const employeeRecord = employeeRecords.find(r => r.name === employeeName) || null;
+//
+// Phase 6.5 hardening (data-lifecycle review) — added caseTasks (the
+// "tasks" category the wider data-inventory review names explicitly),
+// and signingRequests/portalAccount — passed in already-fetched, since
+// both live in tables with zero client-facing RLS (see
+// api/portal/_dsar-lookup.js) and simply can't be queried from here the
+// way every other category can.
+export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [] } = {}) {
+  const matchingEmployeeRecords = employeeRecords.filter(r => r.name === employeeName);
+  const employeeRecord = matchingEmployeeRecords[0] || null;
   const subjectCases = cases.filter(c => c.employeeName === employeeName);
   const subjectCaseIds = new Set(subjectCases.map(c => c.id));
   const onboarding = starterInstances.filter(s => s.name === employeeName);
@@ -28,11 +36,25 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   const subjectConcernReferrals = concernReferrals.filter(r => r.employeeName === employeeName);
   const subjectAllegations = allegations.filter(a => subjectCaseIds.has(a.caseId));
   const subjectCaseSignals = caseSignals.filter(s => subjectCaseIds.has(s.caseId));
+  const subjectCaseTasks = caseTasks.filter(t => subjectCaseIds.has(t.caseId));
   // hr_review_requests isn't remapped to camelCase at load time
   // (App.jsx's loadHrReviews keeps the raw DB row shape) — case_id here,
   // not caseId, matching every other consumer of this state.
   const subjectHrReviewRequests = hrReviewRequests.filter(r => subjectCaseIds.has(r.case_id));
   const subjectAuditLog = auditLog.filter(a => a.caseId && subjectCaseIds.has(a.caseId));
+
+  // Phase 6.5 hardening (data-lifecycle review) — a name is not a stable
+  // identity. If more than one employee_records row shares this exact
+  // name, or the subject's own cases carry more than one distinct
+  // employee_email between them, that's a real signal this org has two
+  // different real people who happen to share a name — silently merging
+  // both into one export would hand one person's confidential case/
+  // wellbeing history to whoever requested the other's. Surfaced, never
+  // auto-resolved (there's no reliable signal to pick the "right" one
+  // from a name alone) — same "flag for a human, don't guess" posture as
+  // flaggedThirdPartyMentions below.
+  const distinctCaseEmails = new Set(subjectCases.map(c => (c.employeeEmail || '').trim().toLowerCase()).filter(Boolean));
+  const possibleNameCollision = matchingEmployeeRecords.length > 1 || distinctCaseEmails.size > 1;
 
   const otherNames = new Set();
   employeeRecords.forEach(r => { if (r.name && r.name !== employeeName) otherNames.add(r.name); });
@@ -67,6 +89,14 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
       scanText(a[field], { field: `allegation.${field}`, caseId: a.caseId, allegationId: a.id });
     });
   });
+  // signingRequests/portalAccounts are already scoped to this employeeName
+  // server-side (api/portal/_dsar-lookup.js filters by org_id+employee_name
+  // directly) — filtered again here defensively, matching every other
+  // category's own belt-and-braces re-check rather than trusting the
+  // caller passed in exactly the right slice.
+  const subjectSigningRequests = signingRequests.filter(s => s.employee_name === employeeName);
+  const subjectPortalAccounts = portalAccounts.filter(p => p.employee_name === employeeName);
+  subjectSigningRequests.forEach(s => scanText(s.document, { field: 'signingRequest.document', signId: s.sign_id }));
 
   // Evidence files (photos, PDFs, CCTV, witness statements) are binary/opaque
   // content that can't be text-scanned for third-party mentions the way
@@ -85,6 +115,7 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   return {
     employeeName,
     employeeRecord,
+    possibleNameCollision,
     cases: casesForExport,
     onboarding,
     offboarding,
@@ -92,8 +123,11 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     concernReferrals: subjectConcernReferrals,
     allegations: subjectAllegations,
     caseSignals: subjectCaseSignals,
+    caseTasks: subjectCaseTasks,
     hrReviewRequests: subjectHrReviewRequests,
     auditLog: subjectAuditLog,
+    signingRequests: subjectSigningRequests,
+    portalAccounts: subjectPortalAccounts,
     flaggedThirdPartyMentions: flagged,
     evidenceRequiringReview,
     compiledAt: new Date().toISOString(),

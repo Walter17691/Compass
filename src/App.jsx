@@ -1726,6 +1726,30 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(error) showToast("Couldn't save webhook — please try again", "error");
     else showToast("Notification settings saved");
   };
+
+  // Phase 6.5 hardening (data-lifecycle review) — infrastructure only, no
+  // enforcement. Compass currently keeps every case/employee/wellbeing
+  // record indefinitely, with no way for an org to record how long they
+  // actually intend to keep records for, and nothing anywhere reads or
+  // acts on this value — deliberately: automatically deleting/
+  // anonymising real case evidence on a timer, without a defined legal
+  // basis for exactly which record types and retention lengths apply
+  // (UK employment law retention periods vary by record type — see
+  // docs/DATA_INVENTORY.md's own recommendation), risks destroying
+  // evidence an org may still need for a live tribunal claim or ongoing
+  // process. This just gives HR somewhere to record their org's own
+  // policy; a genuine automated retention/anonymisation workflow (with a
+  // legal-hold exemption, and human review before anything is actually
+  // removed) is future work once that policy question has a real answer.
+  const [dataRetentionYears, setDataRetentionYears] = useState(org?.data_retention_years||null);
+  const saveDataRetentionYears = async (years) => {
+    if(!org?.id) return;
+    const value = years ? parseInt(years, 10) : null;
+    setDataRetentionYears(value);
+    const { error } = await supabase.from('organisations').update({data_retention_years: value}).eq('id', org.id);
+    if(error) showToast("Couldn't save retention period — please try again", "error");
+    else { showToast("Retention period saved"); audit("Data retention policy updated", value?`Set to ${value} year${value===1?"":"s"}`:"Cleared"); }
+  };
   // Integrations & Workflow Automation (Phase 5, IP28, §22-23) — same
   // JSONB-config-on-organisations precedent as the webhook fields above.
   // Which rule ids are even eligible to be set beyond "suggest" is
@@ -2340,8 +2364,30 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   // ── GDPR helpers ──
-  const exportAllData = () => {
-    const data = { cases, policies:policies.map(p=>({...p,content:"[truncated]"})), auditLog, adjustments, exportedAt:new Date().toISOString() };
+  // Phase 6.5 hardening (data-lifecycle review) — this only ever included
+  // cases, policies, auditLog and adjustments — a fraction of what
+  // delete-org-data.js's own now-corrected table list (and the DSAR
+  // compiler) treat as real tenant data. An org asking to export "their
+  // data" got case files but not employee records, wellbeing notes,
+  // concern referrals, allegations, case signals, tasks, HR review
+  // requests, onboarding/offboarding checklists, or DSAR request logs.
+  // signingRequests/portalAccounts are fetched fresh (zero client-facing
+  // RLS — see api/portal/_dsar-lookup.js), the same lookup the DSAR
+  // compiler uses, just without an employeeName filter so it returns
+  // every row for the org instead of one subject's.
+  const exportAllData = async () => {
+    let signingRequests = [];
+    let portalAccounts = [];
+    try {
+      const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(org?.id||"")}`);
+      if(r.ok) { const d = await r.json(); signingRequests = d.signingRequests||[]; portalAccounts = d.portalAccounts||[]; }
+    } catch(e) { console.error('exportAllData dsar-lookup failed:', e.message); }
+    const data = {
+      cases, policies:policies.map(p=>({...p,content:"[truncated]"})), auditLog, adjustments,
+      employeeRecords, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks,
+      hrReviewRequests, starterInstances, leaverInstances, dsarRequests, signingRequests, portalAccounts,
+      exportedAt:new Date().toISOString(),
+    };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href=url; a.download="compass_data_export.json"; a.click();
@@ -2351,7 +2397,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const deleteAllData = async () => {
     const ok = await confirmDialog({
       title: "Delete all data",
-      message: "This will permanently delete all case files, meeting records, DSAR requests, HR review requests and the audit trail for this organisation. This cannot be undone.",
+      // Phase 6.5 hardening (data-lifecycle review) — was silently
+      // out of sync with what this action actually does (already deleted
+      // wellbeing notes and concern referrals without saying so; now
+      // also covers employee records, signing requests and portal
+      // access) — the person clicking an irreversible delete button
+      // should see an accurate list of what it actually removes.
+      message: "This will permanently delete all case files, meeting records, allegations, employee records, wellbeing notes, concern referrals, signing requests, portal access, onboarding/offboarding checklists, DSAR requests, HR review requests, tasks and the audit trail for this organisation. This cannot be undone.",
       confirmLabel: "Delete everything",
       danger: true,
     });
@@ -7716,7 +7768,7 @@ Please produce:
           integrations={{ mailConnected, mailboxEmail, onConnectMail: connectOutlookMail, onDisconnectMail: disconnectOutlookMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, integrationEvents, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook }}
           notifications={{ dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest }}
           automation={{ automationLevels, saveAutomationLevel }}
-          dataPrivacy={{ exportCSV, exportPDF, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr }}
+          dataPrivacy={{ exportCSV, exportPDF, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, dataRetentionYears, saveDataRetentionYears }}
           onboarding={{ setOnboardStep, setShowOnboard }}
         />
       )}
@@ -7737,8 +7789,11 @@ Please produce:
           concernReferrals={concernReferrals}
           allegations={allegations}
           caseSignals={caseSignals}
+          caseTasks={caseTasks}
           hrReviewRequests={hrReviewRequests}
           auditLog={auditLog}
+          orgId={org?.id}
+          audit={audit}
           setScreen={setScreen}
         />
       )}

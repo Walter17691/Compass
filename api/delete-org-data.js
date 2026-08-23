@@ -15,8 +15,9 @@ async function supabaseRequest(path, options = {}) {
 // the organisation or removing teammates is a different, much bigger
 // action than what this button has ever promised. This deletes every
 // table that holds case/employee content; it deliberately leaves
-// organisations, org_members, locations and calendar/portal connections
-// alone.
+// organisations, org_members, locations, process_templates, org_roles and
+// calendar/mail connections alone (account/org-structure config, not case
+// or employee content).
 //
 // Phase 6.5 hardening (Batch 5) — added wellbeing_notes, concern_referrals,
 // leaver_instances and case_tasks. Verified against the live schema's real
@@ -30,7 +31,37 @@ async function supabaseRequest(path, options = {}) {
 // it. wellbeing_notes and leaver_instances have no case_id at all, and
 // concern_referrals.linked_case_id is ON DELETE SET NULL, not CASCADE —
 // none of the three were reachable through any other table's cascade.
-const ORG_SCOPED_TABLES = ['cases', 'starter_instances', 'dsar_requests', 'hr_review_requests', 'audit_log', 'wellbeing_notes', 'concern_referrals', 'leaver_instances', 'case_tasks'];
+//
+// Phase 6.5 hardening (data-lifecycle review) — a full data-inventory
+// pass against the live schema found ten more org-scoped tables this list
+// had simply never covered, none reachable via any other table's cascade
+// (verified live against information_schema — every one of these has its
+// own direct org_id column, no case_id at all):
+//   - signing_requests: holds the actual signature and document text
+//     sent for signature — real, sensitive personal data, previously left
+//     behind entirely by this button.
+//   - employee_records: the core PII record (job title, department,
+//     manager, employee number) — the single biggest miss; matched to
+//     cases only by employee_name string, so nothing else's cascade ever
+//     reached it.
+//   - employee_portal_accounts / employee_portal_invites: an employee's
+//     own access to view their case data — leaving these behind after
+//     "delete everything" would leave a live login path into records
+//     that (elsewhere in this same delete) no longer exist.
+//   - case_views: no FK at all (confirmed via information_schema — plain
+//     uuid columns), so nothing was ever going to clean these up.
+//   - improvement_initiatives, manager_capability_insights,
+//     er_executive_briefs, org_events, integration_events: AI-generated
+//     or activity-log content the DSAR/inventory review's own "AI-
+//     generated case information" and "audit records" categories cover.
+const ORG_SCOPED_TABLES = [
+  'cases', 'starter_instances', 'dsar_requests', 'hr_review_requests', 'wellbeing_notes',
+  'concern_referrals', 'leaver_instances', 'case_tasks', 'signing_requests', 'employee_records',
+  'employee_portal_accounts', 'employee_portal_invites', 'case_views', 'improvement_initiatives',
+  'manager_capability_insights', 'er_executive_briefs', 'org_events', 'integration_events',
+  // audit_log last and separate from the loop below — see the comment at
+  // its own call site.
+];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -42,7 +73,7 @@ export default async function handler(req, res) {
   if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=role`);
+    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=role,name`);
     const [callerMember] = await memberRes.json();
     if (!callerMember) return res.status(403).json({ error: 'Not a member of this organisation' });
     if (callerMember.role !== 'hr_director') {
@@ -53,6 +84,27 @@ export default async function handler(req, res) {
       const r = await supabaseRequest(`${table}?org_id=eq.${encodeURIComponent(orgId)}`, { method: 'DELETE' });
       if (!r.ok) console.error(`delete-org-data: failed to clear ${table}:`, await r.text());
     }
+
+    // audit_log is cleared last, separately from the loop above, so this
+    // deletion event itself can be recorded as the one surviving row —
+    // the standard compliance expectation ("who deleted this org's data,
+    // and when") shouldn't itself be a casualty of the very action it's
+    // recording. No case/employee specifics in the detail — just the
+    // fact that this happened, matching the "no unnecessary sensitive
+    // detail in the audit log" principle applied everywhere else in this
+    // table.
+    const auditRes = await supabaseRequest(`audit_log?org_id=eq.${encodeURIComponent(orgId)}`, { method: 'DELETE' });
+    if (!auditRes.ok) console.error('delete-org-data: failed to clear audit_log:', await auditRes.text());
+    const recordRes = await supabaseRequest('audit_log', {
+      method: 'POST',
+      body: JSON.stringify({
+        org_id: orgId, user_id: caller.id, user_name: callerMember.name || caller.email || 'Unknown',
+        action: 'Organisation data deleted',
+        detail: 'All case, employee, wellbeing, concern-referral, signing and portal-access records for this organisation were permanently deleted (GDPR "Delete all data").',
+        created_at: new Date().toISOString(),
+      }),
+    });
+    if (!recordRes.ok) console.error('delete-org-data: failed to record the deletion event itself:', await recordRes.text());
 
     res.status(200).json({ success: true });
   } catch (error) {
