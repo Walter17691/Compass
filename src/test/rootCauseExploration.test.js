@@ -15,6 +15,14 @@ describe('formatLocationConcentration', () => {
     expect(formatLocationConcentration({})).toEqual([]);
     expect(formatLocationConcentration(null)).toEqual([]);
   });
+
+  // Phase 6.5 hardening (product-principles review) — sample-size floor:
+  // a location with 1-2 cases isn't a real "concentration," and for a
+  // small site can be effectively identifying.
+  it('excludes a location below the sample-size floor of 3', () => {
+    const result = formatLocationConcentration({ Manchester: 5, Leeds: 2, Birmingham: 1 });
+    expect(result).toEqual([{ location: 'Manchester', count: 5 }]);
+  });
 });
 
 describe('buildReviewAreas', () => {
@@ -26,9 +34,26 @@ describe('buildReviewAreas', () => {
     expect(result[0].suggestion.toLowerCase()).not.toContain('because');
   });
 
-  it('handles singular vs plural case counts', () => {
-    expect(buildReviewAreas([{ themeId: 't1', themeName: 'X', count: 1 }])[0].suggestion).toContain('in 1 case)');
-    expect(buildReviewAreas([{ themeId: 't1', themeName: 'X', count: 2 }])[0].suggestion).toContain('in 2 cases)');
+  it('reports the real case count for a co-occurring theme that clears the floor', () => {
+    expect(buildReviewAreas([{ themeId: 't1', themeName: 'X', count: 4 }])[0].suggestion).toContain('in 4 cases)');
+  });
+
+  // Phase 6.5 hardening (product-principles review) — a co-occurring
+  // theme built on 1-2 shared cases isn't a real pattern; showing it as
+  // a named "potential area for review" overstates what a couple of
+  // cases actually support.
+  it('excludes a co-occurring theme below the sample-size floor of 3', () => {
+    expect(buildReviewAreas([{ themeId: 't1', themeName: 'X', count: 1 }])).toEqual([]);
+    expect(buildReviewAreas([{ themeId: 't1', themeName: 'X', count: 2 }])).toEqual([]);
+  });
+
+  it('keeps a theme that clears the floor alongside one that does not', () => {
+    const result = buildReviewAreas([
+      { themeId: 't1', themeName: 'Rare', count: 2 },
+      { themeId: 't2', themeName: 'Real pattern', count: 3 },
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].themeName).toBe('Real pattern');
   });
 
   it('returns an empty array for no co-occurring themes', () => {
@@ -47,7 +72,16 @@ describe('buildRootCauseSummary', () => {
 
   it('notes when there is no location breakdown', () => {
     const text = buildRootCauseSummary('X', { current_count: 3, by_location: {} });
-    expect(text).toContain('No location breakdown available yet.');
+    expect(text).toContain('No single location accounts for enough cases to show a reliable concentration.');
+  });
+
+  // Phase 6.5 hardening (product-principles review) — same wording as
+  // "no location breakdown at all," since below-floor locations are
+  // filtered out entirely rather than shown with a weak count.
+  it('notes when every location is below the sample-size floor', () => {
+    const text = buildRootCauseSummary('X', { current_count: 3, by_location: { Leeds: 2, Manchester: 1 } });
+    expect(text).toContain('No single location accounts for enough cases to show a reliable concentration.');
+    expect(text).not.toContain('Leeds');
   });
 
   it('handles missing data gracefully', () => {

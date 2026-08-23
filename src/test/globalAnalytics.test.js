@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGlobalStatsContext, inferInsightsTab } from '../lib/globalAnalytics';
+import { buildGlobalStatsContext, inferInsightsTab, GLOBAL_CHAT_SYSTEM_PROMPT } from '../lib/globalAnalytics';
 
 const caseStats = { total_cases: 100, active_cases: 30 };
 
@@ -56,6 +56,38 @@ describe('buildGlobalStatsContext', () => {
     const appealData = { totalFindings: 0, appealedCount: 0, appealRate: null, outcomeCounts: {}, stageCounts: {}, commonGrounds: [] };
     const context = buildGlobalStatsContext(caseStats, null, null, appealData);
     expect(context).not.toContain('APPEAL INTELLIGENCE');
+  });
+
+  // Phase 6.5 hardening (product-principles review) — was `totalFindings
+  // > 0`, which handed the model a 1-or-2-finding "distribution" (e.g. a
+  // single appeal presented as "100% upheld") with no sample-size signal
+  // at all. Now matches appealIntelligence.js's own APPEAL_MIN_SAMPLE_SIZE
+  // floor, the same one its own panel already enforces per breakdown.
+  it('omits appeal intelligence when there are too few findings for a reliable pattern (sample of 1)', () => {
+    const appealData = { totalFindings: 1, appealedCount: 1, appealRate: null, outcomeCounts: { upheld: 1 }, stageCounts: {}, commonGrounds: [] };
+    const context = buildGlobalStatsContext(caseStats, null, null, appealData);
+    expect(context).not.toContain('APPEAL INTELLIGENCE');
+  });
+
+  it('omits appeal intelligence when there are too few findings for a reliable pattern (sample of 2)', () => {
+    const appealData = { totalFindings: 2, appealedCount: 2, appealRate: null, outcomeCounts: { upheld: 2 }, stageCounts: {}, commonGrounds: [] };
+    const context = buildGlobalStatsContext(caseStats, null, null, appealData);
+    expect(context).not.toContain('APPEAL INTELLIGENCE');
+  });
+});
+
+// Phase 6.5 hardening (product-principles review) — the model-facing
+// system prompt itself, not just the data handed to it, since the model
+// could otherwise answer a named-manager performance question from its
+// own general reasoning even with no manager data in context.
+describe('GLOBAL_CHAT_SYSTEM_PROMPT', () => {
+  it('explicitly refuses to rank, score, or evaluate a named manager or employee', () => {
+    expect(GLOBAL_CHAT_SYSTEM_PROMPT.toLowerCase()).toContain('never rank, score, or evaluate a named manager');
+  });
+
+  it('instructs correlation language over causal language', () => {
+    expect(GLOBAL_CHAT_SYSTEM_PROMPT.toLowerCase()).toContain('never state or imply that a pattern was caused');
+    expect(GLOBAL_CHAT_SYSTEM_PROMPT.toLowerCase()).toContain('a pattern worth reviewing');
   });
 });
 

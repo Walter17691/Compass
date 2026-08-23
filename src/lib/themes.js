@@ -24,7 +24,18 @@ export function activeThemes(organisationThemes) {
 // "theme," including inside AI-generated executive-summary prose. This
 // counts HR-curated case_themes tags instead — never raw case text, so
 // there's no name-leak surface at all.
-export function themeFrequency(caseThemes, organisationThemes, minCaseCount = 2) {
+// Phase 6.5 hardening (product-principles review) — default raised from
+// 2 to 3, matching the MIN_SAMPLE_SIZE floor used consistently
+// everywhere else in this phase (trendDetection.js, outcomeConsistency.js,
+// riskMap.js, orgEvents.js, appealIntelligence.js, caseQualityAnalytics.js,
+// policyEffectiveness.js, rootCauseExploration.js, impactTracking.js).
+// The old default of 2 was simply carried over from the retired
+// extractThemeKeywords' own MIN_CASE_COUNT (DataQualityCaveat.jsx's own
+// header cites it as one of two prior-art thresholds) — not a
+// deliberate choice for this new, curated system, and "adequate sample
+// sizes" should mean the same number everywhere in Insights, not a
+// theme-specific exception.
+export function themeFrequency(caseThemes, organisationThemes, minCaseCount = 3) {
   const countByThemeId = {};
   (caseThemes || []).forEach(t => { countByThemeId[t.themeId] = (countByThemeId[t.themeId] || 0) + 1; });
   return Object.entries(countByThemeId)
@@ -60,6 +71,45 @@ export function buildThemeSuggestionPrompt(cs, organisationThemes) {
     + "Case summary: " + caseText + ". "
     + "Suggest 1-3 themes that apply to this case. Strongly prefer reusing an existing theme name exactly as written above; only propose a new theme name if none of the existing ones genuinely fit. "
     + "Respond with ONLY a JSON array of theme name strings, nothing else, e.g. [\"Management communication\",\"Rota changes\"].";
+}
+
+// Phase 6.5 hardening (product-principles review) — "safe entity
+// filtering" ahead of human review. ThemesTab.jsx's own comment already
+// establishes the human-review half (a genuinely new theme name can only
+// be confirmed by HR, never auto-created) — but that only gates WHO can
+// click confirm, not WHAT the AI is allowed to suggest in the first
+// place. A busy HR user could still confirm a suggestion that happens to
+// be a real person's actual name, exactly the failure mode
+// orgIntelligence.js's own header describes for the retired
+// extractThemeKeywords ("a real person's name appearing 2+ times...
+// surfacing as an org-wide 'theme'"). Screens every suggested theme name
+// against known people at the org before it's even shown, not just
+// before it's confirmed.
+export function buildKnownNameTokens(names) {
+  const tokens = new Set();
+  (names || []).forEach(full => {
+    (full || "").split(/\s+/).forEach(w => {
+      const clean = w.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
+      if (clean.length > 1) tokens.add(clean);
+    });
+  });
+  return tokens;
+}
+
+// A suggested name is unsafe if any of its own words matches a known
+// person's first or last name — deliberately whole-word, not substring
+// ("Robertson" as a theme wouldn't be blocked just because a "Robert"
+// works there), and deliberately errs toward over-blocking: a false
+// positive costs HR a moment re-phrasing or adding the theme manually; a
+// false negative leaks a real name into org-wide reporting.
+export function isUnsafeThemeSuggestion(name, knownNameTokens) {
+  if (!knownNameTokens || !knownNameTokens.size) return false;
+  const words = (name || "").split(/\s+/).map(w => w.replace(/[^a-zA-Z'-]/g, "").toLowerCase()).filter(Boolean);
+  return words.some(w => knownNameTokens.has(w));
+}
+
+export function filterUnsafeThemeSuggestions(suggestions, knownNameTokens) {
+  return (suggestions || []).filter(s => !isUnsafeThemeSuggestion(s, knownNameTokens));
 }
 
 export function parseThemeSuggestionResponse(text) {

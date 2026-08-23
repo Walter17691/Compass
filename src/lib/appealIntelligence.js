@@ -57,15 +57,30 @@ export function computeAppealIntelligence(allegations, cases, caseSignals) {
       if (ground) groundCounts[ground] = (groundCounts[ground] || 0) + 1;
     });
 
+  const successfulAppealCount = Object.values(stageCounts).reduce((a, b) => a + b, 0);
+  const groundSignalCount = Object.values(groundCounts).reduce((a, b) => a + b, 0);
+
   return {
     totalFindings: findings.length,
     appealedCount: appealed.length,
     appealRate: findings.length >= MIN_SAMPLE_SIZE ? Math.round((appealed.length / findings.length) * 100) : null,
+    // Phase 6.5 hardening (P1, product-principles review) — outcomeCounts/
+    // stageCounts/commonGrounds themselves stay raw (a UI showing "0 of 0"
+    // for every outcome/ground when nothing is recorded yet is a real,
+    // useful empty state, not a false pattern), but each breakdown's own
+    // total sample size is now surfaced so the panel can gate its DISPLAY
+    // as a distribution behind the same MIN_SAMPLE_SIZE floor
+    // appealRate already had — a single appealed finding showing "100%
+    // upheld" or one ground shown as "1 case" presents a lone data point
+    // as if it were a real pattern.
     outcomeCounts,
+    outcomeSampleSize: appealed.length,
     stageCounts,
+    stageSampleSize: successfulAppealCount,
     commonGrounds: Object.entries(groundCounts)
       .map(([ground, count]) => ({ ground, count }))
       .sort((a, b) => b.count - a.count),
+    groundSampleSize: groundSignalCount,
   };
 }
 

@@ -33,6 +33,24 @@ describe('matchCaseByEmployeeName', () => {
   it('returns null when nothing matches at all', () => {
     expect(matchCaseByEmployeeName(cases, 'Nonexistent Person')).toBeNull();
   });
+
+  // Phase 6.5 hardening (product-principles review) — "named manager
+  // questions to Global Compass AI": sendGlobalChat's "case" intent path
+  // (App.jsx) only ever calls this against the CLASSIFIER's extracted
+  // employeeName, and this function only ever matches a case's own
+  // employeeName field — never manager/investigatingManager/
+  // disciplinaryOfficer. So even if a question naming a manager were
+  // ever misclassified as "case" intent, there is no way for it to
+  // surface that manager's own caseload/performance data — only a
+  // coincidental case where that same name happens to be the employee
+  // subject, exactly like any other name miss.
+  it('does not match a manager\'s name against cases they manage, only against a case\'s own employee', () => {
+    const managedCases = [
+      { id: 'c1', employeeName: 'Sarah Jones', manager: 'Jo Smith' },
+      { id: 'c2', employeeName: 'Ryan Osei', manager: 'Jo Smith' },
+    ];
+    expect(matchCaseByEmployeeName(managedCases, 'Jo Smith')).toBeNull();
+  });
 });
 
 describe('matchCaseByEmployeeNameWithConfidence (Phase 5, IP9)', () => {

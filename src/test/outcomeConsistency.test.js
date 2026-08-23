@@ -207,6 +207,34 @@ describe('comparableCaseSummaries (P14)', () => {
     expect(comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case').some(r => r.key === 'current-case')).toBe(false);
   });
 
+  // Phase 6.5 hardening (product-principles review) — "protected
+  // characteristics are not risk inputs." No such field exists in this
+  // app's own schema today (outcomeConsistency.js's own header), but this
+  // proves the guarantee structurally: even if a case object arrived
+  // carrying one (a stray field from a future schema change, an import,
+  // or an integration), this function's fixed output shape
+  // ({key, outcome, findings}) has no way to surface it — it was never
+  // read, not merely absent from a hand-picked test fixture.
+  it('never surfaces a protected characteristic, even when present on the input case', () => {
+    const cases = [
+      closedMisconductCase('c1', { outcome: 'Final written warning', ethnicity: 'Should Never Appear', gender: 'Should Never Appear', disability: 'Should Never Appear', age: 45, religion: 'Should Never Appear' }),
+      closedMisconductCase('c2', { outcome: 'Verbal warning' }),
+      closedMisconductCase('c3', { outcome: 'Dismissal' }),
+    ];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', status: 'substantiated' },
+      { id: 'a2', caseId: 'c2', status: 'substantiated' },
+      { id: 'a3', caseId: 'c3', status: 'substantiated' },
+    ];
+    const result = comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case');
+    expect(JSON.stringify(result)).not.toContain('Should Never Appear');
+    expect(result.find(r => r.key === 'c1')).toEqual({
+      key: 'c1',
+      outcome: 'Final written warning',
+      findings: [{ status: 'substantiated', label: 'Substantiated', reasoningExcerpt: '' }],
+    });
+  });
+
   it('excludes closed cases with no recorded findings yet', () => {
     const cases = [
       closedMisconductCase('c1', { outcome: 'Final written warning' }),

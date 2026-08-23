@@ -11,6 +11,17 @@
 // stay in App.jsx, matching how org_case_stats() itself is called
 // inline there rather than wrapped in a lib function.
 import { isSignificantTrend } from './trendDetection';
+import { APPEAL_MIN_SAMPLE_SIZE } from './appealIntelligence';
+
+// Phase 6.5 hardening (product-principles review) — reused as a real
+// system-prompt clause (not just documentation) on the final answer
+// call, not only the classifier: the data passed to the model already
+// excludes any per-manager breakdown (see cases_by_manager below), but
+// an explicit instruction is defense-in-depth against the model
+// answering a "how is manager X doing" question from its own general
+// reasoning when no manager data was ever in context, or misreading
+// ordinary volume/duration numbers as a performance judgment.
+export const GLOBAL_CHAT_SYSTEM_PROMPT = "You are Compass, an organisation-wide Employee Relations copilot. Answer only using the data provided below — if a specific number or fact isn't in it, say so rather than guessing or estimating. Never recommend a sanction, disciplinary outcome, or final decision on any specific case. Never rank, score, or evaluate a named manager's or employee's performance, even if asked directly — say that Compass reports on organisational patterns, support needs and process quality only, not individual performance judgments. When discussing statistics, cite only the real numbers given, and never state or imply that a pattern was caused by a named manager, team, or individual — describe correlations as \"a pattern worth reviewing\" or \"appears associated with,\" never as a proven cause. Plain text only — no asterisks, no markdown headers.";
 
 export function buildGlobalStatsContext(caseStats, overview, trendData, appealData) {
   const parts = ["ORG-WIDE CASE STATISTICS (live database query, scoped to cases you have access to):\n" + JSON.stringify(caseStats)];
@@ -44,7 +55,14 @@ export function buildGlobalStatsContext(caseStats, overview, trendData, appealDa
     }
   }
 
-  if (appealData && appealData.totalFindings > 0) {
+  // Phase 6.5 hardening (product-principles review) — was `totalFindings
+  // > 0`, which handed the model a raw 1-or-2-finding "distribution" (a
+  // single appeal outcome/ground presented as if it were a real pattern)
+  // with no sample-size signal at all. appealIntelligence.js's own panel
+  // already gates each of its three breakdowns behind this same
+  // threshold (outcomeSampleSize/stageSampleSize/groundSampleSize) —
+  // this brings the AI-facing context in line with the UI's own floor.
+  if (appealData && appealData.totalFindings >= APPEAL_MIN_SAMPLE_SIZE) {
     parts.push("APPEAL INTELLIGENCE (org-wide):\n" + JSON.stringify(appealData));
   }
 

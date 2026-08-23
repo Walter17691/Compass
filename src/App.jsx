@@ -14,7 +14,7 @@ import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage, withStageTransitionStamp } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
-import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse } from './lib/themes';
+import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, buildKnownNameTokens, filterUnsafeThemeSuggestions } from './lib/themes';
 import {
   addPrepQuestion as addPrepQuestionHelper,
   updatePrepQuestionText as updatePrepQuestionTextHelper,
@@ -56,7 +56,7 @@ import { isTerminalStatus, signatureStatusLabel } from './lib/eSignature';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
-import { buildGlobalStatsContext, inferInsightsTab } from './lib/globalAnalytics';
+import { buildGlobalStatsContext, inferInsightsTab, GLOBAL_CHAT_SYSTEM_PROMPT } from './lib/globalAnalytics';
 import { computeAppealIntelligence } from './lib/appealIntelligence';
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
 import { buildHearingPackSections } from './lib/hearingPack';
@@ -3160,7 +3160,16 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       })});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      const suggestions = parseThemeSuggestionResponse(text);
+      const rawSuggestions = parseThemeSuggestionResponse(text);
+      // Phase 6.5 hardening (product-principles review) — safe entity
+      // filtering ahead of human review (themes.js's own comment): screen
+      // out any suggestion matching a real person's name at this org
+      // BEFORE it's ever shown, not just before HR could confirm it.
+      const knownNames = [
+        ...(employeeRecords||[]).map(r=>r.name), ...(orgMembers||[]).map(m=>m.name),
+        cs.employeeName, cs.manager, cs.investigatingManager, cs.disciplinaryOfficer,
+      ];
+      const suggestions = filterUnsafeThemeSuggestions(rawSuggestions, buildKnownNameTokens(knownNames));
       setThemeSuggestions(s=>({...s, [cs.id]:suggestions}));
       if(!suggestions.length) showToast("Compass found no clear themes to suggest for this case");
     } catch(e) { console.error("suggestThemesForCase", e); showToast("Couldn't generate theme suggestions — "+e.message, "error"); }
@@ -4129,7 +4138,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         model:"claude-sonnet-4-6",
         max_tokens:600,
         stream:false,
-        system:"You are Compass, an organisation-wide Employee Relations copilot. Answer only using the data provided below — if a specific number or fact isn't in it, say so rather than guessing or estimating. Never recommend a sanction, disciplinary outcome, or final decision on any specific case. When discussing statistics, cite only the real numbers given. Plain text only — no asterisks, no markdown headers."+getPolicyCtx(),
+        system:GLOBAL_CHAT_SYSTEM_PROMPT+getPolicyCtx(),
         messages:[
           ...updated.map(m=>({role:m.role, content:m.content})).slice(0,-1),
           {role:"user", content:(dataContext?dataContext+"\n\n":"")+"Question: "+question},

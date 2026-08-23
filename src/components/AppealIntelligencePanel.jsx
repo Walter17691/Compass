@@ -48,6 +48,8 @@ export function AppealIntelligencePanel({ allegations, cases, caseSignals }) {
         <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Appeal outcomes</div>
         {outcomeEntries.length === 0
           ? <div style={{fontSize:13,color:"#6B6375"}}>No appeal outcomes recorded yet.</div>
+          : data.outcomeSampleSize < APPEAL_MIN_SAMPLE_SIZE
+          ? <DataQualityCaveat total={data.outcomeSampleSize} minRequired={APPEAL_MIN_SAMPLE_SIZE} label="appeals recorded"/>
           : outcomeEntries.map(([label, value]) => <BarRow key={label} label={label} value={value} max={maxOutcome} color="#C84B2F"/>)}
       </div>
 
@@ -55,6 +57,8 @@ export function AppealIntelligencePanel({ allegations, cases, caseSignals }) {
         <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Original stage of successful appeals</div>
         {stageEntries.length === 0
           ? <div style={{fontSize:13,color:"#6B6375"}}>No successful appeals with a recorded appeal meeting yet.</div>
+          : data.stageSampleSize < APPEAL_MIN_SAMPLE_SIZE
+          ? <DataQualityCaveat total={data.stageSampleSize} minRequired={APPEAL_MIN_SAMPLE_SIZE} label="successful appeals recorded"/>
           : stageEntries.map(([label, value]) => <BarRow key={label} label={label} value={value} max={maxStage} color="#1A7A4A"/>)}
       </div>
 
@@ -62,6 +66,8 @@ export function AppealIntelligencePanel({ allegations, cases, caseSignals }) {
         <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Most common appeal grounds</div>
         {data.commonGrounds.length === 0
           ? <div style={{fontSize:13,color:"#6B6375"}}>No appeal grounds recorded yet.</div>
+          : data.groundSampleSize < APPEAL_MIN_SAMPLE_SIZE
+          ? <DataQualityCaveat total={data.groundSampleSize} minRequired={APPEAL_MIN_SAMPLE_SIZE} label="appeal grounds recorded"/>
           : (
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {data.commonGrounds.map(g => (

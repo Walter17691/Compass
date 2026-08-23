@@ -159,7 +159,7 @@ export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewReq
           {outcomeEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(outcomeEntries)} color="#C84B2F"/>)}
         </Panel>
         <Panel title="Repeat case themes">
-          {themeFrequencies.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recurring themes tagged across 2+ cases yet.</div>}
+          {themeFrequencies.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recurring themes tagged across 3+ cases yet.</div>}
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {themeFrequencies.map(t=>(
               <span key={t.themeId} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:20,padding:"3px 10px"}}>{t.name} · {t.count} case{t.count===1?"":"s"}</span>

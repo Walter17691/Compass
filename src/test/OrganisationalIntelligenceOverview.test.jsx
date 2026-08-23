@@ -91,18 +91,21 @@ describe('OrganisationalIntelligenceOverview', () => {
 
   // Phase 6.5, Batch 5 — "Repeat case themes" now renders HR-curated
   // case_themes tags (themeFrequency), not raw extracted case text.
-  it('shows recurring themes tagged across 2+ cases, by name', async () => {
+  // Phase 6.5 hardening (product-principles review) — themeFrequency's
+  // own default floor was raised from 2 to 3 to match the MIN_SAMPLE_SIZE
+  // used consistently elsewhere in this phase.
+  it('shows recurring themes tagged across 3+ cases, by name', async () => {
     rpcMock.mockResolvedValue({ data: baseOverview, error: null });
-    const caseThemes = [{ caseId: 'c1', themeId: 't1' }, { caseId: 'c2', themeId: 't1' }];
+    const caseThemes = [{ caseId: 'c1', themeId: 't1' }, { caseId: 'c2', themeId: 't1' }, { caseId: 'c3', themeId: 't1' }];
     const organisationThemes = [{ id: 't1', name: 'Rota changes', active: true }];
     render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={caseThemes} organisationThemes={organisationThemes}/>);
-    await waitFor(() => expect(screen.getByText('Rota changes · 2 cases')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Rota changes · 3 cases')).toBeInTheDocument());
   });
 
-  it('shows the empty state when no theme has been tagged on 2+ cases', async () => {
+  it('shows the empty state when no theme has been tagged on 3+ cases', async () => {
     rpcMock.mockResolvedValue({ data: baseOverview, error: null });
     render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={[]} organisationThemes={[]}/>);
-    await waitFor(() => expect(screen.getByText('No recurring themes tagged across 2+ cases yet.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('No recurring themes tagged across 3+ cases yet.')).toBeInTheDocument());
   });
 
   // Phase 6.5 hardening (Batch 9) — "Cases by site" and "Cases by

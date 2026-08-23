@@ -123,14 +123,6 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
   // generated executive-summary prose below.
   const themeFrequencies = themeFrequency(caseThemes, organisationThemes);
 
-  // Manager caseload
-  const managerCases = {};
-  cases.forEach(cs=>{
-    const mgr = cs.manager||(cs.meetings||[])[0]?.manager||"Unassigned";
-    managerCases[mgr]=(managerCases[mgr]||0)+1;
-  });
-  const managerList = Object.entries(managerCases).sort((a,b)=>b[1]-a[1]).slice(0,5);
-
   const StatBox = ({label,value,sub,accent="#7C5CFC"})=>(
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
       <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{label}</div>
@@ -336,6 +328,18 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
           </div>
 
           {/* Repeat employees */}
+          {/* Phase 6.5 hardening (product-principles review) — a "Manager
+              caseload" panel used to render here: named managers in a
+              sorted, ranked bar chart by raw case count. That's exactly
+              the "worst manager" league table the phase's own
+              cross-cutting constraint prohibits (see
+              OrganisationalIntelligenceOverview.jsx's own cases_by_manager
+              exclusion, which this older screen — Phase 18, predating
+              Phase 6's OP-numbered discipline — never picked up). Case
+              volume alone says nothing about support needs or process
+              quality without team-size/complexity context this app
+              doesn't have; removed rather than reworked, since Manager
+              Insights already covers this org-wide, non-punitively. */}
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
             <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Patterns</div>
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Repeat cases</div>
@@ -352,17 +356,6 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
                 <span style={{fontSize:11,color:"#C84B2F",background:"#FFF0ED",borderRadius:10,padding:"2px 8px",fontWeight:600}}>{count} cases</span>
               </div>
             ))}
-          </div>
-
-          {/* Manager caseload */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Workload</div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Manager caseload</div>
-            {managerList.length===0?<div style={{fontSize:13,color:"#9B9098"}}>No data yet</div>:
-              managerList.map(([mgr,count],i)=>(
-                <BarRow key={i} label={mgr} value={count} max={managerList[0][1]} color="#7C5CFC"/>
-              ))
-            }
           </div>
 
         </div>

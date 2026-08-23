@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { themesForCase, activeThemes, matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, themeFrequency } from '../lib/themes';
+import { themesForCase, activeThemes, matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, themeFrequency, buildKnownNameTokens, isUnsafeThemeSuggestion, filterUnsafeThemeSuggestions } from '../lib/themes';
 
 describe('themesForCase', () => {
   it('filters case_themes rows to one case', () => {
@@ -22,18 +22,21 @@ describe('themeFrequency', () => {
 
   it('counts cases tagged with each theme, resolving the theme name', () => {
     const caseThemes = [
-      { caseId: 'c1', themeId: 't1' }, { caseId: 'c2', themeId: 't1' },
-      { caseId: 'c3', themeId: 't2' }, { caseId: 'c4', themeId: 't2' }, { caseId: 'c5', themeId: 't2' },
+      { caseId: 'c1', themeId: 't1' }, { caseId: 'c2', themeId: 't1' }, { caseId: 'c6', themeId: 't1' },
+      { caseId: 'c3', themeId: 't2' }, { caseId: 'c4', themeId: 't2' }, { caseId: 'c5', themeId: 't2' }, { caseId: 'c7', themeId: 't2' },
     ];
     const result = themeFrequency(caseThemes, organisationThemes);
     expect(result).toEqual([
-      { themeId: 't2', name: 'Bullying', count: 3 },
-      { themeId: 't1', name: 'Rota changes', count: 2 },
+      { themeId: 't2', name: 'Bullying', count: 4 },
+      { themeId: 't1', name: 'Rota changes', count: 3 },
     ]);
   });
 
-  it('excludes a theme tagged on only one case, below the default minimum of 2', () => {
-    const caseThemes = [{ caseId: 'c1', themeId: 't1' }];
+  // Phase 6.5 hardening (product-principles review) — raised from 2 to 3
+  // to match the MIN_SAMPLE_SIZE floor used consistently everywhere else
+  // in this phase; see themes.js's own comment on themeFrequency.
+  it('excludes a theme tagged on only two cases, below the default minimum of 3', () => {
+    const caseThemes = [{ caseId: 'c1', themeId: 't1' }, { caseId: 'c2', themeId: 't1' }];
     expect(themeFrequency(caseThemes, organisationThemes)).toEqual([]);
   });
 
@@ -44,9 +47,9 @@ describe('themeFrequency', () => {
   });
 
   it('falls back to "Unknown theme" if the theme row is missing (e.g. deleted taxonomy entry)', () => {
-    const caseThemes = [{ caseId: 'c1', themeId: 'ghost' }, { caseId: 'c2', themeId: 'ghost' }];
+    const caseThemes = [{ caseId: 'c1', themeId: 'ghost' }, { caseId: 'c2', themeId: 'ghost' }, { caseId: 'c3', themeId: 'ghost' }];
     const result = themeFrequency(caseThemes, organisationThemes);
-    expect(result).toEqual([{ themeId: 'ghost', name: 'Unknown theme', count: 2 }]);
+    expect(result).toEqual([{ themeId: 'ghost', name: 'Unknown theme', count: 3 }]);
   });
 
   it('returns an empty array for no case_themes', () => {
@@ -123,5 +126,65 @@ describe('parseThemeSuggestionResponse', () => {
 
   it('returns an empty array when there is no bracketed array in the text at all', () => {
     expect(parseThemeSuggestionResponse('{"themes": "not an array"}')).toEqual([]);
+  });
+});
+
+// Phase 6.5 hardening (product-principles review) — "personal names must
+// not accidentally become organisational themes." ThemesTab.jsx's own
+// human-review gate (only HR can confirm a genuinely new theme name)
+// doesn't stop HR from confirming an AI suggestion that happens to BE a
+// real person's name — this is the safe-entity-filtering layer that
+// screens it out before it's ever shown.
+describe('buildKnownNameTokens / isUnsafeThemeSuggestion / filterUnsafeThemeSuggestions', () => {
+  it('tokenises full names into individual lowercase word tokens', () => {
+    const tokens = buildKnownNameTokens(['Sarah Jones', 'Ryan O\'Brien-Smith']);
+    expect(tokens.has('sarah')).toBe(true);
+    expect(tokens.has('jones')).toBe(true);
+    expect(tokens.has('ryan')).toBe(true);
+    expect(tokens.has('o\'brien-smith')).toBe(true);
+  });
+
+  // The exact scenario orgIntelligence.js's own retired extractThemeKeywords
+  // used to fail on: a repeatedly-mentioned EMPLOYEE surname surfacing as
+  // a theme suggestion.
+  it('blocks a suggestion matching a repeated employee surname', () => {
+    const tokens = buildKnownNameTokens(['Alex Fletcher', 'Priya Fletcher']);
+    expect(isUnsafeThemeSuggestion('Fletcher', tokens)).toBe(true);
+    expect(isUnsafeThemeSuggestion('Fletcher escalation pattern', tokens)).toBe(true);
+  });
+
+  // Same failure mode, but the recurring name is a MANAGER's, not an
+  // employee's — equally unsafe to surface as an org-wide theme.
+  it('blocks a suggestion matching a repeated manager surname', () => {
+    const tokens = buildKnownNameTokens(['Jo Smith']);
+    expect(isUnsafeThemeSuggestion('Smith management style', tokens)).toBe(true);
+  });
+
+  it('allows an ordinary theme name that shares no word with any known name', () => {
+    const tokens = buildKnownNameTokens(['Alex Fletcher', 'Jo Smith']);
+    expect(isUnsafeThemeSuggestion('Rota changes', tokens)).toBe(false);
+    expect(isUnsafeThemeSuggestion('Bullying and harassment', tokens)).toBe(false);
+  });
+
+  it('matches whole words only, not substrings of an unrelated word', () => {
+    const tokens = buildKnownNameTokens(['Rob Baker']);
+    // "Robertson" contains "rob" but is not the token "rob".
+    expect(isUnsafeThemeSuggestion('Robertson process review', tokens)).toBe(false);
+  });
+
+  it('is case-insensitive', () => {
+    const tokens = buildKnownNameTokens(['Jo Smith']);
+    expect(isUnsafeThemeSuggestion('SMITH', tokens)).toBe(true);
+  });
+
+  it('treats an empty known-names set as blocking nothing', () => {
+    expect(isUnsafeThemeSuggestion('Anything at all', buildKnownNameTokens([]))).toBe(false);
+    expect(isUnsafeThemeSuggestion('Anything at all', buildKnownNameTokens(null))).toBe(false);
+  });
+
+  it('filterUnsafeThemeSuggestions keeps only the safe suggestions from a mixed list', () => {
+    const tokens = buildKnownNameTokens(['Alex Fletcher', 'Jo Smith']);
+    const suggestions = ['Rota changes', 'Fletcher', 'Bullying', 'Smith communication style'];
+    expect(filterUnsafeThemeSuggestions(suggestions, tokens)).toEqual(['Rota changes', 'Bullying']);
   });
 });
