@@ -61,7 +61,20 @@ test('proceeding past a policy-cited guardrail records a structured policy devia
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
   await expect(page.getByText('Procedural guardrails', { exact: true })).toBeVisible({ timeout: 10000 });
-  const signalCard = page.getByText('An allegation has no recorded employee response').locator('xpath=ancestor::div[2]');
+  // Phase 6.5 hardening (production regression suite) — two real bugs
+  // fixed here: (1) the title is "Allegations have..." (plural, stable),
+  // not "An allegation has..." (singular) — guardrails.js's own P1 fix
+  // stabilised this title so syncGuardrailSignals' exact-title dedup
+  // wouldn't re-spawn the signal as "new" every time the count of
+  // unaddressed allegations changed, and this test's expected text had
+  // gone stale against that rename. (2) a plain getByText+ancestor-count
+  // walk resolves against every ancestor whose own aggregate text also
+  // happens to contain the string (e.g. Case Risk Panel's duplicate of
+  // this same signal elsewhere on the page, per guardrail-actions.spec.js's
+  // own comment on the identical signal) — scoping by the signal's own
+  // "Proceed anyway" button (only GuardrailsPanel's cards have one) is
+  // the robust match, same pattern already proven there.
+  const signalCard = page.locator('div').filter({ hasText: 'Allegations have no recorded employee response' }).filter({ has: page.getByRole('button', { name: 'Proceed anyway' }) }).last();
   await expect(signalCard).toBeVisible({ timeout: 10000 });
 
   await signalCard.getByRole('button', { name: 'Proceed anyway' }).click();
@@ -80,7 +93,7 @@ test('proceeding past a policy-cited guardrail records a structured policy devia
   await deviationPrompt.getByLabel('Reason (optional)').fill(reasonText);
   await deviationPrompt.getByRole('button', { name: 'Record and proceed', exact: true }).click();
   await expect(deviationPrompt).not.toBeVisible();
-  await expect(page.getByText('An allegation has no recorded employee response')).not.toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Allegations have no recorded employee response')).not.toBeVisible({ timeout: 10000 });
 
   // caseTimeline.js renders audit entries as one combined string
   // ("{action} — {detail}"), so the action label isn't its own standalone

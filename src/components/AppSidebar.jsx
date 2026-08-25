@@ -20,7 +20,7 @@ const NavButton = ({s, l, indent, screen, goToScreen}) => (
 // out of sync between screens). Meetings/Tasks/Documents are already
 // real top-level destinations by this point (Phases 3/6), which is why
 // this phase — converting the nav shell itself — was sequenced last.
-export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, onOpenCommandBar }) {
+export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, onOpenCommandBar, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner }) {
   const [processesOpen, setProcessesOpen] = useState(true);
   const goToScreen = (s) => { setScreen(s); setShowMobileNav(false); };
   const activeCaseCount = cases.filter(x=>getCaseStage(x)!=="closed").length;
@@ -72,6 +72,40 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
   ];
   const allNavItems = [...primaryItems, ...moduleItems, {s:SCREENS.SEARCH, l:"Search"}, {s:SCREENS.SETTINGS, l:"Settings"}];
 
+  // Phase 6.5 hardening (production regression suite) — a failed
+  // org-data fetch previously left every affected screen showing its
+  // normal "No X yet" empty state, with zero visible signal that
+  // anything had gone wrong; role="status"+aria-live tells a
+  // screen-reader user too. Deliberately not auto-dismissing like a
+  // toast — a data-load failure needs the user to actually do something
+  // (retry), not just be transiently informed.
+  //
+  // This went through three floating-overlay positions before landing
+  // here, each a real collision with real screen content (not just an
+  // E2E artifact): top-centered over Home's own primary buttons,
+  // bottom-right over the Ask Compass chat panel's input row, then a
+  // top full-width strip over RecordScreen's own "End meeting" button.
+  // Every screen in this app puts its own primary actions at SOME edge,
+  // so no floating position over the main content area is ever safe.
+  // The sidebar is the one piece of UI that's identical and stable
+  // across every single screen — rendering the banner as part of ITS
+  // OWN layout (not an overlay on top of anything) makes a collision
+  // structurally impossible rather than just currently-unobserved.
+  const loadIssueBanner = dataLoadIssues.length>0 && !loadBannerDismissed && (
+    <div role="status" aria-live="polite" style={{background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:8,padding:"8px 10px",display:"flex",flexDirection:"column",gap:6,fontSize:12}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
+        <div style={{width:7,height:7,borderRadius:"50%",background:"#C84B2F",flexShrink:0,marginTop:3}}/>
+        <span style={{color:"#1A1535",flex:1,lineHeight:1.4}}>
+          Couldn't load {dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.
+        </span>
+      </div>
+      <div style={{display:"flex",gap:10,paddingLeft:13}}>
+        <button onClick={onRetryLoad} style={{fontSize:11,fontWeight:600,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Retry</button>
+        <button onClick={onDismissLoadBanner} aria-label="Dismiss" style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Dismiss</button>
+      </div>
+    </div>
+  );
+
   const sidebarBody = (
     <>
       <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"4px 14px 16px",cursor:"pointer",width:"100%"}}>
@@ -103,6 +137,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
       </nav>
 
       <div style={{borderTop:"1px solid #F5F1EA",paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
+        {loadIssueBanner&&<div style={{padding:"0 14px"}}>{loadIssueBanner}</div>}
         <div style={{padding:"0 14px"}}><OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/></div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px"}}>
           <div style={{minWidth:0}}>
@@ -132,6 +167,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
             <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
           </div>
         </div>
+        {loadIssueBanner&&<div style={{padding:"0 16px 10px"}}>{loadIssueBanner}</div>}
         {showMobileNav&&(
           <nav style={{borderTop:"1px solid #EDE5D8",display:"flex",flexDirection:"column",padding:"6px 0",maxHeight:"70vh",overflowY:"auto"}}>
             {allNavItems.map(({s,l})=>(

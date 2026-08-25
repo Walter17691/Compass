@@ -71,7 +71,13 @@ test('an allegation with no recorded employee response is flagged with a policy 
   // ancestor-climb from the signal text alone is ambiguous. Scoped by
   // GuardrailsPanel's own "Proceed anyway"/"Create action" buttons,
   // which only its cards have — CaseRiskPanel's don't.
-  const signalCard = page.locator('div').filter({ hasText: 'An allegation has no recorded employee response' }).filter({ has: page.getByRole('button', { name: 'Proceed anyway' }) }).last();
+  // Phase 6.5 hardening (production regression suite) — the title is
+  // "Allegations have..." (plural, stable) not "An allegation has..."
+  // (singular): guardrails.js's own P1 fix stabilised this title so
+  // syncGuardrailSignals' exact-title dedup wouldn't re-spawn the signal
+  // as "new" every time the count of unaddressed allegations changed —
+  // this test's own expected text had gone stale against that rename.
+  const signalCard = page.locator('div').filter({ hasText: 'Allegations have no recorded employee response' }).filter({ has: page.getByRole('button', { name: 'Proceed anyway' }) }).last();
   await expect(signalCard).toBeVisible({ timeout: 10000 });
   await expect(signalCard.getByText('Unauthorised absence')).toBeVisible();
 
@@ -101,5 +107,5 @@ test('an allegation with no recorded employee response is flagged with a policy 
   await expect(deviationPrompt).toBeVisible({ timeout: 5000 });
   await deviationPrompt.getByLabel('What will actually happen').fill('Response will be taken at the disciplinary hearing itself.');
   await deviationPrompt.getByRole('button', { name: 'Record and proceed', exact: true }).click();
-  await expect(page.getByText('An allegation has no recorded employee response')).not.toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Allegations have no recorded employee response')).not.toBeVisible({ timeout: 10000 });
 });

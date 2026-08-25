@@ -37,7 +37,15 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   // changeAllegationStatus save fire-and-forget (optimistic local state
   // first, same pattern as every other cloud-synced entity in this app),
   // and the reload just below would otherwise race a save still in flight.
-  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
+  // Phase 6.5 hardening (production regression suite) — waitForResponse's
+  // predicate only checks the URL/method, not the response's own
+  // ok/status; a transient failed save (this shared sandbox has shown
+  // genuine "TypeError: Failed to fetch" against Supabase) would satisfy
+  // this wait just as readily as a real success, then reload into a case
+  // whose allegation was silently never actually updated. Asserting .ok()
+  // turns that into a clear, fast, honest failure at the point it
+  // actually happened instead of a confusing timeout several steps later.
+  const statusSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()) && r.ok());
   await page.locator('label:text-is("Status") + select').selectOption('substantiated');
   await statusSaved;
 
@@ -69,7 +77,7 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   // card's title; this page only ever shows the one case just navigated
   // to, so both matches are this case's own content, never another case's.
   await page.getByText('Unauthorised absence').last().click();
-  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()));
+  const reasoningSaved = page.waitForResponse(r => r.url().includes('/rest/v1/allegations') && ['POST','PATCH'].includes(r.request().method()) && r.ok());
   await reasoningField.fill('Swipe-card records and CCTV footage confirm the employee left the site at 14:32 without authorisation or prior agreement from their manager.');
   await reasoningField.blur();
   await reasoningSaved;

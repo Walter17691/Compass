@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AppSidebar } from '../components/AppSidebar.jsx';
 
 // Phase 6.5 hardening — dsar_requests' RLS was org-wide with no role
@@ -38,5 +38,48 @@ describe('AppSidebar — Wellbeing nav gating', () => {
   it('shows the Wellbeing nav item for HR', () => {
     render(<AppSidebar {...baseProps} isHR={true} />);
     expect(screen.getByRole('button', { name: 'Wellbeing' })).toBeInTheDocument();
+  });
+});
+
+// Phase 6.5 hardening (production regression suite) — the data-load-issue
+// banner used to be its own position:fixed overlay in App.jsx, and went
+// through three real, E2E-discovered collisions with real screen content
+// (Home's own primary buttons, the Ask Compass chat panel, RecordScreen's
+// "End meeting" button) before moving here — rendered as part of the
+// sidebar's own in-flow layout (position:sticky, never position:fixed),
+// which is identical across every screen, so a collision with a specific
+// screen's own content is structurally impossible rather than just
+// currently-unobserved.
+describe('AppSidebar — data-load-issue banner', () => {
+  it('shows nothing when there are no load issues', () => {
+    render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={[]} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows the banner with Retry/Dismiss when there are load issues, and wires both handlers', () => {
+    const onRetryLoad = vi.fn();
+    const onDismissLoadBanner = vi.fn();
+    render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases']} loadBannerDismissed={false} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner} />);
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent("Couldn't load cases");
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetryLoad).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onDismissLoadBanner).toHaveBeenCalledTimes(1);
+  });
+
+  it('summarises multiple load issues by count rather than listing every one', () => {
+    render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases', 'audit log', 'roles']} loadBannerDismissed={false} />);
+    expect(screen.getByRole('status')).toHaveTextContent("Couldn't load 3 kinds of data");
+  });
+
+  it('hides the banner once dismissed, even with load issues still present', () => {
+    render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases']} loadBannerDismissed={true} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('renders the banner within the mobile header layout too', () => {
+    render(<AppSidebar {...baseProps} isHR={true} isMobile={true} dataLoadIssues={['cases']} loadBannerDismissed={false} />);
+    expect(screen.getByRole('status')).toHaveTextContent("Couldn't load cases");
   });
 });

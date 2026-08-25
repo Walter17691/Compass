@@ -1599,9 +1599,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const isHR = isHrRole(member?.role);
 
+  // Phase 6.5 hardening (production regression suite) — real, DB-confirmed
+  // duplicate-signal bug (see syncGuardrailSignals): tracks whether this
+  // org's case_signals have actually finished their initial load, so
+  // syncGuardrailSignals can wait for real data instead of treating an
+  // empty, not-yet-loaded caseSignals as "no signal exists yet." Declared
+  // here (ahead of loadOrgData/loadCaseSignals below, which both close
+  // over it) rather than alongside caseSignals itself further down.
+  const [caseSignalsLoaded, setCaseSignalsLoaded] = useState(false);
+
   const loadOrgData = () => {
     if(!org?.id) return;
     setDataLoadIssues([]);
+    setCaseSignalsLoaded(false);
     loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
     if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); }
   };
@@ -3945,6 +3955,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         createdBy:r.created_by, resolvedBy:r.resolved_by, resolvedAt:r.resolved_at,
         resolvedReason:r.resolved_reason, createdAt:r.created_at,
       })));
+      // Only after a genuinely successful load — an error above already
+      // returns early, leaving this false, so syncGuardrailSignals keeps
+      // waiting rather than risk duplicate-creating against incomplete data.
+      setCaseSignalsLoaded(true);
     } catch(e) { console.error('loadCaseSignals', e); }
   };
 
@@ -4573,6 +4587,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setConsistencyReviewLoading(l=>({...l, [cs.id]:false}));
   };
 
+  // { [caseId]: Set<title> } — see syncGuardrailSignals below for why this
+  // needs to be a ref (synchronous, not batched) rather than derived from
+  // caseSignals state on every call.
+  const guardrailSyncedTitlesRef = useRef({});
+
   // ── Procedural Guardrails ──
   // computeGuardrailChecks (lib/guardrails.js) is a plain data comparison,
   // no AI call — so this runs automatically when a case is opened rather
@@ -4584,20 +4603,47 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // currently-open signal is auto-resolved once its condition clears,
   // since these are factual comparisons, not judgment calls a human needs
   // to confirm away.
+  //
+  // Phase 6.5 hardening (production regression suite) — real duplicate-
+  // signal bug found via E2E (decision-workspace.spec.js/
+  // procedural-guardrails.spec.js both hit a strict-mode "3 elements"
+  // locator failure on a case with only ONE triggering allegation). Root
+  // cause: this effect's own deps ([cases, allegations, ...] below) mean
+  // it can fire more than once while a case's data is still streaming in
+  // from separate REST loads, and each call closes over the SAME
+  // `caseSignals` snapshot from the render that scheduled it. If a second
+  // call starts before the first call's setCaseSignals has actually
+  // landed, `existing` is stale in both calls, so both independently see
+  // "no signal with this title yet" and both insert one — a genuine
+  // duplicate-row bug that could hit real users too, not just this test
+  // (case data reliably loads over multiple network round-trips).
+  // guardrailSyncedTitlesRef closes the race with a plain, synchronous
+  // (non-batched) ref rather than relying on state, which is exactly the
+  // dedup guarantee "idempotent by construction" above assumed but didn't
+  // actually hold under concurrent fires.
   const syncGuardrailSignals = (cs) => {
     const checks = computeGuardrailChecks(cs, allegations, policies, caseAccess, orgMembers);
     const triggeredTitles = new Set(checks.map(c=>c.title));
     const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk");
+
+    if(!guardrailSyncedTitlesRef.current[cs.id]) guardrailSyncedTitlesRef.current[cs.id] = new Set(existing.map(s=>s.title));
+    const syncedTitles = guardrailSyncedTitlesRef.current[cs.id];
 
     let updated = caseSignals;
     existing.filter(s=>s.status==="open" && !triggeredTitles.has(s.title)).forEach(s => {
       updated = setSignalStatus(updated, s.id, "resolved", null, "Condition no longer detected");
       const changed = updated.find(x=>x.id===s.id);
       if(changed) saveSignalToDB(changed);
+      // Deliberately not removed from syncedTitles here — the original
+      // dedup ("no signal, any status, with this title already exists")
+      // never re-creates a title once any row for it has existed, resolved
+      // or not, so auto-resolving must not reopen the door to a duplicate
+      // either.
     });
 
     checks.forEach(c => {
-      if(existing.some(s=>s.title===c.title)) return;
+      if(syncedTitles.has(c.title)) return;
+      syncedTitles.add(c.title);
       updated = createSignal(updated, cs.id, { type:"process_risk", title:c.title, reasoning:c.reasoning, sourceRefs:c.sourceRefs||[], source:"ai" });
       saveSignalToDB(updated[updated.length-1]);
     });
@@ -4617,14 +4663,24 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // caseAccess added for P8's checkAppealManagerConflict — assigning an
   // Appeal Manager (or reassigning one) should surface a conflict signal
   // immediately, not just on the next full page reload.
+  //
+  // Phase 6.5 hardening (production regression suite) — real,
+  // DB-confirmed duplicate-signal bug found via E2E: on a fresh page
+  // load/reload, this effect can (and, per the E2E evidence, does) fire
+  // before loadCaseSignals' own async fetch has resolved — at that
+  // moment caseSignals is still its initial empty array, which
+  // syncGuardrailSignals's title-dedup misreads as "no signal exists
+  // yet" and creates a genuine duplicate DB row once the real data does
+  // load a moment later. caseSignalsLoaded gates this effect until that
+  // load has actually landed at least once, so dedup only ever runs
+  // against real data, never an empty placeholder.
   useEffect(()=>{
-    if(screen===SCREENS.CASE_VIEW && activeCaseId) {
+    if(screen===SCREENS.CASE_VIEW && activeCaseId && caseSignalsLoaded) {
       const cs = cases.find(c=>c.id===activeCaseId);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncGuardrailSignals only calls setCaseSignals when a check's dedup-by-title comparison finds something new/cleared, not on every fire; the guarded, title-deduped write is what keeps this effect from cascading, same shape the rule can't see through elsewhere in this file (e.g. updateMeetingIntelligence above).
       if(cs) syncGuardrailSignals(cs);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, activeCaseId, cases, allegations, caseAccess]);
+  }, [screen, activeCaseId, cases, allegations, caseAccess, caseSignalsLoaded]);
 
   // ── Automatic Evidence Matrix — link suggestions ──
   // The matrix grid itself and manual linking already existed (Evidence
@@ -7356,37 +7412,19 @@ Please produce:
         </div>
       )}
 
-      {/* Phase 6.5 hardening (accessibility/UX reliability pass) — the
-          known issue: a failed org-data fetch previously left every
-          affected screen showing its normal "No X yet" empty state, with
-          zero visible signal that anything had gone wrong. role="status"
-          + aria-live so a screen-reader user is told this exists even
-          without looking at the screen; deliberately not auto-dismissing
-          like the toast above, since a data-load failure needs the user
-          to actually do something (retry), not just be transiently
-          informed.
-          Phase 6.5 hardening (production regression suite) — was
-          position:fixed, top-centered across the FULL viewport width,
-          which overlapped Home's own "+ New case"/"Start meeting"
-          buttons closely enough to intercept clicks meant for them (a
-          real bug for actual users, not just an E2E-testing artifact —
-          found when the existing E2E suite started failing on this
-          exact click). Stacked directly above the toast's own
-          bottom-right corner (not bottom-left: the sidebar's own
-          org-switcher/sign-out controls live there) with enough vertical
-          offset that the two never overlap even in the rare case both
-          are visible at once — the toast auto-dismisses in 3s, this one
-          doesn't. */}
-      {dataLoadIssues.length>0&&!loadBannerDismissed&&(
-        <div role="status" aria-live="polite" style={{position:"fixed",bottom:isMobile?90:104,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3100,background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",maxWidth:isMobile?"calc(100vw - 32px)":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:"#C84B2F",flexShrink:0}}/>
-          <span style={{fontSize:13,color:"#1A1535",flex:1}}>
-            Couldn't load {dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.
-          </span>
-          <button onClick={loadOrgData} style={{fontSize:12,fontWeight:600,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",whiteSpace:"nowrap"}}>Retry</button>
-          <button onClick={()=>setLoadBannerDismissed(true)} aria-label="Dismiss" style={{background:"none",border:"none",color:"#9B9098",fontSize:16,lineHeight:1,cursor:"pointer",padding:0,flexShrink:0}}>×</button>
-        </div>
-      )}
+      {/* Phase 6.5 hardening (production regression suite) — this used
+          to be its own floating overlay and went through three different
+          fixed positions, each a real collision with real screen content
+          discovered via E2E (top-centered over Home's own primary
+          buttons, bottom-right over the Ask Compass chat panel, a top
+          strip over RecordScreen's own "End meeting" button) — every
+          screen in this app puts its own primary actions at SOME edge,
+          so no floating position over the main content area is ever
+          safe. Now rendered inside AppSidebar itself (see its own
+          loadIssueBanner), the one piece of UI that's identical and
+          genuinely in-flow (position:sticky, not fixed) across every
+          screen — a collision is structurally impossible there, not
+          just currently-unobserved. */}
 
       {confirmState&&(
         <ConfirmModal
@@ -7490,6 +7528,10 @@ Please produce:
         onSignOut={onSignOut}
         isHR={isHR}
         onOpenCommandBar={()=>setShowCommandBar(true)}
+        dataLoadIssues={dataLoadIssues}
+        loadBannerDismissed={loadBannerDismissed}
+        onRetryLoad={loadOrgData}
+        onDismissLoadBanner={()=>setLoadBannerDismissed(true)}
       />
 
       {/* ── Content column — everything else (deadline banner through every

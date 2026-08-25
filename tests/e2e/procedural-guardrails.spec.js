@@ -49,7 +49,19 @@ test('Compass flags the same chair running both the investigation and the discip
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
   await expect(page.getByText('Procedural guardrails', { exact: true })).toBeVisible({ timeout: 10000 });
-  const signalCard = page.getByText('Same person chaired the investigation and the disciplinary hearing').locator('xpath=ancestor::div[2]');
+  // getByText's default substring matching resolves against every
+  // ancestor whose own aggregate text also happens to contain this
+  // string, and a plain ancestor:: div-count walk from an arbitrary one
+  // of those starting points doesn't reliably land on the actual
+  // SignalCard (SignalCard.jsx) boundary. Same filter-by-content +
+  // filter-by-descendant-button + .last() idiom already proven elsewhere
+  // in this suite (case-changes.spec.js's own caseTabBar) — guarantees a
+  // match that both contains the signal's own title AND its own
+  // "Not relevant" button as real descendants, then picks the innermost.
+  const signalCard = page.locator('div')
+    .filter({ hasText: 'Same person chaired the investigation and the disciplinary hearing' })
+    .filter({ has: page.getByRole('button', { name: 'Not relevant' }) })
+    .last();
   await expect(signalCard).toBeVisible({ timeout: 10000 });
   await expect(signalCard.getByText(chairName)).toBeVisible();
   await expect(signalCard.getByRole('button', { name: 'Not relevant' })).toBeVisible();
