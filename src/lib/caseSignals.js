@@ -3,6 +3,7 @@
 // Procedural Guardrails (see supabase/case_signals_2026-08-10.sql). Same
 // shape as allegations.js: a flat, cross-case-listable entity; the caller
 // (App.jsx) owns persistence and which case is active.
+import { newId } from './ids';
 
 export const SIGNAL_TYPES = [
   { id: "next_action", label: "Next best action", color: "#7C5CFC" },
@@ -62,7 +63,7 @@ export function createSignal(signals, caseId, fields) {
   const title = (fields?.title || "").trim();
   if (!title || !fields?.type) return signals;
   const signal = {
-    id: "sig_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+    id: newId("sig"),
     caseId,
     type: fields.type,
     title,

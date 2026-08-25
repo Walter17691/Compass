@@ -26,14 +26,10 @@ export function seedInvestigationChecklist(caseTasks, caseId, ownerName) {
   let updated = caseTasks || [];
   INVESTIGATION_CHECKLIST_STEPS.forEach(step => {
     if (existingNames.has(step.label)) return;
-    const withNewTask = addTask(updated, caseId, { name: step.label, owner: ownerName || "", priority: "normal" });
-    // addTask ids are Date.now()-based — seeding all seven steps in one
-    // synchronous loop can call it within the same millisecond, so two
-    // steps would collide on id and then toggle together. Appending the
-    // step's own stable id guarantees uniqueness here without touching
-    // addTask's shared id scheme (fine for its other, non-batch callers).
-    const newTask = withNewTask[withNewTask.length - 1];
-    updated = [...withNewTask.slice(0, -1), { ...newTask, id: newTask.id + "_" + step.id }];
+    // addTask now mints ids via crypto.randomUUID() (src/lib/ids.js),
+    // collision-proof even seeding all seven steps in one synchronous
+    // loop — no per-step suffix workaround needed any more.
+    updated = addTask(updated, caseId, { name: step.label, owner: ownerName || "", priority: "normal" });
   });
   return updated;
 }

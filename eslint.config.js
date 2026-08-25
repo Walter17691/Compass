@@ -8,6 +8,30 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — Task/
+    // Entity Identity invariant). Date.now() has millisecond resolution —
+    // used to build an id, it silently collides the moment more than one
+    // item is minted in the same synchronous pass (a batch-add loop,
+    // seeding several items at once). Applies everywhere (client, api/,
+    // tests) so the pattern can't creep back in via a new endpoint or a
+    // copy-pasted test fixture either. Use newId() from src/lib/ids.js
+    // (crypto.randomUUID()-based) instead. This only catches the literal
+    // `id: ...Date.now()...` shape, not id values built through an
+    // intermediate variable — a narrow, high-signal check rather than an
+    // attempt at exhaustive static analysis.
+    files: ['**/*.{js,jsx}'],
+    ignores: ['dist/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Property[key.name='id'] > CallExpression[callee.object.name='Date'][callee.property.name='now']",
+          message: 'Do not build an id from Date.now() — it collides within the same millisecond. Use newId() from src/lib/ids.js instead.',
+        },
+      ],
+    },
+  },
+  {
     // Phase 6.5 hardening (accessibility pass) — jsx-a11y's recommended
     // rules only apply where JSX actually lives (this block); api/ and
     // the Node-only config/test-helper files below have none. Catches

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import handler from './delete-org-data.js';
+import { ORG_SCOPED_TABLES } from '../src/lib/dataInventory.js';
 
 function mockRes() {
   const res = { statusCode: null, body: null };
@@ -8,12 +9,19 @@ function mockRes() {
   return res;
 }
 
-const ALL_TABLES = [
-  'cases', 'starter_instances', 'dsar_requests', 'hr_review_requests', 'wellbeing_notes',
-  'concern_referrals', 'leaver_instances', 'case_tasks', 'signing_requests', 'employee_records',
-  'employee_portal_accounts', 'employee_portal_invites', 'case_views', 'improvement_initiatives',
-  'manager_capability_insights', 'er_executive_briefs', 'org_events', 'integration_events', 'audit_log',
-];
+// Phase 6.5 hardening (structural remediation, Prompt 12 — GDPR
+// completeness invariant) — this used to be a hand-copied duplicate of
+// the handler's own local table list, which the independent audit
+// correctly flagged as a test that "asserts the code matches itself"
+// and can never catch a missing table. Importing the same shared
+// dataInventory.js the handler itself now reads from doesn't reintroduce
+// that problem — src/test/dataInventory.test.js is the one that
+// independently re-derives the expected table set (from a live schema
+// snapshot) and checks dataInventory.js against it. This file's job is
+// only to prove the handler actually iterates every table THAT LIST
+// contains and scopes each delete correctly — a different, legitimate
+// concern from "is the list itself complete."
+const ALL_TABLES = [...ORG_SCOPED_TABLES, 'audit_log'];
 
 // Phase 6.5 hardening (data-lifecycle review) — organisation deletion.
 // The task's own required test: deleting Org A must never delete Org B.
@@ -125,13 +133,32 @@ describe('delete-org-data — full table coverage and tenant isolation', () => {
     expect(payload.detail).not.toMatch(/[A-Z][a-z]+ [A-Z][a-z]+/); // no "Firstname Lastname"-shaped names
   });
 
-  it('does not fail the whole request if one table\'s delete errors — continues clearing the rest', async () => {
-    stubFetch({ members: [{ role: 'hr_director', name: 'Alex' }], deleteOk: false });
+  it('still attempts every table even if earlier ones fail, but reports the failure honestly instead of {success:true}', async () => {
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — GDPR
+    // completeness invariant): a GDPR Art. 17 erasure request that
+    // reports success while real personal data remains in one or more
+    // tables is a confidently-false statement to the user — the old
+    // behaviour this test used to assert. Every table must still be
+    // attempted (best-effort, not abort-on-first-failure), but the
+    // response itself must be an honest failure.
+    const calls = stubFetch({ members: [{ role: 'hr_director', name: 'Alex' }], deleteOk: false });
     const res = mockRes();
     await handler(req({ orgId: 'org-a' }), res);
-    // Best-effort: every table is still attempted even if earlier ones
-    // failed, and the endpoint itself reports success rather than
-    // aborting halfway through.
+
+    for (const table of ALL_TABLES) {
+      const del = calls.find(c => c.url.includes(`/rest/v1/${table}?`) && c.method === 'DELETE');
+      expect(del, `expected a DELETE attempt for ${table} even after an earlier failure`).toBeTruthy();
+    }
+    expect(res.statusCode).toBe(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.failedTables.length).toBeGreaterThan(0);
+  });
+
+  it('reports real success — 200, success:true, no failedTables — when every table clears', async () => {
+    stubFetch({ members: [{ role: 'hr_director', name: 'Alex' }], deleteOk: true });
+    const res = mockRes();
+    await handler(req({ orgId: 'org-a' }), res);
     expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ success: true });
   });
 });

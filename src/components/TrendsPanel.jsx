@@ -31,22 +31,23 @@ const TrendCard = ({ text, insightRef, onExplore, onShowEvidence, createCaseTask
 // coherent case-type equivalent (org_theme_root_cause_2026-08-20.sql's
 // own header explains why). Rendered above ThemeTaxonomyManager in the
 // same "Trends & Themes" tab.
-export function TrendsPanel({ createCaseTask, improvementInitiatives } = {}) {
+export function TrendsPanel({ orgId, createCaseTask, improvementInitiatives } = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const [exploringThemeId, setExploringThemeId] = useState(null);
   const [evidenceFor, setEvidenceFor] = useState(null); // { label, entry } | null
 
   useEffect(() => {
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
-      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_period_days: 90 });
+      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_org_id: orgId, p_period_days: 90 });
       if (cancelled) return;
       if (rpcError) { console.error("org_trend_detection", rpcError); setError(true); }
       else setData(data);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [orgId]);
 
   if (error) return <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>Couldn't load trend data right now.</div>;
   if (!data) return <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>Loading trends…</div>;
@@ -71,7 +72,7 @@ export function TrendsPanel({ createCaseTask, improvementInitiatives } = {}) {
         // changes, so RootCauseExplorationPanel's own effect never needs
         // to reset stale state from the previous theme synchronously —
         // it always starts fresh from its own initial null/false state.
-        <RootCauseExplorationPanel key={exploringTheme.themeId} themeId={exploringTheme.themeId} themeName={exploringTheme.themeName} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives} onClose={()=>setExploringThemeId(null)}/>
+        <RootCauseExplorationPanel key={exploringTheme.themeId} orgId={orgId} themeId={exploringTheme.themeId} themeName={exploringTheme.themeName} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives} onClose={()=>setExploringThemeId(null)}/>
       )}
       {evidenceFor && (
         <InsightEvidenceModal

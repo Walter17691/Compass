@@ -1,4 +1,5 @@
 import { supabaseRequest, getUserEmail } from './_supabase.js';
+import { fetchAllPagesServer } from '../_paginatedFetch.js';
 import { postWebhook } from './_notify.js';
 import { computeDueSoon } from '../../src/lib/deadlines.js';
 import { mapCaseRow } from '../../src/lib/caseMapping.js';
@@ -110,10 +111,19 @@ export async function runDigest() {
     // for every org member regardless of plan, so this check (not the
     // client-side toggle) is what actually enforces the gate.
     if (org.plan !== 'pro') continue;
-    const casesRes = await supabaseRequest(`cases?org_id=eq.${org.id}&select=*`);
-    const rows = await casesRes.json();
-    const dsarRes = await supabaseRequest(`dsar_requests?org_id=eq.${org.id}&status=neq.completed&select=*`);
-    const dsarRequests = await dsarRes.json();
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — Pagination
+    // / Complete-Data invariant) — every one of these was a single
+    // unpaginated request, silently truncated at PostgREST's default row
+    // cap once an org's row count crossed it. Confirmed live: the
+    // largest real org has 2,715 cases, so the un-paged `cases` query
+    // alone was dropping 1,715 of them (63%) from every digest run,
+    // meaning deadline alerts for well over half that org's cases never
+    // went out. fetchAllPagesServer (api/_paginatedFetch.js) is the
+    // server-side twin of src/lib/paginatedFetch.js's client-side
+    // fetchAllPages, which already closed this exact bug for
+    // loadCasesFromDB/loadEmployeeRecords.
+    const { data: rows } = await fetchAllPagesServer(`cases?org_id=eq.${org.id}&select=*&order=id.asc`);
+    const { data: dsarRequests } = await fetchAllPagesServer(`dsar_requests?org_id=eq.${org.id}&status=neq.completed&select=*&order=id.asc`);
     const dueSoon = computeDueSoon(rows.map(mapCaseRow), dsarRequests);
     const urgent = dueSoon.filter(isUrgent);
     if (urgent.length === 0) continue;
@@ -121,13 +131,11 @@ export async function runDigest() {
     // location_ids added for canAccessCaseLocation; casesById gives
     // isAuthorisedFor the same location_id/owner_id/created_by every
     // other RLS-equivalent check in this codebase reads off the raw row.
-    const membersRes = await supabaseRequest(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id,role,location_ids`);
-    const members = await membersRes.json();
+    const { data: members } = await fetchAllPagesServer(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id,role,location_ids&order=user_id.asc`);
 
     const casesById = new Map(rows.map(r => [r.id, { locationId: r.location_id, ownerId: r.owner_id, createdBy: r.created_by }]));
 
-    const caseAccessRes = await supabaseRequest(`case_access?org_id=eq.${org.id}&select=case_id,user_id`);
-    const caseAccessRows = await caseAccessRes.json();
+    const { data: caseAccessRows } = await fetchAllPagesServer(`case_access?org_id=eq.${org.id}&select=case_id,user_id&order=case_id.asc`);
     const caseAccessByCase = new Map();
     for (const row of caseAccessRows) {
       if (!caseAccessByCase.has(row.case_id)) caseAccessByCase.set(row.case_id, new Set());

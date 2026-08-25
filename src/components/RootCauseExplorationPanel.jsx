@@ -9,20 +9,21 @@ import { CreateActionButton } from './CreateActionButton';
 // the specific themeId. Language throughout stays in "areas to
 // investigate" framing (rootCauseExploration.js's own doc comment) —
 // never a proven cause.
-export function RootCauseExplorationPanel({ themeId, themeName, createCaseTask, improvementInitiatives, onClose }) {
+export function RootCauseExplorationPanel({ orgId, themeId, themeName, createCaseTask, improvementInitiatives, onClose }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
-      const { data, error: rpcError } = await supabase.rpc('org_theme_root_cause', { p_theme_id: themeId, p_period_days: 90 });
+      const { data, error: rpcError } = await supabase.rpc('org_theme_root_cause', { p_org_id: orgId, p_theme_id: themeId, p_period_days: 90 });
       if (cancelled) return;
       if (rpcError) { console.error("org_theme_root_cause", rpcError); setError(true); }
       else setData(data);
     })();
     return () => { cancelled = true; };
-  }, [themeId]);
+  }, [orgId, themeId]);
 
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E0D8FF",borderRadius:10,padding:"16px 18px",marginBottom:10}}>

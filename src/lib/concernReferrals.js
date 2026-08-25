@@ -4,6 +4,7 @@
 // caller (App.jsx) owns persistence (Supabase) and which org is active.
 // See supabase/concern_referrals_2026-08-12.sql for the RLS shape: any
 // org member can submit one, but only HR roles can triage it.
+import { newId } from './ids';
 
 export const REFERRAL_STATUSES = [
   { id: "new", label: "New", color: "#7C5CFC", bg: "#EDE8FF" },
@@ -32,7 +33,7 @@ export function addConcernReferral(referrals, fields) {
   const description = (fields?.description || "").trim();
   if (!employeeName || !description) return referrals;
   const referral = {
-    id: "ref_" + Date.now(),
+    id: newId("ref"),
     employeeName,
     concernType: fields.concernType || "other",
     description,

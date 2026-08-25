@@ -18,20 +18,21 @@ const FLAG_COLOR = {
 // (management capability, appeal vulnerability, policy confusion,
 // workforce communication) explicitly noted as covered elsewhere in
 // Insights at organisation level, not fabricated per site here.
-export function RiskMapPanel({ cases, employeeRecords, processTemplates, orgEvents, createCaseTask, improvementInitiatives }) {
+export function RiskMapPanel({ orgId, cases, employeeRecords, processTemplates, orgEvents, createCaseTask, improvementInitiatives }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
-      const { data, error: rpcError } = await supabase.rpc('org_insights_overview', { p_period_days: 90 });
+      const { data, error: rpcError } = await supabase.rpc('org_insights_overview', { p_org_id: orgId, p_period_days: 90 });
       if (cancelled) return;
       if (rpcError) { console.error("org_insights_overview", rpcError); setError(true); }
       else setOverview(data);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [orgId]);
 
   if (error) return <div style={{fontSize:13,color:"#6B6375"}}>Couldn't load risk map data right now.</div>;
   if (!overview) return <div style={{fontSize:13,color:"#6B6375"}}>Loading risk map…</div>;

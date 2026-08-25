@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES, CONCERN_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
+import { newId } from './lib/ids';
 import { addCalendarMonth, toISODateLocal } from './lib/dates';
 import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
@@ -29,7 +30,7 @@ import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReaso
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
-import { computeGuardrailChecks } from './lib/guardrails';
+import { computeGuardrailChecks, GUARDRAIL_CHECK_TITLES } from './lib/guardrails';
 import { addConcernReferral, setReferralStatus, updateConcernReferral } from './lib/concernReferrals';
 import { sanitizeTriageSummary } from './lib/concernTriage';
 import { seedInvestigationChecklist, investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './lib/investigationChecklist';
@@ -590,7 +591,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadOrgMembers = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('org_members').select('*').eq('org_id', org.id);
+      // Phase 6.5 hardening (structural remediation, Prompt 12 —
+      // Pagination / Complete-Data invariant) — no test org currently
+      // exceeds PostgREST's default row cap here, but a real enterprise
+      // client's team list plausibly could; fixed proactively with the
+      // same fetchAllPages pattern rather than waiting for a live
+      // truncation like loadCasesFromDB/loadCaseViews already hit.
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('org_members').select('*').eq('org_id', org.id).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadOrgMembers', error); markLoadIssue('team members'); return; }
       if(data) setOrgMembers(data);
     } catch(e) { console.error('loadOrgMembers', e); markLoadIssue('team members'); }
@@ -682,7 +689,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     (async () => {
       const changes = (await Promise.all(pending.map(async m => {
         try {
-          const res = await fetch(`/api/signing?signId=${encodeURIComponent(m.signId)}`);
+          // internal=1 — this is HR silently polling for a status change
+          // while viewing a case, not the employee genuinely opening
+          // their signing link; must never advance sent→opened itself
+          // (see api/signing.js's own comment on this parameter).
+          const res = await fetch(`/api/signing?signId=${encodeURIComponent(m.signId)}&internal=1`);
           if (!res.ok) return null;
           const data = await res.json();
           return data.status && data.status !== m.signStatus ? { id: m.id, status: data.status } : null;
@@ -797,7 +808,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const resendSignatureReminder = async (cs, meeting, { level } = {}) => {
     if(!meeting?.signId) return { success:false };
     try {
-      const statusRes = await fetch(`/api/signing?signId=${encodeURIComponent(meeting.signId)}`);
+      // internal=1 — looking up the recipient address to chase, not the
+      // employee opening their link; must not itself mark the request
+      // "opened" (see api/signing.js's own comment on this parameter).
+      const statusRes = await fetch(`/api/signing?signId=${encodeURIComponent(meeting.signId)}&internal=1`);
       if(!statusRes.ok) { showToast("Couldn't find that signing request", "error"); return { success:false }; }
       const request = await statusRes.json();
       if(!request.employee_email) { showToast("No email on file for this reminder — resend manually from the meeting", "error"); return { success:false }; }
@@ -832,7 +846,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const sendForSignature = async (employeeEmail) => {
     if(!employeeEmail||!reviewOutput) return;
-    setSignStatus("sent");
     const document = (()=>{
       const full = reviewOutput;
       const start = full.indexOf("## Meeting Details");
@@ -850,14 +863,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       documentLabel: meetingType?.label||"Meeting",
       documentDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
     });
-    if(!success) { setSignStatus(null); return; }
-    setSignId(signId);
+    if(!success) return;
     setShowSignModal(false);
     // saveMeetingToCase() navigates to the saved case itself now (both
     // branches — witness interviews to the linked case, regular meetings
     // to the found-or-just-created one), so this no longer needs its own
     // duplicate lookup-and-navigate logic.
-    saveMeetingToCase();
+    saveMeetingToCase({ signId, signStatus: "sent" });
   };
 
   const sendLiveChat = async () => {
@@ -1033,7 +1045,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           const known = new Set(existing.map(s=>s.description.trim().toLowerCase()));
           const fresh = parsed.evidenceMentioned
             .filter(m=>m?.description && !known.has(m.description.trim().toLowerCase()))
-            .map((m,i)=>({ id:"mes_"+Date.now()+"_"+i, description:m.description, kind:m.kind==="witness"?"witness":"evidence", status:"pending" }));
+            .map((m,i)=>({ id:newId("mes"), description:m.description, kind:m.kind==="witness"?"witness":"evidence", status:"pending" }));
           return fresh.length ? [...existing, ...fresh] : existing;
         });
       }
@@ -1043,7 +1055,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           const known = new Set(existing.map(s=>s.description.trim().toLowerCase()));
           const fresh = parsed.actionsIdentified
             .filter(a=>a?.description && !known.has(a.description.trim().toLowerCase()))
-            .map((a,i)=>({ id:"mas_"+Date.now()+"_"+i, description:a.description, suggestedOwner:a.suggestedOwner||"", suggestedDueDate:a.suggestedDueDate||"", status:"pending" }));
+            .map((a,i)=>({ id:newId("mas"), description:a.description, suggestedOwner:a.suggestedOwner||"", suggestedDueDate:a.suggestedDueDate||"", status:"pending" }));
           return fresh.length ? [...existing, ...fresh] : existing;
         });
       }
@@ -1319,7 +1331,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadTeamMembers = async () => {
     if(!org?.id) return;
     try {
-      const { data, error } = await supabase.from('org_members').select('*').eq('org_id', org.id);
+      // Phase 6.5 hardening (structural remediation, Prompt 12 —
+      // Pagination / Complete-Data invariant) — same reasoning as
+      // loadOrgMembers above.
+      const { data, error } = await fetchAllPages((from, to) => supabase.from('org_members').select('*').eq('org_id', org.id).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadTeamMembers', error); markLoadIssue('team members'); return; }
       if(data) setTeamMembers(data);
     } catch(e) { console.error('loadTeamMembers', e); markLoadIssue('team members'); }
@@ -1332,7 +1347,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const r = await authedFetch("/api/delete-member", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ orgMemberId: member.id })
+        body: JSON.stringify({ orgMemberId: member.id, orgId: org.id })
       });
       const d = await r.json();
       if(d.success) setTeamMembers(m=>m.filter(x=>x.id!==member.id));
@@ -1652,8 +1667,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [showLinkCase, setShowLinkCase] = useState(false);
   const appealDetectedRef = useRef(false);
   const [signEmail, setSignEmail] = useState("");
-  const [signId, setSignId] = useState(null);
-  const [signStatus, setSignStatus] = useState(null);
   const [editingStructured, setEditingStructured] = useState(false);
   const liveContextTimer = useRef(null);
   const meetingEndedRef = useRef(false);
@@ -2368,7 +2381,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       const questions = (Array.isArray(parsed.questions)?parsed.questions:[]).map((q,i)=>({
-        id:"pq_"+Date.now()+"_"+i, text:q.text||"", category:q.category||"general", essential:!!q.essential, reasoning:q.reasoning||"",
+        id:newId("pq"), text:q.text||"", category:q.category||"general", essential:!!q.essential, reasoning:q.reasoning||"",
         linkedAllegationId: caseAllegations.some(a=>a.id===q.allegationId) ? q.allegationId : null,
         linkedEvidenceId:null, source:"ai", status:"not_asked", statusSource:"ai",
       })).filter(q=>q.text.trim());
@@ -2774,11 +2787,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       phase.tasks.map(t => {
         const due = new Date(lastDay);
         due.setDate(due.getDate() + t.day);
-        return { ...t, id:t.id+"_"+Date.now(), phaseId:phase.id, phaseLabel:phase.label, dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
+        return { ...t, id:t.id+"_"+newId(), phaseId:phase.id, phaseLabel:phase.label, dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
       })
     );
     const instance = {
-      id: Date.now().toString(),
+      id: newId("leaver"),
       name: f.name, role: f.role, department: f.department,
       manager: f.manager, email: f.email, lastWorkingDay: f.lastWorkingDay, reason: f.reason,
       templateId: f.templateId, templateName: template.name,
@@ -2832,7 +2845,7 @@ Generate a tailored offboarding checklist for this role, considering any role-sp
       const newTasks = parsed.map((t,i) => {
         const due = new Date(lastDay);
         due.setDate(due.getDate() + (t.day||0));
-        return { ...t, id:"ai_"+Date.now()+i, phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"before", phaseLabel:t.phase||"Before last day", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
+        return { ...t, id:newId("ai"), phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"before", phaseLabel:t.phase||"Before last day", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
       });
       const updated = leaverInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
       saveLeaverInstances(updated);
@@ -2877,11 +2890,11 @@ Generate a tailored offboarding checklist for this role, considering any role-sp
       phase.tasks.map(t => {
         const due = new Date(startDate);
         due.setDate(due.getDate() + t.day);
-        return { ...t, id:t.id+"_"+Date.now(), phaseId:phase.id, phaseLabel:phase.label, dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
+        return { ...t, id:t.id+"_"+newId(), phaseId:phase.id, phaseLabel:phase.label, dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
       })
     );
     const instance = {
-      id: Date.now().toString(),
+      id: newId("starter"),
       name: f.name, role: f.role, department: f.department,
       manager: f.manager, email: f.email, startDate: f.startDate,
       templateId: f.templateId, templateName: template.name,
@@ -2932,7 +2945,7 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
       const newTasks = parsed.map((t,i) => {
         const due = new Date(startDate);
         due.setDate(due.getDate() + (t.day||1));
-        return { ...t, id:"ai_"+Date.now()+i, phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"w1", phaseLabel:t.phase||"Week 1", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
+        return { ...t, id:newId("ai"), phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"w1", phaseLabel:t.phase||"Week 1", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
       });
       const updated = starterInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
       saveStarterInstances(updated);
@@ -2949,7 +2962,7 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
 
   const createRedundancyCase = (type, reason, poolDescription) => {
     const rc = {
-      id: Date.now().toString(),
+      id: newId("redundancy"),
       type, reason, poolDescription,
       selectionCriteria: [
         {id:"sc1", criterion:"Skills and qualifications", weight:30, description:"Relevant skills, qualifications, and competencies for future needs"},
@@ -3092,7 +3105,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const f = wellbeingForm;
     if(!f.employeeName.trim() || !f.content.trim()) return;
     const note = {
-      id: Date.now().toString(),
+      id: newId("wellbeing"),
       ...f,
       date: f.date || new Date().toLocaleDateString("en-GB"),
       createdAt: new Date().toISOString(),
@@ -3596,10 +3609,22 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   // Phase 13 — scoped to the current user's own rows (RLS enforces this
   // anyway) since "since I last viewed" is per-viewer, not org-wide.
+  //
+  // Phase 6.5 hardening (structural remediation, Prompt 12 — Pagination /
+  // Complete-Data invariant) — confirmed live: one real user in the
+  // largest org has 2,189 case_views rows, well past PostgREST's default
+  // row cap. An unpaginated fetch here silently drops most of that
+  // user's "last viewed" records, and computeChangesSinceView (App.jsx)
+  // treats a missing record as "never viewed" — a false "nothing's
+  // changed" or an incorrectly-flagged "lots changed since you last
+  // looked" for a case this same user has actually already reviewed
+  // many times. fetchAllPages is the same helper loadCasesFromDB/
+  // loadEmployeeRecords/loadAllegations/loadCaseSignals/loadCaseTasks
+  // already use for exactly this reason.
   const loadCaseViews = async () => {
     if(!org?.id||!user?.id) return;
     try {
-      const {data, error} = await supabase.from('case_views').select('*').eq('org_id', org.id).eq('user_id', user.id);
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('case_views').select('*').eq('org_id', org.id).eq('user_id', user.id).order('case_id', {ascending:true}).range(from, to));
       if(error) { console.error('loadCaseViews', error); return; }
       if(data) setCaseViews(data.map(r=>({caseId:r.case_id, userId:r.user_id, lastViewedAt:r.last_viewed_at})));
     } catch(e) { console.error('loadCaseViews', e); }
@@ -4232,9 +4257,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         // "which locations have the most overdue investigations" have
         // real data behind them, not just total/active/closed counts.
         const [statsResult, overviewResult, trendResult] = await Promise.all([
-          supabase.rpc('org_case_stats'),
-          supabase.rpc('org_insights_overview', { p_period_days: 90 }),
-          supabase.rpc('org_trend_detection', { p_period_days: 90 }),
+          supabase.rpc('org_case_stats', { p_org_id: org.id }),
+          supabase.rpc('org_insights_overview', { p_org_id: org.id, p_period_days: 90 }),
+          supabase.rpc('org_trend_detection', { p_org_id: org.id, p_period_days: 90 }),
         ]);
         if(statsResult.error) console.error("org_case_stats", statsResult.error);
         if(overviewResult.error) console.error("org_insights_overview", overviewResult.error);
@@ -4624,7 +4649,18 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const syncGuardrailSignals = (cs) => {
     const checks = computeGuardrailChecks(cs, allegations, policies, caseAccess, orgMembers);
     const triggeredTitles = new Set(checks.map(c=>c.title));
-    const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk");
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — Guardrail
+    // Lifecycle invariant): generateAppealReview also creates
+    // type:"process_risk" signals ("Appeal ground: ...") — a different
+    // AI-generated source sharing this type purely by historical
+    // accident. Scoping `existing` to titles this file's own checks can
+    // actually produce (GUARDRAIL_CHECK_TITLES, guardrails.js) stops the
+    // auto-resolve sweep below from silently closing a still-valid
+    // Appeal ground signal the next time a sync runs, which it was
+    // doing — that title is never in triggeredTitles (a completely
+    // different system produces it), so it always looked "no longer
+    // detected" to this sweep.
+    const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && GUARDRAIL_CHECK_TITLES.includes(s.title));
 
     if(!guardrailSyncedTitlesRef.current[cs.id]) guardrailSyncedTitlesRef.current[cs.id] = new Set(existing.map(s=>s.title));
     const syncedTitles = guardrailSyncedTitlesRef.current[cs.id];
@@ -4781,7 +4817,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const validTypes = ["witness","allegation_link","inconsistency","action"];
       const findings = (Array.isArray(parsed)?parsed:[])
         .filter(f=>validTypes.includes(f.type) && (f.type!=="allegation_link" || caseAllegations.some(a=>a.id===f.allegationId)))
-        .map((f,i)=>({...f, id:`finding_${Date.now()}_${i}`, status:"open"}));
+        .map((f,i)=>({...f, id:newId("finding"), status:"open"}));
       setDocumentFindings(s=>({...s, [key]:findings}));
       if(!findings.length) showToast("Compass found nothing to flag in this document");
     } catch(e) { console.error("analyseEvidenceDocument", e); showToast("Couldn't analyse the document — "+e.message, "error"); }
@@ -5353,7 +5389,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const addUtterance = async text => {
     if(!text||!text.trim()) return;
     const raw = text.trim(); setInputText(""); if(inputRef.current) inputRef.current.focus();
-    const pendingId = Date.now()+Math.random();
+    const pendingId = newId("utt");
     const ts = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
     setTranscript(p=>[...p,{id:pendingId, speaker:"...", text:raw, ts, pending:true}]);
     try {
@@ -5369,7 +5405,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         ()=>{}
       );
       const parsed = JSON.parse(result.replace(/```json|```/g,"").trim());
-      const items = parsed.map((u,i)=>({id:i===0?pendingId:Date.now()+Math.random(), speaker:u.speaker, text:u.text, ts, aiAttributed:true}));
+      const items = parsed.map((u,i)=>({id:i===0?pendingId:newId("utt"), speaker:u.speaker, text:u.text, ts, aiAttributed:true}));
       setTranscript(p=>{const w=p.filter(u=>u.id!==pendingId); return [...w,...items];});
     } catch(e) {
       setTranscript(p=>p.map(u=>u.id===pendingId?{...u,speaker:caseInfo.manager||"HR Manager",pending:false}:u));
@@ -5430,7 +5466,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       setPrepQuestions((Array.isArray(parsed)?parsed:[]).map((q,i)=>({
-        id: "pq_"+Date.now()+"_"+i,
+        id: newId("pq"),
         text: q.text||"",
         category: q.category||"general",
         essential: !!q.essential,
@@ -5574,7 +5610,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setShowLinkCase(false);
     const meetingEndTimeVal = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
     setMeetingEndTime(meetingEndTimeVal);
-    const extra = inputText.trim() ? [{id:Date.now(),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
+    const extra = inputText.trim() ? [{id:newId("utt"),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
     const allNotes = [...transcript, ...extra];
     if(!allNotes.length) return;
     if(extra.length) { setTranscript(allNotes); setInputText(""); }
@@ -5808,7 +5844,7 @@ Please produce:
     const s = devSession;
     const employeeName = (s.caseInfo.employee||"").trim() || "Unknown Employee";
     const meeting = {
-      id: Date.now().toString(),
+      id: newId("meeting"),
       type: s.type,
       date: s.caseInfo.date || new Date().toLocaleDateString("en-GB"),
       manager: s.caseInfo.manager,
@@ -5841,7 +5877,25 @@ Please produce:
   };
 
   // ── Save to case ──
-  const saveMeetingToCase = () => {
+  // Phase 6.5 hardening (structural remediation, Prompt 12 — Signature
+  // Identity invariant) — signId/signStatus used to be read from
+  // component-level React state at the moment this function ran, not
+  // passed as parameters. That state updates asynchronously (a schedule,
+  // not an immediate apply), so sendForSignature below was calling this
+  // function in the SAME closure as its own state update, before React
+  // had committed it — persisting signId:null onto
+  // the very meeting it just sent for signature (permanently orphaned:
+  // the sync poll never picks it up since it filters on m.signId). Worse,
+  // because the state persisted across renders, saving a LATER, unrelated
+  // meeting — via any path, including "Save to case", which never
+  // touches signatures at all — could silently inherit whatever signId
+  // was still sitting in state from an earlier, different meeting's send,
+  // stamping one employee's signature onto another employee's record.
+  // signatureInfo is now the sole source of truth: every call site must
+  // say explicitly whether this save is attached to a signature request,
+  // and if so, which one — there is no ambient fallback.
+  const saveMeetingToCase = (signatureInfo = {}) => {
+    const { signId: attachedSignId = null, signStatus: attachedSignStatus = null } = signatureInfo;
     // If this is a witness interview, save to parent case evidence instead
     if(caseInfo._linkedCaseId) {
       const witnessNote = {
@@ -5874,7 +5928,7 @@ Please produce:
     }
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const meeting = {
-      id: Date.now().toString(),
+      id: newId("meeting"),
       type: meetingType?.label||"Meeting",
       date: caseInfo.date||new Date().toLocaleDateString("en-GB"),
       manager: caseInfo.manager,
@@ -5900,8 +5954,8 @@ Please produce:
       letterTracking: {},
       savedAt: new Date().toISOString(),
       savedBy: currentUser?.name || "HR Manager",
-      signId: signId,
-      signStatus: signStatus,
+      signId: attachedSignId,
+      signStatus: attachedSignStatus,
       // IP18, §12 — anything still "pending" (never individually
       // accepted or dismissed live) gets one more chance from the
       // Meetings tab instead of silently vanishing with this session's
@@ -6085,7 +6139,7 @@ Please produce:
         } else { content=await file.text(); }
         const name = file.name.replace(/\.[^.]+$/,"");
         const clauses = await indexPolicyClauses(name, content);
-        const pol={id:Date.now().toString()+Math.random(),name,fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k",category:"other",clauses};
+        const pol={id:newId("policy"),name,fileName:file.name,content:content.slice(0,8000),addedAt:new Date().toISOString(),size:Math.round(content.length/1000)+"k",category:"other",clauses};
         setPolicies(p=>{const u=[...p,pol];orgLsSet("compass_policies",u);return u;});
       } catch(err){showToast("Could not read "+file.name, "error");}
     }
@@ -7046,7 +7100,7 @@ Please produce:
                 {linkCandidates.map(cs=>(
                   <button key={cs.id} onClick={()=>{
                     const meeting = {
-                      id: Date.now().toString(),
+                      id: newId("meeting"),
                       type: meetingType?.label||"Appeal",
                       date: caseInfo.date||new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"2-digit",year:"numeric"}),
                       manager: caseInfo.manager,
@@ -7062,7 +7116,21 @@ Please produce:
                       letterTracking: {},
                       savedAt: new Date().toISOString(),
                       savedBy: currentUser?.name||"HR Manager",
-                      signId, signStatus,
+                      // Phase 6.5 hardening (structural remediation,
+                      // Prompt 12 — Signature Identity invariant): this
+                      // appeal meeting is never sent for signature as
+                      // part of this flow, so it must never carry a
+                      // signId/signStatus at all — reading the ambient
+                      // signId/signStatus state here (as this previously
+                      // did) meant an appeal meeting saved any time after
+                      // an unrelated earlier signature send in the same
+                      // session would silently inherit that send's id,
+                      // the exact cross-contamination bug fixed in
+                      // saveMeetingToCase above. This was a second,
+                      // independent instance of the same defect — this
+                      // meeting-construction path doesn't go through
+                      // saveMeetingToCase at all.
+                      signId: null, signStatus: null,
                     };
                     // Explicitly move the case to the appeal stage — the
                     // most common real case here is appealing a case

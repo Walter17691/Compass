@@ -130,6 +130,38 @@ describe('api/signing — sign/acknowledge/decline (POST with signId)', () => {
     await handler({ method: 'POST', headers: {}, body: { signId: 's1', signature: 'data:...', signedAt: new Date().toISOString() } }, res);
     expect(res.statusCode).toBe(429);
   });
+
+  // Phase 6.5 hardening (structural remediation, Prompt 12 — Signature
+  // Identity invariant) — the read-then-write used to be two separate
+  // round trips: two near-simultaneous actions on the same still-pending
+  // request (e.g. signed on one device, declined on another moments
+  // later) could both pass the initial read-time check and both PATCH,
+  // leaving a row that's status:'declined' while still carrying a
+  // signature/signed_at from the other request. Folding the not-yet-
+  // terminal check into the UPDATE's own WHERE clause (status=in.(sent,
+  // opened)) makes this atomic: whichever request the database actually
+  // applies second finds zero matching rows and gets a real 409, instead
+  // of silently producing a self-contradictory record.
+  it('treats a concurrent action that lands between the read and the write as a real conflict, not a silent double-apply', async () => {
+    // The conditional PATCH matches zero rows — simulating another
+    // request having already moved this row out of sent/opened between
+    // this request's own read and its write.
+    stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null }, patchOk: true });
+    global.fetch = vi.fn((url, options = {}) => {
+      const u = String(url);
+      if (u.includes('/rest/v1/signing_requests') && options.method === 'PATCH') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) }); // 0 rows matched
+      }
+      if (u.includes('/rest/v1/signing_requests')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([{ sign_id: 's1', status: 'sent', expires_at: null }]) });
+      }
+      if (u.includes('check_rate_limit')) return Promise.resolve({ ok: true, json: () => Promise.resolve(true) });
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+    });
+    const res = mockRes();
+    await handler({ method: 'POST', headers: {}, body: { signId: 's1', signature: 'data:...', signedAt: new Date().toISOString() } }, res);
+    expect(res.statusCode).toBe(409);
+  });
 });
 
 describe('api/signing — GET (view by sign_id)', () => {
@@ -150,5 +182,48 @@ describe('api/signing — GET (view by sign_id)', () => {
     await handler({ method: 'GET', headers: {}, query: { signId: 's1' } }, res);
     expect(res.statusCode).toBe(200);
     expect(res.body.sign_id).toBe('s1');
+  });
+
+  // Phase 6.5 hardening (structural remediation, Prompt 12 — Signature
+  // Identity invariant) — this endpoint is hit both by the real signer's
+  // own emailed link (public/sign.html) and by Compass's internal HR-side
+  // polling (App.jsx's signature-sync effect, resendSignatureReminder).
+  // Only the former is a genuine "the employee opened this" event; the
+  // sent→opened transition (and its real opened_at timestamp) must never
+  // fire from an internal status check, or HR simply viewing their own
+  // case would falsify the record of employee engagement.
+  it('a genuine (non-internal) view of a "sent" request advances it to "opened" with a real timestamp', async () => {
+    const calls = stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null } });
+    const res = mockRes();
+    await handler({ method: 'GET', headers: {}, query: { signId: 's1' } }, res);
+    expect(res.statusCode).toBe(200);
+    const patch = calls.find(c => c.url.includes('/rest/v1/signing_requests') && c.method === 'PATCH');
+    expect(patch).toBeTruthy();
+    const body = JSON.parse(patch.body);
+    expect(body.status).toBe('opened');
+    expect(body.opened_at).toBeTruthy();
+  });
+
+  it('an internal status check (internal=1) never advances "sent" to "opened" — no PATCH is issued at all', async () => {
+    const calls = stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null } });
+    const res = mockRes();
+    await handler({ method: 'GET', headers: {}, query: { signId: 's1', internal: '1' } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe('sent');
+    const patch = calls.find(c => c.url.includes('/rest/v1/signing_requests') && c.method === 'PATCH');
+    expect(patch).toBeUndefined();
+  });
+
+  it('an internal status check still honestly reports expiry — elapsed time is a fact, not an engagement signal', async () => {
+    stubFetch({ signingRequest: { sign_id: 's1', status: 'expired', expires_at: '2020-01-01T00:00:00.000Z' } });
+    const res = mockRes();
+    await handler({ method: 'GET', headers: {}, query: { signId: 's1', internal: '1' } }, res);
+    expect(res.statusCode).toBe(200);
+    // The already-expired branch (existing.status==='sent') is skipped
+    // for an internal check, so this exercises the OTHER expiry branch
+    // (status==='opened' && isExpired) — covered by the next test — this
+    // one just confirms an internal check never crashes on an
+    // already-terminal 'expired' row and returns it as-is.
+    expect(res.body.status).toBe('expired');
   });
 });

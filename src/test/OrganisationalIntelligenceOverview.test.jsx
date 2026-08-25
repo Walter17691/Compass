@@ -23,10 +23,10 @@ const baseOverview = {
 describe('OrganisationalIntelligenceOverview', () => {
   it('shows a loading state, then the fetched stats', async () => {
     rpcMock.mockResolvedValue({ data: baseOverview, error: null });
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
     expect(screen.getByText(/Loading organisational statistics/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Open cases').parentElement).toHaveTextContent('4'));
-    expect(rpcMock).toHaveBeenCalledWith('org_insights_overview', { p_period_days: expect.any(Number) });
+    expect(rpcMock).toHaveBeenCalledWith('org_insights_overview', { p_org_id: 'org1', p_period_days: expect.any(Number) });
   });
 
   // Phase 6.5, Batch 5 — a per-manager case-count bar chart is exactly
@@ -38,7 +38,7 @@ describe('OrganisationalIntelligenceOverview', () => {
   // it, even though the data is present.
   it('never renders a per-manager breakdown, even though the RPC returns cases_by_manager', async () => {
     rpcMock.mockResolvedValue({ data: baseOverview, error: null });
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText('Open cases').parentElement).toHaveTextContent('4'));
     expect(screen.queryByText('Cases by manager')).not.toBeInTheDocument();
     expect(screen.queryByText('Jo Smith')).not.toBeInTheDocument();
@@ -46,13 +46,13 @@ describe('OrganisationalIntelligenceOverview', () => {
 
   it('shows an error state when the RPC fails', async () => {
     rpcMock.mockResolvedValue({ data: null, error: new Error('boom') });
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText(/Couldn't load organisational statistics/)).toBeInTheDocument());
   });
 
   it('shows a data-quality caveat instead of a number when too few closed cases have a measurable duration', async () => {
     rpcMock.mockResolvedValue({ data: { ...baseOverview, closed_cases_with_duration: 1 }, error: null });
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText(/Only 1 closed cases with measurable duration available/)).toBeInTheDocument());
   });
 
@@ -61,7 +61,7 @@ describe('OrganisationalIntelligenceOverview', () => {
     const dueSoon = [
       { caseId: 'c1', overdue: true }, { caseId: 'c1', overdue: true }, { caseId: 'c2', overdue: true }, { caseId: 'c3', overdue: false },
     ];
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={dueSoon} hrReviewRequests={[]} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={dueSoon} hrReviewRequests={[]} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText('Overdue cases')).toBeInTheDocument());
     const tile = screen.getByText('Overdue cases').parentElement;
     expect(tile).toHaveTextContent('2');
@@ -72,7 +72,7 @@ describe('OrganisationalIntelligenceOverview', () => {
     const hrReviewRequests = [
       { step: 'inv_report', status: 'returned' }, { step: 'inv_report', status: 'returned' }, { step: 'inv_report', status: 'approved' }, { step: 'outcome', status: 'returned' },
     ];
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={hrReviewRequests} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={hrReviewRequests} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText('Returned for further investigation')).toBeInTheDocument());
     const tile = screen.getByText('Returned for further investigation').parentElement;
     expect(tile).toHaveTextContent('2');
@@ -84,7 +84,7 @@ describe('OrganisationalIntelligenceOverview', () => {
       { meetings: [{ type: 'Informal / 1-1' }] },
       { meetings: [{ type: 'Investigation' }] },
     ];
-    render(<OrganisationalIntelligenceOverview cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText('Informal resolution')).toBeInTheDocument());
     expect(screen.getByText('1 formal')).toBeInTheDocument();
   });
@@ -98,13 +98,13 @@ describe('OrganisationalIntelligenceOverview', () => {
     rpcMock.mockResolvedValue({ data: baseOverview, error: null });
     const caseThemes = [{ caseId: 'c1', themeId: 't1' }, { caseId: 'c2', themeId: 't1' }, { caseId: 'c3', themeId: 't1' }];
     const organisationThemes = [{ id: 't1', name: 'Rota changes', active: true }];
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={caseThemes} organisationThemes={organisationThemes}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={caseThemes} organisationThemes={organisationThemes}/>);
     await waitFor(() => expect(screen.getByText('Rota changes · 3 cases')).toBeInTheDocument());
   });
 
   it('shows the empty state when no theme has been tagged on 3+ cases', async () => {
     rpcMock.mockResolvedValue({ data: baseOverview, error: null });
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={[]} organisationThemes={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} caseThemes={[]} organisationThemes={[]}/>);
     await waitFor(() => expect(screen.getByText('No recurring themes tagged across 3+ cases yet.')).toBeInTheDocument());
   });
 
@@ -115,7 +115,7 @@ describe('OrganisationalIntelligenceOverview', () => {
   it('shows "No data yet." for Cases by site and Cases by department when there is no data at all', async () => {
     const emptyOverview = { ...baseOverview, cases_by_location: {}, cases_by_department: {} };
     rpcMock.mockResolvedValue({ data: emptyOverview, error: null });
-    render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
     await waitFor(() => expect(screen.getByText('Cases by site').closest('div')).toBeInTheDocument());
     const siteCard = screen.getByText('Cases by site').parentElement;
     const deptCard = screen.getByText('Cases by department').parentElement;
@@ -134,8 +134,8 @@ describe('OrganisationalIntelligenceOverview', () => {
     vi.setSystemTime(new Date(2026, 9, 30, 12, 0, 0));
     try {
       rpcMock.mockResolvedValue({ data: baseOverview, error: null });
-      render(<OrganisationalIntelligenceOverview cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
-      await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('org_insights_overview', { p_period_days: 29 }));
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('org_insights_overview', { p_org_id: 'org1', p_period_days: 29 }));
     } finally {
       vi.useRealTimers();
     }

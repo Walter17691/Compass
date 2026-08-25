@@ -48,10 +48,24 @@ jobs:
         env:
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          # Phase 6.5 hardening (structural remediation, Prompt 12 — Test
+          # Infrastructure invariant) — previously missing from this
+          # workflow entirely, which meant tenant-isolation.spec.js (the
+          # one spec that proves cross-tenant data doesn't leak) silently
+          # skipped on every CI run. Add these as repo secrets (Settings
+          # -> Secrets and variables -> Actions) using the second test
+          # account described in .env's own comment / tests/e2e/README.md
+          # — helpers.js's requireSecondTenantOrFail now hard-fails CI
+          # specifically if they're still missing, so this can't silently
+          # regress back to skipped again.
+          E2E_TEST_EMAIL_2: ${{ secrets.E2E_TEST_EMAIL_2 }}
+          E2E_TEST_PASSWORD_2: ${{ secrets.E2E_TEST_PASSWORD_2 }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           echo "E2E_TEST_EMAIL=$E2E_TEST_EMAIL" >> .env
           echo "E2E_TEST_PASSWORD=$E2E_TEST_PASSWORD" >> .env
+          echo "E2E_TEST_EMAIL_2=$E2E_TEST_EMAIL_2" >> .env
+          echo "E2E_TEST_PASSWORD_2=$E2E_TEST_PASSWORD_2" >> .env
           echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> .env
       - run: npm run test:e2e
       - name: Upload traces on failure

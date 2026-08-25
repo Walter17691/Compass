@@ -1,3 +1,5 @@
+import { newId } from './ids';
+
 // Integrations & Workflow Automation (Phase 5, IP13, §7) — send-from-
 // Compass coordinated workflow. Draft -> HR Review -> Approve already
 // exist unchanged (lib/letterApproval.js); Send already exists unchanged
@@ -59,6 +61,11 @@ export function buildSentLetterEvidenceItem({ type, subject, recipient, body, ad
     body || "",
   ].join("\n");
   return {
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — Task/
+    // Entity Identity invariant) — see emailIngestion.js's own
+    // buildEmailEvidenceItem comment for why this needs a real id rather
+    // than relying on array position.
+    id: newId("ev"),
     name: `Sent: ${label}`,
     type: "text/plain",
     date: new Date().toLocaleDateString("en-GB"),

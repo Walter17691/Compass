@@ -48,11 +48,11 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR }) {
     setError(null);
     try {
       const period = PERIOD_TYPES.find(p => p.id === periodType);
-      const { data: overview, error: overviewError } = await supabase.rpc('org_insights_overview', { p_period_days: period.days });
+      const { data: overview, error: overviewError } = await supabase.rpc('org_insights_overview', { p_org_id: org.id, p_period_days: period.days });
       if (overviewError) throw overviewError;
-      const { data: trendData, error: trendError } = await supabase.rpc('org_trend_detection', { p_period_days: period.days });
+      const { data: trendData, error: trendError } = await supabase.rpc('org_trend_detection', { p_org_id: org.id, p_period_days: period.days });
       if (trendError) throw trendError;
-      const { data: caseStats } = await supabase.rpc('org_case_stats');
+      const { data: caseStats } = await supabase.rpc('org_case_stats', { p_org_id: org.id });
 
       const inputs = buildExecutiveBriefInputs(overview, trendData);
       const prompt = buildPeriodicReviewPrompt(inputs, periodType, caseStats?.high_priority_active ?? null);

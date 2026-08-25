@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, logout, SECOND_TENANT_CREDS, hasSecondTenant } from './helpers.js';
+import { login, logout, SECOND_TENANT_CREDS, hasSecondTenant, requireSecondTenantOrFail } from './helpers.js';
 
 // Phase 6.5 hardening (production regression suite) — every other spec in
 // this suite runs against ONE shared test org (E2E_TEST_EMAIL), which can
@@ -11,11 +11,16 @@ import { login, logout, SECOND_TENANT_CREDS, hasSecondTenant } from './helpers.j
 // "the UI didn't render it because we didn't ask," but "this account has
 // no way to see it at all."
 //
-// Skipped, not failing, when the second account isn't configured — this
-// mirrors how the rest of the suite already requires E2E_TEST_EMAIL/
-// PASSWORD to be set at all (helpers.js throws otherwise) rather than
-// silently no-op'ing, but a genuinely optional SECOND account shouldn't
-// break `npm run test:e2e` for anyone who hasn't provisioned one.
+// Phase 6.5 hardening (structural remediation, Prompt 12 — Test
+// Infrastructure invariant) — this used to be a plain test.skip(),
+// meaning CI could report green while never once actually running the
+// one spec that proves tenant isolation, if the second-tenant secrets
+// were never wired into the workflow (they weren't — see
+// requireSecondTenantOrFail's own comment in helpers.js). In CI, a
+// missing second tenant is now a hard failure that says exactly what to
+// fix; a contributor's local machine without one configured still gets
+// the softer skip below, same as before.
+requireSecondTenantOrFail();
 test.skip(!hasSecondTenant(), 'E2E_TEST_EMAIL_2/E2E_TEST_PASSWORD_2 not configured — see .env\'s own comment for how to provision a second tenant');
 
 // The sidebar's own "Cases" nav button ("Cases (54)") and Home's "View

@@ -112,6 +112,47 @@ describe('computeDueSoon — case-derived ACAS/statutory deadlines', () => {
     expect(items[0].deadlineDate).toBe('20/06/2025');
   });
 
+  // Phase 6.5 hardening (structural remediation, Prompt 12 — Deadline
+  // Domain Model invariant). "Disciplinary Appeal" legitimately contains
+  // the substring "disciplinary" — without excluding "appeal", an appeal
+  // hearing was silently treated as an original disciplinary hearing,
+  // producing a wrong "outcome letter due" deadline and, once that
+  // appeal's own outcome letter was drafted, a nonsensical second
+  // "appeal window" deadline off the appeal itself (this app has no
+  // concept of appealing an appeal).
+  it('does not treat a Disciplinary Appeal meeting as a second disciplinary hearing needing its own outcome letter', () => {
+    const cases = [{
+      id: 'c5', employeeName: 'Dana', stage: 'appeal',
+      meetings: [
+        { id: 'm1', type: 'Disciplinary', date: '01/06/2025' },
+        { id: 'm2', type: 'Disciplinary Appeal', date: '13/06/2025' },
+      ],
+    }];
+    const items = computeDueSoon(cases, [], today).filter(d => d.category === 'outcome');
+    // Before the fix, discMeetings incorrectly included m2 (its label
+    // contains "disciplinary") alongside m1, producing TWO "outcome
+    // letter due" deadlines — one per qualifying meeting — instead of
+    // one for the actual disciplinary hearing.
+    expect(items).toHaveLength(1);
+  });
+
+  it('does not open a second appeal window off a letter drafted for the appeal hearing itself', () => {
+    const cases = [{
+      id: 'c6', employeeName: 'Eve', stage: 'appeal',
+      meetings: [
+        { id: 'm1', type: 'Disciplinary', date: '01/06/2025', letterOutput: '...' },
+        { id: 'm2', type: 'Disciplinary Appeal', date: '13/06/2025', letterOutput: '...' },
+      ],
+    }];
+    const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+    // The appeal meeting's own letterOutput must not be read as a second
+    // disciplinary outcome letter — only one appeal-window deadline
+    // (from the original hearing's letter), never a second one keyed off
+    // the appeal outcome itself.
+    expect(items).toHaveLength(1);
+    expect(items[0].key).toContain('m1');
+  });
+
   it('flags an investigation as overrunning once 21+ days have passed, due 28 days from the first meeting', () => {
     const cases = [{
       id: 'c5', employeeName: 'Dan', stage: 'investigation',

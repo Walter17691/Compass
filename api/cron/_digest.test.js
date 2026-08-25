@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { isAuthorisedFor } from './_digest.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { isAuthorisedFor, runDigest } from './_digest.js';
 
 // Phase 6.5 hardening (P0) — isAuthorisedFor now mirrors all three RLS
 // policies actually layered on cases.SELECT (location, non-oversight
@@ -132,5 +132,47 @@ describe('isAuthorisedFor', () => {
       const d = { confidential: false, caseId: 'unknown-case' };
       expect(isAuthorisedFor(d, dana, new Map(), casesById)).toBe(false);
     });
+  });
+});
+
+// Phase 6.5 hardening (structural remediation, Prompt 12 — Pagination /
+// Complete-Data invariant). Regression for a confirmed-live bug: this
+// query used to be a single unpaginated request, silently truncated at
+// PostgREST's default row cap once an org's case count crossed it — the
+// app's real largest org (2,715 cases) was losing 1,715 of them from
+// every digest run. Proves runDigest now issues a SECOND page request
+// for `cases` once the first page comes back full, instead of treating
+// a full first page as "that's everything."
+describe('runDigest — pagination', () => {
+  let originalFetch;
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('fetches a second page of cases when the first page returns a full page — proves the org is not silently truncated', async () => {
+    const pageSize = 1000;
+    const casesPage1 = Array.from({ length: pageSize }, (_, i) => ({ id: `c${i}`, org_id: 'org-a', stage: 'active' }));
+    const casesPage2 = [{ id: 'c-last', org_id: 'org-a', stage: 'active' }];
+    const casesRequests = [];
+
+    global.fetch = vi.fn((url, options = {}) => {
+      const u = String(url);
+      if (u.includes('/rest/v1/organisations')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([{ id: 'org-a', name: 'Acme', plan: 'pro', notification_webhook_url: null }]) });
+      }
+      if (u.includes('/rest/v1/cases')) {
+        casesRequests.push(options.headers?.Range);
+        const page = casesRequests.length === 1 ? casesPage1 : casesRequests.length === 2 ? casesPage2 : [];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(page) });
+      }
+      // dsar_requests, org_members, case_access — empty is fine, this
+      // test only asserts on the cases pagination itself.
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    });
+
+    await runDigest();
+
+    expect(casesRequests.length).toBeGreaterThanOrEqual(2);
+    expect(casesRequests[0]).toBe('0-999');
+    expect(casesRequests[1]).toBe('1000-1999');
   });
 });

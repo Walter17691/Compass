@@ -64,9 +64,9 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR }) {
     setGenerating(true);
     setError(null);
     try {
-      const { data: overview, error: overviewError } = await supabase.rpc('org_insights_overview', { p_period_days: 30 });
+      const { data: overview, error: overviewError } = await supabase.rpc('org_insights_overview', { p_org_id: org.id, p_period_days: 30 });
       if (overviewError) throw overviewError;
-      const { data: trendData, error: trendError } = await supabase.rpc('org_trend_detection', { p_period_days: 90 });
+      const { data: trendData, error: trendError } = await supabase.rpc('org_trend_detection', { p_org_id: org.id, p_period_days: 90 });
       if (trendError) throw trendError;
 
       const inputs = buildExecutiveBriefInputs(overview, trendData);

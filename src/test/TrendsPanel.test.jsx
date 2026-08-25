@@ -16,7 +16,7 @@ describe('TrendsPanel', () => {
       data: { by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: { Manchester: 6, Leeds: 4 } }], by_theme_trend: [] },
       error: null,
     });
-    render(<TrendsPanel/>);
+    render(<TrendsPanel orgId="org1"/>);
     expect(screen.getByText(/Loading trends/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/Compass has identified a pattern/)).toBeInTheDocument());
     expect(screen.getByText(/grievance cases increased 30%/)).toBeInTheDocument();
@@ -27,13 +27,13 @@ describe('TrendsPanel', () => {
       data: { by_type_trend: [{ caseType: 'grievance', currentCount: 11, previousCount: 10, byLocation: {} }], by_theme_trend: [] },
       error: null,
     });
-    render(<TrendsPanel/>);
+    render(<TrendsPanel orgId="org1"/>);
     await waitFor(() => expect(screen.getByText('No significant trends identified in the current period.')).toBeInTheDocument());
   });
 
   it('shows an error state when the RPC fails', async () => {
     rpcMock.mockResolvedValue({ data: null, error: new Error('boom') });
-    render(<TrendsPanel/>);
+    render(<TrendsPanel orgId="org1"/>);
     await waitFor(() => expect(screen.getByText("Couldn't load trend data right now.")).toBeInTheDocument());
   });
 
@@ -45,7 +45,7 @@ describe('TrendsPanel', () => {
       },
       error: null,
     });
-    render(<TrendsPanel/>);
+    render(<TrendsPanel orgId="org1"/>);
     await waitFor(() => expect(screen.getByText(/grievance cases increased/)).toBeInTheDocument());
     expect(screen.getByText(/Rota changes had no recorded cases/)).toBeInTheDocument();
   });
@@ -66,12 +66,12 @@ describe('TrendsPanel', () => {
       });
       return Promise.resolve({ data: null, error: null });
     });
-    render(<TrendsPanel/>);
+    render(<TrendsPanel orgId="org1"/>);
     await waitFor(() => expect(screen.getByText(/grievance cases increased/)).toBeInTheDocument());
     expect(screen.getAllByRole('button', { name: 'Explore' })).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Explore' }));
     await waitFor(() => expect(screen.getByText('Root-cause exploration — Rota changes')).toBeInTheDocument());
-    expect(rpcMock).toHaveBeenCalledWith('org_theme_root_cause', { p_theme_id: 't1', p_period_days: 90 });
+    expect(rpcMock).toHaveBeenCalledWith('org_theme_root_cause', { p_org_id: 'org1', p_theme_id: 't1', p_period_days: 90 });
   });
 
   it('shows a Show evidence button on every trend card and opens InsightEvidenceModal with real metrics', async () => {
@@ -80,7 +80,7 @@ describe('TrendsPanel', () => {
       data: { by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: {} }], by_theme_trend: [] },
       error: null,
     });
-    render(<TrendsPanel/>);
+    render(<TrendsPanel orgId="org1"/>);
     await waitFor(() => expect(screen.getByText(/grievance cases increased/)).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Show evidence' }));
     expect(screen.getByText('grievance')).toBeInTheDocument();
@@ -97,11 +97,11 @@ describe('TrendsPanel', () => {
       data: { by_type_trend: [{ caseType: 'grievance', currentCount: 13, previousCount: 10, byLocation: {} }], by_theme_trend: [] },
       error: null,
     });
-    render(<TrendsPanel/>);
+    render(<TrendsPanel orgId="org1"/>);
     await waitFor(() => expect(screen.getByText(/grievance cases increased/)).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
 
-    render(<TrendsPanel createCaseTask={createCaseTask}/>);
+    render(<TrendsPanel orgId="org1" createCaseTask={createCaseTask}/>);
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Create action' }).length).toBeGreaterThan(0));
     await user.click(screen.getAllByRole('button', { name: 'Create action' })[0]);
     await user.type(screen.getByPlaceholderText('Action to take…'), 'Review shift patterns');

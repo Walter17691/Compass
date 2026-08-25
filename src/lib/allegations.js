@@ -1,3 +1,5 @@
+import { newId } from './ids';
+
 // Pure helpers for case allegations/issues — the foundational entity the
 // gap-analysis found missing entirely (evidence-tagging, the AI case
 // overview, and case-scoped AI Q&A are all downstream of this). Unlike
@@ -46,7 +48,7 @@ export function addAllegation(allegations, caseId, fields) {
   const title = (fields?.title || "").trim();
   if (!title) return allegations;
   const allegation = {
-    id: "alg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+    id: newId("alg"),
     caseId,
     title,
     description: fields.description || "",

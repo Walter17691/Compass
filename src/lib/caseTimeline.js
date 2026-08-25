@@ -70,17 +70,33 @@ function rawEntries(cs, allegations, auditLog) {
   });
 
   (cs.evidence || []).forEach((ev, index) => {
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — Task/
+    // Entity Identity invariant) — buildEmailEvidenceItem/
+    // buildSentLetterEvidenceItem now stamp a real ev.id at creation, so
+    // this entry's key (and the persisted excluded/edit/relevance
+    // overrides keyed by it) stays attached to the right evidence item
+    // even if something earlier in the array is later added or removed.
+    // The `?? index` fallback only matters for evidence saved before this
+    // fix shipped, which has no ev.id at all.
+    const stableId = ev.id ?? index;
     if (ev.source === "email") {
-      entries.push({ key: `evidence-email-${index}`, date: ev.date, type: "email", description: `Email saved: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: index }, allegationId: null });
+      entries.push({ key: `evidence-email-${stableId}`, date: ev.date, type: "email", description: `Email saved: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: stableId }, allegationId: null });
     } else if (ev.source === "sent_letter") {
-      entries.push({ key: `evidence-sent-${index}`, date: ev.date, type: "letter", description: `Letter sent: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: index }, allegationId: null });
+      entries.push({ key: `evidence-sent-${stableId}`, date: ev.date, type: "letter", description: `Letter sent: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: stableId }, allegationId: null });
     }
   });
 
   (auditLog || [])
     .filter(e => e.caseId === cs.id && !(e.action || "").startsWith("Allegation") && e.action !== "Email saved to case" && e.action !== "Letter sent")
-    .forEach((e, i) => {
-      entries.push({ key: `audit-${e.ts}-${i}`, date: e.ts, type: "audit", description: e.detail ? `${e.action} — ${e.detail}` : e.action, actor: e.user || null, linkTo: null, allegationId: null });
+    .forEach(e => {
+      // Phase 6.5 hardening (structural remediation, Prompt 12 — Task/
+      // Entity Identity invariant) — e.id is the row's own real database
+      // id (App.jsx's loadAuditLog already preserves it), stable
+      // regardless of array position; the previous ${e.ts}-${i} key
+      // shifted for every entry after a new audit row arrived earlier in
+      // the (created_at desc) list, silently repointing any persisted
+      // override onto the wrong entry.
+      entries.push({ key: `audit-${e.id}`, date: e.ts, type: "audit", description: e.detail ? `${e.action} — ${e.detail}` : e.action, actor: e.user || null, linkTo: null, allegationId: null });
     });
 
   return entries;

@@ -37,21 +37,16 @@ export function sanitizeInvestigationPlanItems(parsed) {
 // Idempotent, same shape as investigationChecklist.js's own
 // seedInvestigationChecklist: skips any item whose name already exists
 // as a task on this case (case-insensitive — an AI-generated item and a
-// human-typed one shouldn't be treated as different just by casing), and
-// appends a distinguishing suffix to each new id so seeding several plan
-// items in one synchronous pass never collides on addTask's
-// Date.now()-based id.
+// human-typed one shouldn't be treated as different just by casing).
+// addTask now mints ids via crypto.randomUUID() (src/lib/ids.js),
+// collision-proof even seeding several plan items in one synchronous
+// pass — no per-item suffix workaround needed any more.
 export function seedInvestigationPlanTasks(caseTasks, caseId, items) {
   const existingNames = new Set((caseTasks || []).filter(t => t.caseId === caseId).map(t => t.name.toLowerCase()));
   let updated = caseTasks || [];
-  let addedCount = 0;
   (items || []).forEach(item => {
     if (existingNames.has(item.name.toLowerCase())) return;
-    const withNewTask = addTask(updated, caseId, { name: item.name, owner: "", priority: "normal", source: INVESTIGATION_PLAN_SOURCE });
-    if (withNewTask === updated) return;
-    const newTask = withNewTask[withNewTask.length - 1];
-    updated = [...withNewTask.slice(0, -1), { ...newTask, id: newTask.id + "_p" + addedCount }];
-    addedCount++;
+    updated = addTask(updated, caseId, { name: item.name, owner: "", priority: "normal", source: INVESTIGATION_PLAN_SOURCE });
   });
   return updated;
 }

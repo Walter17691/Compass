@@ -7,6 +7,7 @@
 // function takes the current instances array and returns a new one; the
 // caller (App.jsx) still owns persistence (localStorage + Supabase) and
 // which "active" instance is selected, since those differ per flow.
+import { newId } from './ids';
 
 export function toggleChecklistTask(instances, instanceId, taskId) {
   return instances.map(s => s.id === instanceId ? {
@@ -25,7 +26,7 @@ export function updateChecklistTaskNote(instances, instanceId, taskId, note) {
 export function addChecklistTask(instances, instanceId, phaseLabel, taskText, owner) {
   if (!taskText?.trim()) return instances;
   const newTask = {
-    id: "manual_" + Date.now(),
+    id: newId("manual"),
     task: taskText.trim(),
     owner: owner || "HR",
     phaseId: phaseLabel.toLowerCase().replace(/\s+/g, "_"),

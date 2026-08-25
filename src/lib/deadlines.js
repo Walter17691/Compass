@@ -1,6 +1,33 @@
 import { getCaseStage } from './caseStage.js';
 import { parseFlexDate, daysBetween, addWorkingDays as addWorkingDaysDate } from './dateMath.js';
 
+// Phase 6.5 hardening (structural remediation, Prompt 12 — Deadline
+// Domain Model invariant). meeting.type is free descriptive text in
+// practice ("Disciplinary hearing", not always the exact MEETING_TYPES
+// label "Disciplinary" — confirmed by this file's own existing test
+// fixtures), so classifying it via substring match (as this file and
+// several siblings across the app already do — caseStage.js, nextStep.js,
+// processTimeline.js, guardrails.js among them) is the app's real,
+// established pattern, not itself the bug. The bug is a missing
+// exclusion: "Disciplinary Appeal" legitimately contains the substring
+// "disciplinary", so an appeal hearing was silently treated as an
+// original disciplinary hearing below — generating a wrong "outcome
+// letter due in 5 working days" deadline off the appeal meeting, and (via
+// the appeal window check) a second, nonsensical "appeal window closes"
+// deadline off a letter that IS the appeal outcome. nextStep.js's own
+// grievance branch already excludes "appeal" from its "grievance"
+// substring match for exactly this reason (`.includes("grievance") &&
+// !.includes("appeal")`) — this applies the same exclusion here, the
+// narrowest fix that doesn't change matching behaviour for every other
+// real (non-exact-label) meeting.type string already in use.
+function isDisciplinaryMeeting(type) {
+  const t = (type || "").toLowerCase();
+  return t.includes("disciplinary") && !t.includes("appeal");
+}
+function isInvestigationMeeting(type) {
+  return (type || "").toLowerCase().includes("investigation");
+}
+
 // UK statutory & ACAS deadline rules. Pure — no React, no I/O — so it can
 // run client-side (App.jsx's dueSoon effect) and server-side (the digest
 // cron function) against the same case data without duplicating the rules.
@@ -72,7 +99,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     });
 
     // Disciplinary outcome — 5 working days from hearing
-    const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary")&&!(m.type||"").toLowerCase().includes("investigation"));
+    const discMeetings = meetings.filter(m=>isDisciplinaryMeeting(m.type));
     discMeetings.forEach(m => {
       const hasOutcome = cs.outcome||meetings.some(mt=>mt.letterOutput&&(mt.type||"").toLowerCase().includes("outcome"));
       if(!hasOutcome) {
@@ -82,7 +109,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     });
 
     // Appeal window — 5 working days from outcome letter
-    const outcomeLetters = meetings.filter(m=>m.letterOutput&&(m.type||"").toLowerCase().includes("disciplinary"));
+    const outcomeLetters = meetings.filter(m=>m.letterOutput&&isDisciplinaryMeeting(m.type));
     outcomeLetters.forEach(m => {
       const dl = workingDaysFromDate(m.savedAt||m.date, 5);
       if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`, caseMeta);
@@ -99,7 +126,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // investigation doesn't lawfully pause a grievance acknowledgement,
     // and this feed is what the email digest cron reads too.
     if(!cs.investigationPaused&&(cs.stage==="investigation"||getCaseStage(cs)==="investigation")&&!cs.investigationReport) {
-      const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
+      const invMeetings = meetings.filter(m=>isInvestigationMeeting(m.type));
       if(invMeetings.length>0) {
         const first = invMeetings[0];
         const startStr = first.savedAt||first.date;

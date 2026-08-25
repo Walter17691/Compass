@@ -3,13 +3,14 @@
 // improvement_initiatives, see supabase/improvement_initiatives_2026-08-20.sql)
 // — no separate table, since milestones only ever need to be read/written
 // as a whole alongside their own initiative.
+import { newId } from './ids';
 
 export const INITIATIVE_STATUSES = ["active", "completed", "abandoned"];
 
 export function addMilestone(milestones, label, targetDate) {
   const trimmed = (label || "").trim();
   if (!trimmed) return milestones;
-  const milestone = { id: "milestone_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), label: trimmed, targetDate: targetDate || "", done: false };
+  const milestone = { id: newId("milestone"), label: trimmed, targetDate: targetDate || "", done: false };
   return [...(milestones || []), milestone];
 }
 

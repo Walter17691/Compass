@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeGuardrailChecks, allegationPolicyClauseRef } from '../lib/guardrails';
+import { computeGuardrailChecks, allegationPolicyClauseRef, GUARDRAIL_CHECK_TITLES } from '../lib/guardrails';
 
 const baseCase = { id: 'case1', meetings: [], evidence: [] };
 
@@ -364,5 +364,38 @@ describe('computeGuardrailChecks — appeal manager conflict (P8)', () => {
 describe('computeGuardrailChecks — clean case', () => {
   it('returns no checks for a case with nothing to flag', () => {
     expect(computeGuardrailChecks(baseCase, [])).toEqual([]);
+  });
+});
+
+// Phase 6.5 hardening (structural remediation, Prompt 12 — Guardrail
+// Lifecycle invariant). App.jsx's syncGuardrailSignals now restricts its
+// auto-resolve sweep to titles in GUARDRAIL_CHECK_TITLES specifically so
+// it can never auto-resolve a generateAppealReview-created "Appeal
+// ground: ..." signal (a different system that happens to share
+// type:"process_risk") as if it were a guardrail check whose condition
+// cleared. These tests guard the two ways that protection could quietly
+// break: the constant drifting out of sync with what the checks
+// actually produce, or an "Appeal ground:"-shaped title slipping in.
+describe('GUARDRAIL_CHECK_TITLES', () => {
+  it('contains the real title a check actually produces', () => {
+    const cs = {
+      ...baseCase,
+      meetings: [
+        { id: 'm1', type: 'Investigation', manager: 'Sam Patel', date: '01/08/2026' },
+        { id: 'm2', type: 'Disciplinary', manager: 'Sam Patel', date: '10/08/2026' },
+      ],
+    };
+    const [check] = computeGuardrailChecks(cs, []);
+    expect(GUARDRAIL_CHECK_TITLES).toContain(check.title);
+  });
+
+  it('has exactly the 8 known check titles, none of them empty or duplicated', () => {
+    expect(GUARDRAIL_CHECK_TITLES).toHaveLength(8);
+    expect(new Set(GUARDRAIL_CHECK_TITLES).size).toBe(8);
+    expect(GUARDRAIL_CHECK_TITLES.every(t => t && t.trim().length > 0)).toBe(true);
+  });
+
+  it('never contains an "Appeal ground:" title — the exact shape generateAppealReview creates, and must never be treated as a guardrail check', () => {
+    expect(GUARDRAIL_CHECK_TITLES.some(t => t.startsWith('Appeal ground:'))).toBe(false);
   });
 });

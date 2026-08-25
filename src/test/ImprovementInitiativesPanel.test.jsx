@@ -18,12 +18,12 @@ describe('ImprovementInitiativesPanel', () => {
   beforeEach(() => { rpcMock.mockReset(); });
 
   it('shows an empty state when there are no initiatives', () => {
-    render(<ImprovementInitiativesPanel improvementInitiatives={[]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
     expect(screen.getByText('No improvement initiatives yet.')).toBeInTheDocument();
   });
 
   it('renders an initiative card with title, status, owner, and target completion', () => {
-    render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
     expect(screen.getByText('Reduce Manchester grievances')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText(/Priya Shah/)).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe('ImprovementInitiativesPanel', () => {
   });
 
   it('hides the New initiative control for non-HR', () => {
-    render(<ImprovementInitiativesPanel improvementInitiatives={[]} isHR={false} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[]} isHR={false} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
     expect(screen.queryByRole('button', { name: '+ New initiative' })).not.toBeInTheDocument();
   });
 
@@ -42,7 +42,7 @@ describe('ImprovementInitiativesPanel', () => {
   // accessible label, not just its placeholder.
   it('labels every "New initiative" field with a real accessible name', async () => {
     const user = userEvent.setup();
-    render(<ImprovementInitiativesPanel improvementInitiatives={[]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
     await user.click(screen.getByRole('button', { name: '+ New initiative' }));
     expect(screen.getByLabelText('Initiative title')).toBeInTheDocument();
     expect(screen.getByLabelText('Problem identified')).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('ImprovementInitiativesPanel', () => {
   it('creates an initiative with comma-separated supporting insights split into an array', async () => {
     const user = userEvent.setup();
     const onAdd = vi.fn();
-    render(<ImprovementInitiativesPanel improvementInitiatives={[]} isHR={true} onAdd={onAdd} onUpdate={vi.fn()} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[]} isHR={true} onAdd={onAdd} onUpdate={vi.fn()} caseTasks={[]}/>);
     await user.click(screen.getByRole('button', { name: '+ New initiative' }));
     await user.type(screen.getByPlaceholderText('Title'), 'Reduce Manchester grievances');
     await user.type(screen.getByPlaceholderText('Problem identified'), 'Grievance volume rising.');
@@ -73,7 +73,7 @@ describe('ImprovementInitiativesPanel', () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     const caseTasks = [{ id: 't1', name: 'Review rota policy', owner: 'Sam', dueDate: '', status: 'open', improvementInitiativeId: 'init1' }];
-    render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={caseTasks}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={caseTasks}/>);
     await user.click(screen.getByRole('button', { name: 'View details' }));
     expect(screen.getByText('No milestones set yet.')).toBeInTheDocument();
     expect(screen.getByText(/Review rota policy/)).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe('ImprovementInitiativesPanel', () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     const withMilestone = { ...baseInitiative, milestones: [{ id: 'm1', label: 'Draft policy', targetDate: '', done: false }] };
-    render(<ImprovementInitiativesPanel improvementInitiatives={[withMilestone]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withMilestone]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]}/>);
     await user.click(screen.getByRole('button', { name: 'View details' }));
     await user.click(screen.getByRole('checkbox'));
     expect(onUpdate).toHaveBeenCalledWith('init1', { milestones: [expect.objectContaining({ id: 'm1', done: true })] });
@@ -96,7 +96,7 @@ describe('ImprovementInitiativesPanel', () => {
   it('disables milestone checkboxes and hides add/remove controls for non-HR', async () => {
     const user = userEvent.setup();
     const withMilestone = { ...baseInitiative, milestones: [{ id: 'm1', label: 'Draft policy', targetDate: '', done: false }] };
-    render(<ImprovementInitiativesPanel improvementInitiatives={[withMilestone]} isHR={false} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withMilestone]} isHR={false} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
     await user.click(screen.getByRole('button', { name: 'View details' }));
     expect(screen.getByRole('checkbox')).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('ImprovementInitiativesPanel', () => {
   it('changes status and saves an outcome for HR', async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
-    render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]}/>);
+    render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]}/>);
     await user.click(screen.getByRole('button', { name: 'View details' }));
     await user.selectOptions(screen.getByDisplayValue('Active'), 'completed');
     expect(onUpdate).toHaveBeenCalledWith('init1', { status: 'completed' });
@@ -126,7 +126,7 @@ describe('ImprovementInitiativesPanel', () => {
     it('lets HR set which metric this initiative addresses', async () => {
       const user = userEvent.setup();
       const onUpdate = vi.fn();
-      render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       await user.selectOptions(screen.getByDisplayValue('Not set'), 'case_type');
       expect(onUpdate).toHaveBeenCalledWith('init1', { metricKind: 'case_type', metricValue: null });
@@ -136,7 +136,7 @@ describe('ImprovementInitiativesPanel', () => {
       const user = userEvent.setup();
       const onUpdate = vi.fn();
       const withKind = { ...baseInitiative, metricKind: 'case_type' };
-      render(<ImprovementInitiativesPanel improvementInitiatives={[withKind]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withKind]} isHR={true} onAdd={vi.fn()} onUpdate={onUpdate} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       await user.selectOptions(screen.getByText('Select a case type…').closest('select'), 'grievance');
       expect(onUpdate).toHaveBeenCalledWith('init1', { metricKind: 'case_type', metricValue: 'grievance' });
@@ -145,7 +145,7 @@ describe('ImprovementInitiativesPanel', () => {
     it('only offers active themes for a theme metric', async () => {
       const user = userEvent.setup();
       const withKind = { ...baseInitiative, metricKind: 'theme' };
-      render(<ImprovementInitiativesPanel improvementInitiatives={[withKind]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withKind]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       expect(screen.getByText('Rota changes')).toBeInTheDocument();
       expect(screen.queryByText('Retired theme')).not.toBeInTheDocument();
@@ -154,7 +154,7 @@ describe('ImprovementInitiativesPanel', () => {
     it('shows no Impact section until the initiative is completed with a metric set', async () => {
       const user = userEvent.setup();
       const withKindOnly = { ...baseInitiative, metricKind: 'case_type', metricValue: 'grievance', status: 'active' };
-      render(<ImprovementInitiativesPanel improvementInitiatives={[withKindOnly]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withKindOnly]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       expect(screen.queryByText('Impact')).not.toBeInTheDocument();
     });
@@ -165,7 +165,7 @@ describe('ImprovementInitiativesPanel', () => {
         ...baseInitiative, status: 'completed', metricKind: 'case_type', metricValue: 'grievance',
         completedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
       };
-      render(<ImprovementInitiativesPanel improvementInitiatives={[recentlyCompleted]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[recentlyCompleted]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       expect(screen.getByText(/Not enough time has passed since completion/)).toBeInTheDocument();
       expect(rpcMock).not.toHaveBeenCalled();
@@ -181,11 +181,11 @@ describe('ImprovementInitiativesPanel', () => {
         ...baseInitiative, status: 'completed', metricKind: 'case_type', metricValue: 'grievance',
         completedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       };
-      render(<ImprovementInitiativesPanel improvementInitiatives={[completed]} isHR={false} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[completed]} isHR={false} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       await waitFor(() => expect(screen.getByText(/grievance rates decreased/)).toBeInTheDocument());
       expect(screen.getByText(/not a confirmed causal outcome/)).toBeInTheDocument();
-      expect(rpcMock).toHaveBeenCalledWith('org_trend_detection', { p_period_days: 30 });
+      expect(rpcMock).toHaveBeenCalledWith('org_trend_detection', { p_org_id: 'org1', p_period_days: 30 });
     });
   });
 
@@ -200,14 +200,14 @@ describe('ImprovementInitiativesPanel', () => {
     it('names the milestone done checkbox after the milestone', async () => {
       const user = userEvent.setup();
       const withMilestone = { ...baseInitiative, milestones: [{ id: 'm1', label: 'Draft policy', targetDate: '', done: false }] };
-      render(<ImprovementInitiativesPanel improvementInitiatives={[withMilestone]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withMilestone]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       expect(screen.getByLabelText('Mark "Draft policy" done')).toBeInTheDocument();
     });
 
     it('labels the new-milestone label and target-date fields', async () => {
       const user = userEvent.setup();
-      render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       expect(screen.getByLabelText('New milestone')).toBeInTheDocument();
       expect(screen.getByLabelText('New milestone target date')).toBeInTheDocument();
@@ -215,7 +215,7 @@ describe('ImprovementInitiativesPanel', () => {
 
     it('labels the metric-kind select, status select, and outcome textarea', async () => {
       const user = userEvent.setup();
-      render(<ImprovementInitiativesPanel improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[baseInitiative]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       expect(screen.getByLabelText(/Metric this initiative addresses/)).toBeInTheDocument();
       expect(screen.getByLabelText('Status')).toBeInTheDocument();
@@ -225,12 +225,12 @@ describe('ImprovementInitiativesPanel', () => {
     it('labels the case-type and theme metric-value selects once a metric kind is chosen', async () => {
       const user = userEvent.setup();
       const withCaseType = { ...baseInitiative, metricKind: 'case_type' };
-      const { rerender } = render(<ImprovementInitiativesPanel improvementInitiatives={[withCaseType]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      const { rerender } = render(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withCaseType]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       await user.click(screen.getByRole('button', { name: 'View details' }));
       expect(screen.getByLabelText('Case type value')).toBeInTheDocument();
 
       const withTheme = { ...baseInitiative, metricKind: 'theme' };
-      rerender(<ImprovementInitiativesPanel improvementInitiatives={[withTheme]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
+      rerender(<ImprovementInitiativesPanel orgId="org1" improvementInitiatives={[withTheme]} isHR={true} onAdd={vi.fn()} onUpdate={vi.fn()} caseTasks={[]} cases={cases} organisationThemes={organisationThemes}/>);
       expect(screen.getByLabelText('Theme value')).toBeInTheDocument();
     });
   });

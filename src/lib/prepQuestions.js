@@ -10,6 +10,7 @@
 // status is one of QUESTION_STATUSES below; statusSource tracks whether
 // the live AI pass or the user themselves set it — updateMeetingIntelligence
 // (App.jsx) never overwrites a status the user set manually.
+import { newId } from './ids';
 
 export const QUESTION_STATUSES = [
   { id: "not_asked", label: "Not asked", symbol: "○", color: "#9B9098" },
@@ -25,7 +26,7 @@ export function questionStatusMeta(status) {
 
 export function addPrepQuestion(questions) {
   return [...(questions || []), {
-    id: "pq_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+    id: newId("pq"),
     text: "", category: "general", essential: false, reasoning: "",
     linkedAllegationId: null, linkedEvidenceId: null, source: "user",
     status: "not_asked", statusSource: "ai",

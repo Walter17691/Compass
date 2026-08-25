@@ -59,16 +59,34 @@ export default async function handler(req, res) {
         if (isExpired(existing.expires_at)) return res.status(409).json({ error: 'This signing link has expired' });
 
         const outcome = signature ? 'signed' : acknowledged ? 'acknowledged' : 'declined';
+        // Phase 6.5 hardening (structural remediation, Prompt 12 —
+        // Signature Identity invariant): the read above and this write
+        // used to be two separate round trips with no re-check at write
+        // time — a genuine TOCTOU window (e.g. the same link opened on a
+        // phone and a laptop, signed on one and declined on the other a
+        // moment later). Because a 'declined' patch never touches
+        // signature/signed_at and a 'signed' patch never touches
+        // declined_at/decline_reason, whichever request landed SECOND
+        // silently produced a self-contradictory row — e.g.
+        // status:'declined' while still carrying a captured signature and
+        // signed_at from the request that landed first. Folding the
+        // not-yet-terminal check into the UPDATE's own WHERE clause makes
+        // the whole read-check-write sequence atomic under Postgres row
+        // locking: only the request that genuinely observes the row still
+        // pending can ever apply its patch, and a loser gets a real,
+        // honest 409 instead of silently corrupting the record.
         const patch = outcome === 'declined'
           ? { status: 'declined', declined_at: signedAt, decline_reason: declineReason || '' }
           : { status: outcome, signature: signature || null, signed_at: signedAt };
 
-        const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}`, {
+        const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&status=in.(sent,opened)`, {
           method: 'PATCH',
+          headers: { 'Prefer': 'return=representation' },
           body: JSON.stringify(patch)
         });
-        const text = await r.text();
-        if (!r.ok) return res.status(500).json({ error: text });
+        if (!r.ok) { const text = await r.text(); return res.status(500).json({ error: text }); }
+        const updatedRows = await r.json();
+        if (!updatedRows.length) return res.status(409).json({ error: 'This document has already been actioned' });
 
         // Notify manager if email provided — using the stored request's
         // fields, never the request body's.
@@ -138,17 +156,39 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { signId } = req.query;
+    const { signId, internal } = req.query;
     try {
       const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`);
       const data = await r.json();
       if (!data.length) return res.status(404).json({ error: 'Not found' });
       let existing = data[0];
 
+      // Phase 6.5 hardening (structural remediation, Prompt 12 —
+      // Signature Identity invariant): this GET is hit by two genuinely
+      // different callers sharing one URL — the actual signer opening
+      // their emailed link (public/sign.html), and Compass's own HR-side
+      // internal status checks (App.jsx's signature-sync poll on every
+      // case view, and resendSignatureReminder's lookup before chasing).
+      // Only the FIRST is a genuine "the employee opened this document"
+      // event; the transition below used to fire for both, meaning an HR
+      // user simply viewing their own case could flip a still-pending
+      // request to "opened" and stamp a real opened_at — a false record
+      // of employee engagement that's directly disclosable (e.g. "the
+      // audit trail shows they opened the outcome letter on 12 March")
+      // when in fact HR's own dashboard produced it. internal=1 marks a
+      // status-only read that must never mutate state; only a request
+      // without it (the real signer-facing page) can advance sent→opened.
+      // The expiry transition below is a pure fact about elapsed time,
+      // not an engagement signal, so it's safe to apply on either kind of
+      // read — an internal check should show a genuinely-expired link as
+      // expired just as honestly as the signer's own page would.
+      const isInternalStatusCheck = internal === '1';
+
       // First real view of the link — stamp opened_at and move past
       // "sent", but only once, and never for a request already past that
-      // stage (signed/acknowledged/declined/expired, or already opened).
-      if (existing.status === 'sent') {
+      // stage (signed/acknowledged/declined/expired, or already opened),
+      // and never from an internal HR-side status check.
+      if (existing.status === 'sent' && !isInternalStatusCheck) {
         const nowIso = new Date().toISOString();
         const patchBody = isExpired(existing.expires_at, new Date(nowIso))
           ? { status: 'expired' }

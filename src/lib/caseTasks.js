@@ -5,6 +5,7 @@
 // always read in the context of one instance; case_tasks needs its own
 // cross-case Tasks screen (every open task across every case), which a
 // flat table — and flat pure helpers over it — supports directly.
+import { newId } from './ids';
 
 export const TASK_PRIORITIES = ["low", "normal", "high"];
 
@@ -16,7 +17,7 @@ export function addTask(tasks, caseId, fields) {
   const name = (fields?.name || "").trim();
   if (!name) return tasks;
   const task = {
-    id: "task_" + Date.now(),
+    id: newId("task"),
     caseId: caseId || null,
     name,
     owner: fields.owner || "",

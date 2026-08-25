@@ -16,7 +16,7 @@ describe('RiskMapPanel', () => {
       data: { cases_by_location: { Manchester: 15, London: 5 }, avg_duration_by_location: {}, avg_case_duration_days: 10 },
       error: null,
     });
-    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
+    render(<RiskMapPanel orgId="org1" cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
     expect(screen.getByText(/Loading risk map/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Manchester')).toBeInTheDocument());
     expect(screen.getByText('Elevated case volume')).toBeInTheDocument();
@@ -24,7 +24,7 @@ describe('RiskMapPanel', () => {
 
   it('shows an error state when the RPC fails', async () => {
     rpcMock.mockResolvedValue({ data: null, error: new Error('boom') });
-    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
+    render(<RiskMapPanel orgId="org1" cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
     await waitFor(() => expect(screen.getByText("Couldn't load risk map data right now.")).toBeInTheDocument());
   });
 
@@ -33,13 +33,13 @@ describe('RiskMapPanel', () => {
       data: { cases_by_location: { Manchester: 5, London: 5 }, avg_duration_by_location: {}, avg_case_duration_days: 10 },
       error: null,
     });
-    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
+    render(<RiskMapPanel orgId="org1" cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
     await waitFor(() => expect(screen.getAllByText('No flags for this site.').length).toBe(2));
   });
 
   it('includes the disclaimer that this is not a ranking and not based on protected characteristics', async () => {
     rpcMock.mockResolvedValue({ data: { cases_by_location: {}, avg_duration_by_location: {}, avg_case_duration_days: null }, error: null });
-    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
+    render(<RiskMapPanel orgId="org1" cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
     await waitFor(() => expect(screen.getByText(/never a ranking and never based on protected characteristics/)).toBeInTheDocument());
   });
 
@@ -51,11 +51,11 @@ describe('RiskMapPanel', () => {
       data: { cases_by_location: { Manchester: 15, London: 5 }, avg_duration_by_location: {}, avg_case_duration_days: 10 },
       error: null,
     });
-    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
+    render(<RiskMapPanel orgId="org1" cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
     await waitFor(() => expect(screen.getByText('Elevated case volume')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
 
-    render(<RiskMapPanel cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]} createCaseTask={createCaseTask}/>);
+    render(<RiskMapPanel orgId="org1" cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]} createCaseTask={createCaseTask}/>);
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Create action' }).length).toBeGreaterThan(0));
     await user.click(screen.getAllByRole('button', { name: 'Create action' })[0]);
     await user.type(screen.getByPlaceholderText('Action to take…'), 'Review Manchester rota');

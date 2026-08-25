@@ -1,3 +1,5 @@
+import { newId } from './ids';
+
 // Phase 24 of the reasoning-layer build-out — Email integration
 // groundwork. Real Outlook/Gmail integration needs OAuth app registration
 // (Microsoft Entra / Google Cloud Console) that only the org owner can
@@ -52,6 +54,13 @@ export function buildEmailEvidenceItem({ sender, subject, date, body, addedBy, r
   // as something the AI document-analysis pipeline can actually read,
   // closing the gap IP11's email-to-evidence phase depends on.
   return {
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — Task/
+    // Entity Identity invariant): a real id, not just whichever array
+    // index this item happens to occupy — lib/caseTimeline.js used to key
+    // this entry (and its persisted excluded/edit/relevance overrides) by
+    // array position, which silently repoints at the wrong evidence item
+    // once anything earlier in the list is added or removed.
+    id: newId("ev"),
     name: subject ? `Email: ${subject}` : "Pasted email",
     type: "text/plain",
     date: date || new Date().toLocaleDateString("en-GB"),

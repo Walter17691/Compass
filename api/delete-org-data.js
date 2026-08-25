@@ -1,4 +1,5 @@
 import { verifyCaller } from './_auth.js';
+import { ORG_SCOPED_TABLES } from '../src/lib/dataInventory.js';
 
 const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -54,14 +55,20 @@ async function supabaseRequest(path, options = {}) {
 //     er_executive_briefs, org_events, integration_events: AI-generated
 //     or activity-log content the DSAR/inventory review's own "AI-
 //     generated case information" and "audit records" categories cover.
-const ORG_SCOPED_TABLES = [
-  'cases', 'starter_instances', 'dsar_requests', 'hr_review_requests', 'wellbeing_notes',
-  'concern_referrals', 'leaver_instances', 'case_tasks', 'signing_requests', 'employee_records',
-  'employee_portal_accounts', 'employee_portal_invites', 'case_views', 'improvement_initiatives',
-  'manager_capability_insights', 'er_executive_briefs', 'org_events', 'integration_events',
-  // audit_log last and separate from the loop below — see the comment at
-  // its own call site.
-];
+//
+// Phase 6.5 hardening (structural remediation, Prompt 12 — GDPR
+// Ownership / DSAR / Erasure Completeness invariant) — an independent
+// audit found this hand-maintained list had drifted again:
+// organisation_themes (AI-derived org-wide theme taxonomy content) had
+// no FK to anything and was never covered. case_access was also flagged,
+// but live verification found it now carries a NOT NULL, ON DELETE
+// CASCADE FK to cases — already fully erased for free; adding it here
+// would be redundant, not a fix (see src/lib/dataInventory.js for the
+// full, currently-verified breakdown of every org-scoped table, cascade-
+// covered or otherwise). The list itself now lives in that one shared
+// module instead of being redefined here, so there's only one place to
+// keep current, and a completeness test can check it independently of
+// this handler.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -80,9 +87,19 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Only an HR Director can delete all organisation data' });
     }
 
+    // Phase 6.5 hardening (structural remediation, Prompt 12 — GDPR
+    // completeness invariant) — this used to console.error a failed
+    // table delete and continue, then unconditionally return
+    // {success:true} regardless — a GDPR Art. 17 erasure request that
+    // reports success while real personal data silently remains in one
+    // or more tables. Every table's own result is now collected and
+    // returned; a single failed table makes the whole response an honest
+    // failure, since a partial erasure is not the "all data deleted"
+    // guarantee this endpoint exists to make.
+    const failedTables = [];
     for (const table of ORG_SCOPED_TABLES) {
       const r = await supabaseRequest(`${table}?org_id=eq.${encodeURIComponent(orgId)}`, { method: 'DELETE' });
-      if (!r.ok) console.error(`delete-org-data: failed to clear ${table}:`, await r.text());
+      if (!r.ok) { failedTables.push(table); console.error(`delete-org-data: failed to clear ${table}:`, await r.text()); }
     }
 
     // audit_log is cleared last, separately from the loop above, so this
@@ -94,18 +111,23 @@ export default async function handler(req, res) {
     // detail in the audit log" principle applied everywhere else in this
     // table.
     const auditRes = await supabaseRequest(`audit_log?org_id=eq.${encodeURIComponent(orgId)}`, { method: 'DELETE' });
-    if (!auditRes.ok) console.error('delete-org-data: failed to clear audit_log:', await auditRes.text());
+    if (!auditRes.ok) { failedTables.push('audit_log'); console.error('delete-org-data: failed to clear audit_log:', await auditRes.text()); }
     const recordRes = await supabaseRequest('audit_log', {
       method: 'POST',
       body: JSON.stringify({
         org_id: orgId, user_id: caller.id, user_name: callerMember.name || caller.email || 'Unknown',
         action: 'Organisation data deleted',
-        detail: 'All case, employee, wellbeing, concern-referral, signing and portal-access records for this organisation were permanently deleted (GDPR "Delete all data").',
+        detail: failedTables.length
+          ? `Deletion PARTIALLY FAILED for: ${failedTables.join(', ')}. All other case, employee, wellbeing, concern-referral, signing and portal-access records for this organisation were permanently deleted (GDPR "Delete all data").`
+          : 'All case, employee, wellbeing, concern-referral, signing and portal-access records for this organisation were permanently deleted (GDPR "Delete all data").',
         created_at: new Date().toISOString(),
       }),
     });
     if (!recordRes.ok) console.error('delete-org-data: failed to record the deletion event itself:', await recordRes.text());
 
+    if (failedTables.length) {
+      return res.status(500).json({ success: false, error: `Deletion failed for: ${failedTables.join(', ')}. Please contact support — some data was not erased.`, failedTables });
+    }
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('Delete org data error:', error.message);

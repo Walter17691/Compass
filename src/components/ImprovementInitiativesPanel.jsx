@@ -16,22 +16,22 @@ const inputStyle = { fontSize: 13, border: "1px solid #E8E0D0", borderRadius: 8,
 // existing trend engine rather than a new RPC. Visible to everyone (not
 // HR-gated) once a metric is set and the initiative is completed, same
 // org-wide-read pattern as the initiative itself.
-function ImpactView({ initiative }) {
+function ImpactView({ orgId, initiative }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const days = daysSince(initiative.completedAt);
 
   useEffect(() => {
-    if (days === null || days < MIN_DAYS_SINCE_COMPLETION) return;
+    if (!orgId || days === null || days < MIN_DAYS_SINCE_COMPLETION) return;
     let cancelled = false;
     (async () => {
-      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_period_days: Math.max(days, 1) });
+      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_org_id: orgId, p_period_days: Math.max(days, 1) });
       if (cancelled) return;
       if (rpcError) { console.error("org_trend_detection", rpcError); setError(true); }
       else setData(data);
     })();
     return () => { cancelled = true; };
-  }, [initiative.completedAt, days]);
+  }, [orgId, initiative.completedAt, days]);
 
   if (days === null) return null;
   if (days < MIN_DAYS_SINCE_COMPLETION) return <div style={{fontSize:12,color:"#9B9098"}}>Not enough time has passed since completion to assess impact yet ({days} of {MIN_DAYS_SINCE_COMPLETION} days).</div>;
@@ -45,7 +45,7 @@ function ImpactView({ initiative }) {
   return <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{describeImpact(label, entry, days)}</div>;
 }
 
-function InitiativeCard({ initiative, isHR, caseTasks, cases, organisationThemes, onUpdate, expanded, onToggleExpand }) {
+function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisationThemes, onUpdate, expanded, onToggleExpand }) {
   const [milestoneLabel, setMilestoneLabel] = useState("");
   const [milestoneDate, setMilestoneDate] = useState("");
   const [outcomeDraft, setOutcomeDraft] = useState(initiative.outcome || "");
@@ -145,7 +145,7 @@ function InitiativeCard({ initiative, isHR, caseTasks, cases, organisationThemes
           {showImpact && (
             <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
               <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Impact</div>
-              <ImpactView initiative={initiative}/>
+              <ImpactView orgId={orgId} initiative={initiative}/>
             </div>
           )}
         </div>
@@ -162,7 +162,7 @@ function InitiativeCard({ initiative, isHR, caseTasks, cases, organisationThemes
 // it. Linked actions are org-level case_tasks (OP21) carrying this
 // initiative's id — created from an Insights card's "Create action"
 // control, not from here, so this panel only ever displays them.
-export function ImprovementInitiativesPanel({ improvementInitiatives, isHR, onAdd, onUpdate, caseTasks, cases, organisationThemes }) {
+export function ImprovementInitiativesPanel({ orgId, improvementInitiatives, isHR, onAdd, onUpdate, caseTasks, cases, organisationThemes }) {
   const [expandedId, setExpandedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -191,7 +191,7 @@ export function ImprovementInitiativesPanel({ improvementInitiatives, isHR, onAd
 
       {sorted.length === 0 && <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>No improvement initiatives yet.</div>}
       {sorted.map(i => (
-        <InitiativeCard key={i.id} initiative={i} isHR={isHR} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)}/>
+        <InitiativeCard key={i.id} orgId={orgId} initiative={i} isHR={isHR} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)}/>
       ))}
 
       {isHR && (showForm ? (

@@ -28,21 +28,22 @@ const EarlySignalCard = ({ entry, onShowEvidence, createCaseTask, improvementIni
 // ("what's just starting to show up") than a 90-day trend ("what's
 // meaningfully shifted this quarter"). "Show evidence" (OP17) opens
 // InsightEvidenceModal with the real underlying counts and window.
-export function EarlySignalsPanel({ createCaseTask, improvementInitiatives } = {}) {
+export function EarlySignalsPanel({ orgId, createCaseTask, improvementInitiatives } = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const [evidenceFor, setEvidenceFor] = useState(null);
 
   useEffect(() => {
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
-      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_period_days: EARLY_SIGNAL_WINDOW_DAYS });
+      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_org_id: orgId, p_period_days: EARLY_SIGNAL_WINDOW_DAYS });
       if (cancelled) return;
       if (rpcError) { console.error("org_trend_detection", rpcError); setError(true); }
       else setData(data);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [orgId]);
 
   if (error) return <div style={{fontSize:13,color:"#6B6375"}}>Couldn't load early signal data right now.</div>;
   if (!data) return <div style={{fontSize:13,color:"#6B6375"}}>Loading early signals…</div>;

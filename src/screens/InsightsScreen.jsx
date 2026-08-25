@@ -61,6 +61,7 @@ export function InsightsScreen({
         <div style={{flex:1,minWidth:0}}>
           {active==="overview"&&(
             <OrganisationalIntelligenceOverview
+              orgId={reporting.org?.id}
               cases={caseData.cases}
               dueSoon={caseData.dueSoon}
               hrReviewRequests={caseData.hrReviewRequests}
@@ -79,11 +80,11 @@ export function InsightsScreen({
           )}
           {active==="trends"&&(
             <>
-              <TrendsPanel createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>
+              <TrendsPanel orgId={reporting.org?.id} createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>
               <ThemeTaxonomyManager organisationThemes={orgIntel.organisationThemes} isHR={isHR} onAdd={orgIntelActions.onAddOrganisationTheme} onUpdate={orgIntelActions.onUpdateOrganisationTheme}/>
             </>
           )}
-          {active==="early-signals"&&<EarlySignalsPanel createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>}
+          {active==="early-signals"&&<EarlySignalsPanel orgId={reporting.org?.id} createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>}
           {active==="manager"&&isHR&&(
             <ManagerInsightsScreen
               cases={caseData.cases}
@@ -98,8 +99,8 @@ export function InsightsScreen({
             />
           )}
           {active==="org-events"&&isHR&&<OrgEventsPanel orgEvents={orgIntel.orgEvents} isHR={isHR} onAddEvent={orgIntelActions.onAddOrgEvent}/>}
-          {active==="risk-map"&&isHR&&<RiskMapPanel cases={caseData.cases} employeeRecords={caseData.employeeRecords} processTemplates={caseData.processTemplates} orgEvents={orgIntel.orgEvents} createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>}
-          {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel improvementInitiatives={orgIntel.improvementInitiatives} isHR={isHR} onAdd={orgIntelActions.onAddImprovementInitiative} onUpdate={orgIntelActions.onUpdateImprovementInitiative} caseTasks={caseData.caseTasks} cases={caseData.cases} organisationThemes={orgIntel.organisationThemes}/>}
+          {active==="risk-map"&&isHR&&<RiskMapPanel orgId={reporting.org?.id} cases={caseData.cases} employeeRecords={caseData.employeeRecords} processTemplates={caseData.processTemplates} orgEvents={orgIntel.orgEvents} createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>}
+          {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel orgId={reporting.org?.id} improvementInitiatives={orgIntel.improvementInitiatives} isHR={isHR} onAdd={orgIntelActions.onAddImprovementInitiative} onUpdate={orgIntelActions.onUpdateImprovementInitiative} caseTasks={caseData.caseTasks} cases={caseData.cases} organisationThemes={orgIntel.organisationThemes}/>}
           {active==="reports"&&(
             <>
               <ExecutiveBriefPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR}/>

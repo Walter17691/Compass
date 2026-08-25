@@ -67,6 +67,35 @@ export function hasSecondTenant() {
   return !!(SECOND_TENANT_CREDS.email && SECOND_TENANT_CREDS.password);
 }
 
+// Phase 6.5 hardening (structural remediation, Prompt 12 — Test
+// Infrastructure invariant). tenant-isolation.spec.js — the ONE spec
+// that actually proves cross-tenant data doesn't leak, everything else
+// in this suite runs against a single shared org and can't test this at
+// all — used to plain test.skip() whenever SECOND_TENANT_CREDS was
+// missing. Confirmed live: .github/workflows/ci.yml's E2E job only wires
+// E2E_TEST_EMAIL/E2E_TEST_PASSWORD through as secrets, never
+// E2E_TEST_EMAIL_2/E2E_TEST_PASSWORD_2 — so this spec has been silently
+// skipping on EVERY CI run, and CI has been reporting green without ever
+// once actually checking tenant isolation. A skip and a real pass are
+// indistinguishable in a green checkmark; for a security-critical spec
+// that gap is the whole problem. In CI (process.env.CI, set by GitHub
+// Actions on every runner) a missing second tenant is now a hard
+// failure with a message pointing at the actual fix, not a skip — a
+// contributor's local machine without the second account configured
+// still gets the softer skip, since that's a legitimate, common case
+// this function's original behaviour already served correctly.
+export function requireSecondTenantOrFail() {
+  if (hasSecondTenant()) return;
+  if (process.env.CI) {
+    throw new Error(
+      'E2E_TEST_EMAIL_2/E2E_TEST_PASSWORD_2 are not set in CI — tenant-isolation.spec.js cannot run, ' +
+      'which means CI is NOT verifying cross-tenant isolation at all. Add both as repo secrets and wire them into ' +
+      '.github/workflows/ci.yml\'s "Write .env for the dev server" step (matching E2E_TEST_EMAIL/E2E_TEST_PASSWORD ' +
+      'already there) — this failure is intentional so that gap can never be silent again.'
+    );
+  }
+}
+
 // Signs the current session out and waits for the login screen to come
 // back — used by tests that need to switch between two genuinely
 // different accounts within one spec (Playwright doesn't persist

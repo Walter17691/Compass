@@ -17,6 +17,35 @@ import { isFindingStatus } from './allegations';
 import { currentRoleHolder } from './caseRoles';
 import { parseFlexDate } from './dateMath';
 
+// Phase 6.5 hardening (structural remediation, Prompt 12 — Guardrail
+// Lifecycle invariant). App.jsx's syncGuardrailSignals auto-resolves any
+// currently-open case_signals row of type "process_risk" whose title
+// isn't in this run's freshly-computed check titles — but
+// generateAppealReview (App.jsx) ALSO creates case_signals rows with
+// type:"process_risk" (title "Appeal ground: <ground>"), an entirely
+// different, AI-generated signal source that shares the same `type`
+// purely by historical accident. Without a way to tell "a real guardrail
+// check that's stopped triggering" apart from "a signal some other
+// system created," the auto-resolve sweep was silently closing every
+// Appeal ground signal the very next time a guardrail sync ran, marking
+// a still-valid appeal finding "Condition no longer detected". This is
+// the exhaustive list of titles this file's own checks can ever produce
+// — kept as one exported source of truth (not re-typed a second time at
+// the call site) so the auto-resolve sweep can restrict itself to
+// signals genuinely owned by computeGuardrailChecks. Must stay in sync
+// with each checkXxx function's own `title:` — guardrails.test.js's own
+// drift test enforces this.
+export const GUARDRAIL_CHECK_TITLES = [
+  "Same person chaired the investigation and the disciplinary hearing",
+  "Evidence added after the investigation report was concluded",
+  "Outcome letter may be missing the right of appeal",
+  "Allegations have no recorded employee response",
+  "Witness evidence referenced but no witness statement is on file",
+  "A finding was recorded with little or no reasoning",
+  "A finding's reasoning may not address the employee's response",
+  "The Appeal Manager made the original decision",
+];
+
 // Process Intelligence (P6) — plain keyword search over P4's already-
 // indexed clauses, not an AI call: still no LLM in this file. Returns
 // the first clause across any policy whose heading or text mentions any

@@ -58,23 +58,24 @@ function topEntries(obj, limit = 6) {
 // than re-deriving branching logic in SQL (see OP2's migration header
 // for the full reasoning). Appeal rate/appeal outcome rate are OP11's
 // job (Appeal Intelligence) — shown as a placeholder here, not guessed.
-export function OrganisationalIntelligenceOverview({ cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
+export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const daysSinceMonthStart = Math.max(1, daysBetween(startOfMonth, now));
-      const { data, error: rpcError } = await supabase.rpc('org_insights_overview', { p_period_days: daysSinceMonthStart });
+      const { data, error: rpcError } = await supabase.rpc('org_insights_overview', { p_org_id: orgId, p_period_days: daysSinceMonthStart });
       if (cancelled) return;
       if (rpcError) { console.error("org_insights_overview", rpcError); setError(true); }
       else setOverview(data);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [orgId]);
 
   // computeStageDurations/computeInformalFormalSplit both iterate every
   // case (thousands, on a real org) — memoized so an unrelated re-render
