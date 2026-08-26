@@ -1,5 +1,5 @@
 -- ============================================================================
--- Phase 6.5 — Structural remediation (Prompt 12, Family 2)
+-- Phase 6.5 — Structural remediation (Prompt 12/13, Family 2)
 -- MULTI-TENANT ANALYTICS INVARIANT
 -- ============================================================================
 -- Independent audit (Prompt 11) found a CRITICAL bug: every Organisational
@@ -14,25 +14,28 @@
 -- one client's real case data ends up durably stored inside a different
 -- client's tenant record.
 --
--- Live confirmation at the time of the follow-up sweep: one real user
--- belongs to 2 orgs and has already generated 20 executive briefs: the
--- mechanism is live and reachable today, masked only by the second org
--- currently having 0 cases.
+-- APPLIED LIVE 2026-08-25, then HOTFIXED 2026-08-26 after a post-deploy
+-- smoke test (Prompt 13) reproduced a real authorization bypass in the
+-- first version of this migration: `where org_id =
+-- assert_org_access(p_org_id)` — a side-effecting (exception-raising)
+-- function embedded as a filter VALUE inside a LANGUAGE SQL function's
+-- declarative CTEs — does not reliably raise for an unauthorised org_id.
+-- Postgres's planner is free to reorder/skip evaluating sub-expressions
+-- it doesn't prove are needed for the declared output, since a STABLE
+-- function has no "must always execute" guarantee; the identical query
+-- run as a literal top-level statement DOES raise correctly. This was
+-- masked in ad hoc testing because public.cases' own RLS independently
+-- re-scopes to the caller's real orgs regardless (defense-in-depth that
+-- happened to return an empty result rather than another org's real
+-- data) — not something to rely on, since org_theme_root_cause's
+-- co-occurring-themes lookup and any future RPC built on this pattern
+-- would not have had the same protection.
 --
--- Root cause and fix, from the follow-up sweep: `my_org_ids()` answers
--- "which orgs is this caller a MEMBER of" — correct as an RLS primitive,
--- wrong as an AGGREGATION SCOPE. Every org-scoped RPC needs an explicit,
--- validated p_org_id parameter instead. This migration:
---   1. Adds assert_org_access(p_org_id) — one shared guard, used as the
---      scoping expression itself (not a separate `if` a future edit could
---      forget to call) in every org-scoped RPC.
---   2. Adds assert_theme_in_org(p_theme_id, p_org_id) for
---      org_theme_root_cause's second, independent gap (p_theme_id itself
---      was never checked against any org).
---   3. Drops and recreates org_insights_overview, org_trend_detection,
---      org_case_stats, org_theme_root_cause with p_org_id as a REQUIRED
---      FIRST parameter (no default) — a client that forgets to pass it
---      gets a hard error, not a silently over-broad result set.
+-- This version — the one actually live — is LANGUAGE PLPGSQL for all
+-- four RPCs, with an explicit `perform public.assert_org_access(p_org_id);`
+-- as the FIRST statement in every function body. plpgsql's imperative,
+-- statement-by-statement execution model has no equivalent reordering
+-- risk: the check is guaranteed to run, and to run first.
 --
 -- This is a DROP + CREATE, not a CREATE OR REPLACE, for each function:
 -- Postgres identifies a function by name AND parameter signature, so
@@ -40,40 +43,37 @@
 -- replacement of the old one — CREATE OR REPLACE would leave the OLD,
 -- vulnerable 0/1-parameter version live alongside the new one. The DROP
 -- is necessary for the fix to actually remove the vulnerable surface.
+-- (The 2026-08-26 hotfix also needs its own drop-then-create, since
+-- LANGUAGE SQL -> LANGUAGE PLPGSQL for the same name+signature is a
+-- CREATE OR REPLACE-safe change in Postgres, but is included explicitly
+-- below for clarity and idempotent re-runnability.)
 --
 -- MIGRATION IMPLICATIONS — READ BEFORE APPLYING:
 --   - This is a BREAKING change to the RPC signatures. It must be applied
 --     in the SAME deploy as the application-code changes that pass
---     p_org_id at every call site (see the accompanying src/ changes in
---     this same commit) — applying the SQL alone will break every
+--     p_org_id at every call site — applying the SQL alone breaks every
 --     Insights panel until the client catches up, since the old 1-arg
 --     calls will 404/error against the new 2-arg-only functions.
---   - org_event_correlation is NOT touched — the sweep confirmed it
---     already derives org_id correctly from the event row itself.
+--   - org_event_correlation is NOT touched — confirmed it already
+--     derives org_id correctly from the event row itself, and (unlike
+--     the four functions here) was never written with the
+--     function-call-as-filter-value pattern in the first place.
 --   - Existing er_executive_briefs / periodic-review rows generated
---     BEFORE this fix may already contain blended data from the live
---     exposure described above. This migration does not retroactively
---     clean those rows — that is a data-quality decision for a human to
---     make (flag, delete, or leave with a caveat), not something to do
---     silently inside a schema migration. Recommend reviewing
---     er_executive_briefs for any org with 2+-org members before treating
---     historical briefs as trustworthy.
+--     BEFORE the original 2026-08-25 fix may already contain blended
+--     data from the live exposure described above. This migration does
+--     not retroactively clean those rows — that is a data-quality
+--     decision for a human to make (flag, delete, or leave with a
+--     caveat), not something to do silently inside a schema migration.
 --
 -- HOW TO APPLY: paste the whole file in one Supabase SQL Editor run.
+-- Already applied live as of 2026-08-26 — this file is kept in sync with
+-- the live database as the source of truth for future environments.
 -- ============================================================================
 
 
 -- ============================================================================
 -- PART 1 — Shared guards
 -- ============================================================================
--- assert_org_access(p_org_id): raises unless the calling user is a member
--- of p_org_id; returns p_org_id itself so it can be used INLINE as the
--- scoping expression in a query (`where org_id = assert_org_access(p_org_id)`)
--- rather than as a separate check a future edit could accidentally drop
--- while leaving the query itself unscoped. STABLE + SECURITY INVOKER
--- (deliberately NOT DEFINER) — it should see exactly what the calling
--- user's own RLS would show it, since it's re-deriving my_org_ids()'s own
--- membership check, not bypassing anything.
 create or replace function public.assert_org_access(p_org_id uuid)
 returns uuid
 language plpgsql
@@ -95,11 +95,6 @@ $$;
 revoke all on function public.assert_org_access(uuid) from anon, public;
 grant execute on function public.assert_org_access(uuid) to authenticated, service_role;
 
--- assert_theme_in_org: org_theme_root_cause's own p_theme_id was never
--- validated against any org at all — fixing only the my_org_ids() CTE
--- would leave this second, independent gap open (a theme id from Org B,
--- passed while Org A is the caller's active org, would return Org B's
--- real cases as if they were Org A's).
 create or replace function public.assert_theme_in_org(p_theme_id uuid, p_org_id uuid)
 returns uuid
 language plpgsql
@@ -121,18 +116,23 @@ grant execute on function public.assert_theme_in_org(uuid, uuid) to authenticate
 
 
 -- ============================================================================
--- PART 2 — org_insights_overview: drop the (p_period_days) overload,
--- recreate as (p_org_id, p_period_days)
+-- PART 2 — org_insights_overview
 -- ============================================================================
 drop function if exists public.org_insights_overview(integer);
+drop function if exists public.org_insights_overview(uuid, integer);
 
 create function public.org_insights_overview(p_org_id uuid, p_period_days integer default 30)
 returns jsonb
-language sql
+language plpgsql
 stable
 as $$
+declare
+  result jsonb;
+begin
+  perform public.assert_org_access(p_org_id);
+
   with my_cases as (
-    select * from public.cases where org_id = public.assert_org_access(p_org_id)
+    select * from public.cases where org_id = p_org_id
   ),
   period as (
     select now() - (p_period_days || ' days')::interval as cutoff
@@ -239,7 +239,10 @@ as $$
     'closed_cases_with_duration', (select count(*) from durations where span is not null),
     'avg_duration_by_location', (select v from by_location_duration),
     'avg_duration_by_department', (select v from by_department_duration)
-  );
+  ) into result;
+
+  return result;
+end;
 $$;
 
 revoke all on function public.org_insights_overview(uuid, integer) from public, anon;
@@ -247,18 +250,23 @@ grant execute on function public.org_insights_overview(uuid, integer) to authent
 
 
 -- ============================================================================
--- PART 3 — org_trend_detection: drop the (p_period_days) overload,
--- recreate as (p_org_id, p_period_days)
+-- PART 3 — org_trend_detection
 -- ============================================================================
 drop function if exists public.org_trend_detection(integer);
+drop function if exists public.org_trend_detection(uuid, integer);
 
 create function public.org_trend_detection(p_org_id uuid, p_period_days integer default 90)
 returns jsonb
-language sql
+language plpgsql
 stable
 as $$
+declare
+  result jsonb;
+begin
+  perform public.assert_org_access(p_org_id);
+
   with my_cases as (
-    select * from public.cases where org_id = public.assert_org_access(p_org_id)
+    select * from public.cases where org_id = p_org_id
   ),
   period_bounds as (
     select
@@ -331,7 +339,10 @@ as $$
     'period_days', p_period_days,
     'by_type_trend', (select v from by_type_trend),
     'by_theme_trend', (select v from by_theme_trend)
-  );
+  ) into result;
+
+  return result;
+end;
 $$;
 
 revoke all on function public.org_trend_detection(uuid, integer) from public, anon;
@@ -339,17 +350,23 @@ grant execute on function public.org_trend_detection(uuid, integer) to authentic
 
 
 -- ============================================================================
--- PART 4 — org_case_stats: drop the 0-arg overload, recreate as (p_org_id)
+-- PART 4 — org_case_stats
 -- ============================================================================
 drop function if exists public.org_case_stats();
+drop function if exists public.org_case_stats(uuid);
 
 create function public.org_case_stats(p_org_id uuid)
 returns jsonb
-language sql
+language plpgsql
 stable
 as $$
+declare
+  result jsonb;
+begin
+  perform public.assert_org_access(p_org_id);
+
   with my_cases as (
-    select * from public.cases where org_id = public.assert_org_access(p_org_id)
+    select * from public.cases where org_id = p_org_id
   ),
   by_type as (
     select coalesce(jsonb_object_agg(case_type, cnt), '{}'::jsonb) as v
@@ -367,7 +384,10 @@ as $$
     'high_priority_active', (select count(*) from my_cases where priority = 'high' and stage <> 'closed'),
     'cases_by_type', (select v from by_type),
     'cases_by_stage', (select v from by_stage)
-  );
+  ) into result;
+
+  return result;
+end;
 $$;
 
 revoke all on function public.org_case_stats(uuid) from public, anon;
@@ -375,22 +395,24 @@ grant execute on function public.org_case_stats(uuid) to authenticated;
 
 
 -- ============================================================================
--- PART 5 — org_theme_root_cause: drop the (p_theme_id, p_period_days)
--- overload, recreate as (p_org_id, p_theme_id, p_period_days) with the
--- theme itself now validated against that org too (Shape B from the sweep)
+-- PART 5 — org_theme_root_cause
 -- ============================================================================
 drop function if exists public.org_theme_root_cause(uuid, integer);
+drop function if exists public.org_theme_root_cause(uuid, uuid, integer);
 
 create function public.org_theme_root_cause(p_org_id uuid, p_theme_id uuid, p_period_days integer default 90)
 returns jsonb
-language sql
+language plpgsql
 stable
 as $$
-  with validated as (
-    select public.assert_theme_in_org(p_theme_id, p_org_id) as theme_id
-  ),
-  my_cases as (
-    select * from public.cases where org_id = public.assert_org_access(p_org_id)
+declare
+  result jsonb;
+begin
+  perform public.assert_org_access(p_org_id);
+  perform public.assert_theme_in_org(p_theme_id, p_org_id);
+
+  with my_cases as (
+    select * from public.cases where org_id = p_org_id
   ),
   period as (
     select now() - (p_period_days || ' days')::interval as cur_start, now() as cur_end
@@ -400,8 +422,7 @@ as $$
     from public.case_themes ct
     join my_cases c on c.id = ct.case_id
     cross join period p
-    cross join validated
-    where ct.theme_id = validated.theme_id and c.created_at >= p.cur_start and c.created_at < p.cur_end
+    where ct.theme_id = p_theme_id and c.created_at >= p.cur_start and c.created_at < p.cur_end
   ),
   by_location as (
     select coalesce(jsonb_object_agg(loc, cnt), '{}'::jsonb) as v
@@ -418,8 +439,7 @@ as $$
     from (
       select ct2.theme_id, count(distinct ct2.case_id) as cnt
       from public.case_themes ct2
-      cross join validated
-      where ct2.case_id in (select case_id from target_case_ids) and ct2.theme_id <> validated.theme_id
+      where ct2.case_id in (select case_id from target_case_ids) and ct2.theme_id <> p_theme_id
       group by ct2.theme_id
     ) x
     join public.organisation_themes th on th.id = x.theme_id and th.org_id = p_org_id
@@ -431,7 +451,10 @@ as $$
     'current_count', (select count(*) from target_case_ids),
     'by_location', (select v from by_location),
     'co_occurring_themes', (select v from co_occurring)
-  );
+  ) into result;
+
+  return result;
+end;
 $$;
 
 revoke all on function public.org_theme_root_cause(uuid, uuid, integer) from public, anon;
@@ -440,16 +463,8 @@ grant execute on function public.org_theme_root_cause(uuid, uuid, integer) to au
 
 -- ============================================================================
 -- PART 6 — er_executive_briefs: normalise its RLS to match its three
--- persisted-insight siblings (org_events, improvement_initiatives,
--- manager_capability_insights all already use this exact shape)
+-- persisted-insight siblings
 -- ============================================================================
--- Not a tenant-scoping fix on its own (this table's rows are already
--- correctly org_id-tagged at write time by the client, per Part 2's own
--- caveat above about relying on client .eq() calls for reads) — this is
--- the "defence in depth for Shape C" the sweep recommended: giving all
--- four persisted-insight tables one reviewable RLS shape instead of three
--- matching and one different, so a future table modelled on "whichever of
--- these four I copied" doesn't inherit the odd one out.
 do $$
 declare
   pol record;
