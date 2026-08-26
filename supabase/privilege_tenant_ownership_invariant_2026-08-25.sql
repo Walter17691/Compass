@@ -29,6 +29,20 @@
 -- re-run. Read the whole file before running — Part 6 changes what
 -- `employee_records`/`starter_instances`/`leaver_instances` allow non-HR
 -- members to write (read access is unchanged).
+--
+-- STATUS (Prompt 14, 2026-08-26): Parts 1-10, including Part 6, are all now
+-- LIVE on production (npeegfsoijhdnnvuqjin). Part 6 was withheld from the
+-- original Prompt 13 apply pending coordinated UI gating (Onboarding/
+-- Offboarding/Organisation/Employee-data settings tabs all switched to
+-- isHR-only, see SettingsScreen.jsx/AppSidebar.jsx/App.jsx) — applied and
+-- adversarially verified live: a real throwaway non-HR (line_manager)
+-- member got 403 on INSERT to all four tables (employee_records,
+-- starter_instances, leaver_instances, org_roles — including the
+-- org_roles privilege-escalation vector specifically), SELECT still
+-- succeeded (org-wide read preserved), and the real E2E HR-director
+-- account's INSERT to employee_records succeeded (legitimate workflow
+-- intact). Sentinel data and the throwaway identity were cleaned up
+-- immediately after.
 -- ============================================================================
 
 
