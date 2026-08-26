@@ -1,14 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { requiresApproval, approvalActionLabel, approvalStatusLabel, approvalActionForOutcome, APPROVAL_ACTIONS, INVESTIGATION_REVIEW_STATUSES, investigationReviewStatusLabel } from '../lib/approvals';
 
+// Phase 6.5 hardening (closes independent audit finding 5.4) — was five
+// declared actions, two of which ("settlement", "redundancy_outcome")
+// had no reachable trigger point anywhere in the app at all — this test
+// file's own original form ("has exactly the spec's five listed
+// actions, in order") only ever asserted the declared list matched
+// itself, exactly the "false assurance signal" the independent audit
+// called out: green regardless of whether any of these ids were ever
+// actually reachable from a real screen. Reduced to the three that now
+// have one (verified by reading every real call site, not assumed):
+// dismissal/final_written_warning via approvalActionForOutcome
+// (OutcomeModal.jsx), suspension via sendLetterCoordinated/
+// sendLetterForAcknowledgement (App.jsx) when the Suspension letter is
+// actually sent.
 describe('requiresApproval', () => {
-  it('returns true for each of the spec\'s five approval-gated actions', () => {
-    ['suspension', 'final_written_warning', 'dismissal', 'settlement', 'redundancy_outcome'].forEach(id => {
+  it('returns true for each of the three actions with a real, reachable trigger', () => {
+    ['suspension', 'final_written_warning', 'dismissal'].forEach(id => {
       expect(requiresApproval(id)).toBe(true);
     });
   });
 
-  it('returns false for an action not on the list', () => {
+  it('returns false for an action with no reachable trigger, or not on the list at all', () => {
+    expect(requiresApproval('settlement')).toBe(false);
+    expect(requiresApproval('redundancy_outcome')).toBe(false);
     expect(requiresApproval('first_written_warning')).toBe(false);
     expect(requiresApproval('record')).toBe(false);
   });
@@ -17,7 +32,7 @@ describe('requiresApproval', () => {
 describe('approvalActionLabel', () => {
   it('returns the human label for a known action', () => {
     expect(approvalActionLabel('final_written_warning')).toBe('Final written warning');
-    expect(approvalActionLabel('redundancy_outcome')).toBe('Redundancy selection outcome');
+    expect(approvalActionLabel('suspension')).toBe('Suspension');
   });
 
   it('falls back to the raw id for an unrecognised action', () => {
@@ -56,9 +71,9 @@ describe('approvalActionForOutcome', () => {
 });
 
 describe('APPROVAL_ACTIONS', () => {
-  it('has exactly the spec\'s five listed actions, in order', () => {
+  it('declares only actions with a real, reachable trigger point', () => {
     expect(APPROVAL_ACTIONS.map(a => a.id)).toEqual([
-      'suspension', 'final_written_warning', 'dismissal', 'settlement', 'redundancy_outcome',
+      'suspension', 'final_written_warning', 'dismissal',
     ]);
   });
 });

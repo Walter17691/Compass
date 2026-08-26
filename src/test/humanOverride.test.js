@@ -10,12 +10,21 @@ describe('requestOverride', () => {
     expect(auditFn).not.toHaveBeenCalled();
   });
 
-  it('proceeds without an audit entry when the reason is left blank', async () => {
+  // Phase 6.5 hardening (closes independent audit finding 5.6) — was
+  // "proceeds without an audit entry when the reason is left blank",
+  // asserting the exact bug: the fastest, most common path through the
+  // dialog (confirm with no reason typed) left no trace at all that an
+  // override happened, indistinguishable from the gate never firing.
+  it('proceeds and still records an audit entry when the reason is left blank', async () => {
     const promptDialogFn = vi.fn().mockResolvedValue({ reason: '' });
     const auditFn = vi.fn();
     const result = await requestOverride(promptDialogFn, auditFn, 'Some unresolved gap');
     expect(result).toBe(true);
-    expect(auditFn).not.toHaveBeenCalled();
+    expect(auditFn).toHaveBeenCalledWith(
+      'Proceeded despite unresolved warning',
+      'Some unresolved gap — no reason given',
+      null
+    );
   });
 
   it('proceeds and records the reason when one is given', async () => {

@@ -22,7 +22,16 @@ export async function requestOverride(promptDialogFn, auditFn, label, { caseId=n
   });
   if(!values) return false;
   const reason = (values.reason||"").trim();
-  if(reason) auditFn(actionLabel, `${label} — ${reason}`, caseId);
+  // Phase 6.5 hardening (closes independent audit finding 5.6) — was
+  // `if(reason) auditFn(...)`, so the fastest, most common path through
+  // this dialog (confirm with the reason left blank) left no audit
+  // record at all that an override happened — indistinguishable from
+  // the guardrail never having fired. This module's own stated purpose
+  // is "a future reviewer sees WHY the gap was left unresolved" — that
+  // requires recording that a gap WAS left unresolved unconditionally;
+  // the reason can stay optional, the event can't. Matches
+  // requestPolicyDeviation's own unconditional auditFn call just below.
+  auditFn(actionLabel, reason ? `${label} — ${reason}` : `${label} — no reason given`, caseId);
   return true;
 }
 

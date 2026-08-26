@@ -11,6 +11,8 @@
 // the standard, correct behaviour for a UK-based user picking a time in
 // their own calendar app.
 
+import { addWorkingDays } from './dateMath';
+
 export function buildEventTimes({ date, startTime, durationMinutes }) {
   if (!date || !startTime) return null;
   const start = new Date(`${date}T${startTime}:00`);
@@ -66,7 +68,17 @@ export function suggestAttendees(cs, { caseAccess = [], orgMembers = [], organis
 // match this pattern is silently skipped — never a guessed number.
 const NOTICE_PATTERN = /(\d+)\s*(hour|working day|business day|day)s?\b[^.]{0,20}notice/i;
 const UNIT_TO_HOURS = { hour: 1, day: 24, "working day": 24, "business day": 24 };
+const WORKING_DAY_UNITS = new Set(["working day", "business day"]);
 
+// Phase 6.5 hardening (closes independent audit finding 5.8) — "working
+// day"/"business day" were given the same flat 24h-per-unit multiplier
+// as a plain calendar day, so "5 working days' notice" was evaluated as
+// 5x24 = 120 calendar hours. A meeting proposed on a Wednesday and
+// scheduled the preceding Friday is 120 calendar hours' notice but only
+// 3 working days — reported compliant when it wasn't. addWorkingDays
+// (dateMath.js) already exists and is now used for exactly these two
+// units, comparing real dates rather than a flat hour count; plain
+// hour/day units are unaffected (weekends don't apply to them either).
 export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Date() } = {}) {
   if (!meetingISO) return null;
   for (const text of policyClauseTexts || []) {
@@ -74,13 +86,22 @@ export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Dat
     if (!match) continue;
     const value = Number(match[1]);
     const unit = match[2].toLowerCase();
-    const requiredHours = value * (UNIT_TO_HOURS[unit] || 24);
-    const actualHours = (new Date(meetingISO).getTime() - now.getTime()) / 3600000;
+    const meetingTime = new Date(meetingISO).getTime();
+    const actualHours = (meetingTime - now.getTime()) / 3600000;
+    let requiredHours = value * (UNIT_TO_HOURS[unit] || 24);
+    let violated = actualHours < requiredHours;
+    if (WORKING_DAY_UNITS.has(unit)) {
+      const deadline = addWorkingDays(now, value);
+      if (deadline) {
+        requiredHours = (deadline.getTime() - now.getTime()) / 3600000;
+        violated = meetingTime < deadline.getTime();
+      }
+    }
     return {
       requiredText: `${value} ${unit}${value > 1 ? "s" : ""}' notice`,
       requiredHours,
       actualHours,
-      violated: actualHours < requiredHours,
+      violated,
       clauseText: text,
     };
   }

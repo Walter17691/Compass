@@ -16,6 +16,18 @@ import { isFindingStatus, allegationStatusMeta } from './allegations';
 // one built on too few closed cases.
 const MIN_SAMPLE_SIZE = 3;
 
+// Phase 6.5 hardening (closes independent audit finding 5.3) — the floor
+// and the displayed "total" both used to be findings.length (an
+// ALLEGATION count), while every caller labels this "N closed <type>
+// cases" (AllegationsPanel.jsx) — a single case with three allegations,
+// all substantiated, passed the floor and rendered "Based on 3 closed
+// cases," from one employee's own case, both statistically meaningless
+// and trivially re-identifying. Floor, total, and the percentage bars
+// are now all genuinely case-based: a status bucket counts the distinct
+// cases that have at least one finding of that status, not the raw
+// allegation count (a case with mixed findings across its allegations
+// can legitimately count in more than one bucket — honest, not
+// double-counted within a single bucket).
 export function computeOutcomeDistribution(cases, allegations, caseType, excludeCaseId) {
   if (!caseType) return { applicable: false, total: 0 };
   const closedCaseIds = new Set(
@@ -24,15 +36,19 @@ export function computeOutcomeDistribution(cases, allegations, caseType, exclude
       .map(c => c.id)
   );
   const findings = (allegations || []).filter(a => closedCaseIds.has(a.caseId) && isFindingStatus(a.status));
-  if (findings.length < MIN_SAMPLE_SIZE) return { applicable: false, total: findings.length };
+  const casesByStatus = {};
+  findings.forEach(a => {
+    if (!casesByStatus[a.status]) casesByStatus[a.status] = new Set();
+    casesByStatus[a.status].add(a.caseId);
+  });
+  const distinctCaseCount = new Set(findings.map(a => a.caseId)).size;
+  if (distinctCaseCount < MIN_SAMPLE_SIZE) return { applicable: false, total: distinctCaseCount };
 
-  const tally = {};
-  findings.forEach(a => { tally[a.status] = (tally[a.status] || 0) + 1; });
-  const distribution = Object.entries(tally)
-    .map(([status, count]) => ({ status, label: allegationStatusMeta(status).label, count, pct: Math.round((count / findings.length) * 100) }))
+  const distribution = Object.entries(casesByStatus)
+    .map(([status, caseIds]) => ({ status, label: allegationStatusMeta(status).label, count: caseIds.size, pct: Math.round((caseIds.size / distinctCaseCount) * 100) }))
     .sort((a, b) => b.count - a.count);
 
-  return { applicable: true, total: findings.length, distribution };
+  return { applicable: true, total: distinctCaseCount, distribution };
 }
 
 // Process Intelligence (P14, §11) — computeOutcomeDistribution above
@@ -67,15 +83,7 @@ export function computeSanctionDistribution(cases, caseType, excludeCaseId) {
 export function comparableCaseSummaries(cases, allegations, caseType, excludeCaseId) {
   if (!caseType) return [];
   const closedCases = (cases || []).filter(c => c.caseType === caseType && c.id !== excludeCaseId && getCaseStage(c) === "closed");
-  // Phase 6.5 hardening (Batch 7) — this function's siblings
-  // (computeOutcomeDistribution/computeSanctionDistribution) already
-  // enforce MIN_SAMPLE_SIZE for exactly the reason stated at the top of
-  // this file ("a '1 of 1 substantiated' comparison isn't a
-  // comparison"), but this one didn't: an individual anonymised summary
-  // is trivially re-identifiable when it's the only (or one of two)
-  // closed case of that type, even with no name/id shown.
-  if (closedCases.length < MIN_SAMPLE_SIZE) return [];
-  return closedCases.map(c => {
+  const summaries = closedCases.map(c => {
     const findings = (allegations || []).filter(a => a.caseId === c.id && isFindingStatus(a.status));
     if (!findings.length) return null;
     return {
@@ -84,4 +92,14 @@ export function comparableCaseSummaries(cases, allegations, caseType, excludeCas
       findings: findings.map(a => ({ status: a.status, label: allegationStatusMeta(a.status).label, reasoningExcerpt: (a.decisionReasoning || "").slice(0, 220) })),
     };
   }).filter(Boolean);
+  // Phase 6.5 hardening (Batch 7, corrected Prompt 14 — closes
+  // independent audit finding 5.3) — the floor was checked against
+  // closedCases.length (every closed case of this type) BEFORE the
+  // map/filter above drops any case with no recorded finding. Three-plus
+  // closed cases with only one actually having a finding still passed
+  // the floor, rendering a single, trivially re-identifiable anonymised
+  // summary — the exact failure this floor exists to prevent. Now
+  // checked against the population actually emitted.
+  if (summaries.length < MIN_SAMPLE_SIZE) return [];
+  return summaries;
 }

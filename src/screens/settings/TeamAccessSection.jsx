@@ -40,29 +40,40 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
                     style={{background:"none",border:"none",color:"#C84B2F",cursor:"pointer",fontSize:11}}>Remove</button>
                 </div>
               </div>
-              {editingMember===m.id&&locations.length>0&&(
+              {editingMember===m.id&&(
                 <div style={{background:"#F5F1EA",borderRadius:8,padding:"10px 14px",marginTop:4}}>
                   <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
                   <select aria-label={`Role for ${m.name||"Unknown"}`} value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
-                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:12}}>
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:locations.length>0?12:0}}>
                     {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
-                  <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                    {locations.map(l=>(
-                      <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
-                        <input type="checkbox"
-                          checked={(m.location_ids||[]).includes(l.id)}
-                          onChange={e=>{
-                            const current = m.location_ids||[];
-                            const updated = e.target.checked?[...current,l.id]:current.filter(x=>x!==l.id);
-                            assignLocations(m.id, updated);
-                          }}
-                          style={{accentColor:"#7C5CFC"}}/>
-                        {l.name}
-                      </label>
-                    ))}
-                  </div>
+                  {/* Phase 6.5 hardening (closes independent audit finding
+                      6.1) — the role selector above used to be nested
+                      inside this same locations.length>0 gate, so "Edit
+                      access" rendered nothing at all (button flipped to
+                      "Done", nothing appeared) in any org with no
+                      locations configured yet — the default state of
+                      every brand-new org. Only the location-access
+                      block, which is genuinely meaningless with zero
+                      locations to assign, stays conditional. */}
+                  {locations.length>0&&(<>
+                    <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {locations.map(l=>(
+                        <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
+                          <input type="checkbox"
+                            checked={(m.location_ids||[]).includes(l.id)}
+                            onChange={e=>{
+                              const current = m.location_ids||[];
+                              const updated = e.target.checked?[...current,l.id]:current.filter(x=>x!==l.id);
+                              assignLocations(m.id, updated);
+                            }}
+                            style={{accentColor:"#7C5CFC"}}/>
+                          {l.name}
+                        </label>
+                      ))}
+                    </div>
+                  </>)}
                 </div>
               )}
             </div>

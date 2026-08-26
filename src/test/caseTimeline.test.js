@@ -86,9 +86,47 @@ describe('buildCaseTimeline', () => {
     expect(dates).toEqual(['2026-08-01', '2026-08-05', '2026-08-10']);
   });
 
-  it('treats an unparseable date as earliest rather than throwing', () => {
+  it('does not throw on an unparseable date', () => {
     const cs = { ...baseCase, dateReceived: 'not-a-date' };
     expect(() => buildCaseTimeline(cs, [], [])).not.toThrow();
+  });
+
+  // Phase 6.5 hardening (closes independent audit finding 3.3) — was raw
+  // `new Date(dateStr)`: Invalid Date's NaN guard silently sorted an
+  // unparseable entry to epoch-0, ABOVE "Case opened" — a letter with a
+  // bad date looked like it predated the case itself, in a hearing pack
+  // handed to a disciplinary panel. Sorts last now, not first.
+  it('sorts an unparseable date last, not first (was silently epoch-0, sorting above "Case opened")', () => {
+    const cs = {
+      ...baseCase,
+      dateReceived: '2026-08-05',
+      meetings: [{ id: 'm1', type: 'Investigation meeting', date: 'not-a-date' }],
+    };
+    const result = buildCaseTimeline(cs, [], []);
+    expect(result[result.length - 1].type).toBe('meeting');
+    expect(result[0].description).toContain('Case opened');
+  });
+
+  // The real bug: every meeting/letter date in this app is UK-format
+  // (DD/MM/YYYY), which `new Date(string)` parses as US month/day order
+  // for any day-of-month <= 12 — a wrong-but-plausible-looking date, not
+  // an error. "05/03/2026" (5 March) silently became 3 May.
+  it('parses DD/MM/YYYY dates correctly, not as US MM/DD/YYYY', () => {
+    const cs = {
+      ...baseCase,
+      dateReceived: '2026-01-01',
+      meetings: [
+        { id: 'm1', type: 'Investigation meeting', date: '05/03/2026' }, // 5 March
+        { id: 'm2', type: 'Disciplinary', date: '03/05/2026' }, // 3 May
+      ],
+    };
+    const result = buildCaseTimeline(cs, [], []);
+    const meetingEntries = result.filter(e => e.type === 'meeting');
+    // 5 March must sort before 3 May — if DD/MM were misread as MM/DD,
+    // "05/03" (read as 3 May) would tie or invert against "03/05" (read
+    // as 5 Mar), corrupting the order silently.
+    expect(meetingEntries[0].date).toBe('05/03/2026');
+    expect(meetingEntries[1].date).toBe('03/05/2026');
   });
 
   it('gives each entry a stable key and tags allegation entries with their allegationId', () => {

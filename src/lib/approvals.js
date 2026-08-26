@@ -5,12 +5,22 @@
 // that works) doesn't depend on letting orgs toggle which actions need
 // one, and there's no existing org-settings surface to hang that on yet
 // (see P2's own note on the same trade-off for stage customization).
+// Phase 6.5 hardening (closes independent audit finding 5.4) — was five
+// declared actions, but only two (final_written_warning, dismissal — via
+// approvalActionForOutcome below) and now suspension (via
+// sendLetterCoordinated/sendLetterForAcknowledgement in App.jsx, when
+// the Suspension letter is actually sent) ever had a real trigger point
+// anywhere in the app. "settlement" and "redundancy_outcome" had no
+// reachable UI path at all — no screen, button, or letter flow ever set
+// either as an outcome — so declaring them here implied an approval gate
+// that silently never fired, worse than not declaring one. Removed
+// rather than fabricated a trigger for a workflow that doesn't exist
+// yet; add them back if/when a real settlement or redundancy-outcome
+// recording flow is built, wired at the same time.
 export const APPROVAL_ACTIONS = [
   { id: "suspension", label: "Suspension" },
   { id: "final_written_warning", label: "Final written warning" },
   { id: "dismissal", label: "Dismissal" },
-  { id: "settlement", label: "Settlement" },
-  { id: "redundancy_outcome", label: "Redundancy selection outcome" },
 ];
 
 export function requiresApproval(actionId) {

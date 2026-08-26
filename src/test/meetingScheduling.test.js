@@ -94,10 +94,24 @@ describe('checkNoticePeriod (Phase 5, IP16)', () => {
     expect(result.violated).toBe(false);
   });
 
-  it('treats a working-day requirement as 24 hours per day', () => {
-    const result = checkNoticePeriod(["Give 5 working days' notice before the hearing."], { meetingISO: '2026-08-16T09:00:00Z', now });
-    expect(result.requiredHours).toBe(120);
+  // Phase 6.5 hardening (closes independent audit finding 5.8) — was
+  // "treats a working-day requirement as 24 hours per day", asserting
+  // the exact bug: a meeting proposed on Friday 14 Aug for the following
+  // Wednesday 19 Aug is 5 CALENDAR days' notice (the flat-24h-per-day
+  // bug's own math: 5 x 24 = 120h = exactly 5 days = reported compliant)
+  // but only 3 WORKING days (Mon/Tue/Wed) — a genuine violation of "5
+  // working days' notice" that the old logic silently missed.
+  it('evaluates a working-day requirement by real working days, not a flat 24h-per-day count', () => {
+    const fridayNow = new Date('2026-08-14T09:00:00Z');
+    const result = checkNoticePeriod(["Give 5 working days' notice before the hearing."], { meetingISO: '2026-08-19T09:00:00Z', now: fridayNow });
     expect(result.violated).toBe(true);
+  });
+
+  it('does not flag a working-day requirement when there genuinely are enough working days', () => {
+    const fridayNow = new Date('2026-08-14T09:00:00Z');
+    // Friday + 5 working days = the following Friday, 21 Aug.
+    const result = checkNoticePeriod(["Give 5 working days' notice before the hearing."], { meetingISO: '2026-08-24T09:00:00Z', now: fridayNow });
+    expect(result.violated).toBe(false);
   });
 
   it('returns null when no clause matches a notice-period pattern', () => {

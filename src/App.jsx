@@ -4508,8 +4508,29 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const valid = (Array.isArray(parsed)?parsed:[]).filter(f=>meetingsWithRecords.some(m=>m.id===f.meetingId1) && meetingsWithRecords.some(m=>m.id===f.meetingId2));
 
       const base = caseSignalsRef.current;
+      // Phase 6.5 hardening (closes independent audit finding 7.4) — this
+      // had no dedup at all, unlike every sibling signal generator in
+      // this file, and re-fires on every meeting save AND every
+      // concludeInvestigation call — a conflict HR already reviewed and
+      // marked Not relevant reappeared as a brand-new, unreviewed signal
+      // the very next time either trigger ran. Identity here is the
+      // meeting-id pair (order-independent — the AI's own m1/m2 ordering
+      // isn't stable across runs), at ANY status: unlike a guardrail
+      // check (which re-evaluates live, changeable case state), this
+      // compares two specific, already-saved meeting records — if a
+      // human already judged this exact pair, there's no new condition
+      // for a later run to have detected, only the same two fixed texts
+      // again.
+      const existingPairs = new Set(
+        signalsForCase(base, cs.id)
+          .filter(s=>s.type==="inconsistency")
+          .map(s=>(s.sourceRefs||[]).filter(r=>r.kind==="meeting").map(r=>r.id).sort().join(":"))
+      );
       let updated = base;
       valid.forEach(f => {
+        const pairKey = [f.meetingId1, f.meetingId2].sort().join(":");
+        if(existingPairs.has(pairKey)) return;
+        existingPairs.add(pairKey);
         const m1 = meetingsWithRecords.find(m=>m.id===f.meetingId1), m2 = meetingsWithRecords.find(m=>m.id===f.meetingId2);
         updated = createSignal(updated, cs.id, {
           type:"inconsistency",
@@ -6397,6 +6418,16 @@ Please produce:
       audit("Letter sent", sentItem.name, activeCaseId);
       const matchingTask = findTaskToCompleteForSentLetter(caseTasks, activeCaseId, activeLetter);
       if(matchingTask) toggleCaseTaskDone(matchingTask.id);
+      // Phase 6.5 hardening (closes independent audit finding 5.4) —
+      // APPROVAL_ACTIONS (lib/approvals.js) declares "suspension" as
+      // sign-off-required, but approvalActionForOutcome only ever maps
+      // outcome-letter types (final written warning, dismissal) — the
+      // real trigger point for suspension is here, sending the
+      // Suspension letter (LetterScreen's own "suspension" tab), the
+      // single most consequential unilateral pre-dismissal act in UK ER
+      // process. Matches OutcomeModal.jsx's own requestHrReview call
+      // shape for the outcome-letter approval actions.
+      if(activeLetter==="suspension") requestHrReview("suspension", activeCaseId, null, subject, false);
     }
 
     showToast("Letter sent to "+to);
@@ -6432,6 +6463,10 @@ Please produce:
       audit("Letter sent for acknowledgement", sentItem.name, activeCaseId);
       const matchingTask = findTaskToCompleteForSentLetter(caseTasks, activeCaseId, activeLetter);
       if(matchingTask) toggleCaseTaskDone(matchingTask.id);
+      // Phase 6.5 hardening (closes independent audit finding 5.4) — see
+      // sendLetterCoordinated's own comment; a suspension letter can be
+      // sent via either path, both need the same trigger.
+      if(activeLetter==="suspension") requestHrReview("suspension", activeCaseId, null, subject, false);
     }
     return true;
   };
@@ -6805,7 +6840,15 @@ Please produce:
       }).join(nl+nl);
 
       const openQuestions = openSignalsForCase(caseSignals, caseId, "unanswered_question");
-      const inconsistencies = signalsForCase(caseSignals, caseId).filter(s=>s.type==="inconsistency");
+      // Phase 6.5 hardening (closes independent audit finding 7.5) — was
+      // signalsForCase(...).filter(type==="inconsistency"), pulling every
+      // status unfiltered, unlike openQuestions right above it. A
+      // conflict HR already investigated and explicitly marked Not
+      // relevant/Explained was still being carried into the formal
+      // investigation report as "already identified," inverting a
+      // human's exculpatory judgement back into an apparent live finding
+      // in the document that goes into the disciplinary bundle.
+      const inconsistencies = openSignalsForCase(caseSignals, caseId, "inconsistency");
       const nextAction = openSignalsForCase(caseSignals, caseId, "next_action")[0];
 
       const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience, drafting a formal internal investigation report. Follow ACAS Code of Practice. Produce the report using EXACTLY the section structure given, using ## for the three PART headers and ### for subsections within them — this structure is what keeps evidence, AI interpretation, and the HR decision visually separate for the reader, so do not merge or reorder it. PART 1 must contain only what is actually in the record — no interpretation. PART 2 is explicitly your analysis — say so, and never state a finding as an established fact where the record is silent or disputed. PART 3 must recommend only a procedural next step, never a sanction, disciplinary outcome, or finding of guilt — that decision belongs solely to the responsible HR manager. Where a detail is genuinely unknown, say so rather than inventing it. Output only the document itself, no preamble.";

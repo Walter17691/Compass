@@ -34,9 +34,24 @@
 // entry key) — the case's `timeline_overrides` column, applied here
 // rather than duplicated per caller.
 
+import { parseFlexDate } from './dateMath';
+
+// Phase 6.5 hardening (closes independent audit finding 3.3) — was raw
+// `new Date(dateStr)` on strings guaranteed to be UK-format (DD/MM/YYYY,
+// the app's own real writers never produce ISO). new Date("25/08/2026")
+// is Invalid Date, caught here, but silently sorted to epoch-0 — above
+// "Case opened," so a letter with an unparseable date looked like it
+// predated the case. Worse: new Date("05/03/2026") parses as a
+// valid-looking but WRONG date (3 May, US month/day order) for any
+// day-of-month <= 12 — a silently mis-sorted entry with no error to
+// notice, since the displayed date text elsewhere is unaffected, only
+// this sort order is wrong. parseFlexDate already exists and correctly
+// handles DD/MM/YYYY; an entry it still can't parse now sorts LAST
+// (Infinity), not first — a hearing pack handed to a disciplinary panel
+// should never show an unparseable-date item as predating the case.
 function toTime(dateStr) {
-  const t = new Date(dateStr).getTime();
-  return Number.isNaN(t) ? 0 : t;
+  const d = parseFlexDate(dateStr);
+  return d ? d.getTime() : Infinity;
 }
 
 function rawEntries(cs, allegations, auditLog) {

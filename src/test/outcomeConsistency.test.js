@@ -88,6 +88,42 @@ describe('computeOutcomeDistribution', () => {
     expect(result.applicable).toBe(false);
     expect(result.total).toBe(2);
   });
+
+  // Phase 6.5 hardening (closes independent audit finding 5.3) — was
+  // thresholded and totalled on findings.length (an ALLEGATION count),
+  // while AllegationsPanel.jsx labels this "Based on N closed <type>
+  // cases" — a single case with three substantiated allegations passed
+  // the 3-sample floor and would have rendered "Based on 3 closed cases"
+  // from one employee's own case. Both the floor and the total must be
+  // genuine distinct-case counts.
+  it('does not treat 3 findings on a single case as a sample of 3 cases', () => {
+    const cases = [closedMisconductCase('c1')];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', status: 'substantiated' },
+      { id: 'a2', caseId: 'c1', status: 'substantiated' },
+      { id: 'a3', caseId: 'c1', status: 'not_substantiated' },
+    ];
+    const result = computeOutcomeDistribution(cases, allegations, 'misconduct', 'current-case');
+    expect(result.applicable).toBe(false);
+    expect(result.total).toBe(1);
+  });
+
+  it('counts a case only once per status even if it has several findings of that same status', () => {
+    const cases = [closedMisconductCase('c1'), closedMisconductCase('c2'), closedMisconductCase('c3')];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', status: 'substantiated' },
+      { id: 'a2', caseId: 'c1', status: 'substantiated' }, // same case, same status again
+      { id: 'a3', caseId: 'c2', status: 'substantiated' },
+      { id: 'a4', caseId: 'c3', status: 'not_substantiated' },
+    ];
+    const result = computeOutcomeDistribution(cases, allegations, 'misconduct', 'current-case');
+    expect(result.applicable).toBe(true);
+    expect(result.total).toBe(3);
+    expect(result.distribution).toEqual([
+      { status: 'substantiated', label: 'Substantiated', count: 2, pct: 67 },
+      { status: 'not_substantiated', label: 'Not substantiated', count: 1, pct: 33 },
+    ]);
+  });
 });
 
 describe('computeSanctionDistribution (P14)', () => {
@@ -169,6 +205,23 @@ describe('comparableCaseSummaries (P14)', () => {
   it('is empty below the sample-size floor, even for a single genuine comparable case', () => {
     const cases = [closedMisconductCase('c1', { outcome: 'Final written warning' })];
     const allegations = [{ id: 'a1', caseId: 'c1', status: 'substantiated', decisionReasoning: 'x' }];
+    expect(comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case')).toEqual([]);
+  });
+
+  // Phase 6.5 hardening (closes independent audit finding 5.3) — the
+  // floor used to be checked against every closed case of this type,
+  // BEFORE cases with no recorded finding were dropped from the output.
+  // 3 closed cases where only 1 actually has a finding used to pass the
+  // floor and render that 1 case as a trivially re-identifiable
+  // "anonymised" summary.
+  it('is empty when 3+ closed cases exist but fewer than 3 actually have a recorded finding', () => {
+    const cases = [
+      closedMisconductCase('c1', { outcome: 'Final written warning' }),
+      closedMisconductCase('c2', { outcome: 'Verbal warning' }),
+      closedMisconductCase('c3', { outcome: 'Dismissal' }),
+    ];
+    // Only c1 has a recorded finding — c2/c3 are closed but findingless.
+    const allegations = [{ id: 'a1', caseId: 'c1', status: 'substantiated', decisionReasoning: 'CCTV footage confirmed the conduct.' }];
     expect(comparableCaseSummaries(cases, allegations, 'misconduct', 'current-case')).toEqual([]);
   });
 
