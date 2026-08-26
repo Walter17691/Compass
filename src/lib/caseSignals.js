@@ -73,6 +73,16 @@ export function createSignal(signals, caseId, fields) {
     source: fields.source || "ai",
     createdBy: fields.createdBy || null,
     createdAt: new Date().toISOString(),
+    // Phase 6.5 hardening (Prompt 14, guardrail lifecycle redesign) — the
+    // stable rule identifier a check's own logic is about (e.g.
+    // "decision_reasoning_missing"), distinct from `title`'s presentation
+    // text. Only guardrail-generated signals set this; every other
+    // signal source (Next Best Action, Contradiction Detection, Appeal
+    // ground) leaves it null, same as before this field existed. This is
+    // the real identity case_signals_open_rule_unique (DB) enforces —
+    // title is not a safe identity (it's copy, and two different rules
+    // could coincidentally share wording).
+    ruleId: fields.ruleId || null,
   };
   return [...(signals || []), signal];
 }

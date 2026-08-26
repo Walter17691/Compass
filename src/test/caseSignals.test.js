@@ -62,6 +62,17 @@ describe('createSignal', () => {
     expect(result[0].source).toBe('user');
     expect(result[0].createdBy).toBe('user_1');
   });
+
+  // Phase 6.5 hardening (Prompt 14, guardrail lifecycle redesign) —
+  // ruleId is the real identity for a guardrail-generated signal
+  // (case_signals_open_rule_unique enforces it at the DB), distinct from
+  // title's presentation text.
+  it('stores ruleId when provided, and defaults it to null otherwise', () => {
+    const withRule = createSignal([], 'case1', { type: 'process_risk', title: 'A finding was recorded with little or no reasoning', ruleId: 'decision_reasoning_missing' });
+    expect(withRule[0].ruleId).toBe('decision_reasoning_missing');
+    const withoutRule = createSignal([], 'case1', { type: 'next_action', title: 'Interview Sarah Jones' });
+    expect(withoutRule[0].ruleId).toBeNull();
+  });
 });
 
 describe('updateSignal', () => {

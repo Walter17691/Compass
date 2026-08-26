@@ -30,7 +30,7 @@ import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReaso
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
-import { computeGuardrailChecks, GUARDRAIL_CHECK_TITLES } from './lib/guardrails';
+import { computeGuardrailChecks } from './lib/guardrails';
 import { addConcernReferral, setReferralStatus, updateConcernReferral } from './lib/concernReferrals';
 import { sanitizeTriageSummary } from './lib/concernTriage';
 import { seedInvestigationChecklist, investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './lib/investigationChecklist';
@@ -3978,7 +3978,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         id:r.id, caseId:r.case_id, type:r.type, title:r.title, reasoning:r.reasoning||"",
         status:r.status, sourceRefs:r.source_refs||[], source:r.source,
         createdBy:r.created_by, resolvedBy:r.resolved_by, resolvedAt:r.resolved_at,
-        resolvedReason:r.resolved_reason, createdAt:r.created_at,
+        resolvedReason:r.resolved_reason, createdAt:r.created_at, ruleId:r.rule_id||null,
       })));
       // Only after a genuinely successful load — an error above already
       // returns early, leaving this false, so syncGuardrailSignals keeps
@@ -3995,9 +3995,35 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       status: signal.status||'open', source_refs: signal.sourceRefs||[], source: signal.source||'ai',
       created_by: signal.createdBy||null, resolved_by: signal.resolvedBy||null,
       resolved_at: signal.resolvedAt||null, resolved_reason: signal.resolvedReason||null,
+      rule_id: signal.ruleId||null,
       updated_at: new Date().toISOString(),
     }));
-    if(error) console.error('saveSignalToDB', error);
+    if(!error) return;
+    // Phase 6.5 hardening (Prompt 14, guardrail lifecycle redesign) —
+    // 23505 here means case_signals_open_rule_unique lost a race: another
+    // tab/session already inserted the open occurrence for this
+    // (case_id, rule_id) between this signal being created locally and
+    // this write landing. The local row is a genuine duplicate of a real
+    // server row, not a failed write — reconcile instead of just logging
+    // and leaving a phantom signal stuck in this client's state forever.
+    if(error.code === '23505' && signal.ruleId) {
+      const { data: canonical, error: fetchError } = await supabase.from('case_signals')
+        .select('*').eq('case_id', signal.caseId).eq('rule_id', signal.ruleId).eq('status', 'open').maybeSingle();
+      if(fetchError || !canonical) { console.error('saveSignalToDB reconcile', fetchError||'no canonical row found'); return; }
+      setCaseSignals(prev => {
+        const withoutLocalDup = prev.filter(s => s.id !== signal.id);
+        if(withoutLocalDup.some(s => s.id === canonical.id)) return withoutLocalDup;
+        return [...withoutLocalDup, {
+          id:canonical.id, caseId:canonical.case_id, type:canonical.type, title:canonical.title,
+          reasoning:canonical.reasoning||"", status:canonical.status, sourceRefs:canonical.source_refs||[],
+          source:canonical.source, createdBy:canonical.created_by, resolvedBy:canonical.resolved_by,
+          resolvedAt:canonical.resolved_at, resolvedReason:canonical.resolved_reason,
+          createdAt:canonical.created_at, ruleId:canonical.rule_id,
+        }];
+      });
+      return;
+    }
+    console.error('saveSignalToDB', error);
   };
 
   const changeSignalStatus = (signalId, status, reason) => {
@@ -4612,22 +4638,26 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setConsistencyReviewLoading(l=>({...l, [cs.id]:false}));
   };
 
-  // { [caseId]: Set<title> } — see syncGuardrailSignals below for why this
+  // { [caseId]: Set<ruleId> } — see syncGuardrailSignals below for why this
   // needs to be a ref (synchronous, not batched) rather than derived from
   // caseSignals state on every call.
-  const guardrailSyncedTitlesRef = useRef({});
+  const guardrailSyncedRuleIdsRef = useRef({});
 
   // ── Procedural Guardrails ──
   // computeGuardrailChecks (lib/guardrails.js) is a plain data comparison,
   // no AI call — so this runs automatically when a case is opened rather
   // than needing a button + loading state, same "always current" treatment
-  // as Case Readiness. Dedup is by exact signal title: a check only
-  // creates a new signal if no signal (any status) with that title already
-  // exists for this case, so a human's dismiss/not-relevant/accept
-  // decision sticks rather than being re-surfaced on the next sync. A
-  // currently-open signal is auto-resolved once its condition clears,
-  // since these are factual comparisons, not judgment calls a human needs
-  // to confirm away.
+  // as Case Readiness. Dedup is by rule_id (each check's own stable id,
+  // not its presentation title — see caseSignals.js/guardrails.js): a
+  // check only creates a new signal if no OPEN signal for that rule_id
+  // already exists for this case, so a human's dismiss/not-relevant/accept
+  // decision sticks rather than being re-surfaced on the next sync, while
+  // a genuinely new occurrence after resolution (the condition clears,
+  // then returns later) can still create a fresh row — see
+  // guardrail_signal_dedup_2026-08-26.sql for why "any status, ever" was
+  // wrong. A currently-open signal is auto-resolved once its condition
+  // clears, since these are factual comparisons, not judgment calls a
+  // human needs to confirm away.
   //
   // Phase 6.5 hardening (production regression suite) — real duplicate-
   // signal bug found via E2E (decision-workspace.spec.js/
@@ -4639,48 +4669,60 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // `caseSignals` snapshot from the render that scheduled it. If a second
   // call starts before the first call's setCaseSignals has actually
   // landed, `existing` is stale in both calls, so both independently see
-  // "no signal with this title yet" and both insert one — a genuine
+  // "no open signal for this rule yet" and both insert one — a genuine
   // duplicate-row bug that could hit real users too, not just this test
-  // (case data reliably loads over multiple network round-trips).
-  // guardrailSyncedTitlesRef closes the race with a plain, synchronous
+  // (case data reliably loads over multiple network round-trips), and
+  // confirmed live in production (48 duplicate groups found 2026-08-26,
+  // every one created within the same 60-second window). Closing this
+  // same-tab race is still worth doing even though
+  // case_signals_open_rule_unique (DB) now backstops the cross-tab/
+  // cross-request case — avoids a routine 409 on every double-fire.
+  // guardrailSyncedRuleIdsRef closes it with a plain, synchronous
   // (non-batched) ref rather than relying on state, which is exactly the
   // dedup guarantee "idempotent by construction" above assumed but didn't
   // actually hold under concurrent fires.
   const syncGuardrailSignals = (cs) => {
     const checks = computeGuardrailChecks(cs, allegations, policies, caseAccess, orgMembers);
-    const triggeredTitles = new Set(checks.map(c=>c.title));
-    // Phase 6.5 hardening (structural remediation, Prompt 12 — Guardrail
-    // Lifecycle invariant): generateAppealReview also creates
-    // type:"process_risk" signals ("Appeal ground: ...") — a different
-    // AI-generated source sharing this type purely by historical
-    // accident. Scoping `existing` to titles this file's own checks can
-    // actually produce (GUARDRAIL_CHECK_TITLES, guardrails.js) stops the
-    // auto-resolve sweep below from silently closing a still-valid
-    // Appeal ground signal the next time a sync runs, which it was
-    // doing — that title is never in triggeredTitles (a completely
-    // different system produces it), so it always looked "no longer
-    // detected" to this sweep.
-    const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && GUARDRAIL_CHECK_TITLES.includes(s.title));
+    const triggeredRuleIds = new Set(checks.map(c=>c.id));
+    // Phase 6.5 hardening (Prompt 14, guardrail lifecycle redesign) —
+    // ruleId (case_signals.rule_id, backfilled/enforced by
+    // guardrail_signal_dedup_2026-08-26.sql) is now the real identity for
+    // a guardrail-generated signal, not title text. This naturally
+    // excludes generateAppealReview's "Appeal ground: ..." signals (a
+    // different, AI-generated source that shares type:"process_risk"
+    // purely by historical accident) without needing GUARDRAIL_CHECK_TITLES
+    // — those never carry a ruleId.
+    const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && s.ruleId);
 
-    if(!guardrailSyncedTitlesRef.current[cs.id]) guardrailSyncedTitlesRef.current[cs.id] = new Set(existing.map(s=>s.title));
-    const syncedTitles = guardrailSyncedTitlesRef.current[cs.id];
+    // Seeded from currently-OPEN rows only (not "ever existed") — a rule
+    // resolved in an earlier sync is deliberately absent here, so a real
+    // recurrence (condition clears, then returns later) can create a
+    // fresh occurrence instead of being permanently suppressed. Still
+    // closes the same-tab race the previous title-keyed ref did (two
+    // fires of this effect before the first write lands both see "no
+    // open signal for this rule yet").
+    if(!guardrailSyncedRuleIdsRef.current[cs.id]) guardrailSyncedRuleIdsRef.current[cs.id] = new Set(existing.filter(s=>s.status==="open").map(s=>s.ruleId));
+    const syncedRuleIds = guardrailSyncedRuleIdsRef.current[cs.id];
 
     let updated = caseSignals;
-    existing.filter(s=>s.status==="open" && !triggeredTitles.has(s.title)).forEach(s => {
+    existing.filter(s=>s.status==="open" && !triggeredRuleIds.has(s.ruleId)).forEach(s => {
       updated = setSignalStatus(updated, s.id, "resolved", null, "Condition no longer detected");
       const changed = updated.find(x=>x.id===s.id);
       if(changed) saveSignalToDB(changed);
-      // Deliberately not removed from syncedTitles here — the original
-      // dedup ("no signal, any status, with this title already exists")
-      // never re-creates a title once any row for it has existed, resolved
-      // or not, so auto-resolving must not reopen the door to a duplicate
-      // either.
+      // Removed from syncedRuleIds (not left in, unlike the old
+      // title-keyed version) — this rule's slot is genuinely free again,
+      // both here and at the DB (case_signals_open_rule_unique only
+      // blocks concurrent OPEN duplicates, never a resolved row's later
+      // recurrence), so a future sync where this check re-triggers
+      // creates a real new occurrence rather than staying silently
+      // suppressed forever.
+      syncedRuleIds.delete(s.ruleId);
     });
 
     checks.forEach(c => {
-      if(syncedTitles.has(c.title)) return;
-      syncedTitles.add(c.title);
-      updated = createSignal(updated, cs.id, { type:"process_risk", title:c.title, reasoning:c.reasoning, sourceRefs:c.sourceRefs||[], source:"ai" });
+      if(syncedRuleIds.has(c.id)) return;
+      syncedRuleIds.add(c.id);
+      updated = createSignal(updated, cs.id, { type:"process_risk", title:c.title, reasoning:c.reasoning, sourceRefs:c.sourceRefs||[], source:"ai", ruleId:c.id });
       saveSignalToDB(updated[updated.length-1]);
     });
 
