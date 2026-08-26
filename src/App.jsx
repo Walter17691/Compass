@@ -1609,6 +1609,16 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     requestHrReview("escalation", escalateCaseId, null, context, true);
   };
 
+  // Phase 6.5 hardening (closes independent audit finding 3.5, part C) —
+  // was a bare .eq('id', reviewId), no precondition on the row's current
+  // status: a second reviewer's decision landing moments after a first
+  // reviewer's approval silently overwrote it, with no trace the first
+  // decision ever happened — even though its case-level effect (e.g. an
+  // outcome letter already sent on the strength of that approval) may
+  // already have taken place. hr_review_requests has no updated_at
+  // column, so this uses the simpler, sufficient guard the audit itself
+  // recommended for this one case: only a request still genuinely
+  // 'pending' can be actioned.
   const respondToReview = async (reviewId, status, comments) => {
     const { data, error } = await supabase.from('hr_review_requests').update({
       status,
@@ -1616,9 +1626,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       reviewed_by: user?.id,
       reviewed_by_name: member?.name||user?.email,
       reviewed_at: new Date().toISOString()
-    }).eq('id', reviewId).select().single();
-    if(data) setHrReviewRequests(r=>r.map(x=>x.id===reviewId?data:x));
-    else { console.error("respondToReview", error); showToast("Couldn't submit your response — "+error?.message, "error"); }
+    }).eq('id', reviewId).eq('status', 'pending').select();
+    if(error) { console.error("respondToReview", error); showToast("Couldn't submit your response — "+error.message, "error"); return; }
+    if(!data?.length) { showToast("This request was already responded to by someone else — reloading the latest version", "error"); loadHrReviews(); return; }
+    setHrReviewRequests(r=>r.map(x=>x.id===reviewId?data[0]:x));
   };
 
   const isHR = isHrRole(member?.role);
@@ -2083,6 +2094,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // actually finished, rather than racing it.
   const allegationVersionRef = useRef({});
   const allegationSaveQueueRef = useRef({});
+
+  // Phase 6.5 hardening (closes independent audit finding 3.5) — same
+  // pattern, same reasoning, for the four other save paths that were
+  // still bare upsert/update with no conflict detection at all:
+  // case_tasks, case_signals, wellbeing_notes, concern_referrals. See
+  // lib/optimisticSave.js's own header comment, which named these
+  // exact four tables as not-yet-migrated when the pattern was first
+  // extracted for allegations.
+  const caseTaskVersionRef = useRef({});
+  const caseTaskSaveQueueRef = useRef({});
+  const caseSignalVersionRef = useRef({});
+  const caseSignalSaveQueueRef = useRef({});
+  const wellbeingNoteVersionRef = useRef({});
+  const wellbeingNoteSaveQueueRef = useRef({});
+  const concernReferralVersionRef = useRef({});
+  const concernReferralSaveQueueRef = useRef({});
 
   // ── Case tasks ──
   const [caseTasks, setCaseTasks] = useState([]);
@@ -3087,27 +3114,44 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const {data, error} = await supabase.from('wellbeing_notes').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
       if(error) { console.error('loadWellbeingNotes', error); markLoadIssue('wellbeing notes'); return; }
-      if(data) saveWellbeingNotes(data.map(r=>({
-        id:r.id, employeeName:r.employee_name, type:r.type, date:r.date, manager:r.manager,
-        content:r.content, supportOffered:r.support_offered, followUpDate:r.follow_up_date,
-        followUpDone:r.follow_up_done, confidential:r.confidential,
-        createdBy:r.created_by, createdAt:r.created_at,
-      })));
+      if(data) {
+        data.forEach(r => { wellbeingNoteVersionRef.current[r.id] = r.updated_at; });
+        saveWellbeingNotes(data.map(r=>({
+          id:r.id, employeeName:r.employee_name, type:r.type, date:r.date, manager:r.manager,
+          content:r.content, supportOffered:r.support_offered, followUpDate:r.follow_up_date,
+          followUpDone:r.follow_up_done, confidential:r.confidential,
+          createdBy:r.created_by, createdAt:r.created_at,
+        })));
+      }
     } catch(e) { console.error('loadWellbeingNotes', e); markLoadIssue('wellbeing notes'); }
   };
 
-  const saveWellbeingNoteToDB = async (note) => {
-    if(!org?.id) return;
-    const { error } = await supabase.from('wellbeing_notes').upsert({
-      id: note.id,
+  // Phase 6.5 hardening (closes independent audit finding 3.5) — was a
+  // bare upsert, no conflict detection — a second writer's concurrent
+  // edit to the same confidential note (e.g. a follow-up date change
+  // racing a content edit) could silently discard one of the two.
+  const saveWellbeingNoteToDB = (note) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
       org_id: org.id,
       employee_name: note.employeeName, type: note.type||'chat', date: note.date||null,
       manager: note.manager||null, content: note.content, support_offered: note.supportOffered||null,
       follow_up_date: note.followUpDate||null, follow_up_done: !!note.followUpDone,
       confidential: note.confidential!==false, created_by: note.createdBy||null,
-      updated_at: new Date().toISOString(),
-    });
-    if(error) { console.error('saveWellbeingNoteToDB', error); showToast("Couldn't save wellbeing note to the cloud — "+error.message, "error"); }
+    };
+    const run = async () => {
+      const updatedAt = wellbeingNoteVersionRef.current[note.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'wellbeing_notes', note.id, updatedAt, {...fields, updated_at: nowIso})));
+      if(conflict) {
+        showToast("This wellbeing note was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadWellbeingNotes();
+        return;
+      }
+      if(error) { console.error('saveWellbeingNoteToDB', error); showToast("Couldn't save wellbeing note to the cloud — "+error.message, "error"); return; }
+      wellbeingNoteVersionRef.current[note.id] = nowIso;
+    };
+    return enqueueSave(wellbeingNoteSaveQueueRef.current, note.id, run);
   };
 
   const addWellbeingNote = () => {
@@ -3439,24 +3483,32 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const {data, error} = await supabase.from('concern_referrals').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
       if(error) { console.error('loadConcernReferrals', error); markLoadIssue('concern referrals'); return; }
-      if(data) setConcernReferrals(data.map(r=>({
-        id:r.id, employeeName:r.employee_name, concernType:r.concern_type, description:r.description,
-        witnesses:r.witnesses||"", discussedWithEmployee:!!r.discussed_with_employee, involvesSafetyOrWelfare:!!r.involves_safety_or_welfare,
-        immediateSafetyConcern:!!r.immediate_safety_concern,
-        mayNeedFormalProcess:!!r.may_need_formal_process, evidenceDescription:r.evidence_description||"", evidenceFiles:r.evidence_files||[],
-        submittedBy:r.submitted_by, submittedByName:r.submitted_by_name||"",
-        status:r.status, hrNotes:r.hr_notes||"", linkedCaseId:r.linked_case_id, createdAt:r.created_at,
-        aiCategory:r.ai_category||"", aiSummary:r.ai_summary||"", aiWitnessesCount:r.ai_witnesses_count??null,
-        aiEvidenceMentioned:r.ai_evidence_mentioned||[], aiImmediateAction:r.ai_immediate_action||"",
-        aiConsiderations:r.ai_considerations||"", aiUrgency:r.ai_urgency||null,
-      })));
+      if(data) {
+        data.forEach(r => { concernReferralVersionRef.current[r.id] = r.updated_at; });
+        setConcernReferrals(data.map(r=>({
+          id:r.id, employeeName:r.employee_name, concernType:r.concern_type, description:r.description,
+          witnesses:r.witnesses||"", discussedWithEmployee:!!r.discussed_with_employee, involvesSafetyOrWelfare:!!r.involves_safety_or_welfare,
+          immediateSafetyConcern:!!r.immediate_safety_concern,
+          mayNeedFormalProcess:!!r.may_need_formal_process, evidenceDescription:r.evidence_description||"", evidenceFiles:r.evidence_files||[],
+          submittedBy:r.submitted_by, submittedByName:r.submitted_by_name||"",
+          status:r.status, hrNotes:r.hr_notes||"", linkedCaseId:r.linked_case_id, createdAt:r.created_at,
+          aiCategory:r.ai_category||"", aiSummary:r.ai_summary||"", aiWitnessesCount:r.ai_witnesses_count??null,
+          aiEvidenceMentioned:r.ai_evidence_mentioned||[], aiImmediateAction:r.ai_immediate_action||"",
+          aiConsiderations:r.ai_considerations||"", aiUrgency:r.ai_urgency||null,
+        })));
+      }
     } catch(e) { console.error('loadConcernReferrals', e); }
   };
 
-  const saveConcernReferralToDB = async (referral) => {
-    if(!org?.id) return;
-    const { error } = await withFkRetry(() => supabase.from('concern_referrals').upsert({
-      id: referral.id, org_id: org.id,
+  // Phase 6.5 hardening (closes independent audit finding 3.5) — was a
+  // bare upsert, no conflict detection — HR adding hr_notes/changing
+  // status could race a concurrent AI-triage write (aiCategory/
+  // aiSummary etc, written moments after submission) silently
+  // discarding one side.
+  const saveConcernReferralToDB = (referral) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
+      org_id: org.id,
       employee_name: referral.employeeName, concern_type: referral.concernType||null,
       description: referral.description, witnesses: referral.witnesses||null, discussed_with_employee: !!referral.discussedWithEmployee,
       involves_safety_or_welfare: !!referral.involvesSafetyOrWelfare, immediate_safety_concern: !!referral.immediateSafetyConcern,
@@ -3467,9 +3519,20 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       ai_category: referral.aiCategory||null, ai_summary: referral.aiSummary||null, ai_witnesses_count: referral.aiWitnessesCount??null,
       ai_evidence_mentioned: referral.aiEvidenceMentioned||[], ai_immediate_action: referral.aiImmediateAction||null,
       ai_considerations: referral.aiConsiderations||null, ai_urgency: referral.aiUrgency||null,
-      updated_at: new Date().toISOString(),
-    }));
-    if(error) { console.error('saveConcernReferralToDB', error); showToast("Couldn't submit — "+error.message, "error"); }
+    };
+    const run = async () => {
+      const updatedAt = concernReferralVersionRef.current[referral.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'concern_referrals', referral.id, updatedAt, {...fields, updated_at: nowIso})));
+      if(conflict) {
+        showToast("This concern referral was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadConcernReferrals();
+        return;
+      }
+      if(error) { console.error('saveConcernReferralToDB', error); showToast("Couldn't submit — "+error.message, "error"); return; }
+      concernReferralVersionRef.current[referral.id] = nowIso;
+    };
+    return enqueueSave(concernReferralSaveQueueRef.current, referral.id, run);
   };
 
   // Manager Enablement (Phase 4, MP5, §3) — runs automatically right
@@ -3983,12 +4046,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const {data, error} = await fetchAllPages((from, to) => supabase.from('case_signals').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
       if(error) { console.error('loadCaseSignals', error); markLoadIssue('case signals'); return; }
-      if(data) setCaseSignals(data.map(r=>({
-        id:r.id, caseId:r.case_id, type:r.type, title:r.title, reasoning:r.reasoning||"",
-        status:r.status, sourceRefs:r.source_refs||[], source:r.source,
-        createdBy:r.created_by, resolvedBy:r.resolved_by, resolvedAt:r.resolved_at,
-        resolvedReason:r.resolved_reason, createdAt:r.created_at, ruleId:r.rule_id||null,
-      })));
+      if(data) {
+        data.forEach(r => { caseSignalVersionRef.current[r.id] = r.updated_at; });
+        setCaseSignals(data.map(r=>({
+          id:r.id, caseId:r.case_id, type:r.type, title:r.title, reasoning:r.reasoning||"",
+          status:r.status, sourceRefs:r.source_refs||[], source:r.source,
+          createdBy:r.created_by, resolvedBy:r.resolved_by, resolvedAt:r.resolved_at,
+          resolvedReason:r.resolved_reason, createdAt:r.created_at, ruleId:r.rule_id||null,
+        })));
+      }
       // Only after a genuinely successful load — an error above already
       // returns early, leaving this false, so syncGuardrailSignals keeps
       // waiting rather than risk duplicate-creating against incomplete data.
@@ -3996,43 +4062,67 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } catch(e) { console.error('loadCaseSignals', e); }
   };
 
-  const saveSignalToDB = async (signal) => {
-    if(!org?.id) return;
-    const { error } = await withFkRetry(() => supabase.from('case_signals').upsert({
-      id: signal.id, case_id: signal.caseId, org_id: org.id,
+  // Phase 6.5 hardening (closes independent audit finding 3.5, part B) —
+  // was a bare upsert with no conflict detection: two users acting on
+  // the same signal within seconds (e.g. one resolving it, another
+  // editing sourceRefs) could have the second write silently discard the
+  // first's resolved_by/resolved_reason — the exact accountability trail
+  // those columns exist for. Layered on top of the existing
+  // case_signals_open_rule_unique 23505 reconciliation (Prompt 14,
+  // guardrail lifecycle redesign) rather than replacing it: that
+  // conflict is a UNIQUE-constraint violation on first insert (no known
+  // version yet, so conditionalUpdate takes its upsert path, same as
+  // before), genuinely different from an optimistic-concurrency conflict
+  // on an existing row's update_at — both are handled, on the branch
+  // each one actually occurs on.
+  const saveSignalToDB = (signal) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
+      case_id: signal.caseId, org_id: org.id,
       type: signal.type, title: signal.title, reasoning: signal.reasoning||null,
       status: signal.status||'open', source_refs: signal.sourceRefs||[], source: signal.source||'ai',
       created_by: signal.createdBy||null, resolved_by: signal.resolvedBy||null,
       resolved_at: signal.resolvedAt||null, resolved_reason: signal.resolvedReason||null,
       rule_id: signal.ruleId||null,
-      updated_at: new Date().toISOString(),
-    }));
-    if(!error) return;
-    // Phase 6.5 hardening (Prompt 14, guardrail lifecycle redesign) —
-    // 23505 here means case_signals_open_rule_unique lost a race: another
-    // tab/session already inserted the open occurrence for this
-    // (case_id, rule_id) between this signal being created locally and
-    // this write landing. The local row is a genuine duplicate of a real
-    // server row, not a failed write — reconcile instead of just logging
-    // and leaving a phantom signal stuck in this client's state forever.
-    if(error.code === '23505' && signal.ruleId) {
-      const { data: canonical, error: fetchError } = await supabase.from('case_signals')
-        .select('*').eq('case_id', signal.caseId).eq('rule_id', signal.ruleId).eq('status', 'open').maybeSingle();
-      if(fetchError || !canonical) { console.error('saveSignalToDB reconcile', fetchError||'no canonical row found'); return; }
-      setCaseSignals(prev => {
-        const withoutLocalDup = prev.filter(s => s.id !== signal.id);
-        if(withoutLocalDup.some(s => s.id === canonical.id)) return withoutLocalDup;
-        return [...withoutLocalDup, {
-          id:canonical.id, caseId:canonical.case_id, type:canonical.type, title:canonical.title,
-          reasoning:canonical.reasoning||"", status:canonical.status, sourceRefs:canonical.source_refs||[],
-          source:canonical.source, createdBy:canonical.created_by, resolvedBy:canonical.resolved_by,
-          resolvedAt:canonical.resolved_at, resolvedReason:canonical.resolved_reason,
-          createdAt:canonical.created_at, ruleId:canonical.rule_id,
-        }];
-      });
-      return;
-    }
-    console.error('saveSignalToDB', error);
+    };
+    const run = async () => {
+      const updatedAt = caseSignalVersionRef.current[signal.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'case_signals', signal.id, updatedAt, {...fields, updated_at: nowIso})));
+      if(conflict) {
+        showToast("This signal was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadCaseSignals();
+        return;
+      }
+      if(!error) { caseSignalVersionRef.current[signal.id] = nowIso; return; }
+      // 23505 here means case_signals_open_rule_unique lost a race:
+      // another tab/session already inserted the open occurrence for
+      // this (case_id, rule_id) between this signal being created
+      // locally and this write landing. The local row is a genuine
+      // duplicate of a real server row, not a failed write — reconcile
+      // instead of just logging and leaving a phantom signal stuck in
+      // this client's state forever.
+      if(error.code === '23505' && signal.ruleId) {
+        const { data: canonical, error: fetchError } = await supabase.from('case_signals')
+          .select('*').eq('case_id', signal.caseId).eq('rule_id', signal.ruleId).eq('status', 'open').maybeSingle();
+        if(fetchError || !canonical) { console.error('saveSignalToDB reconcile', fetchError||'no canonical row found'); return; }
+        caseSignalVersionRef.current[canonical.id] = canonical.updated_at;
+        setCaseSignals(prev => {
+          const withoutLocalDup = prev.filter(s => s.id !== signal.id);
+          if(withoutLocalDup.some(s => s.id === canonical.id)) return withoutLocalDup;
+          return [...withoutLocalDup, {
+            id:canonical.id, caseId:canonical.case_id, type:canonical.type, title:canonical.title,
+            reasoning:canonical.reasoning||"", status:canonical.status, sourceRefs:canonical.source_refs||[],
+            source:canonical.source, createdBy:canonical.created_by, resolvedBy:canonical.resolved_by,
+            resolvedAt:canonical.resolved_at, resolvedReason:canonical.resolved_reason,
+            createdAt:canonical.created_at, ruleId:canonical.rule_id,
+          }];
+        });
+        return;
+      }
+      console.error('saveSignalToDB', error);
+    };
+    return enqueueSave(caseSignalSaveQueueRef.current, signal.id, run);
   };
 
   const changeSignalStatus = (signalId, status, reason) => {
@@ -4058,30 +4148,62 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     try {
       const {data, error} = await fetchAllPages((from, to) => supabase.from('case_tasks').select('*').eq('org_id', org.id).order('created_at', {ascending:true}).range(from, to));
       if(error) { console.error('loadCaseTasks', error); markLoadIssue('case tasks'); return; }
-      if(data) setCaseTasks(data.map(r=>({
-        id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
-        dueDate:r.due_date||"", priority:r.priority, status:r.status,
-        createdBy:r.created_by, createdAt:r.created_at, source:r.source||null,
-        insightRef:r.insight_ref||null, improvementInitiativeId:r.improvement_initiative_id||null,
-      })));
+      if(data) {
+        data.forEach(r => { caseTaskVersionRef.current[r.id] = r.updated_at; });
+        setCaseTasks(data.map(r=>({
+          id:r.id, caseId:r.case_id, name:r.name, owner:r.owner||"",
+          dueDate:r.due_date||"", priority:r.priority, status:r.status,
+          createdBy:r.created_by, createdAt:r.created_at, source:r.source||null,
+          insightRef:r.insight_ref||null, improvementInitiativeId:r.improvement_initiative_id||null,
+        })));
+      }
     } catch(e) { console.error('loadCaseTasks', e); }
   };
 
-  const saveCaseTaskToDB = async (task) => {
-    if(!org?.id) return;
-    const { error } = await withFkRetry(() => supabase.from('case_tasks').upsert({
-      id: task.id, case_id: task.caseId||null, org_id: org.id,
+  // Phase 6.5 hardening (closes independent audit finding 3.5) — was a
+  // bare upsert, no conflict detection: HR Manager A deletes task T;
+  // seconds later Investigator B, whose tab hadn't refetched (no
+  // realtime subscription), ticks T's still-stale checkbox — the upsert
+  // found no conflicting row and re-inserted the deleted task, silently
+  // undoing A's deletion. Same conditionalUpdate/enqueueSave/
+  // withTransientRetry pattern as saveAllegationToDB. Prefers an
+  // explicit UPDATE (via conditionalUpdate, once a version is known)
+  // over a bare upsert specifically so a deleted row can't be
+  // resurrected — deleteCaseTaskFromDB also needs to clear the version
+  // ref so a stale in-flight save queued before the delete can't
+  // silently upsert the task back in as a "new" row afterward.
+  const saveCaseTaskToDB = (task) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
+      case_id: task.caseId||null, org_id: org.id,
       name: task.name, owner: task.owner||null, due_date: task.dueDate||null,
       priority: task.priority||'normal', status: task.status||'open', source: task.source||null,
       insight_ref: task.insightRef||null, improvement_initiative_id: task.improvementInitiativeId||null,
-      created_by: task.createdBy||user?.id||null, updated_at: new Date().toISOString(),
-    }));
-    if(error) { console.error('saveCaseTaskToDB', error); showToast("Couldn't save task to the cloud — "+error.message, "error"); }
+      created_by: task.createdBy||user?.id||null,
+    };
+    const run = async () => {
+      const updatedAt = caseTaskVersionRef.current[task.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'case_tasks', task.id, updatedAt, {...fields, updated_at: nowIso})));
+      if(conflict) {
+        showToast("This task was changed or deleted elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadCaseTasks();
+        return;
+      }
+      if(error) { console.error('saveCaseTaskToDB', error); showToast("Couldn't save task to the cloud — "+error.message, "error"); return; }
+      caseTaskVersionRef.current[task.id] = nowIso;
+    };
+    return enqueueSave(caseTaskSaveQueueRef.current, task.id, run);
   };
 
   const deleteCaseTaskFromDB = async (taskId) => {
     const { error } = await supabase.from('case_tasks').delete().eq('id', taskId);
-    if(error) { console.error('deleteCaseTaskFromDB', error); showToast("Couldn't delete task — "+error.message, "error"); }
+    if(error) { console.error('deleteCaseTaskFromDB', error); showToast("Couldn't delete task — "+error.message, "error"); return; }
+    // Not required for correctness — conditionalUpdate's own WHERE clause
+    // already fails closed (conflict, not a silent resurrection) against
+    // a row that no longer exists — just avoids leaving a stale, never-
+    // reused entry in the version ref forever.
+    delete caseTaskVersionRef.current[taskId];
   };
 
   // Manager Enablement (Phase 4, MP19) — createCaseTask is called from
@@ -5931,7 +6053,13 @@ Please produce:
       savedAt: new Date().toISOString(),
       savedBy: currentUser?.name || "HR Manager",
     };
-    const existing = cases.find(c=>c.employeeName.toLowerCase()===employeeName.toLowerCase());
+    // Phase 6.5 hardening (closes independent audit finding 5.7, sibling
+    // instance) — same fix as saveMeetingToCase just below: disambiguate
+    // among same-named-employee matches via activeCaseId where possible,
+    // never override the name check itself.
+    const devNameMatches = cases.filter(c=>c.employeeName.toLowerCase()===employeeName.toLowerCase());
+    if(devNameMatches.length>1) console.error(`saveDevMeetingToCase: "${employeeName}" matches ${devNameMatches.length} cases — resolving via activeCaseId where possible, otherwise the first match`);
+    const existing = (activeCaseId && devNameMatches.find(c=>c.id===activeCaseId)) || devNameMatches[0];
     const devCaseId = existing ? existing.id : crypto.randomUUID();
     if(existing) {
       saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
@@ -6042,7 +6170,23 @@ Please produce:
       // (or a future real HRIS sync) later changes.
       employeeSnapshot: buildEmployeeSnapshot(getEmployeeRecord(caseInfo.employee)),
     };
-    const existing = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
+    // Phase 6.5 hardening (closes independent audit finding 5.7) — was a
+    // bare cases.find(nameMatch), first-array-hit-wins: an employee with
+    // more than one case (an ordinary combination — a closed prior
+    // misconduct case and a separately-raised open grievance, or two
+    // employees who simply share a name) had this meeting filed onto
+    // whichever case happened to sort first, silently. activeCaseId is
+    // the app's own general "which case is the user currently in"
+    // tracker (set whenever a meeting is started from within a specific
+    // case's own view, e.g. "Start investigation meeting") — used here
+    // only to disambiguate AMONG the name matches, never to override the
+    // name check itself, so a stale activeCaseId from an unrelated,
+    // previously-viewed case can never misfile a meeting onto the wrong
+    // employee's record; it can only correctly pick among that one
+    // employee's own several cases.
+    const nameMatches = cases.filter(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
+    if(nameMatches.length>1) console.error(`saveMeetingToCase: "${caseInfo.employee}" matches ${nameMatches.length} cases — resolving via activeCaseId where possible, otherwise the first match`);
+    const existing = (activeCaseId && nameMatches.find(c=>c.id===activeCaseId)) || nameMatches[0];
     const caseId = existing ? existing.id : crypto.randomUUID();
     const updatedCase = existing
       ? {...existing, meetings:[...existing.meetings, meeting]}
