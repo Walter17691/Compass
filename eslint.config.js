@@ -1,5 +1,6 @@
 import js from '@eslint/js'
 import globals from 'globals'
+import react from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
@@ -46,9 +47,28 @@ export default defineConfig([
       reactRefresh.configs.vite,
       jsxA11y.flatConfigs.recommended,
     ],
+    plugins: { react },
     languageOptions: {
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      // Deployment-pipeline fix (Prompt 13/14) — downgrading eslint
+      // 10 -> 9 to resolve the eslint-plugin-jsx-a11y peer-dependency
+      // conflict blocking every production install (see package.json's
+      // own history) silently lost core no-unused-vars' ability to
+      // recognise `<Btn/>` as a real use of an imported `Btn` — eslint
+      // 10's own no-unused-vars evidently gained native JSX-usage
+      // awareness that 9's doesn't have. Confirmed via a minimal probe
+      // file and an untouched existing screen: every JSX-only-used
+      // import in the whole client codebase was showing as "unused"
+      // after the downgrade — a real, project-wide lint-signal
+      // regression, not a security issue, but one that made lint
+      // meaningless for exactly the files it matters most for. Just
+      // this one rule from eslint-plugin-react restores the lost
+      // capability without pulling in its full recommended ruleset
+      // (which would surface a wave of new, untriaged findings).
+      'react/jsx-uses-vars': 'error',
     },
   },
   {
@@ -73,9 +93,13 @@ export default defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    plugins: { react },
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
       parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      'react/jsx-uses-vars': 'error',
     },
   },
 ])

@@ -57,8 +57,15 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     {s:SCREENS.CONCERNS, l:isHR?"Concerns":"Raise a concern"},
   ];
   const moduleItems = [
-    {s:SCREENS.NEWSTARTER, l:"Onboarding"},
-    {s:SCREENS.OFFBOARDING, l:"Offboarding"},
+    // Phase 6.5 hardening (structural remediation, Prompt 14 — Family 1
+    // Part 6 coordination). employee_records/starter_instances/
+    // leaver_instances hold real PII (probation dates, exit-interview
+    // notes, ill-health/medical-retirement reasons) and are now
+    // HR-only-write at the database layer, matching Wellbeing/DSAR's
+    // existing pattern — this hides the nav entry to match; RLS/triggers
+    // are the real boundary either way.
+    ...(isHR?[{s:SCREENS.NEWSTARTER, l:"Onboarding"}]:[]),
+    ...(isHR?[{s:SCREENS.OFFBOARDING, l:"Offboarding"}]:[]),
     {s:SCREENS.REDUNDANCY, l:"Redundancy"},
     // Wellbeing notes are confidential and RLS-restricted to HR staff (see
     // supabase/wellbeing_notes_2026-08-09.sql) — a non-HR role has no

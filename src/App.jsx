@@ -7880,7 +7880,7 @@ Please produce:
       )}
 
       {/* ══ NEW STARTER ONBOARDING ══ */}
-      {screen===SCREENS.NEWSTARTER&&(
+      {screen===SCREENS.NEWSTARTER&&isHR&&(
         <NewStarterScreen
           activeStarter={activeStarter}
           setActiveStarter={setActiveStarter}
@@ -7902,7 +7902,7 @@ Please produce:
       )}
 
       {/* ══ LEAVER OFFBOARDING ══ */}
-      {screen===SCREENS.OFFBOARDING&&(
+      {screen===SCREENS.OFFBOARDING&&isHR&&(
         <OffboardingScreen
           activeLeaver={activeLeaver}
           setActiveLeaver={setActiveLeaver}

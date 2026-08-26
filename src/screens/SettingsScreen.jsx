@@ -53,7 +53,16 @@ export function SettingsScreen({
   const sections = [
     {id:"billing", label:"Billing"},
     ...(isHR?[{id:"team-access", label:"Team & access"}]:[]),
-    {id:"organisation", label:"Organisation"},
+    // Phase 6.5 hardening (structural remediation, Prompt 14 — Family 1
+    // Part 6 coordination). This tab lets a caller define org_roles
+    // (job titles/access levels) AND directly edit another member's own
+    // access_level/job_title (org_members) — both are HR-only operations
+    // by design (access_level gates who can appoint disciplinary
+    // officers), but this tab had no isHR gate at all, UI or database,
+    // until this pass. Matches the existing Wellbeing/Automations/Data
+    // & Privacy precedent (hide the tab; RLS/triggers are the real
+    // boundary either way).
+    ...(isHR?[{id:"organisation", label:"Organisation"}]:[]),
     ...(isHR?[{id:"locations", label:"Locations"}]:[]),
     ...(isHR?[{id:"portal-access", label:"Portal access"}]:[]),
     {id:"employee-records", label:"Employee data"},
@@ -92,7 +101,7 @@ export function SettingsScreen({
         <div style={{flex:1,minWidth:0}}>
           {active==="billing"&&<BillingSection org={org.org} locations={org.locations} showToast={showToast}/>}
           {active==="team-access"&&<TeamAccessSection isHR={isHR} org={org.org} locations={org.locations} teamMembers={team.teamMembers} editingMember={team.editingMember} setEditingMember={team.setEditingMember} removeMember={team.removeMember} updateMemberRole={team.updateMemberRole} assignLocations={team.assignLocations} inviteForm={team.inviteForm} setInviteForm={team.setInviteForm} inviting={team.inviting} inviteMember={team.inviteMember}/>}
-          {active==="organisation"&&<OrganisationSection org={org.org} orgRoles={org.orgRoles} loadOrgRoles={org.loadOrgRoles} orgMembers={org.orgMembers} loadOrgMembers={org.loadOrgMembers} showToast={showToast}/>}
+          {active==="organisation"&&isHR&&<OrganisationSection org={org.org} orgRoles={org.orgRoles} loadOrgRoles={org.loadOrgRoles} orgMembers={org.orgMembers} loadOrgMembers={org.loadOrgMembers} showToast={showToast}/>}
           {active==="locations"&&<LocationsSection isHR={isHR} locations={org.locations} deleteLocation={org.deleteLocation} addLocation={org.addLocation}/>}
           {active==="portal-access"&&<PortalAccessSection isHR={isHR} portalAccounts={portal.portalAccounts} revokePortalAccess={portal.revokePortalAccess}/>}
           {active==="employee-records"&&<EmployeeRecordsSection employeeCsvFileRef={employeeData.employeeCsvFileRef} employeeCsvProcessing={employeeData.employeeCsvProcessing} handleEmployeeCsvImport={employeeData.handleEmployeeCsvImport} exportEmployeesCsv={employeeData.exportEmployeesCsv} caseCsvFileRef={employeeData.caseCsvFileRef} caseCsvProcessing={employeeData.caseCsvProcessing} handleCaseCsvImport={employeeData.handleCaseCsvImport} downloadCaseCsvTemplate={employeeData.downloadCaseCsvTemplate}/>}
