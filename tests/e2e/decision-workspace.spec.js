@@ -65,7 +65,13 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   await page.reload();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('Procedural guardrails', { exact: true })).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText('A finding was recorded with little or no reasoning')).toBeVisible();
+  // .first() — the same underlying open signal also renders verbatim in
+  // this case's "Suggested for this case" and "Case risk" panels (both
+  // legitimately surface the same signal, not a duplicate one), so an
+  // unscoped getByText matches 3 elements once both those panels exist.
+  // The test's own intent is just "the nudge appears somewhere" — any one
+  // of the three proves that.
+  await expect(page.getByText('A finding was recorded with little or no reasoning').first()).toBeVisible();
 
   // Add substantive reasoning — the guardrail should clear on the next
   // sync. Not an exact match this time: the tab button now carries a
