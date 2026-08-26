@@ -65,7 +65,15 @@ export function SettingsScreen({
     ...(isHR?[{id:"organisation", label:"Organisation"}]:[]),
     ...(isHR?[{id:"locations", label:"Locations"}]:[]),
     ...(isHR?[{id:"portal-access", label:"Portal access"}]:[]),
-    {id:"employee-records", label:"Employee data"},
+    // Phase 6.5 hardening (Prompt 14, Family 1 Part 6) — bulk CSV
+    // import/export of full employee records (including probation dates
+    // and other sensitive HRIS fields) plus bulk case-history import is an
+    // HR-only write surface at the DB layer (employee_records' write
+    // policy, cases created via caseCsv import) even though read access to
+    // employee_records itself stays org-wide elsewhere in the app. Found
+    // during the same Part 6 UI/DB coordination audit as Organisation/
+    // Onboarding/Offboarding.
+    ...(isHR?[{id:"employee-records", label:"Employee data"}]:[]),
     {id:"branding", label:"Branding & letters"},
     {id:"policies", label:"Policies"},
     ...(isHR?[{id:"process-templates", label:"Process templates"}]:[]),
@@ -104,7 +112,7 @@ export function SettingsScreen({
           {active==="organisation"&&isHR&&<OrganisationSection org={org.org} orgRoles={org.orgRoles} loadOrgRoles={org.loadOrgRoles} orgMembers={org.orgMembers} loadOrgMembers={org.loadOrgMembers} showToast={showToast}/>}
           {active==="locations"&&<LocationsSection isHR={isHR} locations={org.locations} deleteLocation={org.deleteLocation} addLocation={org.addLocation}/>}
           {active==="portal-access"&&<PortalAccessSection isHR={isHR} portalAccounts={portal.portalAccounts} revokePortalAccess={portal.revokePortalAccess}/>}
-          {active==="employee-records"&&<EmployeeRecordsSection employeeCsvFileRef={employeeData.employeeCsvFileRef} employeeCsvProcessing={employeeData.employeeCsvProcessing} handleEmployeeCsvImport={employeeData.handleEmployeeCsvImport} exportEmployeesCsv={employeeData.exportEmployeesCsv} caseCsvFileRef={employeeData.caseCsvFileRef} caseCsvProcessing={employeeData.caseCsvProcessing} handleCaseCsvImport={employeeData.handleCaseCsvImport} downloadCaseCsvTemplate={employeeData.downloadCaseCsvTemplate}/>}
+          {active==="employee-records"&&isHR&&<EmployeeRecordsSection employeeCsvFileRef={employeeData.employeeCsvFileRef} employeeCsvProcessing={employeeData.employeeCsvProcessing} handleEmployeeCsvImport={employeeData.handleEmployeeCsvImport} exportEmployeesCsv={employeeData.exportEmployeesCsv} caseCsvFileRef={employeeData.caseCsvFileRef} caseCsvProcessing={employeeData.caseCsvProcessing} handleCaseCsvImport={employeeData.handleCaseCsvImport} downloadCaseCsvTemplate={employeeData.downloadCaseCsvTemplate}/>}
           {/* Phase 6.5 hardening — signature/letterhead/word-template/policy
               removal are real tenant data, so these two sections get the
               org-scoped orgLsSet (passed in as the "lsSet" prop name their
