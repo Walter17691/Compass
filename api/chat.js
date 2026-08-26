@@ -86,8 +86,31 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
   }
 
+  // Phase 6.5 hardening (Prompt 14, Section 7 — closes independent audit
+  // finding 2.2) — auth + a per-user request-frequency limit were already
+  // here, but the request body itself was forwarded to Anthropic on
+  // Compass's own API key completely unvalidated: any authenticated user
+  // could set an arbitrary model or an arbitrary max_tokens, turning a
+  // rate-limited proxy into an uncapped-cost one (30 requests every 5
+  // minutes at, say, max_tokens: 100000 each is a very different bill
+  // than the same 30 requests this app's own call sites actually send).
+  // Every real call site in this codebase uses exactly one model and
+  // tops out at max_tokens: 3400 — allow-listing the model and capping
+  // max_tokens well above that (not exactly at it, so a slightly larger
+  // legitimate prompt doesn't start failing) closes the cost-abuse
+  // vector without touching messages/system, which genuinely do need to
+  // vary per feature.
+  const ALLOWED_MODELS = new Set(['claude-sonnet-4-6']);
+  const MAX_TOKENS_CEILING = 4096;
+  const body = req.body || {};
+  if (!ALLOWED_MODELS.has(body.model)) {
+    return res.status(400).json({ error: 'Unsupported model' });
+  }
+  if (!Number.isInteger(body.max_tokens) || body.max_tokens < 1 || body.max_tokens > MAX_TOKENS_CEILING) {
+    return res.status(400).json({ error: `max_tokens must be an integer between 1 and ${MAX_TOKENS_CEILING}` });
+  }
+
   try {
-    const body = req.body;
     const isStreaming = body.stream === true;
 
     const requestBody = withSystemCache(body);

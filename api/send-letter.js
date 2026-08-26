@@ -21,6 +21,22 @@ export default async function handler(req, res) {
   const withinLimit = await checkRateLimit(`send-letter:${auth.caller.id}`, 20, 300);
   if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
+  // Phase 6.5 hardening (Prompt 14, Section 7 — closes independent audit
+  // finding 2.3, remaining half) — the P0 fix above closed "any
+  // authenticated identity, not just this org's own staff"; this closes
+  // "arbitrary recipient with zero validation at all". `to` staying
+  // caller-chosen is deliberate — HR legitimately shares case
+  // correspondence with external parties (solicitors, occupational
+  // health, the employee's personal email) that Compass has no record
+  // of, so this can't be restricted to a known-employee allow-list
+  // without breaking that. What was genuinely missing is confirming `to`
+  // is even a well-formed email address before Compass's own verified
+  // sending domain relays arbitrary content to it.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (typeof to !== 'string' || !EMAIL_RE.test(to)) {
+    return res.status(400).json({ error: 'A valid recipient email address is required' });
+  }
+
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',

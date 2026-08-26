@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
+import { isHrRole } from '../../src/lib/roles.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -12,9 +13,17 @@ export async function manage(req, res) {
   if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=id`);
-    const members = await memberRes.json();
-    if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
+    // Phase 6.5 hardening (Prompt 14, Section 7 — closes independent
+    // audit finding 2.4, billing half) — was select=id with no role
+    // filter at all, so any org member (line_manager, investigator, even
+    // the nominally read-only auditor) could open a Stripe Billing
+    // Portal session — real power to change payment methods, download
+    // invoices, or cancel the subscription. Same HR-only bar as every
+    // other billing-adjacent control in this app.
+    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=role`);
+    const [member] = await memberRes.json();
+    if (!member) return res.status(403).json({ error: 'Not a member of this organisation' });
+    if (!isHrRole(member.role)) return res.status(403).json({ error: 'You do not have permission to manage billing' });
 
     const orgRes = await supabaseRequest(`organisations?id=eq.${encodeURIComponent(orgId)}&select=stripe_customer_id`);
     const [org] = await orgRes.json();

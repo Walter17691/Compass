@@ -65,4 +65,30 @@ describe('send-letter — authorisation', () => {
     await handler(req(noOrg), res);
     expect(res.statusCode).toBe(400);
   });
+
+  // Phase 6.5 hardening (Prompt 14, Section 7 — closes independent audit
+  // finding 2.3) — `to` was previously forwarded to Resend with zero
+  // validation at all. Deliberately still allows any well-formed
+  // external address (solicitors, occupational health, personal email) —
+  // only rejects malformed/non-string input, not unfamiliar recipients.
+  it('rejects a malformed recipient address', async () => {
+    stubFetch({ members: [{ role: 'hr_manager' }] });
+    const res = mockRes();
+    await handler(req({ ...body, to: 'not-an-email' }), res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects a non-string recipient', async () => {
+    stubFetch({ members: [{ role: 'hr_manager' }] });
+    const res = mockRes();
+    await handler(req({ ...body, to: ['sam@acme.com', 'attacker@evil.com'] }), res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('still allows a well-formed external recipient the org has no record of', async () => {
+    stubFetch({ members: [{ role: 'hr_manager' }] });
+    const res = mockRes();
+    await handler(req({ ...body, to: 'external.solicitor@lawfirm.example.com' }), res);
+    expect(res.statusCode).toBe(200);
+  });
 });
