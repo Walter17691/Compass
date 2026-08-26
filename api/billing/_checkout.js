@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
+import { isHrRole } from '../../src/lib/roles.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -16,9 +17,14 @@ export async function checkout(req, res) {
   if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
-    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=id`);
-    const members = await memberRes.json();
-    if (!members.length) return res.status(403).json({ error: 'Not a member of this organisation' });
+    // Phase 6.5 hardening (Prompt 14, Section 7 — sibling of finding 2.4)
+    // — same gap as billing/_manage.js: membership-only, no role check,
+    // for an action with real financial consequences (starting a paid
+    // subscription the org is bound to). Same HR-only bar as _manage.js.
+    const memberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=role`);
+    const [member] = await memberRes.json();
+    if (!member) return res.status(403).json({ error: 'Not a member of this organisation' });
+    if (!isHrRole(member.role)) return res.status(403).json({ error: 'You do not have permission to manage billing' });
 
     // Priced per active location (volume-tiered on STRIPE_PRICE_ID — see
     // src/lib/plan.js for the tier bands). At least 1: an org with zero
