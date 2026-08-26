@@ -95,7 +95,8 @@ describe('compileSubjectData — additional data sources (Phase 6.5, Batch 5)', 
     auditLog: [
       { id: 'log1', caseId: 'c1', action: 'Case opened' },
       { id: 'log2', caseId: 'c2', action: 'Unrelated case action' },
-      { id: 'log3', caseId: null, action: 'Org-level action, not case-linked' },
+      { id: 'log3', caseId: null, action: 'Org-level action, not case-linked', detail: 'Someone Else' },
+      { id: 'log4', caseId: null, action: 'Employee record updated', detail: 'Ada Lovelace' },
     ],
   };
 
@@ -124,9 +125,15 @@ describe('compileSubjectData — additional data sources (Phase 6.5, Batch 5)', 
     expect(result.hrReviewRequests).toEqual([extendedData.hrReviewRequests[0]]);
   });
 
-  it('includes only audit log entries on the subject\'s own cases, excluding org-level entries with no case link', () => {
+  // Phase 6.5 hardening (Prompt 14, Section 6 — closes independent audit
+  // finding 4.4) — was "excluding org-level entries with no case link",
+  // asserting the exact bug: a case-less audit entry whose detail is
+  // literally the subject's own name (employee record edits, onboarding/
+  // offboarding, portal access — audit(action, employeeName), no case in
+  // scope) was silently dropped from every DSAR export.
+  it('includes case-linked audit entries, plus case-less entries whose detail is exactly the subject\'s name — excluding both an unrelated case and an unrelated name', () => {
     const result = compileSubjectData('Ada Lovelace', extendedData);
-    expect(result.auditLog).toEqual([extendedData.auditLog[0]]);
+    expect(result.auditLog).toEqual([extendedData.auditLog[0], extendedData.auditLog[3]]);
   });
 
   it('flags a third-party name mentioned in a wellbeing note', () => {

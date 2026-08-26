@@ -322,10 +322,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadAuditLog = async () => {
     if(!org?.id) return;
     try {
-      const { data, error } = await supabase.from('audit_log').select('*').eq('org_id', org.id).order('created_at',{ascending:false}).limit(500);
+      // Phase 6.5 hardening (Prompt 14, Section 6 — closes independent
+      // audit finding 3.2/4.2, CRITICAL) — was a flat .limit(500): a real
+      // org's audit_log already holds tens of thousands of rows, so this
+      // silently truncated to the newest 500 everywhere the audit trail is
+      // shown (AuditTrailSection) OR exported (DSAR — compileSubjectData
+      // received this same capped array). Paged on a stable order (id, the
+      // uuid primary key isn't itself meaningful for sorting, but ties
+      // with created_at ensure no page skips/dupes), then reversed once to
+      // keep every existing caller's newest-first expectation.
+      const { data, error } = await fetchAllPages((from, to) => supabase.from('audit_log').select('*').eq('org_id', org.id).order('created_at',{ascending:true}).order('id',{ascending:true}).range(from, to));
       if(error) { console.error("Load audit log error:", error); markLoadIssue('audit log'); return; }
       clearLoadIssue('audit log');
-      if(data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||"", caseId:r.case_id||null, aiPrepared:r.ai_prepared||false, approvedBy:r.approved_by||null, dataUsed:r.data_used||null})));
+      if(data) setAuditLog(data.map(r=>({id:r.id, ts:r.created_at, user:r.user_name, action:r.action, detail:r.detail||"", caseId:r.case_id||null, aiPrepared:r.ai_prepared||false, approvedBy:r.approved_by||null, dataUsed:r.data_used||null})).reverse());
     } catch(e) { console.error("Load audit log error:", e); markLoadIssue('audit log'); }
   };
   useEffect(() => { if(org?.id) loadAuditLog(); }, [org?.id]);

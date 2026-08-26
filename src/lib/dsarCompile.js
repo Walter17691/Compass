@@ -41,7 +41,18 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   // (App.jsx's loadHrReviews keeps the raw DB row shape) — case_id here,
   // not caseId, matching every other consumer of this state.
   const subjectHrReviewRequests = hrReviewRequests.filter(r => subjectCaseIds.has(r.case_id));
-  const subjectAuditLog = auditLog.filter(a => a.caseId && subjectCaseIds.has(a.caseId));
+  // Phase 6.5 hardening (Prompt 14, Section 6 — closes independent audit
+  // finding 4.4) — case-linked audit rows were the only ones ever
+  // included, but many audit() calls concerning this exact subject carry
+  // no caseId at all (employee record edits, onboarding/offboarding,
+  // portal access grants/revokes — audit(action, employeeName) with no
+  // case in scope). Matching a.detail === employeeName (an exact match,
+  // not a substring search) catches these without the false-positive risk
+  // a loose "name appears somewhere in this text" search would carry —
+  // consistent with this file's own third-party-mention philosophy above:
+  // precise matches get included automatically, anything less certain
+  // stays a human-review decision, not a silent guess either way.
+  const subjectAuditLog = auditLog.filter(a => (a.caseId && subjectCaseIds.has(a.caseId)) || a.detail === employeeName);
 
   // Phase 6.5 hardening (data-lifecycle review) — a name is not a stable
   // identity. If more than one employee_records row shares this exact

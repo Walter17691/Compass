@@ -18,7 +18,21 @@ const COMMUNICATION_TYPES = ["email", "letter", "meeting"];
 function resolveSource(cs, entry) {
   if (!entry.linkTo) return null;
   if (entry.linkTo.kind === "meeting") return (cs.meetings || []).find(m => m.id === entry.linkTo.id) || null;
-  if (entry.linkTo.kind === "evidence") return (cs.evidence || [])[entry.linkTo.id] || null;
+  // Phase 6.5 hardening (Prompt 14, Section 6 — closes independent audit
+  // finding 3.4's Communications-view half) — was bracket-indexing
+  // `cs.evidence[entry.linkTo.id]`, treating the stable string id
+  // caseTimeline.js's own linkTo carries (ev.id, e.g. "ev_xyz") as an
+  // array position. Array bracket access with a non-numeric string key
+  // never matches anything, so this silently returned undefined for
+  // every evidence-sourced entry — the signature-status badge for every
+  // emailed/sent-letter row in the Communications tab was permanently
+  // blank, never a stale-but-wrong id (no reordering/deletion needed to
+  // trigger it, it was broken from the start). `ev.id ?? i` mirrors
+  // exactly how caseTimeline.js builds this same linkTo.id in the first
+  // place — real ids resolve directly; only pre-ensureEvidenceIds legacy
+  // rows without a real id fall back to (best-effort, order-dependent)
+  // position, same caveat that fallback already carries at its source.
+  if (entry.linkTo.kind === "evidence") return (cs.evidence || []).find((ev, i) => (ev.id ?? i) === entry.linkTo.id) || null;
   return null;
 }
 

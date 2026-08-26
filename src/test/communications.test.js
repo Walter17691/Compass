@@ -50,6 +50,27 @@ describe('buildCommunicationsView (Phase 5, IP31)', () => {
     expect(result[0].signatureStatus).toBeNull();
   });
 
+  // Phase 6.5 hardening (Prompt 14, Section 6 — closes independent audit
+  // finding 3.4) — resolveSource used to bracket-index cs.evidence by
+  // entry.linkTo.id, which is a real string id (ensureEvidenceIds
+  // guarantees one) in every normal case, not an array position. Bracket
+  // access with a non-numeric string key never matches, so this returned
+  // undefined for every real evidence item with a real id — only the
+  // fallback-to-index case above (no id set at all) coincidentally
+  // worked. A second, later-added evidence item at a non-zero position
+  // makes the bug unambiguous: the old code would look up
+  // cs.evidence["ev_real_id"], not cs.evidence[1].
+  it('resolves signature status by the evidence item\'s real id, not its array position', () => {
+    const cs = { id: 'c1', meetings: [], evidence: [
+      { id: 'ev_other', source: 'email', name: 'Unrelated email', date: '2026-08-01', addedBy: 'Jo' },
+      { id: 'ev_real_id', source: 'sent_letter', name: 'Sent: Outcome Letter', date: '2026-08-03', addedBy: 'Jo', signId: 'sign-3', signStatus: 'signed' },
+    ] };
+    const result = buildCommunicationsView(cs, [], []);
+    const letterEntry = result.find(e => e.description === 'Letter sent: Sent: Outcome Letter');
+    expect(letterEntry.signatureStatus).toBe('signed');
+    expect(letterEntry.signatureStatusLabel).toBe('Signed');
+  });
+
   it('returns entries in chronological order, same as the underlying timeline', () => {
     const cs = {
       id: 'c1',
