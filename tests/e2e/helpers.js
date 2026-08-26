@@ -106,6 +106,43 @@ export async function logout(page) {
   await expect(page.getByPlaceholder('you@company.com')).toBeVisible({ timeout: 10000 });
 }
 
+const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
+
+// Reads the currently logged-in session's own access token out of
+// localStorage — the same RLS-scoped credential the app's own Supabase
+// client already uses, not a service-role bypass. Capture this BEFORE
+// switching accounts/logging out; page.request works with an explicit
+// Authorization header regardless of which account the browser session
+// has since moved on to.
+export async function currentAccessToken(page) {
+  return page.evaluate(() => {
+    const key = Object.keys(localStorage).find(k => k.includes('auth-token'));
+    return key ? JSON.parse(localStorage.getItem(key))?.access_token : null;
+  });
+}
+
+// Phase 6.5 hardening (Prompt 14, Section 9 — CI multi-tenant E2E fixture
+// hygiene). tenant-isolation.spec.js's own canary-case tests used to
+// create a real case in a real (throwaway, but shared and reused across
+// every CI run) tenant and never delete it — "each run adds its own
+// canary and never cleans up," accumulating indefinitely. Deletes by the
+// exact, run-unique employeeName this suite already generates
+// (`Isolation Canary ${Date.now()}`), scoped by the caller's own
+// access token — the same RLS boundary an HR user deleting their own
+// case already has, not a bypass. Best-effort: a cleanup failure
+// shouldn't fail the isolation assertion the test actually exists to
+// prove, so this only logs rather than throws.
+export async function deleteCaseByEmployeeName(page, accessToken, employeeName) {
+  const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` };
+  try {
+    const res = await page.request.delete(`${SUPABASE_URL}/rest/v1/cases?employee_name=eq.${encodeURIComponent(employeeName)}`, { headers });
+    if (!res.ok()) console.error(`deleteCaseByEmployeeName: cleanup failed for "${employeeName}" (${res.status()})`);
+  } catch (e) {
+    console.error(`deleteCaseByEmployeeName: cleanup threw for "${employeeName}"`, e.message);
+  }
+}
+
 // Process Intelligence (P1) — clicking "Proceed anyway" on any advisory
 // gate (Meeting Quality Check, and every later phase reusing
 // requestOverrideReason) now opens a second "Proceed anyway?" prompt

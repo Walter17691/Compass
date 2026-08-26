@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, logout, SECOND_TENANT_CREDS, hasSecondTenant, requireSecondTenantOrFail } from './helpers.js';
+import { login, logout, SECOND_TENANT_CREDS, hasSecondTenant, requireSecondTenantOrFail, currentAccessToken, deleteCaseByEmployeeName } from './helpers.js';
 
 // Phase 6.5 hardening (production regression suite) — every other spec in
 // this suite runs against ONE shared test org (E2E_TEST_EMAIL), which can
@@ -55,6 +55,11 @@ test('a case created in one org is invisible to a genuinely different tenant', a
   await page.getByRole('button', { name: 'Create case', exact: true }).click();
   await expect(page.getByText(canaryName)).toBeVisible({ timeout: 10000 });
 
+  // Captured before logging out — the primary org's own token, used to
+  // clean this canary up at the end regardless of which account the
+  // browser session has since switched to.
+  const primaryToken = await currentAccessToken(page);
+
   // Deliberately not asserting the two accounts show different org
   // *names* here — this shared test-data setup happens to have two
   // real, genuinely separate orgs both literally named "E2E Test Org"
@@ -72,6 +77,8 @@ test('a case created in one org is invisible to a genuinely different tenant', a
   // data has even loaded.
   await expect(page.getByText('Loading cases…')).not.toBeVisible({ timeout: 10000 });
   await expect(page.getByText(canaryName)).not.toBeVisible();
+
+  await deleteCaseByEmployeeName(page, primaryToken, canaryName);
 });
 
 test('a genuinely different tenant sees its own, real case-list state, not the primary account\'s', async ({ page }) => {
@@ -136,11 +143,21 @@ test('the org switcher lists exactly this account\'s own two real memberships, a
 });
 
 test('org data is namespaced in localStorage by the currently active org, not left globally keyed', async ({ page }) => {
-  // This reused throwaway org's own case count only grows across runs
-  // (see the comment below) — the default 30s test timeout is tight
-  // enough on a slow run (login + case-creation UI flow + the poll
-  // below) to make this test flaky for a reason that has nothing to do
-  // with what it's actually checking.
+  // KNOWN FAILING as of 2026-08-26 (Prompt 14, Section 9) — not a flake,
+  // don't "fix" by bumping the poll timeout further (tried 40s -> 90s,
+  // no difference; confirmed the write never completes at all). The
+  // shared SECOND_TENANT_CREDS org has accumulated 2,700+ real cases
+  // from years of every E2E spec in this suite running against it
+  // without cleanup (this spec's own two canary tests are a small
+  // fraction of that — most come from other specs) — this genuinely
+  // exceeds the browser's localStorage quota, so the compass_cases write
+  // this test polls for now fails on every single save. That's a real,
+  // independently-confirmed product finding (see src/lib/storage.js's
+  // lsSet, fixed to at least log instead of silently swallowing this
+  // exact failure) — the fix here isn't in this test, it's a decision
+  // the team needs to make about bulk-cleaning or replacing this shared
+  // fixture org, which touches every other spec that also uses it, not
+  // something to do unilaterally from inside this one spec.
   test.setTimeout(60000);
   const canaryName = `Isolation Storage Canary ${Date.now()}`;
   await login(page, SECOND_TENANT_CREDS);
@@ -163,11 +180,6 @@ test('org data is namespaced in localStorage by the currently active org, not le
   // an observer's point of view — React may paint before every
   // synchronous statement after the state update has run. Polling avoids
   // asserting on a one-shot read that can genuinely race the write.
-  // This reused throwaway org has also accumulated thousands of cases
-  // across every prior run of this same spec (each run adds its own
-  // canary and never cleans up) — serialising that array to localStorage
-  // gets slower as it grows, so the timeout here is generous rather than
-  // tuned to today's size.
   await expect.poll(
     () => page.evaluate(() => Object.keys(localStorage).filter(k => k.includes(':compass_cases')).length),
     { timeout: 40000, intervals: [250, 500, 1000] }
@@ -186,4 +198,7 @@ test('org data is namespaced in localStorage by the currently active org, not le
   // the freshly-created canary, not something bled in from elsewhere.
   const cachedRaw = await page.evaluate(key => localStorage.getItem(key), orgScopedKeys[0]);
   expect(cachedRaw).toContain(canaryName);
+
+  const secondTenantToken = await currentAccessToken(page);
+  await deleteCaseByEmployeeName(page, secondTenantToken, canaryName);
 });

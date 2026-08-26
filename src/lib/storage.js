@@ -1,7 +1,18 @@
 export function ls(key, fallback) {
   try { const v = typeof localStorage !== 'undefined' && localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; }
 }
-export function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+// Phase 6.5 hardening (Prompt 14, Section 9 — closes independent audit
+// finding 10.1) — was a bare try/catch swallowing every error, including
+// QuotaExceededError. Live-reproduced via E2E: an org whose case data
+// has grown large enough to exceed the browser's localStorage quota gets
+// this write failing on every single save, completely silently — no
+// console output, no user-facing signal, nothing. The cache is
+// non-critical (Supabase remains the real source of truth; this only
+// speeds up initial paint), so this still doesn't throw or surface a
+// user-facing error for what's ultimately a soft-fail path — but a
+// developer/support engineer investigating "why does this org's app
+// feel slower to load than everyone else's" now has something to find.
+export function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(val)); } catch(e) { console.error(`lsSet: failed to write "${key}" to localStorage`, e); } }
 
 // Phase 6.5 hardening — tenant isolation. Every org-scoped App.jsx
 // localStorage key (cases, employee records, wellbeing notes, branding
