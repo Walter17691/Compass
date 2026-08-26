@@ -1,0 +1,12 @@
+# Phase 6.5 — deployment pipeline fix (Prompt 13). Vercel's default,
+# zero-config API routing turns every non-underscore-prefixed .js file
+# under api/ into its own serverless function — that convention already
+# excludes helper modules (api/_auth.js, api/portal/_case-list.js, etc.)
+# but NOT *.test.js files, which don't start with an underscore
+# themselves. Confirmed root cause of "exceeded_serverless_functions_
+# per_deployment" (Hobby plan's 12-function cap): 12 real routes +
+# 6 non-underscore api/**/*.test.js files were all being counted as
+# functions. This doesn't touch any route file, handler, or security
+# boundary — it only tells Vercel's build to skip test files it was
+# never meant to deploy as routes in the first place.
+api/**/*.test.js

@@ -56,7 +56,7 @@ export default defineConfig([
     // code, not browser/React code — process, Buffer etc. are real
     // globals there, not undefined variables, and the React-hooks/
     // react-refresh rules don't apply to plain Node scripts.
-    files: ['api/**/*.js', 'tests/e2e/**/*.js', 'vite.config.js', 'playwright.config.js'],
+    files: ['api/**/*.js', 'tests/e2e/**/*.js', 'vite.config.js', 'playwright.config.js', 'scripts/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       globals: globals.node,
