@@ -16,6 +16,7 @@
 import { isFindingStatus } from './allegations';
 import { currentRoleHolder } from './caseRoles';
 import { parseFlexDate } from './dateMath';
+import { isOriginalDecisionMeeting } from './meetingTypeMatch';
 
 // Phase 6.5 hardening (structural remediation, Prompt 12 — Guardrail
 // Lifecycle invariant). App.jsx's syncGuardrailSignals auto-resolves any
@@ -245,7 +246,17 @@ function checkReasoningIgnoresEmployeeResponse(cs, caseAllegations) {
 function checkAppealManagerConflict(cs, caseAccess, orgMembers) {
   const appealManager = currentRoleHolder(caseAccess, orgMembers, cs.id, "appeal_manager");
   if (!appealManager) return null;
-  const lastDecisionMeeting = (cs.meetings || []).slice().reverse().find(m => { const t = (m.type || "").toLowerCase(); return t.includes("disciplinary") || t.includes("grievance"); });
+  // Phase 6.5 hardening (Prompt 14, Section 8 — closes independent audit
+  // finding 5.5) — was `t.includes("disciplinary") || t.includes("grievance")`,
+  // which also matches "Appeal - Disciplinary"/"Appeal - Grievance". Since
+  // an appeal meeting is normally the MOST RECENT meeting on a case at
+  // this stage, .reverse().find(...) would resolve to the appeal hearing
+  // itself rather than the original decision — making the appeal
+  // manager's own name the "original decision maker" whenever
+  // cs.disciplinaryOfficer wasn't explicitly set, false-positiving on
+  // every genuinely independent appeal manager. isOriginalDecisionMeeting
+  // excludes appeal meetings, same fix shape as deadlines.js's own.
+  const lastDecisionMeeting = (cs.meetings || []).slice().reverse().find(m => isOriginalDecisionMeeting(m.type));
   const originalDecisionMaker = cs.disciplinaryOfficer || lastDecisionMeeting?.manager;
   if (!originalDecisionMaker || appealManager.name !== originalDecisionMaker) return null;
   return {

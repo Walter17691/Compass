@@ -1,4 +1,5 @@
 import { getCaseStage, isGrievanceCase } from './caseStage.js';
+import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
 
 // Case Copilot's recommended next action — pure function of a case's
 // current stage, type, and meeting history, no I/O. Drives the "Next
@@ -37,9 +38,9 @@ export function getNextStep(cs) {
 
 function disciplinaryNextStep(cs, stage) {
   const meetings = cs.meetings||[];
-  const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation"));
-  const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary"));
-  const appealMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal"));
+  const invMeetings = meetings.filter(m=>isInvestigationMeeting(m.type));
+  const discMeetings = meetings.filter(m=>isDisciplinaryMeeting(m.type));
+  const appealMeetings = meetings.filter(m=>isAppealMeeting(m.type));
   const lastInv = invMeetings[invMeetings.length-1];
   const lastDisc = discMeetings[discMeetings.length-1];
   const lastAppeal = appealMeetings[appealMeetings.length-1];
@@ -78,8 +79,8 @@ function disciplinaryNextStep(cs, stage) {
 // disciplinary's investigation -> inv_report -> disciplinary chain.
 function grievanceNextStep(cs, stage) {
   const meetings = cs.meetings||[];
-  const hearingMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("grievance")&&!(m.type||"").toLowerCase().includes("appeal"));
-  const appealMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("appeal"));
+  const hearingMeetings = meetings.filter(m=>isGrievanceMeeting(m.type));
+  const appealMeetings = meetings.filter(m=>isAppealMeeting(m.type));
   const lastHearing = hearingMeetings[hearingMeetings.length-1];
   const lastAppeal = appealMeetings[appealMeetings.length-1];
   const hasHearingOutcome = hearingMeetings.some(m=>m.letterOutput);

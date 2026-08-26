@@ -7,6 +7,7 @@
 // outcome) already read elsewhere in this codebase.
 import { getCaseStage } from './caseStage';
 import { getProcessType, DISCIPLINARY_STAGES, GRIEVANCE_STAGES } from './processStages';
+import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch';
 
 // Per-stage "did this actually happen" evidence checks — only defined for
 // the two process shapes whose stage-inference heuristic in caseStage.js
@@ -20,18 +21,27 @@ import { getProcessType, DISCIPLINARY_STAGES, GRIEVANCE_STAGES } from './process
 // check would be tautological, so none is defined here; that gap closes
 // once P16 adds real per-stage dated fields (fit notes, OH referral
 // dates etc.) those heuristics can key off independently.
+// Phase 6.5 hardening (Prompt 14, Section 8 — Family 4 wider sweep) — the
+// disciplinary/hearing checks below used to match on a bare "disciplinary"/
+// "grievance" substring, which "Appeal - Disciplinary"/"Appeal - Grievance"
+// also satisfies. For a missing-step check specifically, that's a false
+// negative risk: a case whose only "disciplinary"-shaped meeting is
+// actually its own appeal would have read as "the disciplinary hearing
+// happened" when it never did. isDisciplinaryMeeting/isGrievanceMeeting
+// exclude appeal meetings; the appeal check itself is unaffected since
+// isAppealMeeting matches the same set isAppealMeeting always has.
 const STAGE_EVIDENCE = {
   disciplinary: {
-    investigation: cs => (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("investigation")),
+    investigation: cs => (cs.meetings||[]).some(m=>isInvestigationMeeting(m.type)),
     inv_report: cs => !!cs.investigationReport,
-    disciplinary: cs => (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("disciplinary")),
+    disciplinary: cs => (cs.meetings||[]).some(m=>isDisciplinaryMeeting(m.type)),
     outcome: cs => !!cs.outcome || (cs.meetings||[]).some(m=>m.letterOutput),
-    appeal: cs => (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("appeal")),
+    appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type)),
   },
   grievance: {
-    hearing: cs => (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("grievance") && !(m.type||"").toLowerCase().includes("appeal")),
+    hearing: cs => (cs.meetings||[]).some(m=>isGrievanceMeeting(m.type)),
     outcome: cs => !!cs.outcome || (cs.meetings||[]).some(m=>m.letterOutput),
-    appeal: cs => (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("appeal")),
+    appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type)),
   },
 };
 

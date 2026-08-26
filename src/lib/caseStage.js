@@ -1,3 +1,5 @@
+import { isAppealMeeting, isDisciplinaryMeeting, isInvestigationMeeting, isGrievanceMeeting } from './meetingTypeMatch';
+
 // Stage-inference heuristics, one per case-type "shape". Disciplinary
 // (investigation -> inv_report -> disciplinary -> outcome -> appeal ->
 // closed) is the default and covers misconduct/capability/attendance/etc
@@ -13,29 +15,27 @@
 // per-type stage registry these heuristics return ids from.
 function inferDisciplinaryStage(cs) {
   const meetings = cs.meetings||[];
-  const types = meetings.map(m=>(m.type||"").toLowerCase());
   const hasOutcome = meetings.some(m=>m.letterOutput);
   const hasSigned = meetings.some(m=>m.signStatus==="signed");
   const hasInvReport = cs.investigationReport;
   if(hasSigned&&hasOutcome) return "closed";
-  if(types.some(t=>t.includes("appeal"))) return "appeal";
+  if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
-  if(types.some(t=>t.includes("disciplinary"))) return "disciplinary";
+  if(meetings.some(m=>isDisciplinaryMeeting(m.type))) return "disciplinary";
   if(hasInvReport) return "inv_report";
-  if(types.some(t=>t.includes("investigation"))) return "investigation";
+  if(meetings.some(m=>isInvestigationMeeting(m.type))) return "investigation";
   if(meetings.length>0) return "investigation";
   return "intake";
 }
 
 function inferGrievanceStage(cs) {
   const meetings = cs.meetings||[];
-  const types = meetings.map(m=>(m.type||"").toLowerCase());
   const hasOutcome = meetings.some(m=>m.letterOutput);
   const hasSigned = meetings.some(m=>m.signStatus==="signed");
   if(hasSigned&&hasOutcome) return "closed";
-  if(types.some(t=>t.includes("appeal"))) return "appeal";
+  if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
-  if(types.some(t=>t.includes("grievance"))) return "hearing";
+  if(meetings.some(m=>isGrievanceMeeting(m.type))) return "hearing";
   return "intake";
 }
 
@@ -65,7 +65,7 @@ function inferProbationStage(cs) {
 function inferFlexibleWorkingStage(cs) {
   const meetings = cs.meetings||[];
   if(cs.outcome) return "decision";
-  if(meetings.some(m=>(m.type||"").toLowerCase().includes("appeal"))) return "appeal";
+  if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(meetings.length>0) return "decision_meeting";
   return "request_received";
 }

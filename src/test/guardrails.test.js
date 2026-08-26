@@ -359,6 +359,34 @@ describe('computeGuardrailChecks — appeal manager conflict (P8)', () => {
     const checks = computeGuardrailChecks(cs, [], [], caseAccess, orgMembers);
     expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeUndefined();
   });
+
+  // Phase 6.5 hardening (Prompt 14, Section 8 — closes independent audit
+  // finding 5.5) — the fallback meeting search used to match "disciplinary"
+  // as a bare substring, which "Appeal - Disciplinary" also satisfies.
+  // Since the appeal hearing is normally the most recent meeting at this
+  // stage, it would resolve as "the original decision meeting" — making
+  // the appeal manager's own name their own "original decision maker" and
+  // false-positiving on every genuinely independent appeal manager who
+  // chairs an appeal after someone else's real disciplinary hearing.
+  it('does not false-positive when the fallback search would otherwise resolve to the appeal meeting itself', () => {
+    const cs = { ...baseCase, meetings: [
+      { id: 'm1', type: 'Disciplinary', manager: 'Priya Shah', date: '10/08/2026' },
+      { id: 'm2', type: 'Appeal - Disciplinary', manager: 'Tom Norton', date: '20/08/2026' },
+    ] };
+    const caseAccess = [{ caseId: 'case1', userId: 'u2', role: 'appeal_manager' }];
+    const checks = computeGuardrailChecks(cs, [], [], caseAccess, orgMembers);
+    expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeUndefined();
+  });
+
+  it('still flags when the appeal manager genuinely also chaired the real disciplinary hearing, even with a later appeal meeting on record', () => {
+    const cs = { ...baseCase, meetings: [
+      { id: 'm1', type: 'Disciplinary', manager: 'Priya Shah', date: '10/08/2026' },
+      { id: 'm2', type: 'Appeal - Disciplinary', manager: 'Priya Shah', date: '20/08/2026' },
+    ] };
+    const caseAccess = [{ caseId: 'case1', userId: 'u1', role: 'appeal_manager' }];
+    const checks = computeGuardrailChecks(cs, [], [], caseAccess, orgMembers);
+    expect(checks.find(c => c.title === 'The Appeal Manager made the original decision')).toBeTruthy();
+  });
 });
 
 describe('computeGuardrailChecks — clean case', () => {

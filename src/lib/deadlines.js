@@ -1,5 +1,6 @@
 import { getCaseStage } from './caseStage.js';
 import { parseFlexDate, daysBetween, addWorkingDays as addWorkingDaysDate } from './dateMath.js';
+import { isDisciplinaryMeeting, isInvestigationMeeting } from './meetingTypeMatch.js';
 
 // Phase 6.5 hardening (structural remediation, Prompt 12 — Deadline
 // Domain Model invariant). meeting.type is free descriptive text in
@@ -8,25 +9,16 @@ import { parseFlexDate, daysBetween, addWorkingDays as addWorkingDaysDate } from
 // fixtures), so classifying it via substring match (as this file and
 // several siblings across the app already do — caseStage.js, nextStep.js,
 // processTimeline.js, guardrails.js among them) is the app's real,
-// established pattern, not itself the bug. The bug is a missing
+// established pattern, not itself the bug. The bug was a missing
 // exclusion: "Disciplinary Appeal" legitimately contains the substring
 // "disciplinary", so an appeal hearing was silently treated as an
 // original disciplinary hearing below — generating a wrong "outcome
 // letter due in 5 working days" deadline off the appeal meeting, and (via
 // the appeal window check) a second, nonsensical "appeal window closes"
-// deadline off a letter that IS the appeal outcome. nextStep.js's own
-// grievance branch already excludes "appeal" from its "grievance"
-// substring match for exactly this reason (`.includes("grievance") &&
-// !.includes("appeal")`) — this applies the same exclusion here, the
-// narrowest fix that doesn't change matching behaviour for every other
-// real (non-exact-label) meeting.type string already in use.
-function isDisciplinaryMeeting(type) {
-  const t = (type || "").toLowerCase();
-  return t.includes("disciplinary") && !t.includes("appeal");
-}
-function isInvestigationMeeting(type) {
-  return (type || "").toLowerCase().includes("investigation");
-}
+// deadline off a letter that IS the appeal outcome. isDisciplinaryMeeting/
+// isInvestigationMeeting now live in meetingTypeMatch.js (Prompt 14,
+// Section 8) so caseStage.js/nextStep.js/processTimeline.js/guardrails.js
+// share this exact definition instead of each maintaining their own copy.
 
 // UK statutory & ACAS deadline rules. Pure — no React, no I/O — so it can
 // run client-side (App.jsx's dueSoon effect) and server-side (the digest
