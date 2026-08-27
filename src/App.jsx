@@ -285,6 +285,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── Cases ──
   const [cases, setCases] = useState(orgLs("compass_cases", []));
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 7.6, MEDIUM) —
+  // kept in sync SYNCHRONOUSLY inside saveCases itself (not via a
+  // useEffect, which only runs after React commits a render — too late
+  // for this). A caller that builds several sequential saveCases calls
+  // from the SAME synchronous run (e.g. resendSignatureReminder inside
+  // AutomationSuggestionsPanel's multi-meeting resend loop, each call
+  // awaited before the next starts) would otherwise have every call
+  // after the first compute its update from the same stale `cases`
+  // closure — each setCases call overwrites the previous one's change
+  // rather than composing with it, so only the LAST meeting's
+  // reminderSentAt stamp survives, silently leaving every earlier one in
+  // the loop still eligible to fire again next cooldown cycle. Reading
+  // casesRef.current instead of `cases` in a call site that loops like
+  // this sees every prior iteration's own change.
+  const casesRef = useRef(cases);
   // Phase 6.5 hardening (P1, reliability review) — cases seeds from a
   // local cache (orgLs), so a returning user usually sees real (if
   // slightly stale) data immediately. A first-ever load on a device, or
@@ -842,7 +857,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       });
       const data = await res.json();
       if(!data.success) { showToast("Failed to send reminder: "+(data.error||JSON.stringify(data)), "error"); return { success:false }; }
-      saveCases(cases.map(x=>x.id===cs.id?{...x, meetings:(x.meetings||[]).map(m=>m.id===meeting.id?{...m, reminderSentAt:new Date().toISOString()}:m)}:x), cs.id);
+      // Phase 6.5 hardening (closes Prompt 11 audit finding 7.6, MEDIUM) —
+      // casesRef.current, not `cases` — this is called in a sequential,
+      // awaited loop over several meetings on the SAME case
+      // (AutomationSuggestionsPanel's multi-meeting resend), all within
+      // one synchronous run before React commits a new render. Reading
+      // the stale `cases` closure meant each call after the first
+      // rebuilt its update from a version of this case that didn't yet
+      // include the previous meeting's own reminderSentAt stamp, so only
+      // the LAST meeting resent in the loop actually got its cooldown
+      // stamp — every earlier one stayed silently eligible to fire again
+      // next cycle.
+      saveCases(casesRef.current.map(x=>x.id===cs.id?{...x, meetings:(x.meetings||[]).map(m=>m.id===meeting.id?{...m, reminderSentAt:new Date().toISOString()}:m)}:x), cs.id);
       // Phase 5, IP30, §29 — the automation-provenance fields: Automate
       // ran with no human click (aiPrepared:true, no approver); Prepare
       // means this exact click on "Send reminder" *is* the approval.
@@ -1138,14 +1164,28 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // here — silence isn't consent, only an explicit accept applies.
   const applyPendingMeetingSuggestions = (caseId) => {
     if(!caseId) return;
+    // Phase 6.5 hardening (closes Prompt 11 audit finding 7.8, MEDIUM) —
+    // this filtered on !s.applied but never actually set applied:true
+    // afterward, so a suggestion stayed eligible forever: any later call
+    // to this same function (there are two call sites, and nothing
+    // scopes either to "only suggestions from this specific meeting")
+    // re-created a task for every suggestion ever accepted, not just
+    // newly-accepted ones.
+    const evidenceIdsApplied = [];
     meetingEvidenceSuggestions.filter(s=>s.status==="accepted" && !s.applied).forEach(s => {
       createCaseTask(caseId, {
         name: s.kind==="witness" ? "Interview "+s.description+" as a potential witness" : "Request "+s.description,
       });
+      evidenceIdsApplied.push(s.id);
     });
+    if(evidenceIdsApplied.length) setMeetingEvidenceSuggestions(s => s.map(x=>evidenceIdsApplied.includes(x.id)?{...x,applied:true}:x));
+
+    const actionIdsApplied = [];
     meetingActionSuggestions.filter(s=>s.status==="accepted" && !s.applied).forEach(s => {
       createCaseTask(caseId, { name:s.description, owner:s.suggestedOwner||"", dueDate:s.suggestedDueDate||"" });
+      actionIdsApplied.push(s.id);
     });
+    if(actionIdsApplied.length) setMeetingActionSuggestions(s => s.map(x=>actionIdsApplied.includes(x.id)?{...x,applied:true}:x));
   };
 
   // IP18, §12 — the post-meeting counterpart to applyPendingMeetingSuggestions
@@ -1699,6 +1739,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [redundancyData, setRedundancyData] = useState({});
   const [showEmailLetter, setShowEmailLetter] = useState(false);
   const [emailLetterTo, setEmailLetterTo] = useState("");
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 7.7, MEDIUM) —
+  // the "Send email" button had no in-flight guard at all: the modal
+  // only closes AFTER sendLetterCoordinated resolves, so it stayed open
+  // and clickable for the whole round trip — neither send-letter.js nor
+  // send-for-signature.js has any idempotency check of its own (a
+  // deliberate choice; a caller-supplied recipient/body means there's no
+  // safe key to dedupe on server-side without also rejecting genuinely
+  // different letters sent moments apart), so a double-click (or an
+  // impatient second click on a slow connection) sent the SAME letter —
+  // including a dismissal or other outcome letter — twice.
+  const [letterSendProcessing, setLetterSendProcessing] = useState(false);
   const [editingLetter, setEditingLetter] = useState(false);
   const [appealDetected, setAppealDetected] = useState(false);
   const [showLinkCase, setShowLinkCase] = useState(false);
@@ -2274,9 +2325,16 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // panel's own time-in-stage tracking for free, regardless of which
     // of the many call sites that set cs.stage (or just change data a
     // heuristic infers a new stage from) triggered it.
-    const prevById = new Map(cases.map(cs => [cs.id, cs]));
+    // Phase 6.5 hardening (closes Prompt 11 audit finding 7.6, MEDIUM) —
+    // casesRef.current, not `cases`, so a caller invoking saveCases
+    // several times in the same synchronous run (before React commits a
+    // new render) builds each successive update on top of the PREVIOUS
+    // call's own change instead of silently discarding it — see
+    // casesRef's own declaration comment.
+    const prevById = new Map(casesRef.current.map(cs => [cs.id, cs]));
     const stamped = u.map(cs => ensureEvidenceIds(withStageTransitionStamp(cs, prevById.get(cs.id) || null)));
     setCases(stamped);
+    casesRef.current = stamped;
     // Phase 6.5 hardening (data-lifecycle review, closes 10.1's
     // remainder) — the cache mirror only, not the real in-memory list or
     // what's sent to Supabase. Bounded so a large org's case history
@@ -7674,12 +7732,14 @@ Please produce:
               style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={async()=>{
-                if(!emailLetterTo.includes("@")) return;
+                if(!emailLetterTo.includes("@")||letterSendProcessing) return;
+                setLetterSendProcessing(true);
                 try {
                   const ok = await sendLetterCoordinated(emailLetterTo);
                   if(ok) { setShowEmailLetter(false); setEmailLetterTo(""); }
                 } catch(e){ showToast("Error: "+e.message, "error"); }
-              }} disabled={!emailLetterTo.includes("@")} style={{flex:1}}>Send email</Btn>
+                setLetterSendProcessing(false);
+              }} disabled={!emailLetterTo.includes("@")||letterSendProcessing} style={{flex:1}}>{letterSendProcessing?"Sending...":"Send email"}</Btn>
               <Btn variant="ghost" onClick={()=>{setShowEmailLetter(false);setEmailLetterTo("");}} style={{flex:1}}>Cancel</Btn>
             </div>
           </div>
