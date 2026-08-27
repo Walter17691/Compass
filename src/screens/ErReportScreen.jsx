@@ -4,7 +4,7 @@ import { useLoadMore } from '../hooks/useLoadMore';
 import { themeFrequency } from '../lib/themes';
 import { daysBetween } from '../lib/dateMath';
 
-export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes }) {
+export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes, isHR }) {
   // ── Core data calculations ──
   const activeCases = cases.filter(cs=>getCaseStage(cs)!=="closed");
   const activeCasesTable = useLoadMore(activeCases, 20);
@@ -340,6 +340,18 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
               quality without team-size/complexity context this app
               doesn't have; removed rather than reworked, since Manager
               Insights already covers this org-wide, non-punitively. */}
+          {/* Phase 6.5 hardening (closes Prompt 16 audit finding H2, HIGH) —
+              unlike every other panel on this screen (aggregate counts,
+              non-identifying stats), this one names individual employees
+              by their own repeat-case history and links straight into
+              their PersonView dossier. Reports itself stays open to every
+              role by design (see InsightsScreen.jsx's own tab list — only
+              Manager Insights/Org Events/Risk Map/Improvement Initiatives
+              are isHR-gated, Reports deliberately isn't), so this one
+              disciplinary-pattern panel is gated internally instead of the
+              whole screen — same pattern already used for
+              ThemeTaxonomyManager's write controls. */}
+          {isHR && (
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
             <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Patterns</div>
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Repeat cases</div>
@@ -357,6 +369,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
               </div>
             ))}
           </div>
+          )}
 
         </div>
 

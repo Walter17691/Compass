@@ -120,6 +120,7 @@ export function InsightsScreen({
                 loadJsPDF={reporting.loadJsPDF}
                 caseThemes={orgIntel.caseThemes}
                 organisationThemes={orgIntel.organisationThemes}
+                isHR={isHR}
               />
             </>
           )}
