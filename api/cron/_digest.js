@@ -4,6 +4,7 @@ import { postWebhook } from './_notify.js';
 import { computeDueSoon } from '../../src/lib/deadlines.js';
 import { mapCaseRow } from '../../src/lib/caseMapping.js';
 import { isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation } from '../../src/lib/roles.js';
+import { escapeHtml as esc } from '../_html.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -16,10 +17,10 @@ function isUrgent(d) {
   return d.overdue || d.daysLeft <= DIGEST_WINDOW_DAYS;
 }
 
-function digestHtml(items) {
+export function digestHtml(items) {
   const rows = items.map(d => `
     <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;font-size:13px">
-      <div><strong>${d.employeeName}</strong><span style="color:#666;margin-left:8px">${d.label}</span></div>
+      <div><strong>${esc(d.employeeName)}</strong><span style="color:#666;margin-left:8px">${esc(d.label)}</span></div>
       <span style="color:${d.overdue ? '#C84B2F' : '#7C5CFC'};white-space:nowrap;margin-left:12px">${d.overdue ? `${d.daysOverdue}d overdue` : `${d.daysLeft}d left`}</span>
     </div>`).join('');
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">
@@ -72,12 +73,34 @@ async function sendDigestEmail(email, items) {
 // own RLS is narrower still (is_hr_role: hr_manager/hr_director only,
 // NOT legal_reviewer/auditor, unlike case confidentiality's broader
 // oversight set) and gets its own branch rather than being forced
-// through the case-shaped checks below. DSAR/leaver/redundancy
-// deadlines (also caseId-less) are genuinely org-wide with no further
-// restriction, matching dsar_requests/leaver_instances' own real RLS.
+// through the case-shaped checks below. leaver deadlines are genuinely
+// org-wide with no further restriction, matching leaver_instances' own
+// real SELECT RLS (org membership only, no role check).
+//
+// Phase 6.5 hardening (closes Prompt 11 audit finding 2.6, MEDIUM) —
+// dsar/redundancy deadlines used to fall through the same blanket
+// `if (!deadline.caseId) return true` as leaver — but dsar_requests and
+// redundancy_cases are BOTH is_hr_role-only in their live RLS (the
+// comment this replaces was simply wrong about dsar_requests, which
+// closed to HR-only via dsar_hr_only_access_2026-08-22.sql — after this
+// comment was written, per the finding's own framing). A non-HR opted-in
+// member was receiving an email naming an employee and their DSAR due
+// date every morning — directly disclosing who has filed a subject
+// access request, often the precursor to a tribunal claim against those
+// same managers.
+const CASELESS_CATEGORY_AUTH = {
+  wellbeing: member => isHrRole(member.role),
+  dsar: member => isHrRole(member.role),
+  redundancy: member => isHrRole(member.role),
+  leaver: () => true,
+};
 export function isAuthorisedFor(deadline, member, caseAccessByCase, casesById = new Map()) {
-  if (deadline.category === 'wellbeing') return isHrRole(member.role);
-  if (!deadline.caseId) return true;
+  if (!deadline.caseId) {
+    const check = CASELESS_CATEGORY_AUTH[deadline.category];
+    // Fail closed for any future caseId-less category this map hasn't
+    // been taught about yet, rather than silently defaulting to "everyone".
+    return check ? check(member) : false;
+  }
 
   const cs = casesById.get(deadline.caseId);
   if (!cs) return false; // can't verify against real case data — fail closed

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { isAuthorisedFor, runDigest } from './_digest.js';
+import { isAuthorisedFor, runDigest, digestHtml } from './_digest.js';
 
 // Phase 6.5 hardening (P0) — isAuthorisedFor now mirrors all three RLS
 // policies actually layered on cases.SELECT (location, non-oversight
@@ -120,10 +120,54 @@ describe('isAuthorisedFor', () => {
     });
   });
 
-  describe('org-wide deadlines with no case at all (DSAR, leaver, redundancy)', () => {
-    it('are always authorised, matching their own genuinely org-wide RLS', () => {
-      const d = { category: 'dsar', confidential: false, caseId: null };
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.6, MEDIUM) —
+  // dsar/redundancy used to fall through the same blanket "no case, so
+  // authorised" branch as leaver, which really is org-wide (leaver_instances'
+  // own SELECT RLS has no role check). dsar_requests and redundancy_cases
+  // are both is_hr_role-only in their live RLS — a non-HR opted-in member
+  // was receiving an email naming an employee and their DSAR due date
+  // every morning, directly disclosing who had filed a subject access
+  // request.
+  describe('leaver deadlines with no case at all — genuinely org-wide RLS', () => {
+    it('is authorised for any org member, matching leaver_instances\' own SELECT RLS', () => {
+      const d = { category: 'leaver', confidential: false, caseId: null };
       expect(isAuthorisedFor(d, lineMgr, new Map())).toBe(true);
+    });
+  });
+
+  describe('dsar deadlines with no case at all — is_hr_role-only RLS (Prompt 11 audit, 2.6)', () => {
+    it('an hr_manager can see a DSAR deadline', () => {
+      const d = { category: 'dsar', confidential: false, caseId: null };
+      expect(isAuthorisedFor(d, alice, new Map())).toBe(true);
+    });
+
+    it('a line_manager cannot — dsar_requests RLS is is_hr_role only', () => {
+      const d = { category: 'dsar', confidential: false, caseId: null };
+      expect(isAuthorisedFor(d, lineMgr, new Map())).toBe(false);
+    });
+
+    it('a legal_reviewer/auditor cannot — is_hr_role is narrower than confidential-case oversight', () => {
+      const d = { category: 'dsar', confidential: false, caseId: null };
+      expect(isAuthorisedFor(d, leo, new Map())).toBe(false);
+    });
+  });
+
+  describe('redundancy deadlines with no case at all — is_hr_role-only RLS (Prompt 11 audit, 2.6 sibling)', () => {
+    it('an hr_manager can see a redundancy consultation deadline', () => {
+      const d = { category: 'redundancy', confidential: false, caseId: null };
+      expect(isAuthorisedFor(d, alice, new Map())).toBe(true);
+    });
+
+    it('a line_manager cannot — redundancy_cases RLS is is_hr_role only', () => {
+      const d = { category: 'redundancy', confidential: false, caseId: null };
+      expect(isAuthorisedFor(d, lineMgr, new Map())).toBe(false);
+    });
+  });
+
+  describe('an unrecognised caseId-less category', () => {
+    it('fails closed rather than defaulting to authorised', () => {
+      const d = { category: 'some_future_category', confidential: false, caseId: null };
+      expect(isAuthorisedFor(d, alice, new Map())).toBe(false);
     });
   });
 
@@ -174,5 +218,30 @@ describe('runDigest — pagination', () => {
     expect(casesRequests.length).toBeGreaterThanOrEqual(2);
     expect(casesRequests[0]).toBe('0-999');
     expect(casesRequests[1]).toBe('1000-1999');
+  });
+});
+
+// Phase 6.5 hardening (closes Prompt 11 audit finding 2.7, MEDIUM) —
+// every other HTML email builder in this codebase imports escapeHtml;
+// this one didn't. A member setting a case's employee name to include a
+// tag would have had it render live inside every opted-in colleague's
+// authentic, DKIM-signed Compass email the next morning.
+describe('digestHtml — HTML-escapes interpolated content (Prompt 11 audit, 2.7)', () => {
+  it('escapes a malicious employeeName so it renders as text, not markup', () => {
+    const html = digestHtml([{ employeeName: '<a href="https://evil.example">click</a>', label: 'Deadline', overdue: false, daysLeft: 2 }]);
+    expect(html).not.toContain('<a href="https://evil.example">');
+    expect(html).toContain('&lt;a href=');
+  });
+
+  it('escapes a malicious deadline label the same way', () => {
+    const html = digestHtml([{ employeeName: 'Sam Employee', label: '<img src=x onerror=alert(1)>', overdue: false, daysLeft: 2 }]);
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;img src=x');
+  });
+
+  it('still renders ordinary names/labels unescaped-looking (no double-escaping of plain text)', () => {
+    const html = digestHtml([{ employeeName: 'Ada Lovelace', label: 'Signature pending', overdue: false, daysLeft: 2 }]);
+    expect(html).toContain('Ada Lovelace');
+    expect(html).toContain('Signature pending');
   });
 });
