@@ -764,7 +764,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Returns {success, signId} rather than driving UI itself, so each
   // caller decides what "success" means for its own document (save a
   // meeting, advance an OH step, or just show a toast).
-  const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true }) => {
+  const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true, caseId, letterType }) => {
     if(!employeeEmail||!document) return { success:false };
 
     // Store document in Supabase via API. Authenticated — this step creates
@@ -792,7 +792,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       body: JSON.stringify({
         employeeEmail, employeeName, managerName,
         meetingType: documentLabel, meetingDate: documentDate,
-        documentType, requiresSignature, signId, orgId: org?.id,
+        documentType, requiresSignature, signId, orgId: org?.id, caseId, letterType,
       })
     });
     const data = await res.json();
@@ -831,6 +831,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           meetingType: request.meeting_type, meetingDate: request.meeting_date,
           documentType: request.document_type, requiresSignature: request.requires_signature,
           signId: meeting.signId, appUrl: window.location.origin,
+          orgId: org?.id, caseId: cs.id,
         })
       });
       const data = await res.json();
@@ -871,6 +872,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       documentType: "meeting_record",
       documentLabel: meetingType?.label||"Meeting",
       documentDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+      caseId: activeCaseId,
     });
     if(!success) return;
     setShowSignModal(false);
@@ -6590,6 +6592,8 @@ Please produce:
         subject,
         body: letterOutput,
         orgId: org?.id,
+        caseId: activeCaseId,
+        letterType: activeLetter,
         employeeName: caseInfo.employee||"Employee",
         meetingType: meetingType?.label||"Meeting",
         managerName: caseInfo.manager||"HR Manager",
@@ -6640,6 +6644,8 @@ Please produce:
       documentLabel: subject,
       documentDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
       requiresSignature: false,
+      caseId: activeCaseId,
+      letterType: activeLetter,
     });
     if(!success) return false;
 
@@ -7234,6 +7240,7 @@ Please produce:
           to:email,
           subject:(meetingType?.label||"Meeting")+" Record - "+caseInfo.employee,
           orgId: org?.id,
+          caseId: activeCaseId,
           html:"<div style='font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px'><h2 style='color:#7C5CFC'>Compass HR</h2><h3>"+( meetingType?.label||"Meeting")+" Record</h3><p><strong>Employee:</strong> "+caseInfo.employee+"</p><p><strong>Date:</strong> "+caseInfo.date+"</p><hr/><div style='white-space:pre-wrap;font-size:14px;line-height:1.6'>"+reviewOutput+"</div><p style='color:#999;font-size:12px;margin-top:20px'>Sent via Compass HR | Private and Confidential</p></div>"
         })});
       showToast("Record shared with "+email);

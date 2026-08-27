@@ -1,4 +1,4 @@
-import { requireOrgMembership } from './_auth.js';
+import { requireCaseAccess, verifyOutcomeApproved } from './_auth.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 
@@ -7,16 +7,46 @@ import { escapeHtml as esc } from './_html.js';
 // project, including an employee portal account, not just this org's own
 // staff), with no org-membership check and no rate limit, sending from
 // Compass's own verified domain with a caller-controlled recipient/
-// subject/body. requireOrgMembership closes the "any authenticated
+// subject/body. requireOrgMembership closed the "any authenticated
 // identity" gap; the rate limit caps abuse even from a legitimate but
 // compromised account, the same pattern api/chat.js already uses.
+//
+// Phase 6.5 hardening (Prompt 16 audit, closes finding C2, CRITICAL) —
+// requireOrgMembership alone still let ANY member of the org — not just
+// someone with a real relationship to the specific case a letter was
+// about — send it, with no check on whether an approval-gated outcome
+// had actually been approved. Chained with C1 (now closed), this meant
+// a "notetaker" case_access grant was enough to both set a case's
+// outcome to Dismissal AND deliver a fabricated dismissal letter, with
+// zero HR sign-off. requireCaseAccess closes the first half;
+// verifyOutcomeApproved closes the second, specifically for outcome
+// letters — letterType is the same category LetterScreen.jsx's own
+// activeLetter state already tracks client-side (outcome/invite/appeal/
+// suspension/...), now threaded through so the server can tell an
+// outcome letter apart from routine case correspondence rather than
+// gating every letter type as if it carried the same weight.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { to, subject, body, orgId, employeeName, meetingType, managerName, date } = req.body;
+  const { to, subject, body, orgId, caseId, letterType, employeeName, meetingType, managerName, date } = req.body;
 
-  const auth = await requireOrgMembership(req, res, orgId);
+  // An outcome letter can only ever exist for a real, already-saved case
+  // (OutcomeModal sets cases.outcome on an existing row) — unlike other
+  // letter types, there's no legitimate "case doesn't exist yet" path
+  // for this one, so caseId is mandatory here specifically.
+  if (letterType === 'outcome' && !caseId) {
+    return res.status(400).json({ error: 'caseId is required for an outcome letter' });
+  }
+
+  const auth = await requireCaseAccess(req, res, orgId, caseId);
   if (!auth) return;
+
+  if (letterType === 'outcome') {
+    const approved = await verifyOutcomeApproved(caseId, auth.case.outcome);
+    if (!approved) {
+      return res.status(403).json({ error: "This outcome requires HR sign-off before its letter can be sent — it hasn't been approved yet." });
+    }
+  }
 
   const withinLimit = await checkRateLimit(`send-letter:${auth.caller.id}`, 20, 300);
   if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });

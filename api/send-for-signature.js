@@ -1,4 +1,4 @@
-import { requireOrgMembership } from './_auth.js';
+import { requireCaseAccess, verifyOutcomeApproved } from './_auth.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 import { documentTypeLabel } from '../src/lib/eSignature.js';
@@ -18,13 +18,39 @@ import { documentTypeLabel } from '../src/lib/eSignature.js';
 // own comment), so this always pointed at the deployed app in practice.
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
+// Phase 6.5 hardening (Prompt 16 audit, closes finding C2, CRITICAL) —
+// same fix as send-letter.js's sibling: requireOrgMembership alone let
+// any org member deliver this email regardless of their relationship to
+// the underlying case, with no check on approval-gated outcomes.
+// caseId/letterType are only present for callers that have real case
+// context (sendLetterForAcknowledgement's outcome-letter path); a
+// resend of an already-sent reminder, or a meeting-record signature
+// request or a meeting-record signature request can legitimately have no
+// caseId yet (a brand-new case isn't found-or-created until
+// saveMeetingToCase, which runs AFTER this call) — requireCaseAccess
+// falls back to a plain org-membership check when caseId is absent.
+// letterType is only ever set for the one flow this is actually about:
+// sendLetterForAcknowledgement's outcome-letter path.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { employeeEmail, employeeName, managerName, meetingType, meetingDate, documentType, requiresSignature, signId, orgId } = req.body;
+  const { employeeEmail, employeeName, managerName, meetingType, meetingDate, documentType, requiresSignature, signId, orgId, caseId, letterType } = req.body;
 
-  const auth = await requireOrgMembership(req, res, orgId);
+  // Same reasoning as send-letter.js's sibling check: an outcome letter
+  // can only ever exist for a real, already-saved case.
+  if (letterType === 'outcome' && !caseId) {
+    return res.status(400).json({ error: 'caseId is required for an outcome letter' });
+  }
+
+  const auth = await requireCaseAccess(req, res, orgId, caseId);
   if (!auth) return;
+
+  if (letterType === 'outcome') {
+    const approved = await verifyOutcomeApproved(caseId, auth.case.outcome);
+    if (!approved) {
+      return res.status(403).json({ error: "This outcome requires HR sign-off before its letter can be sent — it hasn't been approved yet." });
+    }
+  }
 
   const withinLimit = await checkRateLimit(`send-for-signature:${auth.caller.id}`, 20, 300);
   if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });

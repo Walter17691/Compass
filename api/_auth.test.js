@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { verifyCaller, requireOrgMembership, requireOrgRole } from './_auth.js';
+import { verifyCaller, requireOrgMembership, requireOrgRole, requireCaseAccess, verifyOutcomeApproved } from './_auth.js';
 
 function mockRes() {
   const res = { statusCode: null, body: null };
@@ -130,5 +130,107 @@ describe('requireOrgRole', () => {
     const result = await requireOrgRole({ headers: { authorization: 'Bearer good' } }, res, 'org-1', ['hr_director']);
     expect(result).toBeNull();
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// Phase 6.5 hardening (Prompt 16 audit, closes finding C2, CRITICAL) —
+// requireCaseAccess is the shared boundary api/send-letter.js and
+// api/send-for-signature.js now route through instead of bare
+// requireOrgMembership, closing the gap where any org member (not just
+// someone with a real relationship to the specific case) could deliver
+// an arbitrary letter under Compass's own verified sending domain.
+function stubFetchWithCase({ authOk = true, authUser = { id: 'user-1', email: 'a@b.com' }, members = [], caseRow = null, caseAccessRows = [], reviewRows = [] } = {}) {
+  global.fetch = vi.fn((url) => {
+    const u = String(url);
+    if (u.includes('/auth/v1/user')) {
+      return Promise.resolve({ ok: authOk, json: () => Promise.resolve(authUser) });
+    }
+    if (u.includes('/rest/v1/org_members')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
+    }
+    if (u.includes('/rest/v1/cases')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(caseRow ? [caseRow] : []) });
+    }
+    if (u.includes('/rest/v1/case_access')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(caseAccessRows) });
+    }
+    if (u.includes('/rest/v1/hr_review_requests')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(reviewRows) });
+    }
+    return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+  });
+}
+
+describe('requireCaseAccess', () => {
+  let originalFetch;
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('falls back to a plain org-membership check when caseId is omitted (a brand-new case may not exist yet)', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }] });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', undefined);
+    expect(result).not.toBeNull();
+    expect(result.case).toBeUndefined();
+  });
+
+  it('404s when the case does not exist or belongs to a different org', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-2', created_by: 'user-9', owner_id: null, outcome: '' } });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
+    expect(result).toBeNull();
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('allows an HR-role member of the org regardless of case_access', async () => {
+    stubFetchWithCase({ members: [{ role: 'hr_director' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: '' } });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
+    expect(result).not.toBeNull();
+    expect(result.case.id).toBe('case-1');
+  });
+
+  it('allows the case creator even without a case_access row', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: '' } });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
+    expect(result).not.toBeNull();
+  });
+
+  it('allows a member holding any case_access grant on this case', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: '' }, caseAccessRows: [{ role: 'notetaker' }] });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
+    expect(result).not.toBeNull();
+    expect(result.caseRole).toBe('notetaker');
+  });
+
+  it('403s a real org member with no relationship to the case at all — the exact gap this fix closes', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: '' }, caseAccessRows: [] });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
+    expect(result).toBeNull();
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('verifyOutcomeApproved', () => {
+  let originalFetch;
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('returns true for an outcome type that was never approval-gated', async () => {
+    stubFetchWithCase({});
+    expect(await verifyOutcomeApproved('case-1', 'No further action')).toBe(true);
+  });
+
+  it('returns false when no matching approved hr_review_requests row exists', async () => {
+    stubFetchWithCase({ reviewRows: [] });
+    expect(await verifyOutcomeApproved('case-1', 'Summary dismissal (gross misconduct)')).toBe(false);
+  });
+
+  it('returns true once a matching approved hr_review_requests row exists', async () => {
+    stubFetchWithCase({ reviewRows: [{ id: 'review-1' }] });
+    expect(await verifyOutcomeApproved('case-1', 'Final written warning')).toBe(true);
   });
 });

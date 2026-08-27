@@ -4,7 +4,7 @@ import { isGrievanceCase } from '../../lib/caseStage';
 // its own tab now, so it reads the case's actual lifecycle stage
 // directly to decide what to show. "hearing" is grievance's equivalent
 // in-progress stage to disciplinary's "disciplinary".
-export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal }) {
+export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, canDecide }) {
   const grievance = isGrievanceCase(cs);
   const reached = stage==="disciplinary"||stage==="hearing"||stage==="outcome"||stage==="appeal"||stage==="closed"||!!cs.outcome;
 
@@ -30,7 +30,11 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal }) {
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px"}}>
       <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Issue {grievance?"grievance":"disciplinary"} outcome</div>
       <div style={{fontSize:12,color:"#6B6375",marginBottom:14}}>Once the hearing is complete, issue the written outcome. ACAS recommends within 5 working days of the hearing. The outcome letter starts the employee's 5-day appeal window.</div>
-      <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome →</button>
+      {canDecide ? (
+        <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome →</button>
+      ) : (
+        <div style={{fontSize:12,color:"#9B9098"}}>Only HR or this case's Hearing Manager can issue the outcome.</div>
+      )}
     </div>
   );
 }

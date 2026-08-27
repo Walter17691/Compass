@@ -1,4 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
+import { canSeeAllOrgCases } from '../src/lib/roles.js';
+import { approvalActionForOutcome } from '../src/lib/approvals.js';
 
 const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
 // Public anon key — safe to duplicate here, it's already shipped in the
@@ -72,4 +74,64 @@ export async function requireOrgRole(req, res, orgId, roleCheck) {
     return null;
   }
   return auth;
+}
+
+// Phase 6.5 hardening (closes Prompt 16 audit finding C2, CRITICAL) —
+// api/send-letter.js and api/send-for-signature.js used to check org
+// membership alone before delivering an arbitrary, caller-supplied
+// letter under Compass's own verified sending domain: no case, no role,
+// no relationship to what was actually being sent. This is the shared
+// boundary those endpoints now require instead — the same access a case
+// is actually visible under (mirrors the live cases SELECT RLS policy):
+// an oversight role (HR/legal/auditor), the case's own creator/owner, or
+// any case_access grant, not just "some member of this org." Case
+// existence/org match is checked server-side via the service-role key —
+// never trust a client-supplied org/case pairing.
+// caseId is optional here on purpose: a brand-new case doesn't exist yet
+// at the point a meeting record is first sent for signature
+// (saveMeetingToCase is what finds-or-creates it, and that happens
+// AFTER this call for a fresh case — see sendForSignature's own
+// comment) — falling back to the plain org-membership check preserves
+// that legitimate flow. Callers that need the stronger guarantee (an
+// outcome letter, which can only ever exist for a real, already-saved
+// case) enforce caseId being present themselves before calling this.
+export async function requireCaseAccess(req, res, orgId, caseId) {
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return null;
+  if (!caseId) return auth;
+  try {
+    const caseRes = await supabaseRequest(`cases?id=eq.${encodeURIComponent(caseId)}&select=id,org_id,created_by,owner_id,outcome`);
+    const [cs] = await caseRes.json();
+    if (!cs || cs.org_id !== orgId) { res.status(404).json({ error: 'Case not found' }); return null; }
+    if (canSeeAllOrgCases(auth.role) || cs.created_by === auth.caller.id || cs.owner_id === auth.caller.id) {
+      return { ...auth, case: cs };
+    }
+    const accessRes = await supabaseRequest(`case_access?case_id=eq.${encodeURIComponent(caseId)}&user_id=eq.${encodeURIComponent(auth.caller.id)}&select=role`);
+    const accessRows = await accessRes.json();
+    if (accessRows.length > 0) return { ...auth, case: cs, caseRole: accessRows[0].role };
+    res.status(403).json({ error: 'You do not have access to this case' });
+    return null;
+  } catch (e) {
+    console.error('requireCaseAccess error:', e.message);
+    res.status(500).json({ error: 'Could not verify case access' });
+    return null;
+  }
+}
+
+// Phase 6.5 hardening (closes Prompt 16 audit finding C2) — the second
+// half of the same fix: even a caller with real case access shouldn't be
+// able to deliver an outcome letter for an approval-gated outcome type
+// (suspension/final written warning/dismissal — src/lib/approvals.js's
+// APPROVAL_ACTIONS) before HR has actually approved it. Mirrors
+// OutcomeModal.jsx's own requestHrReview call: step is the approval
+// action id, status is the same 'pending'/'approved'/'rejected'
+// vocabulary hr_review_requests has always used. Returns true (nothing
+// to gate) for outcome types that were never approval-gated to begin
+// with, e.g. "No further action".
+export async function verifyOutcomeApproved(caseId, outcomeType) {
+  const action = approvalActionForOutcome(outcomeType);
+  if (!action) return true;
+  const reviewRes = await supabaseRequest(`hr_review_requests?case_id=eq.${encodeURIComponent(caseId)}&step=eq.${encodeURIComponent(action)}&status=eq.approved&select=id&limit=1`);
+  const rows = await reviewRes.json();
+  return rows.length > 0;
 }
