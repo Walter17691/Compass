@@ -41,6 +41,23 @@ describe('AppSidebar — Wellbeing nav gating', () => {
   });
 });
 
+// Phase 6.5 hardening (closes Prompt 16 audit finding H1, HIGH) — same gap
+// as DSAR above, found again: the "Redundancy" nav item had no gate at
+// all, unlike Onboarding/Offboarding/Wellbeing/DSAR right next to it in
+// the same nav group. RLS (redundancy_cases_2026-08-27.sql) is the real
+// boundary; this is the same client-side defense-in-depth as Wellbeing's.
+describe('AppSidebar — Redundancy nav gating (Prompt 16 audit, H1)', () => {
+  it('shows the Redundancy nav item for HR', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    expect(screen.getByRole('button', { name: 'Redundancy' })).toBeInTheDocument();
+  });
+
+  it('hides the Redundancy nav item for non-HR', () => {
+    render(<AppSidebar {...baseProps} isHR={false} />);
+    expect(screen.queryByRole('button', { name: 'Redundancy' })).not.toBeInTheDocument();
+  });
+});
+
 // Phase 6.5 hardening (production regression suite) — the data-load-issue
 // banner used to be its own position:fixed overlay in App.jsx, and went
 // through three real, E2E-discovered collisions with real screen content

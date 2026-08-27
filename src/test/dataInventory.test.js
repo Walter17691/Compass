@@ -27,6 +27,9 @@ const LIVE_ORG_ID_TABLES_2026_08_25 = [
   'leaver_instances', 'locations', 'manager_capability_insights', 'org_events', 'org_members',
   'org_roles', 'organisation_themes', 'process_templates', 'signing_requests', 'starter_instances',
   'wellbeing_notes',
+  // redundancy_cases added 2026-08-27 (closes Prompt 16 audit finding H1)
+  // — see supabase/redundancy_cases_2026-08-27.sql.
+  'redundancy_cases',
 ];
 
 describe('dataInventory — GDPR erasure completeness', () => {
@@ -54,5 +57,9 @@ describe('dataInventory — GDPR erasure completeness', () => {
   it('does not redundantly re-delete case_access — verified cascade-covered by cases (NOT NULL, ON DELETE CASCADE) as of 2026-08-25', () => {
     expect(ORG_SCOPED_TABLES).not.toContain('case_access');
     expect(CASCADE_COVERED_TABLES).toContain('case_access');
+  });
+
+  it('includes redundancy_cases as actively erased — closes Prompt 16 audit finding H1 (previously local-only, not in any table at all)', () => {
+    expect(ORG_SCOPED_TABLES).toContain('redundancy_cases');
   });
 });

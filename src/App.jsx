@@ -1650,7 +1650,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setDataLoadIssues([]);
     setCaseSignalsLoaded(false);
     loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
-    if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); }
+    if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); loadRedundancyCases(); }
   };
   useEffect(loadOrgData, [org?.id, isHR, user?.id]);
 
@@ -2059,7 +2059,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [newLeaverForm, setNewLeaverForm] = useState({name:"",role:"",department:"",manager:"",email:"",lastWorkingDay:"",reason:"resignation",templateId:"default"});
 
   // ── Redundancy / consultation ──
-  const [redundancyCases, setRedundancyCases] = useState(orgLs("compass_redundancy", []));
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H1, HIGH) — was
+  // useState(orgLs(...)), local-only, never synced across HR staff or
+  // devices and invisible to RLS/DSAR/erasure entirely. See
+  // supabase/redundancy_cases_2026-08-27.sql — same cloud-sync + HR-only
+  // RLS pattern wellbeing_notes already has.
+  const [redundancyCases, setRedundancyCases] = useState([]);
   // case: {id, type:"individual"|"collective", reason, poolDescription, selectionCriteria:[{criterion,weight}],
   //         atRiskEmployees:[{id,name,role,dept,score,selected,consultationMeetings:[],outcome:"",redundancyPay:""}],
   //         collectiveInfo:{count,hrOneRequired,notifiedDate,electionDate,consultationStartDate},
@@ -2112,6 +2117,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const wellbeingNoteSaveQueueRef = useRef({});
   const concernReferralVersionRef = useRef({});
   const concernReferralSaveQueueRef = useRef({});
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H1) — same
+  // conflict-detection pattern, now that redundancy_cases is a real,
+  // multi-writer-capable cloud table instead of local-only.
+  const redundancyCaseVersionRef = useRef({});
+  const redundancyCaseSaveQueueRef = useRef({});
 
   // ── Case tasks ──
   const [caseTasks, setCaseTasks] = useState([]);
@@ -2592,7 +2602,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       employeeRecords, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks,
       hrReviewRequests, starterInstances, leaverInstances, dsarRequests, signingRequests, portalAccounts,
       orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseThemes,
-      portalInvites, profiles, caseViews, caseAccess,
+      portalInvites, profiles, caseViews, caseAccess, redundancyCases,
       exportedAt:new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
@@ -2610,7 +2620,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // also covers employee records, signing requests and portal
       // access) — the person clicking an irreversible delete button
       // should see an accurate list of what it actually removes.
-      message: "This will permanently delete all case files, meeting records, allegations, employee records, wellbeing notes, concern referrals, signing requests, portal access, onboarding/offboarding checklists, DSAR requests, HR review requests, tasks and the audit trail for this organisation. This cannot be undone.",
+      message: "This will permanently delete all case files, meeting records, allegations, employee records, wellbeing notes, concern referrals, redundancy cases, signing requests, portal access, onboarding/offboarding checklists, DSAR requests, HR review requests, tasks and the audit trail for this organisation. This cannot be undone.",
       confirmLabel: "Delete everything",
       danger: true,
     });
@@ -3023,7 +3033,53 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
   };
 
   // ── Redundancy helpers ──
-  const saveRedundancyCases = u => { setRedundancyCases(u); orgLsSet("compass_redundancy", u); };
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H1) — cloud-synced
+  // like wellbeing_notes, RLS-restricted to hr_manager/hr_director org
+  // members (see supabase/redundancy_cases_2026-08-27.sql). Only loaded
+  // when isHR (loadOrgData below) — the same "avoid a doomed query for a
+  // role RLS would reject anyway" reasoning as loadWellbeingNotes.
+  const loadRedundancyCases = async () => {
+    if(!org?.id) return;
+    try {
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('redundancy_cases').select('*').eq('org_id', org.id).order('created_at', {ascending:false}).order('id', {ascending:true}).range(from, to));
+      if(error) { console.error('loadRedundancyCases', error); markLoadIssue('redundancy cases'); return; }
+      if(data) {
+        data.forEach(r => { redundancyCaseVersionRef.current[r.id] = r.updated_at; });
+        setRedundancyCases(data.map(r=>({
+          id:r.id, type:r.type, reason:r.reason, poolDescription:r.pool_description,
+          selectionCriteria:r.selection_criteria||[], atRiskEmployees:r.at_risk_employees||[],
+          collectiveInfo:r.collective_info, status:r.status, aiAdvice:r.ai_advice||"",
+          createdBy:r.created_by, createdAt:r.created_at,
+        })));
+      }
+    } catch(e) { console.error('loadRedundancyCases', e); markLoadIssue('redundancy cases'); }
+  };
+
+  // Same conflict-detection pattern as saveWellbeingNoteToDB — a second
+  // HR writer scoring a different at-risk employee on the same case
+  // moments apart must not silently discard the other's edit.
+  const saveRedundancyCaseToDB = (rc) => {
+    if(!org?.id) return Promise.resolve();
+    const fields = {
+      org_id: org.id, type: rc.type, reason: rc.reason||null, pool_description: rc.poolDescription||null,
+      selection_criteria: rc.selectionCriteria||[], at_risk_employees: rc.atRiskEmployees||[],
+      collective_info: rc.collectiveInfo||null, status: rc.status||'setup', ai_advice: rc.aiAdvice||null,
+      created_by: rc.createdBy||null,
+    };
+    const run = async () => {
+      const updatedAt = redundancyCaseVersionRef.current[rc.id];
+      const nowIso = new Date().toISOString();
+      const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'redundancy_cases', rc.id, updatedAt, {...fields, updated_at: nowIso})));
+      if(conflict) {
+        showToast("This redundancy case was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        loadRedundancyCases();
+        return;
+      }
+      if(error) { console.error('saveRedundancyCaseToDB', error); showToast("Couldn't save the redundancy case to the cloud — "+error.message, "error"); return; }
+      redundancyCaseVersionRef.current[rc.id] = nowIso;
+    };
+    return enqueueSave(redundancyCaseSaveQueueRef.current, rc.id, run);
+  };
 
   const createRedundancyCase = (type, reason, poolDescription) => {
     const rc = {
@@ -3043,8 +3099,8 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
       createdBy: currentUser?.name || "HR Manager",
       aiAdvice:"",
     };
-    const updated = [...redundancyCases, rc];
-    saveRedundancyCases(updated);
+    setRedundancyCases(prev => [...prev, rc]);
+    saveRedundancyCaseToDB(rc);
     setActiveRedundancy(rc);
     setRedundancyStep("pool");
     audit("Redundancy case created", `${type} — ${reason}`);
@@ -3053,9 +3109,10 @@ Generate a tailored onboarding checklist for this role. Include role-specific ta
 
   const updateRedundancyCase = (updates) => {
     if(!activeRedundancy) return;
-    const updated = redundancyCases.map(r => r.id===activeRedundancy.id ? {...r,...updates} : r);
-    saveRedundancyCases(updated);
-    setActiveRedundancy(prev=>({...prev,...updates}));
+    const merged = {...activeRedundancy, ...updates};
+    setRedundancyCases(prev => prev.map(r => r.id===merged.id ? merged : r));
+    saveRedundancyCaseToDB(merged);
+    setActiveRedundancy(merged);
   };
 
   const scoreEmployee = (empId, criterionId, score) => {
@@ -8266,7 +8323,12 @@ Please produce:
       )}
 
             {/* ══ REDUNDANCY & CONSULTATION ══ */}
-      {screen===SCREENS.REDUNDANCY&&(
+      {/* Phase 6.5 hardening (closes Prompt 16 audit finding H1, HIGH) —
+          defense-in-depth screen-level guard, same as Wellbeing below —
+          RLS is the real boundary, but this stops the create/empty-state
+          UI from ever rendering for a non-HR role even via direct
+          setScreen navigation. */}
+      {screen===SCREENS.REDUNDANCY&&isHR&&(
         <RedundancyScreen
           activeRedundancy={activeRedundancy}
           setActiveRedundancy={setActiveRedundancy}
@@ -8410,6 +8472,7 @@ Please produce:
           managerCapabilityInsights={managerCapabilityInsights}
           organisationThemes={organisationThemes}
           caseAccess={caseAccess}
+          redundancyCases={redundancyCases}
           orgId={org?.id}
           audit={audit}
           setScreen={setScreen}

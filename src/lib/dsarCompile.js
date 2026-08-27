@@ -61,7 +61,7 @@
 //    regardless of whose case it was on) is folded into the existing
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [] } = {}) {
+export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [] } = {}) {
   const matchingEmployeeRecords = employeeRecords.filter(r => r.name === employeeName);
   const employeeRecord = matchingEmployeeRecords[0] || null;
   const subjectCases = cases.filter(c => c.employeeName === employeeName);
@@ -113,6 +113,13 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   // else's case only" the way actedAsStaff is, since a grant on the
   // subject's own case is still the subject's own personal data too.
   const subjectCaseAccess = caseAccess.filter(a => subjectUserIds.has(a.userId));
+
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H1's own DSAR/
+  // export completeness gap, alongside giving redundancy cases a real DB
+  // table at all) — atRiskEmployees is a jsonb array, not a queryable
+  // column, so this is matched client-side the same way actedAsStaff
+  // matches free-text manager columns above.
+  const subjectRedundancyCases = redundancyCases.filter(r => (r.atRiskEmployees||[]).some(e => e.name === employeeName));
 
   // Records that name the subject as staff (manager / investigating
   // manager / disciplinary officer / HR reviewer) on someone ELSE's
@@ -292,6 +299,7 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     caseViews: subjectCaseViews,
     portalInvites: subjectPortalInvites,
     caseAccessGrants: subjectCaseAccess,
+    redundancyCases: subjectRedundancyCases,
     actedAsStaff,
     flaggedThirdPartyMentions: flagged,
     subjectMentionsInOrgNarratives,

@@ -514,4 +514,21 @@ describe('compileSubjectData — case_access grants, third-party witness mention
     const result = compileSubjectData('Priya Manager', data);
     expect(result.signingRequests).toEqual([data.signingRequests[0]]);
   });
+
+  it('includes redundancy cases where the subject appears as an at-risk employee (closes H1\'s own DSAR gap)', () => {
+    const data = {
+      ...baseData,
+      redundancyCases: [
+        { id: 'rc1', type: 'collective', atRiskEmployees: [{ id: 'e1', name: 'Ada Lovelace', score: 42 }, { id: 'e2', name: 'Grace Hopper', score: 51 }] },
+        { id: 'rc2', type: 'individual', atRiskEmployees: [{ id: 'e3', name: 'Grace Hopper', score: 30 }] },
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.redundancyCases).toEqual([data.redundancyCases[0]]);
+  });
+
+  it('defaults redundancyCases to an empty array when omitted', () => {
+    const result = compileSubjectData('Ada Lovelace', baseData);
+    expect(result.redundancyCases).toEqual([]);
+  });
 });

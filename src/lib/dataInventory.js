@@ -28,6 +28,10 @@ export const ORG_SCOPED_TABLES = [
   'employee_portal_accounts', 'employee_portal_invites', 'case_views', 'improvement_initiatives',
   'manager_capability_insights', 'er_executive_briefs', 'org_events', 'integration_events',
   'organisation_themes',
+  // redundancy_cases (closes Prompt 16 audit finding H1) — its own direct
+  // org_id column, no case_id/FK to cases at all, so nothing else's
+  // cascade would ever reach it (see supabase/redundancy_cases_2026-08-27.sql).
+  'redundancy_cases',
 ];
 
 // Tables with an org_id column that are NOT deleted directly, because a

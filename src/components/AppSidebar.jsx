@@ -66,7 +66,14 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     // are the real boundary either way.
     ...(isHR?[{s:SCREENS.NEWSTARTER, l:"Onboarding"}]:[]),
     ...(isHR?[{s:SCREENS.OFFBOARDING, l:"Offboarding"}]:[]),
-    {s:SCREENS.REDUNDANCY, l:"Redundancy"},
+    // Phase 6.5 hardening (closes Prompt 16 audit finding H1, HIGH) —
+    // redundancy cases hold selection-criteria scores, at-risk employee
+    // names and redundancy pay for people who often don't yet know
+    // they're at risk. This nav item had no gate at all — every org
+    // member, regardless of role, could reach it. RLS (see
+    // supabase/redundancy_cases_2026-08-27.sql) is the real boundary;
+    // this hides the link to match, same as Wellbeing/DSAR below.
+    ...(isHR?[{s:SCREENS.REDUNDANCY, l:"Redundancy"}]:[]),
     // Wellbeing notes are confidential and RLS-restricted to HR staff (see
     // supabase/wellbeing_notes_2026-08-09.sql) — a non-HR role has no
     // database access to them, so don't even show the link.
