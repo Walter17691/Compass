@@ -6137,13 +6137,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   // ── AI: Outcome prediction ──
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 5.9b, MEDIUM) —
+  // this was the one remaining AI prompt site with no safety constraint
+  // at all: no ban on recommending a specific sanction/outcome (every
+  // comparable prompt in this file has one — see runRiskScore just
+  // above, the next-step and case-comparison prompts), and its own
+  // "## Comparable Cases" heading actively invited the model to name
+  // real tribunal decisions it has no way to verify — a fabricated
+  // citation presented as real case law is a serious professional risk
+  // in this exact domain, the same class of issue this app's own letter
+  // system prompt already guards against for invented deadlines.
   const runPrediction = async () => {
     setPredProcessing(true);
     try {
       const tx = reviewOutput || transcript.slice(-40).map(u=>u.text).join("\n");
       await streamClaude(
-        `UK employment tribunal outcome predictor. Analyse based on ERA 1996, ACAS Code, case law. Be honest about risks. ## headers.`,
-        `Meeting: ${meetingType?.label}\nEmployee: ${caseInfo.employee}\nRecord:\n${reviewOutput||tx}\n\n## Likely Outcome if Challenged at Tribunal\n## Key Vulnerabilities\n## Strongest Arguments for Employer\n## Recommended Actions to Strengthen Position\n## Comparable Cases`,
+        `UK employment tribunal outcome predictor. Analyse based on ERA 1996, ACAS Code, case law. Be honest about risks. You must NEVER recommend a specific sanction, disciplinary outcome, or final decision — describe risks and vulnerabilities only; the decision is HR's alone. Never cite a specific named tribunal case, decision, or legal citation — you cannot verify these are real. Discuss precedent in general terms only (e.g. "tribunals have historically scrutinised..."), never naming a specific case. ## headers.`,
+        `Meeting: ${meetingType?.label}\nEmployee: ${caseInfo.employee}\nRecord:\n${reviewOutput||tx}\n\n## Likely Outcome if Challenged at Tribunal\n## Key Vulnerabilities\n## Strongest Arguments for Employer\n## Recommended Actions to Strengthen Position\n## How Tribunals Have Approached Similar Situations`,
         t=>setPrediction(t)
       );
     } catch(e) { setPrediction("Could not generate prediction: "+e.message); }
