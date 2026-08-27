@@ -146,6 +146,19 @@ describe('buildScheduledMeetingEntry (Phase 5, IP17)', () => {
     expect(entry.prepQuestions).toEqual([]);
     expect(entry.manager).toBe('');
     expect(entry.savedBy).toBe('HR Manager');
+    expect(entry.calendarEvents).toEqual([]);
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 7.11, MEDIUM) —
+  // create-event's own {provider, eventId} pairs used to be discarded
+  // entirely, so Compass had no record of which real calendar event(s) a
+  // scheduled meeting corresponds to.
+  it('persists the calendar event ids returned by create-event (Prompt 11 audit, 7.11)', () => {
+    const entry = buildScheduledMeetingEntry({
+      meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: 'x', endISO: 'y',
+      calendarEvents: [{ provider: 'google', eventId: 'g-evt-1' }, { provider: 'microsoft365', eventId: 'ms-evt-1' }],
+    });
+    expect(entry.calendarEvents).toEqual([{ provider: 'google', eventId: 'g-evt-1' }, { provider: 'microsoft365', eventId: 'ms-evt-1' }]);
   });
 
   it('gives each entry a unique id', () => {

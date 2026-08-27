@@ -121,7 +121,14 @@ export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Dat
 // buildCaseTimeline's own "held" vs "scheduled" wording (see its own
 // comment). record stays null/undefined until the meeting is actually
 // run through the live session.
-export function buildScheduledMeetingEntry({ meetingTypeLabel, date, startISO, endISO, attendees, agenda, prepQuestions, manager, savedBy }) {
+// calendarEvents (Phase 6.5 hardening, closes Prompt 11 audit finding
+// 7.11, MEDIUM): api/calendar/_create-event.js returns a {provider,
+// eventId} pair for every calendar it created the event on — this used
+// to be discarded entirely by scheduleMeeting, so Compass had no record
+// of which real calendar event(s) this meeting corresponds to once
+// scheduled, and no way to later update or cancel them if the meeting is
+// rescheduled or the case is closed.
+export function buildScheduledMeetingEntry({ meetingTypeLabel, date, startISO, endISO, attendees, agenda, prepQuestions, manager, savedBy, calendarEvents }) {
   return {
     id: crypto.randomUUID(),
     type: meetingTypeLabel,
@@ -135,5 +142,6 @@ export function buildScheduledMeetingEntry({ meetingTypeLabel, date, startISO, e
     savedBy: savedBy || "HR Manager",
     savedAt: new Date().toISOString(),
     record: null,
+    calendarEvents: calendarEvents || [],
   };
 }

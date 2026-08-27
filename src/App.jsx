@@ -2598,7 +2598,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         const meetingEntry = buildScheduledMeetingEntry({
           meetingTypeLabel: meetingLabel, date, startISO: times.startISO, endISO: times.endISO,
           attendees: parseAttendees(attendees), agenda: workspace.agenda, prepQuestions: workspace.questions,
-          manager: cs.manager, savedBy: currentUser?.name,
+          manager: cs.manager, savedBy: currentUser?.name, calendarEvents: data.events,
         });
         saveCases(cases.map(x=>x.id===caseId?{...x, meetings:[...(x.meetings||[]), meetingEntry]}:x), caseId);
         // Pre-meeting tasks — only genuinely actionable prep items
@@ -2609,7 +2609,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         audit("Meeting workspace created", title, caseId);
       }
 
-      showToast("Meeting scheduled on your calendar");
+      // Phase 6.5 hardening (closes Prompt 11 audit finding 7.11, MEDIUM)
+      // — create-event deliberately creates the event on EVERY calendar
+      // the user has connected (its own header comment), not just one —
+      // real for a user with both Google and Microsoft 365 connected,
+      // but it means attendees get a separate invite from each. Silently
+      // saying "scheduled on your calendar" (singular) when it just went
+      // out from two different systems was misleading; naming both here
+      // makes that an informed fact instead of a surprise.
+      const calendarNote = data.events?.length > 1
+        ? ` on ${data.events.length} connected calendars (${data.events.map(e=>e.provider).join(', ')}) — attendees may receive a separate invite from each`
+        : "";
+      showToast("Meeting scheduled"+(calendarNote||" on your calendar"));
       setMeetingScheduling(false);
       return true;
     } catch(e) { showToast("Couldn't schedule the meeting — "+e.message, "error"); setMeetingScheduling(false); return false; }
