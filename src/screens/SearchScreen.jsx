@@ -1,9 +1,22 @@
+import { useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { Card } from '../components/Primitives';
 import { useLoadMore } from '../hooks/useLoadMore';
+import { useDebounce } from '../hooks/useDebounce';
 
 export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchResults, setScreen, setExpandedCases, cases, setViewMeeting, setViewCaseId, dueSoon, setActivePerson }) {
   const { visible: visibleResults, hasMore, loadMore, total } = useLoadMore(searchResults, 20);
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 10.3, MEDIUM) —
+  // runSearch scans every case's meetings/records/letters/evidence in
+  // memory; calling it on every keystroke re-ran that full scan for each
+  // character typed, real lag against a large org's real case volume.
+  // searchQuery itself still updates immediately below (the input field
+  // stays responsive) — only the expensive scan is debounced.
+  const debouncedQuery = useDebounce(searchQuery, 250);
+  useEffect(() => {
+    runSearch(debouncedQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to the debounced query itself, not runSearch's own identity (a new function reference every parent render, which would otherwise re-run the scan on every unrelated App.jsx re-render too)
+  }, [debouncedQuery]);
   return (
     <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
       <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 20px",fontWeight:600}}>Search</h2>
@@ -11,7 +24,7 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
         aria-label="Search"
         placeholder="Search cases, records, letters, employees, evidence, DSARs..."
         value={searchQuery}
-        onChange={e=>{setSearchQuery(e.target.value);runSearch(e.target.value);}}
+        onChange={e=>setSearchQuery(e.target.value)}
         style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 18px",fontSize:15,color:"#1A1535",outline:"none",marginBottom:24,boxSizing:"border-box"}} />
 
       {searchQuery&&searchResults.length===0&&(
