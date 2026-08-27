@@ -32,7 +32,7 @@ const EMPTY_SCHEDULE_FORM = { caseId: "", meetingType: "investigation", date: ""
 // "smart" additions once a case, date and time are picked: attendee/role
 // suggestions, a policy notice-period check, and an availability check
 // against the organiser's own connected calendar.
-function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMembers = [], organiserEmail, onClose, onSubmit, scheduling, onCheckAvailability, availabilityCheck, availabilityChecking, clearAvailabilityCheck }) {
+function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMembers = [], organiserEmail, ukJurisdiction, onClose, onSubmit, scheduling, onCheckAvailability, availabilityCheck, availabilityChecking, clearAvailabilityCheck }) {
   const [form, setForm] = useState(EMPTY_SCHEDULE_FORM);
   const canSubmit = form.date && form.startTime && !scheduling;
   const cs = cases.find(c=>c.id===form.caseId) || null;
@@ -52,7 +52,7 @@ function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMember
 
   const relevantCategory = cs ? CASE_TYPE_TO_POLICY_CATEGORY[getProcessType(cs.caseType).id] : null;
   const clauseTexts = relevantCategory ? policies.filter(p => p.category === relevantCategory).flatMap(p => (p.clauses || []).map(c => c.text)) : [];
-  const noticeCheck = times ? checkNoticePeriod(clauseTexts, { meetingISO: times.startISO }) : null;
+  const noticeCheck = times ? checkNoticePeriod(clauseTexts, { meetingISO: times.startISO, ukJurisdiction }) : null;
   const containerRef = useRef(null);
   useModalA11y(containerRef, onClose);
 
@@ -142,7 +142,7 @@ function ScheduleMeetingModal({ cases, policies = [], caseAccess = [], orgMember
   );
 }
 
-export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCaseId, setActiveCaseStage, cases = [], onScheduleMeeting, meetingScheduling, policies, caseAccess, orgMembers, organiserEmail, onCheckAvailability, availabilityCheck, availabilityChecking, clearAvailabilityCheck }) {
+export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCaseId, setActiveCaseStage, cases = [], onScheduleMeeting, meetingScheduling, policies, caseAccess, orgMembers, organiserEmail, ukJurisdiction, onCheckAvailability, availabilityCheck, availabilityChecking, clearAvailabilityCheck }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -184,7 +184,7 @@ export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCase
       </div>
 
       {showScheduleModal&&(
-        <ScheduleMeetingModal cases={cases} policies={policies} caseAccess={caseAccess} orgMembers={orgMembers} organiserEmail={organiserEmail}
+        <ScheduleMeetingModal cases={cases} policies={policies} caseAccess={caseAccess} orgMembers={orgMembers} organiserEmail={organiserEmail} ukJurisdiction={ukJurisdiction}
           onClose={()=>setShowScheduleModal(false)} onSubmit={onScheduleMeeting} scheduling={meetingScheduling}
           onCheckAvailability={onCheckAvailability} availabilityCheck={availabilityCheck} availabilityChecking={availabilityChecking} clearAvailabilityCheck={clearAvailabilityCheck}/>
       )}

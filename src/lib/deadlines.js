@@ -1,5 +1,6 @@
 import { getCaseStage } from './caseStage.js';
 import { parseFlexDate, daysBetween, addWorkingDays as addWorkingDaysDate } from './dateMath.js';
+import { DEFAULT_UK_JURISDICTION } from './ukBankHolidays.js';
 import { isDisciplinaryMeeting, isInvestigationMeeting } from './meetingTypeMatch.js';
 
 // Phase 6.5 hardening (structural remediation, Prompt 12 — Deadline
@@ -49,12 +50,19 @@ import { isDisciplinaryMeeting, isInvestigationMeeting } from './meetingTypeMatc
 // wherever dueSoon already does (HomeScreen's HR-facing overdue banner,
 // ManagerPortalScreen's own grouped view, the digest cron) with no extra
 // plumbing anywhere else.
-export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = [], caseAccess = []) {
+// Phase 7 (Controlled Beta Infrastructure Gate 1) — ukJurisdiction is the
+// same trailing-optional-param treatment as every other param added to
+// this signature over time (see wellbeingNotes/leaverInstances/
+// redundancyCases/caseAccess's own comments above): every existing call
+// site keeps working unchanged, defaulting to England & Wales
+// (ukBankHolidays.js's own default), while a caller that knows an org's
+// real configured jurisdiction can pass it through.
+export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = [], caseAccess = [], ukJurisdiction = DEFAULT_UK_JURISDICTION) {
   const start = new Date(today);
   start.setHours(0,0,0,0);
   const due = [];
 
-  const workingDaysFromDate = (dateStr, days) => addWorkingDaysDate(dateStr, days);
+  const workingDaysFromDate = (dateStr, days) => addWorkingDaysDate(dateStr, days, ukJurisdiction);
 
   // caseId/createdBy/confidential ride along on every case-based deadline so
   // downstream consumers that leave Compass's own RLS-protected boundary —
@@ -96,7 +104,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
       const hasOutcome = cs.outcome||meetings.some(mt=>mt.letterOutput&&(mt.type||"").toLowerCase().includes("outcome"));
       if(!hasOutcome) {
         const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-        if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS: 5 working days)", dl, "outcome", `${cs.id}:outcome`, caseMeta);
+        if(dl) addDeadline(cs.employeeName, "Disciplinary outcome letter due (ACAS-recommended: 5 working days)", dl, "outcome", `${cs.id}:outcome`, caseMeta);
       }
     });
 
@@ -104,7 +112,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     const outcomeLetters = meetings.filter(m=>m.letterOutput&&isDisciplinaryMeeting(m.type));
     outcomeLetters.forEach(m => {
       const dl = workingDaysFromDate(m.savedAt||m.date, 5);
-      if(dl) addDeadline(cs.employeeName, "Employee appeal window closes (ACAS: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`, caseMeta);
+      if(dl) addDeadline(cs.employeeName, "Employee appeal window (ACAS-recommended: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`, caseMeta);
     });
 
     // Investigation overrunning — 28 days. Manager Enablement (Phase 4,
@@ -146,7 +154,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // Grievance acknowledgement — 5 working days from receipt
     if((cs.caseType||"").toLowerCase()==="grievance"&&meetings.length===0&&cs.dateReceived) {
       const dl = workingDaysFromDate(cs.dateReceived, 5);
-      if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS: 5 working days)", dl, "grievance", `${cs.id}:grievance`, caseMeta);
+      if(dl) addDeadline(cs.employeeName, "Grievance acknowledgement due (ACAS-recommended: 5 working days)", dl, "grievance", `${cs.id}:grievance`, caseMeta);
     }
 
     // Pending signature chase — 7 days

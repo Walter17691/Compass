@@ -79,7 +79,7 @@ const WORKING_DAY_UNITS = new Set(["working day", "business day"]);
 // (dateMath.js) already exists and is now used for exactly these two
 // units, comparing real dates rather than a flat hour count; plain
 // hour/day units are unaffected (weekends don't apply to them either).
-export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Date() } = {}) {
+export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Date(), ukJurisdiction } = {}) {
   if (!meetingISO) return null;
   for (const text of policyClauseTexts || []) {
     const match = NOTICE_PATTERN.exec(text || "");
@@ -91,7 +91,7 @@ export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Dat
     let requiredHours = value * (UNIT_TO_HOURS[unit] || 24);
     let violated = actualHours < requiredHours;
     if (WORKING_DAY_UNITS.has(unit)) {
-      const deadline = addWorkingDays(now, value);
+      const deadline = addWorkingDays(now, value, ukJurisdiction);
       if (deadline) {
         requiredHours = (deadline.getTime() - now.getTime()) / 3600000;
         violated = meetingTime < deadline.getTime();

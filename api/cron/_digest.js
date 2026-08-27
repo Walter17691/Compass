@@ -124,7 +124,7 @@ export function isAuthorisedFor(deadline, member, caseAccessByCase, casesById = 
 }
 
 export async function runDigest() {
-  const orgsRes = await supabaseRequest('organisations?select=id,name,plan,notification_webhook_url,notification_webhook_type');
+  const orgsRes = await supabaseRequest('organisations?select=id,name,plan,notification_webhook_url,notification_webhook_type,uk_jurisdiction');
   const orgs = await orgsRes.json();
 
   let sent = 0;
@@ -147,7 +147,11 @@ export async function runDigest() {
     // loadCasesFromDB/loadEmployeeRecords.
     const { data: rows } = await fetchAllPagesServer(`cases?org_id=eq.${org.id}&select=*&order=id.asc`);
     const { data: dsarRequests } = await fetchAllPagesServer(`dsar_requests?org_id=eq.${org.id}&status=neq.completed&select=*&order=id.asc`);
-    const dueSoon = computeDueSoon(rows.map(mapCaseRow), dsarRequests);
+    // Phase 7 (Controlled Beta Infrastructure Gate 1) — org.uk_jurisdiction
+    // threaded through so the digest's own due-soon computation uses the
+    // same bank-holiday calendar the in-app banner does, not always the
+    // england-and-wales default.
+    const dueSoon = computeDueSoon(rows.map(mapCaseRow), dsarRequests, new Date(), [], [], [], [], [], org.uk_jurisdiction || undefined);
     const urgent = dueSoon.filter(isUrgent);
     if (urgent.length === 0) continue;
 

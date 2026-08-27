@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Btn, Card } from '../../components/Primitives';
+import { UK_JURISDICTIONS } from '../../lib/ukBankHolidays';
 
-export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies, auditLog, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, lsSet, dataRetentionYears, saveDataRetentionYears }) {
+export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies, auditLog, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, lsSet, dataRetentionYears, saveDataRetentionYears, ukJurisdiction, saveUkJurisdiction }) {
   const [retentionDraft, setRetentionDraft] = useState(dataRetentionYears ?? "");
   return (
     <>
@@ -14,6 +15,22 @@ export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies
             <Btn onClick={exportPDF} variant="ghost" style={{flex:1}}>Export PDF</Btn>
           </div>
           <div style={{fontSize:11,color:"#5A5570",marginTop:10}}>CSV includes all cases, meetings, risk scores and dates. PDF includes full case summaries.</div>
+        </Card>
+      )}
+
+      {isHR&&(
+        <Card style={{marginBottom:12}}>
+          <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Working-day calendar</div>
+          <p style={{fontSize:12,color:"#6B6880",marginBottom:14,lineHeight:1.6}}>Which UK bank holidays Compass excludes when it calculates a "working days" deadline (e.g. the ACAS-recommended 5 working days for an outcome letter or appeal window). ACAS guidance is a recommended timescale, not a fixed statutory deadline — Compass calculates against it for consistency, but the right period for a specific case is always a judgment call for the person running it.</p>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <label htmlFor="uk-jurisdiction" style={{fontSize:12,color:"#1A1535",flexShrink:0}}>Calendar</label>
+            <select id="uk-jurisdiction" value={ukJurisdiction||""} onChange={e=>saveUkJurisdiction(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}>
+              <option value="">England & Wales (default)</option>
+              {UK_JURISDICTIONS.filter(j=>j.id!=="england-and-wales").map(j=>(
+                <option key={j.id} value={j.id}>{j.label}</option>
+              ))}
+            </select>
+          </div>
         </Card>
       )}
 

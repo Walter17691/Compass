@@ -1980,6 +1980,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(error) showToast("Couldn't save retention period — please try again", "error");
     else { showToast("Retention period saved"); audit("Data retention policy updated", value?`Set to ${value} year${value===1?"":"s"}`:"Cleared"); }
   };
+  // Phase 7 (Controlled Beta Infrastructure Gate 1) — which UK
+  // bank-holiday calendar this org's own "ACAS: N working days"
+  // deadlines are computed against (src/lib/ukBankHolidays.js). Same
+  // nullable-org-column, HR-only-write pattern as dataRetentionYears
+  // just above; null reads as "england-and-wales" everywhere this is
+  // consumed (computeDueSoon's own default).
+  const [ukJurisdiction, setUkJurisdiction] = useState(org?.uk_jurisdiction||null);
+  const saveUkJurisdiction = async (jurisdiction) => {
+    if(!org?.id) return;
+    const value = jurisdiction || null;
+    setUkJurisdiction(value);
+    const { error } = await supabase.from('organisations').update({uk_jurisdiction: value}).eq('id', org.id);
+    if(error) showToast("Couldn't save the working-day calendar — please try again", "error");
+    else { showToast("Working-day calendar saved"); audit("UK bank-holiday calendar updated", value||"England & Wales (default)"); }
+  };
   // Integrations & Workflow Automation (Phase 5, IP28, §22-23) — same
   // JSONB-config-on-organisations precedent as the webhook fields above.
   // Which rule ids are even eligible to be set beyond "suggest" is
@@ -2419,8 +2434,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Rules live in src/lib/deadlines.js so the digest cron function (server
   // side) can compute the same due-soon set without duplicating them.
   useEffect(() => {
-    setDueSoon(computeDueSoon(cases, dsarRequests, new Date(), caseTasks, wellbeingNotes, leaverInstances, redundancyCases, caseAccess));
-  }, [cases, dsarRequests, caseTasks, wellbeingNotes, leaverInstances, redundancyCases, caseAccess]);
+    setDueSoon(computeDueSoon(cases, dsarRequests, new Date(), caseTasks, wellbeingNotes, leaverInstances, redundancyCases, caseAccess, ukJurisdiction||undefined));
+  }, [cases, dsarRequests, caseTasks, wellbeingNotes, leaverInstances, redundancyCases, caseAccess, ukJurisdiction]);
 
   // Lets a deep link (Home's "Suggested for you" quick links) land
   // directly on a specific Settings section instead of always Billing.
@@ -6102,7 +6117,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // review consolidated four other date implementations onto) has no
     // such special case and also — unlike the old dates.js version —
     // parses DD/MM/YYYY, not just what `new Date()` itself accepts.
-    const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days)?.toLocaleDateString("en-GB")||null, done:false }));
+    const steps = (NEXT_STEPS_MAP[meetingType?.label] || []).map(s=>({ step:s.step, deadline:addWorkingDays(baseDate,s.days,ukJurisdiction||undefined)?.toLocaleDateString("en-GB")||null, done:false }));
     setNextSteps(steps);
     let fullRecord = "";
     try {
@@ -8653,7 +8668,7 @@ Please produce:
           integrations={{ mailConnected, mailboxEmail, onConnectMail: connectOutlookMail, onDisconnectMail: disconnectOutlookMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, integrationEvents, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook }}
           notifications={{ dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest }}
           automation={{ automationLevels, saveAutomationLevel }}
-          dataPrivacy={{ exportCSV, exportPDF, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, dataRetentionYears, saveDataRetentionYears }}
+          dataPrivacy={{ exportCSV, exportPDF, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, dataRetentionYears, saveDataRetentionYears, ukJurisdiction, saveUkJurisdiction }}
           onboarding={{ setOnboardStep, setShowOnboard }}
         />
       )}
@@ -8716,6 +8731,7 @@ Please produce:
           caseAccess={caseAccess}
           orgMembers={orgMembers}
           organiserEmail={user?.email}
+          ukJurisdiction={ukJurisdiction||undefined}
           onCheckAvailability={checkMeetingAvailability}
           availabilityCheck={availabilityCheck}
           availabilityChecking={availabilityChecking}

@@ -9,6 +9,8 @@
 // UK-format "DD/MM/YYYY" text, not ISO — every consumer needs to handle
 // both.
 
+import { isUkBankHoliday, DEFAULT_UK_JURISDICTION } from './ukBankHolidays';
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ISO_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -97,12 +99,21 @@ export function daysSince(dateIso, now = new Date()) {
   return daysBetween(dateIso, now);
 }
 
-// Adds `days` working days (Mon-Fri) to `date`, returning a Date (not a
-// formatted string — callers that want en-GB display text format the
-// return value themselves, same as dates.js's addCalendarMonth already
-// does). Returns null for an unparseable input date, matching every
-// other function in this module.
-export function addWorkingDays(date, days) {
+// Phase 7 (Controlled Beta Infrastructure Gate 1) — closes a real,
+// reproduced bug: this used to skip Saturday/Sunday only, no UK bank
+// holidays at all, while callers present the result as a concrete,
+// dated fact ("ACAS: 5 working days", "appeal window closes"). Any
+// 5-working-day window spanning a bank holiday came out early. Now also
+// skips gazetted UK bank holidays for the given jurisdiction (default
+// England & Wales — see ukBankHolidays.js's own header comment for why
+// that's the default and not a universal assumption).
+//
+// Adds `days` working days (Mon-Fri, excluding bank holidays) to `date`,
+// returning a Date (not a formatted string — callers that want en-GB
+// display text format the return value themselves, same as dates.js's
+// addCalendarMonth already does). Returns null for an unparseable input
+// date, matching every other function in this module.
+export function addWorkingDays(date, days, jurisdiction = DEFAULT_UK_JURISDICTION) {
   const d = parseFlexDate(date);
   if (!d) return null;
   const result = new Date(d);
@@ -110,7 +121,7 @@ export function addWorkingDays(date, days) {
   while (added < days) {
     result.setDate(result.getDate() + 1);
     const day = result.getDay();
-    if (day !== 0 && day !== 6) added++;
+    if (day !== 0 && day !== 6 && !isUkBankHoliday(result, jurisdiction)) added++;
   }
   return result;
 }

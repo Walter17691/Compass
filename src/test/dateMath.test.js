@@ -241,12 +241,19 @@ describe('addWorkingDays', () => {
     expect(result.getDay()).toBe(1); // Monday
   });
 
-  it('rolls over the year boundary correctly, still skipping the weekend inside it (Thursday 31 Dec 2026 + 2 working days = Monday 4 Jan 2027)', () => {
+  // Phase 7 (Controlled Beta Infrastructure Gate 1) — this test's own
+  // expected date changed from the pre-bank-holiday-aware behaviour: Fri
+  // 1 Jan 2027 is New Year's Day, a real bank holiday, so it's correctly
+  // skipped now — the 2nd working day lands on Tue 5 Jan, not Mon 4 Jan.
+  // This is exactly the class of real-world case (a deadline window
+  // crossing the year boundary AND a bank holiday) this gate exists to
+  // get right.
+  it('rolls over the year boundary correctly, skipping both the weekend and New Year\'s Day inside it (Thursday 31 Dec 2026 + 2 working days = Tuesday 5 Jan 2027)', () => {
     const result = addWorkingDays(new Date(2026, 11, 31), 2);
     expect(result.getFullYear()).toBe(2027);
     expect(result.getMonth()).toBe(0); // January
-    expect(result.getDate()).toBe(4);
-    expect(result.getDay()).toBe(1); // Monday
+    expect(result.getDate()).toBe(5);
+    expect(result.getDay()).toBe(2); // Tuesday
   });
 
   it('returns the same date, not null, for 0 working days', () => {
