@@ -13,6 +13,14 @@ import { CaseQualityAnalyticsPanel } from './CaseQualityAnalyticsPanel';
 import { PolicyEffectivenessPanel } from './PolicyEffectivenessPanel';
 
 const MIN_DURATION_SAMPLE = 3;
+// Phase 6.5 hardening (closes Prompt 16 audit finding H18, HIGH) — the
+// duration/investigation-count stats above already had a sample floor,
+// but the type/site/department/outcome breakdown bars below them did not
+// — a bar reading "Manchester: 1" or "Dismissal: 1" is a direct
+// re-identification risk at a small site or for a rare outcome, the same
+// small-sample disclosure risk MIN_SAMPLE_SIZE/DataQualityCaveat already
+// guard everywhere else in this phase (Trends, Risk Map, Benchmarking).
+const MIN_BAR_SAMPLE = 3;
 
 const StatBox = ({ label, value, sub, accent = "#7C5CFC" }) => (
   <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
@@ -43,6 +51,18 @@ const Panel = ({ title, children }) => (
 
 function topEntries(obj, limit = 6) {
   return Object.entries(obj || {}).sort((a,b)=>b[1]-a[1]).slice(0, limit);
+}
+
+// Phase 6.5 hardening (closes Prompt 16 audit finding H18) — holds back
+// individual bars below MIN_BAR_SAMPLE rather than the whole panel, same
+// suppression-not-fabrication approach as isSignificantTrend elsewhere in
+// this phase. suppressedCount is surfaced as a plain caption, never the
+// suppressed categories' own names/counts — showing "2 categories with
+// under 3 cases not shown" is safe; showing which ones would defeat the
+// point.
+function withSampleFloor(entries) {
+  const visible = entries.filter(([,v]) => v >= MIN_BAR_SAMPLE);
+  return { visible, suppressedCount: entries.length - visible.length };
 }
 
 // Organisational ER Intelligence (Phase 6, OP3, §1) — the Organisational
@@ -105,9 +125,9 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
   const overdueCaseIds = new Set((dueSoon || []).filter(d => d.overdue && d.caseId).map(d => d.caseId));
   const returnedForFurtherInvestigation = (hrReviewRequests || []).filter(r => r.step === "inv_report" && r.status === "returned").length;
 
-  const typeEntries = topEntries(overview.cases_by_type);
-  const locationEntries = topEntries(overview.cases_by_location);
-  const departmentEntries = topEntries(overview.cases_by_department);
+  const typeEntries = withSampleFloor(topEntries(overview.cases_by_type));
+  const locationEntries = withSampleFloor(topEntries(overview.cases_by_location));
+  const departmentEntries = withSampleFloor(topEntries(overview.cases_by_department));
   // cases_by_manager (still returned by org_insights_overview()) is
   // deliberately never rendered here — a sorted, top-N bar chart of
   // named managers by case volume is exactly the "score or rank an
@@ -115,7 +135,7 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
   // constraint prohibits, the same reasoning managerInsights.js's
   // "never a per-manager score" framing and riskMap.js's exclusion of
   // "management capability" from its per-site flags already apply.
-  const outcomeEntries = topEntries(overview.cases_by_outcome);
+  const outcomeEntries = withSampleFloor(topEntries(overview.cases_by_outcome));
   const maxOf = entries => Math.max(1, ...entries.map(([,v])=>v));
 
   return (
@@ -144,20 +164,24 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
         <Panel title="Cases by type">
-          {typeEntries.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
-          {typeEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(typeEntries)}/>)}
+          {typeEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
+          {typeEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(typeEntries.visible)}/>)}
+          {typeEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{typeEntries.suppressedCount} categor{typeEntries.suppressedCount===1?"y":"ies"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Cases by site">
-          {locationEntries.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
-          {locationEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(locationEntries)} color="#B87520"/>)}
+          {locationEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
+          {locationEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(locationEntries.visible)} color="#B87520"/>)}
+          {locationEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{locationEntries.suppressedCount} site{locationEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Cases by department">
-          {departmentEntries.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
-          {departmentEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(departmentEntries)} color="#1C5AA0"/>)}
+          {departmentEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
+          {departmentEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(departmentEntries.visible)} color="#1C5AA0"/>)}
+          {departmentEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{departmentEntries.suppressedCount} department{departmentEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Outcome types">
-          {outcomeEntries.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recorded outcomes yet.</div>}
-          {outcomeEntries.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(outcomeEntries)} color="#C84B2F"/>)}
+          {outcomeEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recorded outcomes yet.</div>}
+          {outcomeEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(outcomeEntries.visible)} color="#C84B2F"/>)}
+          {outcomeEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{outcomeEntries.suppressedCount} outcome{outcomeEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Repeat case themes">
           {themeFrequencies.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recurring themes tagged across 3+ cases yet.</div>}

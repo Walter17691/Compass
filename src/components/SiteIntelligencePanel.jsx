@@ -1,6 +1,11 @@
 import { DataQualityCaveat } from './DataQualityCaveat';
 
 const MIN_DURATION_SAMPLE = 3;
+// Phase 6.5 hardening (closes Prompt 16 audit finding H18, HIGH) — same
+// re-identification risk as OrganisationalIntelligenceOverview.jsx's own
+// fix: a per-site case-type bar reading "1" at a small site is a direct
+// disclosure of which specific case that is.
+const MIN_TYPE_SAMPLE = 3;
 
 const BarRow = ({ label, value, max, color = "#7C5CFC" }) => (
   <div style={{marginBottom:8}}>
@@ -45,7 +50,9 @@ export function SiteIntelligencePanel({ overview }) {
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Site intelligence</div>
       {sites.map(([site, count]) => {
-        const types = Object.entries(locationTypes[site] || {}).sort((a,b)=>b[1]-a[1]);
+        const allTypes = Object.entries(locationTypes[site] || {}).sort((a,b)=>b[1]-a[1]);
+        const types = allTypes.filter(([,v]) => v >= MIN_TYPE_SAMPLE);
+        const suppressedTypeCount = allTypes.length - types.length;
         const maxType = Math.max(1, ...types.map(([,v])=>v));
         const duration = locationDurations[site];
         return (
@@ -57,7 +64,10 @@ export function SiteIntelligencePanel({ overview }) {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
               <div>
                 <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:6}}>Case types</div>
-                {types.map(([t,v])=><BarRow key={t} label={t} value={v} max={maxType}/>)}
+                {types.length===0
+                  ? <DataQualityCaveat total={count} minRequired={MIN_TYPE_SAMPLE} label="cases at this site"/>
+                  : types.map(([t,v])=><BarRow key={t} label={t} value={v} max={maxType}/>)}
+                {types.length>0 && suppressedTypeCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{suppressedTypeCount} type{suppressedTypeCount===1?"":"s"} with under {MIN_TYPE_SAMPLE} cases not shown</div>}
               </div>
               <div>
                 <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:6}}>Avg case duration</div>

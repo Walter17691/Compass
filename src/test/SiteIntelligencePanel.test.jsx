@@ -45,3 +45,29 @@ describe('SiteIntelligencePanel', () => {
     expect(screen.getByText('No site data available yet.')).toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (closes Prompt 16 audit finding H18, HIGH) — a
+// per-site case-type bar reading "1" or "2" is a direct re-identification
+// risk at a small site; individual type bars below the sample floor must
+// be held back, not fabricated away or left showing raw small counts.
+describe('SiteIntelligencePanel — case-type sample floor (Prompt 16 audit, H18)', () => {
+  it('shows a case-type bar with 3+ cases (Manchester: misconduct)', () => {
+    render(<SiteIntelligencePanel overview={overview}/>);
+    expect(screen.getByText('misconduct')).toBeInTheDocument();
+  });
+
+  it('hides a case-type bar under the sample floor (Manchester: grievance, count 2)', () => {
+    render(<SiteIntelligencePanel overview={overview}/>);
+    expect(screen.queryByText('grievance')).not.toBeInTheDocument();
+  });
+
+  it('notes a suppressed count when at least one type bar is shown but another is held back', () => {
+    render(<SiteIntelligencePanel overview={overview}/>);
+    expect(screen.getByText(/1 type with under 3 cases not shown/)).toBeInTheDocument();
+  });
+
+  it('shows a data-quality caveat instead of the type breakdown when every type at a site is below the floor (London: misconduct, count 2)', () => {
+    render(<SiteIntelligencePanel overview={overview}/>);
+    expect(screen.getByText(/Only 2 cases at this site available/)).toBeInTheDocument();
+  });
+});

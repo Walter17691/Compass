@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 
 const rpcMock = vi.fn();
 vi.mock('../supabase', () => ({ supabase: { rpc: (...args) => rpcMock(...args) } }));
@@ -121,6 +121,49 @@ describe('OrganisationalIntelligenceOverview', () => {
     const deptCard = screen.getByText('Cases by department').parentElement;
     expect(siteCard).toHaveTextContent('No data yet.');
     expect(deptCard).toHaveTextContent('No data yet.');
+  });
+
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H18, HIGH) — a bar
+  // reading "Dismissal: 1" or "Manchester: 1" is a direct re-identification
+  // risk at a small site or for a rare outcome. Individual bars below the
+  // sample floor must be held back, not shown at their raw small count.
+  describe('sample floor on the breakdown bars (Prompt 16 audit, H18)', () => {
+    const smallSampleOverview = {
+      ...baseOverview,
+      cases_by_type: { misconduct: 6, grievance: 1 },
+      cases_by_outcome: { 'No further action': 3, Dismissal: 1 },
+      cases_by_location: { 'Not specified': 10, Manchester: 2 },
+      cases_by_department: { Finance: 10, Legal: 2 },
+    };
+
+    it('shows a bar with 3+ cases (misconduct) but holds back one under the floor (grievance)', async () => {
+      rpcMock.mockResolvedValue({ data: smallSampleOverview, error: null });
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Cases by type')).toBeInTheDocument());
+      const typeCard = screen.getByText('Cases by type').parentElement;
+      expect(within(typeCard).getByText('misconduct')).toBeInTheDocument();
+      expect(within(typeCard).queryByText('grievance')).not.toBeInTheDocument();
+      expect(typeCard).toHaveTextContent('1 category with under 3 cases not shown');
+    });
+
+    it('holds back a rare outcome (Dismissal, count 1) while showing one with enough sample', async () => {
+      rpcMock.mockResolvedValue({ data: smallSampleOverview, error: null });
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Outcome types')).toBeInTheDocument());
+      const outcomeCard = screen.getByText('Outcome types').parentElement;
+      expect(within(outcomeCard).getByText('No further action')).toBeInTheDocument();
+      expect(within(outcomeCard).queryByText('Dismissal')).not.toBeInTheDocument();
+    });
+
+    it('holds back a small site (Manchester, count 2) and a small department (Legal, count 2)', async () => {
+      rpcMock.mockResolvedValue({ data: smallSampleOverview, error: null });
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Cases by site')).toBeInTheDocument());
+      const siteCard = screen.getByText('Cases by site').parentElement;
+      const deptCard = screen.getByText('Cases by department').parentElement;
+      expect(within(siteCard).queryByText('Manchester')).not.toBeInTheDocument();
+      expect(within(deptCard).queryByText('Legal')).not.toBeInTheDocument();
+    });
   });
 
   // Phase 6.5 hardening (Batch 12) — daysSinceMonthStart (the RPC's own
