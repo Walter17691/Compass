@@ -90,26 +90,44 @@ export default async function handler(req, res) {
 
         // Notify manager if email provided — using the stored request's
         // fields, never the request body's.
+        //
+        // Phase 6.5 hardening (closes Prompt 11 audit finding 7.10,
+        // MEDIUM) — this fetch had no try/catch of its own, so a Resend
+        // failure (network error, outage, timeout) propagated straight
+        // into the outer catch and returned a 500 — even though the
+        // signature/decline PATCH just above had already committed
+        // successfully. The signer would see their own genuinely-recorded
+        // action reported back as a failure, and a caller that (unlike
+        // sign.html's own fetch, which never checks response.ok) does
+        // check the status code could treat an already-successful sign as
+        // failed and retry needlessly. Isolated so a notification failure
+        // is logged and swallowed, never turning a successful sign/
+        // decline into an apparent one.
         if (existing.manager_email) {
-          const label = documentTypeLabel(existing.document_type);
-          const outcomeText = outcome === 'signed' ? 'signed' : outcome === 'acknowledged' ? 'acknowledged' : 'declined to sign';
-          await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: 'Compass HR <notifications@mail.compasshruk.com>',
-              to: [existing.manager_email],
-              subject: `${existing.employee_name} has ${outcomeText} the ${label.toLowerCase()}`,
-              html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-                <h2 style="color:#7C5CFC">Compass HR</h2>
-                <p>Dear ${esc(existing.manager_name)},</p>
-                <p><strong>${esc(existing.employee_name)}</strong> has ${esc(outcomeText)} the <strong>${esc(label)}</strong>${existing.meeting_date ? ` from <strong>${esc(existing.meeting_date)}</strong>` : ''}.</p>
-                ${outcome === 'declined' && declineReason ? `<p>Reason given: ${esc(declineReason)}</p>` : ''}
-                <p>The outcome is now recorded in the case file in Compass.</p>
-                <p style="color:#666;font-size:12px">Powered by Compass HR</p>
-              </div>`
-            })
-          });
+          try {
+            const label = documentTypeLabel(existing.document_type);
+            const outcomeText = outcome === 'signed' ? 'signed' : outcome === 'acknowledged' ? 'acknowledged' : 'declined to sign';
+            const notifyRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: 'Compass HR <notifications@mail.compasshruk.com>',
+                to: [existing.manager_email],
+                subject: `${existing.employee_name} has ${outcomeText} the ${label.toLowerCase()}`,
+                html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+                  <h2 style="color:#7C5CFC">Compass HR</h2>
+                  <p>Dear ${esc(existing.manager_name)},</p>
+                  <p><strong>${esc(existing.employee_name)}</strong> has ${esc(outcomeText)} the <strong>${esc(label)}</strong>${existing.meeting_date ? ` from <strong>${esc(existing.meeting_date)}</strong>` : ''}.</p>
+                  ${outcome === 'declined' && declineReason ? `<p>Reason given: ${esc(declineReason)}</p>` : ''}
+                  <p>The outcome is now recorded in the case file in Compass.</p>
+                  <p style="color:#666;font-size:12px">Powered by Compass HR</p>
+                </div>`
+              })
+            });
+            if (!notifyRes.ok) console.error('Manager notification email failed:', await notifyRes.text());
+          } catch (notifyErr) {
+            console.error('Manager notification email error:', notifyErr.message);
+          }
         }
 
         return res.status(200).json({ success: true, status: outcome });

@@ -18,7 +18,7 @@ function mockRes() {
 // NOT org-scoped by design: the signer is an external, unauthenticated
 // party, and the unguessable sign_id itself is the access boundary — see
 // this file's own header comment. These tests cover both paths.
-function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], signingRequest = null, insertOk = true, patchOk = true, rateLimitOk = true } = {}) {
+function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], signingRequest = null, insertOk = true, patchOk = true, rateLimitOk = true, resendThrows = false, resendOk = true } = {}) {
   const calls = [];
   global.fetch = vi.fn((url, options = {}) => {
     const u = String(url);
@@ -42,7 +42,8 @@ function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], s
       return Promise.resolve({ ok: true, json: () => Promise.resolve(signingRequest ? [signingRequest] : []) });
     }
     if (u.includes('api.resend.com')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'email-1' }) });
+      if (resendThrows) return Promise.reject(new Error('Resend is down'));
+      return Promise.resolve({ ok: resendOk, text: () => Promise.resolve('resend failed'), json: () => Promise.resolve({ id: 'email-1' }) });
     }
     return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
   });
@@ -161,6 +162,37 @@ describe('api/signing — sign/acknowledge/decline (POST with signId)', () => {
     const res = mockRes();
     await handler({ method: 'POST', headers: {}, body: { signId: 's1', signature: 'data:...', signedAt: new Date().toISOString() } }, res);
     expect(res.statusCode).toBe(409);
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 7.10, MEDIUM) —
+  // the manager-notification email had no try/catch of its own, so a
+  // Resend failure propagated into the outer catch and reported the
+  // whole request as a 500 — even though the signature/decline had
+  // already committed successfully just above.
+  describe('a manager-notification failure never taints an already-successful sign/decline (Prompt 11 audit, 7.10)', () => {
+    it('still reports success when the notification fetch throws outright', async () => {
+      stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null, manager_email: 'manager@acme.com', employee_name: 'Sam' }, resendThrows: true });
+      const res = mockRes();
+      await handler({ method: 'POST', headers: {}, body: { signId: 's1', signature: 'data:...', signedAt: new Date().toISOString() } }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('still reports success when the notification fetch resolves not-ok', async () => {
+      stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null, manager_email: 'manager@acme.com', employee_name: 'Sam' }, resendOk: false });
+      const res = mockRes();
+      await handler({ method: 'POST', headers: {}, body: { signId: 's1', signature: 'data:...', signedAt: new Date().toISOString() } }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('still reports success on decline with no manager_email at all (no notification attempted)', async () => {
+      stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null, manager_email: null, employee_name: 'Sam' } });
+      const res = mockRes();
+      await handler({ method: 'POST', headers: {}, body: { signId: 's1', declined: true, signedAt: new Date().toISOString() } }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
   });
 });
 
