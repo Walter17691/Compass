@@ -1,6 +1,7 @@
 import { runDigest } from './_digest.js';
 import { testNotify } from './_test-notify.js';
 import { reassignNotify } from './_reassign-notify.js';
+import { health } from './_health.js';
 
 // Single catch-all route for /api/cron/* — same convention as
 // api/calendar/[...action].js and api/portal/[...action].js, keeping the
@@ -31,6 +32,13 @@ export default async function handler(req, res) {
       return testNotify(req, res);
     case 'reassign-notify':
       return reassignNotify(req, res);
+    // Phase 7 (Controlled Beta Infrastructure Gate 6) — deliberately no
+    // auth check, unlike every other case here: an uptime monitor needs
+    // to poll this without a stored secret, and the response itself is
+    // safe to expose (presence-only config booleans, a DB reachability
+    // boolean + latency, nothing that reveals a value or schema detail).
+    case 'health':
+      return health(req, res);
     default:
       return res.status(404).json({ error: 'Not found' });
   }
