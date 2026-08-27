@@ -126,10 +126,20 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
               <span style={{width:7,height:7,borderRadius:"50%",background:isScreenCapturing?"#1A7A4A":"#9B9098",display:"inline-block"}}></span>
               {isScreenCapturing?"Stop":"Screen audio"}
             </button>
-            <label style={{display:"flex",alignItems:"center",gap:6,background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            {/* Phase 6.5 hardening (closes Prompt 11 audit finding 6.2,
+                MEDIUM) — a <label> wrapping a display:none file input
+                triggers it for a mouse click, but a <label> is never
+                itself part of the keyboard tab order and a display:none
+                input isn't either, so this control was completely
+                unreachable by keyboard — semantic HTML first, matching
+                the real <button> the Microphone/Screen audio controls
+                either side of it already use, rather than adding an
+                ARIA role to fake one. */}
+            <button type="button" onClick={()=>importFileRef?.current?.click()}
+              style={{display:"flex",alignItems:"center",gap:6,background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,color:"#6B6375",fontWeight:500,fontFamily:"DM Sans,system-ui,sans-serif"}}>
               Import transcript
-              <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
-            </label>
+            </button>
+            <input ref={importFileRef} type="file" accept=".vtt,.txt,.srt" onChange={handleImportFile} style={{display:"none"}}/>
             <div style={{marginLeft:"auto",fontSize:11,color:"#9B9098"}}>
               {transcript.length>0&&`${transcript.length} note${transcript.length!==1?"s":""} captured`}
             </div>
