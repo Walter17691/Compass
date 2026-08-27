@@ -175,3 +175,129 @@ describe('send-letter — case linkage and outcome-approval gate (closes C2)', (
     expect(res.statusCode).toBe(200);
   });
 });
+
+// Phase 6.5 hardening (Prompt 16 audit, closes finding H10, HIGH) — C1/C2
+// closed the RLS/approval bypass, but CaseViewScreen's Copilot "Draft
+// outcome letter" action (fires when !hasDiscOutcome, i.e. specifically
+// BEFORE any decision exists) never calls OutcomeModal's finalizeOutcome
+// — the only code path that sets cases.outcome — so a fully AI-drafted
+// dismissal/warning letter could reach this endpoint with letterType
+// "outcome" while the case's real outcome was still empty. Empty used to
+// fall through the "not approval-gated, nothing to check" branch exactly
+// like a genuine "No further action" decision. These tests walk the full
+// decision chain the audit brief asks for.
+describe('send-letter — the full outcome decision chain (closes H10)', () => {
+  let originalFetch;
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  const outcomeBody = { ...body, letterType: 'outcome', caseId: 'case-1' };
+
+  it('No outcome exists: reproduces the Copilot path exactly (case.outcome === "") and confirms it is blocked, not silently allowed', async () => {
+    stubFetch({
+      members: [{ role: 'hr_director' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: '' },
+      reviewRows: [],
+    });
+    const res = mockRes();
+    await handler(req(outcomeBody), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error).toMatch(/no recorded outcome/i);
+  });
+
+  it('Outcome exists but approval pending: blocked with the approval-specific message, not the no-outcome one', async () => {
+    stubFetch({
+      members: [{ role: 'hr_director' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: 'Summary dismissal (gross misconduct)' },
+      reviewRows: [],
+    });
+    const res = mockRes();
+    await handler(req(outcomeBody), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error).toMatch(/hasn't been approved yet/i);
+  });
+
+  it('Outcome approved: authorised user can issue/send', async () => {
+    stubFetch({
+      members: [{ role: 'hr_director' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: 'Summary dismissal (gross misconduct)' },
+      reviewRows: [{ id: 'review-1' }],
+    });
+    const res = mockRes();
+    await handler(req(outcomeBody), res);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('Unauthorized user: a real org member with zero relationship to the case cannot even reach the outcome check', async () => {
+    stubFetch({
+      members: [{ role: 'line_manager' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: 'Summary dismissal (gross misconduct)' },
+      caseAccessRows: [],
+      reviewRows: [{ id: 'review-1' }], // even though it's approved, they never get this far
+    });
+    const res = mockRes();
+    await handler(req(outcomeBody), res);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('Manipulated client: a direct API call claiming letterType "outcome" with no real approval is blocked regardless of what the client believes', async () => {
+    stubFetch({
+      members: [{ role: 'notetaker' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: '' },
+      caseAccessRows: [{ role: 'notetaker' }],
+    });
+    const res = mockRes();
+    // A manipulated client could set outcome itself in the request body —
+    // the server must ignore it and only trust its own DB read.
+    await handler(req({ ...outcomeBody, outcome: 'Summary dismissal (gross misconduct)' }), res);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('Stale state: approval that existed at page-load time but has since been revoked/changed is re-checked fresh on every send, not cached', async () => {
+    // First call: approved.
+    stubFetch({
+      members: [{ role: 'hr_director' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: 'Final written warning' },
+      reviewRows: [{ id: 'review-1' }],
+    });
+    const firstRes = mockRes();
+    await handler(req(outcomeBody), firstRes);
+    expect(firstRes.statusCode).toBe(200);
+
+    // Second call, same case: approval was revoked/reset in the meantime —
+    // simulates a stale client re-sending after the underlying state changed.
+    stubFetch({
+      members: [{ role: 'hr_director' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: 'Final written warning' },
+      reviewRows: [],
+    });
+    const secondRes = mockRes();
+    await handler(req(outcomeBody), secondRes);
+    expect(secondRes.statusCode).toBe(403);
+  });
+
+  it('Multiple cases for the same employee: the approval check is scoped to the exact caseId sent, never bleeds from a sibling case', async () => {
+    // case-1 (this employee's disciplinary case) is approved; case-2 (a
+    // different case, same employee) is not — sending against case-2's id
+    // must not be satisfied by case-1's approval.
+    stubFetch({
+      members: [{ role: 'hr_director' }],
+      caseRow: { id: 'case-2', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: 'Dismissal with notice' },
+      reviewRows: [], // case-2's own review, not case-1's
+    });
+    const res = mockRes();
+    await handler(req({ ...outcomeBody, caseId: 'case-2' }), res);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('Multi-org user: an approved outcome in a different org the caller also belongs to is never visible through this org-scoped lookup', async () => {
+    stubFetch({
+      members: [{ role: 'hr_director' }], // member of org-1, the claimed orgId
+      caseRow: { id: 'case-1', org_id: 'org-2', created_by: 'user-1', owner_id: null, outcome: 'Dismissal with notice' }, // case actually belongs to org-2
+      reviewRows: [{ id: 'review-1' }],
+    });
+    const res = mockRes();
+    await handler(req(outcomeBody), res); // orgId in body is still org-1
+    expect(res.statusCode).toBe(404); // org mismatch — never reaches the outcome check at all
+  });
+});

@@ -136,6 +136,23 @@ describe('send-for-signature — case linkage and outcome-approval gate (closes 
     expect(res.statusCode).toBe(403);
   });
 
+  // Phase 6.5 hardening (Prompt 16 audit, closes finding H10, HIGH) — the
+  // Copilot "Draft outcome letter" path can reach sendLetterForAcknowledgement
+  // without cases.outcome ever having been set. Same fix, same shared
+  // verifyOutcomeApproved — full scenario matrix lives in send-letter.test.js
+  // since both endpoints share the exact same authorization functions.
+  it('403s with a "no recorded outcome" message when the case has no outcome at all — the H10 gap', async () => {
+    stubFetch({
+      members: [{ role: 'hr_director' }],
+      caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: '' },
+      reviewRows: [],
+    });
+    const res = mockRes();
+    await handler(req(outcomeBody), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error).toMatch(/no recorded outcome/i);
+  });
+
   it('sends once the outcome is genuinely approved', async () => {
     stubFetch({
       members: [{ role: 'hr_director' }],

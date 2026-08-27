@@ -44,7 +44,10 @@ export default async function handler(req, res) {
   if (letterType === 'outcome') {
     const approved = await verifyOutcomeApproved(caseId, auth.case.outcome);
     if (!approved) {
-      return res.status(403).json({ error: "This outcome requires HR sign-off before its letter can be sent — it hasn't been approved yet." });
+      const message = auth.case.outcome
+        ? "This outcome requires HR sign-off before its letter can be sent — it hasn't been approved yet."
+        : "This case has no recorded outcome yet — record the outcome before sending an outcome letter.";
+      return res.status(403).json({ error: message });
     }
   }
 

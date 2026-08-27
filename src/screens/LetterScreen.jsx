@@ -4,8 +4,23 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true }) {
   const [showHistory, setShowHistory] = useState(false);
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H10, HIGH) — an
+  // "Outcome letter" can be reached before any real outcome decision
+  // exists (CaseViewScreen's Copilot "Draft outcome letter" action, or
+  // just clicking this screen's own Outcome letter tab) — drafting is
+  // fine, AI preparing a draft for review is the point, but issuing it
+  // (download/print/copy/send) as if a decision had actually been made
+  // is not. outcomeRecorded is only ever false for activeLetter==="
+  // outcome" with nothing yet in cases.outcome — every other letter type
+  // is unaffected. The real boundary is server-side
+  // (api/_auth.js's verifyOutcomeApproved, checked again on send
+  // regardless of what this button state shows) — this is the honest UX
+  // half of the same fix, so the block reads as an explained product
+  // rule rather than a surprise error after the fact.
+  const outcomeNotYetDecided = activeLetter==="outcome" && !outcomeRecorded;
+  const canIssue = letterIsApproved && !outcomeNotYetDecided;
   return (
     <div>
       <div style={{borderBottom:"1px solid #E8E0D0"}}>
@@ -62,6 +77,21 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               )}
             </div>
 
+            {/* Outcome-not-yet-decided gate — a preparatory AI draft is
+                fine (that's the whole point of the Copilot's "Draft
+                outcome letter" action, offered before any decision has
+                been made), but this screen is the one place every real
+                send/download/print/copy path converges on regardless of
+                how it was reached, so it's the right place to make clear
+                this letter can't be issued as if a decision had already
+                been made. Record the outcome via the case's Outcome tab
+                first. */}
+            {outcomeNotYetDecided&&(
+              <div style={{background:"#FEF0EB",border:"1px solid #F0C4B0",borderRadius:8,padding:"12px 14px",marginBottom:14,fontSize:12,color:"#C84B2F"}}>
+                This case has no recorded outcome yet — this is a preparatory draft only. Record the outcome on the case's Outcome tab before this letter can be downloaded, printed, copied or sent.
+              </div>
+            )}
+
             {/* AI-approval gate — this letter was drafted by AI and carries
                 real legal/financial weight once it reaches the employee, so
                 sending it requires an explicit human sign-off tied to this
@@ -96,9 +126,9 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
             </div>
 
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send via Gmail</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send via Outlook</Btn>
+              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
+              <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send via Gmail</Btn>
+              <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send via Outlook</Btn>
               {onSendFromCompass&&(
                 // Integrations & Workflow Automation (Phase 5, IP13, §7) —
                 // unlike "Send via Gmail/Outlook" above (download a PDF,
@@ -108,7 +138,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                 // the rest of the coordinated workflow — save a sent copy,
                 // add a timeline event, complete a matching task, log an
                 // audit event — as one action.
-                <Btn variant="secondary" onClick={onSendFromCompass} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send from Compass</Btn>
+                <Btn variant="secondary" onClick={onSendFromCompass} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send from Compass</Btn>
               )}
               {onSendForAcknowledgement&&(
                 // Integrations & Workflow Automation (Phase 5, IP27, §21) —
@@ -116,10 +146,10 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                 // receipt), this tracks whether the employee has actually
                 // opened and acknowledged the letter via the same
                 // signing_requests lifecycle meeting records already use.
-                <Btn variant="secondary" onClick={onSendForAcknowledgement} disabled={pdfGenerating||!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Send for acknowledgement</Btn>
+                <Btn variant="secondary" onClick={onSendForAcknowledgement} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send for acknowledgement</Btn>
               )}
-              <Btn variant="ghost" onClick={()=>window.print()} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Print</Btn>
-              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!letterIsApproved} title={letterIsApproved?undefined:"Approve the letter first"}>Copy text</Btn>
+              <Btn variant="ghost" onClick={()=>window.print()} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Print</Btn>
+              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Copy text</Btn>
               <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
               <Btn variant="ghost" onClick={()=>setScreen(SCREENS.REVIEW)}>← Back</Btn>
             </div>

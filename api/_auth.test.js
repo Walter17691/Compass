@@ -224,6 +224,24 @@ describe('verifyOutcomeApproved', () => {
     expect(await verifyOutcomeApproved('case-1', 'No further action')).toBe(true);
   });
 
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H10, HIGH) — a
+  // never-recorded outcome (cases.outcome === "", the real default) used
+  // to fall through the same branch as a genuinely-decided, genuinely-
+  // non-gated outcome — reproduces exactly what CaseViewScreen's Copilot
+  // "Draft outcome letter" action leaves behind, since it never calls
+  // OutcomeModal's finalizeOutcome (the only code path that sets
+  // cases.outcome).
+  it('returns false when no outcome has been recorded at all — the exact gap H10 closes', async () => {
+    stubFetchWithCase({});
+    expect(await verifyOutcomeApproved('case-1', '')).toBe(false);
+  });
+
+  it('returns false for a null/undefined outcome the same way', async () => {
+    stubFetchWithCase({});
+    expect(await verifyOutcomeApproved('case-1', null)).toBe(false);
+    expect(await verifyOutcomeApproved('case-1', undefined)).toBe(false);
+  });
+
   it('returns false when no matching approved hr_review_requests row exists', async () => {
     stubFetchWithCase({ reviewRows: [] });
     expect(await verifyOutcomeApproved('case-1', 'Summary dismissal (gross misconduct)')).toBe(false);

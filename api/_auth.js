@@ -128,7 +128,24 @@ export async function requireCaseAccess(req, res, orgId, caseId) {
 // vocabulary hr_review_requests has always used. Returns true (nothing
 // to gate) for outcome types that were never approval-gated to begin
 // with, e.g. "No further action".
+//
+// Phase 6.5 hardening (closes Prompt 16 audit finding H10, HIGH) — a
+// falsy outcomeType (never recorded — cases.outcome defaults to "") used
+// to fall through the "not approval-gated, nothing to check" branch
+// exactly the same as a genuinely-decided, genuinely-non-gated outcome
+// like "No further action". That's backwards for a letter explicitly
+// typed "outcome": CaseViewScreen's Copilot "Draft outcome letter"
+// action (and the Letter editor's own "Outcome letter" tab, reachable
+// directly any time a case's Letter screen is open) can produce a full
+// AI-drafted dismissal/warning letter WITHOUT ever calling
+// OutcomeModal's finalizeOutcome — the only code path that sets
+// cases.outcome — so the case's real outcome stays empty right up to
+// the point of sending. An empty outcome is never legitimate grounds to
+// send something labelled an outcome communication, approval-gated or
+// not; this is the one case where "nothing recorded yet" must fail
+// closed, not open.
 export async function verifyOutcomeApproved(caseId, outcomeType) {
+  if (!outcomeType) return false;
   const action = approvalActionForOutcome(outcomeType);
   if (!action) return true;
   const reviewRes = await supabaseRequest(`hr_review_requests?case_id=eq.${encodeURIComponent(caseId)}&step=eq.${encodeURIComponent(action)}&status=eq.approved&select=id&limit=1`);

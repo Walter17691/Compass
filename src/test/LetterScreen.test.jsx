@@ -93,6 +93,55 @@ describe('LetterScreen — Send for acknowledgement (Phase 5, IP27)', () => {
   });
 });
 
+// Phase 6.5 hardening (Prompt 16 audit, closes finding H10, HIGH) —
+// activeLetter==="outcome" can be reached before any real outcome
+// decision exists (CaseViewScreen's Copilot "Draft outcome letter"
+// action, or just clicking this screen's own Outcome letter tab).
+// outcomeRecorded (App.jsx: whether the active case's own cases.outcome
+// is set) gates every issue/send/download/print/copy action the same
+// way letterIsApproved already does — the real boundary is server-side
+// (api/_auth.js's verifyOutcomeApproved), this is the UX half so the
+// block reads as an explained rule rather than a surprise error.
+describe('LetterScreen — outcome-not-yet-decided gate (closes H10)', () => {
+  const outcomeProps = { ...baseProps, activeLetter: 'outcome', letterIsApproved: true, letterApproval: { by: 'Jo', at: new Date().toISOString() } };
+
+  it('blocks every issue/send action when activeLetter is "outcome" and no outcome has been recorded, even though the letter is approved', () => {
+    render(<LetterScreen {...outcomeProps} outcomeRecorded={false} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send via Gmail' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send via Outlook' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send from Compass' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Copy text' })).toBeDisabled();
+    expect(screen.getByText(/no recorded outcome yet.*preparatory draft only/i)).toBeInTheDocument();
+  });
+
+  it('still allows Save to case — an internal draft save is not "issuing" the letter externally', () => {
+    render(<LetterScreen {...outcomeProps} outcomeRecorded={false} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+  });
+
+  it('allows every action once a real outcome is recorded (and the letter is approved)', () => {
+    render(<LetterScreen {...outcomeProps} outcomeRecorded={true} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send from Compass' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeEnabled();
+    expect(screen.queryByText(/no recorded outcome yet/i)).not.toBeInTheDocument();
+  });
+
+  it('does not apply this gate to any other letter type — an invite letter is unaffected by outcomeRecorded', () => {
+    render(<LetterScreen {...baseProps} activeLetter="invite" letterIsApproved={true} letterApproval={{ by: 'Jo', at: new Date().toISOString() }} outcomeRecorded={false} />);
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+    expect(screen.queryByText(/no recorded outcome yet/i)).not.toBeInTheDocument();
+  });
+
+  it('defaults outcomeRecorded to true when the prop is omitted, so existing callers/tests are unaffected', () => {
+    render(<LetterScreen {...outcomeProps} onSendFromCompass={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Send from Compass' })).toBeEnabled();
+  });
+});
+
 // Phase 6.5 hardening (Batch 13) — the letter-editing textarea had no
 // accessible name at all.
 describe('LetterScreen — field labelling (Phase 6.5, Batch 13)', () => {
