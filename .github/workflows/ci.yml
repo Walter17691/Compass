@@ -20,14 +20,16 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx vitest run
-      # Non-blocking: ~180 pre-existing findings (mostly react-hooks/purity
-      # on Date.now() calls during render, an established pattern across
-      # the app) predate this workflow. Fixing those is separate, real
-      # work, not something to silently absorb into setting up CI. This
-      # still surfaces the output for visibility without turning every
-      # future PR red for unrelated pre-existing debt.
-      - run: npm run lint
-        continue-on-error: true
+      # Phase 7 (Controlled Beta Infrastructure Gate 2) — blocking, but
+      # only on NEW lint errors. ~180 pre-existing findings (mostly
+      # react-hooks/purity on Date.now() calls during render, an
+      # established pattern across the app) predate this workflow and are
+      # recorded as the accepted baseline in scripts/lint-baseline.json —
+      # fixing that backlog down is separate, real work, not something to
+      # silently absorb into this gate. This only fails a PR that pushes
+      # any file's error count above its own baseline entry (including a
+      # brand new file with any errors at all).
+      - run: npm run lint:regressions
 
   # E2E — runs against a real, throwaway Supabase-backed test org (see
   # tests/e2e/README.md). Needs E2E_TEST_EMAIL/E2E_TEST_PASSWORD as repo

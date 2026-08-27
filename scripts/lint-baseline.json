@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-08-27T14:45:31.685Z",
+  "note": "Phase 7 Gate 2 (CI lint regression gate) - this is the accepted pre-existing lint baseline, not a target to fix. scripts/check-lint-regressions.js fails CI only if a PR pushes any file's error count above what is recorded here, or introduces errors in a file not listed at all. Fixing this backlog down is separate, real work - reducing a count here is always allowed and welcome, but not required.",
+  "totalErrors": 180,
+  "totalWarnings": 9,
+  "perFileErrorCounts": {
+    "api/invite-member.js": 1,
+    "src/App.jsx": 147,
+    "src/Login.jsx": 1,
+    "src/components/caseTabs/OverviewTab.jsx": 1,
+    "src/lib/dsarCompile.js": 2,
+    "src/lib/storage.js": 1,
+    "src/lib/streamClaude.js": 2,
+    "src/main.jsx": 2,
+    "src/screens/CaseViewScreen.jsx": 1,
+    "src/screens/DevelopScreen.jsx": 1,
+    "src/screens/DsarScreen.jsx": 3,
+    "src/screens/ErReportScreen.jsx": 5,
+    "src/screens/HomeScreen.jsx": 4,
+    "src/screens/PersonViewScreen.jsx": 3,
+    "src/screens/RecordScreen.jsx": 3,
+    "src/screens/settings/TemplatesSection.jsx": 1,
+    "src/test/caseContext.test.js": 2
+  }
+}

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "lint:regressions": "node scripts/check-lint-regressions.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
