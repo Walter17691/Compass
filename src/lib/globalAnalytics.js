@@ -55,15 +55,26 @@ export function buildGlobalStatsContext(caseStats, overview, trendData, appealDa
     }
   }
 
-  // Phase 6.5 hardening (product-principles review) — was `totalFindings
-  // > 0`, which handed the model a raw 1-or-2-finding "distribution" (a
-  // single appeal outcome/ground presented as if it were a real pattern)
-  // with no sample-size signal at all. appealIntelligence.js's own panel
-  // already gates each of its three breakdowns behind this same
-  // threshold (outcomeSampleSize/stageSampleSize/groundSampleSize) —
-  // this brings the AI-facing context in line with the UI's own floor.
-  if (appealData && appealData.totalFindings >= APPEAL_MIN_SAMPLE_SIZE) {
-    parts.push("APPEAL INTELLIGENCE (org-wide):\n" + JSON.stringify(appealData));
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 8.2, MEDIUM) —
+  // was gated on totalFindings (the total count of allegations with a
+  // finding, org-wide), not on any of the three breakdowns' OWN sample
+  // sizes — an org with 50 findings but only ONE ever-appealed case and
+  // ONE ever-recorded appeal ground cleared totalFindings>=3 easily,
+  // shipping that single case's specific, potentially near-verbatim
+  // appeal-ground text into an org-wide AI chat context any user could
+  // ask a stats question through. appealIntelligence.js's own panel
+  // already gates each of its three breakdowns behind ITS OWN sample
+  // size (outcomeSampleSize/stageSampleSize/groundSampleSize); this now
+  // mirrors that per-breakdown granularity instead of one gate on an
+  // unrelated total, and only ships the fields that individually clear it.
+  if (appealData) {
+    const safeAppealData = { totalFindings: appealData.totalFindings, appealedCount: appealData.appealedCount, appealRate: appealData.appealRate };
+    if (appealData.outcomeSampleSize >= APPEAL_MIN_SAMPLE_SIZE) safeAppealData.outcomeCounts = appealData.outcomeCounts;
+    if (appealData.stageSampleSize >= APPEAL_MIN_SAMPLE_SIZE) safeAppealData.stageCounts = appealData.stageCounts;
+    if (appealData.groundSampleSize >= APPEAL_MIN_SAMPLE_SIZE) safeAppealData.commonGrounds = appealData.commonGrounds;
+    if (safeAppealData.outcomeCounts || safeAppealData.stageCounts || safeAppealData.commonGrounds) {
+      parts.push("APPEAL INTELLIGENCE (org-wide):\n" + JSON.stringify(safeAppealData));
+    }
   }
 
   return parts.join("\n\n");

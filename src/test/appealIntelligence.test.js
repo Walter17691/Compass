@@ -72,17 +72,31 @@ describe('computeAppealIntelligence', () => {
 
   it('aggregates common appeal grounds from case_signals, across cases', () => {
     const caseSignals = [
-      { caseId: 'c1', type: 'process_risk', title: 'Appeal ground: The sanction was disproportionate' },
-      { caseId: 'c2', type: 'process_risk', title: 'Appeal ground: The sanction was disproportionate' },
-      { caseId: 'c1', type: 'process_risk', title: 'Appeal ground: New evidence not considered' },
-      { caseId: 'c1', type: 'process_risk', title: 'Something unrelated' },
-      { caseId: 'c1', type: 'inconsistency', title: 'Appeal ground: should not count, wrong type' },
+      { caseId: 'c1', type: 'process_risk', status: 'open', title: 'Appeal ground: The sanction was disproportionate' },
+      { caseId: 'c2', type: 'process_risk', status: 'open', title: 'Appeal ground: The sanction was disproportionate' },
+      { caseId: 'c1', type: 'process_risk', status: 'open', title: 'Appeal ground: New evidence not considered' },
+      { caseId: 'c1', type: 'process_risk', status: 'open', title: 'Something unrelated' },
+      { caseId: 'c1', type: 'inconsistency', status: 'open', title: 'Appeal ground: should not count, wrong type' },
     ];
     const result = computeAppealIntelligence([], [], caseSignals);
     expect(result.commonGrounds).toEqual([
       { ground: 'The sanction was disproportionate', count: 2 },
       { ground: 'New evidence not considered', count: 1 },
     ]);
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 8.3, MEDIUM) —
+  // regenerating a case's appeal review marks its PRIOR "Appeal ground:"
+  // signals resolved (superseded) rather than deleting them. Without a
+  // status filter, a single case reviewed multiple times could manufacture
+  // what looks like a multi-case recurring pattern.
+  it('excludes resolved/superseded appeal-ground signals from the count (Prompt 11 audit, 8.3)', () => {
+    const caseSignals = [
+      { caseId: 'c1', type: 'process_risk', status: 'resolved', title: 'Appeal ground: The sanction was disproportionate' },
+      { caseId: 'c1', type: 'process_risk', status: 'open', title: 'Appeal ground: The sanction was disproportionate' },
+    ];
+    const result = computeAppealIntelligence([], [], caseSignals);
+    expect(result.commonGrounds).toEqual([{ ground: 'The sanction was disproportionate', count: 1 }]);
   });
 
   it('handles empty input', () => {

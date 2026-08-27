@@ -15,7 +15,7 @@ import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage, withStageTransitionStamp } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
-import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, buildKnownNameTokens, filterUnsafeThemeSuggestions } from './lib/themes';
+import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, buildKnownNameTokens, filterUnsafeThemeSuggestions, isUnsafeThemeSuggestion } from './lib/themes';
 import {
   addPrepQuestion as addPrepQuestionHelper,
   updatePrepQuestionText as updatePrepQuestionTextHelper,
@@ -3512,8 +3512,20 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   //
   // HR-only at the RLS layer (organisation_themes_2026-08-19.sql) — the
   // taxonomy itself is curated, not a free-for-all list.
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 8.4, MEDIUM) —
+  // filterUnsafeThemeSuggestions (themes.js) only ever ran on AI-generated
+  // suggestions before they were shown as candidates — the actual write
+  // paths (typing a theme name manually, editing a suggestion's text
+  // before confirming, or renaming an existing theme) had no screening at
+  // all, even though a theme is org-wide-visible taxonomy, not a private
+  // per-case note. Same known-name source suggestThemesForCase already
+  // builds (employeeRecords/orgMembers), checked here too since this is
+  // the actual persistence boundary, not just the AI-suggestion path.
+  const orgKnownNameTokens = () => buildKnownNameTokens([...(employeeRecords||[]).map(r=>r.name), ...(orgMembers||[]).map(m=>m.name)]);
+
   const addOrganisationTheme = async (name, description) => {
     if(!org?.id || !name?.trim()) return null;
+    if(isUnsafeThemeSuggestion(name, orgKnownNameTokens())) { showToast("That theme name looks like it may match a real person's name — themes are org-wide, so please rephrase it", "error"); return null; }
     const existing = matchExistingTheme(organisationThemes, name);
     if(existing) return existing;
     const row = {id: crypto.randomUUID(), name: name.trim(), description: description||"", active: true, createdBy: user?.id||null, createdAt: new Date().toISOString()};
@@ -3524,6 +3536,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   };
 
   const updateOrganisationTheme = async (themeId, fields) => {
+    if(fields.name!==undefined && isUnsafeThemeSuggestion(fields.name, orgKnownNameTokens())) { showToast("That theme name looks like it may match a real person's name — themes are org-wide, so please rephrase it", "error"); return; }
     setOrganisationThemes(t=>t.map(x=>x.id===themeId?{...x, ...fields}:x));
     const patch = {};
     if(fields.name!==undefined) patch.name = fields.name;

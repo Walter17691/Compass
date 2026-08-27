@@ -32,9 +32,9 @@ describe('AppealIntelligencePanel', () => {
       { id: 'c3', meetings: [{ type: 'Disciplinary Appeal', record: 'notes' }] },
     ];
     const caseSignals = [
-      { caseId: 'c1', type: 'process_risk', title: 'Appeal ground: The sanction was disproportionate' },
-      { caseId: 'c2', type: 'process_risk', title: 'Appeal ground: The sanction was disproportionate' },
-      { caseId: 'c3', type: 'process_risk', title: 'Appeal ground: The sanction was disproportionate' },
+      { caseId: 'c1', type: 'process_risk', status: 'open', title: 'Appeal ground: The sanction was disproportionate' },
+      { caseId: 'c2', type: 'process_risk', status: 'open', title: 'Appeal ground: The sanction was disproportionate' },
+      { caseId: 'c3', type: 'process_risk', status: 'open', title: 'Appeal ground: The sanction was disproportionate' },
     ];
     render(<AppealIntelligencePanel allegations={allegations} cases={cases} caseSignals={caseSignals}/>);
     expect(screen.getByText('Appeal upheld')).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe('AppealIntelligencePanel', () => {
   it('shows a data-quality caveat for each breakdown when built on just 1 or 2 data points, not a raw distribution', () => {
     const allegations = [finding('a1', 'c1', { appealOutcome: 'upheld' })];
     const cases = [{ id: 'c1', meetings: [{ type: 'Disciplinary Appeal', record: 'notes' }] }];
-    const caseSignals = [{ caseId: 'c1', type: 'process_risk', title: 'Appeal ground: The sanction was disproportionate' }];
+    const caseSignals = [{ caseId: 'c1', type: 'process_risk', status: 'open', title: 'Appeal ground: The sanction was disproportionate' }];
     render(<AppealIntelligencePanel allegations={allegations} cases={cases} caseSignals={caseSignals}/>);
     expect(screen.queryByText('Appeal upheld')).not.toBeInTheDocument();
     expect(screen.queryByText('Disciplinary')).not.toBeInTheDocument();

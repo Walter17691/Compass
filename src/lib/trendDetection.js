@@ -25,8 +25,17 @@ export function isSignificantTrend(entry) {
 // nothing about why.
 export function describeTrend(entry, label) {
   const pct = computePctChange(entry.currentCount, entry.previousCount);
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 8.5, MEDIUM) —
+  // isSignificantTrend above only floors the TOTAL currentCount; this
+  // location breakdown had no per-location floor of its own, so naming
+  // "concentrated at Manchester" for a small site directly implies that
+  // site's own case count is close to the (small) org-wide total — the
+  // same small-cell disclosure risk H18 already closed for the
+  // type/site/department/outcome breakdown bars elsewhere in this phase.
+  // Same MIN_SAMPLE_SIZE floor this file already uses for the trend as a
+  // whole, applied per location too.
   const locations = Object.entries(entry.byLocation || {})
-    .filter(([loc]) => loc !== "Not specified")
+    .filter(([loc, count]) => loc !== "Not specified" && count >= MIN_SAMPLE_SIZE)
     .sort((a, b) => b[1] - a[1]);
   // "Concentrated ACROSS 1 location" doesn't read as English — "across"
   // implies spread over multiple locations. A single location reads

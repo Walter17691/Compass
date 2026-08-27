@@ -89,4 +89,25 @@ describe('describeTrend', () => {
     const text = describeTrend(entry, 'Grievance');
     expect(text).toContain('concentrated across 2 locations (Manchester, Leeds)');
   });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 8.5, MEDIUM) —
+  // isSignificantTrend only floors the TOTAL currentCount; this location
+  // breakdown had no per-location floor of its own, so naming
+  // "concentrated at X" for a small site directly implied that site's own
+  // count was close to the (small) org-wide total. Same MIN_SAMPLE_SIZE
+  // floor as the trend overall, applied per location.
+  it('excludes a location below the sample-size floor, even though the trend overall is significant (Prompt 11 audit, 8.5)', () => {
+    const entry = { currentCount: 5, previousCount: 2, byLocation: { Manchester: 1 } };
+    const text = describeTrend(entry, 'Grievance');
+    expect(text).toContain('no location breakdown available yet');
+    expect(text).not.toContain('Manchester');
+  });
+
+  it('shows only the locations that individually clear the floor, dropping the rest', () => {
+    const entry = { currentCount: 8, previousCount: 3, byLocation: { Manchester: 5, Leeds: 2, Bristol: 1 } };
+    const text = describeTrend(entry, 'Grievance');
+    expect(text).toContain('concentrated at Manchester');
+    expect(text).not.toContain('Leeds');
+    expect(text).not.toContain('Bristol');
+  });
 });

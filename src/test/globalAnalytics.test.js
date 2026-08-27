@@ -46,33 +46,50 @@ describe('buildGlobalStatsContext', () => {
     expect(context).not.toContain('SIGNIFICANT TRENDS');
   });
 
-  it('includes appeal intelligence only when there are real findings', () => {
-    const appealData = { totalFindings: 5, appealedCount: 1, appealRate: 20, outcomeCounts: {}, stageCounts: {}, commonGrounds: [] };
+  it('includes appeal intelligence when at least one breakdown clears its own sample-size floor', () => {
+    const appealData = { totalFindings: 5, appealedCount: 3, appealRate: 60, outcomeSampleSize: 3, outcomeCounts: { upheld: 3 }, stageSampleSize: 0, stageCounts: {}, groundSampleSize: 0, commonGrounds: [] };
     const context = buildGlobalStatsContext(caseStats, null, null, appealData);
     expect(context).toContain('APPEAL INTELLIGENCE');
+    expect(context).toContain('outcomeCounts');
   });
 
   it('omits appeal intelligence when there are no findings yet', () => {
-    const appealData = { totalFindings: 0, appealedCount: 0, appealRate: null, outcomeCounts: {}, stageCounts: {}, commonGrounds: [] };
+    const appealData = { totalFindings: 0, appealedCount: 0, appealRate: null, outcomeSampleSize: 0, outcomeCounts: {}, stageSampleSize: 0, stageCounts: {}, groundSampleSize: 0, commonGrounds: [] };
     const context = buildGlobalStatsContext(caseStats, null, null, appealData);
     expect(context).not.toContain('APPEAL INTELLIGENCE');
   });
 
-  // Phase 6.5 hardening (product-principles review) — was `totalFindings
-  // > 0`, which handed the model a 1-or-2-finding "distribution" (e.g. a
-  // single appeal presented as "100% upheld") with no sample-size signal
-  // at all. Now matches appealIntelligence.js's own APPEAL_MIN_SAMPLE_SIZE
-  // floor, the same one its own panel already enforces per breakdown.
-  it('omits appeal intelligence when there are too few findings for a reliable pattern (sample of 1)', () => {
-    const appealData = { totalFindings: 1, appealedCount: 1, appealRate: null, outcomeCounts: { upheld: 1 }, stageCounts: {}, commonGrounds: [] };
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 8.2, MEDIUM) — was
+  // gated on totalFindings (an org-wide total unrelated to any specific
+  // breakdown's own sample size), so an org with plenty of total findings
+  // but only ONE ever-appealed case still shipped that single case's own
+  // outcome/ground as if it were a real pattern. Each breakdown is now
+  // gated on ITS OWN sample size (outcomeSampleSize/stageSampleSize/
+  // groundSampleSize), matching appealIntelligence.js's own per-breakdown
+  // UI gating, not a single all-or-nothing check on an unrelated total.
+  it('omits a specific breakdown whose own sample size is too small, even when totalFindings is large (Prompt 11 audit, 8.2)', () => {
+    const appealData = {
+      totalFindings: 50, appealedCount: 1, appealRate: 2,
+      outcomeSampleSize: 1, outcomeCounts: { upheld: 1 },
+      stageSampleSize: 1, stageCounts: { Disciplinary: 1 },
+      groundSampleSize: 1, commonGrounds: [{ ground: 'A single, potentially identifying appeal ground', count: 1 }],
+    };
     const context = buildGlobalStatsContext(caseStats, null, null, appealData);
     expect(context).not.toContain('APPEAL INTELLIGENCE');
+    expect(context).not.toContain('potentially identifying appeal ground');
   });
 
-  it('omits appeal intelligence when there are too few findings for a reliable pattern (sample of 2)', () => {
-    const appealData = { totalFindings: 2, appealedCount: 2, appealRate: null, outcomeCounts: { upheld: 2 }, stageCounts: {}, commonGrounds: [] };
+  it('ships only the breakdowns that individually clear the floor, not the others', () => {
+    const appealData = {
+      totalFindings: 20, appealedCount: 10, appealRate: 50,
+      outcomeSampleSize: 10, outcomeCounts: { upheld: 6, not_upheld: 4 },
+      stageSampleSize: 1, stageCounts: { Disciplinary: 1 },
+      groundSampleSize: 0, commonGrounds: [],
+    };
     const context = buildGlobalStatsContext(caseStats, null, null, appealData);
-    expect(context).not.toContain('APPEAL INTELLIGENCE');
+    expect(context).toContain('outcomeCounts');
+    expect(context).not.toContain('stageCounts');
+    expect(context).not.toContain('commonGrounds');
   });
 });
 

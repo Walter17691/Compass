@@ -49,9 +49,17 @@ export function computeAppealIntelligence(allegations, cases, caseSignals) {
       if (label) stageCounts[label] = (stageCounts[label] || 0) + 1;
     });
 
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 8.3, MEDIUM) —
+  // regenerating a case's appeal review (App.jsx's generateAppealReview)
+  // marks the case's PRIOR "Appeal ground:" signals resolved (superseded)
+  // rather than deleting them, then creates fresh open ones. With no
+  // status filter here, every regeneration of the SAME case left its old
+  // grounds still counted alongside the new ones — a single case
+  // reviewed three times could manufacture what looks like a
+  // three-case-wide recurring pattern in the org-wide breakdown.
   const groundCounts = {};
   (caseSignals || [])
-    .filter(s => s.type === "process_risk" && (s.title || "").startsWith("Appeal ground:"))
+    .filter(s => s.type === "process_risk" && s.status === "open" && (s.title || "").startsWith("Appeal ground:"))
     .forEach(s => {
       const ground = s.title.replace(/^Appeal ground:\s*/, "").trim();
       if (ground) groundCounts[ground] = (groundCounts[ground] || 0) + 1;
