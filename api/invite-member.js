@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { email, name, role, orgId, orgName, inviteCode, locationIds } = req.body;
+  const { email, name, role, orgId, locationIds } = req.body;
   if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
@@ -40,6 +40,22 @@ export default async function handler(req, res) {
 
     const withinLimit = await checkRateLimit(`invite-member:${caller.id}`, 20, 300);
     if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
+
+    // Phase 6.5 hardening (closes Prompt 16 audit finding H19, HIGH) —
+    // orgName/inviteCode used to be trusted straight from the request
+    // body with no check against orgId at all. The caller is verified as
+    // real HR staff for orgId, but that only proves who's SENDING the
+    // invite, not that the org name and invite code in the email are the
+    // real ones — an attacker calling this endpoint directly (not
+    // through the UI) could set orgName to anything and inviteCode to an
+    // arbitrary string, using Compass's own verified sending domain to
+    // deliver fully attacker-controlled content to any address. Both are
+    // now looked up server-side from the real organisations row instead
+    // of trusted from the client.
+    const orgRes = await supabaseRequest(`organisations?id=eq.${encodeURIComponent(orgId)}&select=name,invite_code`);
+    const [orgRow] = await orgRes.json();
+    if (!orgRow) return res.status(404).json({ error: 'Organisation not found' });
+    const { name: orgName, invite_code: inviteCode } = orgRow;
 
     const appUrl = 'https://compass-lemon-iota.vercel.app';
     const inviteLink = `${appUrl}?invite=${inviteCode}`;
