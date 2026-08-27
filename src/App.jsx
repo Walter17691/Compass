@@ -6807,6 +6807,7 @@ Please produce:
     }
 
     heading("Chronology");
+    if(sections.auditHistoryMayBeIncomplete) body("Note: this case was opened before Compass reliably linked every activity record to its case — some historic entries from that period may not appear below.");
     if(!sections.chronology.length) body("No chronology entries.");
     sections.chronology.forEach(t=>body(`${t.date?new Date(t.date).toLocaleDateString("en-GB"):"—"} — ${t.description}`));
 

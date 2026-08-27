@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { buildCaseTimeline } from '../lib/caseTimeline';
+import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from '../lib/caseTimeline';
 import { computeStageProgress } from '../lib/processTimeline';
 import { Btn } from './Primitives';
 
@@ -114,6 +114,12 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
           </div>
         )}
       </div>
+
+      {mayHaveIncompleteAuditHistory(cs) && (
+        <div style={{padding:"10px 16px",background:"#FEF5E7",borderBottom:"1px solid #EDE5D8",fontSize:12,color:"#6B5218",lineHeight:1.6}}>
+          This case was opened before Compass reliably linked every activity record to its case — some historic entries from that period may not appear below.
+        </div>
+      )}
 
       <div style={{padding:"16px"}}>
         {entries.length===0 && <div style={{fontSize:13,color:"#9B9098"}}>Nothing recorded on this case yet.</div>}

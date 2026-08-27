@@ -18,7 +18,7 @@
 // tab (buildCaseTimeline, lib/caseTimeline.js), rather than inventing a
 // second, hearing-pack-specific exclusion mechanism.
 
-import { buildCaseTimeline } from './caseTimeline';
+import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from './caseTimeline';
 import { allegationsForCase, evidenceForAllegation } from './allegations';
 import { getProcessType } from './processStages';
 
@@ -67,5 +67,11 @@ export function buildHearingPackSections(cs, { allegations = [], policies = [], 
     evidence: evidence.map(e => ({ name: e.name, type: e.type || null, date: e.date || null, addedBy: e.addedBy || null })),
     policies: relevantPolicies.map(p => ({ name: p.name, clauses: p.clauses || [] })),
     chronology: timeline.map(t => ({ date: t.date, description: t.description })),
+    // Phase 6.5 hardening (closes Prompt 11 audit finding 4.8, MEDIUM) —
+    // see caseTimeline.js's own comment on mayHaveIncompleteAuditHistory.
+    // A hearing pack handed to a disciplinary panel as "the chronology"
+    // should say so when some of a case's own history may be missing,
+    // not present a silently incomplete list as the complete record.
+    auditHistoryMayBeIncomplete: mayHaveIncompleteAuditHistory(cs),
   };
 }

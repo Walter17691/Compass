@@ -117,6 +117,26 @@ function rawEntries(cs, allegations, auditLog) {
   return entries;
 }
 
+// Phase 6.5 hardening (closes Prompt 11 audit finding 4.8, MEDIUM) —
+// audit_log only reliably carried case_id from this point on (live-
+// verified against the real table: the last case-scoped action —
+// "Meeting saved" — recorded with no case_id was 2026-08-21T13:41; every
+// one since has it). Older rows with case_id null stay permanently
+// invisible to rawEntries' own `e.caseId === cs.id` filter above, with no
+// reliable case-identifying data left on them to backfill from — a
+// speculative backfill risks silently attributing the wrong history to
+// the wrong case, worse than the current honest gap. Rather than that,
+// any case whose own history predates this cutoff gets an explicit
+// caveat wherever the timeline is shown (TimelinePanel, the hearing
+// pack's Chronology section) instead of presenting a silently incomplete
+// history as complete.
+const AUDIT_CASE_ID_RELIABLE_FROM = new Date("2026-08-21T13:41:23.763Z").getTime();
+
+export function mayHaveIncompleteAuditHistory(cs) {
+  const opened = parseFlexDate(cs?.dateReceived);
+  return !!opened && opened.getTime() < AUDIT_CASE_ID_RELIABLE_FROM;
+}
+
 export function buildCaseTimeline(cs, allegations, auditLog, overrides = {}) {
   const excluded = new Set(overrides.excluded || []);
   const edits = overrides.edits || {};

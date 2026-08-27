@@ -111,4 +111,16 @@ describe('buildHearingPackSections', () => {
     const sections = buildHearingPackSections(baseCase, {});
     expect(sections.chronology.some(e => e.description?.includes('Case opened'))).toBe(true);
   });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 4.8, MEDIUM)
+  describe('auditHistoryMayBeIncomplete (Prompt 11 audit, 4.8)', () => {
+    it('flags a case opened before audit_log reliably carried case_id', () => {
+      expect(buildHearingPackSections(baseCase, {}).auditHistoryMayBeIncomplete).toBe(true);
+    });
+
+    it('does not flag a case opened after the cutoff', () => {
+      const recentCase = { ...baseCase, dateReceived: '2026-08-22' };
+      expect(buildHearingPackSections(recentCase, {}).auditHistoryMayBeIncomplete).toBe(false);
+    });
+  });
 });

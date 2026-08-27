@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCaseTimeline } from '../lib/caseTimeline';
+import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from '../lib/caseTimeline';
 
 const baseCase = {
   id: 'case1',
@@ -196,5 +196,25 @@ describe('buildCaseTimeline', () => {
     const result = buildCaseTimeline(cs, [], auditLog);
     expect(result.filter(e => e.type === 'audit')).toHaveLength(0);
     expect(result.filter(e => e.type === 'letter')).toHaveLength(1);
+  });
+});
+
+// Phase 6.5 hardening (closes Prompt 11 audit finding 4.8, MEDIUM) —
+// audit_log only reliably carried case_id from 2026-08-21T13:41 onward
+// (live-verified); a case opened before that may have historic audit
+// entries with no case_id, permanently invisible to buildCaseTimeline's
+// own e.caseId===cs.id filter.
+describe('mayHaveIncompleteAuditHistory (Prompt 11 audit, 4.8)', () => {
+  it('flags a case opened before the cutoff', () => {
+    expect(mayHaveIncompleteAuditHistory({ dateReceived: '2026-08-01' })).toBe(true);
+  });
+
+  it('does not flag a case opened after the cutoff', () => {
+    expect(mayHaveIncompleteAuditHistory({ dateReceived: '2026-08-22' })).toBe(false);
+  });
+
+  it('does not flag a case with no dateReceived at all', () => {
+    expect(mayHaveIncompleteAuditHistory({})).toBe(false);
+    expect(mayHaveIncompleteAuditHistory(null)).toBe(false);
   });
 });

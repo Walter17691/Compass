@@ -31,3 +31,17 @@ describe('TimelinePanel — field labelling (Phase 6.5, Batch 13)', () => {
     expect(screen.getByLabelText('Edit description for Meeting entry')).toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (closes Prompt 11 audit finding 4.8, MEDIUM)
+describe('TimelinePanel — incomplete-audit-history caveat (Prompt 11 audit, 4.8)', () => {
+  it('shows a caveat for a case opened before audit_log reliably carried case_id', () => {
+    render(<TimelinePanel cs={cs} allegations={allegations} auditLog={[]} fmtDate={d=>d} onEditDescription={noop} />);
+    expect(screen.getByText(/some historic entries from that period may not appear/)).toBeInTheDocument();
+  });
+
+  it('does not show the caveat for a case opened after the cutoff', () => {
+    const recentCase = { ...cs, dateReceived: '2026-08-22' };
+    render(<TimelinePanel cs={recentCase} allegations={allegations} auditLog={[]} fmtDate={d=>d} onEditDescription={noop} />);
+    expect(screen.queryByText(/some historic entries from that period may not appear/)).not.toBeInTheDocument();
+  });
+});
