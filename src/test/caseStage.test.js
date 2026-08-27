@@ -159,6 +159,35 @@ describe('getCaseStage — long-term sickness-shaped cases', () => {
   });
 });
 
+// Phase 6.5 hardening (closes Prompt 16 audit finding H12, HIGH) — the
+// old heuristic only ever checked meeting.type for "occupational health"/
+// "capability", neither of which is a real, selectable MEETING_TYPES
+// option — a real case could never progress past "contact_welfare" no
+// matter how far it had actually come. The real, already-populated dated
+// fields (ohReferralDate/ohReportReceivedDate, editable on OverviewTab)
+// are now the primary signal.
+describe('getCaseStage — long-term sickness stage from the real OH dated fields (Prompt 16 audit, H12)', () => {
+  it('infers "occupational_health" once ohReferralDate is set, with no matching meeting type needed', () => {
+    const cs = { caseType: 'long-term sickness', ohReferralDate: '2026-01-10', meetings: [{ type: 'Formal Meeting' }] };
+    expect(getCaseStage(cs)).toBe('occupational_health');
+  });
+
+  it('infers "adjustments_considered" once the OH report has actually been received', () => {
+    const cs = { caseType: 'long-term sickness', ohReferralDate: '2026-01-10', ohReportReceivedDate: '2026-01-25', meetings: [] };
+    expect(getCaseStage(cs)).toBe('adjustments_considered');
+  });
+
+  it('does not get stuck at "contact_welfare" once real progress has been recorded, even with no meetings logged', () => {
+    const cs = { caseType: 'long-term sickness', ohReferralDate: '2026-01-10', meetings: [] };
+    expect(getCaseStage(cs)).not.toBe('contact_welfare');
+  });
+
+  it('a capability-type meeting still wins over an OH report date, since it is the later real stage', () => {
+    const cs = { caseType: 'long-term sickness', ohReferralDate: '2026-01-10', ohReportReceivedDate: '2026-01-25', meetings: [{ type: 'Capability Review' }] };
+    expect(getCaseStage(cs)).toBe('capability_consideration');
+  });
+});
+
 describe('getCurrentRisk', () => {
   it('returns null when no meeting has a rating', () => {
     expect(getCurrentRisk({ meetings: [{ date: '2026-01-01' }] })).toBeNull();

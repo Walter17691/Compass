@@ -39,18 +39,29 @@ function inferGrievanceStage(cs) {
   return "intake";
 }
 
-// P2 — no structured data exists yet for these three (fit notes, OH
-// referral dates, probation review dates are P16's job) so, like the two
-// heuristics above, this reads only what's already on the case: meeting
-// count/type and whether an outcome has been recorded. Coarse by design —
-// real dated fields will let this get more precise once P16 lands them.
+// Phase 6.5 hardening (closes Prompt 16 audit finding H12, HIGH) — this
+// heuristic only ever checked meeting.type for the substrings
+// "capability" and "occupational health", but neither string appears
+// anywhere in MEETING_TYPES (constants.js) — there is no "Capability" or
+// "Occupational Health" meeting type a user can actually select. Those
+// two branches were dead code: a real long-term-sickness case could log
+// any number of real meetings (Formal Meeting, Return to Work, etc.) and
+// never advance past "contact_welfare", regardless of how far the case
+// had actually progressed. The real, dated OH fields this comment used
+// to call "P16's job" (fit_note_end_date/oh_referral_date/
+// oh_report_received_date) already exist and are already editable on
+// OverviewTab.jsx — this was simply never wired up to read them. The
+// meeting-type checks stay as a defensive fallback (harmless if a real
+// meeting type ever does contain these words) but the dated fields are
+// now the primary, actually-reachable signal.
 function inferLongTermSicknessStage(cs) {
   const meetings = cs.meetings||[];
   const types = meetings.map(m=>(m.type||"").toLowerCase());
   if(cs.outcome) return "decision";
   if(types.some(t=>t.includes("capability"))) return "capability_consideration";
-  if(types.some(t=>t.includes("occupational health"))) return "occupational_health";
-  if(meetings.length>0) return "contact_welfare";
+  if(cs.ohReportReceivedDate) return "adjustments_considered";
+  if(cs.ohReferralDate || types.some(t=>t.includes("occupational health"))) return "occupational_health";
+  if(cs.fitNoteEndDate || meetings.length>0) return "contact_welfare";
   return "absence_identified";
 }
 
