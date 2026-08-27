@@ -1,5 +1,5 @@
 import { requireOrgRole } from '../_auth.js';
-import { supabaseRequest } from './_supabase.js';
+import { fetchAllPagesServer } from '../_paginatedFetch.js';
 import { isHrRole } from '../../src/lib/roles.js';
 
 // Phase 6.5 hardening (data-lifecycle review) — the DSAR compiler
@@ -63,28 +63,32 @@ export async function dsarLookup(req, res) {
     : '';
 
   try {
-    const signingRes = await supabaseRequest(
+    // Phase 6.5 hardening (closes Prompt 11 audit finding 10.7, MEDIUM) —
+    // every query below was a single, unpaginated request, silently
+    // truncated at PostgREST's default row cap once an org's row count
+    // crossed it — the exact same class of gap H3 already closed for 8
+    // other org-wide loaders this session, and H8 confirmed live on this
+    // very table (signing_requests). employeeName omitted is exactly the
+    // org-wide exportAllData call shape this endpoint exists to serve, so
+    // silent truncation here meant a "complete" GDPR export wasn't.
+    const { data: signingRequests } = await fetchAllPagesServer(
       `signing_requests?org_id=eq.${encodeURIComponent(orgId)}${signingNameFilter}&select=sign_id,document,employee_name,employee_email,manager_name,manager_email,meeting_type,meeting_date,document_type,status,signature,signed_at,created_at,opened_at,expires_at,declined_at,decline_reason`
     );
-    const signingRequests = signingRes.ok ? await signingRes.json() : [];
 
-    const accountsRes = await supabaseRequest(
+    const { data: portalAccounts } = await fetchAllPagesServer(
       `employee_portal_accounts?org_id=eq.${encodeURIComponent(orgId)}${nameFilter}&select=id,employee_name,employee_email,created_at`
     );
-    const portalAccounts = accountsRes.ok ? await accountsRes.json() : [];
 
-    const invitesRes = await supabaseRequest(
+    const { data: portalInvites } = await fetchAllPagesServer(
       `employee_portal_invites?org_id=eq.${encodeURIComponent(orgId)}${nameFilter}&select=id,employee_name,email,created_by,expires_at,accepted_at,created_at`
     );
-    const portalInvites = invitesRes.ok ? await invitesRes.json() : [];
 
     // name here matches org_members' own column (a per-membership display
     // name), not employee_name — org_members doesn't use that convention.
     const memberNameFilter = employeeName ? `&name=eq.${encodeURIComponent(employeeName)}` : '';
-    const membersRes = await supabaseRequest(
+    const { data: matchedMembers } = await fetchAllPagesServer(
       `org_members?org_id=eq.${encodeURIComponent(orgId)}${memberNameFilter}&select=user_id`
     );
-    const matchedMembers = membersRes.ok ? await membersRes.json() : [];
     const userIds = matchedMembers.map(m => m.user_id).filter(Boolean);
 
     // Only resolve profiles/case_views when there's a real user id to
@@ -96,16 +100,15 @@ export async function dsarLookup(req, res) {
     if (!employeeName || userIds.length > 0) {
       let scopeUserIds = userIds;
       if (!employeeName) {
-        const allMembersRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&select=user_id`);
-        const allMembers = allMembersRes.ok ? await allMembersRes.json() : [];
+        const { data: allMembers } = await fetchAllPagesServer(`org_members?org_id=eq.${encodeURIComponent(orgId)}&select=user_id`);
         scopeUserIds = allMembers.map(m => m.user_id).filter(Boolean);
       }
       if (scopeUserIds.length > 0) {
         const idList = scopeUserIds.map(id => encodeURIComponent(id)).join(',');
-        const profilesRes = await supabaseRequest(`profiles?id=in.(${idList})&select=id,name,role,company,created_at`);
-        profiles = profilesRes.ok ? await profilesRes.json() : [];
-        const viewsRes = await supabaseRequest(`case_views?org_id=eq.${encodeURIComponent(orgId)}&user_id=in.(${idList})&select=case_id,user_id,last_viewed_at`);
-        caseViews = viewsRes.ok ? await viewsRes.json() : [];
+        const profilesRes = await fetchAllPagesServer(`profiles?id=in.(${idList})&select=id,name,role,company,created_at`);
+        profiles = profilesRes.data;
+        const viewsRes = await fetchAllPagesServer(`case_views?org_id=eq.${encodeURIComponent(orgId)}&user_id=in.(${idList})&select=case_id,user_id,last_viewed_at`);
+        caseViews = viewsRes.data;
       }
     }
 

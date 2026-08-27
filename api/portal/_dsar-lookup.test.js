@@ -12,32 +12,38 @@ function mockRes() {
 // employee_portal_accounts both have zero client-facing RLS, so this is
 // the only path a DSAR compile can reach either through. HR-role-gated,
 // same pattern as api/portal/_accounts.js.
+//
+// Phase 6.5 hardening (closes Prompt 11 audit finding 10.7, MEDIUM) —
+// every table query below now goes through fetchAllPagesServer, which
+// keeps requesting pages (via a Range header) until it gets a genuinely
+// empty one — even a 2-row table gets a second, empty-page request. This
+// stub actually honours the Range header (slicing the real fixture array)
+// instead of returning the whole array on every call, so that second
+// request correctly comes back empty and the loop terminates, the same
+// way a real PostgREST server would behave.
+function paged(array) {
+  return (options) => {
+    const range = options.headers?.Range || '0-999';
+    const [from, to] = range.split('-').map(Number);
+    const page = array.slice(from, to + 1);
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(page) });
+  };
+}
+
 function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], signingRequests = [], portalAccounts = [], portalInvites = [], profiles = [], caseViews = [] } = {}) {
   const calls = [];
-  global.fetch = vi.fn((url) => {
+  global.fetch = vi.fn((url, options = {}) => {
     const u = String(url);
     calls.push(u);
     if (u.includes('/auth/v1/user')) {
       return Promise.resolve({ ok: authOk, json: () => Promise.resolve(authUser) });
     }
-    if (u.includes('/rest/v1/org_members')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
-    }
-    if (u.includes('/rest/v1/signing_requests')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(signingRequests) });
-    }
-    if (u.includes('/rest/v1/employee_portal_accounts')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(portalAccounts) });
-    }
-    if (u.includes('/rest/v1/employee_portal_invites')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(portalInvites) });
-    }
-    if (u.includes('/rest/v1/profiles')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(profiles) });
-    }
-    if (u.includes('/rest/v1/case_views')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(caseViews) });
-    }
+    if (u.includes('/rest/v1/org_members')) return paged(members)(options);
+    if (u.includes('/rest/v1/signing_requests')) return paged(signingRequests)(options);
+    if (u.includes('/rest/v1/employee_portal_accounts')) return paged(portalAccounts)(options);
+    if (u.includes('/rest/v1/employee_portal_invites')) return paged(portalInvites)(options);
+    if (u.includes('/rest/v1/profiles')) return paged(profiles)(options);
+    if (u.includes('/rest/v1/case_views')) return paged(caseViews)(options);
     return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
   });
   return calls;
@@ -197,5 +203,24 @@ describe('portal dsar-lookup', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.profiles).toHaveLength(1);
     expect(res.body.caseViews).toHaveLength(1);
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 10.7, MEDIUM) —
+  // reproduced live: an unpaginated signing_requests query silently
+  // truncated at PostgREST's default row cap (1000), so an org-wide export
+  // for an org with more signing_requests rows than that would silently
+  // omit every row past the cap — a "complete" GDPR export that wasn't.
+  it('does not silently truncate signing_requests at 1000 rows for a large org (Prompt 11 audit, 10.7)', async () => {
+    const bigSigningRequests = Array.from({ length: 1200 }, (_, i) => ({ sign_id: `s${i}`, employee_name: `Employee ${i}` }));
+    const calls = stubFetch({
+      members: [{ role: 'hr_director', user_id: 'u-sam' }],
+      signingRequests: bigSigningRequests,
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.signingRequests).toHaveLength(1200);
+    const signingRangeRequests = calls.filter(u => u.includes('signing_requests')).length;
+    expect(signingRangeRequests).toBeGreaterThanOrEqual(2); // proves a second page was actually requested, not just returned in one shot
   });
 });
