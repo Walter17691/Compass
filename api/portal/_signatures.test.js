@@ -157,4 +157,26 @@ describe('portal signatures — POST (sign)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
   });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.8, MEDIUM) —
+  // unlike api/signing.js's own POST handler, this path never checked
+  // expires_at at all, so a portal user could sign well past the
+  // request's 7-day expiry window.
+  it('rejects signing a request past its expiry, even though its status is still "sent"/"opened"', async () => {
+    const account = { org_id: 'org-1', employee_name: 'Sam', employee_email: 'sam@acme.com' };
+    const signingRequest = { sign_id: 's1', org_id: 'org-1', employee_email: 'sam@acme.com', status: 'opened', expires_at: '2020-01-01T00:00:00.000Z' };
+    stubFetch({ account, signingRequest });
+    const res = mockRes();
+    await signatures(req('POST', { signId: 's1', signature: 'data:...' }), res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('accepts signing a request with an expiry still in the future', async () => {
+    const account = { org_id: 'org-1', employee_name: 'Sam', employee_email: 'sam@acme.com' };
+    const signingRequest = { sign_id: 's1', org_id: 'org-1', employee_email: 'sam@acme.com', status: 'sent', expires_at: '2099-01-01T00:00:00.000Z' };
+    stubFetch({ account, signingRequest });
+    const res = mockRes();
+    await signatures(req('POST', { signId: 's1', signature: 'data:...' }), res);
+    expect(res.statusCode).toBe(200);
+  });
 });

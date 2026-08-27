@@ -2,7 +2,7 @@ import { supabaseRequest } from './_supabase.js';
 import { requireOrgMembership } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
 import { checkRateLimit } from './_rateLimit.js';
-import { computeExpiresAt, isExpired, isTerminalStatus, documentTypeLabel } from '../src/lib/eSignature.js';
+import { computeExpiresAt, isExpired, isTerminalStatus, isPastPublicViewWindow, documentTypeLabel } from '../src/lib/eSignature.js';
 
 // signing_requests has zero client-facing RLS policies by design (same
 // pattern as employee_portal_accounts) — the signer isn't a logged-in
@@ -156,7 +156,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { signId, internal } = req.query;
+    const { signId, internal, orgId } = req.query;
     try {
       const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`);
       const data = await r.json();
@@ -184,6 +184,22 @@ export default async function handler(req, res) {
       // expired just as honestly as the signer's own page would.
       const isInternalStatusCheck = internal === '1';
 
+      // Phase 6.5 hardening (closes Prompt 11 audit finding 2.10, MEDIUM)
+      // — internal=1 used to be a self-asserted query flag with no real
+      // authentication behind it: anyone holding just the sign_id could
+      // add it and get the exact same unrestricted, permanent read a
+      // genuine HR session gets — it changed a write side-effect, not the
+      // access boundary. It's now a real, org-scoped check. App.jsx's two
+      // internal callers (the signature-sync poll on case view, and
+      // resendSignatureReminder's lookup) already run inside an
+      // authenticated HR session and already know org.id, so this is
+      // additive there and closes the gap for everyone else.
+      if (isInternalStatusCheck) {
+        const auth = await requireOrgMembership(req, res, orgId);
+        if (!auth) return;
+        if (existing.org_id !== orgId) return res.status(403).json({ error: 'Not authorised for this signing request' });
+      }
+
       // First real view of the link — stamp opened_at and move past
       // "sent", but only once, and never for a request already past that
       // stage (signed/acknowledged/declined/expired, or already opened),
@@ -208,6 +224,18 @@ export default async function handler(req, res) {
           const [updated] = await patchRes.json();
           if (updated) existing = updated;
         }
+      }
+
+      // Phase 6.5 hardening (closes Prompt 11 audit finding 2.10, MEDIUM)
+      // — the public link's sign_id was the only access control, with no
+      // time bound: a forwarded or leaked email link kept disclosing the
+      // full document text and captured signature image indefinitely. An
+      // authenticated internal read (above) stays unrestricted, since
+      // that's a real, auditable HR boundary — an anonymous read past a
+      // generous window for the signer to revisit and download their own
+      // copy now gets status only, not the underlying content.
+      if (!isInternalStatusCheck && isTerminalStatus(existing.status) && isPastPublicViewWindow(existing)) {
+        return res.status(200).json({ status: existing.status, restricted: true });
       }
 
       return res.status(200).json(existing);

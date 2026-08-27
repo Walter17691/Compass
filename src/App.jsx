@@ -701,8 +701,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           // internal=1 — this is HR silently polling for a status change
           // while viewing a case, not the employee genuinely opening
           // their signing link; must never advance sent→opened itself
-          // (see api/signing.js's own comment on this parameter).
-          const res = await fetch(`/api/signing?signId=${encodeURIComponent(m.signId)}&internal=1`);
+          // (see api/signing.js's own comment on this parameter). Now a
+          // real auth boundary server-side (closes Prompt 11 audit finding
+          // 2.10, MEDIUM), so this needs authedFetch + orgId like any
+          // other org-scoped call, not a bare fetch.
+          const res = await authedFetch(`/api/signing?signId=${encodeURIComponent(m.signId)}&internal=1&orgId=${encodeURIComponent(org?.id||"")}`);
           if (!res.ok) return null;
           const data = await res.json();
           return data.status && data.status !== m.signStatus ? { id: m.id, status: data.status } : null;
@@ -820,7 +823,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // internal=1 — looking up the recipient address to chase, not the
       // employee opening their link; must not itself mark the request
       // "opened" (see api/signing.js's own comment on this parameter).
-      const statusRes = await fetch(`/api/signing?signId=${encodeURIComponent(meeting.signId)}&internal=1`);
+      // Now a real auth boundary server-side (Prompt 11 audit finding
+      // 2.10, MEDIUM), so authedFetch + orgId, same as the signature-sync
+      // poll above.
+      const statusRes = await authedFetch(`/api/signing?signId=${encodeURIComponent(meeting.signId)}&internal=1&orgId=${encodeURIComponent(org?.id||"")}`);
       if(!statusRes.ok) { showToast("Couldn't find that signing request", "error"); return { success:false }; }
       const request = await statusRes.json();
       if(!request.employee_email) { showToast("No email on file for this reminder — resend manually from the meeting", "error"); return { success:false }; }
@@ -2796,14 +2802,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error('loadPortalAccounts', e); markLoadIssue('portal accounts'); }
   };
 
-  const revokePortalAccess = async (employeeName) => {
-    if(!org?.id) return;
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.9, MEDIUM) —
+  // accountId (the account's own id, not employeeName) is now the real
+  // target; employeeName is kept only for the confirm-dialog copy. See
+  // api/portal/_revoke-access.js for why name alone isn't a safe match.
+  const revokePortalAccess = async (accountId, employeeName) => {
+    if(!org?.id || !accountId) return;
     const ok = await confirmDialog({title:"Revoke portal access?", message:`${employeeName} will immediately lose access to view their case status, sign documents, or complete onboarding tasks in the portal.`, confirmLabel:"Revoke access", danger:true});
     if(!ok) return;
     try {
       const r = await authedFetch("/api/portal/revoke-access", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ orgId: org.id, employeeName }),
+        body: JSON.stringify({ orgId: org.id, accountId }),
       });
       const d = await r.json();
       if(d.success) { showToast("Portal access revoked"); loadPortalAccounts(); }

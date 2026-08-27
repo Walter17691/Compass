@@ -110,6 +110,17 @@
           <p style="color:#666;font-size:14px" id="expired-contact"></p>
         </div>
       </div>
+
+      <!-- Phase 6.5 hardening (closes Prompt 11 audit finding 2.10,
+           MEDIUM) — the document/signature content is no longer sent to
+           this page once a link is well past being actioned; this is
+           what a request in that state renders instead. -->
+      <div id="restricted-section" style="display:none" class="card">
+        <div style="text-align:center">
+          <h2>This link is no longer available</h2>
+          <p style="color:#666;font-size:14px">For your privacy, this document is only viewable here for a limited time after it was actioned. Please contact HR for a copy.</p>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -141,6 +152,15 @@
         docData = data;
         document.getElementById('loading').style.display = 'none';
         document.getElementById('content').style.display = 'block';
+
+        if (data.restricted) {
+          hideActionSections();
+          document.getElementById('doc-type').textContent = 'Document';
+          document.getElementById('doc-content-heading').parentElement.style.display = 'none';
+          document.getElementById('restricted-section').style.display = 'block';
+          document.getElementById('status-badge').innerHTML = '<span style="color:#888">' + (data.status.charAt(0).toUpperCase() + data.status.slice(1)) + '</span>';
+          return;
+        }
 
         const label = documentTypeLabel(data.document_type);
         document.title = 'Sign ' + label + ' - Compass HR';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ESIGNATURE_STATUS, isTerminalStatus, computeExpiresAt, isExpired, effectiveStatus, signatureStatusLabel, documentTypeLabel } from '../lib/eSignature.js';
+import { ESIGNATURE_STATUS, isTerminalStatus, computeExpiresAt, isExpired, effectiveStatus, signatureStatusLabel, documentTypeLabel, terminalAt, isPastPublicViewWindow } from '../lib/eSignature.js';
 
 describe('isTerminalStatus (Phase 5, IP27)', () => {
   it('treats signed/acknowledged/declined/expired as terminal', () => {
@@ -87,5 +87,31 @@ describe('signatureStatusLabel / documentTypeLabel (Phase 5, IP27)', () => {
   it('falls back to a generic label for an unknown document type', () => {
     expect(documentTypeLabel('mystery')).toBe('Document');
     expect(documentTypeLabel(undefined)).toBe('Document');
+  });
+});
+
+// Phase 6.5 hardening (closes Prompt 11 audit finding 2.10, MEDIUM)
+describe('terminalAt / isPastPublicViewWindow (Prompt 11 audit, 2.10)', () => {
+  it('terminalAt reads signed_at for signed/acknowledged, declined_at for declined, expires_at for expired', () => {
+    expect(terminalAt({ status: 'signed', signed_at: 's1' })).toBe('s1');
+    expect(terminalAt({ status: 'acknowledged', signed_at: 's2' })).toBe('s2');
+    expect(terminalAt({ status: 'declined', declined_at: 'd1' })).toBe('d1');
+    expect(terminalAt({ status: 'expired', expires_at: 'e1' })).toBe('e1');
+  });
+
+  it('terminalAt returns null for a non-terminal or missing request', () => {
+    expect(terminalAt(null)).toBeNull();
+    expect(terminalAt({ status: 'sent' })).toBeNull();
+    expect(terminalAt({ status: 'opened' })).toBeNull();
+  });
+
+  it('isPastPublicViewWindow is false with no terminal timestamp at all', () => {
+    expect(isPastPublicViewWindow({ status: 'sent' })).toBe(false);
+  });
+
+  it('isPastPublicViewWindow is false within the 30-day window, true beyond it', () => {
+    const request = { status: 'signed', signed_at: '2026-01-01T00:00:00.000Z' };
+    expect(isPastPublicViewWindow(request, new Date('2026-01-20T00:00:00.000Z'))).toBe(false);
+    expect(isPastPublicViewWindow(request, new Date('2026-03-01T00:00:00.000Z'))).toBe(true);
   });
 });

@@ -8,7 +8,7 @@ function mockRes() {
   return res;
 }
 
-function stubFetch({ members = [], deleteOk = true } = {}) {
+function stubFetch({ members = [], deleteOk = true, deletedRows = [{ id: 'acc-1' }] } = {}) {
   const calls = [];
   global.fetch = vi.fn((url, options = {}) => {
     const u = String(url);
@@ -20,7 +20,11 @@ function stubFetch({ members = [], deleteOk = true } = {}) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
     }
     if (u.includes('/rest/v1/employee_portal_accounts')) {
-      return Promise.resolve({ ok: deleteOk, text: () => Promise.resolve(deleteOk ? '' : 'delete failed') });
+      return Promise.resolve({
+        ok: deleteOk,
+        text: () => Promise.resolve(deleteOk ? '' : 'delete failed'),
+        json: () => Promise.resolve(deleteOk ? deletedRows : []),
+      });
     }
     return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
   });
@@ -45,25 +49,40 @@ describe('portal revoke-access', () => {
   it('rejects a non-HR caller', async () => {
     stubFetch({ members: [{ role: 'line_manager' }] });
     const res = mockRes();
-    await revokeAccess(req({ orgId: 'org-1', employeeName: 'Sam Employee' }), res);
+    await revokeAccess(req({ orgId: 'org-1', accountId: 'acc-1' }), res);
     expect(res.statusCode).toBe(403);
   });
 
-  it('lets HR revoke a portal account, issuing a real DELETE scoped to that org', async () => {
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.9, MEDIUM) —
+  // this used to match/delete on employee_name, which is not unique, and
+  // always reported {success:true} even when zero rows matched. Now
+  // targets the account's own id and only reports success once a row is
+  // confirmed deleted.
+  it('lets HR revoke a portal account by its own id, issuing a real DELETE scoped to that org', async () => {
     const calls = stubFetch({ members: [{ role: 'hr_manager' }] });
     const res = mockRes();
-    await revokeAccess(req({ orgId: 'org-1', employeeName: 'Sam Employee' }), res);
+    await revokeAccess(req({ orgId: 'org-1', accountId: 'acc-1' }), res);
     expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
     const del = calls.find(c => c.url.includes('/rest/v1/employee_portal_accounts') && c.method === 'DELETE');
     expect(del).toBeTruthy();
     expect(del.url).toContain('org_id=eq.org-1');
-    expect(del.url).toContain('employee_name=eq.' + encodeURIComponent('Sam Employee'));
+    expect(del.url).toContain('id=eq.acc-1');
+    expect(del.url).not.toContain('employee_name=eq.');
   });
 
-  it('400s when orgId or employeeName is missing', async () => {
+  it('400s when orgId or accountId is missing', async () => {
     stubFetch({ members: [{ role: 'hr_manager' }] });
     const res = mockRes();
     await revokeAccess(req({ orgId: 'org-1' }), res);
     expect(res.statusCode).toBe(400);
+  });
+
+  it('reports failure (not a false success) when no account actually matched the given id', async () => {
+    stubFetch({ members: [{ role: 'hr_manager' }], deletedRows: [] });
+    const res = mockRes();
+    await revokeAccess(req({ orgId: 'org-1', accountId: 'acc-does-not-exist' }), res);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.success).toBeFalsy();
   });
 });

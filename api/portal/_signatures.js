@@ -1,5 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
+import { isExpired } from '../../src/lib/eSignature.js';
 
 function normEmail(e) {
   return (e || '').trim().toLowerCase();
@@ -48,7 +49,7 @@ export async function signatures(req, res) {
       // caller happens to pass in. Both org_id and employee_email must be
       // present and matching — a missing email on either side fails
       // closed (403), never falls through to a permissive match.
-      const reqRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=org_id,employee_email,status`);
+      const reqRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=org_id,employee_email,status,expires_at`);
       const reqs = await reqRes.json();
       const existing = reqs[0];
       const existingEmail = normEmail(existing?.employee_email);
@@ -56,6 +57,12 @@ export async function signatures(req, res) {
         return res.status(403).json({ error: 'You do not have access to this signature request' });
       }
       if (existing.status === 'signed' || existing.status === 'acknowledged' || existing.status === 'declined') return res.status(400).json({ error: 'Already signed' });
+      // Phase 6.5 hardening (closes Prompt 11 audit finding 2.8, MEDIUM) —
+      // unlike api/signing.js's own POST handler, this path never checked
+      // expires_at at all, so a portal user could sign a document well
+      // past its 7-day expiry window, silently bypassing the same
+      // freshness guarantee every other signing path enforces.
+      if (isExpired(existing.expires_at)) return res.status(400).json({ error: 'This signing request has expired' });
 
       const updateRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}`, {
         method: 'PATCH',

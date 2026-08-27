@@ -204,10 +204,10 @@ describe('api/signing — GET (view by sign_id)', () => {
     expect(body.opened_at).toBeTruthy();
   });
 
-  it('an internal status check (internal=1) never advances "sent" to "opened" — no PATCH is issued at all', async () => {
-    const calls = stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null } });
+  it('an internal status check (internal=1), authenticated as a real org member, never advances "sent" to "opened" — no PATCH is issued at all', async () => {
+    const calls = stubFetch({ members: [{ role: 'hr_manager' }], signingRequest: { sign_id: 's1', status: 'sent', expires_at: null, org_id: 'org-1' } });
     const res = mockRes();
-    await handler({ method: 'GET', headers: {}, query: { signId: 's1', internal: '1' } }, res);
+    await handler({ method: 'GET', headers: { authorization: 'Bearer good' }, query: { signId: 's1', internal: '1', orgId: 'org-1' } }, res);
     expect(res.statusCode).toBe(200);
     expect(res.body.status).toBe('sent');
     const patch = calls.find(c => c.url.includes('/rest/v1/signing_requests') && c.method === 'PATCH');
@@ -215,9 +215,9 @@ describe('api/signing — GET (view by sign_id)', () => {
   });
 
   it('an internal status check still honestly reports expiry — elapsed time is a fact, not an engagement signal', async () => {
-    stubFetch({ signingRequest: { sign_id: 's1', status: 'expired', expires_at: '2020-01-01T00:00:00.000Z' } });
+    stubFetch({ members: [{ role: 'hr_manager' }], signingRequest: { sign_id: 's1', status: 'expired', expires_at: '2020-01-01T00:00:00.000Z', org_id: 'org-1' } });
     const res = mockRes();
-    await handler({ method: 'GET', headers: {}, query: { signId: 's1', internal: '1' } }, res);
+    await handler({ method: 'GET', headers: { authorization: 'Bearer good' }, query: { signId: 's1', internal: '1', orgId: 'org-1' } }, res);
     expect(res.statusCode).toBe(200);
     // The already-expired branch (existing.status==='sent') is skipped
     // for an internal check, so this exercises the OTHER expiry branch
@@ -225,5 +225,72 @@ describe('api/signing — GET (view by sign_id)', () => {
     // one just confirms an internal check never crashes on an
     // already-terminal 'expired' row and returns it as-is.
     expect(res.body.status).toBe('expired');
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.10, MEDIUM) —
+  // internal=1 used to be a self-asserted flag with no real
+  // authentication at all, granting the exact same unrestricted read the
+  // public link gets. It's now a genuine org-scoped auth boundary.
+  describe('internal status checks now require real authentication (Prompt 11 audit, 2.10)', () => {
+    it('rejects an internal check with no bearer token at all', async () => {
+      stubFetch({ signingRequest: { sign_id: 's1', status: 'sent', expires_at: null, org_id: 'org-1' } });
+      const res = mockRes();
+      await handler({ method: 'GET', headers: {}, query: { signId: 's1', internal: '1', orgId: 'org-1' } }, res);
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('rejects an internal check from someone authenticated but not a member of the claimed org', async () => {
+      stubFetch({ members: [], signingRequest: { sign_id: 's1', status: 'sent', expires_at: null, org_id: 'org-1' } });
+      const res = mockRes();
+      await handler({ method: 'GET', headers: { authorization: 'Bearer good' }, query: { signId: 's1', internal: '1', orgId: 'org-1' } }, res);
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('rejects an internal check where the claimed orgId does not match the signing request\'s own org_id — a real member of a DIFFERENT org cannot use their own membership to read another org\'s document', async () => {
+      stubFetch({ members: [{ role: 'hr_manager' }], signingRequest: { sign_id: 's1', status: 'sent', expires_at: null, org_id: 'org-OTHER' } });
+      const res = mockRes();
+      await handler({ method: 'GET', headers: { authorization: 'Bearer good' }, query: { signId: 's1', internal: '1', orgId: 'org-1' } }, res);
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.10, MEDIUM) —
+  // the public link's sign_id was the only access control, with no time
+  // bound, so a forwarded/leaked email link disclosed the full document
+  // and captured signature image forever.
+  describe('public (non-internal) reads of a terminal request are time-bound (Prompt 11 audit, 2.10)', () => {
+    it('a document signed 60 days ago is no longer readable via the public link — only status is returned', async () => {
+      const signedAt = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      stubFetch({ signingRequest: { sign_id: 's1', status: 'signed', expires_at: null, signed_at: signedAt, document: 'sensitive content', signature: 'data:image/png;base64,xyz' } });
+      const res = mockRes();
+      await handler({ method: 'GET', headers: {}, query: { signId: 's1' } }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.status).toBe('signed');
+      expect(res.body.restricted).toBe(true);
+      expect(res.body.document).toBeUndefined();
+      expect(res.body.signature).toBeUndefined();
+    });
+
+    it('a document signed 2 days ago is still fully readable via the public link', async () => {
+      const signedAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+      stubFetch({ signingRequest: { sign_id: 's1', status: 'signed', expires_at: null, signed_at: signedAt, document: 'sensitive content', signature: 'data:image/png;base64,xyz' } });
+      const res = mockRes();
+      await handler({ method: 'GET', headers: {}, query: { signId: 's1' } }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.restricted).toBeFalsy();
+      expect(res.body.document).toBe('sensitive content');
+      expect(res.body.signature).toBe('data:image/png;base64,xyz');
+    });
+
+    it('a non-terminal (still pending) request is never restricted', async () => {
+      // A future expires_at keeps this genuinely non-terminal — isTerminalStatus
+      // gates the restriction entirely, so an "opened" row is never restricted
+      // regardless of age.
+      stubFetch({ signingRequest: { sign_id: 's1', status: 'opened', expires_at: new Date(Date.now() + 1000).toISOString(), document: 'still pending content' } });
+      const res = mockRes();
+      await handler({ method: 'GET', headers: {}, query: { signId: 's1' } }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.restricted).toBeFalsy();
+    });
   });
 });

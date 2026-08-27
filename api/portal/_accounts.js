@@ -20,7 +20,10 @@ export async function listAccounts(req, res) {
   if (!auth) return;
 
   try {
-    const accRes = await supabaseRequest(`employee_portal_accounts?org_id=eq.${encodeURIComponent(orgId)}&select=employee_name,created_at&order=employee_name.asc`);
+    // Phase 6.5 hardening (closes Prompt 11 audit finding 2.9, MEDIUM) —
+    // id/employee_email added so revoke-access can target the exact row
+    // instead of matching on employee_name, which is not unique.
+    const accRes = await supabaseRequest(`employee_portal_accounts?org_id=eq.${encodeURIComponent(orgId)}&select=id,employee_name,employee_email,created_at&order=employee_name.asc`);
     const accounts = await accRes.json();
     res.status(200).json({ accounts });
   } catch (e) {

@@ -33,6 +33,33 @@ export function isExpired(expiresAt, now = new Date()) {
   return now.getTime() > new Date(expiresAt).getTime();
 }
 
+// Phase 6.5 hardening (closes Prompt 11 audit finding 2.10, MEDIUM) — the
+// public signing link's unguessable sign_id was the only access control on
+// GET, with no time bound: a forwarded or leaked email link kept disclosing
+// the full document text and a captured signature image forever. This is
+// the terminal-state timestamp a public-view window gets measured from —
+// the moment the document actually stopped being actionable, not whatever
+// the row happened to be last touched.
+export function terminalAt(request) {
+  if (!request) return null;
+  if (request.status === ESIGNATURE_STATUS.SIGNED || request.status === ESIGNATURE_STATUS.ACKNOWLEDGED) return request.signed_at;
+  if (request.status === ESIGNATURE_STATUS.DECLINED) return request.declined_at;
+  if (request.status === ESIGNATURE_STATUS.EXPIRED) return request.expires_at;
+  return null;
+}
+
+const PUBLIC_VIEW_WINDOW_DAYS = 30;
+
+// Generous enough for a signer to come back and download their own copy,
+// short enough that a stale link sitting in an old inbox or browser
+// history doesn't stay a live disclosure risk indefinitely.
+export function isPastPublicViewWindow(request, now = new Date()) {
+  const at = terminalAt(request);
+  if (!at) return false;
+  const cutoffMs = new Date(at).getTime() + PUBLIC_VIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  return now.getTime() > cutoffMs;
+}
+
 // The status a signing_request should read as right now, accounting for
 // expiry even if the stored row hasn't been written back yet (the GET
 // handler in api/signing.js does that write, but this stays pure/testable

@@ -42,8 +42,26 @@ const REASON_LABELS = {
 
 const OWNER_COLORS = {"HR":"#7C5CFC","Line Manager":"#D4882A","IT":"#4A6FA5","Facilities":"#4A7C6F","Payroll":"#7A5C4A"};
 
+// Phase 6.5 hardening (closes Prompt 11 audit finding 2.9, MEDIUM) —
+// employee_name isn't unique, so matching on it alone risked showing (or
+// revoking) the wrong account when two employees share a name. email is
+// the same disambiguator api/portal/_signatures.js already relies on;
+// falls back to a name match only when it resolves to exactly one
+// account, never a guess among several.
+function findPortalAccountForLeaver(portalAccounts, leaver) {
+  if (!leaver) return null;
+  const email = (leaver.email || "").trim().toLowerCase();
+  if (email) {
+    const byEmail = (portalAccounts||[]).filter(a => (a.employee_email||"").trim().toLowerCase() === email);
+    if (byEmail.length) return byEmail[0];
+  }
+  const byName = (portalAccounts||[]).filter(a => a.employee_name === leaver.name);
+  return byName.length === 1 ? byName[0] : null;
+}
+
 export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, setLeaverView, newLeaverForm, setNewLeaverForm, leaverTemplates, createLeaverInstance, leaverInstances, aiCustomiseLeaverChecklist, leaverAiProcessing, toggleLeaverTask, updateLeaverTaskNote, addLeaverTask, removeLeaverTask, reassignLeaverTaskOwner, updateLeaverExitInterview, portalAccounts, revokePortalAccess }) {
-  const hasPortalAccess = activeLeaver && (portalAccounts||[]).some(a=>a.employee_name===activeLeaver.name);
+  const matchedPortalAccount = findPortalAccountForLeaver(portalAccounts, activeLeaver);
+  const hasPortalAccess = !!matchedPortalAccount;
 
   return (
     <ChecklistScreen
@@ -101,7 +119,7 @@ export function OffboardingScreen({ activeLeaver, setActiveLeaver, leaverView, s
             <Card style={{marginBottom:12}}>
               <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,marginBottom:8,textTransform:"uppercase"}}>Employee Portal</div>
               <div style={{fontSize:12,color:"#6B6880",marginBottom:10,lineHeight:1.6}}>{active.name} still has active Portal access — they can view their case status and documents.</div>
-              <Btn variant="danger" onClick={()=>revokePortalAccess(active.name)} style={{width:"100%",fontSize:12,padding:"9px"}}>Revoke portal access</Btn>
+              <Btn variant="danger" onClick={()=>revokePortalAccess(matchedPortalAccount.id, active.name)} style={{width:"100%",fontSize:12,padding:"9px"}}>Revoke portal access</Btn>
             </Card>
           )}
         </>
