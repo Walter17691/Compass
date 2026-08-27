@@ -1525,7 +1525,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadHrReviews = async () => {
     if(!org?.id) return;
     try {
-      const { data, error } = await supabase.from('hr_review_requests').select('*').eq('org_id', org.id).order('requested_at', {ascending: false});
+      const { data, error } = await fetchAllPages((from, to) => supabase.from('hr_review_requests').select('*').eq('org_id', org.id).order('requested_at', {ascending: false}).order('id', {ascending: true}).range(from, to));
       if(error) { console.error('loadHrReviews', error); markLoadIssue('HR review requests'); return; }
       if(data) setHrReviewRequests(data);
     } catch(e) { console.error('loadHrReviews', e); markLoadIssue('HR review requests'); }
@@ -1541,7 +1541,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [generatingManagerInsight, setGeneratingManagerInsight] = useState(false);
   const loadManagerCapabilityInsights = async () => {
     if(!org?.id) return;
-    const { data, error } = await supabase.from('manager_capability_insights').select('*').eq('org_id', org.id).order('created_at', {ascending: false});
+    const { data, error } = await fetchAllPages((from, to) => supabase.from('manager_capability_insights').select('*').eq('org_id', org.id).order('created_at', {ascending: false}).order('id', {ascending: true}).range(from, to));
     if(error) { console.error('loadManagerCapabilityInsights', error); markLoadIssue('manager capability insights'); return; }
     if(data) setManagerCapabilityInsights(data);
   };
@@ -2638,7 +2638,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadStarterInstances = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('starter_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('starter_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false}).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadStarterInstances', error); markLoadIssue('onboarding checklists'); return; }
       if(data) {
         data.forEach(r => { starterVersionRef.current[r.id] = r.updated_at; });
@@ -2692,7 +2692,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadLeaverInstances = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('leaver_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('leaver_instances').select('*').eq('org_id', org.id).order('created_at', {ascending:false}).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadLeaverInstances', error); markLoadIssue('offboarding checklists'); return; }
       if(data) {
         data.forEach(r => { leaverVersionRef.current[r.id] = r.updated_at; });
@@ -2768,7 +2768,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadDsarRequests = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('dsar_requests').select('*').eq('org_id', org.id);
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('dsar_requests').select('*').eq('org_id', org.id).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadDsarRequests', error); markLoadIssue('DSAR requests'); return; }
       if(data) setDsarRequests(data.map(r=>({
         id:r.id, employeeName:r.employee_name, requestedBy:r.requested_by,
@@ -3139,7 +3139,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const loadWellbeingNotes = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('wellbeing_notes').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('wellbeing_notes').select('*').eq('org_id', org.id).order('created_at', {ascending:false}).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadWellbeingNotes', error); markLoadIssue('wellbeing notes'); return; }
       if(data) {
         data.forEach(r => { wellbeingNoteVersionRef.current[r.id] = r.updated_at; });
@@ -3508,7 +3508,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const loadConcernReferrals = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('concern_referrals').select('*').eq('org_id', org.id).order('created_at', {ascending:false});
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('concern_referrals').select('*').eq('org_id', org.id).order('created_at', {ascending:false}).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadConcernReferrals', error); markLoadIssue('concern referrals'); return; }
       if(data) {
         data.forEach(r => { concernReferralVersionRef.current[r.id] = r.updated_at; });
@@ -3697,7 +3697,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const loadCaseAccess = async () => {
     if(!org?.id) return;
     try {
-      const {data, error} = await supabase.from('case_access').select('*').eq('org_id', org.id);
+      const {data, error} = await fetchAllPages((from, to) => supabase.from('case_access').select('*').eq('org_id', org.id).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadCaseAccess', error); markLoadIssue('case access grants'); return; }
       if(data) setCaseAccess(data.map(r=>({id:r.id, caseId:r.case_id, userId:r.user_id, role:r.role, grantedBy:r.granted_by, grantedAt:r.granted_at,
         // Manager Enablement (Phase 4, MP7) — only ever set on

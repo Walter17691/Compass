@@ -1,0 +1,21 @@
+-- Phase 6.5 hardening (closes Prompt 16 audit finding H8, HIGH)
+--
+-- signing_requests.org_id was nullable, and 17 legacy rows (pre-dating
+-- this column being populated on create) had a NULL value — permanently
+-- unreachable by api/portal/_dsar-lookup.js's own org-scoped DSAR search
+-- and by api/delete-org-data.js's own org-scoped erasure delete, both of
+-- which filter by org_id=eq.<orgId>. A row with no org_id has no
+-- attributable data controller at all, which is itself a compliance
+-- problem independent of the DSAR-completeness gap.
+--
+-- The 17 orphaned rows were confirmed to be pre-hardening dev/test
+-- artifacts (placeholder names "Employee"/"Manager", garbled test input,
+-- no employee_email on any of them) and were deleted directly, with the
+-- user's explicit confirmation, before this migration was written.
+--
+-- api/signing.js's create path already requires requireOrgMembership and
+-- always sets org_id on every new row — this constraint just makes that
+-- invariant unbreakable at the schema level instead of relying solely on
+-- application code never regressing.
+alter table public.signing_requests
+  alter column org_id set not null;
