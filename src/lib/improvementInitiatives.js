@@ -3,7 +3,7 @@
 // improvement_initiatives, see supabase/improvement_initiatives_2026-08-20.sql)
 // — no separate table, since milestones only ever need to be read/written
 // as a whole alongside their own initiative.
-import { newId } from './ids';
+import { newId } from './ids.js';
 
 export const INITIATIVE_STATUSES = ["active", "completed", "abandoned"];
 

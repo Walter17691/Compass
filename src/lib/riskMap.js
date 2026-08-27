@@ -23,7 +23,7 @@
 // and Workforce communication (no real per-site signal exists for this
 // anywhere in the app) stay covered organisation-wide elsewhere in
 // Insights, not force-fit into a fabricated per-site number.
-import { computePctChange } from './trendDetection';
+import { computePctChange } from './trendDetection.js';
 
 const VOLUME_MULTIPLIER = 1.5; // flag a site at >=150% of the average per-site case count
 const DURATION_INCREASE_PCT = 20; // same threshold trendDetection.js's own SIGNIFICANT_INCREASE_PCT uses

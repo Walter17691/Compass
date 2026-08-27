@@ -23,7 +23,7 @@
 // Resolution back to a real caseId happens here, client-side, pure, over
 // data the caller already has RLS-scoped access to.
 
-import { matchCaseByEmployeeName } from './globalAssistant';
+import { matchCaseByEmployeeName } from './globalAssistant.js';
 
 export const COMMAND_BAR_ACTION_TYPES = ["create_task", "open_case"];
 

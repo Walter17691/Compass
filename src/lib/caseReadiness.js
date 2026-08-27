@@ -13,9 +13,9 @@
 // cases that don't use allegations at all keep their existing, unchanged
 // workflow with no readiness panel shown (see CaseViewScreen).
 
-import { evidenceForAllegation } from './allegations';
-import { openSignalsForCase } from './caseSignals';
-import { tasksForCase } from './caseTasks';
+import { evidenceForAllegation } from './allegations.js';
+import { openSignalsForCase } from './caseSignals.js';
+import { tasksForCase } from './caseTasks.js';
 
 export const READINESS_STATUSES = [
   { id: "not_ready", label: "Not ready", color: "#C84B2F", bg: "#FEF0EB", min: 0 },

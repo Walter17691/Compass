@@ -7,8 +7,8 @@
 // identifying or protected-characteristic-adjacent, per the spec's own
 // hard constraint. No such field exists in the schema today; this stays
 // that way deliberately.
-import { getCaseStage } from './caseStage';
-import { isFindingStatus, allegationStatusMeta } from './allegations';
+import { getCaseStage } from './caseStage.js';
+import { isFindingStatus, allegationStatusMeta } from './allegations.js';
 
 // Below this, a distribution risks being either statistically meaningless
 // or effectively identifying (a "1 of 1 substantiated" comparison isn't

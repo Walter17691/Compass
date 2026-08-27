@@ -11,7 +11,7 @@
 // the standard, correct behaviour for a UK-based user picking a time in
 // their own calendar app.
 
-import { addWorkingDays } from './dateMath';
+import { addWorkingDays } from './dateMath.js';
 
 export function buildEventTimes({ date, startTime, durationMinutes }) {
   if (!date || !startTime) return null;

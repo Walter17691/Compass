@@ -10,8 +10,8 @@
 // RPC needed for that one). Pure formatting only — the actual RPC calls
 // stay in App.jsx, matching how org_case_stats() itself is called
 // inline there rather than wrapped in a lib function.
-import { isSignificantTrend } from './trendDetection';
-import { APPEAL_MIN_SAMPLE_SIZE } from './appealIntelligence';
+import { isSignificantTrend } from './trendDetection.js';
+import { APPEAL_MIN_SAMPLE_SIZE } from './appealIntelligence.js';
 
 // Phase 6.5 hardening (product-principles review) — reused as a real
 // system-prompt clause (not just documentation) on the final answer

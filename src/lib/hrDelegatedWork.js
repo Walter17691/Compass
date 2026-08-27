@@ -1,6 +1,6 @@
-import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './investigationChecklist';
-import { allegationsForCase } from './allegations';
-import { parseFlexDate } from './dateMath';
+import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './investigationChecklist.js';
+import { allegationsForCase } from './allegations.js';
+import { parseFlexDate } from './dateMath.js';
 
 // Manager Enablement (Phase 4, MP18, §14) — HR Delegated Work dashboard.
 // Deterministic only, same style as guardrails.js: no AI call, just a

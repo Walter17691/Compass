@@ -1,5 +1,5 @@
-import { isFindingStatus } from './allegations';
-import { openSignalsForCase } from './caseSignals';
+import { isFindingStatus } from './allegations.js';
+import { openSignalsForCase } from './caseSignals.js';
 
 // Process Intelligence (P11) — Decision Quality Check, the case-wide
 // counterpart to Meeting Intelligence's computeMeetingQualityGaps

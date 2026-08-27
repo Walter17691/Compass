@@ -10,8 +10,8 @@
 // noticing a DECREASE following an intervention — the opposite
 // direction — so it needs its own significance gate, not a reused one
 // that would filter out the very outcome this is looking for.
-import { computePctChange } from './trendDetection';
-import { daysBetween } from './dateMath';
+import { computePctChange } from './trendDetection.js';
+import { daysBetween } from './dateMath.js';
 
 export const MIN_DAYS_SINCE_COMPLETION = 7;
 // A real prior baseline is needed to say anything meaningful about

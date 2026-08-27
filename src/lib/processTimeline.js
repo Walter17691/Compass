@@ -5,9 +5,9 @@
 // getCaseStage (P1/existing) and getProcessType's stage list (P2);
 // missing-step detection reuses fields (meetings, investigationReport,
 // outcome) already read elsewhere in this codebase.
-import { getCaseStage } from './caseStage';
-import { getProcessType, DISCIPLINARY_STAGES, GRIEVANCE_STAGES } from './processStages';
-import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch';
+import { getCaseStage } from './caseStage.js';
+import { getProcessType, DISCIPLINARY_STAGES, GRIEVANCE_STAGES } from './processStages.js';
+import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
 
 // Per-stage "did this actually happen" evidence checks — only defined for
 // the two process shapes whose stage-inference heuristic in caseStage.js

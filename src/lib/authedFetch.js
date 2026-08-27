@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabase.js';
 
 // Attaches the current Supabase session's access token as a Bearer header
 // so server-side endpoints can verify who's actually calling (api/_auth.js)

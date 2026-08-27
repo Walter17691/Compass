@@ -1,4 +1,4 @@
-import { newId } from './ids';
+import { newId } from './ids.js';
 
 // Pure helpers for case allegations/issues — the foundational entity the
 // gap-analysis found missing entirely (evidence-tagging, the AI case

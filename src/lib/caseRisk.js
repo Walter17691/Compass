@@ -10,10 +10,10 @@
 // disclaimer discipline runRiskScore (App.jsx) and CaseReadinessBadge
 // already apply to their own outputs: a named list of things worth a
 // second look, with a source for each, never a verdict.
-import { openSignalsForCase } from './caseSignals';
-import { newEvidenceSinceFinding, parseAppealGroundReasoning } from './appealReview';
-import { getProcessType } from './processStages';
-import { getCaseStage } from './caseStage';
+import { openSignalsForCase } from './caseSignals.js';
+import { newEvidenceSinceFinding, parseAppealGroundReasoning } from './appealReview.js';
+import { getProcessType } from './processStages.js';
+import { getCaseStage } from './caseStage.js';
 
 // Guardrail check titles are deliberately stable/fixed text
 // (guardrails.js's own header comment) — matching against them here is

@@ -4,7 +4,7 @@
 // modes, built directly on IP5's read-only Suggest-level rule engine
 // (lib/automationRules.js) rather than a second, parallel rule system.
 
-import { capLevelForSafety, RULE_ACTION_TYPE } from './automationSafety';
+import { capLevelForSafety, RULE_ACTION_TYPE } from './automationSafety.js';
 
 export const AUTOMATION_LEVELS = ["suggest", "prepare", "automate"];
 export const DEFAULT_AUTOMATION_LEVEL = "suggest";

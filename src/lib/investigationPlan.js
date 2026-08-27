@@ -1,4 +1,4 @@
-import { addTask } from './caseTasks';
+import { addTask } from './caseTasks.js';
 
 // Manager Enablement (Phase 4, MP8, §9) — distinct from
 // investigationChecklist.js's fixed 7-step generic checklist: this is an

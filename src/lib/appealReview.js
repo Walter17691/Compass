@@ -4,7 +4,7 @@
 // (it needs a real Claude call), same split as every other AI-copilot
 // feature this build-out added.
 
-import { parseFlexDate } from './dateMath';
+import { parseFlexDate } from './dateMath.js';
 
 // Evidence added after the original finding was recorded (Phase 16's
 // decidedAt) is exactly what an appeal review needs surfaced — it wasn't

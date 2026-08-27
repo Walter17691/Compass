@@ -13,8 +13,8 @@
 // decisionQuality.js's own gaps, which embed per-case allegation titles
 // inline in the string and have no stable category to group by without
 // fragile regex).
-import { computeCaseReadiness } from './caseReadiness';
-import { computeGuardrailChecks } from './guardrails';
+import { computeCaseReadiness } from './caseReadiness.js';
+import { computeGuardrailChecks } from './guardrails.js';
 
 export const CASE_QUALITY_MIN_SAMPLE_SIZE = 3;
 

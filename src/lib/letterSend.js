@@ -1,4 +1,4 @@
-import { newId } from './ids';
+import { newId } from './ids.js';
 
 // Integrations & Workflow Automation (Phase 5, IP13, §7) — send-from-
 // Compass coordinated workflow. Draft -> HR Review -> Approve already

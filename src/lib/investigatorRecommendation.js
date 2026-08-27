@@ -1,5 +1,5 @@
-import { openSignalsForCase } from './caseSignals';
-import { INVESTIGATION_CHECKLIST_STEPS } from './investigationChecklist';
+import { openSignalsForCase } from './caseSignals.js';
+import { INVESTIGATION_CHECKLIST_STEPS } from './investigationChecklist.js';
 
 // Manager Enablement (Phase 4, MP9, §8) — the one piece
 // InvestigatorChecklistView was missing: a single "what should I do

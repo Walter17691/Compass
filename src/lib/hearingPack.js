@@ -18,9 +18,9 @@
 // tab (buildCaseTimeline, lib/caseTimeline.js), rather than inventing a
 // second, hearing-pack-specific exclusion mechanism.
 
-import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from './caseTimeline';
-import { allegationsForCase, evidenceForAllegation } from './allegations';
-import { getProcessType } from './processStages';
+import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from './caseTimeline.js';
+import { allegationsForCase, evidenceForAllegation } from './allegations.js';
+import { getProcessType } from './processStages.js';
 
 // Reuses the two vocabularies that already exist (PROCESS_TYPES'
 // case-type ids, POLICY_CATEGORIES' category ids) rather than a new AI

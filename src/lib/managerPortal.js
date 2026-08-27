@@ -1,5 +1,5 @@
-import { getNextStep } from './nextStep';
-import { caseRoleLabel } from './caseRoles';
+import { getNextStep } from './nextStep.js';
+import { caseRoleLabel } from './caseRoles.js';
 
 // Manager Enablement (Phase 4, MP16, §1) — "My People Actions". Pure
 // aggregation only, no new data source: every section here reads from

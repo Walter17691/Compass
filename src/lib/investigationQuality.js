@@ -1,4 +1,4 @@
-import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './investigationChecklist';
+import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from './investigationChecklist.js';
 
 // Manager Enablement (Phase 4, MP10, §16) — Investigation Quality Check.
 // Same shape as decisionQuality.js's computeDecisionQualityGaps: a flat

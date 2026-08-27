@@ -1,4 +1,4 @@
-import { newId } from './ids';
+import { newId } from './ids.js';
 
 // Phase 24 of the reasoning-layer build-out — Email integration
 // groundwork. Real Outlook/Gmail integration needs OAuth app registration

@@ -1,4 +1,4 @@
-import { addTask } from './caseTasks';
+import { addTask } from './caseTasks.js';
 
 // Phase 15 of the reasoning-layer build-out (Manager Investigation Mode).
 // The checklist itself is stored as ordinary case_tasks (Phase 3 of the

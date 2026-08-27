@@ -7,7 +7,7 @@
 // function takes the current instances array and returns a new one; the
 // caller (App.jsx) still owns persistence (localStorage + Supabase) and
 // which "active" instance is selected, since those differ per flow.
-import { newId } from './ids';
+import { newId } from './ids.js';
 
 export function toggleChecklistTask(instances, instanceId, taskId) {
   return instances.map(s => s.id === instanceId ? {

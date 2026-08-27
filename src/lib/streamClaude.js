@@ -1,4 +1,4 @@
-import { authedFetch } from './authedFetch';
+import { authedFetch } from './authedFetch.js';
 
 export async function streamClaude(system, user, onChunk) {
   const res = await authedFetch("/api/chat", {

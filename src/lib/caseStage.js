@@ -1,4 +1,4 @@
-import { isAppealMeeting, isDisciplinaryMeeting, isInvestigationMeeting, isGrievanceMeeting } from './meetingTypeMatch';
+import { isAppealMeeting, isDisciplinaryMeeting, isInvestigationMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
 
 // Stage-inference heuristics, one per case-type "shape". Disciplinary
 // (investigation -> inv_report -> disciplinary -> outcome -> appeal ->

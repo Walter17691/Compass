@@ -7,8 +7,8 @@
 // already writes per case. No new RPC/table — same fully-client-side
 // aggregation OP9/OP10 already used, over the org-scoped arrays App.jsx
 // already loads.
-import { isFindingStatus, APPEAL_OUTCOMES } from './allegations';
-import { appealMeetingsForCase } from './appealReview';
+import { isFindingStatus, APPEAL_OUTCOMES } from './allegations.js';
+import { appealMeetingsForCase } from './appealReview.js';
 
 const MIN_SAMPLE_SIZE = 3;
 const SUCCESSFUL_OUTCOMES = ["upheld", "partially_upheld"];

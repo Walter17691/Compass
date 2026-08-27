@@ -9,7 +9,7 @@
 // UK-format "DD/MM/YYYY" text, not ISO — every consumer needs to handle
 // both.
 
-import { isUkBankHoliday, DEFAULT_UK_JURISDICTION } from './ukBankHolidays';
+import { isUkBankHoliday, DEFAULT_UK_JURISDICTION } from './ukBankHolidays.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ISO_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;

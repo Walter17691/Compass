@@ -13,10 +13,10 @@
 // signals by exact title match, so a title that changed every run would
 // spawn a fresh signal every time instead of updating one.
 
-import { isFindingStatus } from './allegations';
-import { currentRoleHolder } from './caseRoles';
-import { parseFlexDate } from './dateMath';
-import { isOriginalDecisionMeeting } from './meetingTypeMatch';
+import { isFindingStatus } from './allegations.js';
+import { currentRoleHolder } from './caseRoles.js';
+import { parseFlexDate } from './dateMath.js';
+import { isOriginalDecisionMeeting } from './meetingTypeMatch.js';
 
 // Phase 6.5 hardening (structural remediation, Prompt 12 — Guardrail
 // Lifecycle invariant). App.jsx's syncGuardrailSignals auto-resolves any

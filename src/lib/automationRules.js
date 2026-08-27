@@ -15,10 +15,10 @@
 // UnansweredQuestionsPanel/GuardrailsPanel already render, just re-framed
 // as "you might want to act on this" rather than "here is a finding".
 
-import { openSignalsForCase } from './caseSignals';
-import { tasksForCase } from './caseTasks';
-import { isTerminalStatus } from './eSignature';
-import { parseFlexDate } from './dateMath';
+import { openSignalsForCase } from './caseSignals.js';
+import { tasksForCase } from './caseTasks.js';
+import { isTerminalStatus } from './eSignature.js';
+import { parseFlexDate } from './dateMath.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

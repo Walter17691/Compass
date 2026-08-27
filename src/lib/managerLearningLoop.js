@@ -1,4 +1,4 @@
-import { HR_NOTE_SOURCES } from './caseTasks';
+import { HR_NOTE_SOURCES } from './caseTasks.js';
 
 // Manager Enablement (Phase 4, MP21, §25) — Manager Learning Loop.
 // Deterministic collection of the actual text behind MP20's aggregate

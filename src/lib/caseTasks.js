@@ -5,7 +5,7 @@
 // always read in the context of one instance; case_tasks needs its own
 // cross-case Tasks screen (every open task across every case), which a
 // flat table — and flat pure helpers over it — supports directly.
-import { newId } from './ids';
+import { newId } from './ids.js';
 
 export const TASK_PRIORITIES = ["low", "normal", "high"];
 

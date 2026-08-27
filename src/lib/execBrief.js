@@ -8,7 +8,7 @@
 // deterministic listing of what actually grounded the brief —
 // supporting_data below is exactly what got fed into the prompt, not
 // an AI-guessed per-sentence link.
-import { isSignificantTrend } from './trendDetection';
+import { isSignificantTrend } from './trendDetection.js';
 
 const ANTI_ATTRIBUTION_CLAUSE = "If the theme or trend data points to a genuine pattern worth flagging, introduce it with wording like \"Compass has identified a correlation between…\" — never state or imply that a pattern was *caused* by a named manager, team, or individual; only describe what the aggregate, anonymised data shows.";
 

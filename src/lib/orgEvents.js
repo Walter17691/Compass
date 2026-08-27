@@ -4,7 +4,7 @@
 // spec's own required framing: "There is a temporal correlation worth
 // reviewing," not "the change caused the increase."
 
-import { computePctChange } from './trendDetection';
+import { computePctChange } from './trendDetection.js';
 
 // Phase 6.5 hardening (Batch 7) — same MIN_SAMPLE_SIZE floor used
 // throughout this phase (trendDetection.js's own isSignificantTrend,

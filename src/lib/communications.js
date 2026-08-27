@@ -10,8 +10,8 @@
 // status, by resolving each entry's linkTo back to the real meeting or
 // evidence object.
 
-import { buildCaseTimeline } from './caseTimeline';
-import { effectiveStatus, signatureStatusLabel } from './eSignature';
+import { buildCaseTimeline } from './caseTimeline.js';
+import { effectiveStatus, signatureStatusLabel } from './eSignature.js';
 
 const COMMUNICATION_TYPES = ["email", "letter", "meeting"];
 

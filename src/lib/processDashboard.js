@@ -8,9 +8,9 @@
 // precision this codebase has no real basis for) — the same "advisory,
 // not a legal conclusion" discipline caseRisk.js/tribunalEstimate.js
 // already apply to their own estimates.
-import { getCaseStage } from './caseStage';
-import { getProcessType } from './processStages';
-import { getTemplateForType } from './processTemplates';
+import { getCaseStage } from './caseStage.js';
+import { getProcessType } from './processStages.js';
+import { getTemplateForType } from './processTemplates.js';
 
 export const DEFAULT_STAGE_TARGET_DAYS = 10;
 

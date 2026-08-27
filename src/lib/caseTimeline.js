@@ -34,7 +34,7 @@
 // entry key) — the case's `timeline_overrides` column, applied here
 // rather than duplicated per caller.
 
-import { parseFlexDate } from './dateMath';
+import { parseFlexDate } from './dateMath.js';
 
 // Phase 6.5 hardening (closes independent audit finding 3.3) — was raw
 // `new Date(dateStr)` on strings guaranteed to be UK-format (DD/MM/YYYY,
