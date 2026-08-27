@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { computeDueSoon, groupDueSoon } from '../lib/deadlines.js';
 
 describe('computeDueSoon — daysOverdue', () => {
@@ -619,5 +619,72 @@ describe('computeDueSoon — shared dateMath parsing (Phase 6.5, Batch 2)', () =
     const [d] = computeDueSoon(cases, [], today, caseTasks);
     expect(d.label).toBe('Task due: Chase reference');
     expect(d.daysLeft).toBe(2);
+  });
+});
+
+// Phase 6.5 hardening (closes Prompt 11 audit finding 3.10, MEDIUM) —
+// every date-only field below used to go through a raw `new Date(str)`,
+// which parses as UTC midnight; addDeadline's own local setHours(0,0,0,0)
+// then silently rolled the date back a calendar day for any timezone
+// behind UTC. All 8 now route through dateMath.js's parseFlexDate, which
+// builds the date from local Y/M/D fields directly.
+describe('date-only fields are read as the correct local calendar day in a timezone behind UTC (Prompt 11 audit, 3.10)', () => {
+  let originalTZ;
+  beforeAll(() => { originalTZ = process.env.TZ; process.env.TZ = 'America/New_York'; });
+  afterAll(() => { process.env.TZ = originalTZ; });
+
+  const today = new Date('2026-03-01');
+
+  it('DSAR due date', () => {
+    const dsarRequests = [{ id: '1', employeeName: 'Jane', dueDate: '2026-03-10' }];
+    const [d] = computeDueSoon([], dsarRequests, today);
+    expect(d.deadlineDate).toBe('10/03/2026');
+  });
+
+  it('fit note end date', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', meetings: [], fitNoteEndDate: '2026-03-10' }];
+    const [d] = computeDueSoon(cases, [], today);
+    expect(d.deadlineDate).toBe('10/03/2026');
+  });
+
+  it('probation review date', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', meetings: [], probationReviewDate: '2026-03-10' }];
+    const [d] = computeDueSoon(cases, [], today);
+    expect(d.deadlineDate).toBe('10/03/2026');
+  });
+
+  it('suspension review date', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', meetings: [], suspensionReviewDate: '2026-03-10' }];
+    const [d] = computeDueSoon(cases, [], today);
+    expect(d.deadlineDate).toBe('10/03/2026');
+  });
+
+  it('investigation target completion date', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', investigationPaused: false, meetings: [] }];
+    const caseAccess = [{ id: 'a1', caseId: 'c1', role: 'investigator', targetCompletionDate: '2026-03-10' }];
+    const [d] = computeDueSoon(cases, [], today, [], [], [], [], caseAccess);
+    expect(d.deadlineDate).toBe('10/03/2026');
+  });
+
+  it('wellbeing follow-up date', () => {
+    const wellbeingNotes = [{ id: 'w1', employeeName: 'Priya', followUpDate: '2026-03-10', followUpDone: false }];
+    const [d] = computeDueSoon([], [], today, [], wellbeingNotes);
+    expect(d.deadlineDate).toBe('10/03/2026');
+  });
+
+  it('leaver last working day', () => {
+    const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '2026-03-10', tasks: [{ id: 't1', done: false }] }];
+    const [d] = computeDueSoon([], [], today, [], [], leaverInstances);
+    expect(d.deadlineDate).toBe('10/03/2026');
+  });
+
+  it('redundancy consultation start date', () => {
+    // consultationStartDate + 30 days = 2026-03-31; a "today" close enough
+    // to that (within the 14-day due-soon window) so it's actually
+    // included in the output.
+    const closerToday = new Date('2026-03-20');
+    const redundancyCases = [{ id: 'r1', type: 'collective', collectiveInfo: { count: 25, consultationStartDate: '2026-03-01' } }];
+    const [d] = computeDueSoon([], [], closerToday, [], [], [], redundancyCases);
+    expect(d.deadlineDate).toBe('31/03/2026'); // 2026-03-01 + 30 days
   });
 });

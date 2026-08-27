@@ -16,11 +16,21 @@ export function getTemplateForType(templates, processTypeId) {
 // the exact convention TemplatesSection.jsx's onboarding/offboarding task
 // editor already uses ("day offset from start/last day"), here counted
 // from the case's own dateReceived/creation date instead.
+// Phase 6.5 hardening (closes Prompt 11 audit finding 3.9, MEDIUM) — a
+// date-only fromDateStr parses as UTC midnight, but setDate()/getDate()
+// read and write LOCAL calendar fields. Whenever the added day range
+// crosses a DST transition (UK clocks spring forward the last Sunday of
+// March), the resulting local midnight, converted back to UTC by
+// toISOString(), can land on the PREVIOUS UTC calendar day — reproduced
+// directly: resolveDefaultTaskDueDate(5, "2026-03-25") returned
+// "2026-03-29" instead of the correct "2026-03-30". Using the UTC-field
+// variants throughout keeps the whole calculation in the same frame the
+// string was parsed in, never touching local wall-clock time at all.
 export function resolveDefaultTaskDueDate(dayOffset, fromDateStr) {
   if (dayOffset === null || dayOffset === undefined || dayOffset === "") return "";
   const from = fromDateStr ? new Date(fromDateStr) : new Date();
   if (isNaN(from)) return "";
   const due = new Date(from);
-  due.setDate(due.getDate() + Number(dayOffset));
+  due.setUTCDate(due.getUTCDate() + Number(dayOffset));
   return due.toISOString().split("T")[0];
 }

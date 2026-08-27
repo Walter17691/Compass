@@ -10,21 +10,61 @@
 // both.
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const ISO_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+// Phase 6.5 hardening (closes Prompt 11 audit findings 3.10 and 3.11,
+// MEDIUM) — two real, reproduced bugs in this parser:
+//
+// 3.11: the DD/MM/YYYY branch never validated its own numbers before
+// building a Date, and JS's Date constructor silently rolls over an
+// out-of-range day/month instead of rejecting it — "31/02/2026" (no such
+// date) came back as 3 March. It also assumed every slash-separated
+// 3-part string was DD/MM/YYYY, so a YYYY/MM/DD-shaped value like
+// "2026/03/29" got read as day=2026, producing a nonsense 1934 date.
+// Bounds-checked first, then round-tripped: the constructed date's own
+// Y/M/D must match what was asked for, or it's rejected outright rather
+// than silently guessed at.
+//
+// 3.10: a bare "YYYY-MM-DD" has no time-of-day meaning — every field
+// this parses (a fit note end date, a DSAR due date, a last working
+// day...) is a whole calendar date, not an instant. The native Date
+// constructor parses a date-only ISO string as UTC midnight though, so
+// reading it back via local fields (as deadlines.js's addDeadline does)
+// silently rolled the date back a day for any timezone behind UTC.
+// Parsed via the same local-field constructor as DD/MM/YYYY instead of
+// ever routing a plain calendar date through a UTC instant.
+//
 // Parses "DD/MM/YYYY" (the UK format most of this app's date text fields
-// use) or anything the Date constructor can parse (ISO strings, existing
-// Date objects). Returns null — never NaN, never an Invalid Date — on
-// anything unparseable, so every caller can guard with a plain `if
-// (!d) return` instead of an isNaN check it might forget.
+// use), a bare "YYYY-MM-DD", or anything else the Date constructor can
+// parse (full ISO datetimes, existing Date objects) — a real instant
+// (has a time component) is correctly UTC/offset-interpreted; only the
+// no-time-component form gets the local-safe treatment above. Returns
+// null — never NaN, never an Invalid Date — on anything unparseable, so
+// every caller can guard with a plain `if (!d) return` instead of an
+// isNaN check it might forget.
 export function parseFlexDate(value) {
   if (value == null || value === "") return null;
   if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
-  if (typeof value === "string" && value.includes("/")) {
-    const parts = value.split("/");
-    if (parts.length === 3) {
-      const [dd, mm, yyyy] = parts.map(Number);
+  if (typeof value === "string") {
+    if (value.includes("/")) {
+      const parts = value.split("/");
+      if (parts.length === 3) {
+        const [dd, mm, yyyy] = parts.map(Number);
+        if (Number.isInteger(dd) && Number.isInteger(mm) && Number.isInteger(yyyy) && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+          const d = new Date(yyyy, mm - 1, dd);
+          if (d.getFullYear() === yyyy && d.getMonth() === mm - 1 && d.getDate() === dd) return d;
+          return null; // plausible-looking but not a real calendar date (e.g. 31 Feb)
+        }
+        // Not a plausible DD/MM/YYYY (e.g. a YYYY/MM/DD-shaped value) —
+        // fall through to the native parse below instead of guessing.
+      }
+    }
+    const isoMatch = ISO_DATE_ONLY.exec(value);
+    if (isoMatch) {
+      const [, yyyy, mm, dd] = isoMatch.map(Number);
       const d = new Date(yyyy, mm - 1, dd);
-      return isNaN(d.getTime()) ? null : d;
+      if (d.getFullYear() === yyyy && d.getMonth() === mm - 1 && d.getDate() === dd) return d;
+      return null;
     }
   }
   const d = new Date(value);

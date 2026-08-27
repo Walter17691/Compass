@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { getTemplateForType, resolveDefaultTaskDueDate } from '../lib/processTemplates.js';
 
 describe('getTemplateForType', () => {
@@ -46,5 +46,29 @@ describe('resolveDefaultTaskDueDate', () => {
 
   it('returns an empty string for an unparseable from-date', () => {
     expect(resolveDefaultTaskDueDate(3, 'not-a-date')).toBe('');
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 3.9, MEDIUM) —
+  // reproduced live: mixing a UTC-parsed from-date with local setDate()
+  // arithmetic, then reading back via toISOString() (UTC), could land the
+  // result one UTC calendar day early whenever the added range crossed
+  // the UK's spring-forward DST transition (clocks skip 1am-2am on the
+  // last Sunday of March).
+  describe('correct across the UK spring-forward DST transition (Prompt 11 audit, 3.9)', () => {
+    let originalTZ;
+    beforeAll(() => { originalTZ = process.env.TZ; process.env.TZ = 'Europe/London'; });
+    afterAll(() => { process.env.TZ = originalTZ; });
+
+    it('adds 5 days across 2026-03-25 -> 2026-03-30, spanning the 29 March clock change', () => {
+      expect(resolveDefaultTaskDueDate(5, '2026-03-25')).toBe('2026-03-30');
+    });
+
+    it('adds 1 day onto the DST transition day itself', () => {
+      expect(resolveDefaultTaskDueDate(1, '2026-03-28')).toBe('2026-03-29');
+    });
+
+    it('is also correct crossing the autumn clock-back transition (25 October 2026)', () => {
+      expect(resolveDefaultTaskDueDate(3, '2026-10-23')).toBe('2026-10-26');
+    });
   });
 });

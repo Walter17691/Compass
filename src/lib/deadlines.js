@@ -139,7 +139,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // vanishing.
     if(!cs.investigationPaused) {
       caseAccess.filter(a=>a.caseId===cs.id&&a.role==="investigator"&&a.targetCompletionDate).forEach(a => {
-        addDeadline(cs.employeeName, "Investigation target completion date", new Date(a.targetCompletionDate), "investigation_target", `${cs.id}:invtarget:${a.id}`, caseMeta);
+        addDeadline(cs.employeeName, "Investigation target completion date", parseFlexDate(a.targetCompletionDate), "investigation_target", `${cs.id}:invtarget:${a.id}`, caseMeta);
       });
     }
 
@@ -159,6 +159,15 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
       }
     });
 
+    // Phase 6.5 hardening (closes Prompt 11 audit finding 3.10, MEDIUM) —
+    // every date field below this point (fitNoteEndDate through the
+    // redundancy consultation start date further down) is parsed via
+    // parseFlexDate rather than a raw `new Date(str)`. A bare "YYYY-MM-DD"
+    // has no time-of-day meaning, but the native Date constructor parses
+    // it as UTC midnight, which addDeadline's own local setHours(0,0,0,0)
+    // then silently rolled back a calendar day for any timezone behind
+    // UTC — see dateMath.js's own header comment on this exact fix.
+    //
     // P16 — the four dated fields lib/caseStage.js's and
     // lib/processTimeline.js's own forward-reference comments named as
     // "P16's job": fit notes, probation review, OH referral, suspension
@@ -168,23 +177,23 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // signature chase above works from a sent date — gated on the report
     // not yet being received so it stops nagging once one arrives.
     if(cs.fitNoteEndDate) {
-      addDeadline(cs.employeeName, "Fit note expires — review or request an updated note", new Date(cs.fitNoteEndDate), "fit_note", `${cs.id}:fitnote`, caseMeta);
+      addDeadline(cs.employeeName, "Fit note expires — review or request an updated note", parseFlexDate(cs.fitNoteEndDate), "fit_note", `${cs.id}:fitnote`, caseMeta);
     }
     if(cs.probationReviewDate) {
-      addDeadline(cs.employeeName, "Probation review due", new Date(cs.probationReviewDate), "probation", `${cs.id}:probation`, caseMeta);
+      addDeadline(cs.employeeName, "Probation review due", parseFlexDate(cs.probationReviewDate), "probation", `${cs.id}:probation`, caseMeta);
     }
     if(cs.ohReferralDate && !cs.ohReportReceivedDate) {
       const dl = workingDaysFromDate(cs.ohReferralDate, 15);
       if(dl) addDeadline(cs.employeeName, "Occupational health report expected — chase if not received", dl, "oh_referral", `${cs.id}:oh`, caseMeta);
     }
     if(cs.suspensionReviewDate) {
-      addDeadline(cs.employeeName, "Suspension review due", new Date(cs.suspensionReviewDate), "suspension", `${cs.id}:suspension`, caseMeta);
+      addDeadline(cs.employeeName, "Suspension review due", parseFlexDate(cs.suspensionReviewDate), "suspension", `${cs.id}:suspension`, caseMeta);
     }
   });
 
   dsarRequests.forEach(req => {
     if(req.status==="completed") return;
-    addDeadline(req.employeeName||req.employee_name, "DSAR response due (statutory: 1 calendar month)", new Date(req.due_date||req.dueDate), "dsar", `dsar:${req.id}`);
+    addDeadline(req.employeeName||req.employee_name, "DSAR response due (statutory: 1 calendar month)", parseFlexDate(req.due_date||req.dueDate), "dsar", `dsar:${req.id}`);
   });
 
   caseTasks.forEach(task => {
@@ -203,7 +212,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
   // effect only calls loadWellbeingNotes when isHR).
   wellbeingNotes.forEach(n => {
     if(n.followUpDone||!n.followUpDate) return;
-    addDeadline(n.employeeName, "Wellbeing follow-up due", new Date(n.followUpDate), "wellbeing", `wellbeing:${n.id}`, { confidential: true });
+    addDeadline(n.employeeName, "Wellbeing follow-up due", parseFlexDate(n.followUpDate), "wellbeing", `wellbeing:${n.id}`, { confidential: true });
   });
 
   // Notice period — a leaver's last working day approaching while
@@ -213,7 +222,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
   leaverInstances.forEach(instance => {
     if(!instance.lastWorkingDay) return;
     if(!(instance.tasks||[]).some(t=>!t.done)) return;
-    addDeadline(instance.name, "Last working day approaching — offboarding tasks still open", new Date(instance.lastWorkingDay), "leaver", `leaver:${instance.id}`);
+    addDeadline(instance.name, "Last working day approaching — offboarding tasks still open", parseFlexDate(instance.lastWorkingDay), "leaver", `leaver:${instance.id}`);
   });
 
   // Collective redundancy consultation — TULRCA s.188 minimum consultation
@@ -225,8 +234,8 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     if(r.type!=="collective"||r.status==="complete") return;
     const startStr = r.collectiveInfo?.consultationStartDate;
     if(!startStr) return;
-    const consultStart = new Date(startStr);
-    if(isNaN(consultStart)) return;
+    const consultStart = parseFlexDate(startStr);
+    if(!consultStart) return;
     const count = r.collectiveInfo?.count || (r.atRiskEmployees||[]).length;
     const minDays = count>=100 ? 45 : 30;
     const dl = new Date(consultStart);

@@ -45,6 +45,75 @@ describe('parseFlexDate', () => {
   it('returns null for unparseable garbage text', () => {
     expect(parseFlexDate('not a date at all')).toBeNull();
   });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 3.11, MEDIUM) —
+  // the DD/MM/YYYY branch never validated its own numbers, so JS's Date
+  // constructor silently rolled an out-of-range day/month into the next
+  // month instead of rejecting it.
+  describe('rejects an invalid calendar date instead of silently rolling it over (Prompt 11 audit, 3.11)', () => {
+    it('rejects 31 February (no such date) — used to roll to 3 March', () => {
+      expect(parseFlexDate('31/02/2026')).toBeNull();
+    });
+
+    it('rejects 29 February in a non-leap year', () => {
+      expect(parseFlexDate('29/02/2026')).toBeNull();
+    });
+
+    it('accepts 29 February in a real leap year', () => {
+      const d = parseFlexDate('29/02/2028');
+      expect(d.getFullYear()).toBe(2028);
+      expect(d.getMonth()).toBe(1);
+      expect(d.getDate()).toBe(29);
+    });
+
+    it('rejects month 13', () => {
+      expect(parseFlexDate('15/13/2026')).toBeNull();
+    });
+
+    it('rejects day 0', () => {
+      expect(parseFlexDate('00/06/2026')).toBeNull();
+    });
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 3.11, MEDIUM) — a
+  // YYYY/MM/DD-shaped slash string used to be blindly assumed to be
+  // DD/MM/YYYY, reading day=2026 and producing a nonsense 1934 date.
+  it('does not misread a YYYY/MM/DD-shaped slash string as DD/MM/YYYY (Prompt 11 audit, 3.11)', () => {
+    const d = parseFlexDate('2026/03/29');
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(2); // March
+    expect(d.getDate()).toBe(29);
+  });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 3.10, MEDIUM) — a
+  // bare "YYYY-MM-DD" used to route through the native Date constructor,
+  // which parses it as UTC midnight — reading it back via local fields
+  // (as deadlines.js's addDeadline does) silently rolled the date back a
+  // day for any timezone behind UTC.
+  describe('a bare ISO date is read as the same local calendar day in every timezone (Prompt 11 audit, 3.10)', () => {
+    let originalTZ2;
+    beforeAll(() => { originalTZ2 = process.env.TZ; });
+    afterAll(() => { process.env.TZ = originalTZ2; });
+
+    it('reads 2026-03-29 as 29 March in a timezone behind UTC (America/New_York)', () => {
+      process.env.TZ = 'America/New_York';
+      const d = parseFlexDate('2026-03-29');
+      expect(d.getFullYear()).toBe(2026);
+      expect(d.getMonth()).toBe(2);
+      expect(d.getDate()).toBe(29);
+    });
+
+    it('rejects an invalid bare ISO date (31 April) rather than rolling it over', () => {
+      process.env.TZ = 'Europe/London';
+      expect(parseFlexDate('2026-04-31')).toBeNull();
+    });
+
+    it('still parses a full ISO instant (with a time component) as a genuine UTC instant, not a local calendar date', () => {
+      process.env.TZ = 'Europe/London';
+      const d = parseFlexDate('2026-03-29T23:30:00.000Z');
+      expect(d.toISOString()).toBe('2026-03-29T23:30:00.000Z');
+    });
+  });
 });
 
 describe('daysBetween — DST safety', () => {
