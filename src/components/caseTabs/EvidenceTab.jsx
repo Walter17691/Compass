@@ -2,6 +2,7 @@ import { EvidenceDropzone } from '../EvidenceDropzone';
 import { readEvidenceFiles, fmtBytes } from '../../lib/evidenceUpload';
 import { canAnalyseEvidence } from '../../lib/documentIngestion';
 import { parseCommitmentDueDate } from '../../lib/taskDueDateParsing';
+import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
 
 const FINDING_LABEL = {
   witness: f => `Potential witness: ${f.name}`,
@@ -13,10 +14,16 @@ const FINDING_LABEL = {
 // No longer gated to the investigation stage — evidence (and witness
 // statements specifically) can come in at any point in a case, not just
 // while it's formally "in investigation".
-export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setReviewOutput, setScreen, screens, fmtDate, setMeetingSetup, setCaseInfo, orgMembers, allegations=[], documentFindings={}, documentAnalysisLoading={}, onAnalyseEvidence, onAcceptFinding, onDismissFinding }) {
+export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setReviewOutput, setScreen, screens, fmtDate, setMeetingSetup, setCaseInfo, orgMembers, allegations=[], documentFindings={}, documentAnalysisLoading={}, onAnalyseEvidence, onAcceptFinding, onDismissFinding, promptDialog, audit }) {
   const addEvidenceFiles = async files => {
     const newItems = await readEvidenceFiles(files, { addedBy: currentUser?.name||"HR Manager", onReject: msg => showToast?.(msg, "error") });
     if(newItems.length) saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:[...(x.evidence||[]), ...newItems]}:x));
+  };
+
+  const markEvidenceSigned = async ev => {
+    const ok = await requestManualSignatureConfirmation(promptDialog, audit, { itemLabel: `Witness statement — ${ev.name}`, caseId: cs.id });
+    if(!ok) return;
+    saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map(e=>e.id===ev.id?{...e,signStatus:"signed"}:e)}:x));
   };
 
   return (
@@ -49,7 +56,7 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
               {canAnalyseEvidence(ev)&&!analysed&&(
                 <button onClick={()=>onAnalyseEvidence?.(ev.id)} disabled={loading} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"1px solid #DDD9F5",borderRadius:4,padding:"3px 8px",cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{loading?"Analysing…":"Analyse document"}</button>
               )}
-              {ev.type==="Witness statement"&&(ev.signStatus==="signed"?<span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"3px 8px",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Signed</span>:<button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).map(e=>e.id===ev.id?{...e,signStatus:"signed"}:e)}:x))} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>)}
+              {ev.type==="Witness statement"&&(ev.signStatus==="signed"?<span style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"3px 8px",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Signed</span>:<button onClick={()=>markEvidenceSigned(ev)} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>)}
               <button onClick={()=>saveCases(cases.map(x=>x.id===cs.id?{...x,evidence:(x.evidence||[]).filter(e=>e.id!==ev.id)}:x))} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
             </div>
             </div>

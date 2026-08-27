@@ -35,6 +35,8 @@ const baseProps = {
   concludingInvestigation: false,
   setShowHandoffModal: noop,
   setLetterOutput: noop,
+  promptDialog: () => Promise.resolve(null),
+  audit: noop,
 };
 
 function caseWithMeeting(meetingOverrides) {
@@ -201,13 +203,31 @@ describe('MeetingsTab — e-signature status badges (Phase 5, IP27)', () => {
     });
   });
 
-  it('clicking "Mark signed" saves the meeting with signStatus "signed"', async () => {
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H9, HIGH) — "Mark
+  // signed" used to save signStatus:"signed" directly from the click with
+  // no confirmation at all. It now routes through
+  // requestManualSignatureConfirmation (humanOverride.js), which itself
+  // has its own full test coverage — these just prove MeetingsTab wires
+  // the confirm/cancel outcome through to saveCases/audit correctly.
+  it('clicking "Mark signed" saves the meeting with signStatus "signed" once the confirmation is given', async () => {
     const user = userEvent.setup();
     const saveCases = vi.fn();
+    const audit = vi.fn();
+    const promptDialog = vi.fn().mockResolvedValue({ detail: 'Signed paper copy handed to HR on 12 March 2026' });
     const cs = caseWithMeeting({ signStatus: 'sent', signId: 'sign-1' });
-    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} saveCases={saveCases} />);
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} saveCases={saveCases} promptDialog={promptDialog} audit={audit} />);
     await user.click(screen.getByRole('button', { name: 'Mark signed' }));
     const [savedCases] = saveCases.mock.calls[0];
     expect(savedCases[0].meetings[0].signStatus).toBe('signed');
+    expect(audit).toHaveBeenCalledWith('Marked signed outside Compass', expect.stringContaining('Signed paper copy handed to HR on 12 March 2026'), cs.id);
+  });
+
+  it('does not save when the manual-signature confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn();
+    const cs = caseWithMeeting({ signStatus: 'sent', signId: 'sign-1' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} saveCases={saveCases} promptDialog={() => Promise.resolve(null)} />);
+    await user.click(screen.getByRole('button', { name: 'Mark signed' }));
+    expect(saveCases).not.toHaveBeenCalled();
   });
 });

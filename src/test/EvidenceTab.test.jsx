@@ -127,3 +127,36 @@ describe('EvidenceTab — findings keyed by evidence id, not array position', ()
     expect(screen.getByText('c.txt')).toBeInTheDocument();
   });
 });
+
+// Phase 6.5 hardening (closes Prompt 16 audit finding H9, HIGH) — "Mark
+// signed" used to save signStatus:"signed" directly from the click with
+// no confirmation at all. It now routes through
+// requestManualSignatureConfirmation (humanOverride.js, its own full test
+// coverage) — these just prove EvidenceTab wires the confirm/cancel
+// outcome through to saveCases/audit correctly.
+describe('EvidenceTab — manual "Mark signed" requires confirmation (Prompt 16 audit, H9)', () => {
+  const witnessCase = {
+    id: 'c1', employeeName: 'Sarah Jones',
+    evidence: [{ id: 'ev1', name: 'statement.pdf', type: 'Witness statement', size: 100, date: '2026-01-01' }],
+  };
+
+  it('saves signStatus "signed" once the confirmation is given', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn();
+    const audit = vi.fn();
+    const promptDialog = vi.fn().mockResolvedValue({ detail: 'Signed paper copy handed to HR on 12 March 2026' });
+    render(<EvidenceTab cs={witnessCase} cases={[witnessCase]} saveCases={saveCases} fmtDate={fmtDate} promptDialog={promptDialog} audit={audit} />);
+    await user.click(screen.getByRole('button', { name: 'Mark signed' }));
+    const [savedCases] = saveCases.mock.calls[0];
+    expect(savedCases[0].evidence[0].signStatus).toBe('signed');
+    expect(audit).toHaveBeenCalledWith('Marked signed outside Compass', expect.stringContaining('Signed paper copy handed to HR on 12 March 2026'), 'c1');
+  });
+
+  it('does not save when the manual-signature confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn();
+    render(<EvidenceTab cs={witnessCase} cases={[witnessCase]} saveCases={saveCases} fmtDate={fmtDate} promptDialog={() => Promise.resolve(null)} />);
+    await user.click(screen.getByRole('button', { name: 'Mark signed' }));
+    expect(saveCases).not.toHaveBeenCalled();
+  });
+});

@@ -8150,7 +8150,7 @@ Please produce:
             setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
             setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
             createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
-            generateInvestigationPlan, investigationPlanLoading,
+            generateInvestigationPlan, investigationPlanLoading, promptDialog, audit,
           }}
           header={{
             showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,

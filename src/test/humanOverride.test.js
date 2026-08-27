@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { requestOverride, requestPolicyDeviation } from '../lib/humanOverride';
+import { requestOverride, requestPolicyDeviation, requestManualSignatureConfirmation } from '../lib/humanOverride';
 
 describe('requestOverride', () => {
   it('returns false and never calls audit when the prompt is cancelled', async () => {
@@ -107,5 +107,45 @@ describe('requestPolicyDeviation', () => {
     await requestPolicyDeviation(promptDialogFn, auditFn, clause);
     expect(promptDialogFn.mock.calls[0][0].message).toContain('Disciplinary Policy');
     expect(promptDialogFn.mock.calls[0][0].message).toContain('Notice of hearing');
+  });
+});
+
+// Phase 6.5 hardening (closes Prompt 16 audit finding H9, HIGH) — "Mark
+// signed" used to set signStatus:"signed" from one unconfirmed click,
+// with no attestation of how a genuine signature was actually obtained.
+describe('requestManualSignatureConfirmation', () => {
+  it('returns false and never calls audit when the prompt is cancelled', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue(null);
+    const auditFn = vi.fn();
+    const result = await requestManualSignatureConfirmation(promptDialogFn, auditFn, { itemLabel: 'Investigation record — 12 Mar 2026' });
+    expect(result).toBe(false);
+    expect(auditFn).not.toHaveBeenCalled();
+  });
+
+  it('records a stable, templated audit entry with the given detail', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue({ detail: 'Signed paper copy handed to HR on 12 March 2026' });
+    const auditFn = vi.fn();
+    const result = await requestManualSignatureConfirmation(promptDialogFn, auditFn, { itemLabel: 'Investigation record — 12 Mar 2026', caseId: 'case-1' });
+    expect(result).toBe(true);
+    expect(auditFn).toHaveBeenCalledWith(
+      'Marked signed outside Compass',
+      'Investigation record — 12 Mar 2026 — Signed paper copy handed to HR on 12 March 2026',
+      'case-1'
+    );
+  });
+
+  it('marks the "detail" field required — an unexplained signature assertion is exactly the gap being closed', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue(null);
+    const auditFn = vi.fn();
+    await requestManualSignatureConfirmation(promptDialogFn, auditFn, { itemLabel: 'Witness statement — statement.pdf' });
+    const detailField = promptDialogFn.mock.calls[0][0].fields.find(f => f.key === 'detail');
+    expect(detailField.required).toBe(true);
+  });
+
+  it('includes the item being marked signed in the prompt message', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue(null);
+    const auditFn = vi.fn();
+    await requestManualSignatureConfirmation(promptDialogFn, auditFn, { itemLabel: 'Witness statement — statement.pdf' });
+    expect(promptDialogFn.mock.calls[0][0].message).toContain('Witness statement — statement.pdf');
   });
 });

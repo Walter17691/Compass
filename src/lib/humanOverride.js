@@ -63,3 +63,30 @@ export async function requestPolicyDeviation(promptDialogFn, auditFn, { policyNa
   auditFn("Policy deviation recorded", detail, caseId);
   return true;
 }
+
+// Phase 6.5 hardening (closes Prompt 16 audit finding H9, HIGH) — "Mark
+// signed" (a meeting record or witness statement's signStatus) used to be
+// a single, unconfirmed click that set signStatus:"signed" directly, with
+// no attestation of how a genuine signature was actually obtained and no
+// audit trail distinguishing it from a real e-signature captured through
+// Compass's own signing_requests flow. This matters beyond appearances:
+// caseStage.js's own inferDisciplinaryStage/inferGrievanceStage read
+// signStatus==="signed" directly to decide whether a case is "closed",
+// so an unconfirmed click could make Compass believe an outcome had
+// genuinely been signed for when it hadn't — suppressing appeal-window
+// tracking on a case that was never actually acknowledged. Required (not
+// optional, unlike requestOverride's reason) — this action's whole
+// purpose is asserting a fact Compass can't independently verify, so an
+// unexplained assertion is exactly the gap being closed.
+export async function requestManualSignatureConfirmation(promptDialogFn, auditFn, { itemLabel, caseId=null } = {}) {
+  const values = await promptDialogFn({
+    title: "Confirm signature obtained outside Compass",
+    message: `Marking "${itemLabel}" as signed records that a genuine signature was obtained outside Compass's own e-signature flow — e.g. a signed paper copy. Describe how and when it was actually signed.`,
+    fields: [{ key:"detail", label:"How and when was this signed?", required:true, placeholder:"e.g. Signed paper copy handed to HR on 12 March 2026" }],
+    confirmLabel: "Confirm signed",
+  });
+  if(!values) return false;
+  const detail = (values.detail||"").trim();
+  auditFn("Marked signed outside Compass", `${itemLabel} — ${detail}`, caseId);
+  return true;
+}
