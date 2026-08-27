@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 // Phase 6.5 hardening (accessibility pass) — shared modal keyboard/focus
 // behaviour, applied to every dialog in the app instead of each one
@@ -23,6 +23,23 @@ const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disab
 
 export function useModalA11y(containerRef, onClose, active = true) {
   const previouslyFocused = useRef(null);
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH,
+  // exposed by OutcomeModal's own fix) — the escape-key effect below only
+  // re-subscribes when `active` changes, so it closed over whichever
+  // `onClose` was in scope at that point and never picked up a later
+  // render's fresh closure. A caller whose onClose reads live state (e.g.
+  // OutcomeModal's close() now checking `saving` to refuse to close mid-
+  // write) would have Escape act on a stale, already-outdated version of
+  // that check. Always kept current, read through the ref inside the
+  // handler instead of the closed-over parameter. Updated in a layout
+  // effect, not directly during render — React's own rules disallow
+  // mutating a ref's .current while rendering (concurrent rendering can
+  // re-render without committing); a layout effect still runs
+  // synchronously after the DOM commit and strictly before the browser
+  // can paint or the user can trigger a keydown, so there's no window
+  // where the escape handler could read a stale value.
+  const onCloseRef = useRef(onClose);
+  useLayoutEffect(() => { onCloseRef.current = onClose; });
 
   useEffect(() => {
     if (!active) return;
@@ -46,7 +63,7 @@ export function useModalA11y(containerRef, onClose, active = true) {
     (focusables()[0] || container)?.focus();
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') { onClose?.(); return; }
+      if (e.key === 'Escape') { onCloseRef.current?.(); return; }
       if (e.key !== 'Tab') return;
       const list = focusables();
       if (!list.length) { e.preventDefault(); return; }

@@ -91,4 +91,32 @@ describe('useModalA11y', () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(elsewhere).toHaveFocus();
   });
+
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) — the
+  // escape-key effect only re-subscribes when `active` changes, so it
+  // used to close over whichever onClose was in scope at that point and
+  // never pick up a later render's fresh closure — a caller whose
+  // onClose reads live state (e.g. OutcomeModal's own "refuse to close
+  // while a save is in flight" guard) would have Escape act on a stale,
+  // already-outdated version of that check.
+  it('always calls the latest onClose passed in, even when active never toggles to force a re-subscribe', async () => {
+    const user = userEvent.setup();
+    const firstOnClose = vi.fn();
+    const secondOnClose = vi.fn();
+    function Harness() {
+      const [useSecond, setUseSecond] = useState(false);
+      const containerRef = useRef(null);
+      useModalA11y(containerRef, useSecond ? secondOnClose : firstOnClose, true);
+      return (
+        <div role="dialog" aria-modal="true" ref={containerRef} tabIndex={-1}>
+          <button onClick={() => setUseSecond(true)}>Switch onClose</button>
+        </div>
+      );
+    }
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Switch onClose' }));
+    await user.keyboard('{Escape}');
+    expect(firstOnClose).not.toHaveBeenCalled();
+    expect(secondOnClose).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1250,7 +1250,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const saveCaseToDB = async (caseObj) => {
-    if(!org?.id) return;
+    if(!org?.id) return false;
     const nowIso = new Date().toISOString();
     try {
       const payload = {
@@ -1306,18 +1306,27 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         // overwrite a teammate's concurrent edit with our full local copy,
         // including their changes to meetings/evidence we never saw.
         const { data, error } = await supabase.from('cases').update(payload).eq('id', caseObj.id).eq('updated_at', caseObj.updatedAt).select();
-        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return; }
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return false; }
         if(!data || data.length===0) {
           showToast("This case was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
           loadCasesFromDB();
-          return;
+          return false;
         }
       } else {
         const { error } = await supabase.from('cases').upsert(payload).select();
-        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return; }
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return false; }
       }
       setCases(prev => prev.map(c => c.id===caseObj.id ? {...c, updatedAt: nowIso} : c));
-    } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); }
+      // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) —
+      // a real, awaitable success signal, not just "the promise settled"
+      // (every path above already resolved normally even on a handled
+      // error, via its own showToast + early return). Every existing
+      // caller already ignores this return value (fire-and-forget), so
+      // this is purely additive — the one caller that now needs a real
+      // confirmation before declaring success is OutcomeModal's
+      // finalizeOutcome, the highest-stakes single write in the app.
+      return true;
+    } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); return false; }
   };
 
   const deleteCaseFromDB = async (caseId) => {
@@ -2243,9 +2252,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(org?.id) {
       if(changedId) {
         // Only sync the changed case
+        //
+        // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) —
+        // returns the real save Promise<boolean> instead of firing it and
+        // forgetting the result, so a caller that genuinely needs to know
+        // whether the write landed (OutcomeModal's finalizeOutcome, the
+        // highest-stakes single write in the app) can await it. Every
+        // other caller already discards saveCases' return value, so this
+        // is purely additive — nothing about the existing fire-and-forget
+        // callers changes.
         const changed = stamped.find(x=>x.id===changedId);
-        if(changed) saveCaseToDB(changed);
-        else deleteCaseFromDB(changedId);
+        if(changed) return saveCaseToDB(changed);
+        deleteCaseFromDB(changedId);
+        return Promise.resolve(true);
       } else {
         // Sync all — but only cases that actually changed. Callers build u
         // via cases.map(x => cond ? {...x, ...} : x), which preserves

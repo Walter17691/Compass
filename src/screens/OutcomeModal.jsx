@@ -27,12 +27,35 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
   const cs = cases.find(x=>x.id===activeCaseId);
   const [showQualityCheck, setShowQualityCheck] = useState(false);
   const [qualityGaps, setQualityGaps] = useState([]);
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) — see
+  // finalizeOutcome's own comment below for why this exists.
+  const [saving, setSaving] = useState(false);
 
-  const finalizeOutcome = () => {
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) — used
+  // to call saveCases (a fire-and-forget optimistic write, its own
+  // returned Promise discarded) and then immediately, synchronously
+  // close the modal, show "Outcome recorded", and start drafting the
+  // outcome letter — all before the write to `cases` had actually been
+  // confirmed to land. If that write then failed (network issue, a
+  // stale-version conflict), HR had already been told the decision was
+  // recorded, the modal was gone, and Compass had already started
+  // drafting a letter for an outcome that was never actually persisted —
+  // the single highest-stakes write in the app, since cs.outcome is what
+  // starts the real ACAS appeal-window clock and drives whether the case
+  // is even considered closed (caseStage.js). saveCases now returns a
+  // real Promise<boolean> for a single-case write (passing activeCaseId
+  // as changedId) — awaited here, so success is only ever reported once
+  // the database has actually confirmed it. On failure, the modal stays
+  // open with the entered outcome/notes intact so HR can just retry,
+  // rather than silently losing what they typed.
+  const finalizeOutcome = async () => {
     const wasDismissal = DISMISSAL_OUTCOMES.includes(outcomeType);
     const employeeName = cs?.employeeName;
     const employeeManager = cs?.manager;
-    saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x));
+    setSaving(true);
+    const ok = await saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x), activeCaseId);
+    setSaving(false);
+    if(!ok) { showToast("Couldn't record the outcome — please try again", "error"); return; }
     const approvalAction = approvalActionForOutcome(outcomeType);
     if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
     setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");handleLetter("outcome");
@@ -60,7 +83,12 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
     finalizeOutcome();
   };
 
-  const close = () => { setShowOutcomeModal(false); setOutcomeType(""); setOutcomeNotes(""); };
+  // Guarded against saving — an Escape press or backdrop click while the
+  // outcome write is in flight (useModalA11y calls this directly) must
+  // not hide the modal out from under an in-progress save; the disabled
+  // Cancel button already covers the primary click path, this covers the
+  // keyboard/backdrop ones the hook wires up independently.
+  const close = () => { if(saving) return; setShowOutcomeModal(false); setOutcomeType(""); setOutcomeNotes(""); };
   // Called unconditionally, ahead of the early return below (DecisionQuality
   // CheckModal — itself now hook-managed too, active:false while it isn't
   // showing) — the rules of hooks don't allow this after a conditional return.
@@ -106,8 +134,8 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
           </div>
         )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button onClick={close} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
-          <button disabled={!outcomeType} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome & generate letter</button>
+          <button onClick={close} disabled={saving} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:saving?"not-allowed":"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+          <button disabled={!outcomeType||saving} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType||saving?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>{saving?"Recording outcome…":"Issue outcome & generate letter"}</button>
         </div>
       </div>
     </div>
