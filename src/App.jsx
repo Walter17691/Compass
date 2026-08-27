@@ -5726,6 +5726,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setMeetingEndTime(null);
     setMeetingType(type); setTranscript([]); setPrepNotes(""); setPrepQuestions([]); setMeetingEvidenceSuggestions([]); setMeetingActionSuggestions([]); setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary(""); setLetterOutput(""); setLetterHistory([]);
     setRiskScore(null); setPrediction(""); setNextSteps([]); setParticipants([]);
+    // Phase 6.5 hardening (closes Prompt 16 audit finding H7, HIGH) —
+    // meetingIntelligence (possible-inconsistency quotes, suggested
+    // follow-up questions — both drawn directly from the PREVIOUS
+    // meeting's own transcript) was missing from this reset list, unlike
+    // every other piece of per-meeting AI state above. updateMeetingIntelligence
+    // only re-runs once enough new utterances accumulate, so starting a
+    // new meeting for a DIFFERENT employee could show that employee's
+    // chair the outgoing meeting's own intelligence panel — a real
+    // cross-employee confidentiality leak, not just a stale-content bug
+    // — until the new meeting's own first live pass overwrote it.
+    // dismissedNudgeKey/dismissedFollowUpKey/dismissedCoachingTipKeys are
+    // the same omission, lower severity (they don't render another
+    // employee's content, just risk mis-suppressing a new nudge that
+    // happens to coincidentally match a stale dismissed key).
+    setMeetingIntelligence(null); setDismissedNudgeKey(null); setDismissedFollowUpKey(null); setDismissedCoachingTipKeys([]);
     if(type && type.group === "dev") {
       const config = DEV_MEETING_CONFIG[type.label];
       setDevSession({
