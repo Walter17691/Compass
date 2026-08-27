@@ -1,6 +1,7 @@
 import { verifyCaller } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
 import { supabaseRequest, getUserEmail } from './_supabase.js';
+import { checkRateLimit } from '../_rateLimit.js';
 
 // Emails the new case owner when a case is reassigned to them — the only
 // step of a reassignment that needs a server (RESEND_API_KEY is server-only).
@@ -22,6 +23,12 @@ export async function reassignNotify(req, res) {
 
   const { orgId, orgName, newOwnerId, newOwnerName, employeeName, caseType } = req.body || {};
   if (!orgId || !newOwnerId || !employeeName) return res.status(400).json({ error: 'orgId, newOwnerId and employeeName are required' });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.12, MEDIUM) —
+  // same cap already applied to every other authenticated email-sending
+  // endpoint (send-letter, send-for-signature, portal-invite).
+  const withinLimit = await checkRateLimit(`reassign-notify:${caller.id}`, 20, 300);
+  if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
   try {
     const callerMemberRes = await supabaseRequest(`org_members?org_id=eq.${encodeURIComponent(orgId)}&user_id=eq.${encodeURIComponent(caller.id)}&select=name`);

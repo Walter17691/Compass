@@ -1,6 +1,7 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
+import { checkRateLimit } from '../_rateLimit.js';
 
 // Comparable UK HR/compliance software (BrightHR, Citation, Peninsula) is
 // sold through a sales conversation and a signed contract, not self-serve
@@ -23,6 +24,12 @@ export async function requestDemo(req, res) {
 
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.12, MEDIUM) —
+  // same cap already applied to every other authenticated email-sending
+  // endpoint (send-letter, send-for-signature, portal-invite).
+  const withinLimit = await checkRateLimit(`request-demo:${caller.id}`, 20, 300);
+  if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
   let body;
   try {

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { verifyState } from './_state.js';
 import { supabaseRequest } from '../_supabase.js';
 import { logIntegrationEvent } from '../_integration_events.js';
+import { redactTokenResponse } from '../_oauthLog.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -51,7 +52,7 @@ export async function gmailOauthCallback(req, res) {
     });
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok || !tokenData.refresh_token) {
-      console.error('Gmail token exchange failed:', tokenData);
+      console.error('Gmail token exchange failed:', redactTokenResponse(tokenData));
       await logIntegrationEvent({ orgId: payload.orgId, userId: payload.userId, provider: 'gmail', eventType: 'connect', status: 'error', detail: 'Token exchange failed' });
       return res.redirect(302, `${APP_URL}/?gmail=error`);
     }

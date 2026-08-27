@@ -2,6 +2,7 @@ import { supabaseRequest } from './_supabase.js';
 import { getUserEmail } from '../cron/_supabase.js';
 import { requireOrgMembership } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
+import { checkRateLimit } from '../_rateLimit.js';
 
 const APP_URL = 'https://compass-lemon-iota.vercel.app';
 
@@ -22,6 +23,13 @@ export async function notifyDocument(req, res) {
 
   const auth = await requireOrgMembership(req, res, orgId);
   if (!auth) return;
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.12, MEDIUM) —
+  // same cap already applied to every other authenticated email-sending
+  // endpoint (send-letter, send-for-signature, portal-invite) — caps
+  // sustained abuse from one caller without limiting genuine casework.
+  const withinLimit = await checkRateLimit(`portal-notify-document:${auth.caller.id}`, 20, 300);
+  if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
   try {
     const accountRes = await supabaseRequest(`employee_portal_accounts?org_id=eq.${encodeURIComponent(orgId)}&employee_name=eq.${encodeURIComponent(employeeName)}&select=user_id`);
