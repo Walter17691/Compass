@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 import { matchesCaseFilters } from '../lib/caseFilters';
+import { computeDueSoon } from '../lib/deadlines';
 import { LockIcon } from '../components/Icons';
 import { useLoadMore } from '../hooks/useLoadMore';
 
@@ -24,7 +25,7 @@ const STAGE_LABEL = { intake:"Intake", investigation:"Investigation", inv_report
 // created since the "+ New case" modal started writing cases.ownerId/
 // priority — older cases won't match either filter, same as any
 // additive-migration field.
-export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast }) {
+export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit }) {
   const [selected, setSelected] = useState(new Set());
   const [filters, setFilters] = useState({ type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" });
   const setFilter = (key, value) => setFilters(f=>({...f, [key]:value}));
@@ -37,16 +38,45 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
 
   const filteredCases = cases.filter(cs => matchesCaseFilters(cs, filters, getCaseStage));
   const toggleSelected = id => setSelected(s=>{const n=new Set(s); n.has(id)?n.delete(id):n.add(id); return n;});
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 5.10, MEDIUM) —
+  // this used to close every selected case with no check at all,
+  // silently taking any of them out of computeDueSoon's own
+  // getCaseStage(cs)==="closed" exclusion — a case with a genuinely live
+  // deadline (an outstanding ACAS appeal window, a signature still
+  // pending) would stop being tracked anywhere the moment it closed,
+  // with no indication that had even happened. computeDueSoon only
+  // needs the selected cases themselves for every case-intrinsic
+  // deadline type (outcome, appeal, investigation overrunning,
+  // grievance acknowledgement, signature chase, fit note, probation,
+  // suspension) — its other params are all optional and default to [].
+  // Not a hard block: HR may have a real reason to bulk-close regardless
+  // (e.g. correcting a mistake), so this makes the loss explicit and
+  // informed rather than silent, the same "surface it, don't block it"
+  // approach as the general readiness indicator (caseReadiness.js).
   const bulkClose = async () => {
-    const ok = await confirmDialog({title:`Close ${selected.size} case${selected.size!==1?"s":""}?`, message:"These will be marked closed. You can still view them, and reopen individually if needed.", confirmLabel:"Close", danger:true});
+    const chosen = cases.filter(c=>selected.has(c.id));
+    const liveDeadlineCaseIds = new Set(computeDueSoon(chosen).map(d=>d.caseId).filter(Boolean));
+    const warning = liveDeadlineCaseIds.size > 0
+      ? ` ${liveDeadlineCaseIds.size} of these ${liveDeadlineCaseIds.size===1?"has":"have"} a live deadline (e.g. an outstanding appeal window or a signature still pending) that will stop being tracked once closed.`
+      : "";
+    const ok = await confirmDialog({title:`Close ${selected.size} case${selected.size!==1?"s":""}?`, message:`These will be marked closed. You can still view them, and reopen individually if needed.${warning}`, confirmLabel:"Close", danger:true});
     if(!ok) return;
     saveCases(cases.map(c=>selected.has(c.id)?{...c,stage:"closed",closedReason:"bulk_closed"}:c));
     showToast(`${selected.size} case${selected.size!==1?"s":""} closed`);
     setSelected(new Set());
   };
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 5.11, MEDIUM) —
+  // this downloads the full, unredacted case JSON (meeting transcripts,
+  // evidence, allegations, and whatever else a case carries) with no
+  // audit trail at all — every other significant read/export action in
+  // this app logs one. caseId left null (this spans potentially many
+  // cases, not one) and the export's own size/employee list carried in
+  // meta so the audit entry says what actually left the app, not just
+  // that "an export happened."
   const bulkExport = () => {
     const chosen = cases.filter(c=>selected.has(c.id));
     downloadJson(chosen, `compass_cases_export_${new Date().toISOString().split("T")[0]}.json`);
+    audit?.("Bulk case export", `${chosen.length} case${chosen.length!==1?"s":""} exported as JSON`, null, { dataUsed: chosen.map(c=>c.employeeName).join(", ") });
     showToast(`Exported ${chosen.length} case${chosen.length!==1?"s":""}`);
   };
   const allEmployees = [...new Set(filteredCases.map(cs=>cs.employeeName))];
