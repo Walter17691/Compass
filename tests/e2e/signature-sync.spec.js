@@ -33,7 +33,16 @@ test('a meeting shows Signed automatically once the real signature lands, withou
   await page.getByRole('button', { name: 'Send for signature' }).waitFor({ timeout: 30000 });
 
   await page.getByRole('button', { name: 'Send for signature' }).click();
-  await page.getByPlaceholder('employee@company.com').fill('employee-e2e-test@example.com');
+  // Phase 7 (Controlled Beta Infrastructure Gate 4) — @example.com is
+  // rejected outright by Resend with a 422 ("Invalid `to` field... use
+  // our testing email address instead of domains like `example.com`"),
+  // confirmed via a direct API call. delivered@resend.dev is Resend's
+  // own first-party, publicly documented testing address — not a
+  // secret, no signup required, no real mailbox involved — that always
+  // accepts the send and simulates a real successful delivery, letting
+  // the actual send-for-signature call this test drives genuinely
+  // succeed end-to-end instead of erroring out server-side.
+  await page.getByPlaceholder('employee@company.com').fill('delivered@resend.dev');
   let signId;
   const captureSignId = async (response) => {
     if (response.request().method() !== 'POST' || !response.url().includes('/api/signing')) return;
