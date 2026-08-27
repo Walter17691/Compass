@@ -1941,10 +1941,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
   const [toast, setToast] = useState(null);
 
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H6, HIGH) — every
+  // toast, success or error, used to auto-dismiss on the same flat 3s
+  // timer with no way to review it again — an error like "Couldn't save
+  // the case" could vanish before a user's attention was even back on
+  // the screen, with no persistent record of the failure anywhere. Error
+  // toasts now stay up until the user actually dismisses them (or a new
+  // toast replaces them); success toasts keep the existing short
+  // auto-dismiss, since a fleeting confirmation of something that worked
+  // isn't the same risk as losing the only notice that something didn't.
+  // toastIdRef guards against a stale setTimeout closing a NEWER toast
+  // that replaced this one before the old timer fired.
+  const toastIdRef = useRef(0);
   const showToast = (message, type="success", duration=3000) => {
-    setToast({message, type});
-    setTimeout(()=>setToast(null), duration);
+    const id = ++toastIdRef.current;
+    setToast({message, type, id});
+    if(type!=="error") {
+      setTimeout(()=>setToast(t=>t?.id===id?null:t), duration);
+    }
   };
+  const dismissToast = () => setToast(null);
 
   // In-app replacement for window.confirm — returns a Promise<boolean> so
   // call sites can `if(!await confirmDialog({...})) return;` the same way
@@ -7864,11 +7880,22 @@ Please produce:
         </div>
       )}
 
-            {/* ── Toast notification ── */}
+            {/* ── Toast notification ──
+                Phase 6.5 hardening (closes Prompt 16 audit finding H6,
+                HIGH) — had no role/aria-live at all, so a screen-reader
+                user got no announcement that anything had happened, error
+                or otherwise. role="alert"/aria-live="assertive" for
+                errors (interrupts immediately — the user needs to know
+                now), role="status"/aria-live="polite" for everything else
+                (announced without interrupting). The close button gives
+                every toast — not just errors, which no longer
+                auto-dismiss at all — an explicit, keyboard-reachable way
+                to dismiss it instead of only ever a timeout. */}
       {toast&&(
-        <div style={{position:"fixed",bottom:isMobile?16:24,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#E8F5EE",border:`1px solid ${toast.type==="error"?"#C84B2F44":"#1A7A4A44"}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",animation:"slideIn 0.2s ease",maxWidth:isMobile?"none":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <div role={toast.type==="error"?"alert":"status"} aria-live={toast.type==="error"?"assertive":"polite"} style={{position:"fixed",bottom:isMobile?16:24,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#E8F5EE",border:`1px solid ${toast.type==="error"?"#C84B2F44":"#1A7A4A44"}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",animation:"slideIn 0.2s ease",maxWidth:isMobile?"none":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#C84B2F":"#1A7A4A",flexShrink:0}}/>
-          <span style={{fontSize:14,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif"}}>{toast.message}</span>
+          <span style={{fontSize:14,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",flex:1}}>{toast.message}</span>
+          <button onClick={dismissToast} aria-label="Dismiss" style={{background:"none",border:"none",color:"#9B9098",fontSize:16,lineHeight:1,cursor:"pointer",padding:2,flexShrink:0,fontFamily:"DM Sans,system-ui,sans-serif"}}>×</button>
         </div>
       )}
 
