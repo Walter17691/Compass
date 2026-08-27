@@ -59,7 +59,10 @@ export async function ms365OauthCallback(req, res) {
 
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
 
-    const upsertRes = await supabaseRequest('calendar_connections?on_conflict=user_id,provider', {
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // see _oauth-callback.js's sibling comment; one connection per
+    // (user, org, provider), not per (user, provider).
+    const upsertRes = await supabaseRequest('calendar_connections?on_conflict=user_id,org_id,provider', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({

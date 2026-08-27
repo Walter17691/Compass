@@ -1,16 +1,24 @@
 import { supabaseRequest } from './_supabase.js';
 import { getValidAccessToken, googleCalendarRequest, deadlineToGoogleEvent } from './_google.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 import { logIntegrationEvent } from '../_integration_events.js';
 
+// Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+// looked the connection up by user_id alone, with no orgId in the
+// request at all. A multi-org user's sync while working in Org A could
+// silently use whichever org's connection happened to have been
+// connected/overwritten most recently (see _oauth-callback.js's own
+// comment on the underlying upsert bug this is the read-side half of),
+// pushing Org A's confidential deadline titles onto a calendar logged
+// under a different org entirely.
 export async function sync(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
-  const userId = caller.id;
+  const { deadlines, orgId } = req.body;
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
+  const userId = auth.caller.id;
 
-  const { deadlines } = req.body;
   if (!Array.isArray(deadlines)) {
     return res.status(400).json({ error: 'deadlines[] is required' });
   }
@@ -20,7 +28,7 @@ export async function sync(req, res) {
   // before something later in the sync failed.
   let connection = null;
   try {
-    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&provider=eq.google&select=*`);
+    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&org_id=eq.${orgId}&provider=eq.google&select=*`);
     const connections = await connRes.json();
     connection = connections[0];
     if (!connection) return res.status(404).json({ error: 'No Google Calendar connection for this user' });

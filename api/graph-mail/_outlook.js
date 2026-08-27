@@ -45,9 +45,15 @@ export async function getValidAccessToken(connection) {
 
 // Shared by _list-messages.js and _get-message.js: loads the caller's
 // connection, refreshes the access token if needed (persisting the
-// refresh), and returns both. Returns null if the user has no connection.
-export async function getConnectionWithFreshToken(userId) {
-  const connRes = await supabaseRequest(`graph_mail_connections?user_id=eq.${userId}&provider=eq.microsoft&select=*`);
+// refresh), and returns both. Returns null if the user has no connection
+// for this specific org.
+//
+// Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+// orgId is now required (was user_id alone) — a multi-org user's inbox
+// browsing while working in Org A must never silently read Org B's
+// connected mailbox just because it happens to be the same user_id.
+export async function getConnectionWithFreshToken(userId, orgId) {
+  const connRes = await supabaseRequest(`graph_mail_connections?user_id=eq.${userId}&org_id=eq.${orgId}&provider=eq.microsoft&select=*`);
   const connections = await connRes.json();
   const connection = connections[0];
   if (!connection) return null;

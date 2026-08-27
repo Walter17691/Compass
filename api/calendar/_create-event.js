@@ -1,5 +1,5 @@
 import { supabaseRequest } from './_supabase.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 import { providerAdapter, freshAccessToken, INTEGRATION_EVENT_PROVIDER } from './_providers.js';
 import { logIntegrationEvent } from '../_integration_events.js';
 
@@ -15,14 +15,19 @@ import { logIntegrationEvent } from '../_integration_events.js';
 export async function createEvent(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { title, description, startISO, endISO, attendees, orgId } = req.body || {};
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
+  const caller = auth.caller;
 
-  const { title, description, startISO, endISO, attendees } = req.body || {};
   if (!title || !startISO || !endISO) return res.status(400).json({ error: 'title, startISO and endISO are required' });
 
   try {
-    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${caller.id}&select=*`);
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // was every connection for this user across every org they belong
+    // to; now only the calling org's own connections, matching what the
+    // caller actually authorised for this org.
+    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${caller.id}&org_id=eq.${orgId}&select=*`);
     const connections = await connRes.json();
     if (!connections.length) return res.status(404).json({ error: 'No connected calendar for this user' });
 

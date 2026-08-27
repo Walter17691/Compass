@@ -71,7 +71,10 @@ export async function gmailOauthCallback(req, res) {
       }
     } catch (e) { console.error('Google userinfo lookup failed (non-fatal):', e.message); }
 
-    const upsertRes = await supabaseRequest('graph_mail_connections?on_conflict=user_id,provider', {
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // one connection per (user, org, provider), not per (user, provider)
+    // — see api/calendar/_oauth-callback.js's sibling comment.
+    const upsertRes = await supabaseRequest('graph_mail_connections?on_conflict=user_id,org_id,provider', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({

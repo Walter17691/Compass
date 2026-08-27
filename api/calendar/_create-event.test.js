@@ -19,13 +19,16 @@ const FAR_FUTURE = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 // particular, the multi-connection "one provider fails, another
 // succeeds" resilience this handler's own loop is written to support was
 // entirely unverified.
-function stubFetch({ authOk = true, connections = [{ id: 'conn-google', provider: 'google', org_id: 'org-1', expires_at: FAR_FUTURE, access_token: 'tok' }], eventResponses = {} } = {}) {
+function stubFetch({ authOk = true, members = [{ role: 'hr_manager' }], connections = [{ id: 'conn-google', provider: 'google', org_id: 'org-1', expires_at: FAR_FUTURE, access_token: 'tok' }], eventResponses = {} } = {}) {
   const calls = [];
   global.fetch = vi.fn((url, options = {}) => {
     const u = String(url);
     calls.push({ url: u, method: options.method });
     if (u.includes('/auth/v1/user')) {
       return Promise.resolve({ ok: authOk, json: () => Promise.resolve({ id: 'user-1', email: 'hr@acme.com' }) });
+    }
+    if (u.includes('/rest/v1/org_members')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
     }
     if (u.includes('/rest/v1/calendar_connections')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(connections) });
@@ -46,7 +49,7 @@ function stubFetch({ authOk = true, connections = [{ id: 'conn-google', provider
   return calls;
 }
 
-const validBody = { title: 'Investigation meeting', startISO: '2026-09-01T14:00:00Z', endISO: '2026-09-01T15:00:00Z' };
+const validBody = { title: 'Investigation meeting', startISO: '2026-09-01T14:00:00Z', endISO: '2026-09-01T15:00:00Z', orgId: 'org-1' };
 
 describe('createEvent', () => {
   let originalFetch;
@@ -63,7 +66,7 @@ describe('createEvent', () => {
   it('rejects a request missing required fields', async () => {
     stubFetch();
     const res = mockRes();
-    await createEvent(req({ title: 'x' }), res);
+    await createEvent(req({ ...validBody, title: undefined }), res);
     expect(res.statusCode).toBe(400);
   });
 
@@ -72,6 +75,32 @@ describe('createEvent', () => {
     const res = mockRes();
     await createEvent(req(validBody), res);
     expect(res.statusCode).toBe(404);
+  });
+
+  // Phase 6.5 hardening (Prompt 16 audit, closes finding C3, CRITICAL) —
+  // orgId is now required and the caller's real membership in it is
+  // verified server-side, not trusted from the client.
+  it('400s when orgId is missing entirely', async () => {
+    stubFetch();
+    const res = mockRes();
+    await createEvent(req({ ...validBody, orgId: undefined }), res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('403s a caller who is not a member of the claimed org', async () => {
+    stubFetch({ members: [] });
+    const res = mockRes();
+    await createEvent(req(validBody), res);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('scopes the connection lookup to the calling org, not just the caller\'s user_id — the exact cross-tenant mingling this fix closes', async () => {
+    const calls = stubFetch();
+    const res = mockRes();
+    await createEvent(req(validBody), res);
+    expect(res.statusCode).toBe(200);
+    const connCall = calls.find(c => c.url.includes('calendar_connections'));
+    expect(connCall.url).toContain('org_id=eq.org-1');
   });
 
   it('creates the event and returns its id when the single connected calendar succeeds', async () => {

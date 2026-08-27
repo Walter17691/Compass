@@ -64,7 +64,14 @@ export async function oauthCallback(req, res) {
 
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
 
-    const upsertRes = await supabaseRequest('calendar_connections?on_conflict=user_id,provider', {
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // was on_conflict=user_id,provider: a user connected in Org A who
+    // then connects again while active in Org B silently overwrote Org
+    // A's row (org_id and tokens both) instead of creating a second one.
+    // One connection per (user, org, provider) is the real invariant — a
+    // user can legitimately have Google Calendar connected separately
+    // for two different orgs.
+    const upsertRes = await supabaseRequest('calendar_connections?on_conflict=user_id,org_id,provider', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({

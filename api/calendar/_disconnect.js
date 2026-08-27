@@ -1,17 +1,23 @@
 import { supabaseRequest } from './_supabase.js';
 import { getValidAccessToken, googleCalendarRequest } from './_google.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 import { logIntegrationEvent } from '../_integration_events.js';
 
+// Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+// was scoped (both lookup and delete) by user_id alone: disconnecting
+// while working in one org silently broke sync for every other org the
+// user has separately connected. Both the lookup and the delete below
+// now target this org's own connection row specifically.
 export async function disconnect(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
-  const userId = caller.id;
+  const { orgId } = req.body || {};
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
+  const userId = auth.caller.id;
 
   try {
-    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&provider=eq.google&select=*`);
+    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${userId}&org_id=eq.${orgId}&provider=eq.google&select=*`);
     const connections = await connRes.json();
     const connection = connections[0];
     if (!connection) return res.status(200).json({ success: true }); // already disconnected

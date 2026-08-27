@@ -1,5 +1,5 @@
 import { getConnectionWithFreshToken, graphRequest } from './_outlook.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 
 export async function listMessages(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -9,11 +9,12 @@ export async function listMessages(req, res) {
   // empty) inbox snapshot back on every subsequent load.
   res.setHeader('Cache-Control', 'no-store');
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { orgId } = req.query;
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
 
   try {
-    const conn = await getConnectionWithFreshToken(caller.id);
+    const conn = await getConnectionWithFreshToken(auth.caller.id, orgId);
     if (!conn) return res.status(404).json({ error: 'No Outlook connection for this user' });
 
     const listRes = await graphRequest(

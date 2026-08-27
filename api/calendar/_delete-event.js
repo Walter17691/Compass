@@ -1,19 +1,23 @@
 import { supabaseRequest } from './_supabase.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 import { providerAdapter, freshAccessToken, INTEGRATION_EVENT_PROVIDER } from './_providers.js';
 import { logIntegrationEvent } from '../_integration_events.js';
 
 export async function deleteEvent(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { provider, eventId, orgId } = req.body || {};
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
+  const caller = auth.caller;
 
-  const { provider, eventId } = req.body || {};
   if (!provider || !eventId) return res.status(400).json({ error: 'provider and eventId are required' });
 
   try {
-    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${caller.id}&provider=eq.${provider}&select=*`);
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // scoped by the calling org, not just the caller's user_id — see
+    // _create-event.js's sibling comment.
+    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${caller.id}&org_id=eq.${orgId}&provider=eq.${provider}&select=*`);
     const connection = (await connRes.json())[0];
     if (!connection) return res.status(404).json({ error: `No ${provider} calendar connection for this user` });
 

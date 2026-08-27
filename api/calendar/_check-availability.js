@@ -1,5 +1,5 @@
 import { supabaseRequest } from './_supabase.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 import { providerAdapter, freshAccessToken, availabilityPath, availabilityRequestOptions, normalizeAvailabilityEvents } from './_providers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP16, §10) — "availability
@@ -12,14 +12,17 @@ import { providerAdapter, freshAccessToken, availabilityPath, availabilityReques
 export async function checkAvailability(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { startISO, endISO, orgId } = req.query;
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
+  const caller = auth.caller;
 
-  const { startISO, endISO } = req.query;
   if (!startISO || !endISO) return res.status(400).json({ error: 'startISO and endISO are required' });
 
   try {
-    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${caller.id}&select=*`);
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // scoped by the calling org — see _create-event.js's sibling comment.
+    const connRes = await supabaseRequest(`calendar_connections?user_id=eq.${caller.id}&org_id=eq.${orgId}&select=*`);
     const connections = await connRes.json();
     if (!connections.length) return res.status(200).json({ checked: false, conflicts: [] });
 

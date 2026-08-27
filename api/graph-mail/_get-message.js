@@ -1,5 +1,5 @@
 import { getConnectionWithFreshToken, graphRequest } from './_outlook.js';
-import { verifyCaller } from '../_auth.js';
+import { requireOrgMembership } from '../_auth.js';
 
 // Formats the fetched message into the same "From/Subject/Date + body" text
 // shape the manual paste box already produces, so it can be handed straight
@@ -21,14 +21,14 @@ export async function getMessage(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   res.setHeader('Cache-Control', 'no-store');
 
-  const caller = await verifyCaller(req);
-  if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const { messageId, orgId } = req.query;
+  const auth = await requireOrgMembership(req, res, orgId);
+  if (!auth) return;
 
-  const { messageId } = req.query;
   if (!messageId) return res.status(400).json({ error: 'messageId is required' });
 
   try {
-    const conn = await getConnectionWithFreshToken(caller.id);
+    const conn = await getConnectionWithFreshToken(auth.caller.id, orgId);
     if (!conn) return res.status(404).json({ error: 'No Outlook connection for this user' });
 
     const msgRes = await graphRequest(

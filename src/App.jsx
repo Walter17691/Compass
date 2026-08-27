@@ -2297,10 +2297,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── Calendar integration (Google Calendar) ──
   const [calendarConnected, setCalendarConnected] = useState(false);
   useEffect(() => {
-    if(!user?.id) return;
-    authedFetch(`/api/calendar/status`)
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // scoped to the active org now, not just the signed-in user — a
+    // multi-org user's status check must reflect THIS org's own
+    // connection, not whichever org happens to share the same user_id.
+    if(!user?.id||!org?.id) return;
+    authedFetch(`/api/calendar/status?orgId=${encodeURIComponent(org.id)}`)
       .then(r=>r.json()).then(d=>setCalendarConnected(!!d.connected)).catch(()=>{});
-  }, [user?.id]);
+  }, [user?.id, org?.id]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const calendarParam = params.get("calendar");
@@ -2322,11 +2326,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // this sync, full stop, even for the case's own creator.
       authedFetch("/api/calendar/sync", {
         method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ deadlines: dueSoon.filter(d => !d.confidential) }),
+        body: JSON.stringify({ deadlines: dueSoon.filter(d => !d.confidential), orgId: org?.id }),
       }).catch(e => console.error("Calendar sync failed:", e));
     }, 3000);
     return () => clearTimeout(timeout);
-  }, [dueSoon, calendarConnected, user?.id]);
+  }, [dueSoon, calendarConnected, user?.id, org?.id]);
   const connectGoogleCalendar = async () => {
     if(!user?.id || !org?.id) return;
     try {
@@ -2337,10 +2341,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { showToast("Couldn't start Calendar connection", "error"); }
   };
   const disconnectGoogleCalendar = async () => {
-    if(!user?.id) return;
+    if(!user?.id||!org?.id) return;
     try {
       await authedFetch("/api/calendar/disconnect", {
         method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ orgId: org.id }),
       });
       setCalendarConnected(false);
       showToast("Google Calendar disconnected");
@@ -2359,10 +2364,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // phase actually schedules a meeting through it.
   const [ms365CalendarConnected, setMs365CalendarConnected] = useState(false);
   useEffect(() => {
-    if(!user?.id) return;
-    authedFetch(`/api/calendar/ms365-status`)
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // see the Google Calendar status effect's own sibling comment.
+    if(!user?.id||!org?.id) return;
+    authedFetch(`/api/calendar/ms365-status?orgId=${encodeURIComponent(org.id)}`)
       .then(r=>r.json()).then(d=>setMs365CalendarConnected(!!d.connected)).catch(()=>{});
-  }, [user?.id]);
+  }, [user?.id, org?.id]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ms365Param = params.get("ms365calendar");
@@ -2384,9 +2391,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch { showToast("Couldn't start Microsoft 365 Calendar connection", "error"); }
   };
   const disconnectMs365Calendar = async () => {
-    if(!user?.id) return;
+    if(!user?.id||!org?.id) return;
     try {
-      await authedFetch("/api/calendar/ms365-disconnect", { method: "POST", headers: {"Content-Type":"application/json"} });
+      await authedFetch("/api/calendar/ms365-disconnect", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ orgId: org.id }) });
       setMs365CalendarConnected(false);
       showToast("Microsoft 365 Calendar disconnected");
     } catch { showToast("Couldn't disconnect — please try again"); }
@@ -2441,7 +2448,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setMeetingScheduling(true);
     try {
       const res = await authedFetch("/api/calendar/create-event", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
-        title, description: description||"", startISO: times.startISO, endISO: times.endISO, attendees: parseAttendees(attendees),
+        title, description: description||"", startISO: times.startISO, endISO: times.endISO, attendees: parseAttendees(attendees), orgId: org?.id,
       })});
       const data = await res.json();
       if(!res.ok || !data.success) { showToast(data.error||"Couldn't schedule the meeting", "error"); setMeetingScheduling(false); return false; }
@@ -2487,7 +2494,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const requestId = ++availabilityRequestIdRef.current;
     setAvailabilityChecking(true);
     try {
-      const res = await authedFetch(`/api/calendar/check-availability?startISO=${encodeURIComponent(startISO)}&endISO=${encodeURIComponent(endISO)}`);
+      const res = await authedFetch(`/api/calendar/check-availability?startISO=${encodeURIComponent(startISO)}&endISO=${encodeURIComponent(endISO)}&orgId=${encodeURIComponent(org?.id||"")}`);
       const data = await res.json();
       if (requestId !== availabilityRequestIdRef.current) return; // superseded by a later check
       setAvailabilityCheck(res.ok ? data : { checked:false, conflicts:[] });
@@ -5206,10 +5213,13 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const [inboxMessages, setInboxMessages] = useState(null);
   const [inboxLoading, setInboxLoading] = useState(false);
   useEffect(() => {
-    if(!user?.id) return;
-    authedFetch(`/api/graph-mail/status`)
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // scoped to the active org — see the calendar status effect's own
+    // sibling comment.
+    if(!user?.id||!org?.id) return;
+    authedFetch(`/api/graph-mail/status?orgId=${encodeURIComponent(org.id)}`)
       .then(r=>r.json()).then(d=>{ setMailConnected(!!d.connected); setMailboxEmail(d.mailbox||null); }).catch(()=>{});
-  }, [user?.id]);
+  }, [user?.id, org?.id]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mailParam = params.get("mail");
@@ -5230,9 +5240,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } catch(e) { showToast("Couldn't start Outlook connection", "error"); }
   };
   const disconnectOutlookMail = async () => {
-    if(!user?.id) return;
+    if(!user?.id||!org?.id) return;
     try {
-      await authedFetch("/api/graph-mail/disconnect", { method: "POST", headers: {"Content-Type":"application/json"} });
+      await authedFetch("/api/graph-mail/disconnect", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ orgId: org.id }) });
       setMailConnected(false); setMailboxEmail(null); setInboxMessages(null);
       showToast("Outlook disconnected");
     } catch(e) { showToast("Couldn't disconnect — please try again"); }
@@ -5240,7 +5250,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const loadInboxMessages = async () => {
     setInboxLoading(true);
     try {
-      const res = await authedFetch("/api/graph-mail/list-messages");
+      const res = await authedFetch(`/api/graph-mail/list-messages?orgId=${encodeURIComponent(org?.id||"")}`);
       const data = await res.json();
       // SaveEmailScreen's own load effect re-fires whenever inboxMessages
       // is still null and inboxLoading is false — leaving inboxMessages
@@ -5267,7 +5277,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   const pickInboxMessage = async (messageId) => {
     try {
-      const res = await authedFetch(`/api/graph-mail/get-message?messageId=${encodeURIComponent(messageId)}`);
+      const res = await authedFetch(`/api/graph-mail/get-message?messageId=${encodeURIComponent(messageId)}&orgId=${encodeURIComponent(org?.id||"")}`);
       const data = await res.json();
       if(!res.ok || !data.rawText) { showToast(data.error||"Couldn't read that email", "error"); return; }
 
@@ -5337,10 +5347,13 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailboxEmail, setGmailboxEmail] = useState(null);
   useEffect(() => {
-    if(!user?.id) return;
-    authedFetch(`/api/graph-mail/gmail-status`)
+    // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
+    // scoped to the active org — see the calendar status effect's own
+    // sibling comment.
+    if(!user?.id||!org?.id) return;
+    authedFetch(`/api/graph-mail/gmail-status?orgId=${encodeURIComponent(org.id)}`)
       .then(r=>r.json()).then(d=>{ setGmailConnected(!!d.connected); setGmailboxEmail(d.mailbox||null); }).catch(()=>{});
-  }, [user?.id]);
+  }, [user?.id, org?.id]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const gmailParam = params.get("gmail");
@@ -5383,9 +5396,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } catch { showToast("Couldn't start Gmail connection", "error"); }
   };
   const disconnectGmail = async () => {
-    if(!user?.id) return;
+    if(!user?.id||!org?.id) return;
     try {
-      await authedFetch("/api/graph-mail/gmail-disconnect", { method: "POST", headers: {"Content-Type":"application/json"} });
+      await authedFetch("/api/graph-mail/gmail-disconnect", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ orgId: org.id }) });
       setGmailConnected(false); setGmailboxEmail(null);
       showToast("Gmail disconnected");
     } catch { showToast("Couldn't disconnect — please try again"); }
