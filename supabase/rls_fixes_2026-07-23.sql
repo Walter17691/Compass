@@ -61,6 +61,19 @@ drop policy if exists "Allow all" on public.signing_requests;
 -- any company could enumerate every org." See the note at the bottom of
 -- this file for the deeper fix.
 drop policy if exists "allow all org" on public.organisations;
+-- Phase 6.5 hardening (closes independent audit finding 9.2) — every
+-- create policy below originally had no preceding drop for its OWN
+-- name, only for the legacy "allow all"-style name — replaying this
+-- file (disaster recovery, standing up a staging environment) hit a
+-- real 42710 duplicate_object error at whichever create policy ran
+-- second, aborting the whole pasted-as-one-batch transaction and
+-- leaving every statement after that point — including later drop
+-- policy if exists "allow all locations"/"allow all hr_review_requests"
+-- — never executed, silently stranding those tables on their original
+-- permissive policies. Not applied again here (already live, confirmed
+-- correct) — this only makes the file itself safely re-runnable.
+drop policy if exists "organisations_select_authenticated" on public.organisations;
+drop policy if exists "organisations_insert_own" on public.organisations;
 
 create policy "organisations_select_authenticated"
   on public.organisations for select
@@ -81,6 +94,9 @@ create policy "organisations_insert_own"
 -- the bottom of this file — this does not by itself re-check the invite
 -- code server-side.
 drop policy if exists "allow all members" on public.org_members;
+drop policy if exists "org_members_select_same_org" on public.org_members;
+drop policy if exists "org_members_insert_self" on public.org_members;
+drop policy if exists "org_members_update_same_org" on public.org_members;
 
 create policy "org_members_select_same_org"
   on public.org_members for select
@@ -107,6 +123,8 @@ create policy "org_members_update_same_org"
 -- denies ALL access — this is a functional bug, not a security one: the
 -- "Job Titles & Access Levels" section of Org Settings can't actually
 -- read or write this table right now.
+drop policy if exists "org_roles_same_org" on public.org_roles;
+
 create policy "org_roles_same_org"
   on public.org_roles for all
   to authenticated
@@ -120,6 +138,7 @@ create policy "org_roles_same_org"
 
 -- ── locations ───────────────────────────────────────────────────────────
 drop policy if exists "allow all locations" on public.locations;
+drop policy if exists "locations_same_org" on public.locations;
 
 create policy "locations_same_org"
   on public.locations for all
@@ -134,6 +153,7 @@ create policy "locations_same_org"
 
 -- ── hr_review_requests ──────────────────────────────────────────────────
 drop policy if exists "allow all hr_review_requests" on public.hr_review_requests;
+drop policy if exists "hr_review_requests_same_org" on public.hr_review_requests;
 
 create policy "hr_review_requests_same_org"
   on public.hr_review_requests for all
@@ -155,21 +175,29 @@ create policy "hr_review_requests_same_org"
 --     can_grant_case_access(case_id, org_id) — no enumeration gap.
 --     employee_records/meetings/profiles not re-verified at that pass.
 --
--- Known residual gap (not fixed by this file):
---   The invite-code check for joining an org (OrgSetup.jsx handleJoin)
---   only happens in the CLIENT: it SELECTs organisations by invite_code,
---   then INSERTs an org_members row using that org's id. The
---   org_members_insert_self policy above only checks "are you inserting
---   a row for yourself" — it has no way to verify you actually supplied
---   a correct invite code, because the insert payload doesn't carry the
---   code. A user who already has *any* account could bypass the UI and
---   call the API directly to insert themselves into any org_id they can
---   discover, with any role, including hr_director.
---
---   Row-level policies can't close this on their own — it needs the join
---   flow moved into a Postgres function (SECURITY DEFINER) that takes an
---   invite_code as its only input, does the org lookup and the
---   org_members insert atomically inside the function, and is the ONLY
---   way to insert a first membership row. That's a real follow-up piece
---   of work, not something to paste in alongside this.
+-- Residual gap noted here at the time of writing — closed by later
+-- migrations, kept as a pointer rather than deleted so disaster-recovery
+-- replay doesn't have to rediscover this history:
+--   This file's own org_members_insert_self policy above only checked
+--   "are you inserting a row for yourself" — nothing verified an invite
+--   code, because the insert payload never carried one. Two follow-ups
+--   closed it, in order:
+--     1. join_org_by_code_2026-07-23.sql (same day) moved the join into
+--        join_org_with_invite_code(), a SECURITY DEFINER function that
+--        validates the code server-side and is the only way to insert a
+--        membership row into an org that already has members.
+--     2. org_members_privilege_escalation_fix_2026-08-04.sql (12 days
+--        later) went further: dropped org_members_insert_self entirely
+--        (it still allowed self-insert into ANY org_id with ANY role,
+--        including hr_director, bypassing the function above via a
+--        direct API call), removed the function's caller-supplied
+--        p_role parameter (every invite-code join is now always
+--        location_manager), and added a column-level trigger so role/
+--        location_ids can only change via an existing hr_director/
+--        hr_manager or service_role.
+--   Live-verified 2026-08-26: org_members' only INSERT policy is
+--   org_members_insert_founding_member, matching migration 2's
+--   with_check exactly (self, hr_director, zero existing members, own
+--   org) — the database reflects the fully-hardened state, not just
+--   this file's or migration 1's.
 -- ============================================================================

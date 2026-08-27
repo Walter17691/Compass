@@ -262,3 +262,173 @@ describe('compileSubjectData — same-name collision detection (Phase 6.5)', () 
     expect(result.possibleNameCollision).toBe(false);
   });
 });
+
+// Phase 6.5 hardening (Prompt 14, Section 6 continued — closes
+// independent audit finding 4.3). The audit's own framing: the compiler
+// only ever covered "employee who is the subject of a case" — never a
+// DSAR about a person who is also (or only) a Compass user, or who acts
+// as a manager/investigator/officer/reviewer on someone ELSE's case.
+describe('compileSubjectData — internal-user tables and staff-role columns (Phase 6.5, closes finding 4.3)', () => {
+  const staffData = {
+    ...baseData,
+    dsarRequests: [
+      { id: 'd1', employeeName: 'Ada Lovelace', status: 'completed' },
+      { id: 'd2', employeeName: 'Grace Hopper', status: 'received' },
+    ],
+    orgMembers: [
+      { id: 'om1', user_id: 'u-ada', org_id: 'org-1', name: 'Ada Lovelace', role: 'line_manager' },
+      { id: 'om2', user_id: 'u-grace', org_id: 'org-1', name: 'Grace Hopper', role: 'hr_director' },
+    ],
+    profiles: [
+      { id: 'u-ada', name: 'Ada Lovelace', role: 'line_manager' },
+      { id: 'u-grace', name: 'Grace Hopper', role: 'hr_director' },
+    ],
+    caseViews: [
+      { case_id: 'c2', user_id: 'u-ada', last_viewed_at: '2026-01-05' },
+      { case_id: 'c1', user_id: 'u-grace', last_viewed_at: '2026-01-06' },
+    ],
+    portalInvites: [
+      { id: 'pi1', employee_name: 'Ada Lovelace', email: 'ada@example.com' },
+      { id: 'pi2', employee_name: 'Grace Hopper', email: 'grace@example.com' },
+    ],
+  };
+
+  it('includes only the subject\'s own prior DSAR requests', () => {
+    const result = compileSubjectData('Ada Lovelace', staffData);
+    expect(result.dsarRequests).toEqual([staffData.dsarRequests[0]]);
+  });
+
+  it('includes the subject\'s own org membership, profile, case views (by resolved user id) and portal invite', () => {
+    const result = compileSubjectData('Ada Lovelace', staffData);
+    expect(result.orgMembership).toEqual([staffData.orgMembers[0]]);
+    expect(result.profiles).toEqual([staffData.profiles[0]]);
+    expect(result.caseViews).toEqual([staffData.caseViews[0]]);
+    expect(result.portalInvites).toEqual([staffData.portalInvites[0]]);
+  });
+
+  it('defaults every internal-user source to an empty array when omitted', () => {
+    const result = compileSubjectData('Ada Lovelace', baseData);
+    expect(result.dsarRequests).toEqual([]);
+    expect(result.orgMembership).toEqual([]);
+    expect(result.profiles).toEqual([]);
+    expect(result.caseViews).toEqual([]);
+    expect(result.portalInvites).toEqual([]);
+  });
+
+  it('includes audit log entries recording the subject\'s own actions, even on a case that isn\'t theirs', () => {
+    const data = {
+      ...baseData,
+      auditLog: [
+        { id: 'log1', caseId: 'c2', action: 'Case opened', user: 'Ada Lovelace' },
+        { id: 'log2', caseId: 'c2', action: 'Unrelated action', user: 'Grace Hopper' },
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.auditLog).toEqual([data.auditLog[0]]);
+  });
+
+  it('lists cases where the subject is named as manager, investigating manager or disciplinary officer on someone else\'s case, excluding the subject\'s own cases', () => {
+    const data = {
+      ...baseData,
+      cases: [
+        { id: 'c1', employeeName: 'Ada Lovelace', manager: 'Ada Lovelace', meetings: [] }, // subject's own case — must not double-count
+        { id: 'c2', employeeName: 'Grace Hopper', manager: 'Ada Lovelace', meetings: [] },
+        { id: 'c3', employeeName: 'Priya Shah', investigatingManager: 'Ada Lovelace', meetings: [] },
+        { id: 'c4', employeeName: 'Sam Employee', disciplinaryOfficer: 'Ada Lovelace', meetings: [] },
+        { id: 'c5', employeeName: 'Someone Else', manager: 'Grace Hopper', meetings: [] },
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.actedAsStaff.cases.map(c => c.id).sort()).toEqual(['c2', 'c3', 'c4']);
+  });
+
+  it('lists employee_records where the subject is named as another employee\'s manager', () => {
+    const data = {
+      ...baseData,
+      employeeRecords: [
+        { name: 'Ada Lovelace', manager: 'Grace Hopper' },
+        { name: 'Priya Shah', manager: 'Ada Lovelace' },
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.actedAsStaff.employeeRecords).toEqual([data.employeeRecords[1]]);
+  });
+
+  it('lists wellbeing notes where the subject is named as the manager, for someone else\'s note', () => {
+    const data = {
+      ...baseData,
+      wellbeingNotes: [
+        { id: 'w1', employeeName: 'Priya Shah', manager: 'Ada Lovelace', content: 'x' },
+        { id: 'w2', employeeName: 'Ada Lovelace', manager: 'Grace Hopper', content: 'y' },
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.actedAsStaff.wellbeingNotes).toEqual([data.wellbeingNotes[0]]);
+  });
+
+  it('lists hr_review_requests where the subject requested or reviewed, excluding requests already covered via the subject\'s own cases', () => {
+    const data = {
+      ...baseData,
+      hrReviewRequests: [
+        { id: 'hr1', case_id: 'c2', requested_by_name: 'Ada Lovelace' },
+        { id: 'hr2', case_id: 'c2', reviewed_by_name: 'Ada Lovelace' },
+        { id: 'hr3', case_id: 'c1', requested_by_name: 'Ada Lovelace' }, // subject's own case — already in subjectHrReviewRequests
+        { id: 'hr4', case_id: 'c2', requested_by_name: 'Grace Hopper' },
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.actedAsStaff.hrReviewRequests.map(r => r.id).sort()).toEqual(['hr1', 'hr2']);
+  });
+
+  it('defaults every actedAsStaff category to an empty array when the source data is omitted', () => {
+    const result = compileSubjectData('Ada Lovelace', baseData);
+    expect(result.actedAsStaff).toEqual({ cases: [], employeeRecords: [], wellbeingNotes: [], hrReviewRequests: [] });
+  });
+});
+
+// Phase 6.5 hardening (closes independent audit finding 4.3's
+// Organisational Intelligence gap) — org_events/improvement_initiatives/
+// manager_capability_insights/organisation_themes have no
+// subject-identifying column, so they're defensively scanned for the
+// subject's own name the same way meeting text is scanned for OTHER
+// people's names — this content isn't supposed to name anyone by design,
+// so any hit here is worth a human looking at.
+describe('compileSubjectData — organisational intelligence name-mention scan (Phase 6.5, closes finding 4.3)', () => {
+  const orgIntelData = {
+    ...baseData,
+    orgEvents: [{ id: 'e1', description: 'Restructure discussed with Ada Lovelace present.', eventDate: '2026-03-01' }],
+    improvementInitiatives: [{ id: 'i1', title: 'Reduce grievance backlog', problemIdentified: 'Ada Lovelace flagged repeated delays.' }],
+    managerCapabilityInsights: [{ id: 'm1', suggested_response: 'Consider coaching support for Ada Lovelace.', created_at: '2026-03-02' }],
+    organisationThemes: [{ id: 't1', description: 'Recurring theme involving Ada Lovelace across cases.' }],
+  };
+
+  it('flags the subject\'s name appearing in an org event description', () => {
+    const result = compileSubjectData('Ada Lovelace', orgIntelData);
+    expect(result.subjectMentionsInOrgNarratives.some(f => f.field === 'orgEvent.description')).toBe(true);
+  });
+
+  it('flags the subject\'s name appearing in an improvement initiative\'s title or problem statement', () => {
+    const result = compileSubjectData('Ada Lovelace', orgIntelData);
+    expect(result.subjectMentionsInOrgNarratives.some(f => f.field === 'improvementInitiative.problemIdentified')).toBe(true);
+  });
+
+  it('flags the subject\'s name appearing in a manager capability insight\'s suggested response', () => {
+    const result = compileSubjectData('Ada Lovelace', orgIntelData);
+    expect(result.subjectMentionsInOrgNarratives.some(f => f.field === 'managerCapabilityInsight.suggestedResponse')).toBe(true);
+  });
+
+  it('flags the subject\'s name appearing in an organisation theme description', () => {
+    const result = compileSubjectData('Ada Lovelace', orgIntelData);
+    expect(result.subjectMentionsInOrgNarratives.some(f => f.field === 'organisationTheme.description')).toBe(true);
+  });
+
+  it('does not flag anything when the subject is not named in any organisational narrative', () => {
+    const result = compileSubjectData('Grace Hopper', orgIntelData);
+    expect(result.subjectMentionsInOrgNarratives).toEqual([]);
+  });
+
+  it('defaults to an empty array when no organisational intelligence data is passed', () => {
+    const result = compileSubjectData('Ada Lovelace', baseData);
+    expect(result.subjectMentionsInOrgNarratives).toEqual([]);
+  });
+});

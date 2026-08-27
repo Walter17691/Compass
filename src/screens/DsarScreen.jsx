@@ -24,14 +24,15 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgId, audit, updateDsarRequest, extendDsarRequest, promptDialog }) {
+function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, dsarRequests, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, orgId, audit, updateDsarRequest, extendDsarRequest, promptDialog }) {
   const [compiled, setCompiled] = useState(null);
   const [compiling, setCompiling] = useState(false);
 
-  // Phase 6.5 hardening (data-lifecycle review) — signing_requests and
-  // employee_portal_accounts both have zero client-facing RLS by design
-  // (see api/portal/_dsar-lookup.js's own header comment), so a DSAR
-  // compile now needs one real network round-trip first — this used to
+  // Phase 6.5 hardening (data-lifecycle review) — signing_requests,
+  // employee_portal_accounts, employee_portal_invites, profiles and
+  // case_views all have zero (or own-row-only) client-facing RLS by
+  // design (see api/portal/_dsar-lookup.js's own header comment), so a
+  // DSAR compile needs one real network round-trip first — this used to
   // be a purely synchronous, already-in-memory operation. Best-effort:
   // if the lookup itself fails, the rest of the export still compiles
   // rather than blocking the whole DSAR on one extra endpoint.
@@ -39,11 +40,14 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
     setCompiling(true);
     let signingRequests = [];
     let portalAccounts = [];
+    let portalInvites = [];
+    let profiles = [];
+    let caseViews = [];
     try {
       const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(orgId)}&employeeName=${encodeURIComponent(req.employeeName)}`);
-      if (r.ok) { const d = await r.json(); signingRequests = d.signingRequests || []; portalAccounts = d.portalAccounts || []; }
+      if (r.ok) { const d = await r.json(); signingRequests = d.signingRequests || []; portalAccounts = d.portalAccounts || []; portalInvites = d.portalInvites || []; profiles = d.profiles || []; caseViews = d.caseViews || []; }
     } catch (e) { console.error('dsar-lookup failed:', e.message); }
-    setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, signingRequests, portalAccounts }));
+    setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, signingRequests, portalAccounts, dsarRequests, orgMembers, profiles, caseViews, portalInvites, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes }));
     setCompiling(false);
     // Phase 6.5 hardening (data-lifecycle review) — "DSAR generated" is
     // one of the privacy actions this whole review was asked to make
@@ -100,8 +104,29 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
             </div>
           )}
           <div style={{fontSize:12,color:"#1A1535",marginBottom:8}}>
-            {compiled.cases.length} case{compiled.cases.length!==1?"s":""} · {compiled.onboarding.length} onboarding record{compiled.onboarding.length!==1?"s":""} · {compiled.offboarding.length} offboarding record{compiled.offboarding.length!==1?"s":""} · {compiled.caseTasks.length} task{compiled.caseTasks.length!==1?"s":""} · {compiled.signingRequests.length} signing request{compiled.signingRequests.length!==1?"s":""} · {compiled.portalAccounts.length} portal account{compiled.portalAccounts.length!==1?"s":""} · {compiled.employeeRecord?"employee record found":"no employee record on file"}
+            {compiled.cases.length} case{compiled.cases.length!==1?"s":""} · {compiled.onboarding.length} onboarding record{compiled.onboarding.length!==1?"s":""} · {compiled.offboarding.length} offboarding record{compiled.offboarding.length!==1?"s":""} · {compiled.caseTasks.length} task{compiled.caseTasks.length!==1?"s":""} · {compiled.signingRequests.length} signing request{compiled.signingRequests.length!==1?"s":""} · {compiled.portalAccounts.length} portal account{compiled.portalAccounts.length!==1?"s":""} · {compiled.dsarRequests.length} prior DSAR request{compiled.dsarRequests.length!==1?"s":""} · {compiled.employeeRecord?"employee record found":"no employee record on file"}
           </div>
+          {compiled.orgMembership.length>0&&(
+            <div style={{fontSize:12,color:"#1A1535",marginBottom:8}}>
+              Also a Compass user on this team ({compiled.orgMembership.map(m=>m.role).join(", ")}) · {compiled.caseViews.length} case view{compiled.caseViews.length!==1?"s":""} · {compiled.portalInvites.length} portal invite{compiled.portalInvites.length!==1?"s":""} on record for them
+            </div>
+          )}
+          {(compiled.actedAsStaff.cases.length+compiled.actedAsStaff.employeeRecords.length+compiled.actedAsStaff.wellbeingNotes.length+compiled.actedAsStaff.hrReviewRequests.length)>0&&(
+            <div style={{fontSize:12,color:"#1A1535",marginBottom:8}}>
+              Also named as manager/investigator/officer/reviewer on other employees' records: {compiled.actedAsStaff.cases.length} case{compiled.actedAsStaff.cases.length!==1?"s":""}, {compiled.actedAsStaff.employeeRecords.length} employee record{compiled.actedAsStaff.employeeRecords.length!==1?"s":""}, {compiled.actedAsStaff.wellbeingNotes.length} wellbeing note{compiled.actedAsStaff.wellbeingNotes.length!==1?"s":""}, {compiled.actedAsStaff.hrReviewRequests.length} HR review request{compiled.actedAsStaff.hrReviewRequests.length!==1?"s":""} — included in the download below.
+            </div>
+          )}
+          {compiled.subjectMentionsInOrgNarratives.length>0&&(
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#C84B2F",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Flagged — named in organisational insight content</div>
+              {compiled.subjectMentionsInOrgNarratives.map((f,i)=>(
+                <div key={i} style={{fontSize:12,color:"#6B6375",padding:"6px 0",borderBottom:"1px solid #EDE5D8"}}>
+                  {f.field}{f.date?` (${f.date})`:""}: <span style={{fontStyle:"italic"}}>"...{f.snippet}..."</span>
+                </div>
+              ))}
+              <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>Compass's organisational insights aren't meant to name individuals — this needs manual review before sending.</div>
+            </div>
+          )}
           {compiled.flaggedThirdPartyMentions.length>0?(
             <div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:700,color:"#C84B2F",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Flagged — mentions another named individual</div>
@@ -136,7 +161,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgId, audit, setScreen }) {
+export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, orgId, audit, setScreen }) {
   const [form, setForm] = useState({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   const [showForm, setShowForm] = useState(false);
 
@@ -190,7 +215,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
         ):visibleRequests.map(req=>(
-          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
+          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} dsarRequests={dsarRequests} orgMembers={orgMembers} orgEvents={orgEvents} improvementInitiatives={improvementInitiatives} managerCapabilityInsights={managerCapabilityInsights} organisationThemes={organisationThemes} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
         ))}
         {hasMore&&(
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>

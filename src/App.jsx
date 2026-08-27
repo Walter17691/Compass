@@ -6,7 +6,7 @@ import { newId } from './lib/ids';
 import { addCalendarMonth, toISODateLocal } from './lib/dates';
 import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
-import { ls, lsSet, orgScopedKey, clearAllOrgScopedData } from './lib/storage';
+import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, capRecentForCache } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
@@ -2206,7 +2206,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const prevById = new Map(cases.map(cs => [cs.id, cs]));
     const stamped = u.map(cs => ensureEvidenceIds(withStageTransitionStamp(cs, prevById.get(cs.id) || null)));
     setCases(stamped);
-    orgLsSet("compass_cases", stamped);
+    // Phase 6.5 hardening (data-lifecycle review, closes 10.1's
+    // remainder) — the cache mirror only, not the real in-memory list or
+    // what's sent to Supabase. Bounded so a large org's case history
+    // can't grow this cached key past what localStorage can hold — see
+    // capRecentForCache's own comment.
+    orgLsSet("compass_cases", capRecentForCache(stamped, "updatedAt", 500));
     if(org?.id) {
       if(changedId) {
         // Only sync the changed case
@@ -2556,14 +2561,27 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const exportAllData = async () => {
     let signingRequests = [];
     let portalAccounts = [];
+    let portalInvites = [];
+    let profiles = [];
+    let caseViews = [];
     try {
       const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(org?.id||"")}`);
-      if(r.ok) { const d = await r.json(); signingRequests = d.signingRequests||[]; portalAccounts = d.portalAccounts||[]; }
+      if(r.ok) { const d = await r.json(); signingRequests = d.signingRequests||[]; portalAccounts = d.portalAccounts||[]; portalInvites = d.portalInvites||[]; profiles = d.profiles||[]; caseViews = d.caseViews||[]; }
     } catch(e) { console.error('exportAllData dsar-lookup failed:', e.message); }
+    // Phase 6.5 hardening (closes independent audit finding 4.3's
+    // "tables never wired in" list for this export path too, not only
+    // dsarCompile.js's per-subject one) — orgMembers/orgEvents/
+    // improvementInitiatives/managerCapabilityInsights/
+    // organisationThemes/caseThemes are already loaded client-side under
+    // normal RLS; profiles/caseViews/portalInvites came back from the
+    // lookup above for the same "no client-facing RLS path" reason
+    // signingRequests/portalAccounts already needed it.
     const data = {
       cases, policies:policies.map(p=>({...p,content:"[truncated]"})), auditLog, adjustments,
       employeeRecords, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks,
       hrReviewRequests, starterInstances, leaverInstances, dsarRequests, signingRequests, portalAccounts,
+      orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseThemes,
+      portalInvites, profiles, caseViews,
       exportedAt:new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
@@ -6094,7 +6112,32 @@ Please produce:
   // signatureInfo is now the sole source of truth: every call site must
   // say explicitly whether this save is attached to a signature request,
   // and if so, which one — there is no ambient fallback.
+  const savingMeetingRef = useRef(false);
   const saveMeetingToCase = (signatureInfo = {}) => {
+    // Phase 6.5 hardening (closes independent audit finding 3.7) — the
+    // button that calls this ("Save and go to case →", ReviewScreen.jsx/
+    // LetterScreen.jsx) had no disabled/in-flight guard at all — a
+    // double-click ~250ms apart, while the previous render is still
+    // catching up (several AI calls are fired-and-forgotten below before
+    // navigation), fired this function twice, each appending its own
+    // meeting record to the case — two byte-identical disciplinary
+    // hearing records, both independently offered for signature and
+    // both appearing in the hearing pack. A plain ref (not state)
+    // guards this synchronously, closing the race regardless of
+    // whether React has re-rendered a disabled button in time — this
+    // function runs fully synchronously end to end, so a ref checked at
+    // entry and cleared in a finally block is both necessary (state
+    // alone could still race) and sufficient (no need to also thread a
+    // disabled prop through both call sites for the same guarantee).
+    if(savingMeetingRef.current) return;
+    savingMeetingRef.current = true;
+    try {
+      saveMeetingToCaseImpl(signatureInfo);
+    } finally {
+      savingMeetingRef.current = false;
+    }
+  };
+  const saveMeetingToCaseImpl = (signatureInfo = {}) => {
     const { signId: attachedSignId = null, signStatus: attachedSignStatus = null } = signatureInfo;
     // If this is a witness interview, save to parent case evidence instead
     if(caseInfo._linkedCaseId) {
@@ -8339,6 +8382,11 @@ Please produce:
           caseTasks={caseTasks}
           hrReviewRequests={hrReviewRequests}
           auditLog={auditLog}
+          orgMembers={orgMembers}
+          orgEvents={orgEvents}
+          improvementInitiatives={improvementInitiatives}
+          managerCapabilityInsights={managerCapabilityInsights}
+          organisationThemes={organisationThemes}
           orgId={org?.id}
           audit={audit}
           setScreen={setScreen}

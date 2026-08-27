@@ -12,7 +12,63 @@ export function ls(key, fallback) {
 // user-facing error for what's ultimately a soft-fail path — but a
 // developer/support engineer investigating "why does this org's app
 // feel slower to load than everyone else's" now has something to find.
-export function lsSet(key, val) { try { if(typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(val)); } catch(e) { console.error(`lsSet: failed to write "${key}" to localStorage`, e); } }
+//
+// Phase 6.5 hardening (data-lifecycle review, 10.1 remainder) — logging
+// the failure told a developer WHY the cache stopped working, but did
+// nothing for the org actually hitting it: once a single key's payload
+// crosses the quota, every subsequent write attempt still fails the same
+// way, forever, however small a later individual save is, because
+// setItem always serialises the WHOLE value. A conservative pre-check
+// avoids even attempting a write already known to be hopeless — most
+// browsers cap total localStorage per origin around 5–10MB, and this app
+// writes many keys, so no single one should try to claim more than a
+// third of the smallest realistic budget. This is a generic backstop for
+// any key, not specific to cases — see saveCases in App.jsx for the
+// size-bounded cache this was actually written to protect.
+const MAX_LS_VALUE_BYTES = 3 * 1024 * 1024;
+export function lsSet(key, val) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const serialised = JSON.stringify(val);
+    if (serialised.length > MAX_LS_VALUE_BYTES) {
+      console.error(`lsSet: skipped writing "${key}" to localStorage — ${serialised.length} bytes exceeds the ${MAX_LS_VALUE_BYTES}-byte cap, write would be doomed to fail on quota`);
+      return;
+    }
+    localStorage.setItem(key, serialised);
+  } catch(e) { console.error(`lsSet: failed to write "${key}" to localStorage`, e); }
+}
+
+// Phase 6.5 hardening (data-lifecycle review, 10.1 remainder) — a
+// growing org's full case list is the one cached value actually observed
+// to cross MAX_LS_VALUE_BYTES above (reproduced live: a shared fixture
+// org with 2,700+ cases). Once that happens, MAX_LS_VALUE_BYTES's guard
+// stops the doomed write attempt, but the cache then stays permanently
+// empty for that org — no faster initial paint at all, the exact thing
+// this cache exists for. Since the cache's whole job is a fast first
+// render before the real Supabase fetch arrives and overwrites it (see
+// SENSITIVE_ORG_SCOPED_KEYS's own comment — cases seeds React state
+// straight from this on mount), caching only the most-recently-updated
+// slice is a genuine, safe degradation: the initial paint shows the
+// cases most likely to matter to whoever's opening the app, and the
+// full, authoritative set replaces it moments later regardless. This
+// never touches the real in-memory case list or what's sent to
+// Supabase — only what's mirrored into localStorage.
+export function capRecentForCache(items, dateField, max) {
+  if (!Array.isArray(items) || items.length <= max) return items;
+  // A missing date field means "no timestamp yet" — for cases
+  // specifically, this is what a just-created record looks like on the
+  // very first save, before the Supabase round-trip returns its real
+  // updated_at (see App.jsx's newCase object, which sets no updatedAt at
+  // all). Treating that as epoch/oldest (the naive reading) would make
+  // capping actively drop the newest thing on the screen first — the
+  // opposite of what a "keep what's most likely still relevant" cache is
+  // for. Treating it as Infinity/newest keeps it instead.
+  const time = (item) => {
+    const v = item?.[dateField];
+    return v ? new Date(v).getTime() : Infinity;
+  };
+  return [...items].sort((a, b) => time(b) - time(a)).slice(0, max);
+}
 
 // Phase 6.5 hardening — tenant isolation. Every org-scoped App.jsx
 // localStorage key (cases, employee records, wellbeing notes, branding

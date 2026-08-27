@@ -143,21 +143,25 @@ test('the org switcher lists exactly this account\'s own two real memberships, a
 });
 
 test('org data is namespaced in localStorage by the currently active org, not left globally keyed', async ({ page }) => {
-  // KNOWN FAILING as of 2026-08-26 (Prompt 14, Section 9) — not a flake,
-  // don't "fix" by bumping the poll timeout further (tried 40s -> 90s,
-  // no difference; confirmed the write never completes at all). The
-  // shared SECOND_TENANT_CREDS org has accumulated 2,700+ real cases
-  // from years of every E2E spec in this suite running against it
-  // without cleanup (this spec's own two canary tests are a small
-  // fraction of that — most come from other specs) — this genuinely
-  // exceeds the browser's localStorage quota, so the compass_cases write
-  // this test polls for now fails on every single save. That's a real,
-  // independently-confirmed product finding (see src/lib/storage.js's
-  // lsSet, fixed to at least log instead of silently swallowing this
-  // exact failure) — the fix here isn't in this test, it's a decision
-  // the team needs to make about bulk-cleaning or replacing this shared
-  // fixture org, which touches every other spec that also uses it, not
-  // something to do unilaterally from inside this one spec.
+  // Was KNOWN FAILING 2026-08-26 through 2026-08-27 (Prompt 14, Section
+  // 9) — the shared SECOND_TENANT_CREDS org has accumulated 2,700+ real
+  // cases from years of every E2E spec in this suite running against it
+  // without cleanup, which genuinely exceeded the browser's localStorage
+  // quota, so the compass_cases write this test polls for failed on
+  // every single save. Root-caused and fixed rather than bulk-cleaning
+  // or replacing the fixture org (src/lib/storage.js's capRecentForCache,
+  // used by App.jsx's saveCases): the cache mirror now keeps only the
+  // 500 most-recently-updated cases, which is what the cache's own
+  // purpose (fast initial paint before the real Supabase fetch replaces
+  // it) needs anyway, not full fidelity. Live-verified against this
+  // exact fixture org before this fix landed — a fresh case genuinely
+  // wasn't being cached because of quota exhaustion — and again after,
+  // confirming the same org's write now succeeds and includes the new
+  // case. (First cap attempt treated a case with no updatedAt yet — the
+  // shape of any case on its very first local save, before the Supabase
+  // round-trip returns one — as oldest and dropped it first, which is
+  // backwards: it's always the newest thing on screen. Fixed to treat a
+  // missing updatedAt as newest instead.)
   test.setTimeout(60000);
   const canaryName = `Isolation Storage Canary ${Date.now()}`;
   await login(page, SECOND_TENANT_CREDS);

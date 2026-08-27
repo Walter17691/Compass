@@ -25,7 +25,43 @@
 // both live in tables with zero client-facing RLS (see
 // api/portal/_dsar-lookup.js) and simply can't be queried from here the
 // way every other category can.
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [] } = {}) {
+//
+// Phase 6.5 hardening (Prompt 14, Section 6 continued — closes
+// independent audit finding 4.3). Two kinds of gap, fixed together:
+//
+// 1. Whole tables never wired in: dsarRequests (a DSAR record naming
+//    someone is itself their own personal data — Compass was omitting a
+//    DSAR about a person from that same person's own DSAR), org_members/
+//    profiles/case_views/employee_portal_invites (a person can be the
+//    subject of their own DSAR as an internal user — a manager or
+//    investigator — not only as a case's named employee; profiles/
+//    case_views have no client-facing RLS path to another user's row at
+//    all, so they arrive pre-fetched via api/portal/_dsar-lookup.js the
+//    same way signingRequests/portalAccounts already do), and the
+//    Organisational Intelligence surface (org_events,
+//    improvement_initiatives, manager_capability_insights,
+//    organisation_themes) — org-wide AI-generated narrative text that
+//    could name an individual even though none of these tables have a
+//    subject-identifying column to filter by, so they're scanned for the
+//    subject's own name the same defensive way flaggedThirdPartyMentions
+//    already scans meeting records for OTHER people's names.
+//
+// 2. Structured person-columns missed on records that already get
+//    included by case/table, but only cover "employee who is the case
+//    subject" — never "the same person acting as a manager,
+//    investigating manager, or disciplinary officer on someone ELSE's
+//    case," which is exactly the DSAR most likely to come from a
+//    disgruntled manager, not a disgruntled employee. actedAsStaff below
+//    covers cases.manager/investigating_manager/disciplinary_officer,
+//    employee_records.manager, wellbeing_notes.manager, and
+//    hr_review_requests.requested_by_name/reviewed_by_name — every case
+//    matched here deliberately EXCLUDES the subject's own cases (already
+//    covered by subjectCases) to avoid double-listing the same record.
+//    audit_log.user_name (every action the subject personally took,
+//    regardless of whose case it was on) is folded into the existing
+//    subjectAuditLog filter directly rather than a separate section,
+//    since it's the same shape of record either way.
+export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [] } = {}) {
   const matchingEmployeeRecords = employeeRecords.filter(r => r.name === employeeName);
   const employeeRecord = matchingEmployeeRecords[0] || null;
   const subjectCases = cases.filter(c => c.employeeName === employeeName);
@@ -52,7 +88,34 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   // consistent with this file's own third-party-mention philosophy above:
   // precise matches get included automatically, anything less certain
   // stays a human-review decision, not a silent guess either way.
-  const subjectAuditLog = auditLog.filter(a => (a.caseId && subjectCaseIds.has(a.caseId)) || a.detail === employeeName);
+  // a.user is App.jsx's own camelCase mapping of audit_log.user_name —
+  // every action the subject personally took, on any case, not only
+  // their own.
+  const subjectAuditLog = auditLog.filter(a => (a.caseId && subjectCaseIds.has(a.caseId)) || a.detail === employeeName || a.user === employeeName);
+
+  const subjectDsarRequests = dsarRequests.filter(d => d.employeeName === employeeName);
+  const subjectOrgMembership = orgMembers.filter(m => m.name === employeeName);
+  const subjectUserIds = new Set(subjectOrgMembership.map(m => m.user_id).filter(Boolean));
+  const subjectProfiles = profiles.filter(p => subjectUserIds.has(p.id));
+  const subjectCaseViews = caseViews.filter(v => subjectUserIds.has(v.user_id));
+  const subjectPortalInvites = portalInvites.filter(i => i.employee_name === employeeName);
+
+  // Records that name the subject as staff (manager / investigating
+  // manager / disciplinary officer / HR reviewer) on someone ELSE's
+  // case or record — the exact gap the audit's own framing names:
+  // "misses the subject whenever they aren't the case subject."
+  // Excludes the subject's own cases (already covered by subjectCases)
+  // so a case never appears twice.
+  const actedAsStaff = {
+    cases: cases
+      .filter(c => c.employeeName !== employeeName && (c.manager === employeeName || c.investigatingManager === employeeName || c.disciplinaryOfficer === employeeName))
+      .map(({ evidence, ...meta }) => meta),
+    employeeRecords: employeeRecords.filter(r => r.name !== employeeName && r.manager === employeeName),
+    wellbeingNotes: wellbeingNotes.filter(n => n.employeeName !== employeeName && n.manager === employeeName),
+    // hr_review_requests isn't remapped to camelCase — see the comment
+    // on subjectHrReviewRequests above.
+    hrReviewRequests: hrReviewRequests.filter(r => !subjectCaseIds.has(r.case_id) && (r.requested_by_name === employeeName || r.reviewed_by_name === employeeName)),
+  };
 
   // Phase 6.5 hardening (data-lifecycle review) — a name is not a stable
   // identity. If more than one employee_records row shares this exact
@@ -109,6 +172,31 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   const subjectPortalAccounts = portalAccounts.filter(p => p.employee_name === employeeName);
   subjectSigningRequests.forEach(s => scanText(s.document, { field: 'signingRequest.document', signId: s.sign_id }));
 
+  // Organisational Intelligence surface (org_events, improvement
+  // initiatives, manager capability insights, organisation themes) —
+  // org-wide AI-generated narrative text with no subject-identifying
+  // column to filter these tables by at all. By design (see the
+  // Organisational Intelligence phase's own "never score or rank an
+  // individual" constraint) this content shouldn't name anyone — this is
+  // the defensive backstop for if it ever does anyway, scanning for the
+  // SUBJECT's own name rather than otherNamesList (the reverse direction
+  // from flaggedThirdPartyMentions above: here the subject is the one
+  // who might be mentioned, not the one whose record is being scanned).
+  const subjectMentionsInOrgNarratives = [];
+  const scanForSubject = (text, location) => {
+    if (!text) return;
+    const idx = text.indexOf(employeeName);
+    if (idx === -1) return;
+    subjectMentionsInOrgNarratives.push({ ...location, snippet: text.slice(Math.max(0, idx - 40), idx + employeeName.length + 40) });
+  };
+  orgEvents.forEach(e => scanForSubject(e.description, { field: 'orgEvent.description', orgEventId: e.id, date: e.eventDate }));
+  improvementInitiatives.forEach(i => {
+    scanForSubject(i.title, { field: 'improvementInitiative.title', initiativeId: i.id });
+    scanForSubject(i.problemIdentified, { field: 'improvementInitiative.problemIdentified', initiativeId: i.id });
+  });
+  managerCapabilityInsights.forEach(m => scanForSubject(m.suggested_response, { field: 'managerCapabilityInsight.suggestedResponse', insightId: m.id, date: m.created_at }));
+  organisationThemes.forEach(t => scanForSubject(t.description, { field: 'organisationTheme.description', themeId: t.id }));
+
   // Evidence files (photos, PDFs, CCTV, witness statements) are binary/opaque
   // content that can't be text-scanned for third-party mentions the way
   // meeting records/transcripts are above. Rather than silently bundling raw
@@ -139,7 +227,14 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     auditLog: subjectAuditLog,
     signingRequests: subjectSigningRequests,
     portalAccounts: subjectPortalAccounts,
+    dsarRequests: subjectDsarRequests,
+    orgMembership: subjectOrgMembership,
+    profiles: subjectProfiles,
+    caseViews: subjectCaseViews,
+    portalInvites: subjectPortalInvites,
+    actedAsStaff,
     flaggedThirdPartyMentions: flagged,
+    subjectMentionsInOrgNarratives,
     evidenceRequiringReview,
     compiledAt: new Date().toISOString(),
   };

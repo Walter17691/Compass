@@ -12,7 +12,7 @@ function mockRes() {
 // employee_portal_accounts both have zero client-facing RLS, so this is
 // the only path a DSAR compile can reach either through. HR-role-gated,
 // same pattern as api/portal/_accounts.js.
-function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], signingRequests = [], portalAccounts = [] } = {}) {
+function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], signingRequests = [], portalAccounts = [], portalInvites = [], profiles = [], caseViews = [] } = {}) {
   const calls = [];
   global.fetch = vi.fn((url) => {
     const u = String(url);
@@ -28,6 +28,15 @@ function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], s
     }
     if (u.includes('/rest/v1/employee_portal_accounts')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(portalAccounts) });
+    }
+    if (u.includes('/rest/v1/employee_portal_invites')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(portalInvites) });
+    }
+    if (u.includes('/rest/v1/profiles')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(profiles) });
+    }
+    if (u.includes('/rest/v1/case_views')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(caseViews) });
     }
     return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
   });
@@ -83,7 +92,7 @@ describe('portal dsar-lookup', () => {
 
   it('returns every row for the org when employeeName is omitted (org-wide export use)', async () => {
     const calls = stubFetch({
-      members: [{ role: 'hr_director' }],
+      members: [{ role: 'hr_director', user_id: 'u-sam' }],
       signingRequests: [{ sign_id: 's1', employee_name: 'Sam Employee' }, { sign_id: 's2', employee_name: 'Priya Shah' }],
       portalAccounts: [{ id: 'pa1', employee_name: 'Sam Employee' }, { id: 'pa2', employee_name: 'Priya Shah' }],
     });
@@ -94,5 +103,66 @@ describe('portal dsar-lookup', () => {
     expect(res.body.portalAccounts).toHaveLength(2);
     const signingCall = calls.find(u => u.includes('signing_requests'));
     expect(signingCall).not.toContain('employee_name=eq.');
+  });
+
+  // Phase 6.5 hardening (closes independent audit finding 4.3) —
+  // employee_portal_invites has zero RLS policies at all, and profiles/
+  // case_views are both strictly own-row-only, so an HR user compiling a
+  // DSAR about someone ELSE has no client-side query path to any of the
+  // three — this endpoint is the only way in, same reasoning as
+  // signing_requests/employee_portal_accounts above.
+  it('returns portal invites scoped to the org and employee name', async () => {
+    const calls = stubFetch({
+      members: [{ role: 'hr_manager', user_id: 'u-sam', name: 'Sam Employee' }],
+      portalInvites: [{ id: 'pi1', employee_name: 'Sam Employee', email: 'sam@example.com' }],
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1', employeeName: 'Sam Employee' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.portalInvites).toHaveLength(1);
+    const invitesCall = calls.find(u => u.includes('employee_portal_invites'));
+    expect(invitesCall).toContain('org_id=eq.org-1');
+    expect(invitesCall).toContain('employee_name=eq.Sam');
+  });
+
+  it('resolves the matching org_members row by name, then returns that user\'s profile and case views', async () => {
+    const calls = stubFetch({
+      members: [{ role: 'hr_manager', user_id: 'u-sam', name: 'Sam Employee' }],
+      profiles: [{ id: 'u-sam', name: 'Sam Employee', role: 'hr_manager' }],
+      caseViews: [{ case_id: 'c1', user_id: 'u-sam', last_viewed_at: '2026-01-01' }],
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1', employeeName: 'Sam Employee' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profiles).toEqual([{ id: 'u-sam', name: 'Sam Employee', role: 'hr_manager' }]);
+    expect(res.body.caseViews).toHaveLength(1);
+    const membersCall = calls.find(u => u.includes('org_members') && u.includes('name=eq.Sam'));
+    expect(membersCall).toContain('select=user_id');
+    const profilesCall = calls.find(u => u.includes('/rest/v1/profiles'));
+    expect(profilesCall).toContain('id=in.(u-sam)');
+  });
+
+  it('returns no profile/case-view data when the requested name matches no org member (a case-subject-only DSAR)', async () => {
+    stubFetch({
+      members: [{ role: 'hr_manager' }],
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1', employeeName: 'Not A Member' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profiles).toEqual([]);
+    expect(res.body.caseViews).toEqual([]);
+  });
+
+  it('resolves profiles/case views for every org member when employeeName is omitted (org-wide export use)', async () => {
+    stubFetch({
+      members: [{ role: 'hr_director', user_id: 'u-sam' }],
+      profiles: [{ id: 'u-sam', name: 'Sam Employee', role: 'hr_director' }],
+      caseViews: [{ case_id: 'c1', user_id: 'u-sam', last_viewed_at: '2026-01-01' }],
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profiles).toHaveLength(1);
+    expect(res.body.caseViews).toHaveLength(1);
   });
 });
