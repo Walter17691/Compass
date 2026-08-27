@@ -2110,6 +2110,34 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [wellbeingNotes, setWellbeingNotes] = useState(orgLs("compass_wellbeing", []));
   // note: {id, employeeName, type:"chat"|"eap"|"adjustment"|"crisis"|"return"|"checkin",
   //         date, manager, content, followUpDate, followUpDone, supportOffered, resources:[], confidential:true}
+
+  // Phase 6.5 hardening (closes Prompt 11 audit finding 4.7, MEDIUM) —
+  // the initial state above seeds directly from an ORG-scoped (not
+  // user-scoped) localStorage cache, for the same fast-first-paint
+  // reason every other SENSITIVE_ORG_SCOPED_KEYS cache does. For a
+  // genuine HR user that's fine — loadOrgData's own isHR-gated
+  // loadWellbeingNotes() immediately overwrites it with the real,
+  // RLS-scoped fetch. For a non-HR user that load never runs at all, so
+  // on a shared device where a previous HR session ended without an
+  // explicit sign-out (a natural session timeout, browser crash, or
+  // simply a different org member opening the same browser before the
+  // last person signed out — clearAllOrgScopedData only fires on an
+  // actual sign-out click), the stale confidential wellbeing notes from
+  // that earlier session stayed sitting in state indefinitely: fed
+  // straight into computeDueSoon's org-wide overdue banner every user
+  // sees regardless of role, and passed unconditionally into DsarScreen
+  // (reachable by URL even though its nav item is HR-only). Once isHR is
+  // confirmed false, this clears it at the source — both in memory and
+  // in the cache — rather than patching every downstream consumer
+  // individually.
+  useEffect(() => {
+    if (isHR || !wellbeingNotes.length) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing state a non-HR viewer must never see is exactly the kind of one-time, role-driven sync the other query-param effects in this file already carry this same disable for.
+    setWellbeingNotes([]);
+    orgLsSet("compass_wellbeing", []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHR]);
+
   const [activeWellbeing, setActiveWellbeing] = useState(null); // employee name being viewed
   const [wellbeingForm, setWellbeingForm] = useState({employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
   const [wellbeingView, setWellbeingView] = useState("list"); // list|new|employee
