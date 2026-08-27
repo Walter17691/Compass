@@ -4932,14 +4932,31 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // — those never carry a ruleId.
     const existing = caseSignals.filter(s=>s.caseId===cs.id && s.type==="process_risk" && s.ruleId);
 
-    // Seeded from currently-OPEN rows only (not "ever existed") — a rule
-    // resolved in an earlier sync is deliberately absent here, so a real
-    // recurrence (condition clears, then returns later) can create a
-    // fresh occurrence instead of being permanently suppressed. Still
-    // closes the same-tab race the previous title-keyed ref did (two
-    // fires of this effect before the first write lands both see "no
-    // open signal for this rule yet").
-    if(!guardrailSyncedRuleIdsRef.current[cs.id]) guardrailSyncedRuleIdsRef.current[cs.id] = new Set(existing.filter(s=>s.status==="open").map(s=>s.ruleId));
+    // Phase 6.5 hardening (closes Prompt 16 audit finding H13, HIGH) —
+    // this used to seed only from status==="open" rows, on the theory
+    // that a rule resolved in an earlier sync should stay absent so a
+    // real recurrence can create a fresh occurrence. But GuardrailsPanel's
+    // own "Mark resolved" button (a HUMAN decision) calls
+    // changeSignalStatus(id, "resolved") — the exact same literal status
+    // string the auto-clear branch below uses for "the condition itself
+    // stopped triggering." Seeding from status==="open" only therefore
+    // treated a human's "Mark resolved" click identically to a genuinely
+    // cleared condition: on the very next reload (this ref is
+    // per-session, wiped on every fresh mount), the underlying condition
+    // was almost always still true (dismissing the notification doesn't
+    // change the case), so the check re-fired and recreated the exact
+    // signal the human had just resolved.
+    //
+    // resolvedBy is the real distinguishing signal, already present and
+    // already set correctly by both paths: changeSignalStatus passes the
+    // real user?.id (setSignalStatus stores it as resolvedBy), while the
+    // auto-clear branch below explicitly passes null. Seeding from "open
+    // OR resolvedBy is set" keeps every human decision (resolved/
+    // not_relevant/accepted/dismissed/explained) sticky across a reload,
+    // while a signal resolvedBy===null (only ever produced by the
+    // auto-clear branch, i.e. the condition genuinely stopped matching)
+    // still correctly frees its rule id for a real future recurrence.
+    if(!guardrailSyncedRuleIdsRef.current[cs.id]) guardrailSyncedRuleIdsRef.current[cs.id] = new Set(existing.filter(s=>s.status==="open"||s.resolvedBy).map(s=>s.ruleId));
     const syncedRuleIds = guardrailSyncedRuleIdsRef.current[cs.id];
 
     let updated = caseSignals;

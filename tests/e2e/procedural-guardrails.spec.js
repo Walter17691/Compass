@@ -75,4 +75,16 @@ test('Compass flags the same chair running both the investigation and the discip
 
   await signalCard.getByRole('button', { name: 'Not relevant' }).click();
   await expect(page.getByText('Same person chaired the investigation and the disciplinary hearing')).not.toBeVisible();
+
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H13, HIGH) —
+  // guardrailSyncedRuleIdsRef (App.jsx) is per-session, wiped on every
+  // fresh mount; it used to reseed only from status==="open" signals on
+  // reload, so a dismissed-but-still-triggering guardrail (this test's
+  // own condition — the same chair name never changes — is exactly that
+  // shape, unlike a check that genuinely clears) got recreated as a fresh
+  // duplicate the moment the case was reopened. Same reload idiom as
+  // decision-workspace.spec.js's own guardrail-recheck.
+  await page.reload();
+  await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Same person chaired the investigation and the disciplinary hearing')).not.toBeVisible({ timeout: 10000 });
 });
