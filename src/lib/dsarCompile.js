@@ -61,7 +61,7 @@
 //    regardless of whose case it was on) is folded into the existing
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [] } = {}) {
+export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [] } = {}) {
   const matchingEmployeeRecords = employeeRecords.filter(r => r.name === employeeName);
   const employeeRecord = matchingEmployeeRecords[0] || null;
   const subjectCases = cases.filter(c => c.employeeName === employeeName);
@@ -99,6 +99,20 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   const subjectProfiles = profiles.filter(p => subjectUserIds.has(p.id));
   const subjectCaseViews = caseViews.filter(v => subjectUserIds.has(v.user_id));
   const subjectPortalInvites = portalInvites.filter(i => i.employee_name === employeeName);
+
+  // Phase 6.5 hardening (Prompt 16 audit, H14) — case_access records a
+  // real, individual decision about the subject ("granted investigator
+  // access to case X on <date> by <granter>") that lived in no other
+  // table this compiler already covers — case.manager/investigatingManager/
+  // disciplinaryOfficer below only capture the older direct-column roles,
+  // not the newer assignable ones (notetaker/appeal_manager/
+  // employee_manager/approver/investigator/disciplinary_officer) that
+  // only ever exist as case_access rows. Matched via subjectUserIds, the
+  // same org-member-name-to-user-id resolution already used for
+  // subjectProfiles/subjectCaseViews above — not scoped to "someone
+  // else's case only" the way actedAsStaff is, since a grant on the
+  // subject's own case is still the subject's own personal data too.
+  const subjectCaseAccess = caseAccess.filter(a => subjectUserIds.has(a.userId));
 
   // Records that name the subject as staff (manager / investigating
   // manager / disciplinary officer / HR reviewer) on someone ELSE's
@@ -168,7 +182,13 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   // directly) — filtered again here defensively, matching every other
   // category's own belt-and-braces re-check rather than trusting the
   // caller passed in exactly the right slice.
-  const subjectSigningRequests = signingRequests.filter(s => s.employee_name === employeeName);
+  // Phase 6.5 hardening (Prompt 16 audit, H16) — a signing_requests row
+  // also names a manager_name signatory (the person who chaired/approved
+  // the meeting, not the employee it's about); a DSAR from that manager
+  // was previously invisible here since only employee_name was ever
+  // matched, even though the document, their own name, and their own
+  // signature/decline are just as much their personal data.
+  const subjectSigningRequests = signingRequests.filter(s => s.employee_name === employeeName || s.manager_name === employeeName);
   const subjectPortalAccounts = portalAccounts.filter(p => p.employee_name === employeeName);
   subjectSigningRequests.forEach(s => scanText(s.document, { field: 'signingRequest.document', signId: s.sign_id }));
 
@@ -183,12 +203,13 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   // from flaggedThirdPartyMentions above: here the subject is the one
   // who might be mentioned, not the one whose record is being scanned).
   const subjectMentionsInOrgNarratives = [];
-  const scanForSubject = (text, location) => {
+  const makeSubjectScanner = (target) => (text, location) => {
     if (!text) return;
     const idx = text.indexOf(employeeName);
     if (idx === -1) return;
-    subjectMentionsInOrgNarratives.push({ ...location, snippet: text.slice(Math.max(0, idx - 40), idx + employeeName.length + 40) });
+    target.push({ ...location, snippet: text.slice(Math.max(0, idx - 40), idx + employeeName.length + 40) });
   };
+  const scanForSubject = makeSubjectScanner(subjectMentionsInOrgNarratives);
   orgEvents.forEach(e => scanForSubject(e.description, { field: 'orgEvent.description', orgEventId: e.id, date: e.eventDate }));
   improvementInitiatives.forEach(i => {
     scanForSubject(i.title, { field: 'improvementInitiative.title', initiativeId: i.id });
@@ -196,6 +217,44 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   });
   managerCapabilityInsights.forEach(m => scanForSubject(m.suggested_response, { field: 'managerCapabilityInsight.suggestedResponse', insightId: m.id, date: m.created_at }));
   organisationThemes.forEach(t => scanForSubject(t.description, { field: 'organisationTheme.description', themeId: t.id }));
+
+  // Phase 6.5 hardening (Prompt 16 audit, H15) — a pure witness/third
+  // party who has never been a case subject falls through every filter
+  // above (subjectCases/subjectWellbeingNotes/subjectConcernReferrals/
+  // subjectAllegations are all empty for them — none of those filters
+  // match on anything but the case's own employeeName), even though
+  // their name and their own account of events can be recorded,
+  // verbatim, inside someone ELSE's case as witness testimony — real
+  // personal data about them under UK GDPR regardless of whose case it's
+  // filed under. This is the same reverse-scan technique as
+  // subjectMentionsInOrgNarratives above, just pointed at case content
+  // instead — and, like flaggedThirdPartyMentions, surfaced for human
+  // review rather than bundled in as if it were the subject's own
+  // structured record, since disclosing it means redacting the actual
+  // case subject's own confidential details first. Scoped to OTHER
+  // people's cases only (subjectCaseIds excluded) — a mention of the
+  // subject's own name inside their own case is already covered in full
+  // above, not a third-party disclosure.
+  const subjectMentionsAsThirdParty = [];
+  const scanForSubjectAsThirdParty = makeSubjectScanner(subjectMentionsAsThirdParty);
+  const otherCases = cases.filter(c => !subjectCaseIds.has(c.id));
+  otherCases.forEach(c => {
+    (c.meetings || []).forEach(m => {
+      scanForSubjectAsThirdParty(m.record, { caseId: c.id, meetingId: m.id, field: 'record', meetingType: m.type, date: m.date });
+      (m.transcript || []).forEach((u, i) => scanForSubjectAsThirdParty(u.text, { caseId: c.id, meetingId: m.id, field: `transcript[${i}]`, meetingType: m.type, date: m.date }));
+    });
+  });
+  const otherCaseIds = new Set(otherCases.map(c => c.id));
+  allegations.filter(a => otherCaseIds.has(a.caseId)).forEach(a => {
+    ['description', 'peopleInvolved', 'employeeResponse', 'witnessEvidence', 'investigatorFinding', 'outstandingUncertainty', 'decisionReasoning', 'appealReasoning'].forEach(field => {
+      scanForSubjectAsThirdParty(a[field], { field: `allegation.${field}`, caseId: a.caseId, allegationId: a.id });
+    });
+  });
+  concernReferrals.filter(r => r.employeeName !== employeeName).forEach(r => {
+    scanForSubjectAsThirdParty(r.description, { field: 'concernReferral.description', concernReferralId: r.id });
+    scanForSubjectAsThirdParty(r.witnesses, { field: 'concernReferral.witnesses', concernReferralId: r.id });
+    scanForSubjectAsThirdParty(r.evidenceDescription, { field: 'concernReferral.evidenceDescription', concernReferralId: r.id });
+  });
 
   // Evidence files (photos, PDFs, CCTV, witness statements) are binary/opaque
   // content that can't be text-scanned for third-party mentions the way
@@ -232,9 +291,11 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     profiles: subjectProfiles,
     caseViews: subjectCaseViews,
     portalInvites: subjectPortalInvites,
+    caseAccessGrants: subjectCaseAccess,
     actedAsStaff,
     flaggedThirdPartyMentions: flagged,
     subjectMentionsInOrgNarratives,
+    subjectMentionsAsThirdParty,
     evidenceRequiringReview,
     compiledAt: new Date().toISOString(),
   };

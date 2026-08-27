@@ -2584,13 +2584,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // organisationThemes/caseThemes are already loaded client-side under
     // normal RLS; profiles/caseViews/portalInvites came back from the
     // lookup above for the same "no client-facing RLS path" reason
-    // signingRequests/portalAccounts already needed it.
+    // signingRequests/portalAccounts already needed it. caseAccess (closes
+    // Prompt 16 audit finding H14) was the one remaining already-loaded,
+    // org-scoped table this hand-built list had simply never listed.
     const data = {
       cases, policies:policies.map(p=>({...p,content:"[truncated]"})), auditLog, adjustments,
       employeeRecords, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks,
       hrReviewRequests, starterInstances, leaverInstances, dsarRequests, signingRequests, portalAccounts,
       orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseThemes,
-      portalInvites, profiles, caseViews,
+      portalInvites, profiles, caseViews, caseAccess,
       exportedAt:new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
@@ -8407,6 +8409,7 @@ Please produce:
           improvementInitiatives={improvementInitiatives}
           managerCapabilityInsights={managerCapabilityInsights}
           organisationThemes={organisationThemes}
+          caseAccess={caseAccess}
           orgId={org?.id}
           audit={audit}
           setScreen={setScreen}

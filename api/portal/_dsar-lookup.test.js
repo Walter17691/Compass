@@ -85,9 +85,42 @@ describe('portal dsar-lookup', () => {
     const signingCall = calls.find(u => u.includes('signing_requests'));
     const accountsCall = calls.find(u => u.includes('employee_portal_accounts'));
     expect(signingCall).toContain('org_id=eq.org-1');
-    expect(signingCall).toContain('employee_name=eq.Sam');
+    expect(signingCall).toContain('employee_name.eq.Sam');
     expect(accountsCall).toContain('org_id=eq.org-1');
     expect(accountsCall).toContain('employee_name=eq.Sam');
+  });
+
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H16, HIGH) — a
+  // manager who chaired/approved a meeting is named as manager_name, not
+  // employee_name, on that signing_requests row. Before this fix their
+  // own DSAR could never surface it.
+  it('also matches signing requests where the subject is the manager-side signatory, not the employee', async () => {
+    const calls = stubFetch({
+      members: [{ role: 'hr_manager' }],
+      signingRequests: [{ sign_id: 's1', employee_name: 'Sam Employee', manager_name: 'Priya Manager', document: 'x' }],
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1', employeeName: 'Priya Manager' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.signingRequests).toHaveLength(1);
+    const signingCall = calls.find(u => u.includes('signing_requests'));
+    expect(signingCall).toContain('org_id=eq.org-1');
+    expect(signingCall).toContain('or=(employee_name.eq.Priya');
+    expect(signingCall).toContain('manager_name.eq.Priya');
+  });
+
+  it('does not apply the manager_name/employee_name OR filter to employee_portal_accounts or employee_portal_invites', async () => {
+    const calls = stubFetch({
+      members: [{ role: 'hr_manager' }],
+      portalAccounts: [{ id: 'pa1', employee_name: 'Sam Employee' }],
+      portalInvites: [{ id: 'pi1', employee_name: 'Sam Employee' }],
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1', employeeName: 'Sam Employee' }), res);
+    const accountsCall = calls.find(u => u.includes('employee_portal_accounts'));
+    const invitesCall = calls.find(u => u.includes('employee_portal_invites'));
+    expect(accountsCall).not.toContain('or=(');
+    expect(invitesCall).not.toContain('or=(');
   });
 
   it('returns every row for the org when employeeName is omitted (org-wide export use)', async () => {

@@ -432,3 +432,86 @@ describe('compileSubjectData — organisational intelligence name-mention scan (
     expect(result.subjectMentionsInOrgNarratives).toEqual([]);
   });
 });
+
+describe('compileSubjectData — case_access grants, third-party witness mentions, manager-side signatory (Prompt 16 audit, closes H14/H15/H16)', () => {
+  it('includes case_access rows granted to the subject, resolved via their org membership user id', () => {
+    const data = {
+      ...baseData,
+      orgMembers: [{ user_id: 'u-ada', name: 'Ada Lovelace' }, { user_id: 'u-grace', name: 'Grace Hopper' }],
+      caseAccess: [
+        { id: 'ca1', caseId: 'c2', userId: 'u-ada', role: 'investigator' },
+        { id: 'ca2', caseId: 'c1', userId: 'u-grace', role: 'notetaker' },
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.caseAccessGrants).toEqual([data.caseAccess[0]]);
+  });
+
+  it('defaults caseAccessGrants to an empty array when caseAccess is omitted', () => {
+    const result = compileSubjectData('Ada Lovelace', baseData);
+    expect(result.caseAccessGrants).toEqual([]);
+  });
+
+  it('flags a pure witness/third party\'s name mentioned in someone else\'s allegation, even though they were never a case subject', () => {
+    const data = {
+      ...baseData,
+      allegations: [
+        { id: 'a1', caseId: 'c2', witnessEvidence: 'Sam Witness confirmed the account.', peopleInvolved: 'Grace Hopper, Sam Witness' },
+      ],
+    };
+    const result = compileSubjectData('Sam Witness', data);
+    // Sam Witness is not a case subject or employee record anywhere in
+    // baseData — every structured field is empty for them.
+    expect(result.cases).toEqual([]);
+    expect(result.allegations).toEqual([]);
+    expect(result.subjectMentionsAsThirdParty.some(f => f.field === 'allegation.witnessEvidence' && f.caseId === 'c2')).toBe(true);
+    expect(result.subjectMentionsAsThirdParty.some(f => f.field === 'allegation.peopleInvolved')).toBe(true);
+  });
+
+  it('flags a witness mentioned in a concern referral submitted about someone else', () => {
+    const data = {
+      ...baseData,
+      concernReferrals: [{ id: 'cr1', employeeName: 'Grace Hopper', witnesses: 'Sam Witness saw the incident.' }],
+    };
+    const result = compileSubjectData('Sam Witness', data);
+    expect(result.subjectMentionsAsThirdParty.some(f => f.field === 'concernReferral.witnesses')).toBe(true);
+  });
+
+  it('flags a witness mentioned in another case\'s meeting record or transcript', () => {
+    const result = compileSubjectData('New Witness', {
+      ...baseData,
+      cases: [
+        ...baseData.cases,
+        { id: 'c3', employeeName: 'Grace Hopper', meetings: [{ id: 'm3', type: 'Investigation', date: '2026-04-01', record: 'New Witness described what they saw.', transcript: [{ speaker: 'HR', text: 'Thank you, New Witness.' }] }] },
+      ],
+    });
+    expect(result.subjectMentionsAsThirdParty.some(f => f.field === 'record' && f.caseId === 'c3')).toBe(true);
+    expect(result.subjectMentionsAsThirdParty.some(f => f.field.startsWith('transcript') && f.caseId === 'c3')).toBe(true);
+  });
+
+  it('does not flag the third-party scan against the subject\'s own case, since that content is already fully included above', () => {
+    // c1's own meeting record genuinely does contain the subject's full
+    // name — proving the exclusion is actually doing something, not just
+    // silent because no match would have occurred anyway.
+    const data = {
+      ...baseData,
+      cases: [
+        { ...baseData.cases[0], meetings: [{ ...baseData.cases[0].meetings[0], record: 'Ada Lovelace raised a concern about Grace Hopper being unfair.' }] },
+        baseData.cases[1],
+      ],
+    };
+    const result = compileSubjectData('Ada Lovelace', data);
+    expect(result.subjectMentionsAsThirdParty.some(f => f.caseId === 'c1')).toBe(false);
+  });
+
+  it('also matches signing requests where the subject is the manager-side signatory, not the employee', () => {
+    const data = {
+      ...baseData,
+      signingRequests: [
+        { sign_id: 'sr1', employee_name: 'Ada Lovelace', manager_name: 'Priya Manager', document: 'Meeting record.' },
+      ],
+    };
+    const result = compileSubjectData('Priya Manager', data);
+    expect(result.signingRequests).toEqual([data.signingRequests[0]]);
+  });
+});

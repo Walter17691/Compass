@@ -24,7 +24,7 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, dsarRequests, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, orgId, audit, updateDsarRequest, extendDsarRequest, promptDialog }) {
+function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, dsarRequests, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, orgId, audit, updateDsarRequest, extendDsarRequest, promptDialog }) {
   const [compiled, setCompiled] = useState(null);
   const [compiling, setCompiling] = useState(false);
 
@@ -47,7 +47,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
       const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(orgId)}&employeeName=${encodeURIComponent(req.employeeName)}`);
       if (r.ok) { const d = await r.json(); signingRequests = d.signingRequests || []; portalAccounts = d.portalAccounts || []; portalInvites = d.portalInvites || []; profiles = d.profiles || []; caseViews = d.caseViews || []; }
     } catch (e) { console.error('dsar-lookup failed:', e.message); }
-    setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, signingRequests, portalAccounts, dsarRequests, orgMembers, profiles, caseViews, portalInvites, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes }));
+    setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, signingRequests, portalAccounts, dsarRequests, orgMembers, profiles, caseViews, portalInvites, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess }));
     setCompiling(false);
     // Phase 6.5 hardening (data-lifecycle review) — "DSAR generated" is
     // one of the privacy actions this whole review was asked to make
@@ -161,7 +161,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, orgId, audit, setScreen }) {
+export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, orgId, audit, setScreen }) {
   const [form, setForm] = useState({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   const [showForm, setShowForm] = useState(false);
 
@@ -215,7 +215,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
         ):visibleRequests.map(req=>(
-          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} dsarRequests={dsarRequests} orgMembers={orgMembers} orgEvents={orgEvents} improvementInitiatives={improvementInitiatives} managerCapabilityInsights={managerCapabilityInsights} organisationThemes={organisationThemes} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
+          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} dsarRequests={dsarRequests} orgMembers={orgMembers} orgEvents={orgEvents} improvementInitiatives={improvementInitiatives} managerCapabilityInsights={managerCapabilityInsights} organisationThemes={organisationThemes} caseAccess={caseAccess} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
         ))}
         {hasMore&&(
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>

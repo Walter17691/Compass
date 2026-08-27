@@ -49,10 +49,22 @@ export async function dsarLookup(req, res) {
   if (!auth) return;
 
   const nameFilter = employeeName ? `&employee_name=eq.${encodeURIComponent(employeeName)}` : '';
+  // Phase 6.5 hardening (closes Prompt 16 audit finding H16, HIGH) —
+  // signing_requests also names a manager_name signatory (the person who
+  // chaired/approved the meeting, not the employee it's about). Matching
+  // only employee_name meant a DSAR from that manager could never surface
+  // their own signing_requests rows even though the document, their own
+  // name, and their own signature/decline are just as much their
+  // personal data. Its own filter, not a change to nameFilter above —
+  // employee_portal_accounts/employee_portal_invites have no
+  // manager_name column at all, so reusing nameFilter there would 400.
+  const signingNameFilter = employeeName
+    ? `&or=(employee_name.eq.${encodeURIComponent(employeeName)},manager_name.eq.${encodeURIComponent(employeeName)})`
+    : '';
 
   try {
     const signingRes = await supabaseRequest(
-      `signing_requests?org_id=eq.${encodeURIComponent(orgId)}${nameFilter}&select=sign_id,document,employee_name,employee_email,manager_name,manager_email,meeting_type,meeting_date,document_type,status,signature,signed_at,created_at,opened_at,expires_at,declined_at,decline_reason`
+      `signing_requests?org_id=eq.${encodeURIComponent(orgId)}${signingNameFilter}&select=sign_id,document,employee_name,employee_email,manager_name,manager_email,meeting_type,meeting_date,document_type,status,signature,signed_at,created_at,opened_at,expires_at,declined_at,decline_reason`
     );
     const signingRequests = signingRes.ok ? await signingRes.json() : [];
 
