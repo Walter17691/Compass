@@ -1,4 +1,6 @@
-const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
+// Phase 7 (Controlled Beta Infrastructure Gate 3) — see api/_supabase.js
+// for why this is now configurable via env var with a production fallback.
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // Fails OPEN: if the rate limiter itself is unreachable, we let the request

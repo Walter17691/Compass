@@ -94,7 +94,26 @@ test('a genuinely different tenant sees its own, real case-list state, not the p
   // unrelated to cases specifically — this only checks for a failure
   // naming cases, the thing this test actually cares about.
   await expect(page.getByText('Loading cases…')).not.toBeVisible({ timeout: 10000 });
-  await expect(page.getByText(/Couldn't load.*\bcases\b/)).not.toBeVisible();
+  // Phase 7 (Controlled Beta Infrastructure Gate 3) fix — this used to be
+  // a page-wide getByText(/Couldn't load.*\bcases\b/) regex, which
+  // Playwright matches against a container element's FULL flattened text,
+  // not one coherent banner string. Against the old shared production
+  // test org (2,700+ accumulated real cases) the Cases screen always
+  // rendered real case rows, so the word "cases" never coincidentally
+  // appeared near the separate, already-expected "Couldn't load portal
+  // accounts" banner (still real and still benign here — /api/portal/*
+  // isn't proxied by the local dev server). A fresh, genuinely empty org
+  // on the new dedicated compass-e2e-test project renders "No cases
+  // yet... Create a case... Create first case" instead — which sits in
+  // the same DOM subtree as that unrelated portal banner, so the old
+  // regex spuriously matched across both and never actually inspected
+  // the real load-issue banner (AppSidebar.jsx's own role="status"
+  // element) at all. Scoping to that element, and to the literal word
+  // "cases" within it specifically (not just any "Couldn't load"
+  // banner — "portal accounts" is expected to fail here), is both the
+  // correct fix and a stronger check than the original.
+  const loadIssueBanner = page.getByRole('status').filter({ hasText: /\bcases\b/i });
+  await expect(loadIssueBanner).not.toBeVisible();
 });
 
 test('the org switcher lists exactly this account\'s own two real memberships, and switching between them updates the active org — including a rapid A→B→A round trip', async ({ page }) => {

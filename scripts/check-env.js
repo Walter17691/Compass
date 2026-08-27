@@ -6,12 +6,16 @@
 // of a build log or share directly. Run with `node scripts/check-env.js`.
 //
 // Classification:
-//   frontend-safe/public — safe to ship in the browser bundle. This app
-//     currently has NONE (confirmed by grep: zero import.meta.env.* or
-//     process.env.* references anywhere in src/) — the one client-side
-//     "secret", the Supabase anon key, is hardcoded in src/supabase.js
-//     and src/App.jsx's server-side twins deliberately, since Supabase's
-//     own anon key is designed to be public (RLS is the real boundary).
+//   frontend-safe/public — safe to ship in the browser bundle.
+//     VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY (Phase 7 Gate 3) are the
+//     first genuine entries here — Vite only inlines VITE_-prefixed vars
+//     into the client bundle, and Supabase's own anon key is designed to
+//     be public (RLS is the real boundary), same reasoning that used to
+//     justify hardcoding it directly in src/supabase.js. Both are now
+//     optional: unset falls back to the hardcoded production values, so
+//     production needs no configuration change, while a test/CI
+//     environment sets them to point at the separate compass-e2e-test
+//     project instead.
 //   server-only secret — read via process.env in api/*.js, must NEVER be
 //     prefixed VITE_ (Vite only inlines VITE_-prefixed vars into the
 //     client bundle; everything below is deliberately un-prefixed so it
@@ -22,6 +26,9 @@
 //   runtime — read when a serverless function actually executes.
 
 const VARS = [
+  { name: 'VITE_SUPABASE_URL', classification: 'frontend-safe/public (optional)', runtime: 'build-time (Vite inlines it)', note: 'falls back to the hardcoded production Supabase URL if unset — set only to point a non-production build (e.g. E2E) elsewhere' },
+  { name: 'VITE_SUPABASE_ANON_KEY', classification: 'frontend-safe/public (optional)', runtime: 'build-time (Vite inlines it)', note: 'same fallback behaviour as VITE_SUPABASE_URL above' },
+  { name: 'SUPABASE_URL', classification: 'server-only config (not secret, optional)', runtime: 'runtime', note: 'every api/**/_supabase.js twin — falls back to the hardcoded production Supabase URL if unset' },
   { name: 'SUPABASE_SERVICE_KEY', classification: 'server-only secret', runtime: 'runtime', note: 'RLS-bypassing key — every api/*.js handler needs this' },
   { name: 'ANTHROPIC_API_KEY', classification: 'server-only secret', runtime: 'runtime + dev-build-time (vite.config.js proxy)', note: 'api/chat.js; also proxied by the local dev server' },
   { name: 'RESEND_API_KEY', classification: 'server-only secret', runtime: 'runtime', note: 'every outbound email (send-letter, signing, invites, digest)' },

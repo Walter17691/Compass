@@ -2,11 +2,42 @@
 
 Runs against the local dev server (`npm run dev`, localhost:5173) using a real Supabase-backed login — there's no mock backend.
 
+## Which Supabase project
+
+Phase 7 (Controlled Beta Infrastructure Gate 3) — E2E now runs against a
+**dedicated, genuinely separate non-production Supabase project**
+(`compass-e2e-test`), never the live production database. This is
+mandatory, not a nice-to-have: once a real external beta org has data in
+production, E2E creating/mutating/deleting rows there would be a genuine
+customer-data risk, and the shared production test org had already
+accumulated 2,700+ real cases from years of unattended test runs (see the
+now-resolved "Known issue" below).
+
+`src/supabase.js` and every server-side `api/**/_supabase.js` read
+`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` (client) or `SUPABASE_URL`
+(server), falling back to production only if unset — so a `.env` that
+doesn't set these still points at production by accident. Set them
+explicitly for E2E:
+```
+VITE_SUPABASE_URL=https://zdbbvljbndmujywtkwfy.supabase.co
+VITE_SUPABASE_ANON_KEY=<the compass-e2e-test project's anon key>
+```
+Never point these at the production project (`npeegfsoijhdnnvuqjin`) for
+a test run, and never copy real employee/production data into
+`compass-e2e-test` — it should only ever contain synthetic data created
+by test runs themselves.
+
 ## One-time setup
 
-1. Sign up a **new, separate org** at http://localhost:5173 (or the deployed URL) — any throwaway email works via the normal signup flow. Do not use the real Compass LTD account: every test run creates real case/DSAR data against whatever account signs in.
+1. A throwaway test org + two test accounts already exist on
+   `compass-e2e-test` (see "Second tenant" below for the second one) —
+   this repo does not commit real credentials, so get the actual values
+   from whoever set them up rather than re-signing-up unless you're
+   deliberately replacing them.
 2. Add to a local `.env` file (not committed):
    ```
+   VITE_SUPABASE_URL=https://zdbbvljbndmujywtkwfy.supabase.co
+   VITE_SUPABASE_ANON_KEY=<the compass-e2e-test project's anon key>
    E2E_TEST_EMAIL=your-test-account@example.com
    E2E_TEST_PASSWORD=your-test-account-password
    ```
@@ -29,7 +60,7 @@ E2E_TEST_PASSWORD_2=your-second-test-account-password
 ```
 If these are missing: CI hard-fails with a clear message (`requireSecondTenantOrFail` in `helpers.js`) rather than silently skipping — a missing secret must never read as a passing tenant-isolation check. A local run without them configured gets a soft skip instead, since that's a legitimate, common case for a contributor not working on this spec.
 
-**Known issue (2026-08-26):** the `org data is namespaced in localStorage...` test in this spec currently fails against the live shared second-tenant org — not a flake, confirmed via direct investigation. That org has accumulated 2,700+ real cases from years of every spec in this suite running against it without cleanup (this spec's own two canary-creating tests now clean up after themselves, see `deleteCaseByEmployeeName` in `helpers.js`, but that doesn't retroactively shrink the existing pile), which genuinely exceeds the browser's localStorage quota — `src/lib/storage.js`'s `lsSet` now logs this instead of silently swallowing it, but the underlying write still fails. Fixing the test requires a decision about bulk-cleaning or replacing the shared fixture org, which affects every other spec that also uses it — see the test's own comment for detail.
+**Resolved (2026-08-27, Phase 7 Gate 3):** the "Known issue" that used to be documented here — the shared second-tenant org's localStorage quota being exceeded by 2,700+ accumulated real cases — no longer applies now that E2E runs against a fresh, dedicated `compass-e2e-test` project rather than the same production database every other spec (and years of prior unattended runs) also used. Keep an eye on volume growing again over time on the new project too; `deleteCaseByEmployeeName` cleanup in `helpers.js` still matters, this fix is a reset, not a structural guarantee against it recurring.
 
 ## Running
 

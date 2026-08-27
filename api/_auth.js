@@ -2,7 +2,9 @@ import { supabaseRequest } from './_supabase.js';
 import { canSeeAllOrgCases } from '../src/lib/roles.js';
 import { approvalActionForOutcome } from '../src/lib/approvals.js';
 
-const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
+// Phase 7 (Controlled Beta Infrastructure Gate 3) — see api/_supabase.js
+// for why this is now configurable via env var with a production fallback.
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
 // Public anon key — safe to duplicate here, it's already shipped in the
 // client bundle (src/supabase.js). Only used to validate a caller-supplied
 // access token against Supabase's own /auth/v1/user endpoint.

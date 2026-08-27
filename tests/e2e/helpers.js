@@ -106,8 +106,18 @@ export async function logout(page) {
   await expect(page.getByPlaceholder('you@company.com')).toBeVisible({ timeout: 10000 });
 }
 
-const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
+// Phase 7 (Controlled Beta Infrastructure Gate 3) — same VITE_SUPABASE_URL/
+// VITE_SUPABASE_ANON_KEY env vars src/supabase.js reads, so a direct REST
+// call made from a test (e.g. currentAccessToken's callers backdating a
+// timestamp) targets the same project the app itself is pointed at —
+// npm run test:e2e loads .env via node's own --env-file flag before
+// Playwright starts, so these are populated the same way for both.
+// Falls back to production only so an existing local .env without these
+// two lines doesn't silently break; the whole point of this gate is that
+// CI and any properly-configured local run should set them to the
+// separate compass-e2e-test project instead.
+export const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
+export const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
 
 // Reads the currently logged-in session's own access token out of
 // localStorage — the same RLS-scoped credential the app's own Supabase

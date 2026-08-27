@@ -1,8 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
-
-const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
+import { login, SUPABASE_URL, SUPABASE_ANON_KEY } from './helpers.js';
 
 // Organisational ER Intelligence (Phase 6, OP23, §19) — impact tracking.
 // impactTracking.js's own MIN_DAYS_SINCE_COMPLETION (7 days) is a real

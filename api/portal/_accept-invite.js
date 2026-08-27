@@ -1,7 +1,9 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
 
-const SUPABASE_URL = 'https://npeegfsoijhdnnvuqjin.supabase.co';
+// Phase 7 (Controlled Beta Infrastructure Gate 3) — see api/_supabase.js
+// for why this is now configurable via env var with a production fallback.
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
 
 export async function acceptInvite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

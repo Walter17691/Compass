@@ -31,10 +31,13 @@ jobs:
       # brand new file with any errors at all).
       - run: npm run lint:regressions
 
-  # E2E — runs against a real, throwaway Supabase-backed test org (see
-  # tests/e2e/README.md). Needs E2E_TEST_EMAIL/E2E_TEST_PASSWORD as repo
-  # secrets; skipped entirely on PRs from forks, which can't see secrets,
-  # so it only runs on pushes to main and PRs from within this repo.
+  # E2E — Phase 7 (Controlled Beta Infrastructure Gate 3): runs against a
+  # dedicated, genuinely separate non-production Supabase project
+  # (compass-e2e-test), never the live production database, via
+  # VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY below. Needs E2E_TEST_EMAIL/
+  # E2E_TEST_PASSWORD as repo secrets; skipped entirely on PRs from forks,
+  # which can't see secrets, so it only runs on pushes to main and PRs
+  # from within this repo.
   e2e:
     runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
@@ -48,6 +51,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Write .env for the dev server
         env:
+          # Phase 7 (Controlled Beta Infrastructure Gate 3) — points the
+          # dev server (and so every E2E spec) at the separate
+          # compass-e2e-test Supabase project instead of production.
+          # VITE_SUPABASE_ANON_KEY is a publishable/RLS-scoped key, not a
+          # secret in the traditional sense, but is still stored as a repo
+          # secret here for consistency with everything else in this step.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
           # Phase 6.5 hardening (structural remediation, Prompt 12 — Test
@@ -64,6 +75,8 @@ jobs:
           E2E_TEST_PASSWORD_2: ${{ secrets.E2E_TEST_PASSWORD_2 }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" >> .env
+          echo "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY" >> .env
           echo "E2E_TEST_EMAIL=$E2E_TEST_EMAIL" >> .env
           echo "E2E_TEST_PASSWORD=$E2E_TEST_PASSWORD" >> .env
           echo "E2E_TEST_EMAIL_2=$E2E_TEST_EMAIL_2" >> .env
