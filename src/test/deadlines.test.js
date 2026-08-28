@@ -320,24 +320,19 @@ describe('computeDueSoon — wellbeing follow-ups', () => {
   });
 });
 
-describe('computeDueSoon — leaver notice period', () => {
+// Phase 7.5C — Offboarding was removed from the product's active user
+// experience, so computeDueSoon no longer generates a "leaver" deadline
+// from leaverInstances (there's nowhere left in the product for a user to
+// act on it). leaverInstances remains a real parameter for signature
+// stability, so this now asserts the absence of the old behaviour rather
+// than testing it.
+describe('computeDueSoon — leaver notice period (removed, Phase 7.5C)', () => {
   const today = new Date('2025-06-16');
 
-  it('surfaces a leaver whose last working day is approaching with open offboarding tasks', () => {
+  it('no longer surfaces a "leaver" deadline even with an approaching last working day and open tasks', () => {
     const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '2025-06-20', tasks: [{ id: 't1', done: false }] }];
     const items = computeDueSoon([], [], today, [], [], leaverInstances).filter(d => d.category === 'leaver');
-    expect(items).toHaveLength(1);
-    expect(items[0].employeeName).toBe('Tom');
-  });
-
-  it('skips a leaver whose offboarding tasks are all done', () => {
-    const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '2025-06-20', tasks: [{ id: 't1', done: true }] }];
-    expect(computeDueSoon([], [], today, [], [], leaverInstances).filter(d => d.category === 'leaver')).toHaveLength(0);
-  });
-
-  it('skips a leaver with no last working day recorded', () => {
-    const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '', tasks: [{ id: 't1', done: false }] }];
-    expect(computeDueSoon([], [], today, [], [], leaverInstances).filter(d => d.category === 'leaver')).toHaveLength(0);
+    expect(items).toHaveLength(0);
   });
 });
 
@@ -669,12 +664,6 @@ describe('date-only fields are read as the correct local calendar day in a timez
   it('wellbeing follow-up date', () => {
     const wellbeingNotes = [{ id: 'w1', employeeName: 'Priya', followUpDate: '2026-03-10', followUpDone: false }];
     const [d] = computeDueSoon([], [], today, [], wellbeingNotes);
-    expect(d.deadlineDate).toBe('10/03/2026');
-  });
-
-  it('leaver last working day', () => {
-    const leaverInstances = [{ id: 'l1', name: 'Tom', lastWorkingDay: '2026-03-10', tasks: [{ id: 't1', done: false }] }];
-    const [d] = computeDueSoon([], [], today, [], [], leaverInstances);
     expect(d.deadlineDate).toBe('10/03/2026');
   });
 

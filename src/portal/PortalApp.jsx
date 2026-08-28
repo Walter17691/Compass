@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { PortalCaseList } from './PortalCaseList';
 import { PortalCaseDetail } from './PortalCaseDetail';
 import { PortalSignatures } from './PortalSignatures';
-import { PortalOnboarding } from './PortalOnboarding';
 
 const navBtnStyle = active => ({
   fontSize: 13, padding: "6px 14px", borderRadius: 7, border: "none",
@@ -11,7 +10,7 @@ const navBtnStyle = active => ({
 });
 
 export function PortalApp({ user, employeeName, onSignOut }) {
-  const [view, setView] = useState('cases'); // 'cases' | 'caseDetail' | 'signatures' | 'onboarding'
+  const [view, setView] = useState('cases'); // 'cases' | 'caseDetail' | 'signatures'
   const [activeCaseId, setActiveCaseId] = useState(null);
 
   return (
@@ -22,7 +21,6 @@ export function PortalApp({ user, employeeName, onSignOut }) {
           <nav style={{ display: "flex", gap: 2 }}>
             <button onClick={() => setView('cases')} style={navBtnStyle(view === 'cases' || view === 'caseDetail')}>My cases</button>
             <button onClick={() => setView('signatures')} style={navBtnStyle(view === 'signatures')}>Documents to sign</button>
-            <button onClick={() => setView('onboarding')} style={navBtnStyle(view === 'onboarding')}>Onboarding</button>
           </nav>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -39,7 +37,6 @@ export function PortalApp({ user, employeeName, onSignOut }) {
           <PortalCaseDetail userId={user.id} caseId={activeCaseId} onBack={() => setView('cases')} />
         )}
         {view === 'signatures' && <PortalSignatures userId={user.id} />}
-        {view === 'onboarding' && <PortalOnboarding userId={user.id} />}
       </div>
     </div>
   );

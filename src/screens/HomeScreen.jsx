@@ -16,15 +16,26 @@ const STALE_DAYS = 14;
 // render its own separate copy here, which had drifted out of sync with
 // the shared one (different height, padding, logo size) and caused a
 // visible layout jump on every navigation away from Home.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, showToast, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, setSettingsSection, caseSignals=[], concernReferrals=[], isHR, hrReviewRequests=[], processTemplates=[] }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, caseSignals=[], concernReferrals=[], isHR, hrReviewRequests=[], processTemplates=[] }) {
   const freshMeetingSetup = () => ({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
       <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 32px"}}>
 
-        {/* ── Greeting + primary actions ── */}
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:24,flexWrap:"wrap",gap:16}}>
+        {/* ── Greeting + primary actions ──
+            Phase 7.5C — the four stat-card tiles that used to sit below
+            this (Active cases / Awaiting action / Pending signatures /
+            Closed this month) were almost entirely restating numbers
+            already visible elsewhere on this same screen: active-case and
+            awaiting-action counts were already in this subtitle, pending
+            signatures was already one of the Needs Attention chips below.
+            Only "closed this month" was genuinely not shown anywhere else,
+            so that's the one figure folded into this line instead of
+            losing it outright — the other three tiles were pure
+            duplication, not information, so they're gone rather than
+            moved. */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:16}}>
           <div>
             <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
             <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:32,fontWeight:400,color:"#1C1820",margin:0,letterSpacing:"-0.5px"}}>
@@ -35,7 +46,8 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                 const active=cases.filter(cs=>getCaseStage(cs)!=="closed").length;
                 const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
                 if(active===0) return "No active cases — create one to get started.";
-                return active+" active case"+(active!==1?"s":"")+(actions>0?" · "+actions+" requiring action":"");
+                const closedThisMonth=cases.filter(cs=>{if(getCaseStage(cs)!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
+                return active+" active case"+(active!==1?"s":"")+(actions>0?" · "+actions+" requiring action":"")+(closedThisMonth>0?" · "+closedThisMonth+" closed this month":"");
               })()}
             </p>
           </div>
@@ -45,7 +57,29 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
           </div>
         </div>
 
-        {/* ── Priority strip ── */}
+        {/* ── Needs attention (Level 1) ──
+            Phase 7.5C — previously up to 11 independent categories each
+            rendered as their own row of pill-shaped chips (worst case:
+            actions/overdue/highRisk/appealsOutstanding/staleCases each
+            listing up to 3 individual chips, plus 6 more aggregate-count
+            chips — over 20 separate bordered elements simultaneously on a
+            busy org). No category was removed and no new severity was
+            invented: every count/filter below is identical to before.
+            What changed is presentation — the case-specific, genuinely
+            "go do this" categories (actions/overdue/highRisk/
+            appealsOutstanding, the ones that were already coloured
+            orange/red/purple rather than the muted grey staleCases used)
+            merge into one capped, severity-sorted list of real rows
+            (reusing the same row layout as the Active Cases list below,
+            not a new primitive); staleCases demotes to a count alongside
+            the other aggregate-only categories, since an individual name
+            for a quiet case is far less actionable than "overdue" or
+            "HIGH risk" and every one of those cases is still one click
+            away in Active Cases regardless. The aggregate categories
+            collapse from separate bordered/padded pill chips into one
+            plain text line — same counts, same click-through where one
+            existed (openReferrals), just without a border and background
+            each. */}
         {(()=>{
           const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action);
           const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
@@ -68,103 +102,57 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
           const outcomesAwaitingApproval=hrReviewRequests.filter(r=>r.status==="pending"&&requiresApproval(r.step)).length;
           const investigationsOverrunning=dueSoon.filter(d=>d.category==="investigation").length;
           if(actions.length===0&&pendingSigs===0&&overdue.length===0&&highRisk.length===0&&appealsOutstanding.length===0&&staleCases.length===0&&openReferralsCount===0&&proceduralWarnings===0&&appealsNearingDeadline===0&&outcomesAwaitingApproval===0&&investigationsOverrunning===0) return null;
+
+          // Existing colour already encoded urgency (red = overdue/HIGH
+          // risk, orange = action required, purple = appeal outstanding) —
+          // reused here as the sort/merge key rather than adding a new one.
+          const ATTENTION_ROW_LIMIT=6;
+          const rows=[
+            ...overdue.map((d,i)=>({key:"od"+i,rank:0,color:"#C84B2F",clickable:false,label:`${d.label||d.employeeName} · Overdue`})),
+            ...highRisk.map(cs=>({key:"risk"+cs.id,rank:0,color:"#C84B2F",clickable:true,label:`${cs.employeeName} · HIGH risk`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}})),
+            ...actions.map(cs=>({key:"act"+cs.id,rank:1,color:"#E8622A",clickable:true,label:`${cs.employeeName} · ${getNextStep(cs)?.label}`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}})),
+            ...appealsOutstanding.map(cs=>({key:"appeal"+cs.id,rank:2,color:"#5B3FD4",clickable:true,label:`${cs.employeeName} · Appeal outstanding`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("appeal");setScreen(SCREENS.CASE_VIEW);}})),
+          ].sort((a,b)=>a.rank-b.rank).slice(0,ATTENTION_ROW_LIMIT);
+
+          const summaryParts=[
+            pendingSigs>0&&{label:`${pendingSigs} pending signature${pendingSigs!==1?"s":""}`},
+            staleCases.length>0&&{label:`${staleCases.length} case${staleCases.length!==1?"s":""} with no recent activity`},
+            openReferralsCount>0&&{label:`${openReferralsCount} referral${openReferralsCount!==1?"s":""} awaiting triage`,onClick:()=>setScreen(SCREENS.CONCERNS)},
+            proceduralWarnings>0&&{label:`${proceduralWarnings} procedural warning${proceduralWarnings!==1?"s":""}`},
+            appealsNearingDeadline>0&&{label:`${appealsNearingDeadline} appeal${appealsNearingDeadline!==1?"s":""} nearing deadline`},
+            outcomesAwaitingApproval>0&&{label:`${outcomesAwaitingApproval} outcome${outcomesAwaitingApproval!==1?"s":""} awaiting approval`},
+            investigationsOverrunning>0&&{label:`${investigationsOverrunning} investigation${investigationsOverrunning!==1?"s":""} overrunning`},
+          ].filter(Boolean);
+
           return (
-            <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A44",borderRadius:12,padding:"12px 18px",marginBottom:24,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#E8622A",letterSpacing:"0.5px",textTransform:"uppercase",flexShrink:0}}>Needs attention</div>
-              {actions.slice(0,3).map((cs,i)=>(
-                <button key={i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · ${getNextStep(cs)?.label}`} style={{fontSize:12,color:"#E8622A",background:"#FFFFFF",border:"1px solid #E8622A44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  {cs.employeeName} · {getNextStep(cs)?.label}
-                </button>
-              ))}
-              {pendingSigs>0&&<span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} pending signature{pendingSigs!==1?"s":""}</span>}
-              {/* Phase 7.5B (P0 polish) — overdue/HIGH risk/investigations
-                  overrunning already shared the same red (#C84B2F) as
-                  each other and no one else in this strip, i.e. the
-                  underlying system already treats these three as the
-                  most severe tier; this just makes that existing signal
-                  actually visible (bolder weight + a real border on all
-                  three, matching what highRisk already had) instead of
-                  relying on a subtle colour difference alone. No new
-                  severity invented, no category added or removed, every
-                  click handler/label/filter untouched. */}
-              {overdue.slice(0,3).map((d,i)=>(
-                <span key={"od"+i} title={`${d.label||d.employeeName} · Overdue`} style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",fontWeight:700,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis",display:"inline-block"}}>
-                  {d.label||d.employeeName} · Overdue
-                </span>
-              ))}
-              {highRisk.slice(0,3).map((cs,i)=>(
-                <button key={"risk"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · HIGH risk`} style={{fontSize:12,color:"#C84B2F",background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:700,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  {cs.employeeName} · HIGH risk
-                </button>
-              ))}
-              {appealsOutstanding.slice(0,3).map((cs,i)=>(
-                <button key={"appeal"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("appeal");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · Appeal outstanding`} style={{fontSize:12,color:"#5B3FD4",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
-                  {cs.employeeName} · Appeal outstanding
-                </button>
-              ))}
-              {staleCases.slice(0,3).map((cs,i)=>{
-                const lastUpdated=cs.updatedAt||cs.createdAt;
-                const daysAgo=daysBetween(lastUpdated, Date.now());
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:24,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:rows.length>0?"1px solid #E8E0D0":"none",fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase"}}>Needs attention</div>
+              {rows.map((r,i)=>{
+                const Tag=r.clickable?"button":"div";
                 return (
-                  <button key={"stale"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · No activity in ${daysAgo} days`} style={{fontSize:12,color:"#6B6375",background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
-                    {cs.employeeName} · No activity in {daysAgo}d
-                  </button>
+                  <Tag key={r.key} type={r.clickable?"button":undefined} onClick={r.onClick} title={r.label}
+                    style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:r.clickable?"pointer":"default",textAlign:"left",font:"inherit",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<rows.length-1?"1px solid #F5F1EA":"none"}}>
+                    <div style={{width:6,height:6,borderRadius:"50%",background:r.color,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:r.rank===0?700:600,color:"#1C1820",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</div>
+                    {r.clickable&&<span style={{color:"#C4BAB0",fontSize:14,flexShrink:0}}>›</span>}
+                  </Tag>
                 );
               })}
-              {openReferralsCount>0&&(
-                <button onClick={()=>setScreen(SCREENS.CONCERNS)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>
-                  {openReferralsCount} referral{openReferralsCount!==1?"s":""} awaiting triage
-                </button>
-              )}
-              {proceduralWarnings>0&&(
-                <span title="Open procedural guardrail warnings across all cases" style={{fontSize:12,color:"#B8850F",background:"#FFF6E0",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
-                  {proceduralWarnings} procedural warning{proceduralWarnings!==1?"s":""}
-                </span>
-              )}
-              {appealsNearingDeadline>0&&(
-                <span title="Appeals with a deadline coming up" style={{fontSize:12,color:"#5B3FD4",background:"#F5F3FF",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
-                  {appealsNearingDeadline} appeal{appealsNearingDeadline!==1?"s":""} nearing deadline
-                </span>
-              )}
-              {outcomesAwaitingApproval>0&&(
-                <span title="Outcomes prepared and awaiting approval sign-off" style={{fontSize:12,color:"#1A7A4A",background:"#EAF7EE",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
-                  {outcomesAwaitingApproval} outcome{outcomesAwaitingApproval!==1?"s":""} awaiting approval
-                </span>
-              )}
-              {investigationsOverrunning>0&&(
-                <span title="Investigations running longer than the target timescale" style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",fontWeight:700,whiteSpace:"nowrap"}}>
-                  {investigationsOverrunning} investigation{investigationsOverrunning!==1?"s":""} overrunning
-                </span>
+              {summaryParts.length>0&&(
+                <div style={{padding:"10px 18px",fontSize:12,fontWeight:500,color:"#6B6375",lineHeight:1.7,borderTop:rows.length>0?"1px solid #F5F1EA":"none"}}>
+                  {summaryParts.map((p,i)=>(
+                    <span key={i} style={{fontWeight:500}}>
+                      {p.onClick?(
+                        <button onClick={p.onClick} style={{font:"inherit",fontWeight:500,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",padding:0}}>{p.label}</button>
+                      ):p.label}
+                      {i<summaryParts.length-1&&<span style={{color:"#C4BAB0"}}> · </span>}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           );
         })()}
-
-        {/* ── Stat cards ── */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:28}}>
-          {(()=>{
-            const active=cases.filter(cs=>getCaseStage(cs)!=="closed").length;
-            const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
-            const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
-            const closedInMonth=(monthsAgo)=>cases.filter(cs=>{if(getCaseStage(cs)!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const n=new Date();n.setMonth(n.getMonth()-monthsAgo);return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
-            const closedMonth=closedInMonth(0);
-            const closedLastMonth=closedInMonth(1);
-            const closedDelta=closedMonth-closedLastMonth;
-            const updatedWeek=cases.filter(cs=>{const d=new Date(cs.updatedAt||cs.createdAt||0);return getCaseStage(cs)!=="closed"&&(Date.now()-d)<7*24*60*60*1000;}).length;
-            return [
-              {label:"Active cases",value:active,sub:updatedWeek>0?updatedWeek+" updated this week":"No updates this week",accent:"#7C5CFC"},
-              {label:"Awaiting action",value:actions,sub:actions>0?"Review next steps below":"All up to date",accent:"#E8622A"},
-              {label:"Pending signatures",value:pendingSigs,sub:pendingSigs>0?"Awaiting employee sign-off":"None outstanding",accent:"#1A7A4A"},
-              {label:"Closed this month",value:closedMonth,sub:closedLastMonth>0?(closedDelta>0?"↑":closedDelta<0?"↓":"→")+Math.abs(closedDelta)+" vs last month":"No closures last month",accent:"#6B6375"},
-            ].map(s=>(
-              <div key={s.label} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
-                <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>{s.label}</div>
-                <div style={{fontSize:30,fontWeight:700,color:s.accent,fontFamily:"DM Serif Display,Georgia,serif",marginBottom:4,lineHeight:1}}>{s.value}</div>
-                <div style={{fontSize:11,color:"#9B9098"}}>{s.sub}</div>
-              </div>
-            ));
-          })()}
-        </div>
 
         {/* ── Main grid ── */}
         <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}}>
@@ -274,49 +262,32 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
               })()}
             </div>
 
-            {/* Calendar */}
+            {/* Today's meetings — Phase 7.5C — this used to be a full
+                7-day mini-calendar grid plus Connect Google/Outlook
+                Calendar buttons, duplicating the dedicated "Calendar" nav
+                destination (a real month view) and Settings → Integrations
+                (which already has the real connect/disconnect controls).
+                Reduced to what Home actually needs answered — "do I have
+                anything today" — with everything else one click away via
+                the destinations that already own it. */}
             {(()=>{
               const today=new Date();
-              const weekStart=new Date(today);
-              weekStart.setDate(today.getDate()-today.getDay()+1);
-              const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return d;});
               const caseMeetings=cases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,employeeName:cs.employeeName,caseId:cs.id})));
-              const getMeetingsForDay=(d)=>caseMeetings.filter(m=>{
+              const todayMeetings=caseMeetings.filter(m=>{
                 if(!m.date)return false;
                 const parts=m.date.split("/");
-                if(parts.length===3){const md=new Date(parts[2],parts[1]-1,parts[0]);return md.toDateString()===d.toDateString();}
+                if(parts.length===3){const md=new Date(parts[2],parts[1]-1,parts[0]);return md.toDateString()===today.toDateString();}
                 return false;
               });
-              const todayMeetings=getMeetingsForDay(today);
               return (
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
                   <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div>
-                      <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>This week</div>
-                      <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Calendar</div>
-                    </div>
-                    <button onClick={()=>{setMeetingSetup(freshMeetingSetup());setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Schedule meeting</button>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-                    {weekDays.map((d,i)=>{
-                      const isToday=d.toDateString()===today.toDateString();
-                      const dayMeetings=getMeetingsForDay(d);
-                      return (
-                        <div key={i} style={{padding:"10px 6px",textAlign:"center",borderRight:i<6?"1px solid #F5F1EA":"none",borderBottom:"1px solid #F5F1EA",background:isToday?"#EDE8FF":"none",minHeight:70}}>
-                          <div style={{fontSize:10,fontWeight:600,color:isToday?"#7C5CFC":"#9B9098",letterSpacing:"0.5px",marginBottom:3}}>{d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</div>
-                          <div style={{fontSize:16,fontWeight:700,color:isToday?"#7C5CFC":"#1C1820",marginBottom:4}}>{d.getDate()}</div>
-                          {dayMeetings.slice(0,2).map((m,j)=>(
-                            <button key={j} type="button" onClick={()=>{setActiveCaseId(m.caseId);setScreen(SCREENS.CASE_VIEW);}}
-                              style={{font:"inherit",display:"block",width:"100%",background:isToday?"#7C5CFC":"#EDE8FF",color:isToday?"#fff":"#7C5CFC",border:"none",borderRadius:3,padding:"2px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer",textAlign:"left",fontSize:9,fontWeight:500}}>{m.employeeName}</button>
-                          ))}
-                          {dayMeetings.length>2&&<div style={{fontSize:9,color:"#9B9098"}}>+{dayMeetings.length-2} more</div>}
-                        </div>
-                      );
-                    })}
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Today</div>
+                    <button onClick={()=>setScreen(SCREENS.CALENDAR)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Calendar →</button>
                   </div>
                   <div style={{padding:"12px 18px"}}>
                     {todayMeetings.length>0?(
-                      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
                         {todayMeetings.map((m,i)=>(
                           <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#FDFAF5",borderRadius:8}}>
                             <div style={{width:3,height:28,background:"#7C5CFC",borderRadius:2,flexShrink:0}}/>
@@ -328,16 +299,8 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                         ))}
                       </div>
                     ):(
-                      <div style={{fontSize:12,color:"#9B9098",padding:"6px 0",marginBottom:8}}>No meetings logged today.</div>
+                      <div style={{fontSize:12,color:"#9B9098"}}>No meetings logged today.</div>
                     )}
-                    <div style={{display:"flex",gap:8,paddingTop:8,borderTop:"1px solid #F5F1EA"}}>
-                      {calendarConnected?(
-                        <button onClick={disconnectGoogleCalendar} style={{fontSize:11,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Google Calendar connected — Disconnect</button>
-                      ):(
-                        <button onClick={connectGoogleCalendar} style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Google Calendar</button>
-                      )}
-                      <button onClick={()=>showToast("Outlook integration coming soon")} style={{fontSize:11,color:"#6B6375",background:"#F5F1EA",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Connect Outlook</button>
-                    </div>
                   </div>
                 </div>
               );
@@ -347,151 +310,75 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
           {/* ── Right column ── */}
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-            {/* Compass Recommendations — the highest-priority open signals
-                org-wide (next_action/process_risk), already AI-written when
-                each one was created (Next Best Action, Guardrails). Capped
-                small deliberately — this is a shortlist, not another full
-                list view; the case workspace's own Copilot banner is where
-                the complete picture for any one case lives. */}
+            {/* Secondary assistance (Level 3) — Phase 7.5C merges what
+                used to be three separate bordered cards (Compass
+                Recommendations, Potential Bottlenecks, and a "Quick
+                links"/"Suggested for you" block) into one container.
+                Quick links is gone outright, not just visually folded in:
+                it was a second, weaker "AI suggests you click into a
+                case" list duplicating Compass Recommendations' own
+                purpose in the same column, and its policy suggestions are
+                still one click away via Settings → Policies — nothing it
+                offered is actually lost, only the redundant second
+                container. Recommendations and Bottlenecks stay two real,
+                different signals, just sharing one outer card with a
+                divider instead of each getting its own border/corners/
+                header treatment — content, ranking and AI logic for both
+                are completely untouched, this is presentation only. */}
             {(()=>{
               const recommendations=topOpenSignalsOrgWide(caseSignals,["next_action","process_risk"],5);
-              if(recommendations.length===0) return null;
-              return (
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  {/* Phase 7.5B (P0 polish) — smaller heading than Active
-                      Cases' own 20px (was 18px, matching Potential
-                      Bottlenecks/Quick links below it) so this reads as
-                      secondary to the user's actual workload rather than
-                      co-equal with it. Presentation only: same content,
-                      same ranking, same click-through, same AI logic —
-                      recommendations themselves are untouched. */}
-                  <div style={{padding:"12px 18px",borderBottom:"1px solid #E8E0D0"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI-prioritised</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Compass Recommendations</div>
-                  </div>
-                  <div style={{padding:"4px 0"}}>
-                    {recommendations.map((sig,i)=>{
-                      const cs=cases.find(c=>c.id===sig.caseId);
-                      const meta=signalTypeMeta(sig.type);
-                      return (
-                        <button key={sig.id} onClick={()=>{if(!cs) return; setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}} style={{width:"100%",display:"flex",alignItems:"flex-start",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:cs?"pointer":"default",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<recommendations.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
-                          onMouseEnter={e=>{if(cs) e.currentTarget.style.background="#FDFAF5";}}
-                          onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                          <div style={{width:6,height:6,borderRadius:"50%",background:meta.color,flexShrink:0,marginTop:5}}/>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:12,color:"#1C1820",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sig.title}</div>
-                            <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{cs?.employeeName||"Unknown case"} · {meta.label}</div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Potential Bottlenecks (P17, §18) — average time-in-stage vs.
-                a single advisory target, using P17's own stage-transition
-                tracking (withStageTransitionStamp, hooked into saveCases).
-                Same card styling as Compass Recommendations/Quick links
-                above/below it. */}
-            {(()=>{
               const bottlenecks=computeStageBottlenecks(cases, processTemplates);
-              if(bottlenecks.length===0) return null;
+              if(recommendations.length===0&&bottlenecks.length===0) return null;
               return (
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Running long</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Potential Bottlenecks</div>
-                  </div>
-                  <div style={{padding:"4px 0"}}>
-                    {bottlenecks.slice(0,5).map((b,i)=>(
-                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",borderBottom:i<Math.min(bottlenecks.length,5)-1?"1px solid #F5F1EA":"none"}}>
-                        <div style={{width:6,height:6,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{b.processType} · {b.stage}</div>
-                          <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{b.caseCount} case{b.caseCount!==1?"s":""} · avg {b.avgDays}d (target {b.targetDays}d)</div>
-                        </div>
+                  {recommendations.length>0&&(
+                    <>
+                      <div style={{padding:"12px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI-prioritised</div>
+                        <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Compass Recommendations</div>
                       </div>
-                    ))}
-                  </div>
-                  <div style={{padding:"8px 18px",borderTop:"1px solid #F5F1EA",fontSize:10,color:"#9B9098"}}>Guideline only, not a statutory deadline.</div>
+                      <div style={{padding:"4px 0"}}>
+                        {recommendations.map((sig,i)=>{
+                          const cs=cases.find(c=>c.id===sig.caseId);
+                          const meta=signalTypeMeta(sig.type);
+                          return (
+                            <button key={sig.id} onClick={()=>{if(!cs) return; setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}} style={{width:"100%",display:"flex",alignItems:"flex-start",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:cs?"pointer":"default",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<recommendations.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
+                              onMouseEnter={e=>{if(cs) e.currentTarget.style.background="#FDFAF5";}}
+                              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                              <div style={{width:6,height:6,borderRadius:"50%",background:meta.color,flexShrink:0,marginTop:5}}/>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,color:"#1C1820",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sig.title}</div>
+                                <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{cs?.employeeName||"Unknown case"} · {meta.label}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  {bottlenecks.length>0&&(
+                    <>
+                      <div style={{padding:"12px 18px",borderBottom:"1px solid #E8E0D0",borderTop:recommendations.length>0?"1px solid #E8E0D0":"none"}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Running long</div>
+                        <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Potential Bottlenecks</div>
+                      </div>
+                      <div style={{padding:"4px 0"}}>
+                        {bottlenecks.slice(0,5).map((b,i)=>(
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",borderBottom:i<Math.min(bottlenecks.length,5)-1?"1px solid #F5F1EA":"none"}}>
+                            <div style={{width:6,height:6,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{b.processType} · {b.stage}</div>
+                              <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{b.caseCount} case{b.caseCount!==1?"s":""} · avg {b.avgDays}d (target {b.targetDays}d)</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{padding:"8px 18px",borderTop:"1px solid #F5F1EA",fontSize:10,color:"#9B9098"}}>Guideline only, not a statutory deadline.</div>
+                    </>
+                  )}
                 </div>
               );
             })()}
-
-            {/* Quick links — context-aware */}
-            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-              <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div>
-                  <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Suggested for you</div>
-                  <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Quick links</div>
-                </div>
-              </div>
-              <div style={{padding:"4px 0"}}>
-                {(()=>{
-                  // Every suggestion below used to route to setScreen(SETTINGS)
-                  // regardless of which one was clicked — landing on the
-                  // Billing tab no matter what, whether you clicked "Disciplinary
-                  // outcome letter" or "ACAS Code of Practice" (which had no
-                  // real content behind it at all). Each suggestion now carries
-                  // the actual case it's about, so clicking it opens that case
-                  // — where Case Copilot's own next-step banner already
-                  // recommends the exact matching action — instead of a
-                  // disconnected settings page.
-                  const activeCases = cases.filter(cs=>getCaseStage(cs)!=="closed");
-                  const findCase = (...needles) => activeCases.find(cs=>{
-                    const t = (cs.caseType||"").toLowerCase();
-                    return needles.some(n=>t.includes(n));
-                  });
-                  const investigationCase = activeCases.find(cs=>getCaseStage(cs)==="investigation");
-                  const misconductCase = findCase("misconduct","disciplinary");
-                  const grievanceCase = findCase("grievance");
-                  const redundancyCase = findCase("redundancy");
-                  const performanceCase = findCase("performance");
-
-                  const suggested = [];
-                  const addCase = (cs, label, type, reason) => cs && suggested.push({label, type, reason, caseId:cs.id});
-
-                  addCase(investigationCase, "Continue investigation", "CASE", "Active investigation");
-                  addCase(misconductCase, "Disciplinary Policy", "POLICY", "Misconduct case open");
-                  addCase(misconductCase, "Continue disciplinary case", "CASE", "Misconduct case open");
-                  addCase(grievanceCase, "Grievance Policy", "POLICY", "Grievance case open");
-                  addCase(grievanceCase, "Continue grievance case", "CASE", "Grievance case open");
-                  addCase(redundancyCase, "Redundancy Policy", "POLICY", "Redundancy case open");
-                  addCase(performanceCase, "Performance management policy", "POLICY", "PIP case open");
-                  addCase(performanceCase, "Continue performance case", "CASE", "PIP case open");
-
-                  if(suggested.length===0) {
-                    // No active case to point at — the only honest destination
-                    // is the policy library itself, not a specific action.
-                    suggested.push(
-                      {label:"Disciplinary Policy",type:"POLICY",reason:"Set up your policy library",caseId:null},
-                      {label:"Grievance Policy",type:"POLICY",reason:"Set up your policy library",caseId:null},
-                      {label:"Redundancy Policy",type:"POLICY",reason:"Set up your policy library",caseId:null},
-                    );
-                  }
-
-                  const openSuggestion = (item) => {
-                    if(item.caseId) { setActiveCaseId(item.caseId); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW); }
-                    else { setSettingsSection("policies"); setScreen(SCREENS.SETTINGS); }
-                  };
-
-                  return suggested.slice(0,5).map((item,i)=>(
-                    <button key={i} onClick={()=>openSuggestion(item)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<Math.min(suggested.length,5)-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
-                      onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:12,color:"#1C1820",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
-                        <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{item.type} · {item.reason}</div>
-                      </div>
-                      <span style={{color:"#C4BAB0",fontSize:14,flexShrink:0}}>›</span>
-                    </button>
-                  ));
-                })()}
-                <button onClick={()=>{setSettingsSection("policies");setScreen(SCREENS.SETTINGS);}} style={{width:"100%",padding:"10px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View all policies & templates →</button>
-              </div>
-            </div>
 
           </div>
         </div>

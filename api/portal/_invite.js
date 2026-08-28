@@ -65,7 +65,7 @@ export async function invite(req, res) {
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">
           <h2 style="color:#7C5CFC">Compass HR</h2>
           <p>Hi ${esc(employeeName)},</p>
-          <p>${esc(orgName) || 'Your employer'} has invited you to a secure portal where you can view your case status, sign documents, and complete onboarding tasks.</p>
+          <p>${esc(orgName) || 'Your employer'} has invited you to a secure portal where you can view your case status and sign documents.</p>
           <div style="text-align:center;margin:32px 0">
             <a href="${inviteLink}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Set up my account</a>
           </div>

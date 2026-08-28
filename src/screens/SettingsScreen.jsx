@@ -11,7 +11,6 @@ import { EmployeeRecordsSection } from './settings/EmployeeRecordsSection';
 import { BrandingSection } from './settings/BrandingSection';
 import { PoliciesSection } from './settings/PoliciesSection';
 import { ProcessTemplatesSection } from './settings/ProcessTemplatesSection';
-import { TemplatesSection } from './settings/TemplatesSection';
 import { NotificationsSection } from './settings/NotificationsSection';
 import { AutomationsSection } from './settings/AutomationsSection';
 import { IntegrationsSection } from './settings/IntegrationsSection';
@@ -77,7 +76,6 @@ export function SettingsScreen({
     {id:"branding", label:"Branding & letters"},
     {id:"policies", label:"Policies"},
     ...(isHR?[{id:"process-templates", label:"Process templates"}]:[]),
-    {id:"templates", label:"Checklist templates"},
     {id:"integrations", label:"Integrations"},
     ...(isHR?[{id:"integration-health", label:"Integration health"}]:[]),
     {id:"notifications", label:"Notifications"},
@@ -96,7 +94,7 @@ export function SettingsScreen({
   const SETTINGS_GROUPS = [
     { label: "Organisation", sectionIds: ["billing", "organisation", "locations", "branding"] },
     { label: "People & access", sectionIds: ["team-access", "portal-access", "employee-records"] },
-    { label: "Processes", sectionIds: ["policies", "process-templates", "templates"] },
+    { label: "Processes", sectionIds: ["policies", "process-templates"] },
     { label: "Integrations & automation", sectionIds: ["integrations", "integration-health", "notifications", "automations"] },
     { label: "Governance & data", sectionIds: ["audit-trail", "data-privacy"] },
   ];
@@ -136,7 +134,6 @@ export function SettingsScreen({
           {active==="branding"&&<BrandingSection wordTemplate={branding.wordTemplate} setWordTemplate={branding.setWordTemplate} lsSet={branding.orgLsSet} wordTemplateRef={branding.wordTemplateRef} handleWordTemplateUpload={branding.handleWordTemplateUpload} letterhead={branding.letterhead} setLetterhead={branding.setLetterhead} letterheadRef={branding.letterheadRef} handleLetterheadUpload={branding.handleLetterheadUpload} signature={branding.signature} setSignature={branding.setSignature} setShowSigPad={branding.setShowSigPad}/>}
           {active==="policies"&&<PoliciesSection policies={policies.policies} setPolicies={policies.setPolicies} policyFileRef={policies.policyFileRef} handlePolicyUpload={policies.handlePolicyUpload} policyProcessing={policies.policyProcessing} lsSet={branding.orgLsSet} changePolicyCategory={policies.changePolicyCategory}/>}
           {active==="process-templates"&&<ProcessTemplatesSection processTemplates={templates.processTemplates} saveProcessTemplate={templates.saveProcessTemplate}/>}
-          {active==="templates"&&<TemplatesSection starterTemplates={templates.starterTemplates} saveStarterTemplates={templates.saveStarterTemplates} leaverTemplates={templates.leaverTemplates} saveLeaverTemplates={templates.saveLeaverTemplates} promptDialog={templates.promptDialog} confirmDialog={templates.confirmDialog}/>}
           {active==="integrations"&&<IntegrationsSection mailConnected={integrations.mailConnected} mailboxEmail={integrations.mailboxEmail} onConnectMail={integrations.onConnectMail} onDisconnectMail={integrations.onDisconnectMail} gmailConnected={integrations.gmailConnected} gmailboxEmail={integrations.gmailboxEmail} connectGmail={integrations.connectGmail} disconnectGmail={integrations.disconnectGmail} calendarConnected={integrations.calendarConnected} connectGoogleCalendar={integrations.connectGoogleCalendar} disconnectGoogleCalendar={integrations.disconnectGoogleCalendar} ms365CalendarConnected={integrations.ms365CalendarConnected} connectMs365Calendar={integrations.connectMs365Calendar} disconnectMs365Calendar={integrations.disconnectMs365Calendar} orgWebhookUrl={integrations.orgWebhookUrl} orgWebhookType={integrations.orgWebhookType} onManageNotifications={()=>setActive("notifications")}/>}
           {active==="integration-health"&&isHR&&<IntegrationHealthSection integrationEvents={integrations.integrationEvents}/>}
           {active==="notifications"&&<NotificationsSection dueSoon={notifications.dueSoon} caseTasks={notifications.caseTasks} createCaseTask={notifications.createCaseTask} requestNotifications={notifications.requestNotifications} notifGranted={notifications.notifGranted} emailDigestOptIn={notifications.emailDigestOptIn} toggleEmailDigest={notifications.toggleEmailDigest} orgWebhookUrl={integrations.orgWebhookUrl} orgWebhookType={integrations.orgWebhookType} saveOrgWebhook={integrations.saveOrgWebhook} sendTestWebhook={integrations.sendTestWebhook}/>}

@@ -85,15 +85,10 @@ async function createClosedComparableCase(page, employeeName, caseType, outcomeT
     await qualityCheck.getByRole('button', { name: 'Create follow-up action' }).click();
   }
   await expect(page.getByText('Issue disciplinary outcome', { exact: true })).not.toBeVisible({ timeout: 10000 });
-  // A dismissal-type outcome (OutcomeModal's own DISMISSAL_OUTCOMES)
-  // triggers a real startOffboarding prompt — unrelated to this test,
-  // but real app behaviour this helper needs to clear before it can
-  // navigate on.
-  const offboardingPrompt = page.getByRole('alertdialog', { name: 'Start offboarding checklist?' });
-  const gotOffboardingPrompt = await offboardingPrompt.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false);
-  if (gotOffboardingPrompt) {
-    await offboardingPrompt.getByRole('button', { name: 'Not now', exact: true }).click();
-  }
+  // Phase 7.5C — a dismissal-type outcome used to also trigger a
+  // "Start offboarding checklist?" prompt (OutcomeModal's dismissal
+  // auto-offer); removed along with Offboarding itself, so there's
+  // nothing left to dismiss here.
   // Issuing the outcome navigates to the letter-drafting screen, which
   // has no "+ New case" button — without returning to a screen that
   // does, the next call to this helper hangs waiting for it (this is

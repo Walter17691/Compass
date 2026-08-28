@@ -10,7 +10,6 @@ import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, capRecentForCache } fro
 import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
-import { toggleChecklistTask, updateChecklistTaskNote, addChecklistTask, removeChecklistTask, reassignChecklistTaskOwner, updateChecklistInstanceFields } from './lib/checklistTasks';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage, withStageTransitionStamp } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
@@ -104,8 +103,6 @@ import { SaveEmailScreen } from './screens/SaveEmailScreen';
 // Lazy: less-common screens, split out of the main bundle so the common
 // login -> Home -> Cases path doesn't pay to download them upfront.
 const WellbeingScreen = lazy(() => import('./screens/WellbeingScreen').then(m => ({default: m.WellbeingScreen})));
-const NewStarterScreen = lazy(() => import('./screens/NewStarterScreen').then(m => ({default: m.NewStarterScreen})));
-const OffboardingScreen = lazy(() => import('./screens/OffboardingScreen').then(m => ({default: m.OffboardingScreen})));
 const DevelopScreen = lazy(() => import('./screens/DevelopScreen').then(m => ({default: m.DevelopScreen})));
 const RedundancyScreen = lazy(() => import('./screens/RedundancyScreen').then(m => ({default: m.RedundancyScreen})));
 const ConcernsScreen = lazy(() => import('./screens/ConcernsScreen').then(m => ({default: m.ConcernsScreen})));
@@ -2110,10 +2107,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const starterVersionRef = useRef({});
   const starterSaveQueueRef = useRef({});
   const [dsarRequests, setDsarRequests] = useState([]);
-  const [activeStarter, setActiveStarter] = useState(null);
-  const [starterView, setStarterView] = useState("list");
-  const [starterAiProcessing, setStarterAiProcessing] = useState(false);
-  const [newStarterForm, setNewStarterForm] = useState({name:"",role:"",department:"",manager:"",email:"",startDate:"",templateId:"default"});
+  // Phase 7.5C — activeStarter/starterView/starterAiProcessing/
+  // newStarterForm (UI state that only ever fed the now-removed
+  // NewStarterScreen and createStarterInstance below) deleted as
+  // genuinely dead code. starterInstances/starterTemplates above stay —
+  // DSAR compilation still reads real historical records from them.
 
   // ── Leaver offboarding ──
   const [leaverTemplates, setLeaverTemplates] = useState(orgLs("compass_leaver_templates", [{
@@ -2150,10 +2148,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // identical per-keystroke pattern.
   const leaverVersionRef = useRef({});
   const leaverSaveQueueRef = useRef({});
-  const [activeLeaver, setActiveLeaver] = useState(null);
-  const [leaverView, setLeaverView] = useState("list");
-  const [leaverAiProcessing, setLeaverAiProcessing] = useState(false);
-  const [newLeaverForm, setNewLeaverForm] = useState({name:"",role:"",department:"",manager:"",email:"",lastWorkingDay:"",reason:"resignation",templateId:"default"});
+  // Phase 7.5C — activeLeaver/leaverView/leaverAiProcessing/newLeaverForm
+  // (UI state that only ever fed the now-removed OffboardingScreen,
+  // createLeaverInstance and startOffboarding below) deleted as genuinely
+  // dead code. leaverInstances/leaverTemplates above stay — DSAR
+  // compilation still reads real historical records from them.
 
   // ── Redundancy / consultation ──
   // Phase 6.5 hardening (closes Prompt 16 audit finding H1, HIGH) — was
@@ -2797,7 +2796,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   // ── New starter helpers ──
-  const saveStarterInstances = u => { setStarterInstances(u); orgLsSet("compass_starters", u); };
   const saveStarterTemplates = u => { setStarterTemplates(u); orgLsSet("compass_starter_templates", u); };
 
   const loadStarterInstances = async () => {
@@ -2816,42 +2814,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error('loadStarterInstances', e); markLoadIssue('onboarding checklists'); }
   };
 
-  // Phase 6.5 hardening (P0, data-integrity review) — was a blind upsert of
-  // the entire tasks array with no version guard and no ordering between
-  // saves for the same instance. updateStarterTaskNote fires this on every
-  // keystroke of the checklist note field (see ChecklistScreen.jsx's own
-  // DraftInput fix, which now debounces the UI side) — without a queue,
-  // two saves for the same instance racing over the network could land
-  // out of order, and the LATER-arriving response's full tasks snapshot
-  // would silently win even if it was actually the OLDER edit, discarding
-  // whatever the newer save had added/changed. Same conditionalUpdate +
-  // enqueueSave + withTransientRetry shape as saveAllegationToDB.
-  const saveStarterInstanceToDB = (instance) => {
-    if(!org?.id) return Promise.resolve();
-    const fields = {
-      id: instance.id, org_id: org.id,
-      name: instance.name, role: instance.role||null, department: instance.department||null,
-      manager: instance.manager||null, email: instance.email||null, start_date: instance.startDate||null,
-      template_id: instance.templateId||null, template_name: instance.templateName||null,
-      tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised, created_by: instance.createdBy||null,
-    };
-    const run = async () => {
-      const updatedAt = starterVersionRef.current[instance.id];
-      const nowIso = new Date().toISOString();
-      const { error, conflict } = await withTransientRetry(() => conditionalUpdate(supabase, 'starter_instances', instance.id, updatedAt, {...fields, updated_at: nowIso}));
-      if(conflict) {
-        showToast("This onboarding checklist was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
-        loadStarterInstances();
-        return;
-      }
-      if(error) { console.error('saveStarterInstanceToDB', error); showToast("Couldn't save onboarding record — "+error.message, "error"); return; }
-      starterVersionRef.current[instance.id] = nowIso;
-    };
-    return enqueueSave(starterSaveQueueRef.current, instance.id, run);
-  };
+  // Phase 7.5C — saveStarterInstanceToDB deleted: it was only ever called
+  // from createStarterInstance/applyStarterUpdate/aiCustomiseChecklist,
+  // all removed alongside NewStarterScreen. loadStarterInstances (below)
+  // stays — starterInstances still needs to be real and current for DSAR
+  // compilation, which only ever reads, never writes, this table.
 
   // ── Leaver offboarding helpers ──
-  const saveLeaverInstances = u => { setLeaverInstances(u); orgLsSet("compass_leavers", u); };
   const saveLeaverTemplates = u => { setLeaverTemplates(u); orgLsSet("compass_leaver_templates", u); };
 
   const loadLeaverInstances = async () => {
@@ -2873,35 +2842,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error('loadLeaverInstances', e); markLoadIssue('offboarding checklists'); }
   };
 
-  // Phase 6.5 hardening (P0, data-integrity review) — same fix as
-  // saveStarterInstanceToDB above, for updateLeaverTaskNote's identical
-  // per-keystroke pattern.
-  const saveLeaverInstanceToDB = (instance) => {
-    if(!org?.id) return Promise.resolve();
-    const fields = {
-      id: instance.id, org_id: org.id,
-      name: instance.name, role: instance.role||null, department: instance.department||null,
-      manager: instance.manager||null, email: instance.email||null, last_working_day: instance.lastWorkingDay||null,
-      reason: instance.reason||null,
-      template_id: instance.templateId||null, template_name: instance.templateName||null,
-      tasks: instance.tasks||[], ai_customised: !!instance.aiCustomised,
-      exit_interview_notes: instance.exitInterviewNotes||null, exit_interview_date: instance.exitInterviewDate||null,
-      created_by: instance.createdBy||null,
-    };
-    const run = async () => {
-      const updatedAt = leaverVersionRef.current[instance.id];
-      const nowIso = new Date().toISOString();
-      const { error, conflict } = await withTransientRetry(() => conditionalUpdate(supabase, 'leaver_instances', instance.id, updatedAt, {...fields, updated_at: nowIso}));
-      if(conflict) {
-        showToast("This offboarding checklist was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
-        loadLeaverInstances();
-        return;
-      }
-      if(error) { console.error('saveLeaverInstanceToDB', error); showToast("Couldn't save offboarding record — "+error.message, "error"); return; }
-      leaverVersionRef.current[instance.id] = nowIso;
-    };
-    return enqueueSave(leaverSaveQueueRef.current, instance.id, run);
-  };
+  // Phase 7.5C — saveLeaverInstanceToDB deleted: same reasoning as
+  // saveStarterInstanceToDB above (its only callers were removed
+  // alongside OffboardingScreen). loadLeaverInstances (above) stays for
+  // the same DSAR-still-reads-this-table reason.
 
   // ── Employee Portal access management ──
   const loadPortalAccounts = async () => {
@@ -3010,184 +2954,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     showToast("Deadline extended to "+extended.toLocaleDateString("en-GB"));
   };
 
-  const createLeaverInstance = () => {
-    const f = newLeaverForm;
-    if(!f.name.trim() || !f.lastWorkingDay) return;
-    const template = leaverTemplates.find(t=>t.id===f.templateId) || leaverTemplates[0];
-    const lastDay = new Date(f.lastWorkingDay);
-    const tasks = template.phases.flatMap(phase =>
-      phase.tasks.map(t => {
-        const due = new Date(lastDay);
-        due.setDate(due.getDate() + t.day);
-        return { ...t, id:t.id+"_"+newId(), phaseId:phase.id, phaseLabel:phase.label, dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
-      })
-    );
-    const instance = {
-      id: newId("leaver"),
-      name: f.name, role: f.role, department: f.department,
-      manager: f.manager, email: f.email, lastWorkingDay: f.lastWorkingDay, reason: f.reason,
-      templateId: f.templateId, templateName: template.name,
-      tasks, createdAt: new Date().toISOString(),
-      createdBy: currentUser?.name || "HR Manager",
-    };
-    saveLeaverInstances([instance, ...leaverInstances]);
-    saveLeaverInstanceToDB(instance);
-    setActiveLeaver(instance);
-    setLeaverView("instance");
-    setNewLeaverForm({name:"",role:"",department:"",manager:"",email:"",lastWorkingDay:"",reason:"resignation",templateId:"default"});
-    audit("Leaver offboarding started", f.name+" — "+f.role);
-  };
-
-  // Task-level mutations are shared with onboarding's starter_instances —
-  // see src/lib/checklistTasks.js. Persistence (localStorage/Supabase) and
-  // which instance is "active" stay here since they're wired to this flow's
-  // own state.
-  const applyLeaverUpdate = (updated, instanceId) => {
-    saveLeaverInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveLeaverInstanceToDB(changed);
-    setActiveLeaver(changed);
-  };
-  const toggleLeaverTask = (instanceId, taskId) => applyLeaverUpdate(toggleChecklistTask(leaverInstances, instanceId, taskId), instanceId);
-  const updateLeaverTaskNote = (instanceId, taskId, note) => applyLeaverUpdate(updateChecklistTaskNote(leaverInstances, instanceId, taskId, note), instanceId);
-  const addLeaverTask = (instanceId, phaseLabel, taskText, owner) => applyLeaverUpdate(addChecklistTask(leaverInstances, instanceId, phaseLabel, taskText, owner), instanceId);
-  const removeLeaverTask = (instanceId, taskId) => applyLeaverUpdate(removeChecklistTask(leaverInstances, instanceId, taskId), instanceId);
-  const reassignLeaverTaskOwner = (instanceId, taskId, owner) => applyLeaverUpdate(reassignChecklistTaskOwner(leaverInstances, instanceId, taskId, owner), instanceId);
-  const updateLeaverExitInterview = (instanceId, fields) => applyLeaverUpdate(updateChecklistInstanceFields(leaverInstances, instanceId, fields), instanceId);
-
-  const aiCustomiseLeaverChecklist = async (instance) => {
-    if(!instance) return;
-    setLeaverAiProcessing(true);
-    try {
-      const result = await streamClaude(
-        `You are a UK HR offboarding specialist. Generate a customised leaver checklist.
-Respond ONLY with a JSON array of task objects, no markdown:
-[{"task":"...","owner":"HR|Line Manager|IT|Facilities|Payroll","day":1,"phase":"Before last day"}]
-Day is number of days relative to the last working day (negative = before, positive = after). Phases: "On notice received","Before last day","Last day","After leaving".
-Maximum 20 tasks total. Be specific to the role, department, and reason for leaving.`,
-        `Role: ${instance.role||"General"}
-Department: ${instance.department||"General"}
-Reason for leaving: ${(instance.reason||"").replace(/_/g," ")||"Not specified"}
-Manager: ${instance.manager||"Unknown"}
-Generate a tailored offboarding checklist for this role, considering any role-specific access, equipment, or handover needs.`,
-        ()=>{}
-      );
-      const parsed = JSON.parse(result.replace(/```json|```/g,"").trim());
-      const lastDay = new Date(instance.lastWorkingDay);
-      const newTasks = parsed.map((t,i) => {
-        const due = new Date(lastDay);
-        due.setDate(due.getDate() + (t.day||0));
-        return { ...t, id:newId("ai"), phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"before", phaseLabel:t.phase||"Before last day", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
-      });
-      const updated = leaverInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
-      saveLeaverInstances(updated);
-      const changed = updated.find(s=>s.id===instance.id);
-      saveLeaverInstanceToDB(changed);
-      setActiveLeaver(changed);
-      audit("AI customised leaver checklist", instance.name+" — "+instance.role);
-    } catch(e) { showToast("Could not customise: "+e.message, "error"); }
-    setLeaverAiProcessing(false);
-  };
-
-  // Bridges a dismissal outcome or redundancy confirmation straight into a
-  // pre-filled offboarding checklist — those were previously two dead ends
-  // with no link to each other, despite the leaver checklist being exactly
-  // what's needed at that moment (access revocation, equipment, final pay).
-  // confirm:true (default) is for automatic/implicit offers riding an
-  // unrelated primary action (e.g. issuing a dismissal outcome); explicit
-  // "Start offboarding" buttons the user already chose to click pass
-  // confirm:false to skip the extra prompt.
-  const startOffboarding = async ({name, role, department, manager, email, reason}, {confirm=true}={}) => {
-    if(confirm) {
-      const ok = await confirmDialog({
-        title: "Start offboarding checklist?",
-        message: `Set up an offboarding checklist for ${name} now — access revocation, equipment return, final pay and exit interview.`,
-        confirmLabel: "Start checklist",
-        cancelLabel: "Not now",
-      });
-      if(!ok) return;
-    }
-    setNewLeaverForm({name, role:role||"", department:department||"", manager:manager||"", email:email||"", lastWorkingDay:"", reason:reason||"other", templateId:"default"});
-    setLeaverView("new");
-    setActiveLeaver(null);
-    setScreen(SCREENS.OFFBOARDING);
-  };
-
-  const createStarterInstance = () => {
-    const f = newStarterForm;
-    if(!f.name.trim() || !f.startDate) return;
-    const template = starterTemplates.find(t=>t.id===f.templateId) || starterTemplates[0];
-    const startDate = new Date(f.startDate);
-    const tasks = template.phases.flatMap(phase =>
-      phase.tasks.map(t => {
-        const due = new Date(startDate);
-        due.setDate(due.getDate() + t.day);
-        return { ...t, id:t.id+"_"+newId(), phaseId:phase.id, phaseLabel:phase.label, dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"" };
-      })
-    );
-    const instance = {
-      id: newId("starter"),
-      name: f.name, role: f.role, department: f.department,
-      manager: f.manager, email: f.email, startDate: f.startDate,
-      templateId: f.templateId, templateName: template.name,
-      tasks, createdAt: new Date().toISOString(),
-      createdBy: currentUser?.name || "HR Manager",
-    };
-    saveStarterInstances([instance, ...starterInstances]);
-    saveStarterInstanceToDB(instance);
-    setActiveStarter(instance);
-    setStarterView("instance");
-    setNewStarterForm({name:"",role:"",department:"",manager:"",email:"",startDate:"",templateId:"default"});
-    audit("New starter created", f.name+" — "+f.role);
-  };
-
-  // See applyLeaverUpdate above — same shared task-mutation logic, this
-  // flow's own persistence/active-instance wiring.
-  const applyStarterUpdate = (updated, instanceId) => {
-    saveStarterInstances(updated);
-    const changed = updated.find(s=>s.id===instanceId);
-    saveStarterInstanceToDB(changed);
-    setActiveStarter(changed);
-  };
-  const toggleStarterTask = (instanceId, taskId) => applyStarterUpdate(toggleChecklistTask(starterInstances, instanceId, taskId), instanceId);
-  const updateStarterTaskNote = (instanceId, taskId, note) => applyStarterUpdate(updateChecklistTaskNote(starterInstances, instanceId, taskId, note), instanceId);
-  const addStarterTask = (instanceId, phaseLabel, taskText, owner) => applyStarterUpdate(addChecklistTask(starterInstances, instanceId, phaseLabel, taskText, owner), instanceId);
-  const removeStarterTask = (instanceId, taskId) => applyStarterUpdate(removeChecklistTask(starterInstances, instanceId, taskId), instanceId);
-  const reassignStarterTaskOwner = (instanceId, taskId, owner) => applyStarterUpdate(reassignChecklistTaskOwner(starterInstances, instanceId, taskId, owner), instanceId);
-
-  const aiCustomiseChecklist = async (instance) => {
-    if(!instance) return;
-    setStarterAiProcessing(true);
-    try {
-      const result = await streamClaude(
-        `You are a UK HR onboarding specialist. Generate a customised onboarding checklist.
-Respond ONLY with a JSON array of task objects, no markdown:
-[{"task":"...","owner":"HR|Line Manager|IT|Facilities|New Starter","day":1,"phase":"Week 1"}]
-Day is number of days from start date (negative = before start). Phases: "Before day 1","Week 1","Month 1","Month 3","End of probation".
-Maximum 25 tasks total. Be specific to the role and department.`,
-        `Role: ${instance.role||"General"}
-Department: ${instance.department||"General"}
-Manager: ${instance.manager||"Unknown"}
-Company context: ${policies.length?policies[0].name:"Standard UK employer"}
-Generate a tailored onboarding checklist for this role. Include role-specific tasks beyond the standard HR admin.`,
-        ()=>{}
-      );
-      const parsed = JSON.parse(result.replace(/```json|```/g,"").trim());
-      const startDate = new Date(instance.startDate);
-      const newTasks = parsed.map((t,i) => {
-        const due = new Date(startDate);
-        due.setDate(due.getDate() + (t.day||1));
-        return { ...t, id:newId("ai"), phaseId:t.phase?.toLowerCase().replace(/\s/g,"_")||"w1", phaseLabel:t.phase||"Week 1", dueDate:due.toLocaleDateString("en-GB"), done:false, doneAt:null, note:"", source:"ai" };
-      });
-      const updated = starterInstances.map(s => s.id===instance.id ? {...s, tasks:[...s.tasks, ...newTasks], aiCustomised:true} : s);
-      saveStarterInstances(updated);
-      const changed = updated.find(s=>s.id===instance.id);
-      saveStarterInstanceToDB(changed);
-      setActiveStarter(changed);
-      audit("AI customised checklist", instance.name+" — "+instance.role);
-    } catch(e) { showToast("Could not customise: "+e.message, "error"); }
-    setStarterAiProcessing(false);
-  };
+  // Phase 7.5C — createLeaverInstance/applyLeaverUpdate/toggleLeaverTask/
+  // updateLeaverTaskNote/addLeaverTask/removeLeaverTask/
+  // reassignLeaverTaskOwner/updateLeaverExitInterview/
+  // aiCustomiseLeaverChecklist/startOffboarding/createStarterInstance/
+  // applyStarterUpdate/toggleStarterTask/updateStarterTaskNote/
+  // addStarterTask/removeStarterTask/reassignStarterTaskOwner/
+  // aiCustomiseChecklist deleted here as genuinely dead code — their only
+  // callers were NewStarterScreen/OffboardingScreen/RedundancyScreen's
+  // "Start offboarding" button/OutcomeModal's dismissal auto-offer, all
+  // removed from the product's active surface this same phase.
+  // starterInstances/leaverInstances/starterTemplates/leaverTemplates and
+  // their load functions stay — DSAR compilation still reads real
+  // historical records from them.
 
   // ── Redundancy helpers ──
   // Phase 6.5 hardening (closes Prompt 16 audit finding H1) — cloud-synced
@@ -8465,52 +8244,16 @@ Please produce:
         />
       )}
 
-      {/* ══ NEW STARTER ONBOARDING ══ */}
-      {screen===SCREENS.NEWSTARTER&&isHR&&(
-        <NewStarterScreen
-          activeStarter={activeStarter}
-          setActiveStarter={setActiveStarter}
-          starterView={starterView}
-          setStarterView={setStarterView}
-          newStarterForm={newStarterForm}
-          setNewStarterForm={setNewStarterForm}
-          starterTemplates={starterTemplates}
-          createStarterInstance={createStarterInstance}
-          starterInstances={starterInstances}
-          aiCustomiseChecklist={aiCustomiseChecklist}
-          starterAiProcessing={starterAiProcessing}
-          toggleStarterTask={toggleStarterTask}
-          updateStarterTaskNote={updateStarterTaskNote}
-          addStarterTask={addStarterTask}
-          removeStarterTask={removeStarterTask}
-          reassignStarterTaskOwner={reassignStarterTaskOwner}
-        />
-      )}
-
-      {/* ══ LEAVER OFFBOARDING ══ */}
-      {screen===SCREENS.OFFBOARDING&&isHR&&(
-        <OffboardingScreen
-          activeLeaver={activeLeaver}
-          setActiveLeaver={setActiveLeaver}
-          leaverView={leaverView}
-          setLeaverView={setLeaverView}
-          newLeaverForm={newLeaverForm}
-          setNewLeaverForm={setNewLeaverForm}
-          leaverTemplates={leaverTemplates}
-          createLeaverInstance={createLeaverInstance}
-          leaverInstances={leaverInstances}
-          aiCustomiseLeaverChecklist={aiCustomiseLeaverChecklist}
-          leaverAiProcessing={leaverAiProcessing}
-          toggleLeaverTask={toggleLeaverTask}
-          updateLeaverTaskNote={updateLeaverTaskNote}
-          addLeaverTask={addLeaverTask}
-          removeLeaverTask={removeLeaverTask}
-          reassignLeaverTaskOwner={reassignLeaverTaskOwner}
-          updateLeaverExitInterview={updateLeaverExitInterview}
-          portalAccounts={portalAccounts}
-          revokePortalAccess={revokePortalAccess}
-        />
-      )}
+      {/* Phase 7.5C — Onboarding/Offboarding removed from the product's
+          user-facing scope (nav entry, this render block, the Settings
+          "Checklist templates" editor, and the Portal's own Onboarding
+          tab). The underlying starter_instances/leaver_instances tables,
+          RLS, App-level state, load/save functions and mutation handlers
+          (createStarterInstance, toggleLeaverTask, etc.) are deliberately
+          left in place and dormant rather than removed — DSAR compilation
+          (dsarCompile.js) still reads real historical records from them
+          for subject access requests, and a destructive removal of that
+          data path was explicitly out of scope for this change. */}
 
       {/* Organisational ER Intelligence (Phase 6, OP1) — the new "Insights"
           home; replaces the separate ER ANALYTICS (SCREENS.ERREPORT) and
@@ -8570,7 +8313,6 @@ Please produce:
           isMobile={isMobile}
           getRedundancyAiAdvice={getRedundancyAiAdvice}
           redundancyAiProcessing={redundancyAiProcessing}
-          startOffboarding={startOffboarding}
           promptDialog={promptDialog}
         />
       )}
@@ -8875,7 +8617,6 @@ Please produce:
           saveCases={saveCases}
           showToast={showToast}
           handleLetter={handleLetter}
-          startOffboarding={startOffboarding}
           requestHrReview={requestHrReview}
           allegations={allegations}
           caseSignals={caseSignals}

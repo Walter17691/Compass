@@ -43,7 +43,6 @@ const sections = [
   ['branding', 'Word letter template'],
   ['policies', 'Company policies'],
   ['process-templates', /Define required documents, suggested meetings/],
-  ['templates', 'Onboarding'],
   ['integrations', /Connect the systems your organisation already uses/],
   ['integration-health', /Last successful sync and recent failures/],
   ['notifications', 'Deadline reminders'],

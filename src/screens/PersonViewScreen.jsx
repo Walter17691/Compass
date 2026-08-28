@@ -44,7 +44,7 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
           <button onClick={async()=>{
             const values = await promptDialog({
               title:"Invite to employee portal",
-              message:`Send ${empName} an invite to view their case status, sign documents and complete onboarding tasks.`,
+              message:`Send ${empName} an invite to view their case status and sign documents.`,
               fields:[{key:"email", label:"Email address", type:"email", placeholder:"name@company.com", required:true}],
               confirmLabel:"Send invite",
             });

@@ -58,6 +58,11 @@ import { isDisciplinaryMeeting, isInvestigationMeeting } from './meetingTypeMatc
 // (ukBankHolidays.js's own default), while a caller that knows an org's
 // real configured jurisdiction can pass it through.
 export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = [], caseAccess = [], ukJurisdiction = DEFAULT_UK_JURISDICTION) {
+  // Phase 7.5C — leaverInstances no longer generates a deadline (see the
+  // comment where its loop used to be, below) but stays a real parameter
+  // for call-site signature stability; this no-op keeps it intentionally
+  // "used" rather than silently dropping it from the signature.
+  void leaverInstances;
   const start = new Date(today);
   start.setHours(0,0,0,0);
   const due = [];
@@ -223,15 +228,14 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     addDeadline(n.employeeName, "Wellbeing follow-up due", parseFlexDate(n.followUpDate), "wellbeing", `wellbeing:${n.id}`, { confidential: true });
   });
 
-  // Notice period — a leaver's last working day approaching while
-  // offboarding tasks (checklistTasks.js's own {done} flag) are still
-  // open is worth a reminder; once every task is ticked off there's
-  // nothing left to chase, so it drops out rather than nagging forever.
-  leaverInstances.forEach(instance => {
-    if(!instance.lastWorkingDay) return;
-    if(!(instance.tasks||[]).some(t=>!t.done)) return;
-    addDeadline(instance.name, "Last working day approaching — offboarding tasks still open", parseFlexDate(instance.lastWorkingDay), "leaver", `leaver:${instance.id}`);
-  });
+  // Phase 7.5C — Offboarding was removed from the product's active user
+  // experience (no nav entry, no screen), so this no longer generates a
+  // "leaver" deadline: nagging about open offboarding tasks with nowhere
+  // left in the product to go complete them would be a broken, dead-end
+  // reminder rather than a useful one. leaverInstances stays a real
+  // parameter (still passed by every caller, still real historical data)
+  // in case a future phase resurfaces it; only the deadline it used to
+  // generate is gone.
 
   // Collective redundancy consultation — TULRCA s.188 minimum consultation
   // period (30 days for 20-99 proposed redundancies, 45 for 100+) before

@@ -49,30 +49,6 @@ test('redundancy selection criteria can be renamed, added to, and removed', asyn
   await expect(page.locator('input[placeholder="Criterion name"]')).toHaveCount(criteriaCountBefore);
 });
 
-// Onboarding/offboarding had a real templates data model (name, phases,
-// tasks) with a picker on the create form, but no UI ever let an org
-// create a second template or edit the default — every org was stuck
-// with one fixed checklist. Added a Settings section to manage them.
-test('a new onboarding template can be created and edited, then offered on the starter form', async ({ page }) => {
-  const templateName = `E2E Warehouse Onboarding ${Date.now()}`;
-
-  await login(page);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Checklist templates', exact: true }).click();
-
-  await page.getByRole('button', { name: '+ New onboarding template' }).click();
-  await page.getByPlaceholder(/Warehouse Onboarding/).fill(templateName);
-  await page.getByRole('button', { name: 'Create template', exact: true }).click();
-
-  await expect(page.locator(`input[value="${templateName}"]`)).toBeVisible({ timeout: 10000 });
-  await page.getByRole('button', { name: '+ Add task' }).click();
-  await page.locator('input[placeholder="Task"]').first().fill('Issue forklift safety induction');
-
-  // The new template should now be selectable when creating a starter.
-  // Scoped to the sidebar nav — Settings' Checklist templates section has
-  // its own "Onboarding" tab-style button with the same accessible name.
-  await page.locator('aside, header').getByRole('button', { name: 'Onboarding', exact: true }).click();
-  await page.getByRole('button', { name: '+ Add starter' }).click();
-  const templateSelect = page.getByLabel('Template');
-  await expect(templateSelect.locator(`option`, { hasText: templateName })).toHaveCount(1);
-});
+// Phase 7.5C — the onboarding-template test that used to live here was
+// removed along with the Onboarding/Offboarding feature itself (Settings'
+// "Checklist templates" section, the starter form, NewStarterScreen).

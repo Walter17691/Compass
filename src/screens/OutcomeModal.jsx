@@ -4,10 +4,8 @@ import { computeDecisionQualityGaps } from '../lib/decisionQuality';
 import { DecisionQualityCheckModal } from '../components/DecisionQualityCheckModal';
 import { useModalA11y } from '../hooks/useModalA11y';
 
-const DISMISSAL_OUTCOMES = ["Dismissal with notice", "Summary dismissal (gross misconduct)"];
-
 // Process Intelligence (P9) — issuing the outcome itself is unchanged
-// (case saved, letter drafted, offboarding started where relevant); for
+// (case saved, letter drafted); for
 // the spec's own approval-gated outcome types this ALSO opens a visible,
 // trackable approval request (requestHrReview, generalized beyond its
 // original single "record" step) so the decision shows as "Awaiting
@@ -23,7 +21,7 @@ const DISMISSAL_OUTCOMES = ["Dismissal with notice", "Summary dismissal (gross m
 // Intelligence's equivalent) since OutcomeModal is already a
 // self-contained modal, not a full screen orchestrated from App.jsx —
 // nothing else needs to know this check ran.
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, startOffboarding, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask }) {
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask }) {
   const cs = cases.find(x=>x.id===activeCaseId);
   const [showQualityCheck, setShowQualityCheck] = useState(false);
   const [qualityGaps, setQualityGaps] = useState([]);
@@ -49,9 +47,6 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
   // open with the entered outcome/notes intact so HR can just retry,
   // rather than silently losing what they typed.
   const finalizeOutcome = async () => {
-    const wasDismissal = DISMISSAL_OUTCOMES.includes(outcomeType);
-    const employeeName = cs?.employeeName;
-    const employeeManager = cs?.manager;
     setSaving(true);
     const ok = await saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x), activeCaseId);
     setSaving(false);
@@ -59,7 +54,6 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
     const approvalAction = approvalActionForOutcome(outcomeType);
     if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
     setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");handleLetter("outcome");
-    if(wasDismissal) startOffboarding({name:employeeName, manager:employeeManager, reason:"dismissal"});
   };
 
   const issueOutcome = () => {

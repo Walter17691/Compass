@@ -5,7 +5,7 @@ export function PortalAccessSection({ isHR, portalAccounts, revokePortalAccess }
   return (
     <Card>
       <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Employee Portal access</h3>
-      <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Everyone with an active Portal account, where they can view case status, sign documents and complete onboarding tasks. Revoke access immediately when someone leaves.</p>
+      <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px",lineHeight:1.6}}>Everyone with an active Portal account, where they can view case status and sign documents. Revoke access immediately when someone leaves.</p>
       {portalAccounts.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No employees have Portal access yet</div>}
       {portalAccounts.map(a=>(
         <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>

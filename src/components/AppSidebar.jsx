@@ -57,15 +57,12 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
     {s:SCREENS.CONCERNS, l:isHR?"Concerns":"Raise a concern"},
   ];
   const moduleItems = [
-    // Phase 6.5 hardening (structural remediation, Prompt 14 — Family 1
-    // Part 6 coordination). employee_records/starter_instances/
-    // leaver_instances hold real PII (probation dates, exit-interview
-    // notes, ill-health/medical-retirement reasons) and are now
-    // HR-only-write at the database layer, matching Wellbeing/DSAR's
-    // existing pattern — this hides the nav entry to match; RLS/triggers
-    // are the real boundary either way.
-    ...(isHR?[{s:SCREENS.NEWSTARTER, l:"Onboarding"}]:[]),
-    ...(isHR?[{s:SCREENS.OFFBOARDING, l:"Offboarding"}]:[]),
+    // Phase 7.5C — Onboarding/Offboarding nav entries removed: outside
+    // Compass's intended product scope (Employee Relations case
+    // management and organisational ER intelligence). The underlying
+    // starter_instances/leaver_instances tables and their RLS (Phase 6.5
+    // hardening, HR-only write) are untouched — DSAR compilation still
+    // reads real historical records from them.
     // Phase 6.5 hardening (closes Prompt 16 audit finding H1, HIGH) —
     // redundancy cases hold selection-criteria scores, at-risk employee
     // names and redundancy pay for people who often don't yet know

@@ -76,13 +76,127 @@ describe('HomeScreen — Compass Recommendations prominence (Phase 7.5B, item 7)
     const cs = { id: 'c3', employeeName: 'Some Case', caseType: 'misconduct' };
     const caseSignals = [{ id: 's2', caseId: 'c3', type: 'next_action', status: 'open', title: 'Do the thing' }];
     render(<HomeScreen {...baseHomeProps} cases={[cs]} caseSignals={caseSignals} />);
-    // "Active cases" also appears as a stat-card label (11px caption) —
-    // the section heading itself is the larger of the two matches.
+    // getAllByText, not getByText: robust to "Active cases" appearing more
+    // than once (it no longer does post-7.5C's stat-card removal, but this
+    // shouldn't need updating again if a future change reintroduces a
+    // second match) — the section heading itself is the largest match.
     const activeCasesHeading = screen.getAllByText('Active cases').sort((a,b)=>Number(b.style.fontSize.replace('px',''))-Number(a.style.fontSize.replace('px','')))[0];
     const recommendationsHeading = screen.getByText('Compass Recommendations');
     expect(Number(recommendationsHeading.style.fontSize.replace('px',''))).toBeLessThan(Number(activeCasesHeading.style.fontSize.replace('px','')));
     // Functionality must survive the presentation change: the
     // recommendation itself still renders and is still findable.
     expect(screen.getByText('Do the thing')).toBeInTheDocument();
+  });
+});
+
+// Phase 7.5C — the four stat-card tiles (Active cases / Awaiting action /
+// Pending signatures / Closed this month) were almost entirely duplicate
+// of numbers already shown elsewhere on Home (the greeting subtitle, the
+// Needs Attention chips) and are gone; "closed this month" — the one
+// figure not shown anywhere else — is folded into the greeting subtitle
+// instead of lost outright.
+describe('HomeScreen — stat-card tiles removed (Phase 7.5C)', () => {
+  it('does not render the old stat-card labels, and folds "closed this month" into the greeting subtitle', () => {
+    const closedThisMonth = { id: 'c1', employeeName: 'Closed Case', caseType: 'misconduct', stage: 'closed', updatedAt: new Date().toISOString() };
+    render(<HomeScreen {...baseHomeProps} getCaseStage={cs => cs.stage || 'open'} dashFilter="all" cases={[{ id: 'c0', employeeName: 'Open Case', caseType: 'misconduct' }, closedThisMonth]} />);
+    expect(screen.queryByText('Awaiting action')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pending signatures')).not.toBeInTheDocument();
+    expect(screen.queryByText('Closed this month')).not.toBeInTheDocument();
+    expect(screen.getByText(/1 closed this month/)).toBeInTheDocument();
+  });
+});
+
+// Phase 7.5C — Needs Attention collapses from up to 11 independently
+// rendered chip categories (worst case 20+ bordered pill elements) into
+// one panel: a capped, severity-sorted list of real case rows for the
+// case-specific categories, and a single plain-text summary line for the
+// aggregate-only categories. No category/count/click-through logic
+// changed — only how many separate elements it takes to show them.
+describe('HomeScreen — Needs Attention consolidation (Phase 7.5C)', () => {
+  it('merges case-specific categories into one capped, sorted row list instead of one chip row per category', () => {
+    const cases = Array.from({ length: 4 }, (_, i) => ({
+      id: 'hr' + i, employeeName: 'High Risk ' + i, caseType: 'misconduct',
+      meetings: [{ date: '2026-01-01', riskScore: { rating: 'HIGH' } }],
+    }));
+    render(<HomeScreen {...baseHomeProps} cases={cases} />);
+    // All 4 HIGH-risk rows show (well under the 6-row cap) as real rows,
+    // not pill chips — each is its own clickable row with a chevron.
+    for (const cs of cases) {
+      expect(screen.getByText(new RegExp(cs.employeeName + ' · HIGH risk'))).toBeInTheDocument();
+    }
+  });
+
+  it('caps the merged case-specific list at 6 rows even when far more items qualify', () => {
+    const cases = Array.from({ length: 10 }, (_, i) => ({
+      id: 'hr' + i, employeeName: 'High Risk ' + i, caseType: 'misconduct',
+      meetings: [{ date: '2026-01-01', riskScore: { rating: 'HIGH' } }],
+    }));
+    render(<HomeScreen {...baseHomeProps} cases={cases} />);
+    const rows = screen.getAllByText(/HIGH risk/);
+    expect(rows.length).toBeLessThanOrEqual(6);
+  });
+
+  it('demotes stale (no-recent-activity) cases to an aggregate count rather than an individual named row', () => {
+    const staleCase = { id: 's1', employeeName: 'Quiet Case', caseType: 'misconduct', updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() };
+    render(<HomeScreen {...baseHomeProps} cases={[staleCase]} />);
+    // "Quiet Case" legitimately still appears once, in the Active Cases
+    // list below (Level 2) — what must NOT exist is a Needs-Attention-style
+    // individual "No activity in Nd" row naming the case.
+    expect(screen.getAllByText(/Quiet Case/)).toHaveLength(1);
+    expect(screen.queryByText(/No activity in/)).not.toBeInTheDocument();
+    expect(screen.getByText(/1 case with no recent activity/)).toBeInTheDocument();
+  });
+
+  it('still renders the overdue item as non-clickable text, matching its pre-existing (non-button) behaviour', () => {
+    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
+    render(<HomeScreen {...baseHomeProps} cases={[cs]} dueSoon={[{ overdue: true, label: 'Chase witness statement', caseId: 'c1' }]} />);
+    const overdueRow = screen.getByText(/Chase witness statement · Overdue/);
+    expect(overdueRow.closest('button')).toBeNull();
+  });
+
+  it('keeps the aggregate-only categories as a single clickable summary line (referrals still navigate to Concerns)', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[]} concernReferrals={[{ id: 'r1', status: 'new' }]} />);
+    expect(screen.getByText(/1 referral awaiting triage/)).toBeInTheDocument();
+  });
+});
+
+// Phase 7.5C — the "This week" 7-day mini-calendar grid plus Connect
+// Google/Outlook Calendar buttons were removed from Home (redundant with
+// the dedicated Calendar nav destination and Settings → Integrations,
+// which already own that functionality); a compact "Today" panel with
+// just today's meetings replaces it.
+describe('HomeScreen — Calendar reduced to a "Today" panel (Phase 7.5C)', () => {
+  it('shows a compact Today panel without the old 7-day grid or calendar-connect buttons', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[]} />);
+    expect(screen.getByText('Today')).toBeInTheDocument();
+    expect(screen.queryByText('This week')).not.toBeInTheDocument();
+    expect(screen.queryByText('Connect Google Calendar')).not.toBeInTheDocument();
+    expect(screen.queryByText('Connect Outlook')).not.toBeInTheDocument();
+    expect(screen.queryByText('Schedule meeting')).not.toBeInTheDocument();
+  });
+});
+
+// Phase 7.5C — the "Quick links"/"Suggested for you" block (a second,
+// weaker "click into a case" suggestion list duplicating Compass
+// Recommendations' own purpose in the same column) is gone; its policy
+// links remain reachable via Settings → Policies, just not duplicated here.
+describe('HomeScreen — Quick links removed (Phase 7.5C)', () => {
+  it('no longer renders the Quick links / Suggested for you block', () => {
+    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
+    render(<HomeScreen {...baseHomeProps} cases={[cs]} />);
+    expect(screen.queryByText('Quick links')).not.toBeInTheDocument();
+    expect(screen.queryByText('Suggested for you')).not.toBeInTheDocument();
+    expect(screen.queryByText('View all policies & templates →')).not.toBeInTheDocument();
+  });
+});
+
+// Phase 7.5C — Compass Recommendations and Potential Bottlenecks now
+// share one outer container instead of each having its own bordered card;
+// each still renders/hides independently of the other's presence.
+describe('HomeScreen — Recommendations/Bottlenecks share one container (Phase 7.5C)', () => {
+  it('renders Potential Bottlenecks even when there are no Compass Recommendations', () => {
+    const cs = { id: 'c1', employeeName: 'Slow Case', caseType: 'misconduct', createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(), meetings: [{ type: 'Investigation meeting', date: '01/01/2026' }] };
+    render(<HomeScreen {...baseHomeProps} cases={[cs]} caseSignals={[]} />);
+    expect(screen.queryByText('Compass Recommendations')).not.toBeInTheDocument();
   });
 });
