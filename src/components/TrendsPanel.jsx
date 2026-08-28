@@ -4,17 +4,23 @@ import { isSignificantTrend, describeTrend, computePctChange } from '../lib/tren
 import { RootCauseExplorationPanel } from './RootCauseExplorationPanel';
 import { InsightEvidenceModal } from './InsightEvidenceModal';
 import { CreateActionButton } from './CreateActionButton';
+import { COLOR, TYPE, FONT, RADIUS, SPACE } from '../styles/tokens';
 
+// Phase 2C — each real, significant trend genuinely earns its own
+// surface (a distinct finding, not decoration), so the card stays —
+// just tokenised and with a quieter eyebrow than the old purple
+// uppercase label, since every card said the same "Trend identified"
+// and didn't need to shout it.
 const TrendCard = ({ text, insightRef, onExplore, onShowEvidence, createCaseTask, improvementInitiatives }) => (
-  <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:10}}>
+  <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"14px 16px",marginBottom:SPACE.sm}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:6}}>
-      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.4px",textTransform:"uppercase"}}>Trend identified</div>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Trend identified</div>
       <div style={{display:"flex",gap:6,flexShrink:0}}>
-        <button onClick={onShowEvidence} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"3px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Show evidence</button>
-        {onExplore && <button onClick={onExplore} style={{fontSize:11,background:"none",border:"1px solid #E0D8FF",borderRadius:6,padding:"3px 10px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Explore</button>}
+        <button onClick={onShowEvidence} style={{fontSize:11,background:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"3px 10px",color:COLOR.inkSoft,cursor:"pointer",fontFamily:FONT.sans}}>Show evidence</button>
+        {onExplore && <button onClick={onExplore} style={{fontSize:11,background:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"3px 10px",color:COLOR.purple,cursor:"pointer",fontFamily:FONT.sans}}>Explore</button>}
       </div>
     </div>
-    <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{text}</div>
+    <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.6}}>{text}</div>
     {createCaseTask && <CreateActionButton insightRef={insightRef} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
   </div>
 );
@@ -49,8 +55,8 @@ export function TrendsPanel({ orgId, createCaseTask, improvementInitiatives } = 
     return () => { cancelled = true; };
   }, [orgId]);
 
-  if (error) return <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>Couldn't load trend data right now.</div>;
-  if (!data) return <div style={{fontSize:13,color:"#6B6375",marginBottom:20}}>Loading trends…</div>;
+  if (error) return <div style={{fontSize:13,color:COLOR.inkFaint,marginBottom:20}}>Couldn't load trend data right now.</div>;
+  if (!data) return <div style={{fontSize:13,color:COLOR.inkFaint,marginBottom:20}}>Loading trends…</div>;
 
   const typeTrends = (data.by_type_trend || []).filter(isSignificantTrend);
   const themeTrends = (data.by_theme_trend || []).filter(isSignificantTrend);
@@ -58,9 +64,9 @@ export function TrendsPanel({ orgId, createCaseTask, improvementInitiatives } = 
   const exploringTheme = themeTrends.find(t => t.themeId === exploringThemeId);
 
   return (
-    <div style={{marginBottom:24}}>
-      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Trends (last 90 days vs previous 90 days)</div>
-      {!hasAny && <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>No significant trends identified in the current period.</div>}
+    <div style={{marginBottom:SPACE.xl}}>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>What is changing? (last 90 days vs previous 90 days)</div>
+      {!hasAny && <div style={{fontSize:13,color:COLOR.inkFaint,marginBottom:16}}>No significant trends identified in the current period.</div>}
       {typeTrends.map(t => (
         <TrendCard key={"type-"+t.caseType} text={describeTrend(t, t.caseType)} insightRef={`Trend: ${t.caseType} cases (last 90 days)`} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives} onShowEvidence={()=>setEvidenceFor({ label: t.caseType, entry: t })}/>
       ))}

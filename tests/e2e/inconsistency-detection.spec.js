@@ -27,11 +27,16 @@ test('Compass flags a potential inconsistency between two meeting records and it
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  // A second, linked meeting for the same case — "+ New meeting" in the
-  // case header pre-fills the employee name from the case. Scoped to a
-  // button role — the case's own stage badge also reads "Investigation"
-  // as a plain <span> alongside the meeting-type button here.
-  await page.getByRole('button', { name: '+ New meeting' }).click();
+  // A second, linked meeting for the same case — "+ New meeting" now
+  // lives in the header's "More actions" menu (Phase 2A) since the
+  // primary button is occupied by the real next-step recommendation
+  // (send the first, unsigned investigation record for signature) once
+  // a meeting has been recorded. Pre-fills the employee name from the
+  // case. Scoped to a button role — the case's own stage badge also
+  // reads "Investigation" as a plain <span> alongside the meeting-type
+  // button here.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: '+ New meeting' }).click();
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
   await page.getByPlaceholder(/Type or speak your meeting notes here/).waitFor({ timeout: 10000 });

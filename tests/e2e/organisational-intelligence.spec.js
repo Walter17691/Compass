@@ -17,7 +17,10 @@ test('the Organisational Intelligence dashboard loads real org-wide stats', asyn
   // stat tiles rendered, not stuck loading and not an error.
   await expect(page.getByText('Open cases', { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("Couldn't load organisational statistics")).not.toBeVisible();
-  await expect(page.getByText('Opened this month', { exact: true })).toBeVisible();
+  // Phase 2B — "Opened this month"/"Closed this month" were folded into
+  // Open cases' own headline interpretive line ("N total · N opened, N
+  // closed this month") rather than staying separate equal-weight tiles.
+  await expect(page.getByText(/opened, \d+ closed this month/)).toBeVisible();
   await expect(page.getByText('Overdue cases', { exact: true })).toBeVisible();
   await expect(page.getByText('Cases by type', { exact: true })).toBeVisible();
   await expect(page.getByText('Repeat case themes', { exact: true })).toBeVisible();

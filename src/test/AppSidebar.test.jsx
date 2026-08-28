@@ -16,8 +16,11 @@ const baseProps = {
 };
 
 describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
-  it('shows the DSAR nav item for HR', () => {
+  it('shows the DSAR nav item for HR once HR Processes is expanded', () => {
+    // Home Composition Review, final refinement (item 3) — HR Processes
+    // now starts collapsed; expand it first, same as a real user would.
     render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: /HR Processes/ }));
     expect(screen.getByRole('button', { name: 'DSAR' })).toBeInTheDocument();
   });
 
@@ -35,8 +38,9 @@ describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
 // wellbeing_notes_2026-08-09.sql's HR-only RLS policy — not itself the
 // enforcement).
 describe('AppSidebar — Wellbeing nav gating', () => {
-  it('shows the Wellbeing nav item for HR', () => {
+  it('shows the Wellbeing nav item for HR once HR Processes is expanded', () => {
     render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: /HR Processes/ }));
     expect(screen.getByRole('button', { name: 'Wellbeing' })).toBeInTheDocument();
   });
 });
@@ -47,8 +51,9 @@ describe('AppSidebar — Wellbeing nav gating', () => {
 // the same nav group. RLS (redundancy_cases_2026-08-27.sql) is the real
 // boundary; this is the same client-side defense-in-depth as Wellbeing's.
 describe('AppSidebar — Redundancy nav gating (Prompt 16 audit, H1)', () => {
-  it('shows the Redundancy nav item for HR', () => {
+  it('shows the Redundancy nav item for HR once HR Processes is expanded', () => {
     render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: /HR Processes/ }));
     expect(screen.getByRole('button', { name: 'Redundancy' })).toBeInTheDocument();
   });
 
@@ -67,18 +72,33 @@ describe('AppSidebar — Redundancy nav gating (Prompt 16 audit, H1)', () => {
 // which is identical across every screen, so a collision with a specific
 // screen's own content is structurally impossible rather than just
 // currently-unobserved.
-describe('AppSidebar — data-load-issue banner', () => {
+//
+// Home Composition Review, final refinement (item 4) — that fixed version
+// was still a permanently-expanded card, which was itself visually
+// dominant in the sidebar. It's now a restrained status icon (role="status"
+// lives on its own non-interactive wrapper, not the button, per
+// jsx-a11y/no-interactive-element-to-noninteractive-role) that expands
+// into the full message + Retry/Dismiss on click — same signal, same
+// actions, one click to inspect instead of always-on-screen.
+describe('AppSidebar — data-load-issue indicator', () => {
   it('shows nothing when there are no load issues', () => {
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={[]} />);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('shows the banner with Retry/Dismiss when there are load issues, and wires both handlers', () => {
+  it('shows a restrained indicator carrying the full message as its accessible name, and expands into Retry/Dismiss on click', () => {
     const onRetryLoad = vi.fn();
     const onDismissLoadBanner = vi.fn();
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases']} loadBannerDismissed={false} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner} />);
-    const banner = screen.getByRole('status');
-    expect(banner).toHaveTextContent("Couldn't load cases");
+    // Discoverable without a click — the status region's own accessible
+    // name already carries the real message, satisfying "not hidden or
+    // swallowed" for a screen-reader user even before it's opened.
+    expect(screen.getByRole('status', { name: /Couldn't load cases/ })).toBeInTheDocument();
+    // The full message isn't sitting in the DOM as its own always-visible
+    // block, though — reaching Retry/Dismiss takes exactly one click.
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Data load issue/ }));
+    expect(screen.getByText(/Couldn't load cases/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
@@ -87,16 +107,16 @@ describe('AppSidebar — data-load-issue banner', () => {
 
   it('summarises multiple load issues by count rather than listing every one', () => {
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases', 'audit log', 'roles']} loadBannerDismissed={false} />);
-    expect(screen.getByRole('status')).toHaveTextContent("Couldn't load 3 kinds of data");
+    expect(screen.getByRole('status', { name: /Couldn't load 3 kinds of data/ })).toBeInTheDocument();
   });
 
-  it('hides the banner once dismissed, even with load issues still present', () => {
+  it('hides the indicator once dismissed, even with load issues still present', () => {
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases']} loadBannerDismissed={true} />);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('renders the banner within the mobile header layout too', () => {
+  it('renders the indicator within the mobile header layout too', () => {
     render(<AppSidebar {...baseProps} isHR={true} isMobile={true} dataLoadIssues={['cases']} loadBannerDismissed={false} />);
-    expect(screen.getByRole('status')).toHaveTextContent("Couldn't load cases");
+    expect(screen.getByRole('status', { name: /Couldn't load cases/ })).toBeInTheDocument();
   });
 });

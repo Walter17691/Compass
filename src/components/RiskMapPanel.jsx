@@ -3,13 +3,16 @@ import { supabase } from '../supabase';
 import { computeStageBottlenecksByLocation } from '../lib/processDashboard';
 import { computeSiteRiskFlags } from '../lib/riskMap';
 import { CreateActionButton } from './CreateActionButton';
+import { COLOR, TYPE, RADIUS, SPACE } from '../styles/tokens';
 
-const FLAG_COLOR = {
-  er_volume: "#B87520",
-  case_delay: "#C84B2F",
-  process_risk: "#7C5CFC",
-  operational_change: "#1C5AA0",
-};
+// Phase 2C — every flag category collapsed onto one neutral-amber
+// treatment. The old per-category rainbow (amber/red/purple/blue) had
+// no real severity behind it — riskMap.js's own data model is four
+// independent boolean-style flags, not a graduated risk score (see its
+// header), so colour-coding by category implied a severity gradient
+// that doesn't exist. A flag existing at all is already the one real
+// signal; the label text says which kind. Nothing here scores or ranks
+// a site against another — flags are per-site facts, not a league table.
 
 // Organisational ER Intelligence (Phase 6, OP16, §13) — organisational
 // risk map. See riskMap.js's own header for the full scope reasoning:
@@ -49,24 +52,27 @@ export function RiskMapPanel({ orgId, cases, employeeRecords, processTemplates, 
 
   return (
     <div>
-      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Organisational risk map</div>
-      <div style={{fontSize:12,color:"#6B6375",marginBottom:16,maxWidth:560}}>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:6}}>Organisational risk map</div>
+      <div style={{fontSize:12,color:COLOR.inkFaint,marginBottom:16,maxWidth:560}}>
         Flags below are indicative signals from real case data, never a ranking and never based on protected characteristics. Management capability, appeal, and policy risk are covered organisation-wide in the Manager Insights, Appeal, and Policy panels rather than broken down by site — the data doesn't support attributing those to a specific location.
       </div>
 
-      {sites.length === 0 && <div style={{fontSize:13,color:"#6B6375"}}>No site data available yet.</div>}
+      {sites.length === 0 && <div style={{fontSize:13,color:COLOR.inkFaint}}>No site data available yet.</div>}
       {sites.map(s => (
-        <div key={s.site} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+        <div key={s.site} style={ s.flags.length
+          ? {background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"14px 16px",marginBottom:SPACE.sm}
+          : {borderBottom:`1px solid ${COLOR.borderFaint}`,padding:"10px 0"}
+        }>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:s.flags.length?8:0}}>
-            <div style={{fontSize:14,fontWeight:600,color:"#1A1535"}}>{s.site}</div>
-            <div style={{fontSize:11,color:"#9B9098"}}>{s.caseCount} case{s.caseCount===1?"":"s"}</div>
+            <div style={{fontSize:14,fontWeight:600,color:COLOR.ink}}>{s.site}</div>
+            <div style={{fontSize:11,color:COLOR.inkFaint}}>{s.caseCount} case{s.caseCount===1?"":"s"}</div>
           </div>
           {s.flags.length === 0
-            ? <div style={{fontSize:12,color:"#9B9098"}}>No flags for this site.</div>
+            ? <div style={{fontSize:12,color:COLOR.inkFaint}}>No flags for this site.</div>
             : s.flags.map(f => (
               <div key={f.category} style={{marginBottom:8}}>
-                <div style={{fontSize:12,color:"#1A1535"}}>
-                  <span style={{fontWeight:600,color:FLAG_COLOR[f.category]||"#1A1535"}}>{f.label}</span> — {f.detail}
+                <div style={{fontSize:12,color:COLOR.ink}}>
+                  <span style={{fontWeight:600,color:COLOR.amber}}>{f.label}</span> — {f.detail}
                 </div>
                 {createCaseTask && <CreateActionButton insightRef={`Risk flag: ${s.site} — ${f.label}`} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>}
               </div>

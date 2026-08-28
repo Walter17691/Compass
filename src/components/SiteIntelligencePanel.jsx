@@ -1,4 +1,5 @@
 import { DataQualityCaveat } from './DataQualityCaveat';
+import { COLOR, TYPE, RADIUS } from '../styles/tokens';
 
 const MIN_DURATION_SAMPLE = 3;
 // Phase 6.5 hardening (closes Prompt 16 audit finding H18, HIGH) — same
@@ -7,13 +8,13 @@ const MIN_DURATION_SAMPLE = 3;
 // disclosure of which specific case that is.
 const MIN_TYPE_SAMPLE = 3;
 
-const BarRow = ({ label, value, max, color = "#7C5CFC" }) => (
+const BarRow = ({ label, value, max, color = COLOR.inkQuiet }) => (
   <div style={{marginBottom:8}}>
     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-      <span style={{fontSize:12,color:"#1C1820"}}>{label}</span>
-      <span style={{fontSize:12,color:"#9B9098"}}>{value}</span>
+      <span style={{fontSize:12,color:COLOR.ink}}>{label}</span>
+      <span style={{fontSize:12,color:COLOR.inkFaint}}>{value}</span>
     </div>
-    <div style={{background:"#F5F1EA",borderRadius:3,height:5}}>
+    <div style={{background:COLOR.borderFaint,borderRadius:3,height:5}}>
       <div style={{background:color,borderRadius:3,height:5,width:`${max>0?Math.round((value/max)*100):0}%`}}/>
     </div>
   </div>
@@ -43,12 +44,15 @@ export function SiteIntelligencePanel({ overview }) {
   const companyAvgDuration = overview.avg_case_duration_days;
 
   if (sites.length === 0) {
-    return <div style={{fontSize:13,color:"#6B6375"}}>No site data available yet.</div>;
+    return <div style={{fontSize:13,color:COLOR.inkFaint}}>No site data available yet.</div>;
   }
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Site intelligence</div>
+      <div>
+        <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:4}}>Site intelligence</div>
+        <div style={{fontSize:12,color:COLOR.inkFaint,maxWidth:560}}>Sorted by case volume for scannability only — not a best-site/worst-site ranking.</div>
+      </div>
       {sites.map(([site, count]) => {
         const allTypes = Object.entries(locationTypes[site] || {}).sort((a,b)=>b[1]-a[1]);
         const types = allTypes.filter(([,v]) => v >= MIN_TYPE_SAMPLE);
@@ -56,28 +60,28 @@ export function SiteIntelligencePanel({ overview }) {
         const maxType = Math.max(1, ...types.map(([,v])=>v));
         const duration = locationDurations[site];
         return (
-          <div key={site} style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 18px"}}>
+          <div key={site} style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"16px 18px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-              <div style={{fontSize:14,fontWeight:600,color:"#1A1535"}}>{site}</div>
-              <BarRow label="" value={count} max={maxVolume} color="#B87520"/>
+              <div style={{fontSize:14,fontWeight:600,color:COLOR.ink}}>{site}</div>
+              <BarRow label="" value={count} max={maxVolume}/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
               <div>
-                <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:6}}>Case types</div>
+                <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:6}}>Case types</div>
                 {types.length===0
                   ? <DataQualityCaveat total={count} minRequired={MIN_TYPE_SAMPLE} label="cases at this site"/>
                   : types.map(([t,v])=><BarRow key={t} label={t} value={v} max={maxType}/>)}
-                {types.length>0 && suppressedTypeCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{suppressedTypeCount} type{suppressedTypeCount===1?"":"s"} with under {MIN_TYPE_SAMPLE} cases not shown</div>}
+                {types.length>0 && suppressedTypeCount>0 && <div style={{fontSize:11,color:COLOR.inkFaint,marginTop:4}}>{suppressedTypeCount} type{suppressedTypeCount===1?"":"s"} with under {MIN_TYPE_SAMPLE} cases not shown</div>}
               </div>
               <div>
-                <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:6}}>Avg case duration</div>
+                <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:6}}>Avg case duration</div>
                 {!duration || duration.count < MIN_DURATION_SAMPLE
                   ? <DataQualityCaveat total={duration?.count||0} minRequired={MIN_DURATION_SAMPLE} label="closed cases with measurable duration"/>
                   : (
-                    <div style={{fontSize:13,color:"#1C1820"}}>
+                    <div style={{fontSize:13,color:COLOR.ink}}>
                       {duration.avg_days}d
                       {companyAvgDuration!=null && (
-                        <span style={{color:"#9B9098",fontSize:12}}> · company average {companyAvgDuration}d</span>
+                        <span style={{color:COLOR.inkFaint,fontSize:12}}> · company average {companyAvgDuration}d</span>
                       )}
                     </div>
                   )}

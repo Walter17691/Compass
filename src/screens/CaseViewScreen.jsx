@@ -28,6 +28,8 @@ import { PolicyCitation } from '../components/PolicyCitation';
 import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
 import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
 import { NotetakerView } from '../components/NotetakerView';
+import { ActionMenu } from '../components/design/ActionMenu';
+import { FONT, COLOR, TYPE, RADIUS, BUTTON, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
@@ -44,6 +46,19 @@ const TABS = [
   { id:"themes", label:"Themes" },
   { id:"outcome", label:"Outcome" },
   { id:"ai", label:"AI Assistant" },
+];
+
+// Phase 2A (Compass Design Vision) — purely a rendering-order/visual
+// grouping of the same 12 tabs above; no id, route, or active-tab logic
+// depends on this. Every tab still belongs to exactly one group (the
+// three lists partition TABS completely) so nothing can silently
+// disappear from the workspace if a tab is ever added without also
+// being added here — that would just render ungrouped-nowhere, which is
+// why this file's own tests check the partition is complete.
+const TAB_GROUPS = [
+  { label: "Case", ids: ["overview","timeline","allegations","evidence"] },
+  { label: "Work", ids: ["meetings","people","tasks","documents","communications"] },
+  { label: "Decision", ids: ["themes","outcome","ai"] },
 ];
 
 // Phase 6.5 hardening (Batch 10b, task #205) — was 132 individually
@@ -185,6 +200,39 @@ export function CaseViewScreen({
     setScreen(SCREENS.HOME+"_meeting");
   };
 
+  // Phase 2A (Compass Design Vision) — extracted verbatim from the Case
+  // Copilot banner's own onClick (previously inline there, ~25 lines) so
+  // the compact CaseHeader's single primary action button (below) can
+  // call the exact same handler rather than a second, drifting copy of
+  // this logic. Behaviour is byte-for-byte unchanged — same branches,
+  // same side effects, same order — only its location moved from an
+  // inline closure to a named function referenced from two places.
+  const handleNextStepAction = () => {
+    if(!nextStep) return;
+    // meetingType-derived search term for finding "the meeting this step
+    // is about" among cs.meetings — meeting records store the human
+    // label (e.g. "Disciplinary Appeal", "Grievance"), not the
+    // MEETING_TYPES id, so an "appeal-*" meetingType searches
+    // generically for "appeal" rather than the id's own hyphenated form.
+    const searchTerm = nextStep.meetingType?.startsWith("appeal-") ? "appeal" : nextStep.meetingType;
+    const relevantMeeting = () => meetings.filter(m=>(m.type||"").toLowerCase().includes(searchTerm||""))[0]||meetings[meetings.length-1];
+    if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.meetingType||"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
+    else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
+    else if(nextStep.action==="inv_report"){attemptSubmitInvestigation(cs.id);}
+    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true});}
+    else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});}
+    else if(nextStep.action==="appeal_letter"){
+      // Was previously handled identically to outcome_letter — drafted
+      // an "outcome" letter and regressed stage from "appeal" back to
+      // "outcome", even though the case had already progressed past
+      // that point. The appeal is the final stage (ACAS Code); this
+      // only closes on an explicit close_case, never silently un-does
+      // progress.
+      const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true});
+    }
+    else if(nextStep.action==="close_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));}
+  };
+
   if(isAssignedNotetaker) {
     return (
       <NotetakerView
@@ -242,72 +290,109 @@ export function CaseViewScreen({
 
   return(
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",flexDirection:"column"}}>
-      {/* Header */}
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"14px 28px",flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>← Cases</button>
-            <div style={{width:1,height:16,background:"#EDE5D8"}}/>
-            <div>
-              {/* Phase 7.5B (P0 polish) — whose case this is answers the
-                  5-second "whose case is this" test faster than what type
-                  it is; swapped which line carries the primary heading
-                  treatment. No change to cs.employeeName, getProceedingTitle,
-                  routing, or status — presentation only. */}
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535"}}>{cs.employeeName}</div>
-              <div style={{fontSize:11,color:"#9B9098"}}>{getProceedingTitle(cs)}</div>
+      {/* Header (Phase 2A, Compass Design Vision) — compact CaseHeader:
+          identity first, type/stage second (folded into the same line as
+          the status badge), owner as trailing metadata, one primary
+          action sourced from the same getNextStep logic the Case
+          Copilot banner below already uses (handleNextStepAction,
+          extracted above so both call the identical handler), everything
+          else collapsed into one "More actions" menu. Every action here
+          is the exact same handler the old five-button row called
+          directly — Mark confidential/Reassign/Assign investigator/HR
+          Intervention/Ask HR/+New meeting all still work identically,
+          just reachable through one menu instead of five parallel
+          buttons. Confidentiality gets its own small read-only indicator
+          next to the status badge (a LockIcon pill) so that state stays
+          visible at a glance even though the toggle action itself moved
+          into the menu. */}
+      <div style={{background:COLOR.surface,borderBottom:"1px solid #EDE5D8",padding:"16px 28px",flexShrink:0}}>
+        {/* Phase 2A follow-up — the header band's background/border stay
+            full-bleed (a workspace band, not a content card), but its
+            inner content now shares the same centred CONTENT_MAX_WIDTH
+            column as the tab content below, with the same 28px edge
+            padding, so identity/actions/tabs line up with Overview's
+            cards instead of a full-width header sitting over a
+            narrower, independently-centred content block. */}
+        <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,marginBottom:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:COLOR.inkSoft,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,padding:0,flexShrink:0}}>← Cases</button>
+            <div style={{width:1,height:16,background:"#EDE5D8",flexShrink:0}}/>
+            <div style={{minWidth:0}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+                <div style={{...TYPE.identity,fontSize:20,color:COLOR.ink}}>{cs.employeeName}</div>
+                <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:RADIUS.pill,padding:"3px 10px",whiteSpace:"nowrap"}}>{getCaseStatus(cs).label}</span>
+                {cs.confidential&&(
+                  <span title="Visible only to authorised staff" style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,fontWeight:600,color:"#B87520",background:"#FEF5E7",borderRadius:RADIUS.pill,padding:"3px 10px",whiteSpace:"nowrap"}}><LockIcon size={10} />Confidential</span>
+                )}
+                {/* Phase 2A — investigationPaused used to be the HR
+                    Intervention header BUTTON's own label ("Paused"),
+                    genuinely visible status information, not just an
+                    action — moving that button into "More actions" would
+                    have made a paused investigation invisible at a
+                    glance. Given its own persistent read-only indicator
+                    here, same pattern as Confidential above; the toggle
+                    action itself lives in the menu. */}
+                {cs.investigationPaused&&(
+                  <span title="Investigation paused by HR" style={{fontSize:11,fontWeight:600,color:"#B87520",background:"#FEF5E7",borderRadius:RADIUS.pill,padding:"3px 10px",whiteSpace:"nowrap"}}>Paused</span>
+                )}
+              </div>
+              <div style={{...TYPE.metadata,color:COLOR.inkFaint,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {getProceedingTitle(cs)}{cs.manager&&<> · Owner: {cs.manager}</>}
+              </div>
             </div>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <span style={{fontSize:12,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:20,padding:"4px 12px"}}>{getCaseStatus(cs).label}</span>
-            <button onClick={async()=>{
-              const turningOn = !cs.confidential;
-              const ok = await confirmDialog(turningOn?{title:"Mark case confidential?",message:"Only you, the case creator, and HR Directors will be able to see this case. Other HR managers will lose access unless explicitly granted."}:{title:"Remove confidentiality?",message:"This case will become visible to every HR manager in the organisation again."});
-              if(!ok) return;
-              saveCases(cases.map(x=>x.id===cs.id?{...x,confidential:turningOn}:x));
-              showToast(turningOn?"Case marked confidential":"Case no longer confidential");
-            }} title={cs.confidential?"Visible only to authorised staff":"Visible to all HR staff in the org"} style={{background:cs.confidential?"#FEF5E7":"none",border:"1px solid",borderColor:cs.confidential?"#E8C88A":"#E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:cs.confidential?"#B87520":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6}}>{cs.confidential?<><LockIcon size={11} />Confidential</>:"Mark confidential"}</button>
-            <button onClick={()=>setShowReassignModal(true)} title={`Currently run by ${cs.manager||"unassigned"}`} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Reassign</button>
-            {isHR&&(
-              <button onClick={()=>setShowAssignInvestigatorModal(true)}
-                title={currentInvestigator?`Currently investigating: ${currentInvestigator.name}`+(currentInvestigatorAccess?.targetCompletionDate?` — due ${fmtDate(currentInvestigatorAccess.targetCompletionDate)}`:"")+(currentInvestigatorAccess?.scopeNote?` — ${currentInvestigatorAccess.scopeNote}`:""):"No investigator assigned"}
-                style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",color:"#6B6375",background:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",cursor:"pointer",fontWeight:500}}>
-                {currentInvestigator?"Investigator: "+currentInvestigator.name:"Assign investigator..."}
-              </button>
-            )}
-            {/* Manager Enablement (Phase 4, MP19, §15) — send guidance/a
-                question/a witness request, return for further work,
-                reassign, take over, or pause — all in one place, also
-                reachable from HrDelegatedWorkScreen's own "Intervene"
-                button per row. */}
-            {isHR&&(
-              <button onClick={()=>openHrInterventionModal(cs.id)}
-                style={{background:cs.investigationPaused?"#FEF5E7":"none",border:"1px solid "+(cs.investigationPaused?"#E8C88A":"#E8E0D0"),borderRadius:8,padding:"8px 14px",fontSize:12,color:cs.investigationPaused?"#B87520":"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-                {cs.investigationPaused?"Paused":"HR Intervention"}
-              </button>
-            )}
-            {/* Manager Enablement (Phase 4, MP12, §13) — persistent,
-                case-wide, unlike the old post-meeting-only "Request HR
-                review" button (ReviewScreen.jsx, untouched). HR doesn't
-                need to escalate to themselves. */}
-            {!isHR&&(
-              <button onClick={()=>openEscalateModal(cs.id)}
-                style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask HR</button>
-            )}
-            <button onClick={startMeetingFromHeader}
-              style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New meeting</button>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+            {(()=>{
+              const showNextStepPrimary = nextStep&&stage!=="closed";
+              const primary = showNextStepPrimary
+                ? { label: nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label, onClick: handleNextStepAction, disabled: nextStep.action==="inv_report"&&concludingInvestigation }
+                : { label: "+ New meeting", onClick: startMeetingFromHeader };
+              const menuActions = [
+                { label: cs.confidential?"Remove confidentiality":"Mark confidential", onClick: async()=>{
+                  const turningOn = !cs.confidential;
+                  const ok = await confirmDialog(turningOn?{title:"Mark case confidential?",message:"Only you, the case creator, and HR Directors will be able to see this case. Other HR managers will lose access unless explicitly granted."}:{title:"Remove confidentiality?",message:"This case will become visible to every HR manager in the organisation again."});
+                  if(!ok) return;
+                  saveCases(cases.map(x=>x.id===cs.id?{...x,confidential:turningOn}:x));
+                  showToast(turningOn?"Case marked confidential":"Case no longer confidential");
+                } },
+                { label: `Reassign (currently ${cs.manager||"unassigned"})`, onClick: ()=>setShowReassignModal(true) },
+                isHR && { label: currentInvestigator?`Investigator: ${currentInvestigator.name}`:"Assign investigator...", onClick: ()=>setShowAssignInvestigatorModal(true) },
+                isHR && { label: cs.investigationPaused?"Paused (HR Intervention)":"HR Intervention", onClick: ()=>openHrInterventionModal(cs.id) },
+                !isHR && { label: "Ask HR", onClick: ()=>openEscalateModal(cs.id) },
+                showNextStepPrimary && { label: "+ New meeting", onClick: startMeetingFromHeader },
+              ];
+              return (
+                <>
+                  <button onClick={primary.onClick} disabled={primary.disabled} style={{...BUTTON.primary,fontSize:13,padding:"9px 18px",cursor:primary.disabled?"not-allowed":"pointer",opacity:primary.disabled?0.6:1}}>{primary.label}</button>
+                  <ActionMenu actions={menuActions}/>
+                </>
+              );
+            })()}
           </div>
         </div>
-        {/* Workspace tabs */}
-        <div style={{display:"flex",gap:2,overflowX:"auto"}}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)}
-              style={{padding:"6px 14px",borderRadius:6,border:"none",background:activeTab===t.id?"#F5F3FF":"none",color:activeTab===t.id?"#5B3FD4":"#6B6375",fontWeight:activeTab===t.id?600:400,fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",whiteSpace:"nowrap"}}>
-              {t.label}
-              {t.id==="allegations"&&caseAllegations.length>0&&<span style={{fontSize:10,marginLeft:5,background:activeTab===t.id?"#5B3FD4":"#E8E0D0",color:activeTab===t.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseAllegations.length}</span>}
-              {t.id==="tasks"&&caseTaskList.filter(x=>x.status!=="done").length>0&&<span style={{fontSize:10,marginLeft:5,background:activeTab===t.id?"#5B3FD4":"#E8E0D0",color:activeTab===t.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseTaskList.filter(x=>x.status!=="done").length}</span>}
-            </button>
+        {/* Workspace navigation — Phase 2A groups the same 12 tabs (no
+            routes, ids, or active-tab logic changed) into three
+            conceptual clusters, rendered in that grouped order with a
+            small divider + label between clusters, rather than one flat
+            undifferentiated row. All 12 remain equally reachable — none
+            are hidden behind a "More" menu this phase. */}
+        <div style={{display:"flex",alignItems:"center",gap:2,overflowX:"auto"}}>
+          {TAB_GROUPS.map((group,gi)=>(
+            <div key={group.label} style={{display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
+              {gi>0&&<div style={{width:1,height:18,background:COLOR.border,margin:"0 6px",flexShrink:0}}/>}
+              <span style={{...TYPE.micro,color:COLOR.inkQuiet,marginRight:3,flexShrink:0}}>{group.label}</span>
+              {TABS.filter(t=>group.ids.includes(t.id)).map(t=>(
+                <button key={t.id} onClick={()=>setActiveTab(t.id)}
+                  style={{padding:"6px 9px",borderRadius:6,border:"none",background:activeTab===t.id?"#F5F3FF":"none",color:activeTab===t.id?"#5B3FD4":COLOR.inkSoft,fontWeight:activeTab===t.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+                  {t.label}
+                  {t.id==="allegations"&&caseAllegations.length>0&&<span style={{fontSize:10,marginLeft:5,background:activeTab===t.id?"#5B3FD4":"#E8E0D0",color:activeTab===t.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseAllegations.length}</span>}
+                  {t.id==="tasks"&&caseTaskList.filter(x=>x.status!=="done").length>0&&<span style={{fontSize:10,marginLeft:5,background:activeTab===t.id?"#5B3FD4":"#E8E0D0",color:activeTab===t.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseTaskList.filter(x=>x.status!=="done").length}</span>}
+                </button>
+              ))}
+            </div>
           ))}
+        </div>
         </div>
       </div>
 
@@ -341,31 +426,7 @@ export function CaseViewScreen({
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
               {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true});}}} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.secondary.label}</button>}
-              <button onClick={()=>{
-                // meetingType-derived search term for finding "the meeting
-                // this step is about" among cs.meetings — meeting records
-                // store the human label (e.g. "Disciplinary Appeal",
-                // "Grievance"), not the MEETING_TYPES id, so an
-                // "appeal-*" meetingType searches generically for
-                // "appeal" rather than the id's own hyphenated form.
-                const searchTerm = nextStep.meetingType?.startsWith("appeal-") ? "appeal" : nextStep.meetingType;
-                const relevantMeeting = () => meetings.filter(m=>(m.type||"").toLowerCase().includes(searchTerm||""))[0]||meetings[meetings.length-1];
-                if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.meetingType||"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
-                else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
-                else if(nextStep.action==="inv_report"){attemptSubmitInvestigation(cs.id);}
-                else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true});}
-                else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});}
-                else if(nextStep.action==="appeal_letter"){
-                  // Was previously handled identically to outcome_letter —
-                  // drafted an "outcome" letter and regressed stage from
-                  // "appeal" back to "outcome", even though the case had
-                  // already progressed past that point. The appeal is the
-                  // final stage (ACAS Code); this only closes on an
-                  // explicit close_case, never silently un-does progress.
-                  const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true});
-                }
-                else if(nextStep.action==="close_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));}
-              }} disabled={nextStep.action==="inv_report"&&concludingInvestigation} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:(nextStep.action==="inv_report"&&concludingInvestigation)?"not-allowed":"pointer",opacity:(nextStep.action==="inv_report"&&concludingInvestigation)?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
+              <button onClick={handleNextStepAction} disabled={nextStep.action==="inv_report"&&concludingInvestigation} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:(nextStep.action==="inv_report"&&concludingInvestigation)?"not-allowed":"pointer",opacity:(nextStep.action==="inv_report"&&concludingInvestigation)?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
             </div>
           </div>
 
@@ -490,7 +551,14 @@ export function CaseViewScreen({
 
       {/* Tab content */}
       <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
-        <div style={{maxWidth:800,margin:"0 auto"}}>
+        {/* Phase 2A follow-up — every tab now shares the same
+            CONTENT_MAX_WIDTH (1200) column as the header/nav above (was
+            a pre-existing, tab-agnostic 800 that left Overview's cards
+            in an unbalanced narrow column under a full-width header, and
+            would have misaligned every OTHER tab against the now-capped
+            header if left at 800 while only Overview changed). One
+            shared token, one coherent workspace width for every tab. */}
+        <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto"}}>
           {activeTab==="overview"&&(
             <OverviewTab cs={cs}
               caseCtx={{ cases, saveCases, stage, currentRisk, empRecord, repeatCount }}

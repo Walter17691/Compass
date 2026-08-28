@@ -20,7 +20,10 @@ test('assigning an investigator makes the case count toward Manager Performance 
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Assign investigator...' }).click();
+  // Phase 2A — "Assign investigator..." moved into the header's "More
+  // actions" menu.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'Assign investigator...' }).click();
   await expect(page.getByText('Investigator', { exact: true })).toBeVisible({ timeout: 10000 });
   const accessSaved = page.waitForResponse(r => r.url().includes('/rest/v1/case_access') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Assign investigator', exact: true }).click();

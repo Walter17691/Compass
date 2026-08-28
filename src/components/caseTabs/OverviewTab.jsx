@@ -16,6 +16,7 @@ import { AskHrPanel } from '../AskHrPanel';
 import { CaseRiskPanel } from '../CaseRiskPanel';
 import { ProcessChecklistPanel } from '../ProcessChecklistPanel';
 import { OccupationalHealthPanel } from '../OccupationalHealthPanel';
+import { COLOR, TYPE, RADIUS, SPACE } from '../../styles/tokens';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -56,77 +57,90 @@ export function OverviewTab({
 
   return (
     <>
-      {/* Phase 7.5B (P0 polish) — moved above Risk & Tribunal Exposure/
-          Key Dates: "what is this case about" should be answerable
-          before secondary financial/process inputs. Same card, same
-          empty-state text, same data (cs.description) — reordered only,
-          no AI summary, no new data source. */}
-      <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Description</div>
+      {/* Phase 2A (Compass Design Vision) — Description no longer gets a
+          bordered card: it was the clearest example of "a container that
+          doesn't earn its border" found during the design review — an
+          empty case got the exact same boxed treatment as a full one, for
+          a single line of text either way. Typography (a section label +
+          text) carries this now; same data (cs.description), same empty-
+          state copy, same referredBy/repeatCount lines — presentation
+          only, still positioned first per Phase 7.5B's own reasoning
+          (what happened before secondary financial/process inputs). */}
+      <div style={{marginBottom:SPACE.xl}}>
+        <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.xs}}>Description</div>
         {cs.description ? (
-          <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{cs.description}</div>
+          <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.6}}>{cs.description}</div>
         ) : (
-          <div style={{fontSize:13,color:"#9B9098"}}>No description recorded.</div>
+          <div style={{fontSize:13,color:COLOR.inkFaint}}>No description recorded.</div>
         )}
-        {cs.referredBy&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>Referred by: {cs.referredBy}</div>}
-        {caseCtx.repeatCount>1&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>{ORDINAL[caseCtx.repeatCount]||caseCtx.repeatCount+"th"} case for {cs.employeeName}.</div>}
+        {cs.referredBy&&<div style={{fontSize:12,color:COLOR.inkFaint,marginTop:8}}>Referred by: {cs.referredBy}</div>}
+        {caseCtx.repeatCount>1&&<div style={{fontSize:12,color:COLOR.inkFaint,marginTop:8}}>{ORDINAL[caseCtx.repeatCount]||caseCtx.repeatCount+"th"} case for {cs.employeeName}.</div>}
       </div>
 
+      {/* Phase 2A — Risk & Tribunal Exposure and Key Dates consolidate
+          into one surface with an internal divider instead of two
+          separate bordered cards: both are always shown/hidden together
+          (same caseCtx.stage!=="closed" gate) and both are genuinely
+          input-heavy sections that still earn a contained surface — this
+          isn't a demotion like Description above, just one container
+          instead of two adjacent, near-identical ones. Every field, every
+          calculation (estimateExposure), every input id/label/onChange is
+          completely unchanged. */}
       {caseCtx.stage!=="closed"&&(
-        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,padding:"14px 16px"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:caseCtx.currentRisk||cs.estimatedWeeklyPay?10:0}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase"}}>Risk & tribunal exposure</div>
-            {caseCtx.currentRisk&&RISK_STYLE[caseCtx.currentRisk]&&<span style={{fontSize:11,fontWeight:700,color:RISK_STYLE[caseCtx.currentRisk].color,background:RISK_STYLE[caseCtx.currentRisk].bg,borderRadius:4,padding:"3px 9px"}}>{caseCtx.currentRisk} RISK</span>}
-          </div>
-          <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
-            <div>
-              <label htmlFor="overview-weekly-pay" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Weekly pay (£, gross)</label>
-              <input id="overview-weekly-pay" type="number" min="0" value={cs.estimatedWeeklyPay||""} placeholder="For exposure estimate"
-                onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,estimatedWeeklyPay:e.target.value?Number(e.target.value):null}:x))}
-                style={{width:150,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+        <div style={{background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,marginBottom:SPACE.xl,overflow:"hidden"}}>
+          <div style={{padding:"14px 16px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:caseCtx.currentRisk||cs.estimatedWeeklyPay?10:0}}>
+              <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Risk & tribunal exposure</div>
+              {caseCtx.currentRisk&&RISK_STYLE[caseCtx.currentRisk]&&<span style={{fontSize:11,fontWeight:700,color:RISK_STYLE[caseCtx.currentRisk].color,background:RISK_STYLE[caseCtx.currentRisk].bg,borderRadius:4,padding:"3px 9px"}}>{caseCtx.currentRisk} RISK</span>}
             </div>
-            <div>
-              <label htmlFor="overview-age-at-dismissal" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Age (optional)</label>
-              <input id="overview-age-at-dismissal" type="number" min="16" max="80" value={cs.estimatedAgeAtDismissal||""} placeholder="Assumes 22-40"
-                onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,estimatedAgeAtDismissal:e.target.value?Number(e.target.value):null}:x))}
-                style={{width:110,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
-            </div>
-          </div>
-          {exposure&&(
-            <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
-              <div style={{fontSize:13,color:"#1A1535"}}>Indicative exposure: <strong>{fmtGBP(exposure.totalLow)} – {fmtGBP(exposure.totalHigh)}</strong>{exposure.compensatoryUncapped&&<span style={{color:"#C84B2F"}}> (compensatory award uncapped)</span>}</div>
-              <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>Basic award {fmtGBP(exposure.basicAward)} + compensatory range {fmtGBP(exposure.compensatoryLow)}–{fmtGBP(exposure.compensatoryHigh)}.{exposure.ageAssumed?" Assumes age 22-40 band — enter age for a more accurate estimate.":""} Indicative only — not legal advice, statutory caps change annually.</div>
-              {exposure.capsStale&&<div style={{fontSize:11,color:"#C84B2F",marginTop:4,fontWeight:600,display:"flex",alignItems:"center",gap:5}}><WarningIcon size={12} color="#C84B2F" style={{flexShrink:0}}/>These statutory caps haven't been re-verified against gov.uk in over a year — they may be out of date. Check gov.uk/employment-tribunal-compensation-limits before relying on this figure.</div>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {caseCtx.stage!=="closed"&&(
-        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,padding:"14px 16px"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Key dates</div>
-          <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
-            <div>
-              <label htmlFor="overview-fit-note-end-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Fit note expires</label>
-              <input id="overview-fit-note-end-date" type="date" value={cs.fitNoteEndDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,fitNoteEndDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
-            </div>
-            <div>
-              <label htmlFor="overview-probation-review-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Probation review</label>
-              <input id="overview-probation-review-date" type="date" value={cs.probationReviewDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,probationReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
-            </div>
-            <div>
-              <label htmlFor="overview-oh-referral-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH referral date</label>
-              <input id="overview-oh-referral-date" type="date" value={cs.ohReferralDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,ohReferralDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
-            </div>
-            {cs.ohReferralDate&&(
+            <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
               <div>
-                <label htmlFor="overview-oh-report-received-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH report received</label>
-                <input id="overview-oh-report-received-date" type="date" value={cs.ohReportReceivedDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,ohReportReceivedDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+                <label htmlFor="overview-weekly-pay" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Weekly pay (£, gross)</label>
+                <input id="overview-weekly-pay" type="number" min="0" value={cs.estimatedWeeklyPay||""} placeholder="For exposure estimate"
+                  onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,estimatedWeeklyPay:e.target.value?Number(e.target.value):null}:x))}
+                  style={{width:150,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              </div>
+              <div>
+                <label htmlFor="overview-age-at-dismissal" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Age (optional)</label>
+                <input id="overview-age-at-dismissal" type="number" min="16" max="80" value={cs.estimatedAgeAtDismissal||""} placeholder="Assumes 22-40"
+                  onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,estimatedAgeAtDismissal:e.target.value?Number(e.target.value):null}:x))}
+                  style={{width:110,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              </div>
+            </div>
+            {exposure&&(
+              <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
+                <div style={{fontSize:13,color:"#1A1535"}}>Indicative exposure: <strong>{fmtGBP(exposure.totalLow)} – {fmtGBP(exposure.totalHigh)}</strong>{exposure.compensatoryUncapped&&<span style={{color:"#C84B2F"}}> (compensatory award uncapped)</span>}</div>
+                <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>Basic award {fmtGBP(exposure.basicAward)} + compensatory range {fmtGBP(exposure.compensatoryLow)}–{fmtGBP(exposure.compensatoryHigh)}.{exposure.ageAssumed?" Assumes age 22-40 band — enter age for a more accurate estimate.":""} Indicative only — not legal advice, statutory caps change annually.</div>
+                {exposure.capsStale&&<div style={{fontSize:11,color:"#C84B2F",marginTop:4,fontWeight:600,display:"flex",alignItems:"center",gap:5}}><WarningIcon size={12} color="#C84B2F" style={{flexShrink:0}}/>These statutory caps haven't been re-verified against gov.uk in over a year — they may be out of date. Check gov.uk/employment-tribunal-compensation-limits before relying on this figure.</div>}
               </div>
             )}
-            <div>
-              <label htmlFor="overview-suspension-review-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Suspension review</label>
-              <input id="overview-suspension-review-date" type="date" value={cs.suspensionReviewDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,suspensionReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+          </div>
+
+          <div style={{padding:"14px 16px",borderTop:`1px solid ${COLOR.border}`}}>
+            <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:10}}>Key dates</div>
+            <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
+              <div>
+                <label htmlFor="overview-fit-note-end-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Fit note expires</label>
+                <input id="overview-fit-note-end-date" type="date" value={cs.fitNoteEndDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,fitNoteEndDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              </div>
+              <div>
+                <label htmlFor="overview-probation-review-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Probation review</label>
+                <input id="overview-probation-review-date" type="date" value={cs.probationReviewDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,probationReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              </div>
+              <div>
+                <label htmlFor="overview-oh-referral-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH referral date</label>
+                <input id="overview-oh-referral-date" type="date" value={cs.ohReferralDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,ohReferralDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              </div>
+              {cs.ohReferralDate&&(
+                <div>
+                  <label htmlFor="overview-oh-report-received-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>OH report received</label>
+                  <input id="overview-oh-report-received-date" type="date" value={cs.ohReportReceivedDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,ohReportReceivedDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+                </div>
+              )}
+              <div>
+                <label htmlFor="overview-suspension-review-date" style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Suspension review</label>
+                <input id="overview-suspension-review-date" type="date" value={cs.suspensionReviewDate||""} onChange={e=>caseCtx.saveCases(caseCtx.cases.map(x=>x.id===cs.id?{...x,suspensionReviewDate:e.target.value||null}:x))} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+              </div>
             </div>
           </div>
         </div>

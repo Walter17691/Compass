@@ -32,6 +32,7 @@ test('appealing a closed case detects the appeal, links to the right case, and r
   const today = new Date().toISOString().split('T')[0];
   await page.getByRole('button', { name: '← Cases' }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
+  await page.getByRole('button', { name: /More filters/ }).click(); // Phase 2B - date range moved behind More filters
   await page.getByLabel('From', { exact: true }).fill(today);
   await page.getByLabel('Filter by case type').selectOption('capability');
   // CasesScreen's per-case row title (getProceedingTitle) doesn't include
@@ -81,6 +82,7 @@ test('appealing a closed case detects the appeal, links to the right case, and r
   // back button.
   await page.locator('aside, header').getByRole('button', { name: /^Cases/ }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
+  await page.getByRole('button', { name: /More filters/ }).click(); // Phase 2B - date range moved behind More filters
   await page.getByLabel('From', { exact: true }).fill(today);
   await page.getByLabel('Filter by case type').selectOption('capability');
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });

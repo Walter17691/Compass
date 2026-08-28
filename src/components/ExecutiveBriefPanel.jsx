@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { authedFetch } from '../lib/authedFetch';
 import { buildExecutiveBriefInputs, buildExecutiveBriefPrompt } from '../lib/execBrief';
+import { COLOR, TYPE, RADIUS } from '../styles/tokens';
 
 const fmtGeneratedAt = (iso) => {
   const d = new Date(iso);
@@ -10,9 +11,9 @@ const fmtGeneratedAt = (iso) => {
 
 function SupportingData({ data }) {
   return (
-    <div style={{background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:"10px 12px",marginTop:10}}>
-      <div style={{fontSize:10,fontWeight:700,color:"#9B9098",textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>Supporting data</div>
-      <div style={{fontSize:12,color:"#6B6375",lineHeight:1.7}}>
+    <div style={{background:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"10px 12px",marginTop:10}}>
+      <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>Supporting data</div>
+      <div style={{fontSize:12,color:COLOR.inkSoft,lineHeight:1.7}}>
         {data.totalCases} total cases · {data.openCases} open · {data.openedInPeriod} opened / {data.closedInPeriod} closed this period
         {data.avgCaseDurationDays != null && <> · {data.avgCaseDurationDays}d avg duration</>}
         {(data.significantTypeTrends?.length > 0 || data.significantThemeTrends?.length > 0) && (
@@ -90,24 +91,24 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR }) {
   };
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px",marginBottom:24}}>
+    <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"18px 20px",marginBottom:24}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>ER Executive Brief</div>
+        <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>ER Executive Brief</div>
         {isHR && (
-          <button onClick={generate} disabled={generating} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"8px 18px",color:"#fff",fontWeight:600,cursor:generating?"default":"pointer",opacity:generating?0.7:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <button onClick={generate} disabled={generating} style={{fontSize:13,background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"8px 18px",color:"#fff",fontWeight:600,cursor:generating?"default":"pointer",opacity:generating?0.7:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
             {generating?"Generating…":"Generate brief"}
           </button>
         )}
       </div>
 
-      {error && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>{error}</div>}
-      {loadError && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>Couldn't load the executive brief history right now.</div>}
-      {briefs.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:"#6B6375"}}>No executive brief generated yet.</div>}
+      {error && <div style={{fontSize:13,color:COLOR.red,marginBottom:12}}>{error}</div>}
+      {loadError && <div style={{fontSize:13,color:COLOR.red,marginBottom:12}}>Couldn't load the executive brief history right now.</div>}
+      {briefs.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:COLOR.inkFaint}}>No executive brief generated yet.</div>}
 
       {briefs.map(b => (
-        <div key={b.id} style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid #F5F1EA"}}>
-          <div style={{fontSize:11,color:"#9B9098",marginBottom:8}}>Generated {fmtGeneratedAt(b.created_at)}{b.generated_by_name?" by "+b.generated_by_name:""}</div>
-          <div style={{fontSize:13,color:"#1C1820",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{b.narrative}</div>
+        <div key={b.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+          <div style={{fontSize:11,color:COLOR.inkFaint,marginBottom:8}}>Generated {fmtGeneratedAt(b.created_at)}{b.generated_by_name?" by "+b.generated_by_name:""}</div>
+          <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.8,whiteSpace:"pre-wrap",maxWidth:"min(720px, 100%)"}}>{b.narrative}</div>
           {b.supporting_data && <SupportingData data={b.supporting_data}/>}
         </div>
       ))}

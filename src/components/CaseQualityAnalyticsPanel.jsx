@@ -1,14 +1,18 @@
 import { useMemo } from 'react';
 import { computeCaseQualityAnalytics, CASE_QUALITY_MIN_SAMPLE_SIZE } from '../lib/caseQualityAnalytics';
 import { DataQualityCaveat } from './DataQualityCaveat';
+import { COLOR, TYPE } from '../styles/tokens';
 
-const BarRow = ({ label, value, max, color = "#C84B2F" }) => (
+// Phase 2C — neutral bar colour, not red: these are recurring case-
+// process improvement opportunities, not an error/blame scoreboard —
+// red implied a punitive severity the data doesn't carry.
+const BarRow = ({ label, value, max, color = COLOR.inkQuiet }) => (
   <div style={{marginBottom:8}}>
     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-      <span style={{fontSize:12,color:"#1C1820"}}>{label}</span>
-      <span style={{fontSize:12,color:"#9B9098"}}>{value.count} case{value.count===1?"":"s"} ({value.pct}%)</span>
+      <span style={{fontSize:12,color:COLOR.ink}}>{label}</span>
+      <span style={{fontSize:12,color:COLOR.inkFaint}}>{value.count} case{value.count===1?"":"s"} ({value.pct}%)</span>
     </div>
-    <div style={{background:"#F5F1EA",borderRadius:3,height:5}}>
+    <div style={{background:COLOR.borderFaint,borderRadius:3,height:5}}>
       <div style={{background:color,borderRadius:3,height:5,width:`${max>0?Math.round((value.count/max)*100):0}%`}}/>
     </div>
   </div>
@@ -31,7 +35,7 @@ export function CaseQualityAnalyticsPanel({ cases, allegations, caseSignals, cas
   if (data.totalCases < CASE_QUALITY_MIN_SAMPLE_SIZE) {
     return (
       <div>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Case quality analytics</div>
+        <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:10}}>Case quality analytics</div>
         <DataQualityCaveat total={data.totalCases} minRequired={CASE_QUALITY_MIN_SAMPLE_SIZE} label="cases"/>
       </div>
     );
@@ -42,9 +46,9 @@ export function CaseQualityAnalyticsPanel({ cases, allegations, caseSignals, cas
 
   return (
     <div>
-      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Case quality analytics</div>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:10}}>Case quality analytics</div>
       {topIssues.length === 0
-        ? <div style={{fontSize:13,color:"#6B6375"}}>No recurring case-quality issues identified across {data.totalCases} cases.</div>
+        ? <div style={{fontSize:13,color:COLOR.inkFaint}}>No recurring case-quality issues identified across {data.totalCases} cases.</div>
         : topIssues.map(issue => <BarRow key={issue.id} label={issue.label} value={issue} max={max}/>)}
     </div>
   );

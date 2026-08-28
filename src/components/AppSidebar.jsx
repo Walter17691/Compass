@@ -1,18 +1,97 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { CompassLogo } from './CompassLogo';
 import { ActivityBell } from './ActivityBell';
 import { OrgSwitcher } from './OrgSwitcher';
 import { MenuIcon } from './Icons';
+import { AskCompassWidget } from '../screens/AskCompassWidget';
+import { usePopoverPosition } from '../hooks/usePopoverPosition';
+import { FONT, COLOR, SPACE, RADIUS } from '../styles/tokens';
 
 const SearchIcon = ({size=15}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 
-const NavButton = ({s, l, indent, screen, goToScreen}) => (
-  <button onClick={()=>goToScreen(s)}
-    style={{display:"flex",alignItems:"center",width:"100%",textAlign:"left",background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:indent?"7px 14px 7px 28px":"9px 14px",borderRadius:8,fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-    {l}
-  </button>
-);
+// Home Composition Review, final refinement (item 4) — this used to be a
+// permanently-expanded red card sitting in the sidebar's own in-flow
+// layout (see the git history on this file for the original), which made
+// it one of the most visually dominant things in the sidebar any time a
+// background fetch failed — worse than the problem it was warning about.
+// Same underlying signal (dataLoadIssues), same Retry/Dismiss actions,
+// same "never silently swallow the error" requirement — now a small,
+// permanently-visible status icon (not hidden behind a generic menu, not
+// requiring the user to already suspect something's wrong) that expands
+// into the full message + actions on click, reusing the exact
+// popover-positioning/outside-click/Escape pattern ActivityBell and
+// AskCompassWidget already use. role="status" + aria-live stays on the
+// trigger itself (not just the opened popover), so a screen reader still
+// gets a proactive announcement of the real message the moment it mounts
+// — "restrained" only changes how much space it takes on screen, not
+// whether the error is discoverable or accessible.
+function LoadIssueIndicator({ dataLoadIssues, onRetryLoad, onDismissLoadBanner }) {
+  const [show, setShow] = useState(false);
+  const ref = useRef(null);
+  const btnRef = useRef(null);
+  const popoverStyle = usePopoverPosition(btnRef, show);
+  const message = `Couldn't load ${dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.`;
+
+  useEffect(() => {
+    if (!show) return;
+    const onKeyDown = e => { if (e.key === "Escape") setShow(false); };
+    const onClickOutside = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onClickOutside);
+    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
+  }, [show]);
+
+  // role="status"/aria-live live on this wrapping div (a non-interactive
+  // element) rather than the button itself — a screen reader still gets
+  // a proactive announcement of the full message the moment this mounts,
+  // without assigning a non-interactive live-region role to an
+  // interactive control (jsx-a11y/no-interactive-element-to-noninteractive-role).
+  return (
+    <div style={{position:"relative"}} ref={ref} role="status" aria-live="polite" aria-label={message}>
+      <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-label="Data load issue — click for details" title={message}
+        style={{position:"relative",background:show?COLOR.redTint:"none",border:`1px solid ${COLOR.red}66`,borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer",color:COLOR.red,fontFamily:FONT.sans,display:"flex",alignItems:"center"}}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6.4" stroke="currentColor" strokeWidth="1.3"/>
+          <line x1="8" y1="4.8" x2="8" y2="8.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          <circle cx="8" cy="11" r="0.9" fill="currentColor"/>
+        </svg>
+      </button>
+      {show&&popoverStyle&&(
+        <div role="dialog" aria-label="Data load issue" style={{...popoverStyle,width:280,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.red}44`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"12px 14px"}}>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <div style={{width:7,height:7,borderRadius:"50%",background:COLOR.red,flexShrink:0,marginTop:4}}/>
+            <span style={{fontSize:12,color:COLOR.ink,lineHeight:1.5}}>{message}</span>
+          </div>
+          <div style={{display:"flex",gap:12}}>
+            <button onClick={onRetryLoad} style={{fontSize:12,fontWeight:600,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Retry</button>
+            <button onClick={()=>{onDismissLoadBanner?.();setShow(false);}} aria-label="Dismiss" style={{fontSize:12,color:COLOR.inkFaint,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Dismiss</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Home Composition Review, item 7 — the sidebar predates the Calm
+// Intelligence tokens entirely (every value here was a raw hex/px
+// literal), which is exactly why it read as visually dense and
+// disconnected from the rest of the now-redesigned product: a different
+// grey, a different row rhythm, a different active-state treatment than
+// anything else in the app. Onto the same COLOR/SPACE scale now — same
+// nav items, same routes, same gating, presentation only. `quiet` gives
+// the HR Processes sub-items and the Utilities row a visibly lighter
+// weight than the primary work destinations above them, without shrinking
+// them so far they become hard to read or click.
+const NavButton = ({s, l, indent, quiet, screen, goToScreen}) => {
+  const active = screen===s;
+  return (
+    <button onClick={()=>goToScreen(s)}
+      style={{display:"flex",alignItems:"center",width:"100%",textAlign:"left",background:active?COLOR.purpleTint:"none",border:"none",color:active?COLOR.purple:(quiet?COLOR.inkFaint:COLOR.inkSoft),padding:indent?"6px 14px 6px 28px":"8px 14px",borderRadius:RADIUS.surface,fontSize:quiet?12.5:13,fontWeight:active?600:400,cursor:"pointer",fontFamily:FONT.sans}}>
+      {l}
+    </button>
+  );
+};
 
 // Left sidebar — the single shell mounted above every screen, replacing
 // AppHeader.jsx's top nav bar (kept as one mount point for the same
@@ -20,8 +99,13 @@ const NavButton = ({s, l, indent, screen, goToScreen}) => (
 // out of sync between screens). Meetings/Tasks/Documents are already
 // real top-level destinations by this point (Phases 3/6), which is why
 // this phase — converting the nav shell itself — was sequenced last.
-export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, onOpenCommandBar, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner }) {
-  const [processesOpen, setProcessesOpen] = useState(true);
+export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, onOpenCommandBar, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner, askCompassProps }) {
+  // Home Composition Review, final refinement (item 3) — collapsed by
+  // default now; every route/gate below is untouched, this only changes
+  // the sidebar's initial visual density. The disclosure control (the
+  // "HR Processes" header button + chevron) already existed and still
+  // reveals Redundancy/Wellbeing/DSAR/Save email to case in one click.
+  const [processesOpen, setProcessesOpen] = useState(false);
   const goToScreen = (s) => { setScreen(s); setShowMobileNav(false); };
   const activeCaseCount = cases.filter(x=>getCaseStage(x)!=="closed").length;
 
@@ -86,77 +170,63 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
   // Phase 6.5 hardening (production regression suite) — a failed
   // org-data fetch previously left every affected screen showing its
   // normal "No X yet" empty state, with zero visible signal that
-  // anything had gone wrong; role="status"+aria-live tells a
-  // screen-reader user too. Deliberately not auto-dismissing like a
+  // anything had gone wrong. Deliberately not auto-dismissing like a
   // toast — a data-load failure needs the user to actually do something
-  // (retry), not just be transiently informed.
-  //
-  // This went through three floating-overlay positions before landing
-  // here, each a real collision with real screen content (not just an
-  // E2E artifact): top-centered over Home's own primary buttons,
-  // bottom-right over the Ask Compass chat panel's input row, then a
-  // top full-width strip over RecordScreen's own "End meeting" button.
-  // Every screen in this app puts its own primary actions at SOME edge,
-  // so no floating position over the main content area is ever safe.
-  // The sidebar is the one piece of UI that's identical and stable
-  // across every single screen — rendering the banner as part of ITS
-  // OWN layout (not an overlay on top of anything) makes a collision
-  // structurally impossible rather than just currently-unobserved.
-  const loadIssueBanner = dataLoadIssues.length>0 && !loadBannerDismissed && (
-    <div role="status" aria-live="polite" style={{background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:8,padding:"8px 10px",display:"flex",flexDirection:"column",gap:6,fontSize:12}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
-        <div style={{width:7,height:7,borderRadius:"50%",background:"#C84B2F",flexShrink:0,marginTop:3}}/>
-        <span style={{color:"#1A1535",flex:1,lineHeight:1.4}}>
-          Couldn't load {dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.
-        </span>
-      </div>
-      <div style={{display:"flex",gap:10,paddingLeft:13}}>
-        <button onClick={onRetryLoad} style={{fontSize:11,fontWeight:600,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Retry</button>
-        <button onClick={onDismissLoadBanner} aria-label="Dismiss" style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Dismiss</button>
-      </div>
-    </div>
-  );
+  // (retry), not just be transiently informed. See LoadIssueIndicator
+  // above for how this now renders — this flag just decides whether it
+  // mounts at all.
+  const showLoadIssue = dataLoadIssues.length>0 && !loadBannerDismissed;
 
+  // Home Composition Review, item 7 — four legible tiers instead of one
+  // flat list: primary work destinations (unchanged size/weight, the
+  // items someone opens many times a day), HR Processes as a genuinely
+  // quieter secondary group (smaller label + smaller, lighter rows,
+  // still one click away — nothing hidden), Utilities visually matched to
+  // HR Processes' own quiet weight rather than sharing the primary
+  // items' full size, and Account at the bottom unchanged (org switcher/
+  // identity/sign-out already read as their own tier via the divider
+  // above them). No item removed, renamed, or regated.
   const sidebarBody = (
     <>
       <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"4px 14px 16px",cursor:"pointer",width:"100%"}}>
         <CompassLogo size={30}/>
-        <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535",letterSpacing:"-0.2px"}}>Compass</span>
+        <span style={{fontFamily:FONT.serif,fontSize:17,color:COLOR.ink,letterSpacing:"-0.2px"}}>Compass</span>
       </button>
 
       <nav style={{display:"flex",flexDirection:"column",gap:2,flex:1,overflowY:"auto",paddingBottom:12}}>
         {primaryItems.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen}/>)}
 
-        <button onClick={()=>setProcessesOpen(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"none",border:"none",color:"#9B9098",padding:"12px 14px 4px",fontSize:11,fontWeight:700,letterSpacing:"0.5px",textTransform:"uppercase",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <button onClick={()=>setProcessesOpen(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"none",border:"none",color:COLOR.inkFaint,padding:"14px 14px 4px",fontSize:11,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",cursor:"pointer",fontFamily:FONT.sans}}>
           HR Processes
           <span style={{fontSize:10,transform:processesOpen?"rotate(0deg)":"rotate(-90deg)",transition:"transform 0.15s"}}>▾</span>
         </button>
-        {processesOpen&&moduleItems.map(item=><NavButton key={item.s} {...item} indent screen={screen} goToScreen={goToScreen}/>)}
+        {processesOpen&&moduleItems.map(item=><NavButton key={item.s} {...item} indent quiet screen={screen} goToScreen={goToScreen}/>)}
 
-        <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #F5F1EA",display:"flex",flexDirection:"column",gap:2}}>
-          <button onClick={()=>goToScreen(SCREENS.SEARCH)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:screen===SCREENS.SEARCH?"#F5F3FF":"none",border:"none",color:screen===SCREENS.SEARCH?"#7C5CFC":"#6B6375",padding:"9px 14px",borderRadius:8,fontSize:13,fontWeight:screen===SCREENS.SEARCH?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-            <SearchIcon/> Search
+        <div style={{marginTop:SPACE.md,paddingTop:SPACE.md,borderTop:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",gap:2}}>
+          <button onClick={()=>goToScreen(SCREENS.SEARCH)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:screen===SCREENS.SEARCH?COLOR.purpleTint:"none",border:"none",color:screen===SCREENS.SEARCH?COLOR.purple:COLOR.inkFaint,padding:"6px 14px",borderRadius:RADIUS.surface,fontSize:12.5,fontWeight:screen===SCREENS.SEARCH?600:400,cursor:"pointer",fontFamily:FONT.sans}}>
+            <SearchIcon size={13}/> Search
           </button>
           {onOpenCommandBar&&(
-            <button onClick={onOpenCommandBar} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:"#6B6375",padding:"9px 14px",borderRadius:8,fontSize:13,fontWeight:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <button onClick={onOpenCommandBar} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.inkFaint,padding:"6px 14px",borderRadius:RADIUS.surface,fontSize:12.5,fontWeight:400,cursor:"pointer",fontFamily:FONT.sans}}>
               <span>Command Bar</span>
-              <span style={{fontSize:10,color:"#9B9098",border:"1px solid #E8E0D0",borderRadius:4,padding:"1px 5px"}}>⌘K</span>
+              <span style={{fontSize:10,color:COLOR.inkFaint,border:`1px solid ${COLOR.border}`,borderRadius:4,padding:"1px 5px"}}>⌘K</span>
             </button>
           )}
-          <NavButton s={SCREENS.SETTINGS} l="Settings" screen={screen} goToScreen={goToScreen}/>
+          <NavButton s={SCREENS.SETTINGS} l="Settings" quiet screen={screen} goToScreen={goToScreen}/>
         </div>
       </nav>
 
-      <div style={{borderTop:"1px solid #F5F1EA",paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
-        {loadIssueBanner&&<div style={{padding:"0 14px"}}>{loadIssueBanner}</div>}
+      <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,paddingTop:SPACE.md,display:"flex",flexDirection:"column",gap:SPACE.sm}}>
         <div style={{padding:"0 14px"}}><OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/></div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px"}}>
           <div style={{minWidth:0}}>
-            {currentUser?.name&&<div style={{fontSize:12,color:"#6B6375",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser.name}</div>}
+            {currentUser?.name&&<div style={{fontSize:12,color:COLOR.inkSoft,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser.name}</div>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            {showLoadIssue&&<LoadIssueIndicator dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner}/>}
+            {askCompassProps&&<AskCompassWidget {...askCompassProps}/>}
             <ActivityBell auditLog={auditLog} orgId={org?.id}/>
-            {onSignOut&&<button onClick={onSignOut} title="Sign out" style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
+            {onSignOut&&<button onClick={onSignOut} title="Sign out" style={{background:"none",border:`1px solid ${COLOR.border}`,color:COLOR.inkFaint,borderRadius:RADIUS.surface,padding:"5px 10px",fontSize:11,cursor:"pointer",fontFamily:FONT.sans}}>Sign out</button>}
           </div>
         </div>
       </div>
@@ -174,11 +244,12 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {meetingType&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo?.employee||meetingType.label}</span>}
             {onOpenCommandBar&&<button onClick={onOpenCommandBar} aria-label="Command Bar" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><SearchIcon size={14}/></button>}
+            {showLoadIssue&&<LoadIssueIndicator dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner}/>}
+            {askCompassProps&&<AskCompassWidget {...askCompassProps}/>}
             <ActivityBell auditLog={auditLog} orgId={org?.id}/>
             <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
           </div>
         </div>
-        {loadIssueBanner&&<div style={{padding:"0 16px 10px"}}>{loadIssueBanner}</div>}
         {showMobileNav&&(
           <nav style={{borderTop:"1px solid #EDE5D8",display:"flex",flexDirection:"column",padding:"6px 0",maxHeight:"70vh",overflowY:"auto"}}>
             {allNavItems.map(({s,l})=>(
@@ -198,7 +269,7 @@ export function AppSidebar({ screen, setScreen, cases, getCaseStage, isMobile, s
   }
 
   return (
-    <aside style={{width:224,flexShrink:0,height:"100vh",position:"sticky",top:0,background:"#FFFFFF",borderRight:"1px solid #EDE5D8",display:"flex",flexDirection:"column",padding:"16px 8px"}}>
+    <aside style={{width:224,flexShrink:0,height:"100vh",position:"sticky",top:0,background:COLOR.surface,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px"}}>
       {sidebarBody}
     </aside>
   );

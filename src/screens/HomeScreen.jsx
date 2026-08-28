@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { daysBetween } from '../lib/dateMath';
 import { getCurrentRisk } from '../lib/caseStage';
@@ -5,11 +6,22 @@ import { openReferrals } from '../lib/concernReferrals';
 import { topOpenSignalsOrgWide, signalTypeMeta } from '../lib/caseSignals';
 import { requiresApproval } from '../lib/approvals';
 import { computeStageBottlenecks } from '../lib/processDashboard';
+import { FONT, COLOR, SPACE, RADIUS, TYPE, BUTTON, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
 // Phase 20 — a case with no activity in this many days surfaces in the
 // "Needs attention" strip as stale, separate from actions/overdue items
 // which are keyed off explicit dated deadlines rather than plain inactivity.
 const STALE_DAYS = 14;
+
+// Home Composition Review — 1200 (CONTENT_MAX_WIDTH) is the shell's own
+// maximum, not a mandate that every screen's content spans it. Home's
+// actual working content (greeting/actions, the case list, Today) reads
+// as a working column, not a grid, so it's capped narrower here — flush
+// left within the same outer shell below, not re-centered — so Home's
+// left edge still lines up with every other screen's, and only the
+// unused width past the column goes quiet instead of stretching rows and
+// pulling the header actions out to a distant far edge.
+const HOME_CONTENT_WIDTH = 880;
 
 // The nav/logo shell is rendered once by AppSidebar (App.jsx), mounted
 // unconditionally above every screen including this one — Home used to
@@ -18,12 +30,31 @@ const STALE_DAYS = 14;
 // visible layout jump on every navigation away from Home.
 export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, caseSignals=[], concernReferrals=[], isHR, hrReviewRequests=[], processTemplates=[] }) {
   const freshMeetingSetup = () => ({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+  // Home Composition Review — the two Home "states" (§9): a quiet/new
+  // account with nothing active to work on vs. a busy one. Hoisted once
+  // here since it now also decides whether the Active Cases filter row
+  // (a user can't meaningfully filter a list that's already empty) and
+  // the compact "Your work" prompt render, not just the greeting subtitle.
+  const activeCaseCount = cases.filter(cs=>getCaseStage(cs)!=="closed").length;
+  const isQuietHome = activeCaseCount===0;
+  // Home Composition Review, final refinement (item 1) — Needs Attention's
+  // own row list, not the summary line beneath it, is what was making the
+  // section vertically dominant on a busy org (up to 6 real rows). Starts
+  // collapsed to the top 3 — the sort/rank logic below is untouched, so
+  // "top 3" is still genuinely the 3 highest-priority items, not just the
+  // first 3 in whatever order they happened to be built.
+  const [showAllAttention, setShowAllAttention] = useState(false);
   return(
-    <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+    <div style={{minHeight:"100vh",background:COLOR.paper,fontFamily:FONT.sans}}>
 
-      <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 32px"}}>
+      <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"32px 32px"}}>
+        <div style={{maxWidth:HOME_CONTENT_WIDTH}}>
 
-        {/* ── Greeting + primary actions ──
+        {/* ── Greeting (Phase 2A, Calm Intelligence) ── quiet editorial
+            identity moment — one size (TYPE.identity, 26px), matching the
+            Case Workspace header's own identity size so there is exactly
+            one "this is the primary thing" heading size across the whole
+            product, not a separate larger one just for Home.
             Phase 7.5C — the four stat-card tiles that used to sit below
             this (Active cases / Awaiting action / Pending signatures /
             Closed this month) were almost entirely restating numbers
@@ -35,25 +66,32 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
             losing it outright — the other three tiles were pure
             duplication, not information, so they're gone rather than
             moved. */}
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:16}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingBottom:SPACE.lg,marginBottom:SPACE.xl,borderBottom:`1px solid ${COLOR.borderFaint}`,flexWrap:"wrap",gap:SPACE.lg}}>
           <div>
-            <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
-            <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:32,fontWeight:400,color:"#1C1820",margin:0,letterSpacing:"-0.5px"}}>
+            <div style={{...TYPE.micro,color:COLOR.inkFaint,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:SPACE.xs}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
+            <h1 style={{...TYPE.identity,color:COLOR.ink,margin:0}}>
               Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
             </h1>
-            <p style={{fontSize:13,color:"#9B9098",margin:"5px 0 0"}}>
+            <p style={{...TYPE.metadata,color:COLOR.inkFaint,margin:"5px 0 0"}}>
               {(()=>{
-                const active=cases.filter(cs=>getCaseStage(cs)!=="closed").length;
                 const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
-                if(active===0) return "No active cases — create one to get started.";
+                if(isQuietHome) return "No active cases — create one to get started.";
                 const closedThisMonth=cases.filter(cs=>{if(getCaseStage(cs)!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
-                return active+" active case"+(active!==1?"s":"")+(actions>0?" · "+actions+" requiring action":"")+(closedThisMonth>0?" · "+closedThisMonth+" closed this month":"");
+                return activeCaseCount+" active case"+(activeCaseCount!==1?"s":"")+(actions>0?" · "+actions+" requiring action":"")+(closedThisMonth>0?" · "+closedThisMonth+" closed this month":"");
               })()}
             </p>
           </div>
-          <div style={{display:"flex",gap:10,flexShrink:0,marginTop:4}}>
-            <button onClick={()=>{setMeetingSetup(freshMeetingSetup());setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:13,background:"#FFFFFF",border:"1.5px solid #7C5CFC",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start meeting</button>
-            <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>+ New case</button>
+          {/* Home Composition Review, final refinement (item 2) —
+              alignItems:center (was flex-start) so the button pair sits
+              against the whole 3-line greeting block rather than pinned
+              to just its top edge, which is what read as "floating"
+              beside empty space next to the subtitle line. The bottom
+              border above closes the header into one visually bounded
+              unit instead of relying on whitespace alone to say "these
+              belong together." No change to which action is primary. */}
+          <div style={{display:"flex",gap:SPACE.sm,flexShrink:0}}>
+            <button onClick={()=>{setMeetingSetup(freshMeetingSetup());setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:13,background:COLOR.surface,border:`1.5px solid ${COLOR.purple}`,borderRadius:RADIUS.surface,padding:"10px 20px",cursor:"pointer",color:COLOR.purple,fontFamily:FONT.sans,fontWeight:600}}>Start meeting</button>
+            <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:FONT.sans,fontWeight:600}}>+ New case</button>
           </div>
         </div>
 
@@ -106,13 +144,22 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
           // Existing colour already encoded urgency (red = overdue/HIGH
           // risk, orange = action required, purple = appeal outstanding) —
           // reused here as the sort/merge key rather than adding a new one.
+          // Home Composition Review, final refinement (item 1) — the
+          // 6-item cap and the sort itself are exactly what they were;
+          // INITIAL_ATTENTION_ROWS only changes how many of that already-
+          // prioritised, already-capped list render before the user asks
+          // for more. Every item stays reachable via "View all" — nothing
+          // above this line changed.
           const ATTENTION_ROW_LIMIT=6;
-          const rows=[
+          const INITIAL_ATTENTION_ROWS=3;
+          const allRows=[
             ...overdue.map((d,i)=>({key:"od"+i,rank:0,color:"#C84B2F",clickable:false,label:`${d.label||d.employeeName} · Overdue`})),
             ...highRisk.map(cs=>({key:"risk"+cs.id,rank:0,color:"#C84B2F",clickable:true,label:`${cs.employeeName} · HIGH risk`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}})),
             ...actions.map(cs=>({key:"act"+cs.id,rank:1,color:"#E8622A",clickable:true,label:`${cs.employeeName} · ${getNextStep(cs)?.label}`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}})),
             ...appealsOutstanding.map(cs=>({key:"appeal"+cs.id,rank:2,color:"#5B3FD4",clickable:true,label:`${cs.employeeName} · Appeal outstanding`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("appeal");setScreen(SCREENS.CASE_VIEW);}})),
           ].sort((a,b)=>a.rank-b.rank).slice(0,ATTENTION_ROW_LIMIT);
+          const rows=showAllAttention?allRows:allRows.slice(0,INITIAL_ATTENTION_ROWS);
+          const hiddenAttentionCount=allRows.length-rows.length;
 
           const summaryParts=[
             pendingSigs>0&&{label:`${pendingSigs} pending signature${pendingSigs!==1?"s":""}`},
@@ -124,28 +171,40 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
             investigationsOverrunning>0&&{label:`${investigationsOverrunning} investigation${investigationsOverrunning!==1?"s":""} overrunning`},
           ].filter(Boolean);
 
+          // Phase 2A (Calm Intelligence) — the outer bordered card is
+          // gone: this is the single strongest section on the page and a
+          // box around it was never doing hierarchy work, just visual
+          // noise. A section heading + a closing rule is enough to
+          // separate it from Active Cases below. Row content, severity
+          // colour/weight, and every click handler are byte-for-byte
+          // unchanged from Phase 7.5C — presentation of the wrapper only.
           return (
-            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:24,overflow:"hidden"}}>
-              <div style={{padding:"14px 18px",borderBottom:rows.length>0?"1px solid #E8E0D0":"none",fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase"}}>Needs attention</div>
+            <div style={{marginBottom:SPACE.xxl,paddingBottom:SPACE.lg,borderBottom:`1px solid ${COLOR.border}`}}>
+              <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Needs attention</div>
               {rows.map((r,i)=>{
                 const Tag=r.clickable?"button":"div";
                 return (
                   <Tag key={r.key} type={r.clickable?"button":undefined} onClick={r.onClick} title={r.label}
-                    style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:r.clickable?"pointer":"default",textAlign:"left",font:"inherit",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<rows.length-1?"1px solid #F5F1EA":"none"}}>
+                    style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 0",border:"none",background:"none",cursor:r.clickable?"pointer":"default",textAlign:"left",font:"inherit",fontFamily:FONT.sans,borderBottom:(i<rows.length-1||hiddenAttentionCount>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
                     <div style={{width:6,height:6,borderRadius:"50%",background:r.color,flexShrink:0}}/>
-                    <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:r.rank===0?700:600,color:"#1C1820",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</div>
-                    {r.clickable&&<span style={{color:"#C4BAB0",fontSize:14,flexShrink:0}}>›</span>}
+                    <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:r.rank===0?700:600,color:COLOR.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</div>
+                    {r.clickable&&<span style={{color:COLOR.inkQuiet,fontSize:14,flexShrink:0}}>›</span>}
                   </Tag>
                 );
               })}
+              {hiddenAttentionCount>0&&(
+                <button onClick={()=>setShowAllAttention(true)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",border:"none",background:"none",cursor:"pointer",fontSize:12,color:COLOR.purple,fontFamily:FONT.sans,fontWeight:500,borderBottom:summaryParts.length>0?`1px solid ${COLOR.borderFaint}`:"none"}}>
+                  View all ({allRows.length}) →
+                </button>
+              )}
               {summaryParts.length>0&&(
-                <div style={{padding:"10px 18px",fontSize:12,fontWeight:500,color:"#6B6375",lineHeight:1.7,borderTop:rows.length>0?"1px solid #F5F1EA":"none"}}>
+                <div style={{paddingTop:10,fontSize:12,fontWeight:500,color:COLOR.inkSoft,lineHeight:1.7,borderTop:rows.length>0?`1px solid ${COLOR.borderFaint}`:"none",marginTop:rows.length>0?4:0}}>
                   {summaryParts.map((p,i)=>(
                     <span key={i} style={{fontWeight:500}}>
                       {p.onClick?(
-                        <button onClick={p.onClick} style={{font:"inherit",fontWeight:500,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",padding:0}}>{p.label}</button>
+                        <button onClick={p.onClick} style={{font:"inherit",fontWeight:500,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",padding:0}}>{p.label}</button>
                       ):p.label}
-                      {i<summaryParts.length-1&&<span style={{color:"#C4BAB0"}}> · </span>}
+                      {i<summaryParts.length-1&&<span style={{color:COLOR.inkQuiet}}> · </span>}
                     </span>
                   ))}
                 </div>
@@ -154,26 +213,50 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
           );
         })()}
 
-        {/* ── Main grid ── */}
-        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}}>
+        {/* ── Active Cases (Phase 2A) ── single-column composition, not a
+            two-column dashboard grid: Needs Attention above, Active Cases
+            here at full width so it's unmistakably the dominant working
+            surface, secondary content (Today / Compass intelligence)
+            stacked quietly below it — never beside it competing for the
+            same horizontal attention. */}
+        <div style={{display:"flex",flexDirection:"column",gap:SPACE.lg}}>
 
-          {/* ── Left ── */}
-          <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
+            {/* Home Composition Review, item 1 + 5 — a genuinely quiet
+                account (no active cases at all, not "this search/filter
+                happens to match nothing") gets a compact, intentional
+                prompt sized to its own content, not the populated list's
+                bordered box forced empty. Filters/search are real
+                controls over a real list — with no active cases there is
+                nothing to filter, so they don't render at all here
+                (still fully reachable the moment a case exists, and
+                always reachable via Cases in the nav regardless).
+                filtered-to-empty-by-search stays exactly as it was, one
+                line inside the same bordered list below, since that IS a
+                meaningful state (real cases exist, this view just
+                doesn't match any). */}
+            {isQuietHome ? (
+              <div style={{padding:"18px 0 6px"}}>
+                <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Your work</div>
+                <div style={{fontSize:15,fontWeight:600,color:COLOR.ink,marginBottom:4}}>No active cases yet.</div>
+                <div style={{...TYPE.body,color:COLOR.inkSoft,marginBottom:SPACE.md,maxWidth:420,lineHeight:1.5}}>Create your first case to start managing the process in Compass.</div>
+                <button onClick={()=>setShowCasePrompt(true)} style={{...BUTTON.primary,fontSize:13,padding:"9px 20px"}}>+ New case</button>
+              </div>
+            ) : (
+            <>
             {/* Cases header */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>Active cases</div>
+              <div style={{...TYPE.pageTitle,color:COLOR.ink}}>Active cases</div>
               <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                 <div style={{position:"relative"}}>
-                  <svg style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#9B9098",pointerEvents:"none"}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <input aria-label="Search cases" value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Search cases…" style={{paddingLeft:28,paddingRight:10,paddingTop:7,paddingBottom:7,fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,background:"#FFFFFF",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",width:160}}/>
+                  <svg style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:COLOR.inkFaint,pointerEvents:"none"}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input aria-label="Search cases" value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Search cases…" style={{paddingLeft:28,paddingRight:10,paddingTop:7,paddingBottom:7,fontSize:12,border:`1px solid ${COLOR.border}`,borderRadius:7,background:COLOR.surface,color:COLOR.ink,fontFamily:FONT.sans,outline:"none",width:160}}/>
                 </div>
                 {["active","investigation","disciplinary","closed"].map(s=>(
-                  <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"5px 11px",borderRadius:20,border:"1px solid",borderColor:dashFilter===s?"#7C5CFC":"#E8E0D0",background:dashFilter===s?"#EDE8FF":"#FFFFFF",color:dashFilter===s?"#7C5CFC":"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:dashFilter===s?600:400,whiteSpace:"nowrap"}}>
+                  <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"5px 11px",borderRadius:20,border:"1px solid",borderColor:dashFilter===s?COLOR.purple:COLOR.border,background:dashFilter===s?COLOR.purpleTint:COLOR.surface,color:dashFilter===s?COLOR.purple:COLOR.inkSoft,cursor:"pointer",fontFamily:FONT.sans,fontWeight:dashFilter===s?600:400,whiteSpace:"nowrap"}}>
                     {s.charAt(0).toUpperCase()+s.slice(1)}
                   </button>
                 ))}
-                <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap"}}>View all →</button>
+                <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:12,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,whiteSpace:"nowrap"}}>View all →</button>
               </div>
             </div>
 
@@ -261,15 +344,17 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                 );
               })()}
             </div>
+            </>
+            )}
 
-            {/* Today's meetings — Phase 7.5C — this used to be a full
-                7-day mini-calendar grid plus Connect Google/Outlook
-                Calendar buttons, duplicating the dedicated "Calendar" nav
-                destination (a real month view) and Settings → Integrations
-                (which already has the real connect/disconnect controls).
-                Reduced to what Home actually needs answered — "do I have
-                anything today" — with everything else one click away via
-                the destinations that already own it. */}
+            {/* Today (Phase 2A) — quieter, ambient, no card.
+                Home Composition Review, item 4 — an empty Today used to
+                spend the same two-row shape (heading row, then a second
+                row just for "No meetings logged today.") as the populated
+                case: real content earns a second row, an empty one
+                collapses onto the heading's own row instead, so it costs
+                no more vertical space than the label itself. Populated
+                still expands naturally exactly as before. */}
             {(()=>{
               const today=new Date();
               const caseMeetings=cases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,employeeName:cs.employeeName,caseId:cs.id})));
@@ -279,108 +364,70 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                 if(parts.length===3){const md=new Date(parts[2],parts[1]-1,parts[0]);return md.toDateString()===today.toDateString();}
                 return false;
               });
+              const hasToday=todayMeetings.length>0;
               return (
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Today</div>
-                    <button onClick={()=>setScreen(SCREENS.CALENDAR)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Calendar →</button>
+                <div style={{marginTop:SPACE.xl}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:hasToday?SPACE.sm:0}}>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
+                      <span style={{...TYPE.sectionHeading,color:COLOR.inkFaint,flexShrink:0}}>Today</span>
+                      {!hasToday&&<span style={{fontSize:12.5,color:COLOR.inkFaint}}>No meetings today.</span>}
+                    </div>
+                    <button onClick={()=>setScreen(SCREENS.CALENDAR)} style={{fontSize:12,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,flexShrink:0}}>Calendar →</button>
                   </div>
-                  <div style={{padding:"12px 18px"}}>
-                    {todayMeetings.length>0?(
-                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                        {todayMeetings.map((m,i)=>(
-                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#FDFAF5",borderRadius:8}}>
-                            <div style={{width:3,height:28,background:"#7C5CFC",borderRadius:2,flexShrink:0}}/>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:12,fontWeight:600,color:"#1C1820"}}>{m.employeeName}</div>
-                              <div style={{fontSize:11,color:"#9B9098"}}>{m.type||"Meeting"}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ):(
-                      <div style={{fontSize:12,color:"#9B9098"}}>No meetings logged today.</div>
-                    )}
-                  </div>
+                  {hasToday&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                      {todayMeetings.map((m,i)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",fontSize:12.5}}>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:COLOR.purple,flexShrink:0}}/>
+                          <span style={{fontWeight:600,color:COLOR.ink}}>{m.employeeName}</span>
+                          <span style={{color:COLOR.inkFaint}}>· {m.type||"Meeting"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })()}
-          </div>
 
-          {/* ── Right column ── */}
-          <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-            {/* Secondary assistance (Level 3) — Phase 7.5C merges what
-                used to be three separate bordered cards (Compass
-                Recommendations, Potential Bottlenecks, and a "Quick
-                links"/"Suggested for you" block) into one container.
-                Quick links is gone outright, not just visually folded in:
-                it was a second, weaker "AI suggests you click into a
-                case" list duplicating Compass Recommendations' own
-                purpose in the same column, and its policy suggestions are
-                still one click away via Settings → Policies — nothing it
-                offered is actually lost, only the redundant second
-                container. Recommendations and Bottlenecks stay two real,
-                different signals, just sharing one outer card with a
-                divider instead of each getting its own border/corners/
-                header treatment — content, ranking and AI logic for both
-                are completely untouched, this is presentation only. */}
+            {/* Compass intelligence (Phase 2A, Calm Intelligence) — the
+                single largest visual change on Home. Was a bordered card
+                sharing a whole right column with the case list, visually
+                co-equal with the user's own workload; now a quiet, ambient
+                aside stacked below it — a small dot and one line per
+                item, no box, no header treatment competing with "Active
+                cases" above. Content, ranking, and AI logic are completely
+                unchanged (topOpenSignalsOrgWide / computeStageBottlenecks,
+                same as Phase 7.5C) — this is presentation only. */}
             {(()=>{
               const recommendations=topOpenSignalsOrgWide(caseSignals,["next_action","process_risk"],5);
               const bottlenecks=computeStageBottlenecks(cases, processTemplates);
               if(recommendations.length===0&&bottlenecks.length===0) return null;
               return (
-                <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  {recommendations.length>0&&(
-                    <>
-                      <div style={{padding:"12px 18px",borderBottom:"1px solid #E8E0D0"}}>
-                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI-prioritised</div>
-                        <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Compass Recommendations</div>
-                      </div>
-                      <div style={{padding:"4px 0"}}>
-                        {recommendations.map((sig,i)=>{
-                          const cs=cases.find(c=>c.id===sig.caseId);
-                          const meta=signalTypeMeta(sig.type);
-                          return (
-                            <button key={sig.id} onClick={()=>{if(!cs) return; setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}} style={{width:"100%",display:"flex",alignItems:"flex-start",gap:10,padding:"10px 18px",border:"none",background:"none",cursor:cs?"pointer":"default",textAlign:"left",fontFamily:"DM Sans,system-ui,sans-serif",borderBottom:i<recommendations.length-1?"1px solid #F5F1EA":"none",transition:"background 0.1s"}}
-                              onMouseEnter={e=>{if(cs) e.currentTarget.style.background="#FDFAF5";}}
-                              onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                              <div style={{width:6,height:6,borderRadius:"50%",background:meta.color,flexShrink:0,marginTop:5}}/>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontSize:12,color:"#1C1820",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sig.title}</div>
-                                <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{cs?.employeeName||"Unknown case"} · {meta.label}</div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-                  {bottlenecks.length>0&&(
-                    <>
-                      <div style={{padding:"12px 18px",borderBottom:"1px solid #E8E0D0",borderTop:recommendations.length>0?"1px solid #E8E0D0":"none"}}>
-                        <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Running long</div>
-                        <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Potential Bottlenecks</div>
-                      </div>
-                      <div style={{padding:"4px 0"}}>
-                        {bottlenecks.slice(0,5).map((b,i)=>(
-                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",borderBottom:i<Math.min(bottlenecks.length,5)-1?"1px solid #F5F1EA":"none"}}>
-                            <div style={{width:6,height:6,borderRadius:"50%",background:"#E8622A",flexShrink:0}}/>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{b.processType} · {b.stage}</div>
-                              <div style={{fontSize:10,color:"#9B9098",marginTop:1}}>{b.caseCount} case{b.caseCount!==1?"s":""} · avg {b.avgDays}d (target {b.targetDays}d)</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{padding:"8px 18px",borderTop:"1px solid #F5F1EA",fontSize:10,color:"#9B9098"}}>Guideline only, not a statutory deadline.</div>
-                    </>
-                  )}
+                <div style={{marginTop:SPACE.xl,paddingTop:SPACE.lg,borderTop:`1px solid ${COLOR.border}`}}>
+                  <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Compass intelligence</div>
+                  {recommendations.map((sig)=>{
+                    const cs=cases.find(c=>c.id===sig.caseId);
+                    const meta=signalTypeMeta(sig.type);
+                    return (
+                      <button key={sig.id} onClick={()=>{if(!cs) return; setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"5px 0",border:"none",background:"none",cursor:cs?"pointer":"default",textAlign:"left",fontFamily:FONT.sans,fontSize:12.5}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:meta.color,flexShrink:0}}/>
+                        <span style={{color:COLOR.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sig.title}</span>
+                        <span style={{color:COLOR.inkFaint,flexShrink:0}}>· {cs?.employeeName||"Unknown case"}</span>
+                      </button>
+                    );
+                  })}
+                  {bottlenecks.slice(0,3).map((b,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",fontSize:12.5}}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:COLOR.amber,flexShrink:0}}/>
+                      <span style={{color:COLOR.ink}}>{b.processType} · {b.stage} running long</span>
+                      <span style={{color:COLOR.inkFaint}}>· avg {b.avgDays}d (target {b.targetDays}d)</span>
+                    </div>
+                  ))}
                 </div>
               );
             })()}
 
-          </div>
+        </div>
         </div>
       </div>
     </div>

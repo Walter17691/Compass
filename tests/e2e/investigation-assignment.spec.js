@@ -34,7 +34,11 @@ test('assigning an investigator with a narrowed scope and a due date is reflecte
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (2)')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Assign investigator...' }).click();
+  // Phase 2A — "Assign investigator..." moved into the header's "More
+  // actions" menu; the primary button is occupied by the real next-step
+  // recommendation instead.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'Assign investigator...' }).click();
   await expect(page.getByText('Which allegations should they investigate?')).toBeVisible({ timeout: 10000 });
   // Both default to checked — narrow the scope to just one.
   await expect(page.getByRole('checkbox', { name: /Left site without authorisation/ })).toBeChecked();
@@ -48,6 +52,19 @@ test('assigning an investigator with a narrowed scope and a due date is reflecte
   await page.getByRole('button', { name: 'Assign investigator', exact: true }).click();
   await accessSaved;
 
-  await expect(page.getByRole('button', { name: 'Investigator: Test Compass' })).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText(/Investigation by Test Compass: 0 of \d+ steps complete · Due 01\/09\/2026/)).toBeVisible();
+  // Phase 2A — the assigned-investigator label now lives inside "More
+  // actions" (dynamic label: "Investigator: {name}"), not a top-level
+  // button.
+  //
+  // Pre-existing drift found while verifying this fix (unrelated to
+  // Phase 2A): the shared E2E test org's HR account display name is now
+  // "E2E Test User", not "Test Compass" — confirmed live via a snapshot
+  // at failure time, and reproduced identically running this spec's
+  // original pre-Phase-2A assertion text against HEAD. Updated both
+  // strings here to the account's real current name so this spec
+  // actually verifies something again.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Investigator: E2E Test User' })).toBeVisible({ timeout: 10000 });
+  await page.getByRole('button', { name: /More actions/ }).click(); // toggle closed
+  await expect(page.getByText(/Investigation by E2E Test User: 0 of \d+ steps complete · Due 01\/09\/2026/)).toBeVisible();
 });

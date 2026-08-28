@@ -24,7 +24,10 @@ test('combining the type and date-opened filters on the Cases list narrows resul
   await page.getByRole('button', { name: '← Cases' }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
 
-  // Narrow by date AND type together from the start.
+  // Narrow by date AND type together from the start. Phase 2B — date
+  // range moved behind "More filters" (Compass Design Vision §1); case
+  // type stays immediately visible as one of the quick filters.
+  await page.getByRole('button', { name: /More filters/ }).click();
   await page.getByLabel('From', { exact: true }).fill(today);
   await page.getByLabel('Filter by case type').selectOption('grievance');
   await expect(page.getByText(employeeName)).toBeVisible({ timeout: 10000 });

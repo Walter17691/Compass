@@ -118,7 +118,6 @@ const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
 const CalendarScreen = lazy(() => import('./screens/CalendarScreen').then(m => ({default: m.CalendarScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
-import { AskCompassWidget } from './screens/AskCompassWidget';
 import { CommandBarModal } from './screens/CommandBarModal';
 import { HandoffModal } from './screens/HandoffModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
@@ -7965,6 +7964,10 @@ Please produce:
         loadBannerDismissed={loadBannerDismissed}
         onRetryLoad={loadOrgData}
         onDismissLoadBanner={()=>setLoadBannerDismissed(true)}
+        askCompassProps={{
+          showAskCompass, setShowAskCompass, askCompassHistory, setAskCompassHistory,
+          askCompass, askCompassProcessing, setAskCompassProcessing, askCompassInput, setAskCompassInput,
+        }}
       />
 
       {/* ── Content column — everything else (deadline banner through every
@@ -7972,8 +7975,18 @@ Please produce:
           sidebar. Closes at the very end of this component's return. ── */}
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
 
-      {/* ── Deadline banner ── */}
-      {dueSoon.some(d=>d.overdue)&&screen!==SCREENS.HOME&&(
+      {/* ── Deadline banner ──
+          Phase 2A (Compass Design Vision) — also excluded from
+          CASE_VIEW, matching the existing HOME exclusion pattern. An
+          org-wide "other cases are overdue" banner sitting above a
+          specific case's own identity was the design review's most
+          visible finding: the first thing an HR professional saw when
+          opening THIS case was three unrelated deadlines from other
+          cases. The banner itself, and every other screen that still
+          shows it (Cases, Settings, Insights — none of those are in
+          scope this phase), are completely unchanged; only case_view's
+          render condition changed. */}
+      {dueSoon.some(d=>d.overdue)&&screen!==SCREENS.HOME&&screen!==SCREENS.CASE_VIEW&&(
         <div style={{background:"#FEF0EB",borderBottom:"1px solid #E8622A33",padding:"8px 20px"}}>
           <div style={{maxWidth:1440,margin:"0 auto",display:"flex",alignItems:"center",gap:12,fontSize:12}}>
             <span style={{color:"#C84B2F",fontWeight:600}}>Overdue actions:</span>
@@ -8509,20 +8522,10 @@ Please produce:
         onConfirm={confirmCommandBarPlan}
       />
 
-      {/* ── Ask Compass floating chat ── */}
-      {screen===SCREENS.HOME&&(
-        <AskCompassWidget
-          showAskCompass={showAskCompass}
-          setShowAskCompass={setShowAskCompass}
-          askCompassHistory={askCompassHistory}
-          setAskCompassHistory={setAskCompassHistory}
-          askCompass={askCompass}
-          askCompassProcessing={askCompassProcessing}
-          setAskCompassProcessing={setAskCompassProcessing}
-          askCompassInput={askCompassInput}
-          setAskCompassInput={setAskCompassInput}
-        />
-      )}
+      {/* Ask Compass quick reference now renders as part of AppSidebar's
+          own persistent footer (see the askCompassProps passed to
+          AppSidebar above) — it's no longer a page-level floating
+          overlay gated to the Home screen. */}
 
       {/* ── Disciplinary Handoff Modal ── */}
       {showHandoffModal&&(

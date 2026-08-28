@@ -4,10 +4,11 @@ import { INITIATIVE_STATUSES, addMilestone, toggleMilestone, removeMilestone, de
 import { tasksForInitiative } from '../lib/caseTasks';
 import { activeThemes } from '../lib/themes';
 import { daysSince, findMetricTrendEntry, hasEnoughDataForImpact, describeImpact, MIN_DAYS_SINCE_COMPLETION } from '../lib/impactTracking';
+import { COLOR, TYPE, FONT, RADIUS, SPACE } from '../styles/tokens';
 
-const STATUS_COLOR = { active: "#7C5CFC", completed: "#3C8C5C", abandoned: "#9B9098" };
+const STATUS_COLOR = { active: COLOR.purple, completed: COLOR.green, abandoned: COLOR.inkFaint };
 const STATUS_LABEL = { active: "Active", completed: "Completed", abandoned: "Abandoned" };
-const inputStyle = { fontSize: 13, border: "1px solid #E8E0D0", borderRadius: 8, padding: "7px 10px", fontFamily: "DM Sans,system-ui,sans-serif", color: "#1A1535" };
+const inputStyle = { fontSize: 13, border: `1px solid ${COLOR.border}`, borderRadius: RADIUS.surface, padding: "7px 10px", fontFamily: FONT.sans, color: COLOR.ink };
 
 // Organisational ER Intelligence (Phase 6, OP23, §19) — impact tracking.
 // Reuses org_trend_detection() (OP7's RPC) with p_period_days set to the
@@ -34,15 +35,15 @@ function ImpactView({ orgId, initiative }) {
   }, [orgId, initiative.completedAt, days]);
 
   if (days === null) return null;
-  if (days < MIN_DAYS_SINCE_COMPLETION) return <div style={{fontSize:12,color:"#9B9098"}}>Not enough time has passed since completion to assess impact yet ({days} of {MIN_DAYS_SINCE_COMPLETION} days).</div>;
-  if (error) return <div style={{fontSize:12,color:"#6B6375"}}>Couldn't load impact data right now.</div>;
-  if (!data) return <div style={{fontSize:12,color:"#6B6375"}}>Loading impact…</div>;
+  if (days < MIN_DAYS_SINCE_COMPLETION) return <div style={{fontSize:12,color:COLOR.inkFaint}}>Not enough time has passed since completion to assess impact yet ({days} of {MIN_DAYS_SINCE_COMPLETION} days).</div>;
+  if (error) return <div style={{fontSize:12,color:COLOR.inkSoft}}>Couldn't load impact data right now.</div>;
+  if (!data) return <div style={{fontSize:12,color:COLOR.inkSoft}}>Loading impact…</div>;
 
   const entry = findMetricTrendEntry(data, initiative.metricKind, initiative.metricValue);
-  if (!hasEnoughDataForImpact(entry)) return <div style={{fontSize:12,color:"#9B9098"}}>Not enough case volume before completion to assess impact.</div>;
+  if (!hasEnoughDataForImpact(entry)) return <div style={{fontSize:12,color:COLOR.inkFaint}}>Not enough case volume before completion to assess impact.</div>;
 
   const label = initiative.metricKind === "theme" ? (entry.themeName || initiative.metricValue) : initiative.metricValue;
-  return <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{describeImpact(label, entry, days)}</div>;
+  return <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.6}}>{describeImpact(label, entry, days)}</div>;
 }
 
 function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisationThemes, onUpdate, expanded, onToggleExpand }) {
@@ -55,36 +56,36 @@ function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisatio
   const showImpact = initiative.status === "completed" && initiative.metricKind && initiative.metricValue;
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+    <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"14px 16px",marginBottom:10}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
         <div>
-          <div style={{fontSize:14,fontWeight:600,color:"#1A1535"}}>{initiative.title}</div>
-          <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>
-            <span style={{color:STATUS_COLOR[initiative.status]||"#9B9098",fontWeight:700,textTransform:"uppercase",letterSpacing:0.4}}>{STATUS_LABEL[initiative.status]||initiative.status}</span>
+          <div style={{fontSize:14,fontWeight:600,color:COLOR.ink}}>{initiative.title}</div>
+          <div style={{fontSize:11,color:COLOR.inkFaint,marginTop:2}}>
+            <span style={{color:STATUS_COLOR[initiative.status]||COLOR.inkFaint,fontWeight:700,textTransform:"uppercase",letterSpacing:0.4}}>{STATUS_LABEL[initiative.status]||initiative.status}</span>
             {initiative.owner && ` · ${initiative.owner}`}
             {initiative.targetCompletion && ` · Target: ${initiative.targetCompletion}`}
           </div>
         </div>
-        <button onClick={onToggleExpand} style={{fontSize:11,background:"none",border:"1px solid #E0D8FF",borderRadius:6,padding:"3px 10px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>{expanded?"Hide details":"View details"}</button>
+        <button onClick={onToggleExpand} style={{fontSize:11,background:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"3px 10px",color:COLOR.purple,cursor:"pointer",fontFamily:FONT.sans,flexShrink:0}}>{expanded?"Hide details":"View details"}</button>
       </div>
-      <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6,marginTop:8}}>{initiative.problemIdentified}</div>
+      <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.6,marginTop:8}}>{initiative.problemIdentified}</div>
       {initiative.supportingInsights?.length > 0 && (
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
-          {initiative.supportingInsights.map((s,i) => <span key={i} style={{fontSize:11,color:"#7C5CFC",background:"#F5F3FF",borderRadius:6,padding:"2px 8px"}}>{s}</span>)}
+          {initiative.supportingInsights.map((s,i) => <span key={i} style={{fontSize:11,color:COLOR.purple,background:COLOR.purpleTint,borderRadius:6,padding:"2px 8px"}}>{s}</span>)}
         </div>
       )}
-      {!expanded && <div style={{fontSize:12,color:"#6B6375",marginTop:8}}>{describeMilestoneProgress(initiative.milestones)}</div>}
-      {!expanded && showImpact && <div style={{fontSize:12,color:"#3C8C5C",marginTop:4}}>Impact tracked — view details for the current comparison.</div>}
+      {!expanded && <div style={{fontSize:12,color:COLOR.inkSoft,marginTop:8}}>{describeMilestoneProgress(initiative.milestones)}</div>}
+      {!expanded && showImpact && <div style={{fontSize:12,color:COLOR.green,marginTop:4}}>Impact tracked — view details for the current comparison.</div>}
 
       {expanded && (
-        <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Milestones</div>
-          {(initiative.milestones||[]).length === 0 && <div style={{fontSize:12,color:"#9B9098",marginBottom:8}}>No milestones set yet.</div>}
+        <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${COLOR.borderFaint}`}}>
+          <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Milestones</div>
+          {(initiative.milestones||[]).length === 0 && <div style={{fontSize:12,color:COLOR.inkFaint,marginBottom:8}}>No milestones set yet.</div>}
           {(initiative.milestones||[]).map(m => (
             <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
               <input aria-label={`Mark "${m.label}" done`} type="checkbox" checked={m.done} disabled={!isHR} onChange={()=>onUpdate(initiative.id,{milestones:toggleMilestone(initiative.milestones,m.id)})} style={{cursor:isHR?"pointer":"default"}}/>
-              <span style={{fontSize:12,color:"#1A1535",textDecoration:m.done?"line-through":"none",opacity:m.done?0.6:1,flex:1}}>{m.label}{m.targetDate?` — ${m.targetDate}`:""}</span>
-              {isHR && <button onClick={()=>onUpdate(initiative.id,{milestones:removeMilestone(initiative.milestones,m.id)})} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>}
+              <span style={{fontSize:12,color:COLOR.ink,textDecoration:m.done?"line-through":"none",opacity:m.done?0.6:1,flex:1}}>{m.label}{m.targetDate?` — ${m.targetDate}`:""}</span>
+              {isHR && <button onClick={()=>onUpdate(initiative.id,{milestones:removeMilestone(initiative.milestones,m.id)})} style={{fontSize:11,color:COLOR.red,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Remove</button>}
             </div>
           ))}
           {isHR && (
@@ -94,22 +95,22 @@ function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisatio
               <button
                 onClick={()=>{ if(!milestoneLabel.trim()) return; onUpdate(initiative.id,{milestones:addMilestone(initiative.milestones,milestoneLabel,milestoneDate)}); setMilestoneLabel(""); setMilestoneDate(""); }}
                 disabled={!milestoneLabel.trim()}
-                style={{fontSize:12,background:milestoneLabel.trim()?"#7C5CFC":"#E8E0D0",border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontWeight:600,cursor:milestoneLabel.trim()?"pointer":"default",fontFamily:"DM Sans,system-ui,sans-serif"}}
+                style={{fontSize:12,background:milestoneLabel.trim()?COLOR.purple:COLOR.border,border:"none",borderRadius:RADIUS.surface,padding:"7px 14px",color:"#fff",fontWeight:600,cursor:milestoneLabel.trim()?"pointer":"default",fontFamily:FONT.sans}}
               >Add milestone</button>
             </div>
           )}
 
-          <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Linked actions ({linkedActions.length})</div>
-          {linkedActions.length === 0 && <div style={{fontSize:12,color:"#9B9098",marginBottom:8}}>No actions linked yet — link one when creating an action from an Insights card.</div>}
+          <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Linked actions ({linkedActions.length})</div>
+          {linkedActions.length === 0 && <div style={{fontSize:12,color:COLOR.inkFaint,marginBottom:8}}>No actions linked yet — link one when creating an action from an Insights card.</div>}
           {linkedActions.map(t => (
-            <div key={t.id} style={{fontSize:12,color:"#1A1535",padding:"4px 0",borderBottom:"1px solid #F5F1EA"}}>
-              {t.name}{t.owner?` · ${t.owner}`:""}{t.dueDate?` · Due ${t.dueDate}`:""} {t.status==="done" && <span style={{color:"#3C8C5C"}}>(done)</span>}
+            <div key={t.id} style={{fontSize:12,color:COLOR.ink,padding:"4px 0",borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+              {t.name}{t.owner?` · ${t.owner}`:""}{t.dueDate?` · Due ${t.dueDate}`:""} {t.status==="done" && <span style={{color:COLOR.green}}>(done)</span>}
             </div>
           ))}
 
           {isHR && (
             <div style={{marginTop:16}}>
-              <label htmlFor={`initiative-metric-kind-${initiative.id}`} style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Metric this initiative addresses (for impact tracking)</label>
+              <label htmlFor={`initiative-metric-kind-${initiative.id}`} style={{fontSize:11,color:COLOR.inkFaint,display:"block",marginBottom:4}}>Metric this initiative addresses (for impact tracking)</label>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
                 <select id={`initiative-metric-kind-${initiative.id}`} value={initiative.metricKind||""} onChange={e=>onUpdate(initiative.id,{metricKind:e.target.value||null,metricValue:null})} style={inputStyle}>
                   <option value="">Not set</option>
@@ -131,20 +132,20 @@ function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisatio
               </div>
 
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-                <label htmlFor={`initiative-status-${initiative.id}`} style={{fontSize:11,color:"#9B9098"}}>Status</label>
+                <label htmlFor={`initiative-status-${initiative.id}`} style={{fontSize:11,color:COLOR.inkFaint}}>Status</label>
                 <select id={`initiative-status-${initiative.id}`} value={initiative.status} onChange={e=>onUpdate(initiative.id,{status:e.target.value})} style={inputStyle}>
                   {INITIATIVE_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
                 </select>
               </div>
-              <label htmlFor={`initiative-outcome-${initiative.id}`} style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>Outcome</label>
+              <label htmlFor={`initiative-outcome-${initiative.id}`} style={{fontSize:11,color:COLOR.inkFaint,display:"block",marginBottom:4}}>Outcome</label>
               <textarea id={`initiative-outcome-${initiative.id}`} value={outcomeDraft} onChange={e=>setOutcomeDraft(e.target.value)} placeholder="What happened once this was implemented…" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
-              <button onClick={()=>onUpdate(initiative.id,{outcome:outcomeDraft})} disabled={outcomeDraft===(initiative.outcome||"")} style={{fontSize:12,background:outcomeDraft===(initiative.outcome||"")?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:outcomeDraft===(initiative.outcome||"")?"default":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Save outcome</button>
+              <button onClick={()=>onUpdate(initiative.id,{outcome:outcomeDraft})} disabled={outcomeDraft===(initiative.outcome||"")} style={{fontSize:12,background:outcomeDraft===(initiative.outcome||"")?COLOR.border:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:outcomeDraft===(initiative.outcome||"")?"default":"pointer",fontFamily:FONT.sans}}>Save outcome</button>
             </div>
           )}
 
           {showImpact && (
-            <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid #F5F1EA"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Impact</div>
+            <div style={{marginTop:16,paddingTop:12,borderTop:`1px solid ${COLOR.borderFaint}`}}>
+              <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:0.4,textTransform:"uppercase",marginBottom:8}}>Impact</div>
               <ImpactView orgId={orgId} initiative={initiative}/>
             </div>
           )}
@@ -186,17 +187,17 @@ export function ImprovementInitiativesPanel({ orgId, improvementInitiatives, isH
 
   return (
     <div>
-      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Improvement initiatives</div>
-      <div style={{fontSize:12,color:"#6B6375",marginBottom:16,maxWidth:560}}>A real, HR-owned response to a pattern surfaced elsewhere in Insights — the problem identified, an owner, milestones, and (once implemented) what actually happened.</div>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:6}}>Improvement initiatives</div>
+      <div style={{fontSize:12,color:COLOR.inkSoft,marginBottom:SPACE.md,maxWidth:560}}>A real, HR-owned response to a pattern surfaced elsewhere in Insights — the problem identified, an owner, milestones, and (once implemented) what actually happened.</div>
 
-      {sorted.length === 0 && <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>No improvement initiatives yet.</div>}
+      {sorted.length === 0 && <div style={{fontSize:13,color:COLOR.inkSoft,marginBottom:16}}>No improvement initiatives yet.</div>}
       {sorted.map(i => (
         <InitiativeCard key={i.id} orgId={orgId} initiative={i} isHR={isHR} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)}/>
       ))}
 
       {isHR && (showForm ? (
-        <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 18px"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:0.4,textTransform:"uppercase",marginBottom:10}}>New initiative</div>
+        <div style={{background:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"16px 18px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:COLOR.inkFaint,letterSpacing:0.4,textTransform:"uppercase",marginBottom:10}}>New initiative</div>
           <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title" aria-label="Initiative title" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
           <textarea value={problemIdentified} onChange={e=>setProblemIdentified(e.target.value)} placeholder="Problem identified" aria-label="Problem identified" rows={2} style={{...inputStyle,width:"100%",boxSizing:"border-box",resize:"vertical",marginBottom:8}}/>
           <input value={supportingInsights} onChange={e=>setSupportingInsights(e.target.value)} placeholder="Supporting insights (comma-separated, optional)" aria-label="Supporting insights (comma-separated, optional)" style={{...inputStyle,width:"100%",boxSizing:"border-box",marginBottom:8}}/>
@@ -205,12 +206,12 @@ export function ImprovementInitiativesPanel({ orgId, improvementInitiatives, isH
             <input type="date" value={targetCompletion} onChange={e=>setTargetCompletion(e.target.value)} aria-label="Target completion date" style={{...inputStyle,flex:1,minWidth:150}}/>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={submit} disabled={!title.trim()||!problemIdentified.trim()} style={{fontSize:12,background:title.trim()&&problemIdentified.trim()?"#7C5CFC":"#E8E0D0",border:"none",borderRadius:8,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:title.trim()&&problemIdentified.trim()?"pointer":"default",fontFamily:"DM Sans,system-ui,sans-serif"}}>Create initiative</button>
-            <button onClick={()=>setShowForm(false)} style={{fontSize:12,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
+            <button onClick={submit} disabled={!title.trim()||!problemIdentified.trim()} style={{fontSize:12,background:title.trim()&&problemIdentified.trim()?COLOR.purple:COLOR.border,border:"none",borderRadius:RADIUS.surface,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:title.trim()&&problemIdentified.trim()?"pointer":"default",fontFamily:FONT.sans}}>Create initiative</button>
+            <button onClick={()=>setShowForm(false)} style={{fontSize:12,background:"none",border:"none",color:COLOR.inkFaint,cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
           </div>
         </div>
       ) : (
-        <button onClick={()=>setShowForm(true)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ New initiative</button>
+        <button onClick={()=>setShowForm(true)} style={{fontSize:12,background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"8px 16px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>+ New initiative</button>
       ))}
     </div>
   );

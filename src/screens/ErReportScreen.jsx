@@ -3,6 +3,7 @@ import { authedFetch } from '../lib/authedFetch';
 import { useLoadMore } from '../hooks/useLoadMore';
 import { themeFrequency } from '../lib/themes';
 import { daysBetween } from '../lib/dateMath';
+import { COLOR, TYPE, FONT, RADIUS, SPACE } from '../styles/tokens';
 
 export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes, isHR }) {
   // ── Core data calculations ──
@@ -123,36 +124,41 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
   // generated executive-summary prose below.
   const themeFrequencies = themeFrequency(caseThemes, organisationThemes);
 
-  const StatBox = ({label,value,sub,accent="#7C5CFC"})=>(
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
-      <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{label}</div>
-      <div style={{fontSize:30,fontWeight:700,color:accent,fontFamily:"DM Serif Display,Georgia,serif",marginBottom:4,lineHeight:1}}>{value}</div>
-      {sub&&<div style={{fontSize:11,color:"#9B9098"}}>{sub}</div>}
+  const StatBox = ({label,value,sub,accent=COLOR.ink})=>(
+    <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"16px 18px"}}>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:8}}>{label}</div>
+      <div style={{fontSize:26,fontWeight:700,color:accent,fontFamily:FONT.serif,marginBottom:4,lineHeight:1}}>{value}</div>
+      {sub&&<div style={{fontSize:11,color:COLOR.inkFaint}}>{sub}</div>}
     </div>
   );
 
-  const BarRow = ({label,value,max,color="#7C5CFC",right})=>(
+  // Phase 2C — one neutral bar colour by default (case type/location/
+  // pipeline-stage breakdowns are categories, not urgency states — the
+  // old rainbow cycling through 5 arbitrary colours per case type
+  // implied distinctions that don't exist). Callers still pass an
+  // explicit `color` where it's genuinely semantic (none currently do).
+  const BarRow = ({label,value,max,color=COLOR.inkQuiet,right})=>(
     <div style={{marginBottom:10}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-        <span style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{label}</span>
-        <span style={{fontSize:12,color:"#9B9098"}}>{right||value}</span>
+        <span style={{fontSize:12,color:COLOR.ink,fontWeight:500}}>{label}</span>
+        <span style={{fontSize:12,color:COLOR.inkFaint}}>{right||value}</span>
       </div>
-      <div style={{background:"#F5F1EA",borderRadius:3,height:6}}>
+      <div style={{background:COLOR.borderFaint,borderRadius:3,height:6}}>
         <div style={{background:color,borderRadius:3,height:6,width:`${Math.round((value/max)*100)}%`,transition:"width 0.3s"}}/>
       </div>
     </div>
   );
 
   return(
-    <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-      <div style={{maxWidth:1200,margin:"0 auto",padding:"24px 16px"}}>
+    <div>
 
-        {/* Header */}
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12}}>
+        {/* Header — restrained: this already renders inside Insights'
+            own "Reports" tab (its own PageHeader), so this is a
+            secondary, plain heading, not a second identity moment. */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:SPACE.xl,flexWrap:"wrap",gap:12}}>
           <div>
-            <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>Analytics</div>
-            <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1C1820",margin:0,letterSpacing:"-0.5px"}}>HR Reports</h1>
-            <p style={{fontSize:13,color:"#9B9098",margin:"5px 0 0"}}>Organisation-wide employee relations overview · {cases.length} total cases</p>
+            <h2 style={{...TYPE.sectionHeading,color:COLOR.inkFaint,margin:"0 0 4px",fontWeight:700}}>HR Reports</h2>
+            <p style={{fontSize:13,color:COLOR.inkFaint,margin:0}}>Organisation-wide employee relations overview · {cases.length} total cases</p>
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={async()=>{
@@ -172,7 +178,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
               const d = await r.json();
               setReportNarrative(d.content?.[0]?.text||"Unable to generate.");
             } catch(e) { setReportNarrative("Error generating summary."); }
-          }} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>
+          }} style={{fontSize:13,background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,flexShrink:0}}>
             Generate AI summary
           </button>
           <button onClick={async()=>{
@@ -210,7 +216,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
               lines.forEach(line=>{ if(y>280){doc.addPage();y=20;} doc.text(line,M,y); y+=5.5; });
             }
             doc.save("Compass_Board_Report_"+new Date().toLocaleDateString("en-GB").split("/").join("-")+".pdf");
-          }} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:9,padding:"10px 20px",color:"#1A1535",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>
+          }} style={{fontSize:13,background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"10px 20px",color:COLOR.ink,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,flexShrink:0}}>
             Download board report
           </button>
           </div>
@@ -218,15 +224,15 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
 
         {/* AI narrative */}
         {reportNarrative&&(
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px 24px",marginBottom:24}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Executive summary</div>
-            <div style={{fontSize:13,color:"#1C1820",lineHeight:1.8}}>{reportNarrative==="Generating..."?<span style={{color:"#9B9098",fontStyle:"italic"}}>Generating AI summary…</span>:reportNarrative}</div>
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"20px 24px",marginBottom:24}}>
+            <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Executive summary</div>
+            <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.8,maxWidth:"min(720px, 100%)"}}>{reportNarrative==="Generating..."?<span style={{color:COLOR.inkFaint,fontStyle:"italic"}}>Generating AI summary…</span>:reportNarrative}</div>
             {themeFrequencies.length>0&&(
-              <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #F5F1EA"}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Recurring themes behind this summary</div>
+              <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${COLOR.borderFaint}`}}>
+                <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Recurring themes behind this summary</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   {themeFrequencies.map(t=>(
-                    <span key={t.themeId} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:20,padding:"3px 10px"}}>{t.name} · {t.count} case{t.count===1?"":"s"}</span>
+                    <span key={t.themeId} style={{fontSize:11,color:COLOR.inkSoft,background:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.pill,padding:"3px 10px"}}>{t.name} · {t.count} case{t.count===1?"":"s"}</span>
                   ))}
                 </div>
               </div>
@@ -237,21 +243,21 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
         {/* Stat cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12,marginBottom:24}}>
           <StatBox label="Total cases" value={cases.length} sub={activeCases.length+" active · "+closedCases.length+" closed"+(casesDelta!=null?" · "+(casesDelta>0?"↑":casesDelta<0?"↓":"→")+Math.abs(casesDelta)+" vs prior 30d":"")}/>
-          <StatBox label="High risk" value={highRisk.length} sub={highRisk.length>0?"Requires attention":"No high risk cases"} accent="#C84B2F"/>
-          <StatBox label="Avg resolution" value={avgResolution?avgResolution+"d":"—"} sub={resTimes.length+" closed cases measured"+(resolutionDelta!=null?" · "+(resolutionDelta>0?"↑":resolutionDelta<0?"↓":"→")+Math.abs(resolutionDelta)+"d vs prior 30d":"")} accent="#1A7A4A"/>
-          <StatBox label="Pending signatures" value={pendingSigs} sub={pendingSigs>0?"Awaiting employee sign-off":"All signed"} accent="#E8622A"/>
+          <StatBox label="High risk" value={highRisk.length} sub={highRisk.length>0?"Requires attention":"No high risk cases"} accent={highRisk.length>0?COLOR.red:COLOR.ink}/>
+          <StatBox label="Avg resolution" value={avgResolution?avgResolution+"d":"—"} sub={resTimes.length+" closed cases measured"+(resolutionDelta!=null?" · "+(resolutionDelta>0?"↑":resolutionDelta<0?"↓":"→")+Math.abs(resolutionDelta)+"d vs prior 30d":"")} accent={COLOR.ink}/>
+          <StatBox label="Pending signatures" value={pendingSigs} sub={pendingSigs>0?"Awaiting employee sign-off":"All signed"} accent={pendingSigs>0?COLOR.amber:COLOR.ink}/>
         </div>
 
         {/* ACAS compliance alert */}
         {(slowInvestigations.length>0||pendingSigs>2)&&(
-          <div style={{background:"#FFF8F0",border:"1.5px solid #E8622A44",borderRadius:12,padding:"14px 20px",marginBottom:24,display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#E8622A",textTransform:"uppercase",letterSpacing:"0.5px"}}>Compliance alerts</div>
+          <div style={{background:COLOR.amberTint,border:`1.5px solid ${COLOR.amber}44`,borderRadius:12,padding:"14px 20px",marginBottom:24,display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+            <div style={{fontSize:12,fontWeight:700,color:COLOR.amber,textTransform:"uppercase",letterSpacing:"0.5px"}}>Compliance alerts</div>
             {slowInvestigations.map((cs,i)=>(
-              <button key={i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:"#E8622A",background:"#FFFFFF",border:"1px solid #E8622A44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
+              <button key={i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} style={{fontSize:12,color:COLOR.amber,background:COLOR.surface,border:`1px solid ${COLOR.amber}44`,borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
                 {cs.employeeName} — investigation overrunning
               </button>
             ))}
-            {pendingSigs>2&&<span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} signatures pending</span>}
+            {pendingSigs>2&&<span style={{fontSize:12,color:COLOR.purple,background:COLOR.purpleTint,borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} signatures pending</span>}
           </div>
         )}
 
@@ -259,53 +265,53 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:20,marginBottom:20}}>
 
           {/* Case volume by month */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Trend</div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases opened per month</div>
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"20px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Trend</div>
+            <div style={{fontFamily:FONT.serif,fontSize:18,fontWeight:400,color:COLOR.ink,marginBottom:16}}>Cases opened per month</div>
             <div style={{display:"flex",alignItems:"flex-end",gap:6,height:100}}>
               {monthLabels.map((m,i)=>(
                 <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                  <div style={{width:"100%",background:"#7C5CFC",borderRadius:"3px 3px 0 0",height:`${Math.max(4,Math.round((monthValues[i]/maxMonthVal)*80))}px`,opacity:0.7+0.3*(monthValues[i]/maxMonthVal)}}/>
-                  <div style={{fontSize:9,color:"#9B9098",textAlign:"center"}}>{m}</div>
-                  <div style={{fontSize:10,color:"#7C5CFC",fontWeight:600}}>{monthValues[i]}</div>
+                  <div style={{width:"100%",background:COLOR.purple,borderRadius:"3px 3px 0 0",height:`${Math.max(4,Math.round((monthValues[i]/maxMonthVal)*80))}px`,opacity:0.7+0.3*(monthValues[i]/maxMonthVal)}}/>
+                  <div style={{fontSize:9,color:COLOR.inkFaint,textAlign:"center"}}>{m}</div>
+                  <div style={{fontSize:10,color:COLOR.purple,fontWeight:600}}>{monthValues[i]}</div>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Case type breakdown */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Breakdown</div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases by type</div>
-            {caseTypeList.length===0?<div style={{fontSize:13,color:"#9B9098"}}>No data yet</div>:
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"20px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Breakdown</div>
+            <div style={{fontFamily:FONT.serif,fontSize:18,fontWeight:400,color:COLOR.ink,marginBottom:16}}>Cases by type</div>
+            {caseTypeList.length===0?<div style={{fontSize:13,color:COLOR.inkFaint}}>No data yet</div>:
               caseTypeList.map(([type,count],i)=>(
-                <BarRow key={i} label={type.charAt(0).toUpperCase()+type.slice(1)} value={count} max={caseTypeList[0][1]} color={["#7C5CFC","#E8622A","#1A7A4A","#C84B2F","#B87520"][i%5]}/>
+                <BarRow key={i} label={type.charAt(0).toUpperCase()+type.slice(1)} value={count} max={caseTypeList[0][1]} />
               ))
             }
           </div>
 
           {/* Outcomes */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Results</div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Disciplinary outcomes</div>
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"20px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Results</div>
+            <div style={{fontFamily:FONT.serif,fontSize:18,fontWeight:400,color:COLOR.ink,marginBottom:16}}>Disciplinary outcomes</div>
             {outcomeList.length===0?(
-              <div style={{fontSize:13,color:"#9B9098"}}>No outcomes recorded yet</div>
+              <div style={{fontSize:13,color:COLOR.inkFaint}}>No outcomes recorded yet</div>
             ):outcomeList.map(([outcome,count],i)=>(
-              <BarRow key={i} label={outcome} value={count} max={outcomeList[0][1]} color="#1A7A4A"/>
+              <BarRow key={i} label={outcome} value={count} max={outcomeList[0][1]}/>
             ))}
           </div>
 
           {/* Stage pipeline */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Pipeline</div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases by stage</div>
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"20px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Pipeline</div>
+            <div style={{fontFamily:FONT.serif,fontSize:18,fontWeight:400,color:COLOR.ink,marginBottom:16}}>Cases by stage</div>
             {[
-              {label:"Open",value:byStage.open,color:"#9B9098"},
-              {label:"Investigation",value:byStage.investigation,color:"#7C5CFC"},
-              {label:"Disciplinary",value:byStage.disciplinary,color:"#C84B2F"},
-              {label:"Grievance hearing",value:byStage.hearing,color:"#7C5CFC"},
-              {label:"Appeal",value:byStage.appeal,color:"#B87520"},
-              {label:"Closed",value:byStage.closed,color:"#1A7A4A"},
+              {label:"Open",value:byStage.open,color:COLOR.inkQuiet},
+              {label:"Investigation",value:byStage.investigation,color:COLOR.inkQuiet},
+              {label:"Disciplinary",value:byStage.disciplinary,color:COLOR.inkQuiet},
+              {label:"Grievance hearing",value:byStage.hearing,color:COLOR.inkQuiet},
+              {label:"Appeal",value:byStage.appeal,color:COLOR.inkQuiet},
+              {label:"Closed",value:byStage.closed,color:COLOR.green},
             ].filter(s=>s.value>0).map((s,i)=>(
               <BarRow key={i} label={s.label} value={s.value} max={Math.max(...[byStage.open,byStage.investigation,byStage.disciplinary,byStage.hearing,byStage.appeal,byStage.closed],1)} color={s.color}/>
             ))}
@@ -317,12 +323,12 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:20,marginBottom:20}}>
 
           {/* Location breakdown */}
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Geography</div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Cases by location</div>
-            {locationList.length===0?<div style={{fontSize:13,color:"#9B9098"}}>No location data</div>:
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"20px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Geography</div>
+            <div style={{fontFamily:FONT.serif,fontSize:18,fontWeight:400,color:COLOR.ink,marginBottom:16}}>Cases by location</div>
+            {locationList.length===0?<div style={{fontSize:13,color:COLOR.inkFaint}}>No location data</div>:
               locationList.map(([loc,count],i)=>(
-                <BarRow key={i} label={loc} value={count} max={locationList[0][1]} color="#7C5CFC"/>
+                <BarRow key={i} label={loc} value={count} max={locationList[0][1]}/>
               ))
             }
           </div>
@@ -352,20 +358,20 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
               whole screen — same pattern already used for
               ThemeTaxonomyManager's write controls. */}
           {isHR && (
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"20px"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Patterns</div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:16}}>Repeat cases</div>
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"20px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Patterns</div>
+            <div style={{fontFamily:FONT.serif,fontSize:18,fontWeight:400,color:COLOR.ink,marginBottom:16}}>Repeat cases</div>
             {repeatEmployees.length===0?(
-              <div style={{fontSize:13,color:"#9B9098"}}>No employees with multiple cases</div>
+              <div style={{fontSize:13,color:COLOR.inkFaint}}>No employees with multiple cases</div>
             ):repeatEmployees.slice(0,5).map(([name,count],i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:i<repeatEmployees.length-1?"1px solid #F5F1EA":"none"}}>
+              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:i<repeatEmployees.length-1?`1px solid ${COLOR.borderFaint}`:"none"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:28,height:28,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#7C5CFC",flexShrink:0}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:COLOR.purple,flexShrink:0}}>
                     {name.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
                   </div>
-                  <button onClick={()=>{setActivePerson(name);setScreen(SCREENS.PERSON_VIEW);}} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,textAlign:"left"}}>{name}</button>
+                  <button onClick={()=>{setActivePerson(name);setScreen(SCREENS.PERSON_VIEW);}} style={{fontSize:12,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,textAlign:"left"}}>{name}</button>
                 </div>
-                <span style={{fontSize:11,color:"#C84B2F",background:"#FFF0ED",borderRadius:10,padding:"2px 8px",fontWeight:600}}>{count} cases</span>
+                <span style={{fontSize:11,color:COLOR.amber,background:COLOR.amberTint,borderRadius:RADIUS.pill,padding:"2px 8px",fontWeight:600}}>{count} cases</span>
               </div>
             ))}
           </div>
@@ -374,20 +380,20 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
         </div>
 
         {/* Active cases table */}
-        <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:20}}>
-          <div style={{padding:"16px 20px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,overflow:"hidden",marginBottom:20}}>
+          <div style={{padding:"16px 20px",borderBottom:`1px solid ${COLOR.borderFaint}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Detail</div>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820"}}>Active cases</div>
+              <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>Detail</div>
+              <div style={{fontFamily:FONT.serif,fontSize:18,fontWeight:400,color:COLOR.ink}}>Active cases</div>
             </div>
-            <span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:10,padding:"3px 10px",fontWeight:600}}>{activeCases.length} open</span>
+            <span style={{fontSize:12,color:COLOR.purple,background:COLOR.purpleTint,borderRadius:RADIUS.pill,padding:"3px 10px",fontWeight:600}}>{activeCases.length} open</span>
           </div>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <div style={{overflowX:"auto",width:"100%",minWidth:0,boxSizing:"border-box"}}>
+            <table style={{width:"100%",minWidth:640,borderCollapse:"collapse",fontSize:12}}>
               <thead>
-                <tr style={{background:"#FDFAF5"}}>
+                <tr style={{background:COLOR.paper}}>
                   {["Employee","Job title","Case type","Stage","Opened","Days open","Next action"].map(h=>(
-                    <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",borderBottom:"1px solid #E8E0D0",whiteSpace:"nowrap"}}>{h}</th>
+                    <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",borderBottom:`1px solid ${COLOR.borderFaint}`,whiteSpace:"nowrap"}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -398,47 +404,46 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, setReport
                   const opened=new Date(cs.dateReceived||cs.createdAt||0);
                   const daysOpen=daysBetween(opened, new Date());
                   const rec=employeeRecordsMap[cs.employeeName]||{};
-                  const stageColors={open:"#9B9098",investigation:"#7C5CFC",disciplinary:"#C84B2F",appeal:"#B87520",closed:"#1A7A4A"};
+                  const stageColors={open:COLOR.inkFaint,investigation:COLOR.inkSoft,disciplinary:COLOR.inkSoft,appeal:COLOR.inkSoft,closed:COLOR.green};
                   return (
-                    <tr key={cs.id} style={{borderBottom:i<activeCasesTable.visible.length-1||activeCasesTable.hasMore?"1px solid #F5F1EA":"none",cursor:"pointer"}}
+                    <tr key={cs.id} style={{borderBottom:i<activeCasesTable.visible.length-1||activeCasesTable.hasMore?`1px solid ${COLOR.borderFaint}`:"none",cursor:"pointer"}}
                       onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
+                      onMouseEnter={e=>e.currentTarget.style.background=COLOR.paper}
                       onMouseLeave={e=>e.currentTarget.style.background="none"}>
                       <td style={{padding:"10px 16px"}}>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <div style={{width:28,height:28,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#7C5CFC",flexShrink:0}}>
+                          <div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:COLOR.purple,flexShrink:0}}>
                             {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
                           </div>
-                          <span style={{fontWeight:500,color:"#1C1820"}}>{cs.employeeName}</span>
+                          <span style={{fontWeight:500,color:COLOR.ink}}>{cs.employeeName}</span>
                         </div>
                       </td>
-                      <td style={{padding:"10px 16px",color:"#6B6375"}}>{rec.jobTitle||cs.jobTitle||"—"}</td>
-                      <td style={{padding:"10px 16px",color:"#6B6375"}}>{cs.caseType||"HR Matter"}</td>
+                      <td style={{padding:"10px 16px",color:COLOR.inkSoft}}>{rec.jobTitle||cs.jobTitle||"—"}</td>
+                      <td style={{padding:"10px 16px",color:COLOR.inkSoft}}>{cs.caseType||"HR Matter"}</td>
                       <td style={{padding:"10px 16px"}}>
-                        <span style={{fontSize:11,fontWeight:600,color:stageColors[stage]||"#9B9098",background:"#F5F1EA",borderRadius:10,padding:"2px 8px"}}>{stage.charAt(0).toUpperCase()+stage.slice(1)}</span>
+                        <span style={{fontSize:11,fontWeight:600,color:stageColors[stage]||COLOR.inkFaint,background:COLOR.borderFaint,borderRadius:RADIUS.pill,padding:"2px 8px"}}>{stage.charAt(0).toUpperCase()+stage.slice(1)}</span>
                       </td>
-                      <td style={{padding:"10px 16px",color:"#6B6375",whiteSpace:"nowrap"}}>{cs.dateReceived?fmtDate(cs.dateReceived):"—"}</td>
+                      <td style={{padding:"10px 16px",color:COLOR.inkSoft,whiteSpace:"nowrap"}}>{cs.dateReceived?fmtDate(cs.dateReceived):"—"}</td>
                       <td style={{padding:"10px 16px"}}>
-                        <span style={{color:daysOpen>28?"#C84B2F":daysOpen>14?"#E8622A":"#1C1820",fontWeight:daysOpen>28?600:400}}>{isNaN(daysOpen)||daysOpen<0?"—":daysOpen+"d"}</span>
+                        <span style={{color:daysOpen>28?COLOR.red:daysOpen>14?COLOR.amber:COLOR.ink,fontWeight:daysOpen>28?600:400}}>{isNaN(daysOpen)||daysOpen<0?"—":daysOpen+"d"}</span>
                       </td>
-                      <td style={{padding:"10px 16px",color:"#7C5CFC",fontSize:11}}>{next?.label||"—"}</td>
+                      <td style={{padding:"10px 16px",color:COLOR.purple,fontSize:11}}>{next?.label||"—"}</td>
                     </tr>
                   );
                 })}
                 {activeCases.length===0&&(
-                  <tr><td colSpan={7} style={{padding:"32px",textAlign:"center",color:"#9B9098"}}>No active cases</td></tr>
+                  <tr><td colSpan={7} style={{padding:"32px",textAlign:"center",color:COLOR.inkFaint}}>No active cases</td></tr>
                 )}
               </tbody>
             </table>
           </div>
           {activeCasesTable.hasMore&&(
-            <button onClick={activeCasesTable.loadMore} style={{width:"100%",padding:"12px",background:"#FDFAF5",border:"none",borderTop:"1px solid #E8E0D0",cursor:"pointer",fontSize:12,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <button onClick={activeCasesTable.loadMore} style={{width:"100%",padding:"12px",background:COLOR.paper,border:"none",borderTop:`1px solid ${COLOR.borderFaint}`,cursor:"pointer",fontSize:12,color:COLOR.purple,fontWeight:600,fontFamily:FONT.sans}}>
               Load more ({activeCasesTable.visible.length} of {activeCasesTable.total})
             </button>
           )}
         </div>
 
-      </div>
     </div>
   );
 }

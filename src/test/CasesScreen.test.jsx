@@ -11,11 +11,17 @@ const noop = () => {};
 const cases = [{ id: 'c1', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'open', ownerId: 'u1' }];
 
 describe('CasesScreen — field labelling (Phase 6.5, Batch 13)', () => {
-  it('labels every filter select', () => {
+  it('labels every filter select', async () => {
+    const user = userEvent.setup();
     render(<CasesScreen cases={cases} locations={[{ id: 'l1', name: 'Manchester' }]} orgMembers={[{ user_id: 'u1', name: 'Alex' }]} setIntake={noop} setScreen={noop} getCaseStage={()=>"open"} setActiveCaseId={noop} setActiveCaseStage={noop} getNextStep={()=>null} getProceedingTitle={cs=>cs.employeeName} getCaseStatus={()=>"active"} saveCases={noop} confirmDialog={noop} showToast={noop} />);
+    // Phase 2B — Case type/Stage/Status stay immediately visible;
+    // Location/Owner/Priority moved behind "More filters" (Compass
+    // Design Vision, Amendment 1). Same selects, same labels, same
+    // matchesCaseFilters predicates — only default visibility changed.
     expect(screen.getByLabelText('Filter by case type')).toBeInTheDocument();
     expect(screen.getByLabelText('Filter by stage')).toBeInTheDocument();
     expect(screen.getByLabelText('Filter by status')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /More filters/ }));
     expect(screen.getByLabelText('Filter by location')).toBeInTheDocument();
     expect(screen.getByLabelText('Filter by owner')).toBeInTheDocument();
     expect(screen.getByLabelText('Filter by priority')).toBeInTheDocument();

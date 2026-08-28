@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { CaseViewScreen } from '../screens/CaseViewScreen.jsx';
 
 // Phase 6.5 hardening (Batch 10b, task #205) — CaseViewScreen had zero test
@@ -87,7 +88,11 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
   it('renders the header for a case', () => {
     render(<CaseViewScreen {...baseProps} />);
     expect(screen.getByText('Sam Employee')).toBeInTheDocument();
-    expect(screen.getByText('Disciplinary Investigation')).toBeInTheDocument();
+    // Phase 2A — the proceeding title now shares a text node with the
+    // owner metadata ("Disciplinary Investigation · Owner: Alex
+    // Manager"), so this matches on the substring rather than the exact
+    // string the line used to be alone.
+    expect(screen.getByText(/Disciplinary Investigation/)).toBeInTheDocument();
   });
 
   // Phase 7.5B (P0 polish, item 3) — employee identity must be the
@@ -99,7 +104,7 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
   it('gives the employee name the primary heading style and the proceeding title a secondary style', () => {
     render(<CaseViewScreen {...baseProps} />);
     const name = screen.getByText('Sam Employee');
-    const proceedingTitle = screen.getByText('Disciplinary Investigation');
+    const proceedingTitle = screen.getByText(/Disciplinary Investigation/);
     expect(name.style.fontFamily).toContain('DM Serif Display');
     expect(Number(name.style.fontSize.replace('px',''))).toBeGreaterThan(Number(proceedingTitle.style.fontSize.replace('px','')));
   });
@@ -130,4 +135,83 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
       if (expectedText) expect(screen.getByText(expectedText)).toBeInTheDocument();
     });
   }
+});
+
+// Phase 2A (Compass Design Vision) — the 12 tabs are now rendered
+// grouped (Case / Work / Decision) rather than as one flat row, purely a
+// rendering-order change (TAB_GROUPS in CaseViewScreen.jsx). This proves
+// the partition is actually complete in the real rendered output — every
+// one of the 12 original tab labels is still a real, clickable button —
+// rather than trusting the module's own "these three lists partition
+// TABS completely" comment.
+describe('CaseViewScreen — grouped tab navigation (Phase 2A)', () => {
+  it('still renders all 12 original tabs as clickable buttons, none hidden by the new visual grouping', () => {
+    render(<CaseViewScreen {...baseProps} />);
+    const allLabels = ['Overview','Timeline','Allegations','Meetings','Evidence','Participants','Tasks','Documents','Communications','Themes','Outcome','AI Assistant'];
+    for (const label of allLabels) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
+    }
+  });
+
+  it('shows the three group labels (Case / Work / Decision)', () => {
+    render(<CaseViewScreen {...baseProps} />);
+    expect(screen.getByText('Case')).toBeInTheDocument();
+    expect(screen.getByText('Work')).toBeInTheDocument();
+    expect(screen.getByText('Decision')).toBeInTheDocument();
+  });
+
+  it('switching tabs still works through the grouped nav — clicking Allegations shows the Allegations tab body', async () => {
+    const user = userEvent.setup();
+    render(<CaseViewScreen {...baseProps} />);
+    await user.click(screen.getByRole('button', { name: 'Allegations' }));
+    expect(screen.getByText(/No allegations recorded yet/)).toBeInTheDocument();
+  });
+});
+
+// Phase 2A — the five equal-weight header buttons (Mark confidential,
+// Reassign, Assign investigator, HR Intervention, +New meeting) become
+// one primary action + a "More actions" menu. Every one of the original
+// actions must still exist and call the exact same handler — this
+// exercises the real ActionMenu component, not just checking labels are
+// present as text.
+describe('CaseViewScreen — header ActionMenu (Phase 2A)', () => {
+  it('shows "+ New meeting" as the primary action when there is no next step, and every other action inside "More actions"', async () => {
+    const user = userEvent.setup();
+    render(<CaseViewScreen {...baseProps} />);
+    expect(screen.getByRole('button', { name: '+ New meeting' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /More actions/ }));
+    const menu = screen.getByRole('menu', { name: /More actions/ });
+    expect(screen.getByRole('menuitem', { name: 'Mark confidential' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Reassign/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Assign investigator/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /HR Intervention/ })).toBeInTheDocument();
+    expect(menu).toBeInTheDocument();
+  });
+
+  it('clicking "Reassign" in the menu calls the exact same setShowReassignModal handler the old header button called', async () => {
+    const setShowReassignModal = vi.fn();
+    const user = userEvent.setup();
+    render(<CaseViewScreen {...baseProps} header={{ ...baseProps.header, setShowReassignModal }} />);
+    await user.click(screen.getByRole('button', { name: /More actions/ }));
+    await user.click(screen.getByRole('menuitem', { name: /Reassign/ }));
+    expect(setShowReassignModal).toHaveBeenCalledWith(true);
+  });
+
+  it('uses the real next-step action as the primary button when one exists, and offers +New meeting from the menu instead', async () => {
+    const attemptSubmitInvestigation = vi.fn();
+    const user = userEvent.setup();
+    const props = {
+      ...baseProps,
+      shell: { ...baseProps.shell, getNextStep: () => ({ label: 'Submit investigation report', action: 'inv_report' }) },
+      header: { ...baseProps.header, attemptSubmitInvestigation },
+    };
+    render(<CaseViewScreen {...props} />);
+    const primary = screen.getByRole('button', { name: 'Submit investigation report' });
+    expect(primary).toBeInTheDocument();
+    await user.click(primary);
+    expect(attemptSubmitInvestigation).toHaveBeenCalledWith('c1');
+    // +New meeting moved into the menu since it's no longer primary.
+    await user.click(screen.getByRole('button', { name: /More actions/ }));
+    expect(screen.getByRole('menuitem', { name: '+ New meeting' })).toBeInTheDocument();
+  });
 });

@@ -23,7 +23,10 @@ test('an overdue investigator target completion date surfaces as a real deadline
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Assign investigator...' }).click();
+  // Phase 2A — "Assign investigator..." moved into the header's "More
+  // actions" menu.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'Assign investigator...' }).click();
   await expect(page.getByText('Investigator', { exact: true })).toBeVisible({ timeout: 10000 });
 
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);

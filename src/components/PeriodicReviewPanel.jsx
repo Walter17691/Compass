@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { authedFetch } from '../lib/authedFetch';
 import { buildExecutiveBriefInputs } from '../lib/execBrief';
 import { PERIOD_TYPES, periodTypeLabel, buildPeriodicReviewPrompt } from '../lib/periodicReview';
+import { COLOR, TYPE, RADIUS } from '../styles/tokens';
 
 const fmtGeneratedAt = (iso) => {
   const d = new Date(iso);
@@ -75,29 +76,29 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR }) {
   };
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px",marginBottom:24}}>
+    <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"18px 20px",marginBottom:24}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Periodic ER review</div>
+        <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Periodic ER review</div>
         {isHR && (
           <div style={{display:"flex",gap:8}}>
-            <select aria-label="Review period" value={periodType} onChange={e=>setPeriodType(e.target.value)} style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <select aria-label="Review period" value={periodType} onChange={e=>setPeriodType(e.target.value)} style={{fontSize:13,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif"}}>
               {PERIOD_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
-            <button onClick={generate} disabled={generating} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:9,padding:"8px 18px",color:"#fff",fontWeight:600,cursor:generating?"default":"pointer",opacity:generating?0.7:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <button onClick={generate} disabled={generating} style={{fontSize:13,background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"8px 18px",color:"#fff",fontWeight:600,cursor:generating?"default":"pointer",opacity:generating?0.7:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
               {generating?"Generating…":"Generate review"}
             </button>
           </div>
         )}
       </div>
 
-      {error && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>{error}</div>}
-      {loadError && <div style={{fontSize:13,color:"#C84B2F",marginBottom:12}}>Couldn't load the periodic review history right now.</div>}
-      {reviews.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:"#6B6375"}}>No periodic review generated yet.</div>}
+      {error && <div style={{fontSize:13,color:COLOR.red,marginBottom:12}}>{error}</div>}
+      {loadError && <div style={{fontSize:13,color:COLOR.red,marginBottom:12}}>Couldn't load the periodic review history right now.</div>}
+      {reviews.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:COLOR.inkFaint}}>No periodic review generated yet.</div>}
 
       {reviews.map(r => (
-        <div key={r.id} style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid #F5F1EA"}}>
-          <div style={{fontSize:11,color:"#9B9098",marginBottom:8}}>{periodTypeLabel(r.period_type)} · generated {fmtGeneratedAt(r.created_at)}{r.generated_by_name?" by "+r.generated_by_name:""}</div>
-          <div style={{fontSize:13,color:"#1C1820",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{r.narrative}</div>
+        <div key={r.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+          <div style={{fontSize:11,color:COLOR.inkFaint,marginBottom:8}}>{periodTypeLabel(r.period_type)} · generated {fmtGeneratedAt(r.created_at)}{r.generated_by_name?" by "+r.generated_by_name:""}</div>
+          <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.8,whiteSpace:"pre-wrap",maxWidth:"min(720px, 100%)"}}>{r.narrative}</div>
         </div>
       ))}
     </div>

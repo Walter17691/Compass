@@ -19,13 +19,16 @@ test('sending HR guidance produces a real signal a Manager Capability Insight ca
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Assign investigator...' }).click();
+  // Phase 2A — both actions moved into the header's "More actions" menu.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'Assign investigator...' }).click();
   await expect(page.getByText('Investigator', { exact: true })).toBeVisible({ timeout: 10000 });
   const accessSaved = page.waitForResponse(r => r.url().includes('/rest/v1/case_access') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Assign investigator', exact: true }).click();
   await accessSaved;
 
-  await page.getByRole('button', { name: 'HR Intervention', exact: true }).click();
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'HR Intervention' }).click();
   await expect(page.getByText('HR Intervention', { exact: true }).first()).toBeVisible({ timeout: 10000 });
   await page.getByPlaceholder('What should the investigator know?').fill('Investigator did not follow up on the CCTV lead HR flagged earlier.');
   await page.getByRole('button', { name: 'Send guidance', exact: true }).click();

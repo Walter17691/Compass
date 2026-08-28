@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { HomeScreen } from '../screens/HomeScreen.jsx';
 
 // Phase 6.5 hardening (Batch 13) — the dashboard case-search field
@@ -9,7 +9,43 @@ const noop = () => {};
 
 describe('HomeScreen — field labelling (Phase 6.5, Batch 13)', () => {
   it('labels the dashboard case-search field', () => {
-    render(<HomeScreen cases={[]} getCaseStage={() => 'open'} currentUser={{ name: 'Alex' }} getNextStep={() => null} setMeetingSetup={noop} setScreen={noop} setShowCasePrompt={noop} dueSoon={[]} dashSearch="" setDashSearch={noop} dashFilter="all" setDashFilter={noop} setActiveCaseId={noop} setActiveCaseStage={noop} fmtDate={d => d} showToast={noop} calendarConnected={false} connectGoogleCalendar={noop} disconnectGoogleCalendar={noop} setSettingsSection={noop} isHR={true} />);
+    // Home Composition Review — the search/filter row only renders once
+    // there's an active case to search over (see the "quiet Home" tests
+    // below); a real case is supplied here so this test still exercises
+    // the field's accessible name, not the now-intentionally-absent
+    // empty-account state.
+    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
+    render(<HomeScreen cases={[cs]} getCaseStage={() => 'open'} currentUser={{ name: 'Alex' }} getNextStep={() => null} setMeetingSetup={noop} setScreen={noop} setShowCasePrompt={noop} dueSoon={[]} dashSearch="" setDashSearch={noop} dashFilter="all" setDashFilter={noop} setActiveCaseId={noop} setActiveCaseStage={noop} fmtDate={d => d} showToast={noop} calendarConnected={false} connectGoogleCalendar={noop} disconnectGoogleCalendar={noop} setSettingsSection={noop} isHR={true} />);
+    expect(screen.getByLabelText('Search cases')).toBeInTheDocument();
+  });
+});
+
+// Home Composition Review, item 1 + 5 + 9 — a genuinely quiet account (no
+// active cases at all) gets a compact "Your work" prompt instead of the
+// full bordered case-list box, and the search/filter row — which has
+// nothing to filter — doesn't render at all. Cases nav/functionality
+// itself is untouched; this is presentation only.
+describe('HomeScreen — quiet/new-account composition (Home Composition Review)', () => {
+  it('renders a compact "Your work" prompt instead of the case-list filters/box when there are no active cases', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[]} />);
+    expect(screen.getByText('Your work')).toBeInTheDocument();
+    expect(screen.getByText('No active cases yet.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Search cases')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Investigation' })).not.toBeInTheDocument();
+  });
+
+  it('wires the quiet-state "+ New case" button to the same create-case handler as the header action', () => {
+    const setShowCasePrompt = vi.fn();
+    render(<HomeScreen {...baseHomeProps} cases={[]} setShowCasePrompt={setShowCasePrompt} />);
+    fireEvent.click(screen.getAllByRole('button', { name: '+ New case' })[0]);
+    expect(setShowCasePrompt).toHaveBeenCalledWith(true);
+  });
+
+  it('renders the full Active cases header, filters and list once at least one active case exists', () => {
+    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
+    render(<HomeScreen {...baseHomeProps} cases={[cs]} />);
+    expect(screen.queryByText('Your work')).not.toBeInTheDocument();
+    expect(screen.getByText('Active cases')).toBeInTheDocument();
     expect(screen.getByLabelText('Search cases')).toBeInTheDocument();
   });
 });
@@ -66,13 +102,15 @@ describe('HomeScreen — Needs Attention severity (Phase 7.5B, item 6)', () => {
   });
 });
 
-// Phase 7.5B (P0 polish, item 7) — Compass Recommendations' own heading
-// must render smaller than Active Cases' heading (20px), so it reads as
-// secondary rather than co-equal with the user's actual workload.
-// Content/ranking/click-through are untouched — only asserting the
-// heading isn't full-size.
-describe('HomeScreen — Compass Recommendations prominence (Phase 7.5B, item 7)', () => {
-  it('renders the Compass Recommendations heading smaller than the Active cases heading', () => {
+// Phase 7.5B (P0 polish, item 7) / Phase 2A (Calm Intelligence) —
+// Compass Recommendations was demoted again in Phase 2A: no longer its
+// own bordered card with a serif sub-heading at all, folded into one
+// ambient "Compass intelligence" section (a plain small-caps label, no
+// card, no per-item heading) stacked below Active Cases rather than
+// beside it. Content/ranking/click-through are untouched — only
+// asserting the section reads as genuinely quieter than Active Cases.
+describe('HomeScreen — Compass intelligence prominence (Phase 2A, Calm Intelligence)', () => {
+  it('renders "Compass intelligence" as a quiet section heading, smaller than the Active cases heading, with no competing bordered card', () => {
     const cs = { id: 'c3', employeeName: 'Some Case', caseType: 'misconduct' };
     const caseSignals = [{ id: 's2', caseId: 'c3', type: 'next_action', status: 'open', title: 'Do the thing' }];
     render(<HomeScreen {...baseHomeProps} cases={[cs]} caseSignals={caseSignals} />);
@@ -81,8 +119,13 @@ describe('HomeScreen — Compass Recommendations prominence (Phase 7.5B, item 7)
     // shouldn't need updating again if a future change reintroduces a
     // second match) — the section heading itself is the largest match.
     const activeCasesHeading = screen.getAllByText('Active cases').sort((a,b)=>Number(b.style.fontSize.replace('px',''))-Number(a.style.fontSize.replace('px','')))[0];
-    const recommendationsHeading = screen.getByText('Compass Recommendations');
-    expect(Number(recommendationsHeading.style.fontSize.replace('px',''))).toBeLessThan(Number(activeCasesHeading.style.fontSize.replace('px','')));
+    const intelligenceHeading = screen.getByText('Compass intelligence');
+    expect(Number(intelligenceHeading.style.fontSize.replace('px',''))).toBeLessThan(Number(activeCasesHeading.style.fontSize.replace('px','')));
+    // No bordered card wrapping this section any more — a plain top rule
+    // only (no background, no border-radius), distinguishing it from
+    // Active Cases' own real bordered surface below.
+    expect(intelligenceHeading.parentElement.style.background).toBeFalsy();
+    expect(intelligenceHeading.parentElement.style.borderRadius).toBeFalsy();
     // Functionality must survive the presentation change: the
     // recommendation itself still renders and is still findable.
     expect(screen.getByText('Do the thing')).toBeInTheDocument();

@@ -22,13 +22,21 @@ test('sending guidance creates a real task, and pausing an investigation is refl
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Assign investigator...' }).click();
+  // Phase 2A (Compass Design Vision) — the case header's five equal-
+  // weight action buttons (Mark confidential/Reassign/Assign
+  // investigator/HR Intervention/+New meeting) collapsed into one
+  // primary action + a "More actions" menu; every action below now
+  // opens that menu first, same handlers, same effects, just one extra
+  // click to reach them.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'Assign investigator...' }).click();
   await expect(page.getByText('Investigator', { exact: true })).toBeVisible({ timeout: 10000 });
   const accessSaved = page.waitForResponse(r => r.url().includes('/rest/v1/case_access') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Assign investigator', exact: true }).click();
   await accessSaved;
 
-  await page.getByRole('button', { name: 'HR Intervention', exact: true }).click();
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'HR Intervention' }).click();
   await expect(page.getByText('HR Intervention', { exact: true }).first()).toBeVisible({ timeout: 10000 });
   await page.getByPlaceholder('What should the investigator know?').fill('Please re-check the loading bay CCTV timestamps.');
   // Verified via the UI rather than a network-response race: local state
@@ -46,12 +54,15 @@ test('sending guidance creates a real task, and pausing an investigation is refl
   await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
   await expect(page.getByText('Guidance from HR: Please re-check the loading bay CCTV timestamps.', { exact: true })).toBeVisible({ timeout: 15000 });
 
-  // Pause — the header button itself flips to "Paused".
-  await page.getByRole('button', { name: 'HR Intervention', exact: true }).click();
+  // Pause — a persistent "Paused" indicator now sits next to the case
+  // status badge (Phase 2A), separate from the menu action that toggles
+  // it, since that's genuine status information, not just an action.
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: 'HR Intervention' }).click();
   const caseSaved = page.waitForResponse(r => r.url().includes('/rest/v1/cases') && ['POST','PATCH'].includes(r.request().method()));
   await page.getByRole('button', { name: 'Pause investigation', exact: true }).click();
   await caseSaved;
-  await expect(page.getByRole('button', { name: 'Paused', exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible({ timeout: 10000 });
 
   // MP18's own dashboard picks the same flag up.
   await page.locator('aside, header').getByRole('button', { name: 'Delegated Work', exact: true }).click();

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
+import { PageHeader } from '../components/design/PageHeader';
+import { CONTENT_MAX_WIDTH } from '../styles/tokens';
 import { SettingsNav } from './settings/SettingsNav';
 import { ManagerInsightsScreen } from './ManagerInsightsScreen';
 import { ErReportScreen } from './ErReportScreen';
@@ -51,9 +53,8 @@ export function InsightsScreen({
   const [active, setActive] = useState(deepLink.initialSection && sections.some(s=>s.id===deepLink.initialSection) ? deepLink.initialSection : "overview");
 
   return (
-    <div style={{maxWidth:1080,margin:"0 auto",padding:"40px 20px"}}>
-      <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Insights</h2>
-      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px"}}>What your Employee Relations data is telling you across every case — patterns, themes, and where to focus.</p>
+    <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"40px 28px",minWidth:0,width:"100%",boxSizing:"border-box"}}>
+      <PageHeader title="Insights" subtitle="What your Employee Relations data is telling you across every case — patterns, themes, and where to focus."/>
 
       <div style={{display:"flex",gap:32,alignItems:"flex-start"}}>
         <SettingsNav sections={sections} active={active} onChange={v=>{setActive(v); deepLink.clearInitialSection?.();}} isMobile={false}/>

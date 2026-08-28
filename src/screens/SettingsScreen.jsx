@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
+import { PageHeader } from '../components/design/PageHeader';
+import { CONTENT_MAX_WIDTH } from '../styles/tokens';
 import { SettingsNav } from './settings/SettingsNav';
 import { BillingSection } from './settings/BillingSection';
 import { TeamAccessSection } from './settings/TeamAccessSection';
@@ -111,9 +113,14 @@ export function SettingsScreen({
   useEffect(() => () => clearInitialSection?.(), []);
 
   return(
-    <div style={{maxWidth:920,margin:"0 auto",padding:"40px 20px"}}>
-      <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Settings</h2>
-      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px"}}>Case files and employee records are stored securely in the cloud, shared with your organisation.</p>
+    <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"40px 28px"}}>
+      {/* Phase 2B — demoted from the editorial identity heading treatment
+          (serif, purple) to the plain PageHeader every other non-
+          identity screen uses (Compass Design Vision §5): Settings is
+          deliberately secondary to the case-management product, not
+          another hero screen. Routes/permissions/sections below are
+          completely unchanged. */}
+      <PageHeader title="Settings" subtitle="Case files and employee records are stored securely in the cloud, shared with your organisation."/>
 
       <div style={{display:"flex",gap:32,alignItems:"flex-start"}}>
         <SettingsNav sections={sections} active={active} onChange={setActive} isMobile={isMobile} groups={SETTINGS_GROUPS}/>

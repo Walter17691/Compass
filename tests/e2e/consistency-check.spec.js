@@ -56,6 +56,7 @@ async function createClosedComparableCase(page, employeeName, caseType, outcomeT
   await page.getByRole('button', { name: '← Cases' }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   const today = new Date().toISOString().split('T')[0];
+  await page.getByRole('button', { name: /More filters/ }).click(); // Phase 2B - date range moved behind More filters
   await page.getByLabel('From', { exact: true }).fill(today);
   await page.getByLabel('Filter by case type').selectOption(caseType);
   await revealCase(page, employeeName);

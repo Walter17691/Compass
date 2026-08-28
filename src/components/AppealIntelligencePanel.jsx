@@ -1,22 +1,26 @@
 import { computeAppealIntelligence, APPEAL_MIN_SAMPLE_SIZE } from '../lib/appealIntelligence';
 import { APPEAL_OUTCOMES } from '../lib/allegations';
 import { DataQualityCaveat } from './DataQualityCaveat';
+import { COLOR, TYPE, FONT, RADIUS } from '../styles/tokens';
 
-const StatBox = ({ label, value, sub, accent = "#7C5CFC" }) => (
-  <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
-    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{label}</div>
-    <div style={{fontSize:30,fontWeight:700,color:accent,fontFamily:"DM Serif Display,Georgia,serif",marginBottom:4,lineHeight:1}}>{value}</div>
-    {sub&&<div style={{fontSize:11,color:"#9B9098"}}>{sub}</div>}
+// Phase 2C — plain ink accent for the headline rate (not a graded
+// metric), and one neutral bar colour for outcome/stage breakdowns
+// (categories, not urgency states).
+const StatBox = ({ label, value, sub, accent = COLOR.ink }) => (
+  <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"18px 20px"}}>
+    <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:8}}>{label}</div>
+    <div style={{fontSize:28,fontWeight:700,color:accent,fontFamily:FONT.serif,marginBottom:4,lineHeight:1}}>{value}</div>
+    {sub&&<div style={{fontSize:11,color:COLOR.inkFaint}}>{sub}</div>}
   </div>
 );
 
-const BarRow = ({ label, value, max, color = "#7C5CFC" }) => (
+const BarRow = ({ label, value, max, color = COLOR.inkQuiet }) => (
   <div style={{marginBottom:8}}>
     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-      <span style={{fontSize:12,color:"#1C1820"}}>{label}</span>
-      <span style={{fontSize:12,color:"#9B9098"}}>{value}</span>
+      <span style={{fontSize:12,color:COLOR.ink}}>{label}</span>
+      <span style={{fontSize:12,color:COLOR.inkFaint}}>{value}</span>
     </div>
-    <div style={{background:"#F5F1EA",borderRadius:3,height:5}}>
+    <div style={{background:COLOR.borderFaint,borderRadius:3,height:5}}>
       <div style={{background:color,borderRadius:3,height:5,width:`${max>0?Math.round((value/max)*100):0}%`}}/>
     </div>
   </div>
@@ -36,7 +40,7 @@ export function AppealIntelligencePanel({ allegations, cases, caseSignals }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Appeal intelligence</div>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Appeal intelligence</div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
         {data.appealRate !== null
@@ -45,33 +49,33 @@ export function AppealIntelligencePanel({ allegations, cases, caseSignals }) {
       </div>
 
       <div>
-        <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Appeal outcomes</div>
+        <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Appeal outcomes</div>
         {outcomeEntries.length === 0
-          ? <div style={{fontSize:13,color:"#6B6375"}}>No appeal outcomes recorded yet.</div>
+          ? <div style={{fontSize:13,color:COLOR.inkFaint}}>No appeal outcomes recorded yet.</div>
           : data.outcomeSampleSize < APPEAL_MIN_SAMPLE_SIZE
           ? <DataQualityCaveat total={data.outcomeSampleSize} minRequired={APPEAL_MIN_SAMPLE_SIZE} label="appeals recorded"/>
-          : outcomeEntries.map(([label, value]) => <BarRow key={label} label={label} value={value} max={maxOutcome} color="#C84B2F"/>)}
+          : outcomeEntries.map(([label, value]) => <BarRow key={label} label={label} value={value} max={maxOutcome}/>)}
       </div>
 
       <div>
-        <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Original stage of successful appeals</div>
+        <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Original stage of successful appeals</div>
         {stageEntries.length === 0
-          ? <div style={{fontSize:13,color:"#6B6375"}}>No successful appeals with a recorded appeal meeting yet.</div>
+          ? <div style={{fontSize:13,color:COLOR.inkFaint}}>No successful appeals with a recorded appeal meeting yet.</div>
           : data.stageSampleSize < APPEAL_MIN_SAMPLE_SIZE
           ? <DataQualityCaveat total={data.stageSampleSize} minRequired={APPEAL_MIN_SAMPLE_SIZE} label="successful appeals recorded"/>
-          : stageEntries.map(([label, value]) => <BarRow key={label} label={label} value={value} max={maxStage} color="#1A7A4A"/>)}
+          : stageEntries.map(([label, value]) => <BarRow key={label} label={label} value={value} max={maxStage}/>)}
       </div>
 
       <div>
-        <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Most common appeal grounds</div>
+        <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:8}}>Most common appeal grounds</div>
         {data.commonGrounds.length === 0
-          ? <div style={{fontSize:13,color:"#6B6375"}}>No appeal grounds recorded yet.</div>
+          ? <div style={{fontSize:13,color:COLOR.inkFaint}}>No appeal grounds recorded yet.</div>
           : data.groundSampleSize < APPEAL_MIN_SAMPLE_SIZE
           ? <DataQualityCaveat total={data.groundSampleSize} minRequired={APPEAL_MIN_SAMPLE_SIZE} label="appeal grounds recorded"/>
           : (
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {data.commonGrounds.map(g => (
-                <span key={g.ground} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:20,padding:"3px 10px"}}>{g.ground} · {g.count} case{g.count===1?"":"s"}</span>
+                <span key={g.ground} style={{fontSize:11,color:COLOR.inkSoft,background:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.pill,padding:"3px 10px"}}>{g.ground} · {g.count} case{g.count===1?"":"s"}</span>
               ))}
             </div>
           )}

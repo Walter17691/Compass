@@ -40,7 +40,8 @@ test('the Trends & Themes tab loads real trend data without erroring', async ({ 
   await login(page);
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Trends & Themes', exact: true }).click();
-  await expect(page.getByText(/Trends \(last 90 days vs previous 90 days\)/)).toBeVisible({ timeout: 10000 });
+  // Phase 2C — heading reworded to lead with the question it answers.
+  await expect(page.getByText(/What is changing\? \(last 90 days vs previous 90 days\)/)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("Couldn't load trend data right now.")).not.toBeVisible();
 });
 

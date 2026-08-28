@@ -37,7 +37,22 @@ test('a change made after the first view shows up as a dismissible banner on the
 
   // This is the case's first-ever view (opened right after "Create case")
   // — no prior case_views row exists yet, so the banner must not appear.
-  const changesBanner = page.locator('div').filter({ hasText: /update.*since you last viewed|Since you last viewed this case|Compass is summarising/i }).last();
+  //
+  // Pre-existing bug found while verifying Phase 2B (unrelated to it —
+  // CaseViewScreen.jsx's own banner markup here is byte-identical to
+  // HEAD). `locator('div').filter({hasText})` matches every ANCESTOR div
+  // whose full text content happens to include the phrase too (a plain
+  // div+hasText filter has no "innermost match only" behaviour) — .last()
+  // resolved to the message-only inner div (no Dismiss descendant, so
+  // the later click hung for the full 60s timeout); .first() resolved to
+  // a much higher page-level wrapper div, which also (correctly, if
+  // uselessly here) contains the toast's own "Dismiss" and the sidebar's
+  // unrelated "Couldn't load portal accounts" Dismiss, tripping a strict-
+  // mode violation. getByText finds only the message's own innermost
+  // element (Playwright's own documented behaviour, unlike a raw
+  // div+hasText filter); its parent is the actual banner wrapper — same
+  // xpath-to-parent pattern this file already uses just below.
+  const changesBanner = page.getByText(/update.*since you last viewed|Since you last viewed this case|Compass is summarising/i).locator('xpath=..');
   await expect(changesBanner).not.toBeVisible();
 
   // Add a task from inside the case — this writes a real "Task added"
@@ -60,6 +75,7 @@ test('a change made after the first view shows up as a dismissible banner on the
   await page.getByRole('button', { name: '← Cases' }).click();
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
   const today = new Date().toISOString().split('T')[0];
+  await page.getByRole('button', { name: /More filters/ }).click(); // Phase 2B - date range moved behind More filters
   await page.getByLabel('From', { exact: true }).fill(today);
   await page.getByLabel('Filter by case type').selectOption('misconduct');
   await revealCase(page, employeeName);

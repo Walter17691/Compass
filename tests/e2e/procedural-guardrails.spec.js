@@ -31,11 +31,15 @@ test('Compass flags the same chair running both the investigation and the discip
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
   // Second meeting for the same case, same chair name — "+ New meeting"
-  // from the case header (see inconsistency-detection.spec.js's own
-  // precedent for why the meeting-type button needs role-scoping here:
-  // the case's own stage badge already renders "Investigation" as plain
+  // now lives in the header's "More actions" menu (Phase 2A), same
+  // reasoning as inconsistency-detection.spec.js: the primary button is
+  // occupied by the real next-step recommendation once a meeting has
+  // been recorded (see inconsistency-detection.spec.js's own precedent
+  // for why the meeting-type button also needs role-scoping here: the
+  // case's own stage badge already renders "Investigation" as plain
   // text by this point).
-  await page.getByRole('button', { name: '+ New meeting' }).click();
+  await page.getByRole('button', { name: /More actions/ }).click();
+  await page.getByRole('menuitem', { name: '+ New meeting' }).click();
   await page.getByRole('button', { name: 'Disciplinary ACAS S2' }).click();
   await page.getByPlaceholder('e.g. Tom Norton').fill(chairName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

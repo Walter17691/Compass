@@ -4,6 +4,7 @@ import { computeStageDurations } from '../lib/processDashboard';
 import { computeInformalFormalSplit } from '../lib/orgIntelligence';
 import { themeFrequency } from '../lib/themes';
 import { daysBetween } from '../lib/dateMath';
+import { COLOR, FONT } from '../styles/tokens';
 import { DataQualityCaveat } from './DataQualityCaveat';
 import { SiteIntelligencePanel } from './SiteIntelligencePanel';
 import { BenchmarkingPanel } from './BenchmarkingPanel';
@@ -22,29 +23,44 @@ const MIN_DURATION_SAMPLE = 3;
 // guard everywhere else in this phase (Trends, Risk Map, Benchmarking).
 const MIN_BAR_SAMPLE = 3;
 
-const StatBox = ({ label, value, sub, accent = "#7C5CFC" }) => (
-  <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
-    <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{label}</div>
-    <div style={{fontSize:30,fontWeight:700,color:accent,fontFamily:"DM Serif Display,Georgia,serif",marginBottom:4,lineHeight:1}}>{value}</div>
-    {sub&&<div style={{fontSize:11,color:"#9B9098"}}>{sub}</div>}
+// Phase 2B (Compass Design Vision §3) — default accent is neutral ink,
+// not the brand purple: a plain count (open cases, avg duration) isn't
+// an interactive/primary element, so it shouldn't borrow that colour.
+// Explicit accent props (green for positive, red for overdue) are
+// unchanged — those are genuinely semantic. `large` gives the one or
+// two promoted headline metrics a bigger, calmer treatment without a
+// different DOM shape (label + value stay direct siblings under one
+// wrapper, same as every other tile — several tests key off exactly
+// that structure).
+const StatBox = ({ label, value, sub, accent = COLOR.ink, large = false }) => (
+  <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:10,padding:large?"22px 24px":"16px 18px"}}>
+    <div style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{label}</div>
+    <div style={{fontSize:large?36:26,fontWeight:700,color:accent,fontFamily:FONT.serif,marginBottom:4,lineHeight:1}}>{value}</div>
+    {sub&&<div style={{fontSize:12,color:COLOR.inkFaint}}>{sub}</div>}
   </div>
 );
 
-const BarRow = ({ label, value, max, color = "#7C5CFC" }) => (
+// Phase 2B — one neutral bar colour across every breakdown (type/site/
+// department/outcome). These are category counts, not urgency states;
+// the old per-panel amber/blue/red assignments implied a severity that
+// isn't there (Compass Design Vision §7 — neutral grey for categories
+// that aren't inherently urgent, colour reserved for genuine semantic
+// meaning elsewhere).
+const BarRow = ({ label, value, max, color = COLOR.inkQuiet }) => (
   <div style={{marginBottom:10}}>
     <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-      <span style={{fontSize:12,color:"#1C1820",fontWeight:500}}>{label}</span>
-      <span style={{fontSize:12,color:"#9B9098"}}>{value}</span>
+      <span style={{fontSize:12,color:COLOR.ink,fontWeight:500}}>{label}</span>
+      <span style={{fontSize:12,color:COLOR.inkFaint}}>{value}</span>
     </div>
-    <div style={{background:"#F5F1EA",borderRadius:3,height:6}}>
+    <div style={{background:COLOR.borderFaint,borderRadius:3,height:6}}>
       <div style={{background:color,borderRadius:3,height:6,width:`${max>0?Math.round((value/max)*100):0}%`,transition:"width 0.3s"}}/>
     </div>
   </div>
 );
 
 const Panel = ({ title, children }) => (
-  <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"18px 20px"}}>
-    <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:14}}>{title}</div>
+  <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:10,padding:"16px 18px"}}>
+    <div style={{fontSize:11,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>{title}</div>
     {children}
   </div>
 );
@@ -141,14 +157,29 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
   const outcomeEntries = withSampleFloor(topEntries(overview.cases_by_outcome));
   const maxOf = entries => Math.max(1, ...entries.map(([,v])=>v));
 
+  // Phase 2B (Compass Design Vision §3) — "Open cases" promoted to a
+  // single headline tile with the opened/closed-this-month figures
+  // folded into its own interpretive line, rather than four equal-sized
+  // tiles competing for attention. Both figures are real, already-
+  // fetched values from the same RPC — nothing invented or compared
+  // that wasn't already being shown. Overdue/Returned stay as their own
+  // smaller tiles since they're the two counts that most directly say
+  // "look here," not because they need equal visual weight to the
+  // headline.
+  const monthlyMovement = `${overview.opened_in_period} opened, ${overview.closed_in_period} closed this month`;
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
-        <StatBox label="Open cases" value={overview.open_cases} sub={overview.total_cases+" total"}/>
-        <StatBox label="Opened this month" value={overview.opened_in_period} accent="#1A7A4A"/>
-        <StatBox label="Closed this month" value={overview.closed_in_period} accent="#1A7A4A"/>
-        <StatBox label="Overdue cases" value={overdueCaseIds.size} accent={overdueCaseIds.size>0?"#C84B2F":"#1A7A4A"}/>
-        <StatBox label="Returned for further investigation" value={returnedForFurtherInvestigation} accent="#B87520"/>
+      {/* Phase 2C fix — the previous fixed minmax(220,1.4fr)+2x
+          minmax(160,1fr) template had a hard combined minimum (540px+
+          gaps) that could exceed the available column width at 1024px,
+          forcing real horizontal page overflow. auto-fit keeps the same
+          3-across layout at normal widths but degrades by wrapping
+          instead of overflowing. */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+        <StatBox large label="Open cases" value={overview.open_cases} sub={`${overview.total_cases} total · ${monthlyMovement}`}/>
+        <StatBox label="Overdue cases" value={overdueCaseIds.size} accent={overdueCaseIds.size>0?COLOR.red:COLOR.green}/>
+        <StatBox label="Returned for further investigation" value={returnedForFurtherInvestigation} accent={returnedForFurtherInvestigation>0?COLOR.amber:COLOR.ink}/>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
@@ -156,37 +187,37 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
           ? <StatBox label="Avg case duration" value={overview.avg_case_duration_days+"d"} sub={overview.closed_cases_with_duration+" closed cases measured"}/>
           : <DataQualityCaveat total={overview.closed_cases_with_duration} minRequired={MIN_DURATION_SAMPLE} label="closed cases with measurable duration"/>}
         {investigationCaseCount >= MIN_DURATION_SAMPLE
-          ? <StatBox label="Avg investigation duration" value={avgInvestigationDays+"d"} sub={investigationCaseCount+" cases currently in investigation"} accent="#7C5CFC"/>
+          ? <StatBox label="Avg investigation duration" value={avgInvestigationDays+"d"} sub={investigationCaseCount+" cases currently in investigation"}/>
           : <DataQualityCaveat total={investigationCaseCount} minRequired={MIN_DURATION_SAMPLE} label="cases currently in investigation"/>}
-        <StatBox label="Informal resolution" value={resolutionSplit.informal} sub={resolutionSplit.formal+" formal"} accent="#1A7A4A"/>
+        <StatBox label="Informal resolution" value={resolutionSplit.informal} sub={resolutionSplit.formal+" formal"} accent={COLOR.green}/>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
         <Panel title="Cases by type">
-          {typeEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
+          {typeEntries.visible.length===0 && <div style={{fontSize:12,color:COLOR.inkFaint}}>No data yet.</div>}
           {typeEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(typeEntries.visible)}/>)}
-          {typeEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{typeEntries.suppressedCount} categor{typeEntries.suppressedCount===1?"y":"ies"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
+          {typeEntries.suppressedCount>0 && <div style={{fontSize:11,color:COLOR.inkFaint,marginTop:4}}>{typeEntries.suppressedCount} categor{typeEntries.suppressedCount===1?"y":"ies"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Cases by site">
-          {locationEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
-          {locationEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(locationEntries.visible)} color="#B87520"/>)}
-          {locationEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{locationEntries.suppressedCount} site{locationEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
+          {locationEntries.visible.length===0 && <div style={{fontSize:12,color:COLOR.inkFaint}}>No data yet.</div>}
+          {locationEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(locationEntries.visible)}/>)}
+          {locationEntries.suppressedCount>0 && <div style={{fontSize:11,color:COLOR.inkFaint,marginTop:4}}>{locationEntries.suppressedCount} site{locationEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Cases by department">
-          {departmentEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No data yet.</div>}
-          {departmentEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(departmentEntries.visible)} color="#1C5AA0"/>)}
-          {departmentEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{departmentEntries.suppressedCount} department{departmentEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
+          {departmentEntries.visible.length===0 && <div style={{fontSize:12,color:COLOR.inkFaint}}>No data yet.</div>}
+          {departmentEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(departmentEntries.visible)}/>)}
+          {departmentEntries.suppressedCount>0 && <div style={{fontSize:11,color:COLOR.inkFaint,marginTop:4}}>{departmentEntries.suppressedCount} department{departmentEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Outcome types">
-          {outcomeEntries.visible.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recorded outcomes yet.</div>}
-          {outcomeEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(outcomeEntries.visible)} color="#C84B2F"/>)}
-          {outcomeEntries.suppressedCount>0 && <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>{outcomeEntries.suppressedCount} outcome{outcomeEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
+          {outcomeEntries.visible.length===0 && <div style={{fontSize:12,color:COLOR.inkFaint}}>No recorded outcomes yet.</div>}
+          {outcomeEntries.visible.map(([k,v])=><BarRow key={k} label={k} value={v} max={maxOf(outcomeEntries.visible)}/>)}
+          {outcomeEntries.suppressedCount>0 && <div style={{fontSize:11,color:COLOR.inkFaint,marginTop:4}}>{outcomeEntries.suppressedCount} outcome{outcomeEntries.suppressedCount===1?"":"s"} with under {MIN_BAR_SAMPLE} cases not shown</div>}
         </Panel>
         <Panel title="Repeat case themes">
-          {themeFrequencies.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No recurring themes tagged across 3+ cases yet.</div>}
+          {themeFrequencies.length===0 && <div style={{fontSize:12,color:COLOR.inkFaint}}>No recurring themes tagged across 3+ cases yet.</div>}
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {themeFrequencies.map(t=>(
-              <span key={t.themeId} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:20,padding:"3px 10px"}}>{t.name} · {t.count} case{t.count===1?"":"s"}</span>
+              <span key={t.themeId} style={{fontSize:11,color:COLOR.inkSoft,background:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,borderRadius:20,padding:"3px 10px"}}>{t.name} · {t.count} case{t.count===1?"":"s"}</span>
             ))}
           </div>
         </Panel>
@@ -196,7 +227,7 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
       <BenchmarkingPanel overview={overview} cases={cases}/>
 
       <div>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Process bottlenecks by site</div>
+        <div style={{fontSize:11,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Process bottlenecks by site</div>
         <ProcessBottlenecksPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} onOpenCase={onOpenCase}/>
       </div>
 

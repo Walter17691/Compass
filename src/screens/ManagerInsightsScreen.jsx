@@ -1,12 +1,17 @@
 import { Card, Btn } from '../components/Primitives';
 import { computeManagerPerformanceInsights } from '../lib/managerInsights';
 import { collectInterventionSignals } from '../lib/managerLearningLoop';
+import { COLOR, TYPE, FONT, RADIUS } from '../styles/tokens';
 
+// Phase 2C — plain ink accent, not the old fixed near-black hex: these
+// are org-wide aggregate counts, not a per-manager comparison, so
+// nothing here should read as "graded" (no red/green scoring, per the
+// Design Vision's explicit management-support-not-ranking principle).
 const StatTile = ({ label, value, detail }) => (
-  <Card style={{flex:"1 1 200px",minWidth:200}}>
-    <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>{label}</div>
-    <div style={{fontSize:28,fontWeight:600,color:"#1A1535",fontFamily:"DM Serif Display,Georgia,serif"}}>{value}</div>
-    {detail&&<div style={{fontSize:12,color:"#6B6375",marginTop:4}}>{detail}</div>}
+  <Card style={{flex:"1 1 200px",minWidth:200,border:`1px solid ${COLOR.borderFaint}`}}>
+    <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:8}}>{label}</div>
+    <div style={{fontSize:26,fontWeight:600,color:COLOR.ink,fontFamily:FONT.serif}}>{value}</div>
+    {detail&&<div style={{fontSize:12,color:COLOR.inkFaint,marginTop:4}}>{detail}</div>}
   </Card>
 );
 
@@ -34,14 +39,14 @@ export function ManagerInsightsScreen({ cases, caseAccess, hrReviewRequests, aud
   const signalCount = collectInterventionSignals(caseTasks, hrReviewRequests, auditLog).length;
 
   return (
-    <div style={{maxWidth:900,margin:"0 auto",padding:"40px 20px"}}>
-      <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Manager Performance Insights</h2>
-      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px",maxWidth:560}}>
+    <div style={{maxWidth:900,margin:"0 auto",padding:"8px 0 40px"}}>
+      <h2 style={{...TYPE.pageTitle,color:COLOR.ink,margin:"0 0 4px"}}>Manager Performance Insights</h2>
+      <p style={{fontSize:13,color:COLOR.inkFaint,margin:"0 0 24px",maxWidth:560}}>
         Aggregated, organisation-wide trends across delegated investigations — advisory context for training and process decisions, not a score for any individual manager.
       </p>
 
       {insights.delegatedCaseCount===0 ? (
-        <Card style={{textAlign:"center",padding:"32px 20px",color:"#9B9098",fontSize:13}}>No investigations have been delegated yet — insights will appear here once managers start taking on investigations.</Card>
+        <Card style={{textAlign:"center",padding:"32px 20px",color:COLOR.inkFaint,fontSize:13,border:`1px solid ${COLOR.borderFaint}`}}>No investigations have been delegated yet — insights will appear here once managers start taking on investigations.</Card>
       ) : (
         <div style={{display:"flex",flexWrap:"wrap",gap:16}}>
           <StatTile
@@ -72,11 +77,11 @@ export function ManagerInsightsScreen({ cases, caseAccess, hrReviewRequests, aud
         </div>
       )}
 
-      <div style={{marginTop:36,paddingTop:28,borderTop:"1px solid #EDE5D8"}}>
+      <div style={{marginTop:36,paddingTop:28,borderTop:`1px solid ${COLOR.borderFaint}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,marginBottom:16,flexWrap:"wrap"}}>
           <div>
-            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:19,color:"#1A1535",margin:"0 0 4px",fontWeight:600}}>Manager Capability Insight</h3>
-            <p style={{fontSize:13,color:"#6B6375",margin:0,maxWidth:520}}>Recurring themes across HR's own recorded interventions, with a suggested organisational response — never a comment on any named manager.</p>
+            <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:4}}>Manager Capability Insight</div>
+            <p style={{fontSize:13,color:COLOR.inkFaint,margin:0,maxWidth:520}}>Recurring themes across HR's own recorded interventions, with a suggested organisational response — never a comment on any named manager.</p>
           </div>
           {onGenerateManagerInsight&&(
             <Btn onClick={onGenerateManagerInsight} disabled={generatingManagerInsight||signalCount===0}>
@@ -86,24 +91,24 @@ export function ManagerInsightsScreen({ cases, caseAccess, hrReviewRequests, aud
         </div>
 
         {signalCount===0&&!managerCapabilityInsights?.length ? (
-          <Card style={{textAlign:"center",padding:"24px 20px",color:"#9B9098",fontSize:13}}>Not enough recorded intervention history yet — insights will be available once HR has sent guidance, returned an investigation, or recorded an override.</Card>
+          <Card style={{textAlign:"center",padding:"24px 20px",color:COLOR.inkFaint,fontSize:13,border:`1px solid ${COLOR.borderFaint}`}}>Not enough recorded intervention history yet — insights will be available once HR has sent guidance, returned an investigation, or recorded an override.</Card>
         ) : !managerCapabilityInsights?.length ? (
-          <Card style={{textAlign:"center",padding:"24px 20px",color:"#9B9098",fontSize:13}}>No insight generated yet — click "Generate insight" to analyse what's been recorded so far.</Card>
+          <Card style={{textAlign:"center",padding:"24px 20px",color:COLOR.inkFaint,fontSize:13,border:`1px solid ${COLOR.borderFaint}`}}>No insight generated yet — click "Generate insight" to analyse what's been recorded so far.</Card>
         ) : managerCapabilityInsights.map(insight=>(
-          <Card key={insight.id} style={{marginBottom:16}}>
-            <div style={{fontSize:11,color:"#9B9098",marginBottom:12}}>Generated {fmtGeneratedAt(insight.created_at)} · based on {insight.sample_size} recorded intervention{insight.sample_size===1?"":"s"}</div>
+          <Card key={insight.id} style={{marginBottom:16,border:`1px solid ${COLOR.borderFaint}`}}>
+            <div style={{fontSize:11,color:COLOR.inkFaint,marginBottom:12}}>Generated {fmtGeneratedAt(insight.created_at)} · based on {insight.sample_size} recorded intervention{insight.sample_size===1?"":"s"}</div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
               {(insight.categories||[]).map((cat,i)=>(
-                <div key={i} style={{background:"#F9F7F2",border:"1px solid #EDE5D8",borderRadius:8,padding:"10px 12px"}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:2}}>{cat.label}</div>
-                  {cat.description&&<div style={{fontSize:12,color:"#6B6375",marginBottom:cat.frequency?4:0}}>{cat.description}</div>}
-                  {cat.frequency&&<div style={{fontSize:11,color:"#9B9098"}}>{cat.frequency}</div>}
+                <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+                  <div style={{fontSize:13,fontWeight:600,color:COLOR.ink,marginBottom:2}}>{cat.label}</div>
+                  {cat.description&&<div style={{fontSize:12,color:COLOR.inkSoft,marginBottom:cat.frequency?4:0}}>{cat.description}</div>}
+                  {cat.frequency&&<div style={{fontSize:11,color:COLOR.inkFaint}}>{cat.frequency}</div>}
                 </div>
               ))}
             </div>
             {insight.suggested_response&&(
-              <div style={{fontSize:12,color:"#1A1535",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px"}}>
-                <span style={{fontWeight:700,color:"#7C5CFC"}}>Suggested response: </span>{insight.suggested_response}
+              <div style={{fontSize:12,color:COLOR.ink,background:COLOR.purpleTint,borderRadius:RADIUS.surface,padding:"10px 12px"}}>
+                <span style={{fontWeight:700,color:COLOR.purpleDeep}}>Suggested response: </span>{insight.suggested_response}
               </div>
             )}
           </Card>
