@@ -15,8 +15,13 @@ This is a documentation-only deliverable — no application code, database, or U
 | G | [G-FINDINGS-REGISTER.md](./G-FINDINGS-REGISTER.md) | Defect/feedback log template and columns |
 | H | [H-UAT-SCORECARD.md](./H-UAT-SCORECARD.md) | Summary rollup for a decision-maker who wasn't in the room |
 | I | [I-BETA-DECISION-GATE.md](./I-BETA-DECISION-GATE.md) | Final PASS / PASS WITH CONDITIONS / FAIL checklist |
+| J | [J-ENVIRONMENT-AND-DATA.md](./J-ENVIRONMENT-AND-DATA.md) | *(Phase 8A)* Environment decision, version freeze, Meridian dataset, tester account matrix, scenario prep matrix |
+| K | [K-SESSION-EXECUTION-CHECKLIST.md](./K-SESSION-EXECUTION-CHECKLIST.md) | *(Phase 8A)* Facilitator checklist, recording, stop conditions, pilot plan, session order |
+| L | [L-GO-NO-GO.md](./L-GO-NO-GO.md) | *(Phase 8A)* Pre-UAT readiness checklist, manual actions, GO/NO-GO |
 
-Run sessions in the order Documents A→B naturally imply: read A once, use B every session, C+D are what you hand the tester, E+F are what you fill in during/after, and G/H/I are completed once real data exists.
+Run sessions in the order Documents A→B naturally imply: read A once, use B every session, C+D are what you hand the tester, E+F are what you fill in during/after, and G/H/I are completed once real data exists. J/K/L (Phase 8A) sit in front of all of that — they make the programme actually executable: J says *where* UAT runs and *who's* in it, K says *exactly what to do* each session, L says whether you're actually ready to start.
+
+**Fixture/reset tooling**: `scripts/uat/seed-uat-org.js` (one-time setup) and `scripts/uat/reset-uat-case.js --scenario <1-6>` (run between every session) — both read connection details from `.env`, both hard-refuse to run against anything but the confirmed non-production `compass-e2e-test` project (verified: correctly accepts that project, correctly rejects production, missing config, and any unrecognised project). See Document J §7 for what they do and, just as importantly, what they deliberately don't (Scenario 5's investigation case is seeded manually, not scripted — see J §7 for why).
 
 ---
 

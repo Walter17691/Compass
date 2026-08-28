@@ -12,6 +12,7 @@ dist
 dist-ssr
 coverage
 *.local
+scripts/uat/.uat-credentials.local.json
 
 # Playwright
 test-results
