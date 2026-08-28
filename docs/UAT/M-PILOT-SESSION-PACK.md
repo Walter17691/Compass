@@ -4,6 +4,8 @@ A convenience extract for the live pilot session only — everything you need in
 
 **Tester:** Experienced HR/ER professional · **Scenario:** 5 — Disciplinary → Outcome → Appeal · **Target length:** 45–60 minutes
 
+**Known seeding limitation (Phase 8B) — read before the session:** the pre-seeded case (Grace Oduya) has the full investigation content in its Overview/Description and Investigation Report fields, and correctly sits at the "inv_report" stage with Compass's own real next-step guidance ("Proceed to disciplinary — send invitation") — verified against the app's actual logic, not assumed. What it does **not** have is separate structured entries in the Meetings or Evidence tabs (Grace's interview, Kian's witness statement, CCTV/safety-record entries) — that content only exists as narrative text in the investigation report, not as tab-level records. If the tester goes looking for it there and finds it empty, that's a known seeding gap, not a Compass defect — don't log it as a finding; note it in your own facilitator log instead so it's clear why, and mention this limitation to the tester if they get stuck specifically because of it (this is one of the few places where telling them something is appropriate, since it's about the seeded data, not the product).
+
 ---
 
 ## FACILITATOR COPY
