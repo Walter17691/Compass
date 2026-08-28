@@ -114,28 +114,56 @@ async function findOrCreateOrg() {
   return org.id;
 }
 
+// Phase 8B — the Admin API's list-users endpoint does NOT actually
+// filter server-side by an `?email=` query param (confirmed by running
+// this for real: every tester's lookup silently returned the same
+// first user in the whole project, regardless of which email was
+// requested, and the script wrongly treated that unrelated pre-existing
+// account as "already exists — reusing" seven times over). Create-first
+// is the only approach that can't be fooled this way: attempt creation,
+// and only fall back to a real, paginated, client-side-filtered list
+// scan if creation fails specifically because the email is taken.
+async function findUserIdByEmail(email) {
+  let page = 1;
+  const perPage = 200;
+  while (true) {
+    const res = await supabaseAdminAuth(`admin/users?page=${page}&per_page=${perPage}`);
+    if (!res.ok) throw new Error(`Failed to list users (page ${page}): ${res.status} ${await res.text()}`);
+    const body = await res.json();
+    const users = body.users || [];
+    const match = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    if (match) return match.id;
+    if (users.length < perPage) return null; // exhausted every page, genuinely not found
+    page++;
+  }
+}
+
 async function findOrCreateTester(tester, orgId, domain, creds) {
   const email = `uat-hr-${tester.n}@${domain}`;
 
-  // Check if this auth user already exists by listing and filtering —
-  // the Admin API's list endpoint supports a plain email filter.
-  const listRes = await supabaseAdminAuth(`admin/users?email=${encodeURIComponent(email)}`);
-  const listBody = await listRes.json().catch(() => ({}));
-  let userId = listBody?.users?.[0]?.id;
+  let userId;
+  const password = genPassword();
+  const createRes = await supabaseAdminAuth('admin/users', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, email_confirm: true }),
+  });
 
-  if (!userId) {
-    const password = genPassword();
-    const createRes = await supabaseAdminAuth('admin/users', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, email_confirm: true }),
-    });
-    if (!createRes.ok) throw new Error(`Failed to create auth user ${email}: ${createRes.status} ${await createRes.text()}`);
+  if (createRes.ok) {
     const created = await createRes.json();
     userId = created.id || created.user?.id;
     creds[email] = password;
     console.log(`Created auth account ${email}.`);
   } else {
-    console.log(`Auth account ${email} already exists — reusing.`);
+    const body = await createRes.text();
+    const alreadyExists = createRes.status === 422 || /already.*registered|already.*exists|email_exists/i.test(body);
+    if (!alreadyExists) {
+      throw new Error(`Failed to create auth user ${email}: ${createRes.status} ${body}`);
+    }
+    userId = await findUserIdByEmail(email);
+    if (!userId) {
+      throw new Error(`Create failed as "already exists" but a real client-side scan found no user with email ${email} — investigate before re-running.`);
+    }
+    console.log(`Auth account ${email} already exists — reusing (verified by exact email match, not a list filter).`);
   }
 
   const memberCheck = await supabaseRest(`org_members?org_id=eq.${orgId}&user_id=eq.${userId}&select=id`);
@@ -154,15 +182,22 @@ async function findOrCreateTester(tester, orgId, domain, creds) {
 }
 
 async function seedRoster(orgId) {
+  // Phase 8B — resolution=ignore-duplicates alone only de-duplicates
+  // against the table's PRIMARY KEY (id, a fresh gen_random_uuid() on
+  // every insert, so it never actually conflicts) unless the real
+  // target constraint is named explicitly via on_conflict — confirmed
+  // by running this for real: without it, a second run threw a raw 409
+  // on the very first already-seeded name instead of silently skipping
+  // it. employee_records' real uniqueness is (org_id, name).
   const rows = ROSTER.map(([name, job_title, location]) => ({ org_id: orgId, name, job_title, location }));
-  const res = await supabaseRest('employee_records', {
+  const res = await supabaseRest('employee_records?on_conflict=org_id,name', {
     method: 'POST',
     headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
     body: JSON.stringify(rows),
   });
   if (!res.ok) throw new Error(`Failed to seed employee_records: ${res.status} ${await res.text()}`);
   const inserted = await res.json();
-  console.log(`Employee roster: ${inserted.length} new record(s) inserted (existing names skipped via the org_id+name unique constraint).`);
+  console.log(`Employee roster: ${inserted.length} new record(s) inserted (existing names skipped via the real org_id+name conflict target).`);
 }
 
 async function main() {
