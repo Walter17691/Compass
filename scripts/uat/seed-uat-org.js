@@ -85,6 +85,9 @@ function saveCreds(creds) {
 
 async function findOrCreateOrg() {
   const res = await supabaseRest(`organisations?name=eq.${encodeURIComponent(UAT_ORG_NAME)}&select=id,name,plan,stripe_subscription_status`);
+  if (!res.ok) {
+    throw new Error(`Organisation lookup failed: ${res.status} ${await res.text()}`);
+  }
   const existing = await res.json();
   if (existing.length) {
     console.log(`Organisation "${UAT_ORG_NAME}" already exists (${existing[0].id}).`);

@@ -58,6 +58,9 @@ async function main() {
   const employeeName = SCENARIO_EMPLOYEE[scenario];
 
   const orgRes = await supabaseRest(`organisations?name=eq.${encodeURIComponent(UAT_ORG_NAME)}&select=id,name`);
+  if (!orgRes.ok) {
+    throw new Error(`Lookup failed: ${orgRes.status} ${await orgRes.text()}`);
+  }
   const orgs = await orgRes.json();
   if (!orgs.length) {
     console.log(`No organisation named "${UAT_ORG_NAME}" found — nothing to reset. Has scripts/uat/seed-uat-org.js been run yet?`);
@@ -68,6 +71,9 @@ async function main() {
   const casesRes = await supabaseRest(
     `cases?org_id=eq.${orgId}&employee_name=eq.${encodeURIComponent(employeeName)}&select=id,employee_name,case_type,stage,created_at`
   );
+  if (!casesRes.ok) {
+    throw new Error(`Case lookup failed: ${casesRes.status} ${await casesRes.text()}`);
+  }
   const cases = await casesRes.json();
 
   if (!cases.length) {
