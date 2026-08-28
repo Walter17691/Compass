@@ -77,7 +77,10 @@ function withSampleFloor(entries) {
 // managerInsights.js's own "returned" filter, orgIntelligence.js) rather
 // than re-deriving branching logic in SQL (see OP2's migration header
 // for the full reasoning). Appeal rate/appeal outcome rate are OP11's
-// job (Appeal Intelligence) — shown as a placeholder here, not guessed.
+// job (Appeal Intelligence) — AppealIntelligencePanel below already
+// covers this with its own real StatBox; Phase 7.5B removed the stale
+// "Coming... later in this phase" placeholder that used to sit in the
+// grid above, since the feature it was waiting on had already shipped.
 export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
@@ -156,10 +159,6 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
           ? <StatBox label="Avg investigation duration" value={avgInvestigationDays+"d"} sub={investigationCaseCount+" cases currently in investigation"} accent="#7C5CFC"/>
           : <DataQualityCaveat total={investigationCaseCount} minRequired={MIN_DURATION_SAMPLE} label="cases currently in investigation"/>}
         <StatBox label="Informal resolution" value={resolutionSplit.informal} sub={resolutionSplit.formal+" formal"} accent="#1A7A4A"/>
-        <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.4px",textTransform:"uppercase",marginBottom:4}}>Appeal rate</div>
-          <div style={{fontSize:13,color:"#6B6375"}}>Coming with Appeal Intelligence, later in this phase.</div>
-        </div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>

@@ -56,6 +56,22 @@ export function OverviewTab({
 
   return (
     <>
+      {/* Phase 7.5B (P0 polish) — moved above Risk & Tribunal Exposure/
+          Key Dates: "what is this case about" should be answerable
+          before secondary financial/process inputs. Same card, same
+          empty-state text, same data (cs.description) — reordered only,
+          no AI summary, no new data source. */}
+      <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Description</div>
+        {cs.description ? (
+          <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{cs.description}</div>
+        ) : (
+          <div style={{fontSize:13,color:"#9B9098"}}>No description recorded.</div>
+        )}
+        {cs.referredBy&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>Referred by: {cs.referredBy}</div>}
+        {caseCtx.repeatCount>1&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>{ORDINAL[caseCtx.repeatCount]||caseCtx.repeatCount+"th"} case for {cs.employeeName}.</div>}
+      </div>
+
       {caseCtx.stage!=="closed"&&(
         <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,padding:"14px 16px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:caseCtx.currentRisk||cs.estimatedWeeklyPay?10:0}}>
@@ -119,17 +135,6 @@ export function OverviewTab({
       <OccupationalHealthPanel cs={cs} cases={caseCtx.cases} saveCases={caseCtx.saveCases} stage={caseCtx.stage} ohReportFindings={oh.ohReportFindings} ohReportAnalysisLoading={oh.ohReportAnalysisLoading} onAnalyseOhReport={oh.onAnalyseOhReport} onAcceptOhFinding={oh.onAcceptOhFinding} onDismissOhFinding={oh.onDismissOhFinding} onSendForSignature={oh.onSendForSignature} />
 
       <ProcessChecklistPanel template={processTemplate} />
-
-      <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Description</div>
-        {cs.description ? (
-          <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{cs.description}</div>
-        ) : (
-          <div style={{fontSize:13,color:"#9B9098"}}>No description recorded.</div>
-        )}
-        {cs.referredBy&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>Referred by: {cs.referredBy}</div>}
-        {caseCtx.repeatCount>1&&<div style={{fontSize:12,color:"#9B9098",marginTop:8}}>{ORDINAL[caseCtx.repeatCount]||caseCtx.repeatCount+"th"} case for {cs.employeeName}.</div>}
-      </div>
 
       <ApprovalsPanel cs={cs} hrReviewRequests={caseData.hrReviewRequests} respondToReview={review.respondToReview} isApprover={review.isApprover} />
 

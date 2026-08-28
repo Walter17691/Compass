@@ -65,7 +65,7 @@ export function CaseViewScreen({
   evidenceTab = {}, documentsTab = {}, themesTab = {}, aiTab = {},
 }) {
   const {
-    cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
+    cases, casesLoading, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
     getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
     setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
     setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
@@ -102,7 +102,21 @@ export function CaseViewScreen({
   // hand right after landing here.
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one-time, prop-driven sync on a genuine value change, same shape as this file's own changesBannerDismissed effect and the mailParam/calendarParam effects in App.jsx that this rule doesn't flag consistently.
   useEffect(() => { if(initialTab) { setActiveTab(initialTab); clearInitialTab?.(); } }, [initialTab]);
-  if(!cs) return <div style={{padding:40,color:"#9B9098",fontFamily:"DM Sans,system-ui,sans-serif"}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7C5CFC",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
+  if(!cs) {
+    // Phase 7.5B (P0 polish) — casesLoading distinguishes "the org's
+    // cases genuinely haven't loaded yet" (a direct nav/reload/bookmark
+    // to a case URL always hits this on first render, since activeCaseId
+    // is read synchronously from the URL but `cases` starts empty) from
+    // "cases have loaded and this id truly isn't in them" — the only
+    // case that should ever say Not Found. Same loading affordance
+    // (pulsing dot) already used for the app's own initial load and
+    // lazy-route Suspense fallback, not a new pattern. Authorization/
+    // retrieval itself is untouched — cs is still exactly
+    // cases.find(x=>x.id===activeCaseId) above; this only changes what
+    // renders while that result is still unreliable.
+    if (casesLoading) return <div style={{padding:80,textAlign:"center"}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span></div>;
+    return <div style={{padding:40,color:"#9B9098",fontFamily:"DM Sans,system-ui,sans-serif"}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7C5CFC",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
+  }
   const meetings = cs.meetings||[];
   const stage = getCaseStage(cs);
   const nextStep = getNextStep(cs);
@@ -235,8 +249,13 @@ export function CaseViewScreen({
             <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:"#6B6375",fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>← Cases</button>
             <div style={{width:1,height:16,background:"#EDE5D8"}}/>
             <div>
-              <div style={{fontSize:11,color:"#9B9098"}}>{cs.employeeName}</div>
-              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535"}}>{getProceedingTitle(cs)}</div>
+              {/* Phase 7.5B (P0 polish) — whose case this is answers the
+                  5-second "whose case is this" test faster than what type
+                  it is; swapped which line carries the primary heading
+                  treatment. No change to cs.employeeName, getProceedingTitle,
+                  routing, or status — presentation only. */}
+              <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:17,color:"#1A1535"}}>{cs.employeeName}</div>
+              <div style={{fontSize:11,color:"#9B9098"}}>{getProceedingTitle(cs)}</div>
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>

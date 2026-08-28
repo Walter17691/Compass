@@ -8339,7 +8339,7 @@ Please produce:
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(
         <CaseViewScreen
           shell={{
-            cases, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
+            cases, casesLoading, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
             getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
             setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
             setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,

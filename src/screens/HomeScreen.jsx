@@ -77,13 +77,23 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                 </button>
               ))}
               {pendingSigs>0&&<span style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",borderRadius:20,padding:"5px 12px",fontWeight:500}}>{pendingSigs} pending signature{pendingSigs!==1?"s":""}</span>}
+              {/* Phase 7.5B (P0 polish) — overdue/HIGH risk/investigations
+                  overrunning already shared the same red (#C84B2F) as
+                  each other and no one else in this strip, i.e. the
+                  underlying system already treats these three as the
+                  most severe tier; this just makes that existing signal
+                  actually visible (bolder weight + a real border on all
+                  three, matching what highRisk already had) instead of
+                  relying on a subtle colour difference alone. No new
+                  severity invented, no category added or removed, every
+                  click handler/label/filter untouched. */}
               {overdue.slice(0,3).map((d,i)=>(
-                <span key={"od"+i} title={`${d.label||d.employeeName} · Overdue`} style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis",display:"inline-block"}}>
+                <span key={"od"+i} title={`${d.label||d.employeeName} · Overdue`} style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",fontWeight:700,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis",display:"inline-block"}}>
                   {d.label||d.employeeName} · Overdue
                 </span>
               ))}
               {highRisk.slice(0,3).map((cs,i)=>(
-                <button key={"risk"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · HIGH risk`} style={{fontSize:12,color:"#C84B2F",background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
+                <button key={"risk"+i} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}} title={`${cs.employeeName} · HIGH risk`} style={{fontSize:12,color:"#C84B2F",background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:700,whiteSpace:"nowrap",maxWidth:"calc(100vw - 64px)",overflow:"hidden",textOverflow:"ellipsis"}}>
                   {cs.employeeName} · HIGH risk
                 </button>
               ))}
@@ -122,7 +132,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                 </span>
               )}
               {investigationsOverrunning>0&&(
-                <span title="Investigations running longer than the target timescale" style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",borderRadius:20,padding:"5px 12px",fontWeight:500,whiteSpace:"nowrap"}}>
+                <span title="Investigations running longer than the target timescale" style={{fontSize:12,color:"#C84B2F",background:"#FFF0ED",border:"1px solid #C84B2F44",borderRadius:20,padding:"5px 12px",fontWeight:700,whiteSpace:"nowrap"}}>
                   {investigationsOverrunning} investigation{investigationsOverrunning!==1?"s":""} overrunning
                 </span>
               )}
@@ -227,11 +237,23 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
                           <div style={{width:36,height:36,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#7C5CFC",flexShrink:0,marginRight:14}}>
                             {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
                           </div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:600,color:"#1C1820",marginBottom:1}}>{cs.employeeName}</div>
-                            <div style={{fontSize:12,color:"#9B9098"}}>{cs.caseType||"HR Matter"}{next?" · "+next.label:""}</div>
+                          {/* Phase 7.5B (P0 polish) — this is the only
+                              flexible column in the row; every sibling
+                              (avatar, badge, timestamp, chevron) is
+                              flexShrink:0, so a long employee name/case
+                              type is the only thing that ever truncates,
+                              via a real ellipsis rather than an
+                              unprotected sibling getting compressed
+                              until its own content visually overlaps the
+                              next column — the confirmed bug this fixes.
+                              title= preserves the untruncated name on
+                              hover; nothing here changes what identity
+                              info is available, only how it wraps. */}
+                          <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                            <div title={cs.employeeName} style={{fontSize:13,fontWeight:600,color:"#1C1820",marginBottom:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cs.employeeName}</div>
+                            <div title={(cs.caseType||"HR Matter")+(next?" · "+next.label:"")} style={{fontSize:12,color:"#9B9098",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cs.caseType||"HR Matter"}{next?" · "+next.label:""}</div>
                           </div>
-                          <div style={{marginRight:16}}>
+                          <div style={{marginRight:16,flexShrink:0}}>
                             <span style={{fontSize:11,fontWeight:600,color:st.color,background:st.bg,borderRadius:20,padding:"3px 10px",whiteSpace:"nowrap"}}>{st.label}</span>
                           </div>
                           <div style={{textAlign:"right",flexShrink:0,minWidth:80}}>
@@ -336,9 +358,16 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setM
               if(recommendations.length===0) return null;
               return (
                 <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #E8E0D0"}}>
+                  {/* Phase 7.5B (P0 polish) — smaller heading than Active
+                      Cases' own 20px (was 18px, matching Potential
+                      Bottlenecks/Quick links below it) so this reads as
+                      secondary to the user's actual workload rather than
+                      co-equal with it. Presentation only: same content,
+                      same ranking, same click-through, same AI logic —
+                      recommendations themselves are untouched. */}
+                  <div style={{padding:"12px 18px",borderBottom:"1px solid #E8E0D0"}}>
                     <div style={{fontSize:11,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:2}}>AI-prioritised</div>
-                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",fontWeight:400}}>Compass Recommendations</div>
+                    <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Compass Recommendations</div>
                   </div>
                   <div style={{padding:"4px 0"}}>
                     {recommendations.map((sig,i)=>{

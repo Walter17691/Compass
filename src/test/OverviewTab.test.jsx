@@ -41,3 +41,32 @@ describe('OverviewTab — field labelling (Phase 6.5, Batch 13)', () => {
     expect(screen.getByLabelText('OH report received')).toBeInTheDocument();
   });
 });
+
+// Phase 7.5B (P0 polish, item 4) — "what is this case about" (the
+// Description card) must render before Risk & Tribunal Exposure and Key
+// Dates, not after them, so a reader hits the narrative before the
+// financial/administrative inputs. Same card, same content, same empty
+// state — asserted here as DOM order, the one thing a plain
+// presence-only test wouldn't catch.
+describe('OverviewTab — card order (Phase 7.5B, item 4)', () => {
+  it('renders the Description card before Risk & tribunal exposure', () => {
+    const { container } = render(<OverviewTab {...baseProps} />);
+    const text = container.textContent;
+    expect(text.indexOf('Description')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('Risk & tribunal exposure')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('Description')).toBeLessThan(text.indexOf('Risk & tribunal exposure'));
+  });
+
+  it('still shows the honest empty state when no description is recorded', () => {
+    render(<OverviewTab {...baseProps} />);
+    expect(screen.getByText('No description recorded.')).toBeInTheDocument();
+  });
+
+  it('renders a real description above Risk & tribunal exposure when one exists', () => {
+    const csWithDescription = { ...cs, description: 'Employee raised a concern about a colleague.' };
+    const { container } = render(<OverviewTab {...baseProps} cs={csWithDescription} caseCtx={{ ...baseProps.caseCtx, cases: [csWithDescription] }} />);
+    const text = container.textContent;
+    expect(screen.getByText('Employee raised a concern about a colleague.')).toBeInTheDocument();
+    expect(text.indexOf('Employee raised a concern about a colleague.')).toBeLessThan(text.indexOf('Risk & tribunal exposure'));
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SettingsScreen } from '../screens/SettingsScreen.jsx';
 
 // Phase 6.5 hardening (Batch 10b, task #205) — SettingsScreen had zero test
@@ -60,4 +60,30 @@ describe('SettingsScreen — section smoke test (Phase 6.5, task #205)', () => {
       expect(screen.getByText(expectedText)).toBeInTheDocument();
     });
   }
+});
+
+// Phase 7.5B (P0 polish, item 8) — grouping is presentation only: every
+// section from the smoke test above must still be reachable as a nav
+// button, under a real category header, with routes/behaviour untouched
+// (already proven per-section above; this proves none of them silently
+// vanished from the nav once grouped).
+describe('SettingsScreen — grouped navigation (Phase 7.5B, item 8)', () => {
+  it('shows category headers and every section as a still-clickable nav button', () => {
+    render(<SettingsScreen {...baseProps} />);
+    // getAllByText, not getByText: "Organisation" is both a category
+    // header and its own section's nav-button label, so it's expected
+    // to match twice.
+    for (const label of ['Organisation', 'People & access', 'Processes', 'Integrations & automation', 'Governance & data']) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    for (const name of ['Billing', 'Team & access', 'Locations', 'Policies', 'Integrations', 'Notifications', 'Audit trail', 'Data & privacy', 'Help']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('still navigates to the correct section when a grouped nav button is clicked', () => {
+    render(<SettingsScreen {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Locations' }));
+    expect(screen.getByText('No locations added yet')).toBeInTheDocument();
+  });
 });

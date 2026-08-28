@@ -36,6 +36,18 @@ describe('OrganisationalIntelligenceOverview', () => {
   // still returns cases_by_manager (baseOverview above includes it,
   // matching the real shape); this proves the component never renders
   // it, even though the data is present.
+  // Phase 7.5B (P0 polish, item 5) — this placeholder was stale, not
+  // genuinely unfinished: AppealIntelligencePanel (rendered further down
+  // this same screen) already computes and shows a real Appeal rate
+  // StatBox. Confirms the "Coming... later in this phase" text is gone
+  // and doesn't silently reappear.
+  it('does not show the stale "Coming with Appeal Intelligence" placeholder', async () => {
+    rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+    render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+    await waitFor(() => expect(screen.getByText('Open cases').parentElement).toHaveTextContent('4'));
+    expect(screen.queryByText(/Coming with Appeal Intelligence/)).not.toBeInTheDocument();
+  });
+
   it('never renders a per-manager breakdown, even though the RPC returns cases_by_manager', async () => {
     rpcMock.mockResolvedValue({ data: baseOverview, error: null });
     render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);

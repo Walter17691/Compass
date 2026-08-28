@@ -90,6 +90,40 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
     expect(screen.getByText('Disciplinary Investigation')).toBeInTheDocument();
   });
 
+  // Phase 7.5B (P0 polish, item 3) — employee identity must be the
+  // visually primary heading (larger, DM Serif Display), case type/
+  // proceeding title secondary (smaller, muted) — the exact inverse of
+  // the pre-polish styling. Asserted on the actual rendered style, not
+  // just presence of both strings, since presence alone doesn't lock in
+  // which one is primary.
+  it('gives the employee name the primary heading style and the proceeding title a secondary style', () => {
+    render(<CaseViewScreen {...baseProps} />);
+    const name = screen.getByText('Sam Employee');
+    const proceedingTitle = screen.getByText('Disciplinary Investigation');
+    expect(name.style.fontFamily).toContain('DM Serif Display');
+    expect(Number(name.style.fontSize.replace('px',''))).toBeGreaterThan(Number(proceedingTitle.style.fontSize.replace('px','')));
+  });
+
+  // Phase 7.5B (P0 polish, item 2) — a direct nav/reload/bookmark to a
+  // case URL must show a loading state, never "Case not found", while
+  // the org's cases are still loading. Genuine not-found (cases have
+  // loaded, id truly isn't in them) must still say so — both branches
+  // asserted here so the distinction can't silently collapse back into
+  // "always not found" or "always loading".
+  describe('loading vs. genuinely not found (Phase 7.5B, item 2)', () => {
+    const missingCaseProps = { ...baseProps, shell: { ...baseProps.shell, activeCaseId: 'does-not-exist' } };
+
+    it('shows a loading state, not "Case not found", while cases are still loading', () => {
+      render(<CaseViewScreen {...missingCaseProps} shell={{ ...missingCaseProps.shell, casesLoading: true }} />);
+      expect(screen.queryByText(/Case not found/)).not.toBeInTheDocument();
+    });
+
+    it('shows "Case not found" once cases have loaded and the id genuinely is not among them', () => {
+      render(<CaseViewScreen {...missingCaseProps} shell={{ ...missingCaseProps.shell, casesLoading: false }} />);
+      expect(screen.getByText(/Case not found/)).toBeInTheDocument();
+    });
+  });
+
   for (const [id, expectedText] of tabs) {
     it(`renders the ${id} tab`, () => {
       render(<CaseViewScreen {...baseProps} initialTab={id} />);

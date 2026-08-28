@@ -2,21 +2,73 @@
 // pill row with real sub-navigation: only the active section renders, so
 // the page is one short screen instead of one long scroll. Collapses to a
 // <select> on mobile, where a sidebar has nowhere to go.
-export function SettingsNav({ sections, active, onChange, isMobile }) {
+//
+// Phase 7.5B (P0 polish) — optional `groups` prop
+// ([{label, sectionIds:[...]}, ...]) lets a caller with a long flat
+// `sections` list (Settings' own ~17 items) render them under category
+// headers instead. Strictly additive and opt-in: when `groups` is
+// omitted (InsightsScreen's own call site, unchanged), rendering is
+// byte-for-byte identical to before — same button markup, same active/
+// hover styling, same click handler. No id, label, or route in
+// `sections` itself is ever touched by grouping; a group is just a
+// presentation-time partition of the same array. A section whose id
+// isn't listed in any group (or when `groups` is omitted) still renders,
+// ungrouped, after the grouped ones — so a role-gated section simply
+// disappearing from `sections` (today's existing isHR filtering) never
+// produces an empty visible group or a silently-dropped item.
+export function SettingsNav({ sections, active, onChange, isMobile, groups }) {
+  const groupedSections = groups
+    ? groups
+        .map(g => ({ label: g.label, items: sections.filter(s => g.sectionIds.includes(s.id)) }))
+        .filter(g => g.items.length > 0)
+    : null;
+  const groupedIds = new Set((groupedSections||[]).flatMap(g => g.items.map(s => s.id)));
+  const ungrouped = groups ? sections.filter(s => !groupedIds.has(s.id)) : sections;
+
   if(isMobile) return (
     <select aria-label="Settings section" value={active} onChange={e=>onChange(e.target.value)}
       style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:20,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-      {sections.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+      {groupedSections
+        ? <>
+            {groupedSections.map(g=>(
+              <optgroup key={g.label} label={g.label}>
+                {g.items.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+              </optgroup>
+            ))}
+            {ungrouped.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+          </>
+        : sections.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
     </select>
   );
-  return (
+
+  const navButton = s => (
+    <button key={s.id} onClick={()=>onChange(s.id)}
+      style={{textAlign:"left",background:active===s.id?"#F5F3FF":"none",border:"none",color:active===s.id?"#7C5CFC":"#6B6375",padding:"9px 12px",borderRadius:7,fontSize:13,fontWeight:active===s.id?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+      {s.label}
+    </button>
+  );
+
+  if(!groupedSections) return (
     <nav style={{display:"flex",flexDirection:"column",gap:2,width:190,flexShrink:0}}>
-      {sections.map(s=>(
-        <button key={s.id} onClick={()=>onChange(s.id)}
-          style={{textAlign:"left",background:active===s.id?"#F5F3FF":"none",border:"none",color:active===s.id?"#7C5CFC":"#6B6375",padding:"9px 12px",borderRadius:7,fontSize:13,fontWeight:active===s.id?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-          {s.label}
-        </button>
+      {sections.map(navButton)}
+    </nav>
+  );
+
+  return (
+    <nav style={{display:"flex",flexDirection:"column",gap:14,width:190,flexShrink:0}}>
+      {groupedSections.map(g=>(
+        <div key={g.label}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",padding:"0 12px",marginBottom:4}}>{g.label}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:2}}>
+            {g.items.map(navButton)}
+          </div>
+        </div>
       ))}
+      {ungrouped.length>0&&(
+        <div style={{display:"flex",flexDirection:"column",gap:2}}>
+          {ungrouped.map(navButton)}
+        </div>
+      )}
     </nav>
   );
 }

@@ -86,6 +86,20 @@ export function SettingsScreen({
     {id:"data-privacy", label:"Data & privacy"},
     {id:"help", label:"Help"},
   ];
+  // Phase 7.5B (P0 polish) — presentation-only grouping for SettingsNav's
+  // own optional `groups` prop. Every id/label/route/isHR-gate above is
+  // completely untouched; this only says which category header each
+  // already-existing section renders under. A section not listed here
+  // (there shouldn't be any, but if `sections` ever grows one) still
+  // renders ungrouped rather than silently vanishing — see SettingsNav's
+  // own comment for that fallback.
+  const SETTINGS_GROUPS = [
+    { label: "Organisation", sectionIds: ["billing", "organisation", "locations", "branding"] },
+    { label: "People & access", sectionIds: ["team-access", "portal-access", "employee-records"] },
+    { label: "Processes", sectionIds: ["policies", "process-templates", "templates"] },
+    { label: "Integrations & automation", sectionIds: ["integrations", "integration-health", "notifications", "automations"] },
+    { label: "Governance & data", sectionIds: ["audit-trail", "data-privacy"] },
+  ];
   // Lets a deep link (Home's "Suggested for you" / "View all policies &
   // templates") land directly on the relevant section instead of always
   // Billing. Cleared on unmount so a later, ordinary nav-bar click into
@@ -104,7 +118,7 @@ export function SettingsScreen({
       <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px"}}>Case files and employee records are stored securely in the cloud, shared with your organisation.</p>
 
       <div style={{display:"flex",gap:32,alignItems:"flex-start"}}>
-        <SettingsNav sections={sections} active={active} onChange={setActive} isMobile={isMobile}/>
+        <SettingsNav sections={sections} active={active} onChange={setActive} isMobile={isMobile} groups={SETTINGS_GROUPS}/>
 
         <div style={{flex:1,minWidth:0}}>
           {active==="billing"&&<BillingSection org={org.org} locations={org.locations} showToast={showToast}/>}
