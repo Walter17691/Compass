@@ -82,25 +82,165 @@ describe('AppSidebar — primary navigation (Home + Sidebar Product Experience p
   });
 });
 
-describe('AppSidebar — Overdue indicator (Design System Convergence, Phase 1)', () => {
-  it('renders nothing when nothing is overdue', () => {
-    render(<AppSidebar {...baseProps} dueSoon={[{ overdue: false, employeeName: 'A', label: 'x', daysOverdue: 0 }]} />);
+// Sidebar footer redesign — the Overdue indicator duplicated Home's own
+// "For You" feed (overdue items are already its top tier) and offered no
+// action beyond "View all in Home", one click away regardless. Removed
+// from the footer entirely rather than fixed-to-fit; Home remains the
+// one real, contextualised place this information lives. `dueSoon` is no
+// longer a prop AppSidebar accepts at all.
+describe('AppSidebar — Overdue indicator removal (Sidebar footer redesign)', () => {
+  it('never renders an overdue-actions control anywhere, even when dueSoon-shaped data is passed through', () => {
+    render(<AppSidebar {...baseProps} isHR={true} dueSoon={[{ overdue: true, employeeName: 'Sam', label: 'x', daysOverdue: 3 }]} />);
     expect(screen.queryByLabelText(/Overdue actions/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/View all in Home/)).not.toBeInTheDocument();
+  });
+});
+
+// Sidebar footer redesign — the footer previously packed an org badge,
+// a bare name, up to five small icons (load-issue, overdue, a second
+// "Ask Compass" identical in icon to the primary nav destination,
+// activity, and a standalone Sign out button) into one row narrower than
+// their combined width — the proximate cause of a real overlap bug, and
+// on inspection a genuinely confusing account area even once that
+// overlap was fixed. Redesigned around a single account identity control
+// (avatar + name + org as secondary text, opening a menu with
+// org-switching/Settings/Sign out) plus the one icon — Activity — that
+// carries information no other surface already shows (unread-since-
+// last-viewed, not just a browsable log). Overdue and the second Ask
+// Compass were removed outright (see their own describe blocks); org
+// switching and Sign out moved into the account menu; Settings gained a
+// convenience shortcut there alongside its existing nav destination.
+describe('AppSidebar — account menu (Sidebar footer redesign)', () => {
+  it('shows the signed-in user\'s name and initials, with the organisation as secondary text rather than a separate badge', () => {
+    render(<AppSidebar {...baseProps} isHR={true} currentUser={{ name: 'Priya Shah' }} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    expect(screen.getByText('Priya Shah')).toBeInTheDocument();
+    expect(screen.getByText('Acme Ltd')).toBeInTheDocument();
+    expect(screen.getByText('PS')).toBeInTheDocument();
+    // Not rendered as its own clickable object distinct from the account
+    // control — no separate "Switch organisation" trigger sits beside it.
+    expect(screen.queryByRole('button', { name: /Switch organisation/ })).not.toBeInTheDocument();
   });
 
-  it('shows a count and expands to list overdue items, linking to Home', () => {
+  it('opens a menu on click containing Settings and Sign out, and closes on Escape', () => {
+    const onSignOut = vi.fn();
     const setScreen = vi.fn();
-    const dueSoon = [
-      { overdue: true, employeeName: 'Sam Employee', label: 'Chase witness statement', daysOverdue: 3 },
-      { overdue: true, employeeName: 'Jo Manager', label: 'Investigation report', daysOverdue: 1 },
-    ];
-    render(<AppSidebar {...baseProps} setScreen={setScreen} dueSoon={dueSoon} />);
-    const trigger = screen.getByLabelText(/Overdue actions — 2/);
-    expect(trigger).toBeInTheDocument();
+    render(<AppSidebar {...baseProps} isHR={true} setScreen={setScreen} onSignOut={onSignOut} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByRole('menu', { name: 'Account' })).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Settings'));
+    expect(setScreen).toHaveBeenCalledWith('settings');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    fireEvent.click(screen.getByText('Sign out'));
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the account menu on Escape', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByRole('menu', { name: 'Account' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Account' })).not.toBeInTheDocument();
+  });
+
+  it('lists every available organisation with the current one checked, and switches on click', () => {
+    const switchOrg = vi.fn();
+    const org = { id: 'org1', name: 'Acme Ltd' };
+    const availableOrgs = [org, { id: 'org2', name: 'Beta Inc' }];
+    render(<AppSidebar {...baseProps} isHR={true} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByRole('button', { name: /Beta Inc/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Beta Inc/ }));
+    expect(switchOrg).toHaveBeenCalledWith('org2');
+  });
+
+  it('does not show an organisation switch list when there is only one organisation, but still offers to join another', () => {
+    render(<AppSidebar {...baseProps} isHR={true} org={{ id: 'org1', name: 'Acme Ltd' }} availableOrgs={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByText(/Join another organisation/)).toBeInTheDocument();
+  });
+
+  it('calls onJoinAnotherOrg when that menu item is clicked', () => {
+    const onJoinAnotherOrg = vi.fn();
+    render(<AppSidebar {...baseProps} isHR={true} onJoinAnotherOrg={onJoinAnotherOrg} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    fireEvent.click(screen.getByText(/Join another organisation/));
+    expect(onJoinAnotherOrg).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the Activity control visible and separate from the account menu, not folded inside it', () => {
+    render(<AppSidebar {...baseProps} isHR={true} auditLog={[{ id: '1', action: 'Case created', ts: new Date().toISOString(), user: 'Alex' }]} />);
+    expect(screen.getByRole('button', { name: /^Activity/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.queryByText('Recent activity')).not.toBeInTheDocument();
+  });
+
+  // Sidebar footer composition pass, Part 1 — the whole row (avatar,
+  // name, org, chevron) is one single button, not a row with a small
+  // appended control doing the actual work. Clicking the org name text
+  // itself (a plain child of that button, not a separate element)
+  // proves there's nothing narrower to "miss."
+  it('opens the account menu from a click anywhere in the row, including the organisation text — there is no separate small trigger', () => {
+    render(<AppSidebar {...baseProps} isHR={true} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    expect(screen.queryByRole('button', { name: /^\.\.\.$/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Acme Ltd'));
+    expect(screen.getByRole('menu', { name: 'Account' })).toBeInTheDocument();
+  });
+
+  it('carries the full organisation name as a title attribute for a tooltip on truncation, without changing footer layout width', () => {
+    const longName = 'A Genuinely Very Long Organisation Name That Would Otherwise Truncate Awkwardly Ltd';
+    render(<AppSidebar {...baseProps} isHR={true} org={{ id: 'org1', name: longName }} />);
+    const orgText = screen.getByText(longName);
+    expect(orgText).toHaveAttribute('title', longName);
+    expect(orgText.style.whiteSpace).toBe('nowrap');
+    expect(orgText.style.textOverflow).toBe('ellipsis');
+  });
+
+  it('gives the account row an open/hover-style background when the menu is open', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    expect(trigger.style.background).toBe('none');
     fireEvent.click(trigger);
-    expect(screen.getByText(/Sam Employee — Chase witness statement/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /View all in Home/ }));
-    expect(setScreen).toHaveBeenCalledWith('home');
+    expect(trigger.style.background).not.toBe('none');
+  });
+});
+
+// Sidebar footer composition pass, Part 4 — Activity is a global
+// application function, not account identity, so it now lives beside
+// the Compass mark at the top of the sidebar shell rather than inside
+// the account row at the bottom.
+describe('AppSidebar — Activity relocated to the sidebar header (Sidebar footer composition pass)', () => {
+  it('is not a descendant of the account menu trigger or its popover', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const activity = screen.getByRole('button', { name: /^Activity/ });
+    const accountTrigger = screen.getByRole('button', { name: 'Account menu' });
+    expect(accountTrigger.contains(activity)).toBe(false);
+    expect(activity.contains(accountTrigger)).toBe(false);
+  });
+
+  it('still opens its own recent-activity popover independently of the account menu', () => {
+    render(<AppSidebar {...baseProps} isHR={true} auditLog={[{ id: '1', action: 'Case created', ts: new Date().toISOString(), user: 'Alex' }]} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Activity/ }));
+    expect(screen.getByText('Recent activity')).toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'Account' })).not.toBeInTheDocument();
+  });
+});
+
+// Sidebar footer redesign — AskCompassWidget rendered the exact same
+// icon as the primary "Ask Compass" nav destination but answered only a
+// stateless subset of what that destination already handles (confirmed
+// against sendGlobalChat's own intent classifier in App.jsx, which
+// already routes general UK-employment-law/ACAS/best-practice questions
+// alongside case/stats ones) — a first-time user had no way to tell the
+// two apart. Removed from the footer/mobile header entirely; the
+// capability isn't lost, it's just no longer duplicated.
+describe('AppSidebar — second Ask Compass icon removal (Sidebar footer redesign)', () => {
+  it('renders only one control whose accessible name mentions Ask Compass — the primary nav destination', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const matches = screen.getAllByRole('button', { name: /Ask Compass/ });
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toHaveTextContent('Ask Compass');
   });
 });
 
@@ -233,32 +373,27 @@ describe('AppSidebar — collapsible section behaviour (Home + Sidebar Product E
 // screen's own content is structurally impossible rather than just
 // currently-unobserved.
 //
-// Home Composition Review, final refinement (item 4) — that fixed version
-// was still a permanently-expanded card, which was itself visually
-// dominant in the sidebar. It's now a restrained status icon (role="status"
-// lives on its own non-interactive wrapper, not the button, per
-// jsx-a11y/no-interactive-element-to-noninteractive-role) that expands
-// into the full message + Retry/Dismiss on click — same signal, same
-// actions, one click to inspect instead of always-on-screen.
-describe('AppSidebar — data-load-issue indicator', () => {
+// Sidebar footer composition pass, Part 5 — a permanent small icon in
+// the account footer (even one that only appeared when a real problem
+// existed) still read as "one more system control living in my account
+// area." Now an in-flow notice rendered above the nav list — not in the
+// footer, not behind a click — with the same Retry/Dismiss handlers and
+// the same colours the app's own global error toast already uses
+// (#FEF0EB/#C84B2F44), so it reads as a genuine error notice rather than
+// a navigation-adjacent icon. role="alert"/aria-live="assertive" so a
+// screen reader gets the full message the moment it mounts, with no
+// click required to reach it.
+describe('AppSidebar — data-load-issue notice (Sidebar footer composition pass)', () => {
   it('shows nothing when there are no load issues', () => {
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={[]} />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('shows a restrained indicator carrying the full message as its accessible name, and expands into Retry/Dismiss on click', () => {
+  it('shows the full message immediately, with Retry/Dismiss both reachable with no click needed to reveal them', () => {
     const onRetryLoad = vi.fn();
     const onDismissLoadBanner = vi.fn();
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases']} loadBannerDismissed={false} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner} />);
-    // Discoverable without a click — the status region's own accessible
-    // name already carries the real message, satisfying "not hidden or
-    // swallowed" for a screen-reader user even before it's opened.
-    expect(screen.getByRole('status', { name: /Couldn't load cases/ })).toBeInTheDocument();
-    // The full message isn't sitting in the DOM as its own always-visible
-    // block, though — reaching Retry/Dismiss takes exactly one click.
-    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Data load issue/ }));
-    expect(screen.getByText(/Couldn't load cases/)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Couldn't load cases/);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
@@ -267,16 +402,16 @@ describe('AppSidebar — data-load-issue indicator', () => {
 
   it('summarises multiple load issues by count rather than listing every one', () => {
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases', 'audit log', 'roles']} loadBannerDismissed={false} />);
-    expect(screen.getByRole('status', { name: /Couldn't load 3 kinds of data/ })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Couldn't load 3 kinds of data/);
   });
 
-  it('hides the indicator once dismissed, even with load issues still present', () => {
+  it('hides the notice once dismissed, even with load issues still present', () => {
     render(<AppSidebar {...baseProps} isHR={true} dataLoadIssues={['cases']} loadBannerDismissed={true} />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('renders the indicator within the mobile header layout too', () => {
+  it('renders the notice within the mobile header layout too, and it never lives in the account row', () => {
     render(<AppSidebar {...baseProps} isHR={true} isMobile={true} dataLoadIssues={['cases']} loadBannerDismissed={false} />);
-    expect(screen.getByRole('status', { name: /Couldn't load cases/ })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Couldn't load cases/);
   });
 });

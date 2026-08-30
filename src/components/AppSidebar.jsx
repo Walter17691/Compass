@@ -2,9 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { CompassLogo } from './CompassLogo';
 import { ActivityBell } from './ActivityBell';
-import { OrgSwitcher } from './OrgSwitcher';
-import { MenuIcon, AskCompassIcon } from './Icons';
-import { AskCompassWidget } from '../screens/AskCompassWidget';
+import { MenuIcon, CheckIcon, AskCompassIcon } from './Icons';
 import { CreateMenu } from './CreateMenu';
 import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { FONT, COLOR, SPACE, RADIUS } from '../styles/tokens';
@@ -12,124 +10,30 @@ import { FONT, COLOR, SPACE, RADIUS } from '../styles/tokens';
 const SearchIcon = ({size=15}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const ChevronIcon = ({size=10, expanded}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:expanded?"rotate(0deg)":"rotate(-90deg)",transition:"transform 0.12s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>;
 
-// Home Composition Review, final refinement (item 4) — this used to be a
-// permanently-expanded red card sitting in the sidebar's own in-flow
-// layout (see the git history on this file for the original), which made
-// it one of the most visually dominant things in the sidebar any time a
-// background fetch failed — worse than the problem it was warning about.
-// Same underlying signal (dataLoadIssues), same Retry/Dismiss actions,
-// same "never silently swallow the error" requirement — now a small,
-// permanently-visible status icon (not hidden behind a generic menu, not
-// requiring the user to already suspect something's wrong) that expands
-// into the full message + actions on click, reusing the exact
-// popover-positioning/outside-click/Escape pattern ActivityBell and
-// AskCompassWidget already use. role="status" + aria-live stays on the
-// trigger itself (not just the opened popover), so a screen reader still
-// gets a proactive announcement of the real message the moment it mounts
-// — "restrained" only changes how much space it takes on screen, not
-// whether the error is discoverable or accessible.
-function LoadIssueIndicator({ dataLoadIssues, onRetryLoad, onDismissLoadBanner }) {
-  const [show, setShow] = useState(false);
-  const ref = useRef(null);
-  const btnRef = useRef(null);
-  const popoverStyle = usePopoverPosition(btnRef, show);
+// Sidebar footer composition pass, Part 5 — this used to be a permanent
+// small icon+popover living in the account footer, which read as one
+// more system control bolted onto identity rather than a genuine error
+// state. Same underlying signal (dataLoadIssues), same Retry/Dismiss
+// handlers, same "never silently swallow the error" requirement — now an
+// in-flow, always-fully-visible notice (no click needed to reveal the
+// message) styled with the exact colour pair the app's own global toast
+// already uses for an error (see App.jsx's `toast.type==="error"` block:
+// #FEF0EB/#C84B2F44) rather than inventing a second error-notice
+// language. Rendered above the nav list, not in the footer — it exists
+// for exactly as long as the problem does and takes zero layout space
+// once resolved/dismissed, never a permanent navigation-adjacent icon.
+function LoadIssueNotice({ dataLoadIssues, onRetryLoad, onDismissLoadBanner }) {
   const message = `Couldn't load ${dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.`;
-
-  useEffect(() => {
-    if (!show) return;
-    const onKeyDown = e => { if (e.key === "Escape") setShow(false); };
-    const onClickOutside = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('mousedown', onClickOutside);
-    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
-  }, [show]);
-
-  // role="status"/aria-live live on this wrapping div (a non-interactive
-  // element) rather than the button itself — a screen reader still gets
-  // a proactive announcement of the full message the moment this mounts,
-  // without assigning a non-interactive live-region role to an
-  // interactive control (jsx-a11y/no-interactive-element-to-noninteractive-role).
   return (
-    <div style={{position:"relative"}} ref={ref} role="status" aria-live="polite" aria-label={message}>
-      <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-label="Data load issue — click for details" title={message}
-        style={{position:"relative",background:show?COLOR.redTint:"none",border:`1px solid ${COLOR.red}66`,borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer",color:COLOR.red,fontFamily:FONT.sans,display:"flex",alignItems:"center"}}>
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="6.4" stroke="currentColor" strokeWidth="1.3"/>
-          <line x1="8" y1="4.8" x2="8" y2="8.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          <circle cx="8" cy="11" r="0.9" fill="currentColor"/>
-        </svg>
-      </button>
-      {show&&popoverStyle&&(
-        <div role="dialog" aria-label="Data load issue" style={{...popoverStyle,width:280,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.red}44`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"12px 14px"}}>
-          <div style={{display:"flex",gap:8,marginBottom:10}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:COLOR.red,flexShrink:0,marginTop:4}}/>
-            <span style={{fontSize:12,color:COLOR.ink,lineHeight:1.5}}>{message}</span>
-          </div>
-          <div style={{display:"flex",gap:12}}>
-            <button onClick={onRetryLoad} style={{fontSize:12,fontWeight:600,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Retry</button>
-            <button onClick={()=>{onDismissLoadBanner?.();setShow(false);}} aria-label="Dismiss" style={{fontSize:12,color:COLOR.inkFaint,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Dismiss</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Design System Convergence pass, Phase 1 — replaces the old full-width
-// "Overdue actions" banner that used to sit above page content on every
-// screen except Home/Case View, permanently occupying vertical space and
-// duplicating Home's own Needs Attention section. Same dueSoon/overdue
-// data (App.jsx passes the exact same array this used to filter), same
-// destination on click (Home, where the full list already lives with
-// real context) — now a small persistent icon in nav chrome, reusing the
-// identical popover/dismiss pattern LoadIssueIndicator already
-// established, rather than inventing a second notification mechanism.
-function OverdueIndicator({ dueSoon, setScreen }) {
-  const [show, setShow] = useState(false);
-  const ref = useRef(null);
-  const btnRef = useRef(null);
-  const popoverStyle = usePopoverPosition(btnRef, show);
-  const overdue = (dueSoon||[]).filter(d=>d.overdue);
-
-  useEffect(() => {
-    if (!show) return;
-    const onKeyDown = e => { if (e.key === "Escape") setShow(false); };
-    const onClickOutside = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('mousedown', onClickOutside);
-    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
-  }, [show]);
-
-  if (!overdue.length) return null;
-  const message = `${overdue.length} overdue action${overdue.length!==1?"s":""} across your cases.`;
-
-  return (
-    <div style={{position:"relative"}} ref={ref} role="status" aria-live="polite" aria-label={message}>
-      <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-label={`Overdue actions — ${overdue.length}, click for details`} title={message}
-        style={{position:"relative",background:show?COLOR.redTint:"none",border:`1px solid ${COLOR.red}66`,borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer",color:COLOR.red,fontFamily:FONT.sans,display:"flex",alignItems:"center",gap:5}}>
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="6.4" stroke="currentColor" strokeWidth="1.3"/>
-          <line x1="8" y1="4.8" x2="8" y2="8.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          <circle cx="8" cy="11" r="0.9" fill="currentColor"/>
-        </svg>
-        <span style={{fontSize:11,fontWeight:700}}>{overdue.length}</span>
-      </button>
-      {show&&popoverStyle&&(
-        <div role="dialog" aria-label="Overdue actions" style={{...popoverStyle,width:300,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.red}44`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"12px 14px"}}>
-          <div style={{...{fontSize:11,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.06em",textTransform:"uppercase"},marginBottom:8}}>Overdue actions</div>
-          <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:10}}>
-            {overdue.slice(0,3).map((d,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"baseline",gap:6,padding:"4px 0"}}>
-                <div style={{width:6,height:6,borderRadius:"50%",background:COLOR.red,flexShrink:0}}/>
-                <span style={{fontSize:12,color:COLOR.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.employeeName} — {d.label}</span>
-                <span style={{fontSize:11,color:COLOR.red,flexShrink:0,marginLeft:"auto"}}>{d.daysOverdue}d</span>
-              </div>
-            ))}
-            {overdue.length>3&&<div style={{fontSize:11,color:COLOR.inkFaint,marginTop:2}}>+{overdue.length-3} more</div>}
-          </div>
-          <button onClick={()=>{setScreen(SCREENS.HOME);setShow(false);}} style={{fontSize:12,fontWeight:600,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>View all in Home →</button>
-        </div>
-      )}
+    <div role="alert" aria-live="assertive" style={{background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:RADIUS.surface,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+        <div style={{width:7,height:7,borderRadius:"50%",background:COLOR.red,flexShrink:0,marginTop:4}}/>
+        <span style={{fontSize:12,color:COLOR.ink,lineHeight:1.4,flex:1}}>{message}</span>
+      </div>
+      <div style={{display:"flex",gap:14,paddingLeft:15}}>
+        <button onClick={onRetryLoad} style={{fontSize:12,fontWeight:600,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Retry</button>
+        <button onClick={onDismissLoadBanner} aria-label="Dismiss" style={{fontSize:12,color:COLOR.inkFaint,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Dismiss</button>
+      </div>
     </div>
   );
 }
@@ -193,6 +97,84 @@ function SidebarGroup({ label, items, screen, goToScreen, expanded, onToggle }) 
   );
 }
 
+// Sidebar footer redesign — a first-time HR user should be able to look
+// at the bottom of the sidebar and immediately read "this is my
+// account," not have to parse a row of unlabelled status icons. This
+// single control now carries everything that's genuinely an account-
+// identity or account-scoped action: who's signed in, which org they're
+// in, switching/joining an org (previously OrgSwitcher's own standalone
+// badge — absorbed here rather than kept as a second trigger), a
+// shortcut into Settings, and Sign out. Organisation is deliberately
+// secondary text under the name, not a separate beige badge — it reads
+// as "part of who I am here," which is what it actually is, rather than
+// a distinct clickable object competing for attention next to the name.
+function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnotherOrg, onSignOut, onOpenSettings }) {
+  const [show, setShow] = useState(false);
+  const ref = useRef(null);
+  const btnRef = useRef(null);
+  const popoverStyle = usePopoverPosition(btnRef, show);
+
+  useEffect(() => {
+    if (!show) return;
+    const onKeyDown = e => { if (e.key === "Escape") setShow(false); };
+    const onClickOutside = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onClickOutside);
+    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
+  }, [show]);
+
+  const initials = (currentUser?.name || "?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+  const menuItemStyle = {width:"100%",textAlign:"left",display:"flex",alignItems:"center",gap:6,background:"none",border:"none",borderRadius:RADIUS.surface,padding:"8px 10px",fontSize:13,color:COLOR.ink,cursor:"pointer",fontFamily:FONT.sans};
+
+  return (
+    <div style={{position:"relative",width:"100%"}} ref={ref}>
+      {/* Sidebar footer composition pass, Part 1 — the entire row is the
+          trigger (not a tiny appended control): avatar, name, org and
+          chevron all sit inside one button so there's nothing to "miss."
+          Hover/open feedback is a plain background swap on the row
+          itself (the same direct-mutation-on-interaction technique
+          HomeScreen's own Ask Compass input already uses for its focus
+          border) rather than a bordered/pill treatment that would read
+          as "yet another small control." */}
+      <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-haspopup="true" aria-expanded={show} aria-label="Account menu"
+        onMouseEnter={e=>{if(!show) e.currentTarget.style.background=COLOR.paper;}}
+        onMouseLeave={e=>{if(!show) e.currentTarget.style.background="none";}}
+        style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:show?COLOR.paper:"none",border:"none",padding:"6px 8px",borderRadius:RADIUS.surface,cursor:"pointer",textAlign:"left"}}>
+        <div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,color:COLOR.purpleDeep,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{initials}</div>
+        <div style={{minWidth:0,flex:1}}>
+          <div title={currentUser?.name||undefined} style={{fontSize:13,fontWeight:600,color:COLOR.ink,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.name||"Account"}</div>
+          {org?.name&&<div title={org.name} style={{fontSize:11,color:COLOR.inkFaint,lineHeight:1.3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{org.name}</div>}
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+          style={{color:COLOR.inkFaint,flexShrink:0,transform:show?"rotate(180deg)":"none",transition:"transform 0.12s"}}>
+          <polyline points="18 15 12 9 6 15"/>
+        </svg>
+      </button>
+      {show&&popoverStyle&&(
+        <div role="menu" aria-label="Account" style={{...popoverStyle,minWidth:224,background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:6}}>
+          {availableOrgs.length>1&&(
+            <>
+              <div style={{padding:"6px 10px 2px",fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.06em",textTransform:"uppercase"}}>Organisation</div>
+              {availableOrgs.map(o=>(
+                <button key={o.id} onClick={()=>{switchOrg(o.id);setShow(false);}}
+                  style={{...menuItemStyle,background:o.id===org.id?COLOR.purpleTint:"none",color:o.id===org.id?COLOR.purple:COLOR.ink,fontWeight:o.id===org.id?600:400}}>
+                  <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.name}</span>
+                  {o.id===org.id&&<CheckIcon size={11}/>}
+                </button>
+              ))}
+              <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,margin:"4px 0"}}/>
+            </>
+          )}
+          <button onClick={()=>{setShow(false);onJoinAnotherOrg();}} style={{...menuItemStyle,color:COLOR.inkSoft}}>+ Join another organisation</button>
+          <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,margin:"4px 0"}}/>
+          <button onClick={()=>{setShow(false);onOpenSettings();}} style={menuItemStyle}>Settings</button>
+          {onSignOut&&<button onClick={()=>{setShow(false);onSignOut();}} style={{...menuItemStyle,color:COLOR.red}}>Sign out</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Left sidebar — the single shell mounted above every screen, replacing
 // AppHeader.jsx's top nav bar (kept as one mount point for the same
 // reason AppHeader was unified in the first place: nothing left to drift
@@ -213,7 +195,7 @@ function SidebarGroup({ label, items, screen, goToScreen, expanded, onToggle }) 
 // opens it is wired independently at the App.jsx document-keydown level
 // (see the `metaKey||ctrlKey` handler there) and needs nothing from this
 // component to keep working.
-export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner, dueSoon=[], askCompassProps, createMenuProps }) {
+export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner, createMenuProps }) {
   const goToScreen = (s) => { setScreen(s); setShowMobileNav(false); };
 
   // Home Experience Redesign, §10 — "56 total cases" is database
@@ -305,10 +287,21 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
 
   const sidebarBody = (
     <>
-      <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"4px 14px 12px",cursor:"pointer",width:"100%"}}>
-        <CompassLogo size={30}/>
-        <span style={{fontFamily:FONT.serif,fontSize:17,color:COLOR.ink,letterSpacing:"-0.2px"}}>Compass</span>
-      </button>
+      {/* Sidebar footer composition pass, Part 4 — Activity is a global
+          application function (org-wide audit feed), not part of who's
+          signed in, so it doesn't belong in the account row at all.
+          Placed here, beside the Compass mark, it reads as "a global
+          sidebar-shell control" rather than an account or navigation
+          item — visually nowhere near Ask Compass (which lives further
+          down the nav list, not in this header row), so there's no
+          competition between the two. */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 8px 12px"}}>
+        <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"0 6px",cursor:"pointer"}}>
+          <CompassLogo size={30}/>
+          <span style={{fontFamily:FONT.serif,fontSize:17,color:COLOR.ink,letterSpacing:"-0.2px"}}>Compass</span>
+        </button>
+        <ActivityBell auditLog={auditLog} orgId={org?.id}/>
+      </div>
 
       {/* IA & User Journey pass, §7 — universal Create pattern. One
           learned control instead of the New case/New meeting/New task/
@@ -328,7 +321,18 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
         <SearchIcon size={13}/> Search
       </button>
 
-      <nav style={{display:"flex",flexDirection:"column",gap:2,flex:1,overflowY:"auto",paddingBottom:12}}>
+      {/* Sidebar footer composition pass, Part 5 — an in-flow notice
+          only present for exactly as long as the underlying problem is,
+          pushing the nav down slightly rather than living in fixed
+          footer chrome. Genuinely rare (a background fetch actually
+          failing), so this cost is negligible in practice. */}
+      {showLoadIssue&&(
+        <div style={{padding:"0 6px 10px"}}>
+          <LoadIssueNotice dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner}/>
+        </div>
+      )}
+
+      <nav style={{display:"flex",flexDirection:"column",gap:2,flex:1,minHeight:0,overflowY:"auto",paddingBottom:12}}>
         {primaryItems.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen}/>)}
         <AskCompassNavButton screen={screen} goToScreen={goToScreen}/>
         {primaryItemsAfterAsk.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen}/>)}
@@ -341,20 +345,11 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
         </div>
       </nav>
 
-      <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,paddingTop:SPACE.md,display:"flex",flexDirection:"column",gap:SPACE.sm}}>
-        <div style={{padding:"0 14px"}}><OrgSwitcher org={org} availableOrgs={availableOrgs} switchOrg={switchOrg} onJoinAnotherOrg={onJoinAnotherOrg}/></div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px"}}>
-          <div style={{minWidth:0}}>
-            {currentUser?.name&&<div style={{fontSize:12,color:COLOR.inkSoft,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser.name}</div>}
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            {showLoadIssue&&<LoadIssueIndicator dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner}/>}
-            <OverdueIndicator dueSoon={dueSoon} setScreen={setScreen}/>
-            {askCompassProps&&<AskCompassWidget {...askCompassProps}/>}
-            <ActivityBell auditLog={auditLog} orgId={org?.id}/>
-            {onSignOut&&<button onClick={onSignOut} title="Sign out" style={{background:"none",border:`1px solid ${COLOR.border}`,color:COLOR.inkFaint,borderRadius:RADIUS.surface,padding:"5px 10px",fontSize:11,cursor:"pointer",fontFamily:FONT.sans}}>Sign out</button>}
-          </div>
-        </div>
+      {/* Sidebar footer composition pass, Part 6 — the healthy-state
+          footer now contains exactly one thing: account identity. */}
+      <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,paddingTop:SPACE.sm,paddingBottom:2,flexShrink:0}}>
+        <AccountMenu currentUser={currentUser} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg}
+          onJoinAnotherOrg={onJoinAnotherOrg} onSignOut={onSignOut} onOpenSettings={()=>goToScreen(SCREENS.SETTINGS)}/>
       </div>
     </>
   );
@@ -376,13 +371,15 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
           </button>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {meetingType&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo?.employee||meetingType.label}</span>}
-            {showLoadIssue&&<LoadIssueIndicator dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner}/>}
-            <OverdueIndicator dueSoon={dueSoon} setScreen={setScreen}/>
-            {askCompassProps&&<AskCompassWidget {...askCompassProps}/>}
             <ActivityBell auditLog={auditLog} orgId={org?.id}/>
             <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
           </div>
         </div>
+        {showLoadIssue&&(
+          <div style={{padding:"0 16px 10px"}}>
+            <LoadIssueNotice dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner}/>
+          </div>
+        )}
         {showMobileNav&&(
           <nav style={{borderTop:"1px solid #EDE5D8",display:"flex",flexDirection:"column",padding:"6px 0",maxHeight:"70vh",overflowY:"auto"}}>
             <div style={{padding:"6px 16px 10px"}}><CreateMenu {...createMenuProps} onAfterAction={()=>setShowMobileNav(false)} /></div>
@@ -392,9 +389,13 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
                 {l}
               </button>
             ))}
-            <div style={{padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderTop:"1px solid #F5F1EA",marginTop:6,paddingTop:12}}>
-              {currentUser?.name&&<span style={{fontSize:12,color:"#6B6375"}}>{currentUser.name}</span>}
-              {onSignOut&&<button onClick={onSignOut} style={{background:"none",border:"1px solid #E8E0D0",color:"#9B9098",borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Sign out</button>}
+            {/* Sidebar footer composition pass, §9 — reuses the exact
+                same AccountMenu as desktop (org switching/Join another
+                organisation/Settings/Sign out), so mobile isn't left
+                with a lesser, name-plus-Sign-out-only account area. */}
+            <div style={{borderTop:"1px solid #F5F1EA",marginTop:6,padding:"8px 10px 4px"}}>
+              <AccountMenu currentUser={currentUser} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg}
+                onJoinAnotherOrg={onJoinAnotherOrg} onSignOut={onSignOut} onOpenSettings={()=>{setShowMobileNav(false);goToScreen(SCREENS.SETTINGS);}}/>
             </div>
           </nav>
         )}
@@ -403,7 +404,7 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   }
 
   return (
-    <aside style={{width:224,flexShrink:0,height:"100vh",position:"sticky",top:0,background:COLOR.surface,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px"}}>
+    <aside style={{width:224,flexShrink:0,height:"100vh",position:"sticky",top:0,background:COLOR.surface,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px",overflowX:"hidden"}}>
       {sidebarBody}
     </aside>
   );
