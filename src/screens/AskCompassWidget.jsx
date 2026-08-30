@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { usePopoverPosition } from '../hooks/usePopoverPosition';
-import { FONT, COLOR } from '../styles/tokens';
+import { AskCompassIcon } from '../components/Icons';
+import { FONT, COLOR, RADIUS } from '../styles/tokens';
 
 // Home Composition Review, follow-up fix — this is a genuinely distinct
 // destination from the "Ask Compass" nav item (GlobalAssistantScreen):
@@ -47,52 +48,62 @@ export function AskCompassWidget({ showAskCompass, setShowAskCompass, askCompass
   return(
     <div style={{position:"relative"}} ref={ref}>
       <button ref={btnRef} onClick={()=>setShowAskCompass(v=>!v)} aria-label="Ask Compass — quick HR reference" title="Ask Compass — quick HR reference" style={{position:"relative",background:showAskCompass?COLOR.purpleTint:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer",color:COLOR.inkSoft,fontFamily:FONT.sans,display:"flex",alignItems:"center"}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <AskCompassIcon size={14}/>
       </button>
       {showAskCompass&&popoverStyle&&(
-        <div role="dialog" aria-label="Ask Compass" style={{...popoverStyle,width:360,maxWidth:"calc(100vw - 24px)",background:"#FFFFFF",borderRadius:16,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",border:"1px solid #E8E0D0",zIndex:250,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          <div style={{padding:"14px 16px",borderBottom:"1px solid #E8E0D0",display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(135deg,#EDE8FF 0%,#FDFAF5 100%)",flexShrink:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              </div>
-              <div>
-                <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:15,color:"#1C1820",fontWeight:400}}>Ask Compass</div>
-                <div style={{fontSize:10,color:"#9B9098"}}>UK employment law · ACAS · Best practice</div>
-              </div>
+        <div role="dialog" aria-label="Ask Compass" style={{...popoverStyle,width:360,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",border:`1px solid ${COLOR.border}`,zIndex:250,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          {/* 10/10 pass, item 7 (quiet expert assistance) — the gradient
+              header + circular chat-bubble avatar read as consumer-AI-
+              chatbot theatrics, out of step with every other popover in
+              the product (ActivityBell, the portal-error indicator) and
+              with GlobalAssistantScreen's own already-plain treatment of
+              the exact same feature. Same title/subtitle copy, same
+              close control — just no gradient, no icon avatar. */}
+          <div style={{padding:"14px 16px",borderBottom:`1px solid ${COLOR.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+            <div>
+              <div style={{fontFamily:FONT.serif,fontSize:15,color:COLOR.ink,fontWeight:400}}>Ask Compass</div>
+              <div style={{fontSize:10,color:COLOR.inkFaint}}>UK employment law · ACAS · Best practice</div>
             </div>
-            <button onClick={()=>setShowAskCompass(false)} aria-label="Close" style={{background:"none",border:"none",cursor:"pointer",color:"#9B9098",fontSize:20,lineHeight:1,padding:4,flexShrink:0}}>×</button>
+            <button onClick={()=>setShowAskCompass(false)} aria-label="Close" style={{background:"none",border:"none",cursor:"pointer",color:COLOR.inkFaint,fontSize:20,lineHeight:1,padding:4,flexShrink:0}}>×</button>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:8,minHeight:160}}>
             {askCompassHistory.length===0&&(
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                <div style={{fontSize:12,color:"#9B9098",marginBottom:4}}>Ask me anything about UK employment law, ACAS guidance, or HR best practice.</div>
-                {["ACAS disciplinary process?","Dismissal on zero-hours contract?","Reasonable adjustments?","How long should an investigation take?"].map((q,i)=>(
-                  <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",lineHeight:1.4}}>{q}</button>
+                <div style={{fontSize:12,color:COLOR.inkFaint,marginBottom:4}}>Ask me anything about UK employment law, ACAS guidance, or HR best practice.</div>
+                {/* Design System Convergence pass, Phase 6 — trimmed from
+                    4 to the requested max of 3; "Dismissal on zero-hours
+                    contract?" (the most narrowly specific of the four)
+                    dropped in favour of the three broadest, most
+                    frequently useful topics. Every remaining prompt is
+                    exactly the same stateless law/ACAS/best-practice
+                    question this widget already answers — nothing new
+                    promised. */}
+                {["ACAS disciplinary process?","Reasonable adjustments?","How long should an investigation take?"].map((q,i)=>(
+                  <button key={i} onClick={()=>{setAskCompassHistory([{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}} style={{textAlign:"left",fontSize:12,color:COLOR.inkSoft,background:COLOR.paper,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"8px 12px",cursor:"pointer",fontFamily:FONT.sans,lineHeight:1.4}}>{q}</button>
                 ))}
               </div>
             )}
             {askCompassHistory.map((m,i)=>(
               <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 12px",borderRadius:10,background:m.role==="user"?"#7C5CFC":"#F5F1EA",color:m.role==="user"?"#fff":"#1C1820"}}>{m.role==="assistant"?(()=>{
+                <div style={{maxWidth:"85%",fontSize:12,lineHeight:1.6,padding:"8px 12px",borderRadius:10,background:m.role==="user"?COLOR.purple:COLOR.borderFaint,color:m.role==="user"?"#fff":COLOR.ink}}>{m.role==="assistant"?(()=>{
                   const txt = m.content.replace(/^#{1,6} /gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/\*(.+?)\*/g,"$1");
                   return txt.split("\n").map((line,j)=>{
                     if(!line.trim()) return <div key={j} style={{height:6}}/>;
-                    if(/^\d+\./.test(line.trim())) return <div key={j} style={{marginBottom:4,paddingLeft:8,borderLeft:"2px solid #7C5CFC22"}}>{line.trim()}</div>;
-                    if(line.trim().startsWith("- ")||line.trim().startsWith("• ")) return <div key={j} style={{marginBottom:3,paddingLeft:8,display:"flex",gap:6}}><span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{line.trim().slice(2)}</span></div>;
-                    if(line.trim()==="---") return <hr key={j} style={{border:"none",borderTop:"1px solid #E8E0D0",margin:"8px 0"}}/>;
+                    if(/^\d+\./.test(line.trim())) return <div key={j} style={{marginBottom:4,paddingLeft:8,borderLeft:`2px solid ${COLOR.purple}22`}}>{line.trim()}</div>;
+                    if(line.trim().startsWith("- ")||line.trim().startsWith("• ")) return <div key={j} style={{marginBottom:3,paddingLeft:8,display:"flex",gap:6}}><span style={{color:COLOR.purple,flexShrink:0}}>·</span><span>{line.trim().slice(2)}</span></div>;
+                    if(line.trim()==="---") return <hr key={j} style={{border:"none",borderTop:`1px solid ${COLOR.border}`,margin:"8px 0"}}/>;
                     return <div key={j} style={{marginBottom:4}}>{line.trim()}</div>;
                   });
                 })():m.content}</div>
               </div>
             ))}
-            {askCompassProcessing&&<div style={{fontSize:12,color:"#9B9098",fontStyle:"italic"}}>Thinking…</div>}
+            {askCompassProcessing&&<div style={{fontSize:12,color:COLOR.inkFaint,fontStyle:"italic"}}>Thinking…</div>}
           </div>
-          <div style={{padding:"10px 14px",borderTop:"1px solid #E8E0D0",display:"flex",gap:8,flexShrink:0}}>
-            <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" aria-label="Ask an HR question" style={{flex:1,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"8px 12px",background:"#FDFAF5",color:"#1C1820",fontFamily:"DM Sans,system-ui,sans-serif",outline:"none",minWidth:0}}/>
-            <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} aria-label="Send" style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600,flexShrink:0}}>→</button>
+          <div style={{padding:"10px 14px",borderTop:`1px solid ${COLOR.border}`,display:"flex",gap:8,flexShrink:0}}>
+            <input value={askCompassInput} onChange={e=>setAskCompassInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} placeholder="Ask an HR question…" aria-label="Ask an HR question" style={{flex:1,fontSize:13,border:`1.5px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"8px 12px",background:COLOR.paper,color:COLOR.ink,fontFamily:FONT.sans,outline:"none",minWidth:0}}/>
+            <button onClick={()=>{if(askCompassInput.trim()){const q=askCompassInput.trim();setAskCompassInput("");setAskCompassHistory(h=>[...h,{role:"user",content:q}]);askCompass(q,askCompassHistory,setAskCompassHistory,setAskCompassProcessing);}}} aria-label="Send" style={{background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"8px 14px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600,flexShrink:0}}>→</button>
           </div>
-          {askCompassHistory.length>0&&<div style={{padding:"6px 14px 10px",borderTop:"1px solid #F5F1EA",display:"flex",justifyContent:"flex-end",flexShrink:0}}><button onClick={()=>setAskCompassHistory([])} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Clear chat</button></div>}
+          {askCompassHistory.length>0&&<div style={{padding:"6px 14px 10px",borderTop:`1px solid ${COLOR.borderFaint}`,display:"flex",justifyContent:"flex-end",flexShrink:0}}><button onClick={()=>setAskCompassHistory([])} style={{fontSize:11,color:COLOR.inkFaint,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Clear chat</button></div>}
         </div>
       )}
     </div>

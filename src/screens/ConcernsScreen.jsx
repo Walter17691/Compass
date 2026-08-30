@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PageHeader } from '../components/design/PageHeader';
 import { CONCERN_TYPES } from '../constants';
 import { referralStatusMeta, REFERRAL_STATUSES } from '../lib/concernReferrals';
 import { computeConcernIntakeGaps } from '../lib/concernIntakeGaps';
@@ -199,8 +200,11 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
   if (!isHR) {
     return (
       <div style={{maxWidth:560,margin:"0 auto",padding:"40px 20px"}}>
-        <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Raise a people concern</h2>
-        <p style={{fontSize:13,color:"#6B6375",margin:"0 0 24px"}}>Tell HR about a conduct, performance, or welfare issue — they'll review it and decide the next step.</p>
+        {/* Design System Convergence pass, Phase 2 — was a purple serif
+            h2; this is an intake form, not an editorial moment, so it
+            gets the same plain PageHeader treatment as every other
+            operational screen. */}
+        <PageHeader title="Raise a people concern" subtitle="Tell HR about a conduct, performance, or welfare issue — they'll review it and decide the next step."/>
         {concernSubmitted ? (
           <Card style={{textAlign:"center",padding:"32px 20px"}}>
             <div style={{fontSize:15,color:"#1A1535",marginBottom:6,fontWeight:600}}>Submitted</div>
@@ -226,11 +230,8 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
 
   return (
     <div style={{maxWidth:720,margin:"0 auto",padding:"40px 20px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-        <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>People concerns</h2>
-        <Btn variant="secondary" onClick={()=>setShowForm(v=>!v)}>{showForm?"Cancel":"+ Raise a concern"}</Btn>
-      </div>
-      <p style={{fontSize:13,color:"#6B6375",margin:"0 0 20px"}}>{open.length} awaiting triage</p>
+      <PageHeader title="People concerns" subtitle={`${open.length} awaiting triage`}
+        actions={<Btn variant="secondary" onClick={()=>setShowForm(v=>!v)}>{showForm?"Cancel":"+ Raise a concern"}</Btn>}/>
 
       {showForm&&(
         <div style={{marginBottom:24}}>

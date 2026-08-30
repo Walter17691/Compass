@@ -1,3 +1,4 @@
+import { COLOR } from '../styles/tokens';
 import { Btn } from './Primitives';
 import { WarningIcon, InfoIcon } from './Icons';
 import { signalTypeMeta, SIGNAL_STATUSES } from '../lib/caseSignals';
@@ -14,13 +15,20 @@ function statusLabel(status) {
 // extraActions carries whatever's specific to the signal's type — e.g.
 // "Create task" for a next_action signal, "Link to allegation" for an
 // inconsistency.
-export function SignalCard({ signal, onDismiss, onMarkNotRelevant, onMarkResolved, resolvedLabel="Mark resolved", onAskWhy, extraActions = [] }) {
+// 10/10 pass, Part A — was its own full bordered card per item; the
+// three panels that render a list of these (Unanswered Questions,
+// Inconsistencies, Guardrails) now compose as one shared "Case
+// readiness" queue, so each signal is a row (bottom border only, no own
+// background/radius) rather than a stack of near-identical boxes. Every
+// prop, handler, and piece of shown data is unchanged — this is the
+// outer wrapper only.
+export function SignalCard({ signal, onDismiss, onMarkNotRelevant, onMarkResolved, resolvedLabel="Mark resolved", onAskWhy, extraActions = [], last=false }) {
   const meta = signalTypeMeta(signal.type);
   const Icon = signal.type === "process_risk" ? WarningIcon : InfoIcon;
   const isOpen = signal.status === "open";
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px"}}>
+    <div style={{padding:"12px 0",borderBottom:last?"none":`1px solid ${COLOR.borderFaint}`}}>
       <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
         <div style={{flexShrink:0,width:26,height:26,borderRadius:"50%",background:meta.color+"18",display:"flex",alignItems:"center",justifyContent:"center",marginTop:1}}>
           <Icon size={14} color={meta.color} />

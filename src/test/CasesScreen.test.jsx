@@ -123,3 +123,59 @@ describe('CasesScreen — loading state (Phase 6.5, P1)', () => {
     expect(screen.queryByText('Loading cases…')).not.toBeInTheDocument();
   });
 });
+
+// IA & User Journey pass, §10 — Cases as a work inbox: a top-level
+// All/Mine/Needs attention/Closed segment, additional to (not replacing)
+// the existing type/stage/status filters. "Mine" reuses the ownerId a
+// case is already stamped with at creation; "Needs attention" reuses
+// getNextStep exactly as the row's own "Next: …" line already does.
+describe('CasesScreen — quick segments (IA & User Journey pass, §10)', () => {
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, setActiveCaseId: noop, setActiveCaseStage: noop, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, confirmDialog: noop, showToast: noop };
+  const segmentCases = [
+    { id: 'mine-open', employeeName: 'Mine Open', ownerId: 'me', stage: 'investigation' },
+    { id: 'other-open', employeeName: 'Other Open', ownerId: 'someone-else', stage: 'investigation' },
+    { id: 'mine-closed', employeeName: 'Mine Closed', ownerId: 'me', stage: 'closed' },
+  ];
+  const getCaseStage = cs => cs.stage;
+  const getNextStep = cs => cs.id === 'other-open' ? { action: true, label: 'Do something' } : null;
+
+  // getProceedingTitle returns the plain employee name in these tests,
+  // and the same-employee group header above each row also shows that
+  // name — so every case name legitimately appears twice in the DOM
+  // (group header + row title). getAllByText/queryAllByText check
+  // presence/absence by count rather than assuming a single match.
+  it('shows All by default with every case and correct segment counts', () => {
+    render(<CasesScreen {...baseProps} cases={segmentCases} getCaseStage={getCaseStage} getNextStep={getNextStep} currentUserId="me" />);
+    expect(screen.getByRole('button', { name: 'All (3)' })).toBeInTheDocument();
+    expect(screen.getAllByText('Mine Open').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Other Open').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Mine Closed').length).toBeGreaterThan(0);
+  });
+
+  it('filters to only the current user\'s cases under Mine', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={segmentCases} getCaseStage={getCaseStage} getNextStep={getNextStep} currentUserId="me" />);
+    await user.click(screen.getByRole('button', { name: 'Mine (2)' }));
+    expect(screen.getAllByText('Mine Open').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Mine Closed').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Other Open').length).toBe(0);
+  });
+
+  it('filters to only cases with a next step, excluding closed cases, under Needs attention', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={segmentCases} getCaseStage={getCaseStage} getNextStep={getNextStep} currentUserId="me" />);
+    await user.click(screen.getByRole('button', { name: 'Needs attention (1)' }));
+    expect(screen.getAllByText('Other Open').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Mine Open').length).toBe(0);
+    expect(screen.queryAllByText('Mine Closed').length).toBe(0);
+  });
+
+  it('filters to only closed cases under Closed', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={segmentCases} getCaseStage={getCaseStage} getNextStep={getNextStep} currentUserId="me" />);
+    await user.click(screen.getByRole('button', { name: 'Closed (1)' }));
+    expect(screen.getAllByText('Mine Closed').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Mine Open').length).toBe(0);
+    expect(screen.queryAllByText('Other Open').length).toBe(0);
+  });
+});

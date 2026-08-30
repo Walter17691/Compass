@@ -16,7 +16,6 @@ import { ProcessTemplatesSection } from './settings/ProcessTemplatesSection';
 import { NotificationsSection } from './settings/NotificationsSection';
 import { AutomationsSection } from './settings/AutomationsSection';
 import { IntegrationsSection } from './settings/IntegrationsSection';
-import { IntegrationHealthSection } from './settings/IntegrationHealthSection';
 import { AuditTrailSection } from './settings/AuditTrailSection';
 import { DataPrivacySection } from './settings/DataPrivacySection';
 import { HelpSection } from './settings/HelpSection';
@@ -52,8 +51,20 @@ export function SettingsScreen({
   onboarding = {},
 }) {
   const sections = [
-    {id:"billing", label:"Billing"},
-    ...(isHR?[{id:"team-access", label:"Team & access"}]:[]),
+    // Client IA cleanup — Billing removed from Settings navigation
+    // entirely (was previously isHR-gated, but that gate still meant any
+    // HR team member — not just whoever actually owns the org's
+    // subscription — could see and reach it). No separate "org owner"
+    // role exists in the current permission model to gate this more
+    // finely, and this pass was explicitly told not to invent one.
+    // BillingSection itself, its route, and every /api/billing/* endpoint
+    // are untouched — see the render branch below, still reachable via
+    // the same initialSection deep-link mechanism every other section
+    // uses, just with no current caller wiring anything to it. Confirmed
+    // before removing: Billing has never gated app usage anywhere (no
+    // paywall/subscription check exists in App.jsx) — removing it from
+    // nav doesn't block any required account functionality.
+    ...(isHR?[{id:"organisation", label:"Organisation"}]:[]),
     // Phase 6.5 hardening (structural remediation, Prompt 14 — Family 1
     // Part 6 coordination). This tab lets a caller define org_roles
     // (job titles/access levels) AND directly edit another member's own
@@ -63,8 +74,9 @@ export function SettingsScreen({
     // until this pass. Matches the existing Wellbeing/Automations/Data
     // & Privacy precedent (hide the tab; RLS/triggers are the real
     // boundary either way).
-    ...(isHR?[{id:"organisation", label:"Organisation"}]:[]),
+    ...(isHR?[{id:"team-access", label:"Team & access"}]:[]),
     ...(isHR?[{id:"locations", label:"Locations"}]:[]),
+    {id:"branding", label:"Branding & letters"},
     ...(isHR?[{id:"portal-access", label:"Portal access"}]:[]),
     // Phase 6.5 hardening (Prompt 14, Family 1 Part 6) — bulk CSV
     // import/export of full employee records (including probation dates
@@ -75,37 +87,49 @@ export function SettingsScreen({
     // during the same Part 6 UI/DB coordination audit as Organisation/
     // Onboarding/Offboarding.
     ...(isHR?[{id:"employee-records", label:"Employee data"}]:[]),
-    {id:"branding", label:"Branding & letters"},
     {id:"policies", label:"Policies"},
     ...(isHR?[{id:"process-templates", label:"Process templates"}]:[]),
     {id:"integrations", label:"Integrations"},
-    ...(isHR?[{id:"integration-health", label:"Integration health"}]:[]),
+    // Client IA cleanup — "Integration health" folded into Integrations
+    // itself (see IntegrationsSection.jsx): it was four read-only rows
+    // duplicating the four OAuth integrations already listed there, with
+    // no functionality of its own beyond a status badge. Same
+    // summarizeIntegrationHealth data, now shown contextually against
+    // each connected integration instead of as a separate destination.
     {id:"notifications", label:"Notifications"},
     ...(isHR?[{id:"automations", label:"Automations"}]:[]),
     {id:"audit-trail", label:"Audit trail"},
     {id:"data-privacy", label:"Data & privacy"},
     {id:"help", label:"Help"},
   ];
-  // Phase 7.5B (P0 polish) — presentation-only grouping for SettingsNav's
-  // own optional `groups` prop. Every id/label/route/isHR-gate above is
-  // completely untouched; this only says which category header each
-  // already-existing section renders under. A section not listed here
-  // (there shouldn't be any, but if `sections` ever grows one) still
-  // renders ungrouped rather than silently vanishing — see SettingsNav's
-  // own comment for that fallback.
+  // Client IA cleanup — presentation-only grouping for SettingsNav's own
+  // optional `groups` prop, reorganised around the mental model an HR
+  // admin actually thinks in (Organisation / People & access / Compass
+  // setup / Security & data / Support) rather than the previous
+  // implementation-flavoured "Processes" + "Integrations & automation"
+  // split. Every id/label/route/isHR-gate above is completely untouched —
+  // this only says which category header each already-existing section
+  // renders under. "Support" is new only as a group *label* (Help already
+  // existed as an ungrouped section before this pass; it silently had no
+  // header at all — see SettingsNav's own ungrouped-fallback rendering).
   const SETTINGS_GROUPS = [
-    { label: "Organisation", sectionIds: ["billing", "organisation", "locations", "branding"] },
+    { label: "Organisation", sectionIds: ["organisation", "locations", "branding"] },
     { label: "People & access", sectionIds: ["team-access", "portal-access", "employee-records"] },
-    { label: "Processes", sectionIds: ["policies", "process-templates"] },
-    { label: "Integrations & automation", sectionIds: ["integrations", "integration-health", "notifications", "automations"] },
-    { label: "Governance & data", sectionIds: ["audit-trail", "data-privacy"] },
+    { label: "Compass setup", sectionIds: ["policies", "process-templates", "integrations", "notifications", "automations"] },
+    { label: "Security & data", sectionIds: ["audit-trail", "data-privacy"] },
+    { label: "Support", sectionIds: ["help"] },
   ];
   // Lets a deep link (Home's "Suggested for you" / "View all policies &
   // templates") land directly on the relevant section instead of always
-  // Billing. Cleared on unmount so a later, ordinary nav-bar click into
-  // Settings still defaults to Billing rather than getting stuck wherever
-  // the last deep link pointed.
-  const [active, setActive] = useState(initialSection || "billing");
+  // the default. Cleared on unmount so a later, ordinary nav-bar click
+  // into Settings still lands on the default rather than getting stuck
+  // wherever the last deep link pointed.
+  // Client IA cleanup — default is now sections[0], which is "Organisation"
+  // for an HR user (a sensible overview, not billing or an arbitrary
+  // technical page) and the first surviving non-gated section for a
+  // non-HR user — never hardcoded to a specific id here, so it can't
+  // drift out of sync with the isHR gates above.
+  const [active, setActive] = useState(initialSection || sections[0]?.id);
   // Deliberately runs only on unmount, not whenever clearInitialSection
   // changes identity — this should fire exactly once, when the user
   // leaves Settings, not on every render.
@@ -113,7 +137,18 @@ export function SettingsScreen({
   useEffect(() => () => clearInitialSection?.(), []);
 
   return(
-    <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"40px 28px"}}>
+    // Settings shell geometry — fixes a horizontal jump between sections.
+    // This div is a direct flex-item child of App.jsx's content column
+    // (display:flex, flexDirection:"column", no explicit alignItems, so
+    // the default is stretch). A flex item's own auto side-margins
+    // disable that default stretch per the flexbox spec, so without an
+    // explicit width this div fell back to shrink-to-fit sizing (capped
+    // by maxWidth, but never filling up to it) — its rendered width, and
+    // therefore its centred left/right position, tracked whichever
+    // section's Card content happened to be narrower or wider. width:
+    // "100%" gives it a definite size again, so maxWidth/margin:auto
+    // resolve to the same fixed, centred box for every section.
+    <div style={{width:"100%",maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"40px 28px"}}>
       {/* Phase 2B — demoted from the editorial identity heading treatment
           (serif, purple) to the plain PageHeader every other non-
           identity screen uses (Compass Design Vision §5): Settings is
@@ -141,8 +176,7 @@ export function SettingsScreen({
           {active==="branding"&&<BrandingSection wordTemplate={branding.wordTemplate} setWordTemplate={branding.setWordTemplate} lsSet={branding.orgLsSet} wordTemplateRef={branding.wordTemplateRef} handleWordTemplateUpload={branding.handleWordTemplateUpload} letterhead={branding.letterhead} setLetterhead={branding.setLetterhead} letterheadRef={branding.letterheadRef} handleLetterheadUpload={branding.handleLetterheadUpload} signature={branding.signature} setSignature={branding.setSignature} setShowSigPad={branding.setShowSigPad}/>}
           {active==="policies"&&<PoliciesSection policies={policies.policies} setPolicies={policies.setPolicies} policyFileRef={policies.policyFileRef} handlePolicyUpload={policies.handlePolicyUpload} policyProcessing={policies.policyProcessing} lsSet={branding.orgLsSet} changePolicyCategory={policies.changePolicyCategory}/>}
           {active==="process-templates"&&<ProcessTemplatesSection processTemplates={templates.processTemplates} saveProcessTemplate={templates.saveProcessTemplate}/>}
-          {active==="integrations"&&<IntegrationsSection mailConnected={integrations.mailConnected} mailboxEmail={integrations.mailboxEmail} onConnectMail={integrations.onConnectMail} onDisconnectMail={integrations.onDisconnectMail} gmailConnected={integrations.gmailConnected} gmailboxEmail={integrations.gmailboxEmail} connectGmail={integrations.connectGmail} disconnectGmail={integrations.disconnectGmail} calendarConnected={integrations.calendarConnected} connectGoogleCalendar={integrations.connectGoogleCalendar} disconnectGoogleCalendar={integrations.disconnectGoogleCalendar} ms365CalendarConnected={integrations.ms365CalendarConnected} connectMs365Calendar={integrations.connectMs365Calendar} disconnectMs365Calendar={integrations.disconnectMs365Calendar} orgWebhookUrl={integrations.orgWebhookUrl} orgWebhookType={integrations.orgWebhookType} onManageNotifications={()=>setActive("notifications")}/>}
-          {active==="integration-health"&&isHR&&<IntegrationHealthSection integrationEvents={integrations.integrationEvents}/>}
+          {active==="integrations"&&<IntegrationsSection isHR={isHR} mailConnected={integrations.mailConnected} mailboxEmail={integrations.mailboxEmail} onConnectMail={integrations.onConnectMail} onDisconnectMail={integrations.onDisconnectMail} gmailConnected={integrations.gmailConnected} gmailboxEmail={integrations.gmailboxEmail} connectGmail={integrations.connectGmail} disconnectGmail={integrations.disconnectGmail} calendarConnected={integrations.calendarConnected} connectGoogleCalendar={integrations.connectGoogleCalendar} disconnectGoogleCalendar={integrations.disconnectGoogleCalendar} ms365CalendarConnected={integrations.ms365CalendarConnected} connectMs365Calendar={integrations.connectMs365Calendar} disconnectMs365Calendar={integrations.disconnectMs365Calendar} orgWebhookUrl={integrations.orgWebhookUrl} orgWebhookType={integrations.orgWebhookType} integrationEvents={integrations.integrationEvents} onManageNotifications={()=>setActive("notifications")}/>}
           {active==="notifications"&&<NotificationsSection dueSoon={notifications.dueSoon} caseTasks={notifications.caseTasks} createCaseTask={notifications.createCaseTask} requestNotifications={notifications.requestNotifications} notifGranted={notifications.notifGranted} emailDigestOptIn={notifications.emailDigestOptIn} toggleEmailDigest={notifications.toggleEmailDigest} orgWebhookUrl={integrations.orgWebhookUrl} orgWebhookType={integrations.orgWebhookType} saveOrgWebhook={integrations.saveOrgWebhook} sendTestWebhook={integrations.sendTestWebhook}/>}
           {active==="automations"&&isHR&&<AutomationsSection automationLevels={automation.automationLevels} saveAutomationLevel={automation.saveAutomationLevel}/>}
           {active==="audit-trail"&&<AuditTrailSection auditLog={auditLog}/>}

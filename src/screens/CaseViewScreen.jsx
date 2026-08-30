@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 import { MDRenderer } from '../components/MDRenderer';
@@ -29,6 +29,7 @@ import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
 import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
 import { NotetakerView } from '../components/NotetakerView';
 import { ActionMenu } from '../components/design/ActionMenu';
+import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { FONT, COLOR, TYPE, RADIUS, BUTTON, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
@@ -60,6 +61,22 @@ const TAB_GROUPS = [
   { label: "Work", ids: ["meetings","people","tasks","documents","communications"] },
   { label: "Decision", ids: ["themes","outcome","ai"] },
 ];
+
+// IA & User Journey pass, §11 — "aggressively reduce permanent case nav"
+// down to Overview/Timeline/Evidence/More. These three (plus Overview,
+// which the case always opens on) are the tabs a normal working session
+// touches every time; the other nine are genuinely specialised or
+// lower-frequency (allegations detail, meeting records, participants,
+// tasks, documents, communications, themes, outcome, the AI assistant) —
+// still one click away behind More, not removed. MORE_GROUPS is derived
+// from TAB_GROUPS rather than a second hand-written list so the two can
+// never drift apart: every tab not promoted to the permanent row above
+// automatically ends up in More, under the same conceptual grouping this
+// file already used for the old flat 12-tab row.
+const PRIMARY_TAB_IDS = ["overview","timeline","evidence"];
+const MORE_GROUPS = TAB_GROUPS
+  .map(g => ({ label: g.label, ids: g.ids.filter(id => !PRIMARY_TAB_IDS.includes(id)) }))
+  .filter(g => g.ids.length > 0);
 
 // Phase 6.5 hardening (Batch 10b, task #205) — was 132 individually
 // destructured props (2 of them, concludeInvestigation/assignInvestigator,
@@ -100,6 +117,20 @@ export function CaseViewScreen({
   const [activeTab, setActiveTab] = useState("overview");
   const [whySignal, setWhySignal] = useState(null);
   const [changesBannerDismissed, setChangesBannerDismissed] = useState(false);
+  // IA & User Journey pass, §11 — More tab popover; same open/outside-
+  // click/Escape shape as AppSidebar's own More menu.
+  const [showMoreTabs, setShowMoreTabs] = useState(false);
+  const moreTabsRef = useRef(null);
+  const moreTabsBtnRef = useRef(null);
+  const moreTabsPopoverStyle = usePopoverPosition(moreTabsBtnRef, showMoreTabs, { minHeight: 260 });
+  useEffect(() => {
+    if (!showMoreTabs) return;
+    const onKeyDown = e => { if (e.key === "Escape") setShowMoreTabs(false); };
+    const onClickOutside = e => { if (moreTabsRef.current && !moreTabsRef.current.contains(e.target)) setShowMoreTabs(false); };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onClickOutside);
+    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
+  }, [showMoreTabs]);
   const cs = cases.find(x=>x.id===activeCaseId);
   // CaseViewScreen doesn't remount when switching between cases while
   // staying on this screen (no key={cs.id} at the App.jsx call site), so
@@ -371,27 +402,58 @@ export function CaseViewScreen({
             })()}
           </div>
         </div>
-        {/* Workspace navigation — Phase 2A groups the same 12 tabs (no
-            routes, ids, or active-tab logic changed) into three
-            conceptual clusters, rendered in that grouped order with a
-            small divider + label between clusters, rather than one flat
-            undifferentiated row. All 12 remain equally reachable — none
-            are hidden behind a "More" menu this phase. */}
-        <div style={{display:"flex",alignItems:"center",gap:2,overflowX:"auto"}}>
-          {TAB_GROUPS.map((group,gi)=>(
-            <div key={group.label} style={{display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
-              {gi>0&&<div style={{width:1,height:18,background:COLOR.border,margin:"0 6px",flexShrink:0}}/>}
-              <span style={{...TYPE.micro,color:COLOR.inkQuiet,marginRight:3,flexShrink:0}}>{group.label}</span>
-              {TABS.filter(t=>group.ids.includes(t.id)).map(t=>(
-                <button key={t.id} onClick={()=>setActiveTab(t.id)}
-                  style={{padding:"6px 9px",borderRadius:6,border:"none",background:activeTab===t.id?"#F5F3FF":"none",color:activeTab===t.id?"#5B3FD4":COLOR.inkSoft,fontWeight:activeTab===t.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
-                  {t.label}
-                  {t.id==="allegations"&&caseAllegations.length>0&&<span style={{fontSize:10,marginLeft:5,background:activeTab===t.id?"#5B3FD4":"#E8E0D0",color:activeTab===t.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseAllegations.length}</span>}
-                  {t.id==="tasks"&&caseTaskList.filter(x=>x.status!=="done").length>0&&<span style={{fontSize:10,marginLeft:5,background:activeTab===t.id?"#5B3FD4":"#E8E0D0",color:activeTab===t.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseTaskList.filter(x=>x.status!=="done").length}</span>}
-                </button>
-              ))}
-            </div>
+        {/* IA & User Journey pass, §11 — the old flat/grouped 12-tab row
+            (see git history) is reduced to the three tabs a normal
+            working session touches every visit — Overview/Timeline/
+            Evidence — plus a "More" popover for the other nine, grouped
+            under the same Case/Work/Decision labels the old row already
+            used (MORE_GROUPS derives from TAB_GROUPS above, so nothing
+            here can silently omit a tab). No route, id, or active-tab
+            logic changed — this is which control reaches each tab, not
+            what the tabs are. */}
+        <div style={{display:"flex",alignItems:"center",gap:2}} ref={moreTabsRef}>
+          {TABS.filter(t=>PRIMARY_TAB_IDS.includes(t.id)).map(t=>(
+            <button key={t.id} onClick={()=>setActiveTab(t.id)}
+              style={{padding:"6px 9px",borderRadius:6,border:"none",background:activeTab===t.id?COLOR.purpleTint:"none",color:activeTab===t.id?COLOR.purpleDeep:COLOR.inkSoft,fontWeight:activeTab===t.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+              {t.label}
+            </button>
           ))}
+          {(()=>{
+            const moreActive = !PRIMARY_TAB_IDS.includes(activeTab);
+            const activeMoreTab = moreActive ? TABS.find(t=>t.id===activeTab) : null;
+            // Same badge signal the old flat row gave per-tab, surfaced
+            // on the collapsed trigger instead so "there's an open
+            // allegation/task" doesn't silently disappear just because
+            // those tabs moved behind More.
+            const badgeCount = caseAllegations.length + caseTaskList.filter(x=>x.status!=="done").length;
+            return (
+              <div style={{position:"relative"}}>
+                <button ref={moreTabsBtnRef} onClick={()=>setShowMoreTabs(v=>!v)} aria-expanded={showMoreTabs} aria-haspopup="true"
+                  style={{padding:"6px 9px",borderRadius:6,border:"none",background:moreActive||showMoreTabs?COLOR.purpleTint:"none",color:moreActive?COLOR.purpleDeep:COLOR.inkSoft,fontWeight:moreActive?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}>
+                  {activeMoreTab ? activeMoreTab.label : "More"}
+                  {!moreActive&&badgeCount>0&&<span style={{fontSize:10,background:COLOR.border,color:COLOR.inkSoft,borderRadius:10,padding:"1px 6px",fontWeight:600}}>{badgeCount}</span>}
+                  <span aria-hidden="true" style={{fontSize:9}}>▾</span>
+                </button>
+                {showMoreTabs&&moreTabsPopoverStyle&&(
+                  <div role="menu" aria-label="More case tabs" style={{...moreTabsPopoverStyle,width:200,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"8px"}}>
+                    {MORE_GROUPS.map((group,gi)=>(
+                      <div key={group.label} style={{marginTop:gi>0?8:0}}>
+                        <div style={{...TYPE.micro,color:COLOR.inkQuiet,padding:"4px 8px"}}>{group.label}</div>
+                        {TABS.filter(t=>group.ids.includes(t.id)).map(t=>(
+                          <button key={t.id} onClick={()=>{setActiveTab(t.id);setShowMoreTabs(false);}}
+                            style={{display:"flex",alignItems:"center",width:"100%",textAlign:"left",background:activeTab===t.id?COLOR.purpleTint:"none",border:"none",color:activeTab===t.id?COLOR.purpleDeep:COLOR.ink,padding:"7px 8px",borderRadius:6,fontSize:13,fontWeight:activeTab===t.id?600:400,cursor:"pointer",fontFamily:FONT.sans}}>
+                            {t.label}
+                            {t.id==="allegations"&&caseAllegations.length>0&&<span style={{fontSize:10,marginLeft:5,background:COLOR.border,color:COLOR.inkSoft,borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseAllegations.length}</span>}
+                            {t.id==="tasks"&&caseTaskList.filter(x=>x.status!=="done").length>0&&<span style={{fontSize:10,marginLeft:5,background:COLOR.border,color:COLOR.inkSoft,borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseTaskList.filter(x=>x.status!=="done").length}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
         </div>
       </div>

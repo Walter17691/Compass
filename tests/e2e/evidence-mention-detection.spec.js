@@ -51,9 +51,11 @@ test('accepting a live witness mention creates a real task on the matching case'
   await page.getByRole('button', { name: 'Leave without saving' }).click();
   await page.getByRole('button', { name: 'Leave', exact: true }).click();
 
-  // Leaving a meeting always lands back on Home, not the case — reopen the
-  // case from there using Home's own case search.
-  await page.getByPlaceholder('Search cases…').fill(employeeName);
+  // Leaving a meeting always lands back on Home, not the case — reopen it
+  // via Cases' own search (Home Experience Redesign removed Home's case
+  // search along with the Active Cases table it belonged to).
+  await page.getByRole('button', { name: 'Cases', exact: true }).click();
+  await page.getByPlaceholder('Search by employee…').fill(employeeName);
   await page.getByText(employeeName).first().click();
 
   const caseTabBar = page.locator('div')

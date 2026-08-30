@@ -34,6 +34,31 @@ describe('ExecutiveBriefPanel', () => {
     expect(screen.getByText(/Supporting data/)).toBeInTheDocument();
   });
 
+  // Design System Convergence pass, Phase 7 — buildExecutiveBriefPrompt
+  // asks the model for prose paragraphs followed by a "- "-prefixed
+  // bullet list; this is new coverage for actually splitting that real
+  // structure into a distinct "Recommended areas" section, and for the
+  // safe fallback when a narrative doesn't have that shape.
+  it('splits the prompted "- " bullet list into its own Recommended areas section', async () => {
+    const narrative = 'Case volume was stable this quarter.\n\nGrievances rose slightly.\n\n- Review the grievance process\n- Monitor absence-related cases';
+    fromMock.mockReturnValue(selectChain({ data: [{ id: 'b1', narrative, created_at: '2026-08-01T00:00:00Z', supporting_data: null }], error: null }));
+    render(<ExecutiveBriefPanel org={{ id: 'org1' }} user={{ id: 'u1' }} isHR={true}/>);
+    await waitFor(() => expect(screen.getByText('Recommended areas for leadership attention')).toBeInTheDocument());
+    expect(screen.getByText('Review the grievance process')).toBeInTheDocument();
+    expect(screen.getByText('Monitor absence-related cases')).toBeInTheDocument();
+    expect(screen.getByText(/Grievances rose slightly/)).toBeInTheDocument();
+    // The bullet lines themselves must not also appear in the prose block.
+    expect(screen.queryByText(/- Review the grievance process/)).not.toBeInTheDocument();
+  });
+
+  it('renders the whole narrative as before when it has no bullet list (older briefs, or non-compliant generation)', async () => {
+    const narrative = 'A plain narrative with no bullet points at all.';
+    fromMock.mockReturnValue(selectChain({ data: [{ id: 'b1', narrative, created_at: '2026-08-01T00:00:00Z', supporting_data: null }], error: null }));
+    render(<ExecutiveBriefPanel org={{ id: 'org1' }} user={{ id: 'u1' }} isHR={true}/>);
+    await waitFor(() => expect(screen.getByText(narrative)).toBeInTheDocument());
+    expect(screen.queryByText('Recommended areas for leadership attention')).not.toBeInTheDocument();
+  });
+
   it('shows an empty state with no briefs generated yet', async () => {
     fromMock.mockReturnValue(selectChain({ data: [], error: null }));
     render(<ExecutiveBriefPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true}/>);

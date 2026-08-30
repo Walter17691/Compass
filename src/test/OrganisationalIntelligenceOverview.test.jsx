@@ -74,8 +74,8 @@ describe('OrganisationalIntelligenceOverview', () => {
       { caseId: 'c1', overdue: true }, { caseId: 'c1', overdue: true }, { caseId: 'c2', overdue: true }, { caseId: 'c3', overdue: false },
     ];
     render(<OrganisationalIntelligenceOverview orgId="org1" cases={[]} dueSoon={dueSoon} hrReviewRequests={[]} processTemplates={[]}/>);
-    await waitFor(() => expect(screen.getByText('Overdue cases')).toBeInTheDocument());
-    const tile = screen.getByText('Overdue cases').parentElement;
+    await waitFor(() => expect(screen.getByText(/Overdue/)).toBeInTheDocument());
+    const tile = screen.getByText(/Overdue/).parentElement;
     expect(tile).toHaveTextContent('2');
   });
 
@@ -97,8 +97,8 @@ describe('OrganisationalIntelligenceOverview', () => {
       { meetings: [{ type: 'Investigation' }] },
     ];
     render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
-    await waitFor(() => expect(screen.getByText('Informal resolution')).toBeInTheDocument());
-    expect(screen.getByText('1 formal')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Informal \/ formal/)).toBeInTheDocument());
+    expect(screen.getByText('1 / 1')).toBeInTheDocument();
   });
 
   // Phase 6.5, Batch 5 — "Repeat case themes" now renders HR-curated

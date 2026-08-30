@@ -18,6 +18,10 @@ test('pasting an email suggests the matching case and saves it as evidence once 
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
+  // Save email to case lives inside the "HR Processes" sidebar group,
+  // which now starts collapsed (Home Composition Review, final
+  // refinement item 3).
+  await page.locator('aside, header').getByRole('button', { name: 'HR Processes' }).click();
   await page.locator('aside, header').getByRole('button', { name: 'Save email to case', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Save email to case' })).toBeVisible({ timeout: 10000 });
 

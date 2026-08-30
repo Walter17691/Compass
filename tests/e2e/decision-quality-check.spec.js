@@ -84,8 +84,10 @@ test('issuing an outcome with an undecided allegation is flagged, and can be sen
   await expect(qualityCheck).not.toBeVisible();
   await expect(page.getByText('Issue disciplinary outcome', { exact: true })).not.toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByPlaceholder('Search cases…').fill(employeeName);
+  // Home Experience Redesign removed Home's own case search along with
+  // the Active Cases table it belonged to — Cases has its own search.
+  await page.getByRole('button', { name: 'Cases', exact: true }).click();
+  await page.getByPlaceholder('Search by employee…').fill(employeeName);
   await page.getByText(employeeName).first().click();
   await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
   await expect(page.getByText(/Follow up on:.*Allegation not yet decided/)).toBeVisible({ timeout: 10000 });

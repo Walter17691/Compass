@@ -34,7 +34,7 @@ describe('RiskMapPanel', () => {
       error: null,
     });
     render(<RiskMapPanel orgId="org1" cases={[]} employeeRecords={[]} processTemplates={[]} orgEvents={[]}/>);
-    await waitFor(() => expect(screen.getAllByText('No flags for this site.').length).toBe(2));
+    await waitFor(() => expect(screen.getAllByText(/No risk flags detected for this site/).length).toBe(2));
   });
 
   it('includes the disclaimer that this is not a ranking and not based on protected characteristics', async () => {

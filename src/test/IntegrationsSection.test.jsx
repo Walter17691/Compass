@@ -8,17 +8,36 @@ import { IntegrationsSection } from '../screens/settings/IntegrationsSection.jsx
 // connect button, which has no isHR gate), so it's covered directly here
 // alongside real E2E interaction for the two live connections.
 describe('IntegrationsSection', () => {
-  it('renders one row per catalog entry, including the not-yet-available ones', () => {
+  // Client IA cleanup, §4 — roadmap/unsupported integrations no longer sit
+  // in the primary list badged "Requires administrator" (which implied an
+  // admin could connect them today — they can't, nothing behind that
+  // badge is built). They now live in a visually subordinate "Coming
+  // soon" list with no status badge or action.
+  it('renders real integrations in the primary list and roadmap ones in a separate, honestly-labelled "Coming soon" list', () => {
     render(<IntegrationsSection />);
     expect(screen.getByText('Microsoft Outlook')).toBeInTheDocument();
     expect(screen.getByText('Gmail')).toBeInTheDocument();
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
     expect(screen.getByText('HRIS platforms')).toBeInTheDocument();
-    expect(screen.getAllByText('Requires administrator').length).toBeGreaterThan(0);
+    expect(screen.getByText('Occupational Health providers')).toBeInTheDocument();
+    expect(screen.getByText('E-signature platforms')).toBeInTheDocument();
+    expect(screen.getByText('Cloud document storage')).toBeInTheDocument();
+    // Never imply an admin could unlock these — they can't.
+    expect(screen.queryByText('Requires administrator')).not.toBeInTheDocument();
+    // Real, not-yet-connected rows still offer a genuine Connect action.
+    expect(screen.getAllByRole('button', { name: 'Connect' }).length).toBeGreaterThan(0);
+  });
+
+  it('shows what Compass actually uses each real integration for', () => {
+    render(<IntegrationsSection />);
+    expect(screen.getAllByText('Save relevant emails to Compass').length).toBe(2); // Outlook + Gmail
+    expect(screen.getAllByText('Sync case deadlines to your calendar').length).toBe(2); // Google + MS365 Calendar
+    expect(screen.getAllByText('Daily digest of overdue actions').length).toBe(2); // Slack + Teams
   });
 
   it('shows Outlook as connected with the mailbox, and offers Disconnect', () => {
     render(<IntegrationsSection mailConnected mailboxEmail="hr@acme.com" />);
-    expect(screen.getByText('hr@acme.com')).toBeInTheDocument();
+    expect(screen.getByText(/hr@acme\.com/)).toBeInTheDocument();
     const outlookRow = screen.getByText('Microsoft Outlook').closest('div').parentElement.parentElement;
     expect(outlookRow).toHaveTextContent('Connected');
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
@@ -37,7 +56,7 @@ describe('IntegrationsSection', () => {
     const user = userEvent.setup();
     const disconnectGmail = vi.fn();
     render(<IntegrationsSection gmailConnected gmailboxEmail="hr@gmail.com" disconnectGmail={disconnectGmail} />);
-    expect(screen.getByText('hr@gmail.com')).toBeInTheDocument();
+    expect(screen.getByText(/hr@gmail\.com/)).toBeInTheDocument();
     const gmailRow = screen.getByText('Gmail').closest('div').parentElement.parentElement;
     expect(gmailRow).toHaveTextContent('Connected');
     await user.click(within(gmailRow).getByRole('button', { name: 'Disconnect' }));
@@ -99,5 +118,53 @@ describe('IntegrationsSection', () => {
     expect(slackRow).toHaveTextContent('Connected');
     expect(screen.getAllByRole('button', { name: 'Set up' })).toHaveLength(1); // just Teams now
     expect(screen.getAllByRole('button', { name: 'Manage' })).toHaveLength(1); // Slack
+  });
+});
+
+// Client IA cleanup, §3 — Integration health folded in here instead of
+// staying a separate Settings destination: same summarizeIntegrationHealth
+// data, shown contextually against each connected OAuth integration.
+describe('IntegrationsSection — integration health (Client IA cleanup, §3)', () => {
+  it('shows a Healthy badge for a connected integration with a successful sync and no recent failures', () => {
+    const integrationEvents = [{ provider: 'outlook_mail', status: 'success', created_at: '2026-01-01T00:00:00Z' }];
+    render(<IntegrationsSection isHR mailConnected mailboxEmail="hr@acme.com" integrationEvents={integrationEvents} />);
+    const outlookRow = screen.getByText('Microsoft Outlook').closest('div').parentElement.parentElement;
+    expect(within(outlookRow).getByText('Healthy')).toBeInTheDocument();
+  });
+
+  it('shows a recent-failures badge for a connected integration with errors', () => {
+    const integrationEvents = [
+      { provider: 'gmail', status: 'error', created_at: '2026-01-02T00:00:00Z', detail: 'token expired' },
+    ];
+    render(<IntegrationsSection isHR gmailConnected gmailboxEmail="hr@gmail.com" integrationEvents={integrationEvents} />);
+    const gmailRow = screen.getByText('Gmail').closest('div').parentElement.parentElement;
+    expect(within(gmailRow).getByText('1 recent failure')).toBeInTheDocument();
+  });
+
+  it('shows no health badge for a connected integration with no sync history yet', () => {
+    render(<IntegrationsSection isHR mailConnected mailboxEmail="hr@acme.com" integrationEvents={[]} />);
+    const outlookRow = screen.getByText('Microsoft Outlook').closest('div').parentElement.parentElement;
+    expect(within(outlookRow).queryByText('Healthy')).not.toBeInTheDocument();
+    expect(within(outlookRow).queryByText(/recent failure/)).not.toBeInTheDocument();
+  });
+
+  it('never shows a health badge for Slack/Teams or the roadmap rows (no sync history concept for them)', () => {
+    const integrationEvents = [{ provider: 'outlook_mail', status: 'success', created_at: '2026-01-01T00:00:00Z' }];
+    render(<IntegrationsSection isHR orgWebhookUrl="https://hooks.slack.com/x" orgWebhookType="slack" integrationEvents={integrationEvents} onManageNotifications={()=>{}} />);
+    const slackRow = screen.getByText('Slack').closest('div').parentElement.parentElement;
+    expect(within(slackRow).queryByText('Healthy')).not.toBeInTheDocument();
+  });
+
+  // Client IA cleanup, §7 — "Integration health" was its own isHR-gated
+  // Settings section before this merge; Integrations itself has never
+  // been isHR-gated (any org member can connect their own mailbox).
+  // Folding health data into an ungated screen must not silently hand
+  // every org member information that used to require isHR.
+  it('hides the health badge from a non-HR user even when the same data would show it for HR', () => {
+    const integrationEvents = [{ provider: 'outlook_mail', status: 'success', created_at: '2026-01-01T00:00:00Z' }];
+    render(<IntegrationsSection isHR={false} mailConnected mailboxEmail="hr@acme.com" integrationEvents={integrationEvents} />);
+    const outlookRow = screen.getByText('Microsoft Outlook').closest('div').parentElement.parentElement;
+    expect(within(outlookRow).queryByText('Healthy')).not.toBeInTheDocument();
+    expect(outlookRow).toHaveTextContent('Connected'); // connection status itself is unaffected — only health is gated
   });
 });

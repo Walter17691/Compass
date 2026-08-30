@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PageHeader } from '../components/design/PageHeader';
 
 // Phase 24 of the reasoning-layer build-out — Email integration.
 // Started as a manual-only "paste an email" flow; now also supports
@@ -27,11 +28,13 @@ export function SaveEmailScreen({ cases, extraction, extractionLoading, onExtrac
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
       <div style={{maxWidth:700,margin:"0 auto",padding:"32px 32px"}}>
-        <div style={{marginBottom:20}}>
-          <div style={{fontSize:11,color:"#9B9098",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>Groundwork</div>
-          <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1C1820",margin:0}}>Save email to case</h1>
-          <p style={{fontSize:13,color:"#9B9098",margin:"6px 0 0"}}>Paste an email below — Compass reads it, suggests which case it belongs to, and files it as evidence once you confirm. Nothing is saved automatically.</p>
-        </div>
+        {/* Design System Convergence pass, Phase 2 — was a bespoke serif
+            h1 + ad hoc eyebrow div; standard PageHeader now (eyebrow is a
+            first-class slot there too), matching every other screen.
+            Save email to case is a utility flow, not an editorial
+            moment, so it drops serif for the same plain title treatment
+            Cases/Tasks/etc. use. */}
+        <PageHeader eyebrow="Groundwork" title="Save email to case" subtitle="Paste an email below — Compass reads it, suggests which case it belongs to, and files it as evidence once you confirm. Nothing is saved automatically."/>
 
         {replyMatch && (
           <div style={{background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:12,padding:20,marginBottom:16}}>

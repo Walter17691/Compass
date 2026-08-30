@@ -26,8 +26,8 @@ export function RowChevron() {
   return <span style={{color:COLOR.inkQuiet,fontSize:16,flexShrink:0}}>›</span>;
 }
 
-export function RowPrimary({ children }) {
-  return <div style={{fontSize:13,fontWeight:600,color:COLOR.ink,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{children}</div>;
+export function RowPrimary({ children, title, muted=false }) {
+  return <div title={title} style={{fontSize:13,fontWeight:600,color:muted?COLOR.inkFaint:COLOR.ink,textDecoration:muted?"line-through":"none",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{children}</div>;
 }
 
 export function RowSecondary({ children }) {

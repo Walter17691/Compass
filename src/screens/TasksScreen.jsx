@@ -1,9 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { useLoadMore } from '../hooks/useLoadMore';
+import { PageHeader } from '../components/design/PageHeader';
+import { DataRow, RowPrimary, RowSecondary } from '../components/design/DataRow';
+import { COLOR, FONT, RADIUS, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
-const PRIORITY_COLOR = { low: "#6B6375", normal: "#7C5CFC", high: "#C84B2F" };
+const PRIORITY_COLOR = { low: COLOR.inkSoft, normal: COLOR.purple, high: COLOR.red };
 
 function isOverdue(dueDate) {
   if (!dueDate) return false;
@@ -16,8 +19,13 @@ function isOverdue(dueDate) {
 // user can access, filterable and inline-completable, modeled on
 // DsarScreen.jsx's list-plus-filter layout. The per-case Tasks panel in
 // the case workspace shows the same underlying data scoped to one case.
-export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDone, deleteCaseTask, setScreen, setActiveCaseId, setActiveCaseStage, fmtDate }) {
-  const [showForm, setShowForm] = useState(false);
+export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDone, deleteCaseTask, setScreen, setActiveCaseId, setActiveCaseStage, fmtDate, autoOpenForm, clearAutoOpenForm }) {
+  // IA & User Journey pass, §7 — same autoOpenForm/clearAutoOpenForm shape
+  // ConcernsScreen already uses for the universal Create menu's "Raise a
+  // concern" action; lets "New task" jump straight to this screen with
+  // the form already open instead of requiring a second click here.
+  const [showForm, setShowForm] = useState(!!autoOpenForm);
+  useEffect(() => () => clearAutoOpenForm?.(), []);
   const [form, setForm] = useState({ caseId: "", name: "", owner: "", dueDate: "", priority: "normal" });
   const [filterOwner, setFilterOwner] = useState("");
   const [filterCaseId, setFilterCaseId] = useState("");
@@ -67,16 +75,21 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
   const openTasks = caseTasks.filter(t=>t.status!=="done").length;
 
   return (
-    <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:0,fontWeight:400}}>Tasks</h2>
-          <p style={{fontSize:13,color:"#9B9098",margin:"2px 0 0"}}>{openTasks} open across all cases</p>
-        </div>
-        <Btn onClick={()=>setShowForm(s=>!s)}>{showForm?"Cancel":"+ New task"}</Btn>
+    <div style={{minHeight:"100vh",background:COLOR.paper,fontFamily:FONT.sans}}>
+      <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"32px 32px 0"}}>
+        {/* Design System Convergence pass, Phase 2 — was a bespoke serif
+            h2 + p pair with its own bordered header strip, one of eight
+            screens each inventing a slightly different title treatment
+            (some purple, some ink; 18–28px). PageHeader is the same
+            plain-title component Cases/People/Insights/Settings already
+            use — Tasks is an operational register like those, not an
+            editorial moment, so it gets the same non-serif, non-purple
+            treatment they do. */}
+        <PageHeader title="Tasks" subtitle={`${openTasks} open across all cases`}
+          actions={<Btn onClick={()=>setShowForm(s=>!s)}>{showForm?"Cancel":"+ New task"}</Btn>}/>
       </div>
 
-      <div style={{maxWidth:820,margin:"0 auto",padding:"28px 24px"}}>
+      <div style={{maxWidth:820,margin:"0 auto",padding:"0 24px 28px"}}>
         {showForm&&(
           <Card style={{marginBottom:20}}>
             <div style={{marginBottom:12}}>
@@ -134,33 +147,48 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
 
         {total===0 && <div style={{textAlign:"center",padding:40,color:"#9B9098",fontSize:13}}>No tasks match these filters.</div>}
 
-        {visible.map(t => {
-          const cs = caseById[t.caseId];
-          const overdue = t.status!=="done" && isOverdue(t.dueDate);
-          return (
-            <Card key={t.id} style={{marginBottom:10,padding:16}}>
-              <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                <input type="checkbox" aria-label={`Mark "${t.name}" done`} checked={t.status==="done"} onChange={()=>toggleCaseTaskDone(t.id)} style={{marginTop:3,cursor:"pointer"}}/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:14,fontWeight:500,color:"#1A1535",textDecoration:t.status==="done"?"line-through":"none",opacity:t.status==="done"?0.6:1}}>{t.name}</div>
-                  <div style={{display:"flex",gap:8,alignItems:"center",marginTop:4,flexWrap:"wrap"}}>
-                    {cs&&<button onClick={()=>openCase(cs.id)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",padding:0,fontFamily:"DM Sans,system-ui,sans-serif"}}>{cs.employeeName}</button>}
-                    {/* Organisational ER Intelligence (Phase 6, OP21, §17) — an
-                        action created from an Insights card has no case (t.caseId
-                        is null); insightRef names which insight prompted it in
-                        place of the case link every other row shows. */}
-                    {!cs&&t.insightRef&&<span style={{fontSize:11,color:"#7C5CFC"}}>{t.insightRef}</span>}
-                    {t.owner&&<span style={{fontSize:11,color:"#9B9098"}}>· {t.owner}</span>}
-                    {t.dueDate&&<span style={{fontSize:11,color:overdue?"#C84B2F":"#9B9098"}}>· Due {fmtDate(t.dueDate)}{overdue?" (overdue)":""}</span>}
+        {/* Design System Convergence pass, Phase 3 — was one bordered
+            Card per task (a scanned-and-compared list, exactly the case
+            Phase 3 calls out for row treatment, not one-card-per-record).
+            Now one shared bordered list with a divider between rows,
+            same rhythm as Cases/People. Every field, control, and
+            handler is unchanged — RowPrimary's own overflow:hidden/
+            ellipsis (already used by Cases/People for long employee
+            names) is the actual fix for the reported problem: a task
+            named from a long AI-generated signal title (e.g. a full
+            unanswered-question sentence) used to wrap across 2–3 lines
+            and made rows an inconsistent height, hard to scan at 100
+            tasks. It's now one line with the full text still reachable
+            via the native title tooltip — nothing hidden, not
+            discarded, just not forced onto the row at full length. */}
+        {visible.length>0&&(
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,overflow:"hidden"}}>
+            {visible.map(t => {
+              const cs = caseById[t.caseId];
+              const overdue = t.status!=="done" && isOverdue(t.dueDate);
+              return (
+                <DataRow key={t.id}>
+                  <input type="checkbox" aria-label={`Mark "${t.name}" done`} checked={t.status==="done"} onChange={()=>toggleCaseTaskDone(t.id)} style={{cursor:"pointer",flexShrink:0,marginLeft:14}}/>
+                  <div style={{flex:1,minWidth:0,padding:"11px 12px 11px 0"}}>
+                    <RowPrimary title={t.name} muted={t.status==="done"}>{t.name}</RowPrimary>
+                    <RowSecondary>
+                      {cs&&<button onClick={()=>openCase(cs.id)} style={{fontSize:11,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",padding:0,fontFamily:FONT.sans}}>{cs.employeeName}</button>}
+                      {/* Organisational ER Intelligence (Phase 6, OP21, §17) — an
+                          action created from an Insights card has no case (t.caseId
+                          is null); insightRef names which insight prompted it in
+                          place of the case link every other row shows. */}
+                      {!cs&&t.insightRef&&<span style={{color:COLOR.purple}}>{t.insightRef}</span>}
+                      {t.owner&&<span>· {t.owner}</span>}
+                      {t.dueDate&&<span style={{color:overdue?COLOR.red:COLOR.inkFaint}}>· Due {fmtDate(t.dueDate)}{overdue?" (overdue)":""}</span>}
+                    </RowSecondary>
                   </div>
-                </div>
-                <Badge color={PRIORITY_COLOR[t.priority]||PRIORITY_COLOR.normal}>{(t.priority||"normal").toUpperCase()}</Badge>
-                <button onClick={()=>deleteCaseTask(t.id)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove</button>
-              </div>
-            </Card>
-          );
-        })}
-
+                  <Badge color={PRIORITY_COLOR[t.priority]||PRIORITY_COLOR.normal}>{(t.priority||"normal").toUpperCase()}</Badge>
+                  <button onClick={()=>deleteCaseTask(t.id)} style={{fontSize:11,color:COLOR.red,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,marginRight:14,flexShrink:0}}>Remove</button>
+                </DataRow>
+              );
+            })}
+          </div>
+        )}
         {hasMore && (
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
             Load more ({total-visible.length} remaining)

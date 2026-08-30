@@ -69,10 +69,12 @@ test('issuing an approval-gated outcome opens a visible, actionable approval req
   // editing screen (same as every other letter-generating action in the
   // app), and its own "← Back"/"Save to case" controls both re-save the
   // meeting and land elsewhere — not a route back to this case. Reach it
-  // again the same way action-detection.spec.js does: Home's case search.
+  // again the same way action-detection.spec.js does: Cases' own search
+  // (Home Experience Redesign removed Home's own case search along with
+  // the Active Cases table it belonged to).
   await expect(page.getByText('This letter was drafted by AI', { exact: false })).toBeVisible({ timeout: 90000 });
-  await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByPlaceholder('Search cases…').fill(employeeName);
+  await page.getByRole('button', { name: 'Cases', exact: true }).click();
+  await page.getByPlaceholder('Search by employee…').fill(employeeName);
   await page.getByText(employeeName).first().click();
   await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByText('Approvals', { exact: true })).toBeVisible({ timeout: 10000 });

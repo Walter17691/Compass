@@ -15,17 +15,129 @@ const baseProps = {
   auditLog: [], onSignOut: noop, onOpenCommandBar: noop,
 };
 
+// Design System Convergence pass, Phase 1 — replaces the old full-width
+// "Overdue actions" banner (previously rendered directly in App.jsx,
+// outside AppSidebar) with a small persistent icon here. New coverage.
+// Home + Sidebar Product Experience pass, Part 1 — primary navigation
+// stays cut down to the five genuinely-frequent destinations (Home/Cases/
+// Ask Compass/Tasks/People), but "More" is gone entirely now — the
+// destinations that used to live behind it (Calendar/Delegated Work or
+// My People Actions/Concerns/Insights/HR Processes/Settings) are inline
+// collapsible sections in the sidebar itself, covered separately below.
+describe('AppSidebar — primary navigation (Home + Sidebar Product Experience pass)', () => {
+  it('shows exactly the five primary destinations plus Ask Compass, and no Command Bar row', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    for (const name of ['Home', 'Ask Compass', 'Tasks', 'People']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: /^Cases/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Command Bar/ })).not.toBeInTheDocument();
+  });
+
+  it('has no "More" control anywhere in the sidebar', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    expect(screen.queryByRole('button', { name: /^More$/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps Calendar, Insights and Settings out of the primary list, reachable instead via their own collapsible section headings', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    expect(screen.queryByRole('button', { name: 'Calendar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Insights' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.getByRole('button', { name: 'Calendar' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence' }));
+    expect(screen.getByRole('button', { name: 'Insights' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Organisation' }));
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('shows the Create menu trigger and the Search entry point', () => {
+    render(<AppSidebar {...baseProps} isHR={true} createMenuProps={{}} />);
+    expect(screen.getByRole('button', { name: /Create/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Search/ })).toBeInTheDocument();
+  });
+
+  it('does not show plain "Cases" with a raw total record count — that is database information, not navigation information', () => {
+    render(<AppSidebar {...baseProps} isHR={true} cases={[{ id: 'c1' }, { id: 'c2' }]} getCaseStage={() => 'open'} />);
+    expect(screen.getByRole('button', { name: 'Cases' })).toBeInTheDocument();
+  });
+
+  // Home Experience Redesign, §10 — only the current destination may
+  // carry selected-state background treatment. Ask Compass previously
+  // kept a permanent purpleTint background regardless of which screen
+  // was active, so it looked "selected" even while genuinely on Home.
+  it('does not give Ask Compass selected-state background treatment while a different screen (Home) is active', () => {
+    render(<AppSidebar {...baseProps} screen="home" isHR={true} />);
+    const home = screen.getByRole('button', { name: 'Home' });
+    const askCompass = screen.getByRole('button', { name: /Ask Compass/ });
+    expect(home.style.background).not.toBe('none');
+    expect(askCompass.style.background).toBe('none');
+  });
+
+  it('does give Ask Compass the same selected-state background treatment as any other item once it is the active screen', () => {
+    render(<AppSidebar {...baseProps} screen="ask_compass" isHR={true} />);
+    const askCompass = screen.getByRole('button', { name: /Ask Compass/ });
+    expect(askCompass.style.background).not.toBe('none');
+  });
+});
+
+describe('AppSidebar — Overdue indicator (Design System Convergence, Phase 1)', () => {
+  it('renders nothing when nothing is overdue', () => {
+    render(<AppSidebar {...baseProps} dueSoon={[{ overdue: false, employeeName: 'A', label: 'x', daysOverdue: 0 }]} />);
+    expect(screen.queryByLabelText(/Overdue actions/)).not.toBeInTheDocument();
+  });
+
+  it('shows a count and expands to list overdue items, linking to Home', () => {
+    const setScreen = vi.fn();
+    const dueSoon = [
+      { overdue: true, employeeName: 'Sam Employee', label: 'Chase witness statement', daysOverdue: 3 },
+      { overdue: true, employeeName: 'Jo Manager', label: 'Investigation report', daysOverdue: 1 },
+    ];
+    render(<AppSidebar {...baseProps} setScreen={setScreen} dueSoon={dueSoon} />);
+    const trigger = screen.getByLabelText(/Overdue actions — 2/);
+    expect(trigger).toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.getByText(/Sam Employee — Chase witness statement/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /View all in Home/ }));
+    expect(setScreen).toHaveBeenCalledWith('home');
+  });
+});
+
+// Home + Sidebar Product Experience pass, Part 1 — Redundancy/Wellbeing/
+// DSAR live in an inline "HR Processes" collapsible section now, not
+// behind "More". Same gating, same underlying screens — the whole group
+// simply never gets built for a non-HR user ("groups with zero
+// accessible destinations should not appear").
 describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
   it('shows the DSAR nav item for HR once HR Processes is expanded', () => {
-    // Home Composition Review, final refinement (item 3) — HR Processes
-    // now starts collapsed; expand it first, same as a real user would.
     render(<AppSidebar {...baseProps} isHR={true} />);
-    fireEvent.click(screen.getByRole('button', { name: /HR Processes/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'HR Processes' }));
     expect(screen.getByRole('button', { name: 'DSAR' })).toBeInTheDocument();
   });
 
-  it('hides the DSAR nav item for non-HR, matching Wellbeing', () => {
+  // Home + Sidebar Product Experience pass, Part 14 — the disclosure
+  // control must expose its expanded/collapsed state to assistive tech,
+  // not just move a chevron visually, and must not be styled as if it
+  // were itself a selectable destination (Part 1's explicit requirement).
+  it('exposes HR Processes as an accessible disclosure control that never looks like an active destination itself', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const toggle = screen.getByRole('button', { name: 'HR Processes' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls');
+    expect(toggle.style.background).toBe('none');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // Still no selected-state background even now that it's expanded and
+    // one of its children (DSAR) is about to be shown — a category
+    // heading is never itself a destination, expanded or not.
+    expect(toggle.style.background).toBe('none');
+    expect(screen.getByRole('button', { name: 'DSAR' })).toBeInTheDocument();
+  });
+
+  it('does not render an HR Processes section at all for a non-HR user (not just its items hidden)', () => {
     render(<AppSidebar {...baseProps} isHR={false} />);
+    expect(screen.queryByRole('button', { name: 'HR Processes' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'DSAR' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Wellbeing' })).not.toBeInTheDocument();
   });
@@ -40,7 +152,7 @@ describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
 describe('AppSidebar — Wellbeing nav gating', () => {
   it('shows the Wellbeing nav item for HR once HR Processes is expanded', () => {
     render(<AppSidebar {...baseProps} isHR={true} />);
-    fireEvent.click(screen.getByRole('button', { name: /HR Processes/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'HR Processes' }));
     expect(screen.getByRole('button', { name: 'Wellbeing' })).toBeInTheDocument();
   });
 });
@@ -53,13 +165,61 @@ describe('AppSidebar — Wellbeing nav gating', () => {
 describe('AppSidebar — Redundancy nav gating (Prompt 16 audit, H1)', () => {
   it('shows the Redundancy nav item for HR once HR Processes is expanded', () => {
     render(<AppSidebar {...baseProps} isHR={true} />);
-    fireEvent.click(screen.getByRole('button', { name: /HR Processes/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'HR Processes' }));
     expect(screen.getByRole('button', { name: 'Redundancy' })).toBeInTheDocument();
   });
 
   it('hides the Redundancy nav item for non-HR', () => {
     render(<AppSidebar {...baseProps} isHR={false} />);
     expect(screen.queryByRole('button', { name: 'Redundancy' })).not.toBeInTheDocument();
+  });
+});
+
+// Home + Sidebar Product Experience pass, Part 1 — collapse/expand
+// semantics: default collapsed, but the section owning the current
+// destination auto-expands; navigating to a screen in a still-collapsed
+// section (e.g. a deep link) reveals it too; toggling one section never
+// affects another's state.
+describe('AppSidebar — collapsible section behaviour (Home + Sidebar Product Experience pass, Part 1)', () => {
+  it('starts every non-owning section collapsed', () => {
+    render(<AppSidebar {...baseProps} screen="home" isHR={true} />);
+    for (const name of ['Work', 'Intelligence', 'HR Processes', 'Organisation']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-expanded', 'false');
+    }
+  });
+
+  it('auto-expands the section owning the current destination on mount', () => {
+    render(<AppSidebar {...baseProps} screen="insights" isHR={true} />);
+    expect(screen.getByRole('button', { name: 'Intelligence' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Work' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('auto-expands the owning section when the active screen changes, even without clicking that section\'s own toggle', () => {
+    const { rerender } = render(<AppSidebar {...baseProps} screen="home" isHR={true} />);
+    expect(screen.getByRole('button', { name: 'Organisation' })).toHaveAttribute('aria-expanded', 'false');
+    rerender(<AppSidebar {...baseProps} screen="settings" isHR={true} />);
+    expect(screen.getByRole('button', { name: 'Organisation' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('keeps multiple sections independently expanded at once', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence' }));
+    expect(screen.getByRole('button', { name: 'Work' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Intelligence' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Calendar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Insights' })).toBeInTheDocument();
+  });
+
+  it('collapses a section again on a second click of its own heading, without affecting others', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Intelligence' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.getByRole('button', { name: 'Work' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Calendar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Intelligence' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Insights' })).toBeInTheDocument();
   });
 });
 

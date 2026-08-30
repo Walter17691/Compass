@@ -8,6 +8,9 @@ import { login } from './helpers.js';
 // relevant to the specific pool, not a one-size-fits-all fixed set.
 test('redundancy selection criteria can be renamed, added to, and removed', async ({ page }) => {
   await login(page);
+  // Redundancy lives inside the "HR Processes" sidebar group, which now
+  // starts collapsed (Home Composition Review, final refinement item 3).
+  await page.getByRole('button', { name: 'HR Processes' }).click();
   await page.getByRole('button', { name: 'Redundancy', exact: true }).click();
 
   // Redundancy cases persist server-side per org, so a case from an

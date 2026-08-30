@@ -35,8 +35,23 @@ describe('EarlySignalsPanel', () => {
       error: null,
     });
     render(<EarlySignalsPanel orgId="org1"/>);
-    await waitFor(() => expect(screen.getByText('No emerging themes identified in the current 6-week window.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Not enough case volume yet/)).toBeInTheDocument());
     expect(screen.queryByText(/grievance/)).not.toBeInTheDocument();
+  });
+
+  // Design System Convergence pass, Phase 5 — genuinely NO SIGNAL
+  // DETECTED (enough case volume to check, nothing significant found),
+  // distinct from the NO DATA case below (currentCount under the
+  // sample floor). Wording must read as a real, positive finding, not a
+  // data gap.
+  it('shows a distinct "no signal" message (not "not enough data") when volume is sufficient but flat', async () => {
+    rpcMock.mockResolvedValue({
+      data: { by_type_trend: [], by_theme_trend: [{ themeId: 't1', themeName: 'shift changes', currentCount: 5, previousCount: 5, byLocation: {} }] },
+      error: null,
+    });
+    render(<EarlySignalsPanel orgId="org1"/>);
+    await waitFor(() => expect(screen.getByText(/theme volume looks stable/)).toBeInTheDocument());
+    expect(screen.queryByText(/Not enough case volume/)).not.toBeInTheDocument();
   });
 
   it('shows an empty state when no theme clears the significance threshold', async () => {
@@ -45,7 +60,10 @@ describe('EarlySignalsPanel', () => {
       error: null,
     });
     render(<EarlySignalsPanel orgId="org1"/>);
-    await waitFor(() => expect(screen.getByText('No emerging themes identified in the current 6-week window.')).toBeInTheDocument());
+    // Design System Convergence pass, Phase 5 — currentCount (2) is below
+    // MIN_SAMPLE_SIZE (3), so this is genuinely the NO DATA case, not NO
+    // SIGNAL DETECTED — a more accurate message than the old generic one.
+    await waitFor(() => expect(screen.getByText(/Not enough case volume yet/)).toBeInTheDocument());
   });
 
   it('shows an error state when the RPC fails', async () => {

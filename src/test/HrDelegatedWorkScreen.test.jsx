@@ -30,8 +30,12 @@ describe('HrDelegatedWorkScreen', () => {
     expect(screen.getByText('Sam Employee')).toBeInTheDocument();
     expect(screen.getByText('Investigator: Alex Investigator')).toBeInTheDocument();
     expect(screen.getByText('Progress: 1 of 7 steps')).toBeInTheDocument();
-    expect(screen.getByText('Meetings completed: 1')).toBeInTheDocument();
-    expect(screen.getByText('Target completion: 2026-09-01')).toBeInTheDocument();
+    // Design System Convergence pass, Phase 3 — labels shortened for a
+    // compact row ("Meetings completed"/"Target completion" -> "Meetings"/
+    // "Target") now that all four sit inline in one scannable line
+    // instead of a card's own roomier layout; same underlying values.
+    expect(screen.getByText('Meetings: 1')).toBeInTheDocument();
+    expect(screen.getByText('Target: 2026-09-01')).toBeInTheDocument();
   });
 
   it('shows no attention badge or reasons when nothing is flagged', () => {
@@ -52,7 +56,7 @@ describe('HrDelegatedWorkScreen', () => {
 
   it('shows "Not set" when no target completion date was given', () => {
     render(<HrDelegatedWorkScreen {...baseProps} caseAccess={[{ id: 'a1', caseId: 'c1', userId: 'u1', role: 'investigator' }]} />);
-    expect(screen.getByText('Target completion: Not set')).toBeInTheDocument();
+    expect(screen.getByText('Target: Not set')).toBeInTheDocument();
   });
 
   it('clicking a row navigates to the case', async () => {

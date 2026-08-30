@@ -41,9 +41,30 @@ const selectStyle = {fontSize:12,border:`1px solid ${COLOR.border}`,borderRadius
 // Owner/priority/date-range filters only have real data to match against
 // for cases created since those fields started being written — older
 // cases won't match either, same as any additive-migration field.
-export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit }) {
+export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit, currentUserId }) {
   const [selected, setSelected] = useState(new Set());
   const [search, setSearch] = useState("");
+  // IA & User Journey pass, §10 — Cases as a work inbox: All/Mine/Needs
+  // attention/Closed as one quick top-level segment, alongside (not
+  // replacing) the existing type/stage/status filters below. "Mine"
+  // reuses the same ownerId a case is already stamped with at creation
+  // (App.jsx sets ownerId to the creating user's own id); "Needs
+  // attention" reuses getNextStep exactly as the row's own "Next: …" line
+  // and attention-highlight already do — no new predicate invented for
+  // either.
+  const [segment, setSegment] = useState("all");
+  const segmentCounts = {
+    all: cases.length,
+    mine: cases.filter(cs=>currentUserId&&cs.ownerId===currentUserId).length,
+    attention: cases.filter(cs=>getCaseStage(cs)!=="closed"&&!!getNextStep(cs)).length,
+    closed: cases.filter(cs=>getCaseStage(cs)==="closed").length,
+  };
+  const segmentedCases = cases.filter(cs => {
+    if(segment==="mine") return currentUserId&&cs.ownerId===currentUserId;
+    if(segment==="attention") return getCaseStage(cs)!=="closed"&&!!getNextStep(cs);
+    if(segment==="closed") return getCaseStage(cs)==="closed";
+    return true;
+  });
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [filters, setFilters] = useState({ type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" });
   const setFilter = (key, value) => setFilters(f=>({...f, [key]:value}));
@@ -56,7 +77,7 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
   const stages = [...new Set(cases.map(cs=>getCaseStage(cs)))].filter(Boolean);
   const owners = [...new Set(cases.map(cs=>cs.ownerId).filter(Boolean))];
 
-  const filteredCases = cases
+  const filteredCases = segmentedCases
     .filter(cs => matchesCaseFilters(cs, filters, getCaseStage))
     .filter(cs => !search || (cs.employeeName||"").toLowerCase().includes(search.toLowerCase()));
   const toggleSelected = id => setSelected(s=>{const n=new Set(s); n.has(id)?n.delete(id):n.add(id); return n;});
@@ -111,10 +132,18 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
             title="Cases"
             subtitle={`${cases.filter(cs=>getCaseStage(cs)!=="closed").length} active · ${cases.filter(cs=>getCaseStage(cs)==="closed").length} closed`}
             actions={<>
-              <button onClick={()=>{setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});setScreen(SCREENS.INTAKE);}}
-                style={{...BUTTON.secondary,fontSize:13,padding:"9px 18px"}}>+ New case</button>
+              {/* 10/10 pass — was the one screen in the product where
+                  "+ New meeting" outranked "+ New case" (filled purple vs
+                  outline); Home already established + New case as the
+                  primary action / Start meeting as secondary, so this was
+                  a real hierarchy inconsistency between the two screens
+                  someone creating work from most often, not a deliberate
+                  per-screen choice. Same handlers, same labels — only
+                  which one is visually dominant changed. */}
               <button onClick={()=>setScreen(SCREENS.HOME+"_meeting")}
-                style={{...BUTTON.primary,fontSize:13,padding:"9px 18px"}}>+ New meeting</button>
+                style={{...BUTTON.secondary,fontSize:13,padding:"9px 18px"}}>+ New meeting</button>
+              <button onClick={()=>{setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});setScreen(SCREENS.INTAKE);}}
+                style={{...BUTTON.primary,fontSize:13,padding:"9px 18px"}}>+ New case</button>
             </>}
           />
         </div>
@@ -134,6 +163,21 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
         {cases.length===0&&!casesLoading&&(
           <EmptyState title="No cases yet" message="Create a case to start managing HR proceedings"
             action={<button onClick={()=>setScreen(SCREENS.INTAKE)} style={{...BUTTON.primary,fontSize:14,padding:"12px 28px"}}>Create first case →</button>}/>
+        )}
+        {cases.length>0&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:SPACE.md}}>
+            {[
+              {id:"all",label:"All"},
+              {id:"mine",label:"Mine"},
+              {id:"attention",label:"Needs attention"},
+              {id:"closed",label:"Closed"},
+            ].map(s=>(
+              <button key={s.id} onClick={()=>setSegment(s.id)}
+                style={{fontSize:12.5,padding:"7px 14px",borderRadius:RADIUS.pill,border:"1px solid",borderColor:segment===s.id?COLOR.purple:COLOR.border,background:segment===s.id?COLOR.purpleTint:COLOR.surface,color:segment===s.id?COLOR.purple:COLOR.inkSoft,cursor:"pointer",fontFamily:FONT.sans,fontWeight:segment===s.id?600:400}}>
+                {s.label} <span style={{opacity:0.7}}>({segmentCounts[s.id]})</span>
+              </button>
+            ))}
+          </div>
         )}
         {cases.length>0&&(
           <div style={{marginBottom:SPACE.lg}}>
@@ -158,6 +202,31 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
               </button>
               {activeFilterCount>0&&<button onClick={clearFilters} style={{...BUTTON.tertiary,fontSize:12,padding:"6px 4px",color:COLOR.inkFaint}}>Clear filters ({activeFilterCount})</button>}
             </div>
+            {/* 10/10 pass, item 8 (clear filter state) — "Clear filters (N)"
+                said how many were active but not which ones, or let you
+                remove just one; this is genuinely new (no prior chip
+                summary existed), everything it reads/clears is the exact
+                same filters/search state already wired above. */}
+            {activeFilterCount>0&&(
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginTop:8}}>
+                {[
+                  search&&{key:"search",label:`"${search}"`,onRemove:()=>setSearch("")},
+                  filters.status&&{key:"status",label:filters.status==="active"?"Active":"Closed",onRemove:()=>setFilter("status","")},
+                  filters.type&&{key:"type",label:filters.type,onRemove:()=>setFilter("type","")},
+                  filters.stage&&{key:"stage",label:STAGE_LABEL[filters.stage]||filters.stage,onRemove:()=>setFilter("stage","")},
+                  filters.locationId&&{key:"locationId",label:locations?.find(l=>l.id===filters.locationId)?.name||"Location",onRemove:()=>setFilter("locationId","")},
+                  filters.ownerId&&{key:"ownerId",label:(orgMembers||[]).find(m=>m.user_id===filters.ownerId)?.name||"Owner",onRemove:()=>setFilter("ownerId","")},
+                  filters.priority&&{key:"priority",label:filters.priority.charAt(0).toUpperCase()+filters.priority.slice(1)+" priority",onRemove:()=>setFilter("priority","")},
+                  filters.from&&{key:"from",label:`From ${filters.from}`,onRemove:()=>setFilter("from","")},
+                  filters.to&&{key:"to",label:`To ${filters.to}`,onRemove:()=>setFilter("to","")},
+                ].filter(Boolean).map(chip=>(
+                  <button key={chip.key} onClick={chip.onRemove} aria-label={`Remove filter: ${chip.label}`} style={{display:"flex",alignItems:"center",gap:5,fontSize:11.5,fontWeight:500,color:COLOR.purple,background:COLOR.purpleTint,border:"none",borderRadius:RADIUS.pill,padding:"4px 6px 4px 10px",cursor:"pointer",fontFamily:FONT.sans}}>
+                    {chip.label}
+                    <span aria-hidden="true" style={{fontSize:13,lineHeight:1}}>×</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {showMoreFilters&&(
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginTop:10,paddingTop:10,borderTop:`1px solid ${COLOR.borderFaint}`}}>
                 {locations?.length>0&&(
@@ -189,8 +258,8 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
           </div>
         )}
         {cases.length>0&&filteredCases.length===0&&(
-          <EmptyState message="No cases match these filters"
-            action={<button onClick={clearFilters} style={{...BUTTON.secondary,fontSize:13,padding:"8px 18px"}}>Clear filters</button>}/>
+          <EmptyState message={segment!=="all"&&activeFilterCount===0?"No cases in this view":"No cases match these filters"}
+            action={<button onClick={()=>{clearFilters();setSegment("all");}} style={{...BUTTON.secondary,fontSize:13,padding:"8px 18px"}}>{segment!=="all"&&activeFilterCount===0?"Show all cases":"Clear filters"}</button>}/>
         )}
         {(()=>{
           return employees.map(emp=>{

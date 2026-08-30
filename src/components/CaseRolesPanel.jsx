@@ -6,10 +6,11 @@ import { ASSIGNABLE_ROLES, currentRoleHolder } from '../lib/caseRoles';
 // (CaseViewScreen's investigator select, ReassignCaseModal, HandoffModal)
 // and aren't duplicated here — this covers exactly the roles that had no
 // UI at all before this phase (caseRoles.js's ASSIGNABLE_ROLES).
+// 10/10 pass, Part A — no longer its own card; OverviewTab now wraps
+// this in a collapsible Layer 3 disclosure (heading lives there).
 export function CaseRolesPanel({ cs, caseAccess, orgMembers, assignCaseRole }) {
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
-      <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Case roles</div>
+    <div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {ASSIGNABLE_ROLES.map(role=>{
           const holder = currentRoleHolder(caseAccess, orgMembers, cs.id, role.id);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
-import { isSignificantTrend, computePctChange } from '../lib/trendDetection';
+import { isSignificantTrend, computePctChange, MIN_SAMPLE_SIZE } from '../lib/trendDetection';
 import { describeEarlySignal, buildSuggestedReview, EARLY_SIGNAL_WINDOW_DAYS } from '../lib/earlySignals';
 import { InsightEvidenceModal } from './InsightEvidenceModal';
 import { CreateActionButton } from './CreateActionButton';
@@ -55,13 +55,29 @@ export function EarlySignalsPanel({ orgId, createCaseTask, improvementInitiative
   if (error) return <div style={{fontSize:13,color:COLOR.inkFaint}}>Couldn't load early signal data right now.</div>;
   if (!data) return <div style={{fontSize:13,color:COLOR.inkFaint}}>Loading early signals…</div>;
 
-  const signals = (data.by_theme_trend || []).filter(isSignificantTrend);
+  const rawEntries = data.by_theme_trend || [];
+  const signals = rawEntries.filter(isSignificantTrend);
+  // Design System Convergence pass, Phase 5 — NO DATA ("not enough case
+  // volume to say anything yet") and NO SIGNAL DETECTED ("checked —
+  // volume is stable, nothing emerging") used to collapse into the same
+  // one-line message. isSignificantTrend requires currentCount >=
+  // MIN_SAMPLE_SIZE as its own first gate, so re-checking that same
+  // condition against the raw (pre-filter) entries — not a new
+  // calculation — tells these apart honestly without inventing a signal
+  // that isn't there.
+  const hasEnoughData = rawEntries.some(e => e.currentCount >= MIN_SAMPLE_SIZE);
 
   return (
     <div>
       <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>What may be emerging? (last 6 weeks vs previous 6 weeks)</div>
       {signals.length === 0
-        ? <div style={{fontSize:13,color:COLOR.inkFaint}}>No emerging themes identified in the current 6-week window.</div>
+        ? (
+          <div style={{fontSize:13,color:COLOR.inkFaint,maxWidth:480,lineHeight:1.6}}>
+            {hasEnoughData
+              ? "No emerging themes detected in the current 6-week window — theme volume looks stable, not a gap in the data."
+              : `Not enough case volume yet across any tracked theme to detect an emerging pattern (each needs at least ${MIN_SAMPLE_SIZE} cases in a 6-week window). This will fill in as more cases are recorded and themed.`}
+          </div>
+        )
         : signals.map(s => <EarlySignalCard key={s.themeId} entry={s} onShowEvidence={()=>setEvidenceFor(s)} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>)}
       {evidenceFor && (
         <InsightEvidenceModal

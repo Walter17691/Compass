@@ -1,6 +1,7 @@
 import { Badge, Btn, Card, SectionTitle } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon, CrossIcon } from '../components/Icons';
+import { PageHeader } from '../components/design/PageHeader';
 
 export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redundancyStep, setRedundancyStep, redundancyAiOutput, setRedundancyAiOutput, redundancyCases, createRedundancyCase, updateRedundancyCase, scoreEmployee, generateRedundancyLetter, isMobile, getRedundancyAiAdvice, redundancyAiProcessing, promptDialog }) {
   const stepLabels = {setup:"Setup",pool:"Selection",consultation:"Consultation",outcome:"Outcome"};
@@ -8,15 +9,11 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
 
   return(
     <div style={{maxWidth:1280,margin:"0 auto",padding:"32px 20px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
-        <div>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Redundancy &amp; consultation</h2>
-          <p style={{fontSize:13,color:"#6B6880",margin:0}}>Individual and collective redundancy processes. Legally guided, document-ready.</p>
-        </div>
-        <div style={{display:"flex",gap:8}}>
-          {activeRedundancy&&<Btn variant="ghost" onClick={()=>{setActiveRedundancy(null);setRedundancyStep("setup");setRedundancyAiOutput("");}}>← All cases</Btn>}
-        </div>
-      </div>
+      {/* Design System Convergence pass, Phase 2 — was a purple serif h2;
+          Redundancy is a process/administrative screen, not an editorial
+          moment. */}
+      <PageHeader title="Redundancy & consultation" subtitle="Individual and collective redundancy processes. Legally guided, document-ready."
+        actions={activeRedundancy&&<Btn variant="ghost" onClick={()=>{setActiveRedundancy(null);setRedundancyStep("setup");setRedundancyAiOutput("");}}>← All cases</Btn>}/>
 
       {/* Case list */}
       {!activeRedundancy&&(

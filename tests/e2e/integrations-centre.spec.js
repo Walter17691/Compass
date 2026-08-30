@@ -8,25 +8,28 @@ import { login } from './helpers.js';
 // automated run can complete headlessly, and the shared E2E account's
 // own real connection state isn't something this test controls or should
 // assume). What's fully verifiable here: every catalog entry renders,
-// the not-yet-available integrations are honestly labelled, and the
-// Slack/Teams "Set up" action correctly routes into the existing
+// the not-yet-available integrations sit in a separate, honestly-labelled
+// "Coming soon" area (Client IA cleanup, §4 — no longer badged "Requires
+// administrator" in the primary list, which implied an admin could
+// connect them today when nothing behind that badge is actually built),
+// and the Slack/Teams "Set up" action correctly routes into the existing
 // Notifications section rather than a dead end.
 test('the Integration Centre lists every catalog entry and routes Slack/Teams setup to Notifications', async ({ page }) => {
   await login(page);
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Integrations', exact: true }).click();
-  await expect(page.getByText('Integrations', { exact: true }).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Integrations', exact: true })).toBeVisible({ timeout: 10000 });
 
   for (const label of ['Microsoft Outlook', 'Gmail', 'Microsoft 365 Calendar', 'Google Calendar', 'Microsoft Teams', 'Slack', 'HRIS platforms', 'Occupational Health providers', 'E-signature platforms', 'Cloud document storage']) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
 
-  // Four stub integrations remain (Gmail moved to a real connector in
-  // IP2, Microsoft 365 Calendar in IP3), honestly marked rather than
-  // shown as if live.
-  await expect(page.getByText('Requires administrator', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/Not yet available/).first()).toBeVisible();
+  // Four roadmap integrations remain listed, but honestly — in their own
+  // "Coming soon" area, with no badge implying an admin could act on them.
+  await expect(page.getByText('Coming soon', { exact: true })).toBeVisible();
+  await expect(page.getByText('Requires administrator', { exact: true })).not.toBeVisible();
+  await expect(page.getByText(/Not yet available/)).not.toBeVisible();
 
   // Gmail (Phase 5, IP2) and Microsoft 365 Calendar (Phase 5, IP3) — both
   // now real connectors, same shape as Outlook/Google Calendar: offer a

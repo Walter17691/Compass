@@ -31,10 +31,15 @@ describe('OccupationalHealthPanel (Phase 5, IP22)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  // 10/10 pass, Part A — the panel no longer renders its own heading
+  // (OverviewTab now supplies it via a wrapping collapsible disclosure,
+  // so a standalone render has no heading to find); asserting on the
+  // "hr_review" step's own recommendations field is still a faithful
+  // check that history/content isn't hidden for a closed case.
   it('still renders a closed case that has an in-progress OH process, so history is never hidden', () => {
     const cs = makeCase({ ohProcess: { currentStep: 'hr_review', history: { concern_identified: '2026-01-01T00:00:00.000Z' } } });
     render(<OccupationalHealthPanel cs={cs} cases={[cs]} saveCases={()=>{}} stage="closed" />);
-    expect(screen.getByText('Occupational health process')).toBeInTheDocument();
+    expect(screen.getByLabelText('OH report recommendations')).toBeInTheDocument();
   });
 
   it('"Mark done" on the current step advances to the next step and calls saveCases', async () => {

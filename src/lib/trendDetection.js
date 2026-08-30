@@ -2,7 +2,13 @@
 // Pure logic over org_trend_detection()'s (OP2/OP7's RPC) raw counts.
 // Same MIN_SAMPLE_SIZE floor used everywhere else in this phase — a
 // trend built on 1-2 cases is either noise or effectively identifying.
-const MIN_SAMPLE_SIZE = 3;
+// Design System Convergence pass, Phase 5 — exported (value unchanged)
+// so empty states can honestly distinguish "not enough case volume yet"
+// from "checked, nothing significant" — isSignificantTrend below
+// collapses both into a single false, but they're genuinely different
+// things to tell HR. Presentation-only use; the threshold itself and
+// every calculation using it are untouched.
+export const MIN_SAMPLE_SIZE = 3;
 const SIGNIFICANT_INCREASE_PCT = 20;
 
 // null means "no comparable prior-period data" (previousCount was 0),

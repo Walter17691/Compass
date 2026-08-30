@@ -4,6 +4,19 @@
 // per icon, since none of these has enough surface area to justify its own.
 // All default to currentColor so they inherit color from the parent style.
 
+// Home UX Polish pass, §9 — Ask Compass previously used a plain chat-
+// bubble glyph in the sidebar nav and the account-tier widget, but a
+// different sparkle/spark glyph on Home's own input — three different
+// icons for one capability. This is now the one shared glyph for every
+// Ask Compass surface (nav, Home input, the account-tier widget).
+export function AskCompassIcon({ size = 15, color = "currentColor", style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.1 2.1M15.6 15.6l2.1 2.1M17.7 6.3l-2.1 2.1M8.4 15.6l-2.1 2.1" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ size = 12, color = "currentColor", style }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={style}>

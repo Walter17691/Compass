@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TasksScreen } from '../screens/TasksScreen.jsx';
@@ -34,5 +34,29 @@ describe('TasksScreen — field labelling (Phase 6.5, Batch 13)', () => {
   it('labels the per-task "mark done" checkbox with the task\'s own name', () => {
     render(<TasksScreen caseTasks={caseTasks} cases={cases} createCaseTask={noop} toggleCaseTaskDone={noop} deleteCaseTask={noop} setScreen={noop} setActiveCaseId={noop} setActiveCaseStage={noop} fmtDate={d=>d} />);
     expect(screen.getByLabelText('Mark "Chase witness statement" done')).toBeInTheDocument();
+  });
+});
+
+// IA & User Journey pass, §7 — the universal Create menu's "New task"
+// action navigates here with autoOpenForm set, the same shape
+// ConcernsScreen's own autoOpenForm/clearAutoOpenForm already uses for
+// "Raise a concern". Proves the form actually opens without the user
+// needing a second click on "+ New task" once they've already landed here.
+describe('TasksScreen — autoOpenForm (IA & User Journey pass, §7)', () => {
+  it('opens the New task form immediately when autoOpenForm is set', () => {
+    render(<TasksScreen caseTasks={caseTasks} cases={cases} createCaseTask={noop} toggleCaseTaskDone={noop} deleteCaseTask={noop} setScreen={noop} setActiveCaseId={noop} setActiveCaseStage={noop} fmtDate={d=>d} autoOpenForm={true} clearAutoOpenForm={noop} />);
+    expect(screen.getByLabelText('Task')).toBeInTheDocument();
+  });
+
+  it('clears the auto-open flag on unmount so a later plain visit does not still show it', () => {
+    const clearAutoOpenForm = vi.fn();
+    const { unmount } = render(<TasksScreen caseTasks={caseTasks} cases={cases} createCaseTask={noop} toggleCaseTaskDone={noop} deleteCaseTask={noop} setScreen={noop} setActiveCaseId={noop} setActiveCaseStage={noop} fmtDate={d=>d} autoOpenForm={true} clearAutoOpenForm={clearAutoOpenForm} />);
+    unmount();
+    expect(clearAutoOpenForm).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not show the form by default', () => {
+    render(<TasksScreen caseTasks={caseTasks} cases={cases} createCaseTask={noop} toggleCaseTaskDone={noop} deleteCaseTask={noop} setScreen={noop} setActiveCaseId={noop} setActiveCaseStage={noop} fmtDate={d=>d} />);
+    expect(screen.queryByLabelText('Task')).not.toBeInTheDocument();
   });
 });

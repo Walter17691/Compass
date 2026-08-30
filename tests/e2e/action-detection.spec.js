@@ -44,7 +44,11 @@ test('accepting a live detected action creates a real task on the matching case'
   await page.getByRole('button', { name: 'Leave without saving' }).click();
   await page.getByRole('button', { name: 'Leave', exact: true }).click();
 
-  await page.getByPlaceholder('Search cases…').fill(employeeName);
+  // Home Experience Redesign — Home no longer has its own case search
+  // (that was the old Active Cases table's filter row, removed along with
+  // the table itself); Cases screen still has one for exactly this.
+  await page.getByRole('button', { name: 'Cases', exact: true }).click();
+  await page.getByPlaceholder('Search by employee…').fill(employeeName);
   await page.getByText(employeeName).first().click();
 
   const caseTabBar = page.locator('div')

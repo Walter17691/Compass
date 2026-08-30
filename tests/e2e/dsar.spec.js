@@ -11,7 +11,10 @@ test('DSAR due date is exactly receivedDate + 1 calendar month', async ({ page }
 
   await login(page);
   // DSAR lives inside the "HR Processes" sidebar group, not a top-level
-  // nav button — the group is expanded by default, so no need to open it.
+  // nav button — the group now starts collapsed (Home Composition Review,
+  // final refinement item 3), so it must be expanded before DSAR is
+  // reachable.
+  await page.getByRole('button', { name: 'HR Processes' }).click();
   await page.getByRole('button', { name: 'DSAR', exact: true }).click();
   await page.getByRole('button', { name: '+ Log new request' }).click();
 

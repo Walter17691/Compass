@@ -2,244 +2,376 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { HomeScreen } from '../screens/HomeScreen.jsx';
 
-// Phase 6.5 hardening (Batch 13) — the dashboard case-search field
-// relied on placeholder text alone, with no other accessible name. Had
-// no test coverage at all before this.
+// Home Experience Redesign — Home's composition changed almost entirely
+// (no more header creation buttons, no Needs Attention/Active Cases
+// table, a real For You feed instead). This file replaces the previous
+// HomeScreen test suite, which asserted on UI that no longer exists.
 const noop = () => {};
+const getCaseStage = cs => cs.stage || 'open';
+const noNextStep = () => null;
 
-describe('HomeScreen — field labelling (Phase 6.5, Batch 13)', () => {
-  it('labels the dashboard case-search field', () => {
-    // Home Composition Review — the search/filter row only renders once
-    // there's an active case to search over (see the "quiet Home" tests
-    // below); a real case is supplied here so this test still exercises
-    // the field's accessible name, not the now-intentionally-absent
-    // empty-account state.
-    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
-    render(<HomeScreen cases={[cs]} getCaseStage={() => 'open'} currentUser={{ name: 'Alex' }} getNextStep={() => null} setMeetingSetup={noop} setScreen={noop} setShowCasePrompt={noop} dueSoon={[]} dashSearch="" setDashSearch={noop} dashFilter="all" setDashFilter={noop} setActiveCaseId={noop} setActiveCaseStage={noop} fmtDate={d => d} showToast={noop} calendarConnected={false} connectGoogleCalendar={noop} disconnectGoogleCalendar={noop} setSettingsSection={noop} isHR={true} />);
-    expect(screen.getByLabelText('Search cases')).toBeInTheDocument();
+const baseHomeProps = {
+  cases: [], getCaseStage, currentUser: { name: 'Alex' }, getNextStep: noNextStep,
+  setScreen: noop, setShowCasePrompt: noop, dueSoon: [], setActiveCaseId: noop,
+  setActiveCaseStage: noop, fmtDate: d => d, isHR: true, onAskCompass: noop,
+};
+
+describe('HomeScreen — header (Home Experience Redesign, §2)', () => {
+  it('shows the greeting and a real-data contextual sentence, with no creation buttons', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[{ id: 'c1', employeeName: 'Sam', stage: 'investigation' }]} />);
+    expect(screen.getByText(/Good (morning|afternoon|evening), Alex/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start meeting' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ New case' })).not.toBeInTheDocument();
+  });
+
+  it('says "You\'re all caught up" when there is nothing in the feed', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }]} />);
+    expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
+  });
+
+  it('states an urgent count distinctly from a normal count', () => {
+    const overdueCase = { id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() };
+    const dueSoon = [{ key: 'od1', overdue: true, daysOverdue: 2, daysLeft: 0, label: 'Overdue thing', employeeName: 'Sam', caseId: 'c1', category: 'outcome' }];
+    render(<HomeScreen {...baseHomeProps} cases={[overdueCase]} dueSoon={dueSoon} />);
+    expect(screen.getByText('1 urgent item needs your attention today.')).toBeInTheDocument();
   });
 });
 
-// Home Composition Review, item 1 + 5 + 9 — a genuinely quiet account (no
-// active cases at all) gets a compact "Your work" prompt instead of the
-// full bordered case-list box, and the search/filter row — which has
-// nothing to filter — doesn't render at all. Cases nav/functionality
-// itself is untouched; this is presentation only.
-describe('HomeScreen — quiet/new-account composition (Home Composition Review)', () => {
-  it('renders a compact "Your work" prompt instead of the case-list filters/box when there are no active cases', () => {
-    render(<HomeScreen {...baseHomeProps} cases={[]} />);
-    expect(screen.getByText('Your work')).toBeInTheDocument();
-    expect(screen.getByText('No active cases yet.')).toBeInTheDocument();
+describe('HomeScreen — Ask Compass (Home Experience Redesign, §3)', () => {
+  it('renders a real, always-visible input with no "Open Ask Compass" click-through step first', () => {
+    render(<HomeScreen {...baseHomeProps} />);
+    expect(screen.getByLabelText('Ask Compass')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Ask Compass/ })).not.toBeInTheDocument();
+  });
+
+  it('submits directly on Enter', () => {
+    const onAskCompass = vi.fn();
+    render(<HomeScreen {...baseHomeProps} onAskCompass={onAskCompass} />);
+    const input = screen.getByLabelText('Ask Compass');
+    fireEvent.change(input, { target: { value: 'What needs attention?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onAskCompass).toHaveBeenCalledWith('What needs attention?');
+    expect(input.value).toBe('');
+  });
+
+  it('shows at most 3 static starter prompts that submit immediately on click', () => {
+    const onAskCompass = vi.fn();
+    render(<HomeScreen {...baseHomeProps} onAskCompass={onAskCompass} />);
+    const starters = ['What needs my attention?', 'Summarise my open cases', "What's overdue?"];
+    for (const label of starters) expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: starters[0] }));
+    expect(onAskCompass).toHaveBeenCalledWith(starters[0]);
+  });
+
+  it('does nothing on Enter when the field is blank', () => {
+    const onAskCompass = vi.fn();
+    render(<HomeScreen {...baseHomeProps} onAskCompass={onAskCompass} />);
+    fireEvent.keyDown(screen.getByLabelText('Ask Compass'), { key: 'Enter' });
+    expect(onAskCompass).not.toHaveBeenCalled();
+  });
+});
+
+describe('HomeScreen — For You feed (Home Experience Redesign, §4/§6)', () => {
+  it('renders an overdue item with urgent (red) treatment and a case-linked feed row for a next-step action with neutral treatment', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Overdue Person', stage: 'investigation', updatedAt: new Date().toISOString() },
+      { id: 'c2', employeeName: 'Action Person', stage: 'inv_report', updatedAt: new Date().toISOString() },
+    ];
+    const dueSoon = [{ key: 'od1', overdue: true, daysOverdue: 3, daysLeft: 0, label: 'DSAR response due', employeeName: 'Overdue Person', caseId: 'c1', category: 'dsar' }];
+    const getNextStep = cs => cs.id === 'c2' ? { action: 'inv_report', label: 'Submit investigation report' } : null;
+    render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} getNextStep={getNextStep} />);
+    const eyebrows = screen.getAllByText('Action needed');
+    expect(eyebrows).toHaveLength(2);
+    expect(eyebrows[0]).toHaveStyle({ color: '#C84B2F' });
+    expect(eyebrows[1]).not.toHaveStyle({ color: '#C84B2F' });
+    expect(screen.getByText('DSAR response overdue')).toBeInTheDocument();
+    expect(screen.getByText('Submit investigation report')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit investigation report →' })).toBeInTheDocument();
+  });
+
+  it('navigates to the case when a feed row action is clicked', () => {
+    const setActiveCaseId = vi.fn();
+    const setScreen = vi.fn();
+    const cases = [{ id: 'c1', employeeName: 'Sam', stage: 'inv_report', updatedAt: new Date().toISOString() }];
+    const getNextStep = () => ({ action: 'inv_report', label: 'Submit investigation report' });
+    render(<HomeScreen {...baseHomeProps} cases={cases} getNextStep={getNextStep} setActiveCaseId={setActiveCaseId} setScreen={setScreen} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Submit investigation report →' }));
+    expect(setActiveCaseId).toHaveBeenCalledWith('c1');
+    expect(setScreen).toHaveBeenCalledWith('case_view');
+  });
+
+  it('routes a non-case deadline (DSAR) to the DSAR screen, not a case', () => {
+    const setScreen = vi.fn();
+    const dueSoon = [{ key: 'dsar1', overdue: true, daysOverdue: 5, daysLeft: 0, label: 'DSAR response due', employeeName: 'Sarah', caseId: null, category: 'dsar' }];
+    render(<HomeScreen {...baseHomeProps} cases={[{ id: 'x', employeeName: 'Someone', stage: 'investigation', updatedAt: new Date().toISOString() }]} dueSoon={dueSoon} setScreen={setScreen} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open DSAR →' }));
+    expect(setScreen).toHaveBeenCalledWith('dsar');
+  });
+});
+
+describe('HomeScreen — For You feed cap (Home + Sidebar Product Experience pass, Part 5)', () => {
+  it('caps the feed to 5 rows initially and reveals the rest via "View all", on a real-scale org', () => {
+    const dueSoon = Array.from({ length: 9 }, (_, i) => ({
+      // category "next_step" passes its label through unhumanised (a
+      // user-written action already), keeping this test focused purely
+      // on the cap/expand behaviour rather than the title humaniser.
+      key: `od${i}`, overdue: true, daysOverdue: i + 1, daysLeft: 0,
+      label: `Overdue item ${i}`, employeeName: `Case ${i}`, caseId: 'c' + i, category: 'next_step',
+    }));
+    const cases = Array.from({ length: 9 }, (_, i) => ({ id: 'c' + i, employeeName: 'Case ' + i, stage: 'investigation', updatedAt: new Date().toISOString() }));
+    render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} />);
+    expect(screen.getByText('Overdue item 0')).toBeInTheDocument();
+    expect(screen.getByText('Overdue item 4')).toBeInTheDocument();
+    expect(screen.queryByText('Overdue item 5')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View all (9) →' }));
+    expect(screen.getByText('Overdue item 5')).toBeInTheDocument();
+    expect(screen.getByText('Overdue item 8')).toBeInTheDocument();
+  });
+
+  it('shows no "View all" control when the feed is within the cap', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', stage: 'inv_report', updatedAt: new Date().toISOString() }];
+    const getNextStep = () => ({ action: 'inv_report', label: 'Submit investigation report' });
+    render(<HomeScreen {...baseHomeProps} cases={cases} getNextStep={getNextStep} />);
+    expect(screen.queryByRole('button', { name: /View all \(/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('HomeScreen — Recently active (Home Experience Redesign, §8)', () => {
+  it('shows at most 4 cases, most recently updated first, with no search/filter controls', () => {
+    const cases = Array.from({ length: 6 }, (_, i) => ({
+      id: 'c' + i, employeeName: 'Case ' + i, stage: 'investigation',
+      updatedAt: new Date(Date.now() - i * 86400000).toISOString(),
+    }));
+    render(<HomeScreen {...baseHomeProps} cases={cases} />);
+    expect(screen.getByText('Case 0')).toBeInTheDocument();
+    expect(screen.getByText('Case 3')).toBeInTheDocument();
+    expect(screen.queryByText('Case 4')).not.toBeInTheDocument();
+    expect(screen.queryByText('Case 5')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Search cases')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Investigation' })).not.toBeInTheDocument();
   });
 
-  it('wires the quiet-state "+ New case" button to the same create-case handler as the header action', () => {
+  it('excludes closed cases from Recently active', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Open Case', stage: 'investigation', updatedAt: new Date().toISOString() },
+      { id: 'c2', employeeName: 'Closed Case', stage: 'closed', updatedAt: new Date().toISOString() },
+    ];
+    render(<HomeScreen {...baseHomeProps} cases={cases} />);
+    expect(screen.getByText('Open Case')).toBeInTheDocument();
+    expect(screen.queryByText('Closed Case')).not.toBeInTheDocument();
+  });
+});
+
+describe('HomeScreen — Today rail (Home Experience Redesign, §9)', () => {
+  it('is omitted entirely when there is nothing today, rather than showing an empty card', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }]} />);
+    expect(screen.queryByText('Today')).not.toBeInTheDocument();
+  });
+
+  it("shows today's meeting without duplicating it in the For You feed", () => {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const cases = [{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: today.toISOString(), meetings: [{ type: 'Investigation meeting', date: `${dd}/${mm}/${today.getFullYear()}` }] }];
+    render(<HomeScreen {...baseHomeProps} cases={cases} />);
+    expect(screen.getByText('Today')).toBeInTheDocument();
+    expect(screen.getByText(/Investigation meeting/)).toBeInTheDocument();
+  });
+
+  // Home UX Polish pass, §4 — Today redesigned as a compact agenda:
+  // state badge (Meeting/Due) → event/deadline → person, no fabricated
+  // times (meeting records only ever carry a date, never a time-of-day).
+  it('labels a meeting row "Meeting" and a due-today deadline row "Due", each with the person shown', () => {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dateStr = `${dd}/${mm}/${today.getFullYear()}`;
+    const cases = [
+      { id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: today.toISOString(), meetings: [{ type: 'Investigation meeting', date: dateStr }] },
+      { id: 'c2', employeeName: 'James Carter', stage: 'outcome', updatedAt: today.toISOString() },
+    ];
+    const dueSoon = [{ key: 'k1', overdue: false, daysLeft: 0, label: 'Disciplinary outcome letter due (ACAS-recommended: 5 working days)', employeeName: 'James Carter', caseId: 'c2', category: 'outcome' }];
+    render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} />);
+    expect(screen.getByText('Meeting')).toBeInTheDocument();
+    expect(screen.getByText('Due')).toBeInTheDocument();
+    // Both names also appear a second time in Recently active — these are
+    // real, distinct cases, so that's expected, not a duplication bug.
+    expect(screen.getAllByText('Sarah Jones').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('James Carter').length).toBeGreaterThan(0);
+    // Same human wording the feed itself uses, not the raw ACAS-citation label.
+    expect(screen.getByText('Disciplinary outcome letter due')).toBeInTheDocument();
+    expect(screen.queryByText(/ACAS/)).not.toBeInTheDocument();
+  });
+
+  // Home UX Polish pass, §5 — one extremely compact line beneath Today,
+  // not another dashboard component.
+  it('shows a compact "This week" summary beneath Today when the week ahead has real deadlines/meetings', () => {
+    const inFiveDays = new Date(); inFiveDays.setDate(inFiveDays.getDate() + 5);
+    const dd = String(inFiveDays.getDate()).padStart(2, '0');
+    const mm = String(inFiveDays.getMonth() + 1).padStart(2, '0');
+    const cases = [{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString(), meetings: [{ type: 'Review meeting', date: `${dd}/${mm}/${inFiveDays.getFullYear()}` }] }];
+    const dueSoon = [
+      { key: 'k1', overdue: false, daysLeft: 3, label: 'Probation review due', employeeName: 'Sam', caseId: 'c1', category: 'probation' },
+      { key: 'k2', overdue: false, daysLeft: 6, label: 'Grievance acknowledgement due (ACAS-recommended: 5 working days)', employeeName: 'Sam', caseId: 'c1', category: 'grievance' },
+    ];
+    render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} />);
+    expect(screen.getByText('This week')).toBeInTheDocument();
+    expect(screen.getByText('2 deadlines · 1 meeting')).toBeInTheDocument();
+  });
+
+  it('does not show "This week" when the week ahead has nothing real to summarise', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }]} />);
+    expect(screen.queryByText('This week')).not.toBeInTheDocument();
+  });
+});
+
+describe('HomeScreen — empty state (Home Experience Redesign, §15)', () => {
+  it('shows a calm empty state with no For You / Recently active / Today sections, and one onboarding action', () => {
     const setShowCasePrompt = vi.fn();
     render(<HomeScreen {...baseHomeProps} cases={[]} setShowCasePrompt={setShowCasePrompt} />);
-    fireEvent.click(screen.getAllByRole('button', { name: '+ New case' })[0]);
+    expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
+    expect(screen.queryByText('For you')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recently active')).not.toBeInTheDocument();
+    expect(screen.queryByText('Your work')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create your first case →' }));
     expect(setShowCasePrompt).toHaveBeenCalledWith(true);
   });
 
-  it('renders the full Active cases header, filters and list once at least one active case exists', () => {
-    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
-    render(<HomeScreen {...baseHomeProps} cases={[cs]} />);
-    expect(screen.queryByText('Your work')).not.toBeInTheDocument();
-    expect(screen.getByText('Active cases')).toBeInTheDocument();
-    expect(screen.getByLabelText('Search cases')).toBeInTheDocument();
-  });
-});
-
-const baseHomeProps = {
-  getCaseStage: () => 'open', currentUser: { name: 'Alex' }, getNextStep: () => null, setMeetingSetup: noop,
-  setScreen: noop, setShowCasePrompt: noop, dueSoon: [], dashSearch: '', setDashSearch: noop, dashFilter: 'active',
-  setDashFilter: noop, setActiveCaseId: noop, setActiveCaseStage: noop, fmtDate: d => d, showToast: noop,
-  calendarConnected: false, connectGoogleCalendar: noop, disconnectGoogleCalendar: noop, setSettingsSection: noop,
-  isHR: true,
-};
-
-// Phase 7.5B (P0 polish, item 1) — the case-list row's only flexible
-// column must be the employee-name/case-type block; every sibling
-// (badge, timestamp) must refuse to shrink. Asserted directly on the
-// rendered inline styles rather than pixel layout, since jsdom doesn't
-// actually lay out flexbox — this is the same level the bug itself was
-// fixed at (CSS properties, not computed geometry).
-describe('HomeScreen — case-list card layout (Phase 7.5B, item 1)', () => {
-  it('truncates a long employee name with an ellipsis and preserves it via title, rather than letting the status badge get compressed', () => {
-    const longName = 'A Very Long Employee Name That Would Not Fit In A Narrow Card Column';
-    const cs = { id: 'c1', employeeName: longName, caseType: 'misconduct', updatedAt: new Date().toISOString() };
-    render(<HomeScreen {...baseHomeProps} cases={[cs]} />);
-    const nameEl = screen.getByTitle(longName);
-    expect(nameEl.textContent).toBe(longName);
-    expect(nameEl.style.whiteSpace).toBe('nowrap');
-    expect(nameEl.style.overflow).toBe('hidden');
-    expect(nameEl.style.textOverflow).toBe('ellipsis');
-    // The status badge must never be allowed to shrink below its own
-    // content — this is what the overlap bug actually was.
-    const badge = screen.getByText('Open');
-    expect(badge.parentElement.style.flexShrink).toBe('0');
-  });
-});
-
-// Phase 7.5B (P0 polish, item 6) — overdue/HIGH risk/investigations
-// overrunning must render visually bolder (fontWeight 700) than a lower-
-// urgency category already sharing the strip (procedural warnings stays
-// at its existing 500), using only the categories/colours the system
-// already assigns — no new severity invented.
-describe('HomeScreen — Needs Attention severity (Phase 7.5B, item 6)', () => {
-  it('renders overdue and HIGH-risk items bolder than a routine procedural-warning chip', () => {
-    const highRiskCase = { id: 'c2', employeeName: 'Risky Case', caseType: 'misconduct', meetings: [{ date: '2026-01-01', riskScore: { rating: 'HIGH' } }] };
-    const caseSignals = [{ id: 's1', caseId: 'c2', type: 'process_risk', status: 'open', title: 'Procedural gap' }];
-    render(<HomeScreen {...baseHomeProps} cases={[highRiskCase]}
-      dueSoon={[{ overdue: true, label: 'Chase witness statement', caseId: 'c2' }]}
-      caseSignals={caseSignals} />);
-    const overdueChip = screen.getByText(/Chase witness statement · Overdue/);
-    const highRiskChip = screen.getByText(/Risky Case · HIGH risk/);
-    const proceduralChip = screen.getByText(/procedural warning/);
-    expect(overdueChip.style.fontWeight).toBe('700');
-    expect(highRiskChip.style.fontWeight).toBe('700');
-    expect(proceduralChip.style.fontWeight).toBe('500');
-  });
-});
-
-// Phase 7.5B (P0 polish, item 7) / Phase 2A (Calm Intelligence) —
-// Compass Recommendations was demoted again in Phase 2A: no longer its
-// own bordered card with a serif sub-heading at all, folded into one
-// ambient "Compass intelligence" section (a plain small-caps label, no
-// card, no per-item heading) stacked below Active Cases rather than
-// beside it. Content/ranking/click-through are untouched — only
-// asserting the section reads as genuinely quieter than Active Cases.
-describe('HomeScreen — Compass intelligence prominence (Phase 2A, Calm Intelligence)', () => {
-  it('renders "Compass intelligence" as a quiet section heading, smaller than the Active cases heading, with no competing bordered card', () => {
-    const cs = { id: 'c3', employeeName: 'Some Case', caseType: 'misconduct' };
-    const caseSignals = [{ id: 's2', caseId: 'c3', type: 'next_action', status: 'open', title: 'Do the thing' }];
-    render(<HomeScreen {...baseHomeProps} cases={[cs]} caseSignals={caseSignals} />);
-    // getAllByText, not getByText: robust to "Active cases" appearing more
-    // than once (it no longer does post-7.5C's stat-card removal, but this
-    // shouldn't need updating again if a future change reintroduces a
-    // second match) — the section heading itself is the largest match.
-    const activeCasesHeading = screen.getAllByText('Active cases').sort((a,b)=>Number(b.style.fontSize.replace('px',''))-Number(a.style.fontSize.replace('px','')))[0];
-    const intelligenceHeading = screen.getByText('Compass intelligence');
-    expect(Number(intelligenceHeading.style.fontSize.replace('px',''))).toBeLessThan(Number(activeCasesHeading.style.fontSize.replace('px','')));
-    // No bordered card wrapping this section any more — a plain top rule
-    // only (no background, no border-radius), distinguishing it from
-    // Active Cases' own real bordered surface below.
-    expect(intelligenceHeading.parentElement.style.background).toBeFalsy();
-    expect(intelligenceHeading.parentElement.style.borderRadius).toBeFalsy();
-    // Functionality must survive the presentation change: the
-    // recommendation itself still renders and is still findable.
-    expect(screen.getByText('Do the thing')).toBeInTheDocument();
-  });
-});
-
-// Phase 7.5C — the four stat-card tiles (Active cases / Awaiting action /
-// Pending signatures / Closed this month) were almost entirely duplicate
-// of numbers already shown elsewhere on Home (the greeting subtitle, the
-// Needs Attention chips) and are gone; "closed this month" — the one
-// figure not shown anywhere else — is folded into the greeting subtitle
-// instead of lost outright.
-describe('HomeScreen — stat-card tiles removed (Phase 7.5C)', () => {
-  it('does not render the old stat-card labels, and folds "closed this month" into the greeting subtitle', () => {
-    const closedThisMonth = { id: 'c1', employeeName: 'Closed Case', caseType: 'misconduct', stage: 'closed', updatedAt: new Date().toISOString() };
-    render(<HomeScreen {...baseHomeProps} getCaseStage={cs => cs.stage || 'open'} dashFilter="all" cases={[{ id: 'c0', employeeName: 'Open Case', caseType: 'misconduct' }, closedThisMonth]} />);
-    expect(screen.queryByText('Awaiting action')).not.toBeInTheDocument();
-    expect(screen.queryByText('Pending signatures')).not.toBeInTheDocument();
-    expect(screen.queryByText('Closed this month')).not.toBeInTheDocument();
-    expect(screen.getByText(/1 closed this month/)).toBeInTheDocument();
-  });
-});
-
-// Phase 7.5C — Needs Attention collapses from up to 11 independently
-// rendered chip categories (worst case 20+ bordered pill elements) into
-// one panel: a capped, severity-sorted list of real case rows for the
-// case-specific categories, and a single plain-text summary line for the
-// aggregate-only categories. No category/count/click-through logic
-// changed — only how many separate elements it takes to show them.
-describe('HomeScreen — Needs Attention consolidation (Phase 7.5C)', () => {
-  it('merges case-specific categories into one capped, sorted row list instead of one chip row per category', () => {
-    const cases = Array.from({ length: 4 }, (_, i) => ({
-      id: 'hr' + i, employeeName: 'High Risk ' + i, caseType: 'misconduct',
-      meetings: [{ date: '2026-01-01', riskScore: { rating: 'HIGH' } }],
-    }));
-    render(<HomeScreen {...baseHomeProps} cases={cases} />);
-    // All 4 HIGH-risk rows show (well under the 6-row cap) as real rows,
-    // not pill chips — each is its own clickable row with a chevron.
-    for (const cs of cases) {
-      expect(screen.getByText(new RegExp(cs.employeeName + ' · HIGH risk'))).toBeInTheDocument();
-    }
-  });
-
-  it('caps the merged case-specific list at 6 rows even when far more items qualify', () => {
-    const cases = Array.from({ length: 10 }, (_, i) => ({
-      id: 'hr' + i, employeeName: 'High Risk ' + i, caseType: 'misconduct',
-      meetings: [{ date: '2026-01-01', riskScore: { rating: 'HIGH' } }],
-    }));
-    render(<HomeScreen {...baseHomeProps} cases={cases} />);
-    const rows = screen.getAllByText(/HIGH risk/);
-    expect(rows.length).toBeLessThanOrEqual(6);
-  });
-
-  it('demotes stale (no-recent-activity) cases to an aggregate count rather than an individual named row', () => {
-    const staleCase = { id: 's1', employeeName: 'Quiet Case', caseType: 'misconduct', updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() };
-    render(<HomeScreen {...baseHomeProps} cases={[staleCase]} />);
-    // "Quiet Case" legitimately still appears once, in the Active Cases
-    // list below (Level 2) — what must NOT exist is a Needs-Attention-style
-    // individual "No activity in Nd" row naming the case.
-    expect(screen.getAllByText(/Quiet Case/)).toHaveLength(1);
-    expect(screen.queryByText(/No activity in/)).not.toBeInTheDocument();
-    expect(screen.getByText(/1 case with no recent activity/)).toBeInTheDocument();
-  });
-
-  it('still renders the overdue item as non-clickable text, matching its pre-existing (non-button) behaviour', () => {
-    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
-    render(<HomeScreen {...baseHomeProps} cases={[cs]} dueSoon={[{ overdue: true, label: 'Chase witness statement', caseId: 'c1' }]} />);
-    const overdueRow = screen.getByText(/Chase witness statement · Overdue/);
-    expect(overdueRow.closest('button')).toBeNull();
-  });
-
-  it('keeps the aggregate-only categories as a single clickable summary line (referrals still navigate to Concerns)', () => {
-    render(<HomeScreen {...baseHomeProps} cases={[]} concernReferrals={[{ id: 'r1', status: 'new' }]} />);
-    expect(screen.getByText(/1 referral awaiting triage/)).toBeInTheDocument();
-  });
-});
-
-// Phase 7.5C — the "This week" 7-day mini-calendar grid plus Connect
-// Google/Outlook Calendar buttons were removed from Home (redundant with
-// the dedicated Calendar nav destination and Settings → Integrations,
-// which already own that functionality); a compact "Today" panel with
-// just today's meetings replaces it.
-describe('HomeScreen — Calendar reduced to a "Today" panel (Phase 7.5C)', () => {
-  it('shows a compact Today panel without the old 7-day grid or calendar-connect buttons', () => {
+  it('still shows the greeting and Ask Compass in the empty state', () => {
     render(<HomeScreen {...baseHomeProps} cases={[]} />);
-    expect(screen.getByText('Today')).toBeInTheDocument();
-    expect(screen.queryByText('This week')).not.toBeInTheDocument();
-    expect(screen.queryByText('Connect Google Calendar')).not.toBeInTheDocument();
-    expect(screen.queryByText('Connect Outlook')).not.toBeInTheDocument();
-    expect(screen.queryByText('Schedule meeting')).not.toBeInTheDocument();
+    expect(screen.getByText(/Good (morning|afternoon|evening), Alex/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Ask Compass')).toBeInTheDocument();
   });
 });
 
-// Phase 7.5C — the "Quick links"/"Suggested for you" block (a second,
-// weaker "click into a case" suggestion list duplicating Compass
-// Recommendations' own purpose in the same column) is gone; its policy
-// links remain reachable via Settings → Policies, just not duplicated here.
-describe('HomeScreen — Quick links removed (Phase 7.5C)', () => {
-  it('no longer renders the Quick links / Suggested for you block', () => {
-    const cs = { id: 'c1', employeeName: 'Some Case', caseType: 'misconduct' };
-    render(<HomeScreen {...baseHomeProps} cases={[cs]} />);
-    expect(screen.queryByText('Quick links')).not.toBeInTheDocument();
-    expect(screen.queryByText('Suggested for you')).not.toBeInTheDocument();
-    expect(screen.queryByText('View all policies & templates →')).not.toBeInTheDocument();
+describe('HomeScreen — Compass noticed (Home + Sidebar Product Experience pass, Part 8)', () => {
+  it('shows the signal\'s own reasoning and a type-specific action, not just a title and employee name', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }];
+    const caseSignals = [{
+      id: 'sig1', caseId: 'c1', type: 'process_risk', status: 'open',
+      title: 'Possible evidence gap',
+      reasoning: 'The evidence recorded in this appeal may not address the employee\'s explanation.',
+      createdAt: new Date().toISOString(),
+    }];
+    render(<HomeScreen {...baseHomeProps} cases={cases} caseSignals={caseSignals} />);
+    expect(screen.getByText('Possible evidence gap')).toBeInTheDocument();
+    expect(screen.getByText('The evidence recorded in this appeal may not address the employee\'s explanation.')).toBeInTheDocument();
+    expect(screen.getByText('Review guardrail →')).toBeInTheDocument();
+  });
+
+  it('labels a next_action signal "Review case →" rather than the guardrail wording', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }];
+    const caseSignals = [{
+      id: 'sig1', caseId: 'c1', type: 'next_action', status: 'open',
+      title: 'Next best action available', reasoning: 'A next step has been identified.',
+      createdAt: new Date().toISOString(),
+    }];
+    render(<HomeScreen {...baseHomeProps} cases={cases} caseSignals={caseSignals} />);
+    expect(screen.getByText('Review case →')).toBeInTheDocument();
+  });
+
+  it('is omitted entirely when there are no open signals or bottlenecks', () => {
+    render(<HomeScreen {...baseHomeProps} cases={[{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }]} />);
+    expect(screen.queryByText('Compass noticed')).not.toBeInTheDocument();
   });
 });
 
-// Phase 7.5C — Compass Recommendations and Potential Bottlenecks now
-// share one outer container instead of each having its own bordered card;
-// each still renders/hides independently of the other's presence.
-describe('HomeScreen — Recommendations/Bottlenecks share one container (Phase 7.5C)', () => {
-  it('renders Potential Bottlenecks even when there are no Compass Recommendations', () => {
-    const cs = { id: 'c1', employeeName: 'Slow Case', caseType: 'misconduct', createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(), meetings: [{ type: 'Investigation meeting', date: '01/01/2026' }] };
-    render(<HomeScreen {...baseHomeProps} cases={[cs]} caseSignals={[]} />);
-    expect(screen.queryByText('Compass Recommendations')).not.toBeInTheDocument();
+describe('HomeScreen — Compass noticed reasoning progressive disclosure (Home Micro-Polish pass)', () => {
+  const withOverflow = (fn) => {
+    // jsdom never lays out real box heights, so scrollHeight/clientHeight
+    // are always 0 — the component's own overflow check (scrollHeight >
+    // clientHeight) can never fire without forcing real measurements
+    // here. Stubbing both getters is the only way to exercise the "long
+    // reasoning" branch in a unit test rather than only in a live browser.
+    Object.defineProperty(window.HTMLElement.prototype, 'scrollHeight', { configurable: true, value: 120 });
+    Object.defineProperty(window.HTMLElement.prototype, 'clientHeight', { configurable: true, value: 48 });
+    try {
+      fn();
+    } finally {
+      delete window.HTMLElement.prototype.scrollHeight;
+      delete window.HTMLElement.prototype.clientHeight;
+    }
+  };
+
+  const longReasoningProps = () => ({
+    cases: [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }],
+    caseSignals: [{
+      id: 'sig1', caseId: 'c1', type: 'process_risk', status: 'open',
+      title: 'Possible evidence gap',
+      reasoning: 'The evidence recorded in this appeal may not address the employee\'s explanation, and there is no indication the original finding considered it before a decision was reached.',
+      createdAt: new Date().toISOString(),
+    }],
+  });
+
+  it('shows a "More" toggle only when the reasoning actually overflows the clamped preview', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }];
+    const caseSignals = [{ id: 'sig1', caseId: 'c1', type: 'next_action', status: 'open', title: 'Short one', reasoning: 'Brief reason.', createdAt: new Date().toISOString() }];
+    render(<HomeScreen {...baseHomeProps} {...{ cases, caseSignals }} />);
+    // jsdom reports scrollHeight===clientHeight (both 0) by default, so
+    // short, non-overflowing reasoning must not render a dead-end toggle.
+    expect(screen.queryByRole('button', { name: /more/i })).not.toBeInTheDocument();
+  });
+
+  it('renders the full reasoning text in the DOM even while visually clamped, with a "More" control when it overflows', () => {
+    withOverflow(() => {
+      const props = longReasoningProps();
+      render(<HomeScreen {...baseHomeProps} {...props} />);
+      expect(screen.getByText(props.caseSignals[0].reasoning)).toBeInTheDocument();
+      const more = screen.getByRole('button', { name: /show more detail/i });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      expect(more).toHaveAttribute('aria-controls');
+      expect(more).toHaveTextContent('More');
+    });
+  });
+
+  it('expands to "Less" on click/keyboard activation, without navigating or opening a modal', () => {
+    withOverflow(() => {
+      const setScreen = vi.fn();
+      const props = longReasoningProps();
+      render(<HomeScreen {...baseHomeProps} {...props} setScreen={setScreen} />);
+      const more = screen.getByRole('button', { name: /show more detail/i });
+      fireEvent.click(more);
+      expect(screen.getByRole('button', { name: /show less detail/i })).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('Less')).toBeInTheDocument();
+      expect(setScreen).not.toHaveBeenCalled();
+      // Same full text stays in the DOM before and after — nothing was
+      // regenerated, summarised, or re-fetched by expanding it.
+      expect(screen.getByText(props.caseSignals[0].reasoning)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /show less detail/i }));
+      expect(screen.getByRole('button', { name: /show more detail/i })).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
+  it('keeps "Review guardrail →" as its own reachable control alongside More, not replaced by it', () => {
+    withOverflow(() => {
+      const props = longReasoningProps();
+      render(<HomeScreen {...baseHomeProps} {...props} />);
+      expect(screen.getByRole('button', { name: 'Review guardrail →' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /show more detail/i })).toBeInTheDocument();
+    });
+  });
+});
+
+describe('HomeScreen — Your work breakdown (Home + Sidebar Product Experience pass, Part 9)', () => {
+  it('is omitted entirely when there is nothing overdue, awaiting approval, or due this week', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'A', stage: 'investigation', updatedAt: new Date().toISOString() },
+      { id: 'c2', employeeName: 'B', stage: 'investigation', updatedAt: new Date().toISOString() },
+    ];
+    render(<HomeScreen {...baseHomeProps} cases={cases} />);
+    expect(screen.queryByText('Your work')).not.toBeInTheDocument();
+  });
+
+  it('shows a real overdue/awaiting-approval/due-this-week breakdown instead of a bare open-case count', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }];
+    const dueSoon = [
+      { key: 'od1', overdue: true, daysOverdue: 1, daysLeft: 0, label: 'Overdue thing', employeeName: 'Sam', caseId: 'c1', category: 'outcome' },
+      { key: 'k2', overdue: false, daysLeft: 3, label: 'Probation review due', employeeName: 'Sam', caseId: 'c1', category: 'probation' },
+    ];
+    const hrReviewRequests = [{ id: 'r1', case_id: 'c1', status: 'pending', step: 'dismissal' }];
+    render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} hrReviewRequests={hrReviewRequests} />);
+    expect(screen.getByText('Your work')).toBeInTheDocument();
+    expect(screen.getByText('1 overdue · 1 awaiting approval · 1 due this week')).toBeInTheDocument();
   });
 });

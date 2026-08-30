@@ -13,6 +13,9 @@ test('a wellbeing note survives clearing localStorage, proving it is cloud-synce
   const employeeName = `E2E Wellbeing ${Date.now()}`;
 
   await login(page);
+  // Wellbeing lives inside the "HR Processes" sidebar group, which now
+  // starts collapsed (Home Composition Review, final refinement item 3).
+  await page.getByRole('button', { name: 'HR Processes' }).click();
   await page.getByRole('button', { name: 'Wellbeing', exact: true }).click();
   await expect(page.getByText('Mental health & wellbeing')).toBeVisible();
 
@@ -36,6 +39,8 @@ test('a wellbeing note survives clearing localStorage, proving it is cloud-synce
   await page.evaluate(() => localStorage.removeItem('compass_wellbeing'));
   await page.reload();
 
+  // The reload remounts AppSidebar, so HR Processes is collapsed again.
+  await page.getByRole('button', { name: 'HR Processes' }).click();
   await page.getByRole('button', { name: 'Wellbeing', exact: true }).click();
   await page.getByText(employeeName, { exact: true }).click();
   await expect(page.getByText('E2E test wellbeing conversation notes.')).toBeVisible({ timeout: 10000 });

@@ -9,6 +9,26 @@ const fmtGeneratedAt = (iso) => {
   return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 };
 
+// Design System Convergence pass, Phase 7 — buildExecutiveBriefPrompt
+// (lib/execBrief.js) explicitly asks the model for "3-4 paragraphs"
+// followed by a "-"-prefixed bulleted "Recommended areas for leadership
+// attention" list; the narrative already carries that structure, it was
+// just rendered as one undifferentiated block of prose. This finds the
+// real split point (the first "- " bullet line) and gives the
+// recommendations their own labelled section — same generated text,
+// same words, nothing paraphrased or added. If a narrative doesn't
+// follow the requested shape (older briefs generated before this
+// pass, or the model not complying), splitPoint stays -1 and the whole
+// thing renders exactly as before — never a broken or partial display.
+function splitBriefNarrative(narrative) {
+  const lines = narrative.split("\n");
+  const splitIndex = lines.findIndex(l => l.trim().startsWith("- "));
+  if (splitIndex <= 0) return { summary: narrative, recommendations: [] };
+  const recommendations = lines.slice(splitIndex).filter(l => l.trim().startsWith("- ")).map(l => l.trim().slice(2).trim());
+  const summary = lines.slice(0, splitIndex).join("\n").trim();
+  return recommendations.length ? { summary, recommendations } : { summary: narrative, recommendations: [] };
+}
+
 function SupportingData({ data }) {
   return (
     <div style={{background:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"10px 12px",marginTop:10}}>
@@ -105,13 +125,24 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR }) {
       {loadError && <div style={{fontSize:13,color:COLOR.red,marginBottom:12}}>Couldn't load the executive brief history right now.</div>}
       {briefs.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:COLOR.inkFaint}}>No executive brief generated yet.</div>}
 
-      {briefs.map(b => (
-        <div key={b.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${COLOR.borderFaint}`}}>
-          <div style={{fontSize:11,color:COLOR.inkFaint,marginBottom:8}}>Generated {fmtGeneratedAt(b.created_at)}{b.generated_by_name?" by "+b.generated_by_name:""}</div>
-          <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.8,whiteSpace:"pre-wrap",maxWidth:"min(720px, 100%)"}}>{b.narrative}</div>
-          {b.supporting_data && <SupportingData data={b.supporting_data}/>}
-        </div>
-      ))}
+      {briefs.map(b => {
+        const { summary, recommendations } = splitBriefNarrative(b.narrative);
+        return (
+          <div key={b.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+            <div style={{fontSize:11,color:COLOR.inkFaint,marginBottom:8}}>Generated {fmtGeneratedAt(b.created_at)}{b.generated_by_name?" by "+b.generated_by_name:""}</div>
+            <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.8,whiteSpace:"pre-wrap",maxWidth:"min(720px, 100%)"}}>{summary}</div>
+            {recommendations.length>0 && (
+              <div style={{marginTop:14,maxWidth:"min(720px, 100%)"}}>
+                <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:8}}>Recommended areas for leadership attention</div>
+                <ul style={{margin:0,paddingLeft:18,display:"flex",flexDirection:"column",gap:6}}>
+                  {recommendations.map((r,i) => <li key={i} style={{fontSize:13,color:COLOR.ink,lineHeight:1.6}}>{r}</li>)}
+                </ul>
+              </div>
+            )}
+            {b.supporting_data && <SupportingData data={b.supporting_data}/>}
+          </div>
+        );
+      })}
     </div>
   );
 }

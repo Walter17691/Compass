@@ -168,29 +168,58 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
   // headline.
   const monthlyMovement = `${overview.opened_in_period} opened, ${overview.closed_in_period} closed this month`;
 
+  // 10/10 pass, item 6 (executive clarity) — every figure below already
+  // existed as its own stat tile; this synthesises the same numbers into
+  // one lead sentence so the page reads insight-first ("here's what's
+  // going on, here's the evidence") rather than metric-first ("here are
+  // some numbers, work out what they mean yourself"). No new calculation
+  // — overdueCaseIds/avgInvestigationDays/resolutionSplit are the exact
+  // values the tiles beneath already render, just said in a sentence
+  // first. Deliberately factual, not alarmist, in tone either direction —
+  // "2 overdue" reads the same whether that's good or bad news for this
+  // org's size, so the sentence doesn't editorialise beyond the numbers.
+  const headline = [
+    `${overview.open_cases} open case${overview.open_cases===1?"":"s"}`,
+    overdueCaseIds.size>0 && `${overdueCaseIds.size} overdue`,
+    investigationCaseCount>=MIN_DURATION_SAMPLE && `investigations averaging ${avgInvestigationDays}d`,
+    (resolutionSplit.informal+resolutionSplit.formal)>0 && `${resolutionSplit.informal} resolved informally, ${resolutionSplit.formal} formally`,
+  ].filter(Boolean).join(" · ");
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Phase 2C fix — the previous fixed minmax(220,1.4fr)+2x
-          minmax(160,1fr) template had a hard combined minimum (540px+
-          gaps) that could exceed the available column width at 1024px,
-          forcing real horizontal page overflow. auto-fit keeps the same
-          3-across layout at normal widths but degrades by wrapping
-          instead of overflowing. */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
-        <StatBox large label="Open cases" value={overview.open_cases} sub={`${overview.total_cases} total · ${monthlyMovement}`}/>
-        <StatBox label="Overdue cases" value={overdueCaseIds.size} accent={overdueCaseIds.size>0?COLOR.red:COLOR.green}/>
-        <StatBox label="Returned for further investigation" value={returnedForFurtherInvestigation} accent={returnedForFurtherInvestigation>0?COLOR.amber:COLOR.ink}/>
-      </div>
+      <div style={{fontSize:14,color:COLOR.ink,lineHeight:1.6}}>{headline}.</div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
-        {overview.closed_cases_with_duration >= MIN_DURATION_SAMPLE
-          ? <StatBox label="Avg case duration" value={overview.avg_case_duration_days+"d"} sub={overview.closed_cases_with_duration+" closed cases measured"}/>
-          : <DataQualityCaveat total={overview.closed_cases_with_duration} minRequired={MIN_DURATION_SAMPLE} label="closed cases with measurable duration"/>}
-        {investigationCaseCount >= MIN_DURATION_SAMPLE
-          ? <StatBox label="Avg investigation duration" value={avgInvestigationDays+"d"} sub={investigationCaseCount+" cases currently in investigation"}/>
-          : <DataQualityCaveat total={investigationCaseCount} minRequired={MIN_DURATION_SAMPLE} label="cases currently in investigation"/>}
-        <StatBox label="Informal resolution" value={resolutionSplit.informal} sub={resolutionSplit.formal+" formal"} accent={COLOR.green}/>
+      {/* 10/10 pass, Part B, item 10 — this used to be 6 equal-ish stat
+          tiles across two grid rows (plus up to 2 DataQualityCaveats),
+          all before a reader reached anything else on the tab. The
+          headline sentence above already carries these same figures in
+          one place; only "Open cases" earns real headline-tile
+          treatment now (it's the one number that answers "how big is
+          the current workload," the anchor everything else here relates
+          to). Overdue/Returned/durations/informal-formal split move into
+          one compact inline row — same values, same DataQualityCaveat
+          suppression for genuinely small samples, just sized to their
+          actual importance rather than a uniform tile grid. */}
+      <StatBox large label="Open cases" value={overview.open_cases} sub={`${overview.total_cases} total · ${monthlyMovement}`}/>
+
+      <div style={{display:"flex",flexWrap:"wrap",columnGap:24,rowGap:8,padding:"2px 2px"}}>
+        <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Overdue </span><span style={{color:overdueCaseIds.size>0?COLOR.red:COLOR.ink,fontWeight:600}}>{overdueCaseIds.size}</span></span>
+        <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Returned for further investigation </span><span style={{color:returnedForFurtherInvestigation>0?COLOR.amber:COLOR.ink,fontWeight:600}}>{returnedForFurtherInvestigation}</span></span>
+        <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Informal / formal </span><span style={{color:COLOR.ink,fontWeight:600}}>{resolutionSplit.informal} / {resolutionSplit.formal}</span></span>
+        {overview.closed_cases_with_duration >= MIN_DURATION_SAMPLE &&
+          <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Avg case duration </span><span style={{color:COLOR.ink,fontWeight:600}}>{overview.avg_case_duration_days}d</span></span>}
+        {investigationCaseCount >= MIN_DURATION_SAMPLE &&
+          <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Avg investigation duration </span><span style={{color:COLOR.ink,fontWeight:600}}>{avgInvestigationDays}d</span></span>}
       </div>
+      {/* Same DataQualityCaveat component/wording every other Insights
+          tab uses for a below-threshold sample — kept as its own quiet
+          (already borderless) line rather than folded into the compact
+          row above, so its fuller "why this is limited" explanation
+          isn't truncated into a terse metric pair. */}
+      {overview.closed_cases_with_duration < MIN_DURATION_SAMPLE &&
+        <DataQualityCaveat total={overview.closed_cases_with_duration} minRequired={MIN_DURATION_SAMPLE} label="closed cases with measurable duration"/>}
+      {investigationCaseCount < MIN_DURATION_SAMPLE &&
+        <DataQualityCaveat total={investigationCaseCount} minRequired={MIN_DURATION_SAMPLE} label="cases currently in investigation"/>}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
         <Panel title="Cases by type">

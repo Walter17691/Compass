@@ -1,3 +1,4 @@
+import { COLOR, SPACE, TYPE } from '../styles/tokens';
 import { SignalCard } from './SignalCard';
 
 // Phase 3 of the reasoning-layer build-out (meeting intelligence, after
@@ -6,42 +7,43 @@ import { SignalCard } from './SignalCard';
 // meeting records pairwise (App.jsx's generateInconsistencies). Never
 // framed as an accusation, per the spec's own wording constraint —
 // enforced in the generation prompt, not here.
+// 10/10 pass, Part A — see UnansweredQuestionsPanel's own comment: no
+// longer its own card; composes as a "Case readiness" subsection with
+// queue rows instead of one card per signal.
 export function InconsistenciesPanel({ cs, signals, loading, onCheck, changeSignalStatus, createCaseTask, allegations, onLinkAllegation, onAskWhy }) {
   if (!(cs.meetings||[]).filter(m=>m.record).length) return null;
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:16}}>
-      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Potential inconsistencies</div>
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:SPACE.sm}}>
+        <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Potential inconsistencies</div>
         <button onClick={()=>onCheck(cs)} disabled={loading}
-          style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          style={{fontSize:11,background:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"4px 10px",color:COLOR.inkSoft,cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
           {loading?"Comparing meeting records…":signals.length?"Check again":"Check for inconsistencies"}
         </button>
       </div>
-      <div style={{padding:"16px"}}>
-        {!loading && signals.length===0 && <div style={{fontSize:13,color:"#9B9098"}}>No potential inconsistencies flagged yet.</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {signals.map(signal=>(
-            <div key={signal.id}>
-              <SignalCard signal={signal}
-                onMarkNotRelevant={()=>changeSignalStatus(signal.id, "not_relevant")}
-                onMarkResolved={()=>changeSignalStatus(signal.id, "explained")}
-                resolvedLabel="Mark explained"
-                onAskWhy={()=>onAskWhy(signal)}
-                extraActions={[
-                  {label:"Add to meeting prep", onClick:()=>{createCaseTask(cs.id, {name:"Clarify: "+signal.title}); changeSignalStatus(signal.id, "accepted", "Queued for next meeting");}},
-                ]}
-              />
-              {signal.status==="open" && allegations.length>0 && (
-                <select aria-label={`Link "${signal.title}" to allegation`} defaultValue="" onChange={e=>{if(e.target.value){onLinkAllegation(signal, e.target.value); e.target.value="";}}}
-                  style={{marginTop:6,fontSize:11,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px",color:"#6B6375"}}>
-                  <option value="" disabled>Link to allegation…</option>
-                  {allegations.map(a=><option key={a.id} value={a.id}>{a.title}</option>)}
-                </select>
-              )}
-            </div>
-          ))}
-        </div>
+      {!loading && signals.length===0 && <div style={{fontSize:13,color:COLOR.inkFaint}}>No potential inconsistencies flagged yet.</div>}
+      <div style={{display:"flex",flexDirection:"column"}}>
+        {signals.map((signal,i)=>(
+          <div key={signal.id}>
+            <SignalCard signal={signal} last={i===signals.length-1 && !(signal.status==="open" && allegations.length>0)}
+              onMarkNotRelevant={()=>changeSignalStatus(signal.id, "not_relevant")}
+              onMarkResolved={()=>changeSignalStatus(signal.id, "explained")}
+              resolvedLabel="Mark explained"
+              onAskWhy={()=>onAskWhy(signal)}
+              extraActions={[
+                {label:"Add to meeting prep", onClick:()=>{createCaseTask(cs.id, {name:"Clarify: "+signal.title}); changeSignalStatus(signal.id, "accepted", "Queued for next meeting");}},
+              ]}
+            />
+            {signal.status==="open" && allegations.length>0 && (
+              <select aria-label={`Link "${signal.title}" to allegation`} defaultValue="" onChange={e=>{if(e.target.value){onLinkAllegation(signal, e.target.value); e.target.value="";}}}
+                style={{marginBottom:10,fontSize:11,border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"4px 8px",color:COLOR.inkSoft}}>
+                <option value="" disabled>Link to allegation…</option>
+                {allegations.map(a=><option key={a.id} value={a.id}>{a.title}</option>)}
+              </select>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

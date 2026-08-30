@@ -7,6 +7,8 @@ import { useLoadMore } from '../hooks/useLoadMore';
 import { daysBetween } from '../lib/dateMath';
 import { authedFetch } from '../lib/authedFetch';
 import { WarningIcon } from '../components/Icons';
+import { PageHeader } from '../components/design/PageHeader';
+import { COLOR, RADIUS } from '../styles/tokens';
 
 const STATUS_LABEL = { received:"Received", in_progress:"In progress", ready_to_send:"Ready to send", completed:"Completed" };
 
@@ -70,21 +72,33 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
     extendDsarRequest(req, values.reason);
   };
 
+  // Design System Convergence pass, Phase 3 — was its own bordered Card
+  // per request, every one identically shaped whether compiled or not.
+  // DSAR is explicitly an operational register (item 3) — request name,
+  // received date, statutory deadline, status, and next action should be
+  // immediately comparable across rows, so the collapsed row is now a
+  // compact line inside one shared list. The compiled-data panel below
+  // is genuinely the "interpretation/exceptional conditions" case Phase
+  // 3 reserves real cards for (name-collision warnings, flagged
+  // third-party mentions, evidence needing manual review) — it keeps its
+  // own contained surface, appearing only once a request is actually
+  // compiled, same as before. Every field, handler, and control is
+  // unchanged.
   return (
-    <Card style={{marginBottom:12}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-        <div>
-          <div style={{fontSize:15,fontWeight:600,color:"#1A1535"}}>{req.employeeName}</div>
+    <div style={{padding:"14px 16px",borderBottom:"1px solid #F1EBDD"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,gap:12}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:600,color:"#1A1535"}}>{req.employeeName}</div>
           <div style={{fontSize:12,color:"#9B9098"}}>{req.requestedBy?`Requested by ${req.requestedBy} · `:""}Received {req.receivedDate}</div>
         </div>
-        <div style={{textAlign:"right"}}>
+        <div style={{textAlign:"right",flexShrink:0}}>
           <span style={{fontSize:11,fontWeight:600,color:overdue?"#C84B2F":"#7C5CFC",background:overdue?"#FEF0EB":"#EDE8FF",borderRadius:20,padding:"3px 10px"}}>{STATUS_LABEL[req.status]}</span>
           <div style={{fontSize:11,color:overdue?"#C84B2F":"#9B9098",marginTop:4}}>Due {req.dueDate}{overdue?` · ${Math.abs(days)}d overdue`:` · ${days}d left`}</div>
           {req.extended&&<div style={{fontSize:11,color:"#7C5CFC",marginTop:4}}>Extended — {req.extensionReason||"complex request"}</div>}
         </div>
       </div>
 
-      <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:8,marginBottom:compiled?10:0,flexWrap:"wrap"}}>
         <select aria-label={`Status for ${req.employeeName}'s DSAR request`} value={req.status} onChange={e=>updateDsarRequest(req.id, {status:e.target.value})} style={{fontSize:12,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",background:"#fff",color:"#1A1535"}}>
           {Object.entries(STATUS_LABEL).filter(([v])=>v!=="completed"||req.reviewedFlaggedSections).map(([v,l])=><option key={v} value={v}>{l}</option>)}
         </select>
@@ -157,7 +171,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
           </label>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -180,12 +194,10 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
 
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:0,fontWeight:400}}>DSAR requests</h2>
-          <p style={{fontSize:13,color:"#9B9098",margin:"2px 0 0"}}>{dsarRequests.filter(r=>r.status!=="completed").length} open · statutory response deadline: 1 calendar month from receipt</p>
-        </div>
-        <Btn onClick={()=>setShowForm(s=>!s)}>{showForm?"Cancel":"+ Log new request"}</Btn>
+      {/* Design System Convergence pass, Phase 2 — standard PageHeader. */}
+      <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px"}}>
+        <PageHeader title="DSAR requests" subtitle="Statutory response deadline: 1 calendar month from receipt" meta={`${dsarRequests.filter(r=>r.status!=="completed").length} open`}
+          actions={<Btn onClick={()=>setShowForm(s=>!s)}>{showForm?"Cancel":"+ Log new request"}</Btn>}/>
       </div>
 
       <div style={{maxWidth:760,margin:"0 auto",padding:"28px 24px"}}>
@@ -214,9 +226,13 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
             <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1A1535",marginBottom:8}}>No DSAR requests logged</div>
             <div style={{fontSize:13,color:"#9B9098"}}>Log a request when someone asks what personal data you hold on them.</div>
           </div>
-        ):visibleRequests.map(req=>(
-          <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} dsarRequests={dsarRequests} orgMembers={orgMembers} orgEvents={orgEvents} improvementInitiatives={improvementInitiatives} managerCapabilityInsights={managerCapabilityInsights} organisationThemes={organisationThemes} caseAccess={caseAccess} redundancyCases={redundancyCases} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
-        ))}
+        ):(
+          <div style={{background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,overflow:"hidden"}}>
+            {visibleRequests.map(req=>(
+              <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} dsarRequests={dsarRequests} orgMembers={orgMembers} orgEvents={orgEvents} improvementInitiatives={improvementInitiatives} managerCapabilityInsights={managerCapabilityInsights} organisationThemes={organisationThemes} caseAccess={caseAccess} redundancyCases={redundancyCases} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
+            ))}
+          </div>
+        )}
         {hasMore&&(
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
             Load more ({visibleRequests.length} of {total})

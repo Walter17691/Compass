@@ -46,7 +46,15 @@ function ImpactView({ orgId, initiative }) {
   return <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.6}}>{describeImpact(label, entry, days)}</div>;
 }
 
-function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisationThemes, onUpdate, expanded, onToggleExpand }) {
+// Design System Convergence pass, Phase 3 — was its own bordered card
+// per initiative even collapsed (already-good progressive disclosure —
+// only one expands at a time — just with unnecessary card chrome on
+// every row regardless). Now a row inside one shared list, divider
+// instead of a border-per-row; the expanded detail block is unchanged
+// (Milestones/Linked actions/Metric/Impact genuinely earn the extra
+// weight once opened — that's the "exceptional/interpretation" content
+// Phase 3 reserves real surfaces for).
+function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisationThemes, onUpdate, expanded, onToggleExpand, last }) {
   const [milestoneLabel, setMilestoneLabel] = useState("");
   const [milestoneDate, setMilestoneDate] = useState("");
   const [outcomeDraft, setOutcomeDraft] = useState(initiative.outcome || "");
@@ -56,7 +64,7 @@ function InitiativeCard({ orgId, initiative, isHR, caseTasks, cases, organisatio
   const showImpact = initiative.status === "completed" && initiative.metricKind && initiative.metricValue;
 
   return (
-    <div style={{background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"14px 16px",marginBottom:10}}>
+    <div style={{padding:"13px 16px",borderBottom:last?"none":`1px solid ${COLOR.borderFaint}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
         <div>
           <div style={{fontSize:14,fontWeight:600,color:COLOR.ink}}>{initiative.title}</div>
@@ -191,9 +199,13 @@ export function ImprovementInitiativesPanel({ orgId, improvementInitiatives, isH
       <div style={{fontSize:12,color:COLOR.inkSoft,marginBottom:SPACE.md,maxWidth:560}}>A real, HR-owned response to a pattern surfaced elsewhere in Insights — the problem identified, an owner, milestones, and (once implemented) what actually happened.</div>
 
       {sorted.length === 0 && <div style={{fontSize:13,color:COLOR.inkSoft,marginBottom:16}}>No improvement initiatives yet.</div>}
-      {sorted.map(i => (
-        <InitiativeCard key={i.id} orgId={orgId} initiative={i} isHR={isHR} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)}/>
-      ))}
+      {sorted.length > 0 && (
+        <div style={{background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,overflow:"hidden",marginBottom:16}}>
+          {sorted.map((i,idx) => (
+            <InitiativeCard key={i.id} orgId={orgId} initiative={i} isHR={isHR} caseTasks={caseTasks} cases={cases} organisationThemes={organisationThemes} onUpdate={onUpdate} expanded={expandedId===i.id} onToggleExpand={()=>setExpandedId(id=>id===i.id?null:i.id)} last={idx===sorted.length-1}/>
+          ))}
+        </div>
+      )}
 
       {isHR && (showForm ? (
         <div style={{background:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"16px 18px"}}>

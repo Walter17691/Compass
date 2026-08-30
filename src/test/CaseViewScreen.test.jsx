@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CaseViewScreen } from '../screens/CaseViewScreen.jsx';
 
@@ -144,27 +144,54 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
 // one of the 12 original tab labels is still a real, clickable button —
 // rather than trusting the module's own "these three lists partition
 // TABS completely" comment.
-describe('CaseViewScreen — grouped tab navigation (Phase 2A)', () => {
-  it('still renders all 12 original tabs as clickable buttons, none hidden by the new visual grouping', () => {
+// IA & User Journey pass, §11 — the permanent row is reduced to
+// Overview/Timeline/Evidence; the other nine tabs move behind a "More"
+// popover, grouped under the same Case/Work/Decision labels the old flat
+// row used (MORE_GROUPS derives from TAB_GROUPS, so the partition can't
+// silently drop a tab). No route, id, or active-tab logic changed here —
+// only which control reaches each tab.
+describe('CaseViewScreen — Overview/Timeline/Evidence + More navigation (IA & User Journey pass, §11)', () => {
+  it('renders exactly Overview, Timeline and Evidence as permanent tabs, plus a More trigger', () => {
     render(<CaseViewScreen {...baseProps} />);
-    const allLabels = ['Overview','Timeline','Allegations','Meetings','Evidence','Participants','Tasks','Documents','Communications','Themes','Outcome','AI Assistant'];
-    for (const label of allLabels) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
-    }
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Timeline' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Evidence' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Allegations' })).not.toBeInTheDocument();
   });
 
-  it('shows the three group labels (Case / Work / Decision)', () => {
+  it('reveals the other nine tabs, grouped under Case/Work/Decision, once More is opened', async () => {
+    const user = userEvent.setup();
     render(<CaseViewScreen {...baseProps} />);
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('menu', { name: 'More case tabs' })).toBeInTheDocument();
+    const remainingLabels = ['Allegations','Meetings','Participants','Tasks','Documents','Communications','Themes','Outcome','AI Assistant'];
+    for (const label of remainingLabels) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
+    }
     expect(screen.getByText('Case')).toBeInTheDocument();
     expect(screen.getByText('Work')).toBeInTheDocument();
     expect(screen.getByText('Decision')).toBeInTheDocument();
   });
 
-  it('switching tabs still works through the grouped nav — clicking Allegations shows the Allegations tab body', async () => {
+  it('switching tabs still works through More — clicking Allegations shows the Allegations tab body and closes the popover', async () => {
     const user = userEvent.setup();
     render(<CaseViewScreen {...baseProps} />);
+    await user.click(screen.getByRole('button', { name: 'More' }));
     await user.click(screen.getByRole('button', { name: 'Allegations' }));
     expect(screen.getByText(/No allegations recorded yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'More case tabs' })).not.toBeInTheDocument();
+  });
+
+  it('shows the active tab\'s own label on the More trigger when a "more" tab is selected, so context is not lost', async () => {
+    const user = userEvent.setup();
+    render(<CaseViewScreen {...baseProps} />);
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    // Two "Allegations" buttons exist for a moment: the popover item just
+    // clicked, and the trigger this click is about to relabel — scope to
+    // the popover explicitly to avoid ambiguity.
+    await user.click(within(screen.getByRole('menu', { name: 'More case tabs' })).getByRole('button', { name: 'Allegations' }));
+    expect(screen.getByRole('button', { name: 'Allegations' })).toHaveAttribute('aria-haspopup', 'true');
   });
 });
 

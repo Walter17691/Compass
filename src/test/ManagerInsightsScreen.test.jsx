@@ -16,10 +16,16 @@ describe('ManagerInsightsScreen', () => {
     expect(screen.getByText(/No investigations have been delegated yet/)).toBeInTheDocument();
   });
 
+  // Design System Convergence pass, Phase 4 — the five KPI tiles became
+  // one headline sentence + a compact inline metrics row; these now
+  // check the same underlying values in their new presentation
+  // ("10 days" -> "10d" in the compact row, full "days" wording kept in
+  // the headline sentence) rather than a standalone tile value.
   it('shows the average completion time once at least one investigation has been submitted', () => {
     render(<ManagerInsightsScreen cases={cases} caseAccess={caseAccess} hrReviewRequests={hrReviewRequests} auditLog={[]} dueSoon={[]} />);
-    expect(screen.getByText('10 days')).toBeInTheDocument();
-    expect(screen.getByText(/Based on 1 completed investigation/)).toBeInTheDocument();
+    expect(screen.getByText(/averaging 10 days to complete/)).toBeInTheDocument();
+    expect(screen.getByText('10d')).toBeInTheDocument();
+    expect(screen.getByText(/Completion average based on 1 completed investigation/)).toBeInTheDocument();
   });
 
   it('shows "Not enough data" when a case is delegated but never submitted', () => {
@@ -30,15 +36,15 @@ describe('ManagerInsightsScreen', () => {
   it('counts investigations returned for rework', () => {
     const returned = [{ id: 'r1', case_id: 'c1', step: 'inv_report', status: 'returned' }];
     render(<ManagerInsightsScreen cases={cases} caseAccess={caseAccess} hrReviewRequests={returned} auditLog={[]} dueSoon={[]} />);
-    const tile = screen.getByText('Investigations returned for rework').closest('div');
-    expect(tile.parentElement).toHaveTextContent('1');
+    expect(screen.getByText(/1 returned for rework/)).toBeInTheDocument();
+    expect(screen.getByText('Returned for rework').parentElement).toHaveTextContent('1');
   });
 
   it('counts overdue manager actions from dueSoon, scoped to delegated cases', () => {
     const dueSoon = [{ caseId: 'c1', overdue: true }];
     render(<ManagerInsightsScreen cases={cases} caseAccess={caseAccess} hrReviewRequests={[]} auditLog={[]} dueSoon={dueSoon} />);
-    const tile = screen.getByText('Overdue manager actions').closest('div');
-    expect(tile.parentElement).toHaveTextContent('1');
+    expect(screen.getByText(/1 overdue action/)).toBeInTheDocument();
+    expect(screen.getByText('Overdue manager actions').parentElement).toHaveTextContent('1');
   });
 
   it('counts meeting quality gaps and process deviations from the audit log', () => {
@@ -48,8 +54,8 @@ describe('ManagerInsightsScreen', () => {
       { action: 'Policy deviation recorded' },
     ];
     render(<ManagerInsightsScreen cases={cases} caseAccess={caseAccess} hrReviewRequests={[]} auditLog={auditLog} dueSoon={[]} />);
-    expect(screen.getByText('Meeting quality gaps').closest('div').parentElement).toHaveTextContent('1');
-    expect(screen.getByText('Process deviations').closest('div').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('Meeting quality gaps').parentElement).toHaveTextContent('1');
+    expect(screen.getByText('Process deviations').parentElement).toHaveTextContent('2');
   });
 
   // Manager Enablement (Phase 4, MP21, §25) — "Manager Capability Insight".

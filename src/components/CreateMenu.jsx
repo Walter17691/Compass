@@ -1,0 +1,88 @@
+import { useState, useRef, useEffect } from 'react';
+import { usePopoverPosition } from '../hooks/usePopoverPosition';
+import { FONT, COLOR, RADIUS } from '../styles/tokens';
+
+const PlusIcon = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+
+// IA & User Journey pass, §7 — one universal Create control, replacing
+// the New case / New meeting / New task / Raise a concern / Save email
+// buttons that used to live scattered one-per-screen. Every action here
+// calls a handler App.jsx already had (see the createMenuProps built at
+// the <AppSidebar> call site) — this component only decides what's
+// offered and how it's grouped, never what happens when clicked.
+//
+// When mounted while the user is inside a case (isInCase), a "This case"
+// group appears first with case-scoped actions (Start meeting / Add
+// evidence / Add task) ahead of the global ones — the same contextual-
+// creation idea the brief asks for (§7), without a second, separate "+"
+// control competing with this one inside the case workspace itself.
+export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask, onAddEmail, isInCase, activeCaseName, onAddEvidence, onAddCaseTask, onStartCaseMeeting, onAfterAction }) {
+  const [show, setShow] = useState(false);
+  const ref = useRef(null);
+  const btnRef = useRef(null);
+  const popoverStyle = usePopoverPosition(btnRef, show, { minHeight: 280 });
+
+  useEffect(() => {
+    if (!show) return;
+    const onKeyDown = e => { if (e.key === "Escape") setShow(false); };
+    const onClickOutside = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onClickOutside);
+    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
+  }, [show]);
+
+  const run = (fn) => { fn?.(); setShow(false); onAfterAction?.(); };
+
+  const globalItems = [
+    { l:"New case", fn:onNewCase },
+    { l:"Start a meeting", fn:onNewMeeting },
+    { l:"Raise a concern", fn:onRaiseConcern },
+    { l:"New task", fn:onNewTask },
+    { l:"Add email to a case", fn:onAddEmail },
+  ];
+  const caseItems = [
+    { l:"Start meeting for this case", fn:onStartCaseMeeting },
+    { l:"Add evidence", fn:onAddEvidence },
+    { l:"Add task", fn:onAddCaseTask },
+  ];
+
+  return (
+    <div style={{position:"relative"}} ref={ref}>
+      {/* Home UX Polish pass, §8 — was a solid-filled purple button, the
+          same visual weight as a primary "Submit"-style CTA; that read as
+          more dominant than a persistent, always-visible utility should
+          be. A tinted/outlined treatment (same purple-on-tint pattern
+          the sidebar's own active nav state and Ask Compass's nav item
+          already use) keeps it clearly discoverable without competing
+          with the actual content of the page for attention. */}
+      <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-expanded={show} aria-haspopup="true"
+        style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}33`,color:COLOR.purpleDeep,padding:"8px 14px",borderRadius:RADIUS.surface,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>
+        <PlusIcon size={13}/> Create
+      </button>
+      {show&&popoverStyle&&(
+        <div role="menu" aria-label="Create" style={{...popoverStyle,width:240,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"8px"}}>
+          {isInCase&&(
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.06em",textTransform:"uppercase",padding:"4px 8px"}}>
+                {activeCaseName ? `In ${activeCaseName}'s case` : "In this case"}
+              </div>
+              {caseItems.map(item=>(
+                <button key={item.l} onClick={()=>run(item.fn)}
+                  style={{display:"flex",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.ink,padding:"8px 8px",borderRadius:RADIUS.surface,fontSize:13,cursor:"pointer",fontFamily:FONT.sans}}>
+                  {item.l}
+                </button>
+              ))}
+              <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,margin:"6px 0"}}/>
+            </div>
+          )}
+          {globalItems.map(item=>(
+            <button key={item.l} onClick={()=>run(item.fn)}
+              style={{display:"flex",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.ink,padding:"8px 8px",borderRadius:RADIUS.surface,fontSize:13,cursor:"pointer",fontFamily:FONT.sans}}>
+              {item.l}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

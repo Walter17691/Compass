@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { SettingsScreen } from '../screens/SettingsScreen.jsx';
 
 // Phase 6.5 hardening (Batch 10b, task #205) — SettingsScreen had zero test
@@ -33,8 +33,11 @@ const baseProps = {
 // too (e.g. "Billing", "Locations", "Integrations"), so asserting on the
 // heading text alone matches two elements once the nav renders alongside
 // the active section.
+// Client IA cleanup — "billing" removed from the reachable-via-nav list
+// (it's no longer in `sections` for any user); "integration-health"
+// removed as a distinct section (folded into "integrations" itself, see
+// IntegrationsSection.test.jsx's own health-badge coverage).
 const sections = [
-  ['billing', 'Manage subscription'],
   ['team-access', 'Team members'],
   ['organisation', 'Job titles & access levels'],
   ['locations', 'No locations added yet'],
@@ -44,7 +47,6 @@ const sections = [
   ['policies', 'Company policies'],
   ['process-templates', /Define required documents, suggested meetings/],
   ['integrations', /Connect the systems your organisation already uses/],
-  ['integration-health', /Last successful sync and recent failures/],
   ['notifications', 'Deadline reminders'],
   ['automations', 'Chase signature on stale meeting records'],
   ['audit-trail', 'Every action timestamped and logged.'],
@@ -61,22 +63,80 @@ describe('SettingsScreen — section smoke test (Phase 6.5, task #205)', () => {
   }
 });
 
-// Phase 7.5B (P0 polish, item 8) — grouping is presentation only: every
+// Client IA cleanup, §1 — Billing removed from Settings navigation
+// entirely, for every user, not just non-HR. BillingSection itself and
+// every /api/billing/* endpoint are untouched (confirmed: nothing in
+// App.jsx gates app usage on billing status, so removing the nav entry
+// doesn't block any required account functionality) — this only proves
+// the nav no longer exposes it.
+describe('SettingsScreen — Billing removed from navigation (Client IA cleanup, §1)', () => {
+  it('never shows Billing in the nav, for an HR user or otherwise', () => {
+    const { unmount } = render(<SettingsScreen {...baseProps} isHR={true} />);
+    expect(screen.queryByRole('button', { name: 'Billing' })).not.toBeInTheDocument();
+    unmount();
+    render(<SettingsScreen {...baseProps} isHR={false} />);
+    expect(screen.queryByRole('button', { name: 'Billing' })).not.toBeInTheDocument();
+  });
+
+  it('never lands on Billing by default for any user', () => {
+    render(<SettingsScreen {...baseProps} isHR={true} initialSection={null} />);
+    expect(screen.queryByText('Manage subscription')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the first available section, not a blank pane, when a non-HR user has no initialSection', () => {
+    render(<SettingsScreen {...baseProps} isHR={false} initialSection={null} />);
+    expect(screen.getByText('Word letter template')).toBeInTheDocument();
+  });
+
+  it('defaults an HR user to Organisation — a sensible overview, not an arbitrary technical page', () => {
+    render(<SettingsScreen {...baseProps} isHR={true} initialSection={null} />);
+    expect(screen.getByText('Job titles & access levels')).toBeInTheDocument();
+  });
+
+  // BillingSection/the "billing" render branch are deliberately still
+  // present in SettingsScreen.jsx's code (not deleted) — this proves the
+  // component still renders correctly if something reaches it via the
+  // same initialSection deep-link mechanism every other section uses,
+  // even though no in-app caller currently sets it to "billing".
+  it('still renders BillingSection correctly if reached via a direct deep link', () => {
+    render(<SettingsScreen {...baseProps} initialSection="billing" />);
+    expect(screen.getByText('Manage subscription')).toBeInTheDocument();
+  });
+});
+
+// Client IA cleanup, §2 — grouping reorganised around Organisation /
+// People & access / Compass setup / Security & data / Support. Every
 // section from the smoke test above must still be reachable as a nav
 // button, under a real category header, with routes/behaviour untouched
 // (already proven per-section above; this proves none of them silently
-// vanished from the nav once grouped).
-describe('SettingsScreen — grouped navigation (Phase 7.5B, item 8)', () => {
-  it('shows category headers and every section as a still-clickable nav button', () => {
+// vanished from the nav once regrouped).
+describe('SettingsScreen — grouped navigation (Client IA cleanup, §2)', () => {
+  it('shows the new category headers and every section as a still-clickable nav button', () => {
     render(<SettingsScreen {...baseProps} />);
     // getAllByText, not getByText: "Organisation" is both a category
     // header and its own section's nav-button label, so it's expected
     // to match twice.
-    for (const label of ['Organisation', 'People & access', 'Processes', 'Integrations & automation', 'Governance & data']) {
+    for (const label of ['Organisation', 'People & access', 'Compass setup', 'Security & data', 'Support']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    for (const name of ['Billing', 'Team & access', 'Locations', 'Policies', 'Integrations', 'Notifications', 'Audit trail', 'Data & privacy', 'Help']) {
+    for (const name of ['Team & access', 'Locations', 'Policies', 'Integrations', 'Notifications', 'Automations', 'Audit trail', 'Data & privacy', 'Help']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('does not show the old implementation-flavoured group labels', () => {
+    render(<SettingsScreen {...baseProps} />);
+    expect(screen.queryByText('Processes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Integrations & automation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Governance & data')).not.toBeInTheDocument();
+  });
+
+  it('groups Policies, Process templates, Integrations, Notifications and Automations together under "Compass setup"', () => {
+    render(<SettingsScreen {...baseProps} />);
+    const compassSetupHeader = screen.getByText('Compass setup');
+    const group = compassSetupHeader.parentElement;
+    for (const name of ['Policies', 'Process templates', 'Integrations', 'Notifications', 'Automations']) {
+      expect(within(group).getByRole('button', { name })).toBeInTheDocument();
     }
   });
 

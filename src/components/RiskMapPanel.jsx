@@ -57,7 +57,12 @@ export function RiskMapPanel({ orgId, cases, employeeRecords, processTemplates, 
         Flags below are indicative signals from real case data, never a ranking and never based on protected characteristics. Management capability, appeal, and policy risk are covered organisation-wide in the Manager Insights, Appeal, and Policy panels rather than broken down by site — the data doesn't support attributing those to a specific location.
       </div>
 
-      {sites.length === 0 && <div style={{fontSize:13,color:COLOR.inkFaint}}>No site data available yet.</div>}
+      {/* Design System Convergence pass, Phase 5 — NO DATA, distinct from
+          the per-site "no flags" case below (which is NO SIGNAL
+          DETECTED — a real check that found nothing, not an absence of
+          data). Explains why (no case has a location recorded) rather
+          than just "nothing here". */}
+      {sites.length === 0 && <div style={{fontSize:13,color:COLOR.inkFaint,maxWidth:480,lineHeight:1.6}}>No site data available yet — risk flags appear once cases are recorded against a location. Nothing to review until then.</div>}
       {sites.map(s => (
         <div key={s.site} style={ s.flags.length
           ? {background:COLOR.surface,border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.surface,padding:"14px 16px",marginBottom:SPACE.sm}
@@ -68,7 +73,7 @@ export function RiskMapPanel({ orgId, cases, employeeRecords, processTemplates, 
             <div style={{fontSize:11,color:COLOR.inkFaint}}>{s.caseCount} case{s.caseCount===1?"":"s"}</div>
           </div>
           {s.flags.length === 0
-            ? <div style={{fontSize:12,color:COLOR.inkFaint}}>No flags for this site.</div>
+            ? <div style={{fontSize:12,color:COLOR.inkFaint}}>No risk flags detected for this site — checked against duration, volume, and process signals.</div>
             : s.flags.map(f => (
               <div key={f.category} style={{marginBottom:8}}>
                 <div style={{fontSize:12,color:COLOR.ink}}>

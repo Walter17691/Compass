@@ -12,7 +12,7 @@ const RISK_COLOR = { HIGH: COLOR.red, MEDIUM: COLOR.amber };
 // the previous repeated bordered-card layout. People stays deliberately
 // scoped to Compass's own ER use case (meeting history), not a general
 // HRIS directory — same fields as before, just presented as rows.
-export function PeopleScreen({ cases, setActivePerson, setScreen, setCaseInfo, setMeetingSetup }) {
+export function PeopleScreen({ cases, setActivePerson, setScreen, setMeetingSetup }) {
   const [search, setSearch] = useState("");
   const allPeople = [...new Set(cases.map(c=>c.employeeName))].map(name=>{
     const empCases = cases.filter(c=>c.employeeName===name);
@@ -62,7 +62,14 @@ export function PeopleScreen({ cases, setActivePerson, setScreen, setCaseInfo, s
                 <RowChevron/>
               </div>
             </button>
-            <button type="button" onClick={()=>{setCaseInfo(p2=>({...p2,employee:p.name}));setMeetingSetup(s=>({...s,employee:p.name}));setScreen(SCREENS.HOME);}}
+            {/* IA & User Journey pass, §37 audit finding — this used to
+                prefill meetingSetup then navigate to Home, where Home's
+                own "Start meeting" button calls freshMeetingSetup() and
+                wipes the prefill the moment it's clicked, forcing a
+                second, confusing step. PersonViewScreen's own "+ New
+                meeting" already goes straight to the meeting-setup
+                screen with the prefill intact — same destination here now. */}
+            <button type="button" onClick={()=>{setMeetingSetup(s=>({...s,employee:p.name}));setScreen(SCREENS.HOME+"_meeting");}}
               style={{fontSize:12,background:"none",border:"none",padding:"5px 8px",color:COLOR.purple,cursor:"pointer",fontWeight:600,fontFamily:FONT.sans,flexShrink:0,marginRight:4}}>+ New meeting</button>
           </DataRow>
         ))}

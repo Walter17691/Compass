@@ -1,434 +1,437 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { SCREENS } from '../constants';
-import { daysBetween } from '../lib/dateMath';
-import { getCurrentRisk } from '../lib/caseStage';
-import { openReferrals } from '../lib/concernReferrals';
 import { topOpenSignalsOrgWide, signalTypeMeta } from '../lib/caseSignals';
-import { requiresApproval } from '../lib/approvals';
 import { computeStageBottlenecks } from '../lib/processDashboard';
-import { FONT, COLOR, SPACE, RADIUS, TYPE, BUTTON, CONTENT_MAX_WIDTH } from '../styles/tokens';
+import { buildForYouFeed, humanizeDeadlineTitle } from '../lib/homeFeed';
+import { requiresApproval } from '../lib/approvals';
+import { AskCompassIcon } from '../components/Icons';
+import { FONT, COLOR, SPACE, RADIUS, TYPE, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
-// Phase 20 — a case with no activity in this many days surfaces in the
-// "Needs attention" strip as stale, separate from actions/overdue items
-// which are keyed off explicit dated deadlines rather than plain inactivity.
-const STALE_DAYS = 14;
+// Home Experience Redesign — up to 3 static interaction shortcuts, not
+// AI-generated suggestions. Clicking one submits that exact question
+// through the same onAskCompass flow as typing it and pressing Enter.
+const STARTER_PROMPTS = ["What needs my attention?", "Summarise my open cases", "What's overdue?"];
 
-// Home Composition Review — 1200 (CONTENT_MAX_WIDTH) is the shell's own
-// maximum, not a mandate that every screen's content spans it. Home's
-// actual working content (greeting/actions, the case list, Today) reads
-// as a working column, not a grid, so it's capped narrower here — flush
-// left within the same outer shell below, not re-centered — so Home's
-// left edge still lines up with every other screen's, and only the
-// unused width past the column goes quiet instead of stretching rows and
-// pulling the header actions out to a distant far edge.
-const HOME_CONTENT_WIDTH = 880;
+const TYPE_LABEL = { ACTION_NEEDED: "Action needed", DEADLINE: "Deadline", APPROVAL: "Approval", FOLLOW_UP: "Follow-up" };
 
-// The nav/logo shell is rendered once by AppSidebar (App.jsx), mounted
-// unconditionally above every screen including this one — Home used to
-// render its own separate copy here, which had drifted out of sync with
-// the shared one (different height, padding, logo size) and caused a
-// visible layout jump on every navigation away from Home.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setMeetingSetup, setScreen, setShowCasePrompt, dueSoon, dashSearch, setDashSearch, dashFilter, setDashFilter, setActiveCaseId, setActiveCaseStage, fmtDate, caseSignals=[], concernReferrals=[], isHR, hrReviewRequests=[], processTemplates=[] }) {
-  const freshMeetingSetup = () => ({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
-  // Home Composition Review — the two Home "states" (§9): a quiet/new
-  // account with nothing active to work on vs. a busy one. Hoisted once
-  // here since it now also decides whether the Active Cases filter row
-  // (a user can't meaningfully filter a list that's already empty) and
-  // the compact "Your work" prompt render, not just the greeting subtitle.
+// Home Micro-Polish pass — Compass Noticed's reasoning is real, AI-
+// written explanation text (already generated once at signal-creation
+// time, never rewritten here) that can run to several sentences. Showing
+// it in full by default let one long signal dominate the whole secondary
+// rail; showing none of it lost the "why" the brief's own Part 8 asked
+// for. This clamps the reasoning to a 3-line preview via CSS
+// line-clamp (no truncation of the underlying string — the full text is
+// always in the DOM, just visually clipped) and only offers a
+// More/Less toggle when the text actually overflows that preview,
+// measured directly via scrollHeight vs clientHeight rather than a
+// length heuristic, so short reasoning never gets a dead-end "More".
+// Title and the contextual action stay their own, more prominent
+// buttons/text — this component owns only the reasoning + its own
+// disclosure control, never the row's navigation.
+function CompassNoticedItem({ sig, cs, meta, ctaLabel, onOpenCase }) {
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const reasoningRef = useRef(null);
+  const reasoningId = `compass-noticed-reasoning-${sig.id}`;
+
+  useEffect(() => {
+    const el = reasoningRef.current;
+    if (!el) return;
+    setCanExpand(el.scrollHeight > el.clientHeight + 1);
+  }, [sig.reasoning]);
+
+  return (
+    <div style={{display:"flex",alignItems:"flex-start",gap:8,width:"100%",fontFamily:FONT.sans}}>
+      <div style={{width:5,height:5,borderRadius:"50%",background:meta.color,flexShrink:0,marginTop:6}}/>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{sig.title}</div>
+        {sig.reasoning&&(
+          <div ref={reasoningRef} id={reasoningId} style={{fontSize:11.5,color:COLOR.inkFaint,marginTop:2,lineHeight:1.4,...(expanded?null:{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"})}}>
+            {sig.reasoning}
+          </div>
+        )}
+        <div style={{fontSize:11,color:COLOR.inkQuiet,marginTop:2}}>{cs?.employeeName||"Unknown case"}</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginTop:4}}>
+          {cs&&(
+            <button onClick={onOpenCase} style={{fontSize:11.5,fontWeight:600,color:COLOR.purple,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
+              {ctaLabel}
+            </button>
+          )}
+          {canExpand&&(
+            <button onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded} aria-controls={reasoningId}
+              aria-label={expanded?`Show less detail — ${sig.title}`:`Show more detail — ${sig.title}`}
+              style={{fontSize:11,fontWeight:600,color:COLOR.inkQuiet,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
+              {expanded?"Less":"More"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Home Experience Redesign — a busy real org can genuinely have dozens of
+// pending approvals/overdue items; the feed is already correctly
+// prioritised (see lib/homeFeed.js), but showing all of them at once
+// would turn "here's what matters right now" straight back into an
+// endless queue. Same progressive-disclosure shape the old Needs
+// Attention section already used: a capped initial view, everything else
+// one click away via "View all," never actually hidden.
+const INITIAL_FEED_ROWS = 5;
+
+// Home UX Polish pass, §3 — a restrained left-border accent instead of a
+// coloured card background or an icon: urgent/overdue rows get the same
+// red already used for urgency everywhere else, approvals get the same
+// purple already used for the CTA colour (not a new accent), every other
+// row stays neutral. Three weights, two colours, both already in use
+// elsewhere in the product — nothing new introduced.
+const ROW_ACCENT = (item) => item.urgent ? COLOR.red : item.type==="APPROVAL" ? COLOR.purple : "transparent";
+
+// Home Experience Redesign — this is the redesign of Home's COMPOSITION,
+// not its data. Every number/decision below is sourced from getNextStep,
+// dueSoon, hrReviewRequests + requiresApproval, caseSignals, and the
+// existing case records — see src/lib/homeFeed.js for the deterministic,
+// separately-unit-tested prioritisation logic. Nothing here calls AI or
+// invents a new legal/statutory calculation; this file only decides how
+// those existing facts are laid out and which one earns the user's
+// attention first.
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setScreen, setShowCasePrompt, dueSoon, setActiveCaseId, setActiveCaseStage, fmtDate, caseSignals=[], concernReferrals=[], isHR, hrReviewRequests=[], processTemplates=[], onAskCompass }) {
+  const [askInput, setAskInput] = useState("");
+  const submitAsk = (overrideQuestion) => {
+    const question = (overrideQuestion ?? askInput).trim();
+    if(!question) return;
+    setAskInput("");
+    onAskCompass?.(question);
+  };
+
   const activeCaseCount = cases.filter(cs=>getCaseStage(cs)!=="closed").length;
   const isQuietHome = activeCaseCount===0;
-  // Home Composition Review, final refinement (item 1) — Needs Attention's
-  // own row list, not the summary line beneath it, is what was making the
-  // section vertically dominant on a busy org (up to 6 real rows). Starts
-  // collapsed to the top 3 — the sort/rank logic below is untouched, so
-  // "top 3" is still genuinely the 3 highest-priority items, not just the
-  // first 3 in whatever order they happened to be built.
-  const [showAllAttention, setShowAllAttention] = useState(false);
+  const [showAllFeed, setShowAllFeed] = useState(false);
+
+  // §5 prioritisation — reuses getNextStep/dueSoon/hrReviewRequests/
+  // requiresApproval exactly as they already existed; see lib/homeFeed.js.
+  const feed = useMemo(() => buildForYouFeed({
+    cases, getCaseStage, getNextStep, dueSoon, concernReferrals, hrReviewRequests, isHR,
+  }), [cases, getCaseStage, getNextStep, dueSoon, concernReferrals, hrReviewRequests, isHR]);
+  const urgentCount = feed.filter(f=>f.urgent).length;
+
+  // §2 — one short, real-data sentence. No vanity stats. Part 3 of the
+  // Home + Sidebar pass asks for real workload context in the literal
+  // shape "3 things need your attention today" rather than a padded
+  // "You have..." lead-in.
+  const contextSentence = isQuietHome
+    ? "Employee relations case management for your organisation."
+    : feed.length===0
+      ? "You're all caught up."
+      : urgentCount>0
+        ? `${urgentCount} urgent item${urgentCount!==1?"s":""} need${urgentCount===1?"s":""} your attention today.`
+        : `${feed.length} thing${feed.length!==1?"s":""} need${feed.length===1?"s":""} your attention today.`;
+
+  const goToFeedItem = (item) => {
+    if(item.caseId) { setActiveCaseId(item.caseId); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW); return; }
+    if(item.screen==="dsar") setScreen(SCREENS.DSAR);
+    else if(item.screen==="wellbeing") setScreen(SCREENS.WELLBEING);
+    else if(item.screen==="redundancy") setScreen(SCREENS.REDUNDANCY);
+    else if(item.screen==="concerns") setScreen(SCREENS.CONCERNS);
+  };
+
+  // §9 Today — the relevant subset only (today's meetings + today's
+  // deadlines), never the full calendar/task list. daysLeft===0 items are
+  // deliberately excluded from the For You feed above so they only ever
+  // appear here, once.
+  const todayMeetings = useMemo(() => {
+    const today = new Date();
+    return cases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,employeeName:cs.employeeName,caseId:cs.id})))
+      .filter(m=>{
+        if(!m.date) return false;
+        const parts=m.date.split("/");
+        if(parts.length!==3) return false;
+        const md=new Date(parts[2],parts[1]-1,parts[0]);
+        return md.toDateString()===today.toDateString();
+      });
+  }, [cases]);
+  const todayDeadlines = dueSoon.filter(d=>!d.overdue && d.daysLeft===0);
+
+  // §5 This week — one extremely compact line beneath Today, not another
+  // dashboard component. Same 7-day horizon idea as the feed's own
+  // "upcoming" tier, counted independently since a deadline due today
+  // isn't itself "this week" in the sense meant here (it's already shown
+  // above, in Today).
+  const weekMeetings = useMemo(() => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate()+7);
+    return cases.flatMap(cs=>cs.meetings||[]).filter(m=>{
+      if(!m.date) return false;
+      const parts=m.date.split("/");
+      if(parts.length!==3) return false;
+      const md=new Date(parts[2],parts[1]-1,parts[0]);
+      return md>=today && md<weekEnd;
+    }).length;
+  }, [cases]);
+  const weekDeadlines = dueSoon.filter(d=>!d.overdue && d.daysLeft>=0 && d.daysLeft<=7).length;
+  const hasWeekSummary = weekMeetings>0 || weekDeadlines>0;
+  const hasToday = todayMeetings.length>0 || todayDeadlines.length>0 || hasWeekSummary;
+
+  // Home + Sidebar Product Experience pass, Part 9 — "Your work" only
+  // earns its space when it can show a real breakdown (overdue / awaiting
+  // approval / due this week), each independently derivable from data
+  // already computed above or on this screen. A bare "N open cases"
+  // count told the user nothing they could act on, so the section is
+  // hidden entirely rather than shown empty when none of the three apply.
+  const overdueCount = dueSoon.filter(d=>d.overdue).length;
+  const awaitingApprovalCount = hrReviewRequests.filter(r=>r.status==="pending" && requiresApproval(r.step)).length;
+  const hasWorkBreakdown = overdueCount>0 || awaitingApprovalCount>0 || weekDeadlines>0;
+
+  // §7 "Compass Noticed" — identical source/logic to the previous
+  // "Compass intelligence" block; presentation and location only changed.
+  // Part 8 — capped at 3 (was 5): each row is now taller (title +
+  // reasoning + action), so fewer, more legible rows keep the rail
+  // proportionate rather than turning it into a second feed.
+  const recommendations = topOpenSignalsOrgWide(caseSignals,["next_action","process_risk"],3);
+  const bottlenecks = computeStageBottlenecks(cases, processTemplates);
+  const hasCompassNoticed = recommendations.length>0 || bottlenecks.length>0;
+
+  // §8 Continue working — max 4, sorted by recency, subordinate to For You.
+  const RECENT_LIMIT = 4;
+  const recentCases = useMemo(() => cases
+    .filter(cs=>getCaseStage(cs)!=="closed")
+    .sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))
+    .slice(0, RECENT_LIMIT), [cases, getCaseStage]);
+
+  const askBox = (
+    <div style={{marginBottom:SPACE.xxl}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"16px 20px",transition:"border-color 0.15s"}}
+        onFocus={e=>e.currentTarget.style.borderColor=COLOR.purple} onBlur={e=>e.currentTarget.style.borderColor=COLOR.border}>
+        <AskCompassIcon size={18} color={COLOR.purpleDeep}/>
+        <input aria-label="Ask Compass" value={askInput} onChange={e=>setAskInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();submitAsk();}}}
+          placeholder="Ask Compass about your people, cases or HR work…"
+          style={{flex:1,fontSize:15,border:"none",background:"none",color:COLOR.ink,outline:"none",fontFamily:FONT.sans,minWidth:0}}/>
+        {askInput.trim() && (
+          <button onClick={()=>submitAsk()} style={{flexShrink:0,fontSize:12,fontWeight:600,color:"#fff",background:COLOR.purpleDeep,border:"none",borderRadius:RADIUS.surface,padding:"7px 16px",cursor:"pointer",fontFamily:FONT.sans}}>Ask →</button>
+        )}
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
+        {STARTER_PROMPTS.map(p=>(
+          <button key={p} onClick={()=>submitAsk(p)} style={{fontSize:12,color:COLOR.inkFaint,background:"none",border:`1px solid ${COLOR.borderFaint}`,borderRadius:RADIUS.pill,padding:"5px 12px",cursor:"pointer",fontFamily:FONT.sans}}>{p}</button>
+        ))}
+      </div>
+    </div>
+  );
+
   return(
     <div style={{minHeight:"100vh",background:COLOR.paper,fontFamily:FONT.sans}}>
+      <style>{`
+        .home-v2-grid{display:grid;grid-template-columns:1fr 320px;grid-template-areas:"foryou today" "recent secondary";column-gap:${SPACE.xxl}px;row-gap:${SPACE.xxl}px;align-items:start;}
+        .home-v2-foryou{grid-area:foryou;min-width:0;}
+        .home-v2-today{grid-area:today;min-width:0;}
+        .home-v2-recent{grid-area:recent;min-width:0;}
+        .home-v2-secondary{grid-area:secondary;min-width:0;display:flex;flex-direction:column;gap:${SPACE.xl}px;}
+        .home-v2-feed-row:hover{background:${COLOR.surface};}
+        @media (max-width:900px){
+          .home-v2-grid{grid-template-columns:1fr;grid-template-areas:"foryou" "today" "recent" "secondary";}
+        }
+      `}</style>
 
       <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"32px 32px"}}>
-        <div style={{maxWidth:HOME_CONTENT_WIDTH}}>
 
-        {/* ── Greeting (Phase 2A, Calm Intelligence) ── quiet editorial
-            identity moment — one size (TYPE.identity, 26px), matching the
-            Case Workspace header's own identity size so there is exactly
-            one "this is the primary thing" heading size across the whole
-            product, not a separate larger one just for Home.
-            Phase 7.5C — the four stat-card tiles that used to sit below
-            this (Active cases / Awaiting action / Pending signatures /
-            Closed this month) were almost entirely restating numbers
-            already visible elsewhere on this same screen: active-case and
-            awaiting-action counts were already in this subtitle, pending
-            signatures was already one of the Needs Attention chips below.
-            Only "closed this month" was genuinely not shown anywhere else,
-            so that's the one figure folded into this line instead of
-            losing it outright — the other three tiles were pure
-            duplication, not information, so they're gone rather than
-            moved. */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingBottom:SPACE.lg,marginBottom:SPACE.xl,borderBottom:`1px solid ${COLOR.borderFaint}`,flexWrap:"wrap",gap:SPACE.lg}}>
-          <div>
-            <div style={{...TYPE.micro,color:COLOR.inkFaint,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:SPACE.xs}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
-            <h1 style={{...TYPE.identity,color:COLOR.ink,margin:0}}>
-              Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
-            </h1>
-            <p style={{...TYPE.metadata,color:COLOR.inkFaint,margin:"5px 0 0"}}>
-              {(()=>{
-                const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action).length;
-                if(isQuietHome) return "No active cases — create one to get started.";
-                const closedThisMonth=cases.filter(cs=>{if(getCaseStage(cs)!=="closed")return false;const d=new Date(cs.updatedAt||cs.createdAt||0);const n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
-                return activeCaseCount+" active case"+(activeCaseCount!==1?"s":"")+(actions>0?" · "+actions+" requiring action":"")+(closedThisMonth>0?" · "+closedThisMonth+" closed this month":"");
-              })()}
-            </p>
-          </div>
-          {/* Home Composition Review, final refinement (item 2) —
-              alignItems:center (was flex-start) so the button pair sits
-              against the whole 3-line greeting block rather than pinned
-              to just its top edge, which is what read as "floating"
-              beside empty space next to the subtitle line. The bottom
-              border above closes the header into one visually bounded
-              unit instead of relying on whitespace alone to say "these
-              belong together." No change to which action is primary. */}
-          <div style={{display:"flex",gap:SPACE.sm,flexShrink:0}}>
-            <button onClick={()=>{setMeetingSetup(freshMeetingSetup());setScreen(SCREENS.HOME+"_meeting");}} style={{fontSize:13,background:COLOR.surface,border:`1.5px solid ${COLOR.purple}`,borderRadius:RADIUS.surface,padding:"10px 20px",cursor:"pointer",color:COLOR.purple,fontFamily:FONT.sans,fontWeight:600}}>Start meeting</button>
-            <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"10px 20px",cursor:"pointer",color:"#fff",fontFamily:FONT.sans,fontWeight:600}}>+ New case</button>
-          </div>
+        {/* §2 Header — greeting + one real-data sentence. No creation
+            buttons here: creation is the global + Create control now,
+            not a second, Home-specific system. */}
+        <div style={{marginBottom:SPACE.xl}}>
+          <div style={{...TYPE.micro,color:COLOR.inkFaint,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:SPACE.xs}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
+          <h1 style={{...TYPE.identity,color:COLOR.ink,margin:0}}>
+            Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
+          </h1>
+          <p style={{...TYPE.metadata,color:COLOR.inkFaint,margin:"6px 0 0"}}>{contextSentence}</p>
         </div>
 
-        {/* ── Needs attention (Level 1) ──
-            Phase 7.5C — previously up to 11 independent categories each
-            rendered as their own row of pill-shaped chips (worst case:
-            actions/overdue/highRisk/appealsOutstanding/staleCases each
-            listing up to 3 individual chips, plus 6 more aggregate-count
-            chips — over 20 separate bordered elements simultaneously on a
-            busy org). No category was removed and no new severity was
-            invented: every count/filter below is identical to before.
-            What changed is presentation — the case-specific, genuinely
-            "go do this" categories (actions/overdue/highRisk/
-            appealsOutstanding, the ones that were already coloured
-            orange/red/purple rather than the muted grey staleCases used)
-            merge into one capped, severity-sorted list of real rows
-            (reusing the same row layout as the Active Cases list below,
-            not a new primitive); staleCases demotes to a count alongside
-            the other aggregate-only categories, since an individual name
-            for a quiet case is far less actionable than "overdue" or
-            "HIGH risk" and every one of those cases is still one click
-            away in Active Cases regardless. The aggregate categories
-            collapse from separate bordered/padded pill chips into one
-            plain text line — same counts, same click-through where one
-            existed (openReferrals), just without a border and background
-            each. */}
-        {(()=>{
-          const actions=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getNextStep(cs)?.action);
-          const pendingSigs=cases.reduce((a,cs)=>a+(cs.evidence||[]).filter(e=>e.signStatus==="pending"&&e.signId).length,0);
-          const overdue=dueSoon.filter(d=>d.overdue);
-          const highRisk=cases.filter(cs=>getCaseStage(cs)!=="closed"&&getCurrentRisk(cs)==="HIGH");
-          const appealsOutstanding=cases.filter(cs=>getCaseStage(cs)==="appeal");
-          const staleCases=cases.filter(cs=>{
-            if(getCaseStage(cs)==="closed") return false;
-            const lastUpdated=cs.updatedAt||cs.createdAt;
-            if(!lastUpdated) return false;
-            return (Date.now()-new Date(lastUpdated))>STALE_DAYS*24*60*60*1000;
-          });
-          const openReferralsCount=isHR?openReferrals(concernReferrals).length:0;
-          // Process Intelligence (P17, §18) — each of these four reuses an
-          // existing computed source (P6's process_risk signals, P16's own
-          // dueSoon appeal/investigation categories, P9's approval requests)
-          // rather than any new deterministic logic of its own.
-          const proceduralWarnings=caseSignals.filter(s=>s.type==="process_risk"&&s.status==="open").length;
-          const appealsNearingDeadline=dueSoon.filter(d=>d.category==="appeal").length;
-          const outcomesAwaitingApproval=hrReviewRequests.filter(r=>r.status==="pending"&&requiresApproval(r.step)).length;
-          const investigationsOverrunning=dueSoon.filter(d=>d.category==="investigation").length;
-          if(actions.length===0&&pendingSigs===0&&overdue.length===0&&highRisk.length===0&&appealsOutstanding.length===0&&staleCases.length===0&&openReferralsCount===0&&proceduralWarnings===0&&appealsNearingDeadline===0&&outcomesAwaitingApproval===0&&investigationsOverrunning===0) return null;
+        {/* §3 Ask Compass — a genuine input, not a promotional banner.
+            Submitting (Enter, the Ask button, or a starter prompt) hands
+            off to the exact same sendGlobalChat flow the Ask Compass nav
+            destination uses; nothing here re-implements the AI call. */}
+        {askBox}
 
-          // Existing colour already encoded urgency (red = overdue/HIGH
-          // risk, orange = action required, purple = appeal outstanding) —
-          // reused here as the sort/merge key rather than adding a new one.
-          // Home Composition Review, final refinement (item 1) — the
-          // 6-item cap and the sort itself are exactly what they were;
-          // INITIAL_ATTENTION_ROWS only changes how many of that already-
-          // prioritised, already-capped list render before the user asks
-          // for more. Every item stays reachable via "View all" — nothing
-          // above this line changed.
-          const ATTENTION_ROW_LIMIT=6;
-          const INITIAL_ATTENTION_ROWS=3;
-          const allRows=[
-            ...overdue.map((d,i)=>({key:"od"+i,rank:0,color:"#C84B2F",clickable:false,label:`${d.label||d.employeeName} · Overdue`})),
-            ...highRisk.map(cs=>({key:"risk"+cs.id,rank:0,color:"#C84B2F",clickable:true,label:`${cs.employeeName} · HIGH risk`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}})),
-            ...actions.map(cs=>({key:"act"+cs.id,rank:1,color:"#E8622A",clickable:true,label:`${cs.employeeName} · ${getNextStep(cs)?.label}`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}})),
-            ...appealsOutstanding.map(cs=>({key:"appeal"+cs.id,rank:2,color:"#5B3FD4",clickable:true,label:`${cs.employeeName} · Appeal outstanding`,onClick:()=>{setActiveCaseId(cs.id);setActiveCaseStage("appeal");setScreen(SCREENS.CASE_VIEW);}})),
-          ].sort((a,b)=>a.rank-b.rank).slice(0,ATTENTION_ROW_LIMIT);
-          const rows=showAllAttention?allRows:allRows.slice(0,INITIAL_ATTENTION_ROWS);
-          const hiddenAttentionCount=allRows.length-rows.length;
+        {isQuietHome ? (
+          // §15 Empty state — calm and intentional. No empty For You/
+          // Recently Active/Today tables; one restrained onboarding link
+          // reusing the exact existing case-creation handler.
+          <div style={{textAlign:"center",padding:"40px 20px"}}>
+            <div style={{fontSize:15,color:COLOR.inkSoft,marginBottom:16}}>You're all caught up.</div>
+            <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,fontWeight:600,color:"#fff",background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"10px 22px",cursor:"pointer",fontFamily:FONT.sans}}>Create your first case →</button>
+          </div>
+        ) : (
+          <div className="home-v2-grid">
 
-          const summaryParts=[
-            pendingSigs>0&&{label:`${pendingSigs} pending signature${pendingSigs!==1?"s":""}`},
-            staleCases.length>0&&{label:`${staleCases.length} case${staleCases.length!==1?"s":""} with no recent activity`},
-            openReferralsCount>0&&{label:`${openReferralsCount} referral${openReferralsCount!==1?"s":""} awaiting triage`,onClick:()=>setScreen(SCREENS.CONCERNS)},
-            proceduralWarnings>0&&{label:`${proceduralWarnings} procedural warning${proceduralWarnings!==1?"s":""}`},
-            appealsNearingDeadline>0&&{label:`${appealsNearingDeadline} appeal${appealsNearingDeadline!==1?"s":""} nearing deadline`},
-            outcomesAwaitingApproval>0&&{label:`${outcomesAwaitingApproval} outcome${outcomesAwaitingApproval!==1?"s":""} awaiting approval`},
-            investigationsOverrunning>0&&{label:`${investigationsOverrunning} investigation${investigationsOverrunning!==1?"s":""} overrunning`},
-          ].filter(Boolean);
-
-          // Phase 2A (Calm Intelligence) — the outer bordered card is
-          // gone: this is the single strongest section on the page and a
-          // box around it was never doing hierarchy work, just visual
-          // noise. A section heading + a closing rule is enough to
-          // separate it from Active Cases below. Row content, severity
-          // colour/weight, and every click handler are byte-for-byte
-          // unchanged from Phase 7.5C — presentation of the wrapper only.
-          return (
-            <div style={{marginBottom:SPACE.xxl,paddingBottom:SPACE.lg,borderBottom:`1px solid ${COLOR.border}`}}>
-              <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Needs attention</div>
-              {rows.map((r,i)=>{
-                const Tag=r.clickable?"button":"div";
+            {/* §4 FOR YOU — the primary surface. Each row states what
+                happened, who/what it relates to, when it matters, and
+                the one real action available. Red is reserved for
+                urgent/overdue rows only (§6) — everything else stays
+                visually neutral, distinguished by its type label. */}
+            <div className="home-v2-foryou">
+              <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>For you</div>
+              {feed.length===0 ? (
+                <div style={{fontSize:13,color:COLOR.inkFaint,padding:"12px 0"}}>Nothing needs your attention right now.</div>
+              ) : (()=>{
+                const visibleFeed = showAllFeed ? feed : feed.slice(0, INITIAL_FEED_ROWS);
+                const hiddenCount = feed.length - visibleFeed.length;
                 return (
-                  <Tag key={r.key} type={r.clickable?"button":undefined} onClick={r.onClick} title={r.label}
-                    style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 0",border:"none",background:"none",cursor:r.clickable?"pointer":"default",textAlign:"left",font:"inherit",fontFamily:FONT.sans,borderBottom:(i<rows.length-1||hiddenAttentionCount>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                    <div style={{width:6,height:6,borderRadius:"50%",background:r.color,flexShrink:0}}/>
-                    <div style={{flex:1,minWidth:0,fontSize:12,fontWeight:r.rank===0?700:600,color:COLOR.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</div>
-                    {r.clickable&&<span style={{color:COLOR.inkQuiet,fontSize:14,flexShrink:0}}>›</span>}
-                  </Tag>
-                );
-              })}
-              {hiddenAttentionCount>0&&(
-                <button onClick={()=>setShowAllAttention(true)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",border:"none",background:"none",cursor:"pointer",fontSize:12,color:COLOR.purple,fontFamily:FONT.sans,fontWeight:500,borderBottom:summaryParts.length>0?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                  View all ({allRows.length}) →
-                </button>
-              )}
-              {summaryParts.length>0&&(
-                <div style={{paddingTop:10,fontSize:12,fontWeight:500,color:COLOR.inkSoft,lineHeight:1.7,borderTop:rows.length>0?`1px solid ${COLOR.borderFaint}`:"none",marginTop:rows.length>0?4:0}}>
-                  {summaryParts.map((p,i)=>(
-                    <span key={i} style={{fontWeight:500}}>
-                      {p.onClick?(
-                        <button onClick={p.onClick} style={{font:"inherit",fontWeight:500,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",padding:0}}>{p.label}</button>
-                      ):p.label}
-                      {i<summaryParts.length-1&&<span style={{color:COLOR.inkQuiet}}> · </span>}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* ── Active Cases (Phase 2A) ── single-column composition, not a
-            two-column dashboard grid: Needs Attention above, Active Cases
-            here at full width so it's unmistakably the dominant working
-            surface, secondary content (Today / Compass intelligence)
-            stacked quietly below it — never beside it competing for the
-            same horizontal attention. */}
-        <div style={{display:"flex",flexDirection:"column",gap:SPACE.lg}}>
-
-            {/* Home Composition Review, item 1 + 5 — a genuinely quiet
-                account (no active cases at all, not "this search/filter
-                happens to match nothing") gets a compact, intentional
-                prompt sized to its own content, not the populated list's
-                bordered box forced empty. Filters/search are real
-                controls over a real list — with no active cases there is
-                nothing to filter, so they don't render at all here
-                (still fully reachable the moment a case exists, and
-                always reachable via Cases in the nav regardless).
-                filtered-to-empty-by-search stays exactly as it was, one
-                line inside the same bordered list below, since that IS a
-                meaningful state (real cases exist, this view just
-                doesn't match any). */}
-            {isQuietHome ? (
-              <div style={{padding:"18px 0 6px"}}>
-                <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Your work</div>
-                <div style={{fontSize:15,fontWeight:600,color:COLOR.ink,marginBottom:4}}>No active cases yet.</div>
-                <div style={{...TYPE.body,color:COLOR.inkSoft,marginBottom:SPACE.md,maxWidth:420,lineHeight:1.5}}>Create your first case to start managing the process in Compass.</div>
-                <button onClick={()=>setShowCasePrompt(true)} style={{...BUTTON.primary,fontSize:13,padding:"9px 20px"}}>+ New case</button>
-              </div>
-            ) : (
-            <>
-            {/* Cases header */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-              <div style={{...TYPE.pageTitle,color:COLOR.ink}}>Active cases</div>
-              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                <div style={{position:"relative"}}>
-                  <svg style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:COLOR.inkFaint,pointerEvents:"none"}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <input aria-label="Search cases" value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Search cases…" style={{paddingLeft:28,paddingRight:10,paddingTop:7,paddingBottom:7,fontSize:12,border:`1px solid ${COLOR.border}`,borderRadius:7,background:COLOR.surface,color:COLOR.ink,fontFamily:FONT.sans,outline:"none",width:160}}/>
-                </div>
-                {["active","investigation","disciplinary","closed"].map(s=>(
-                  <button key={s} onClick={()=>setDashFilter(s)} style={{fontSize:11,padding:"5px 11px",borderRadius:20,border:"1px solid",borderColor:dashFilter===s?COLOR.purple:COLOR.border,background:dashFilter===s?COLOR.purpleTint:COLOR.surface,color:dashFilter===s?COLOR.purple:COLOR.inkSoft,cursor:"pointer",fontFamily:FONT.sans,fontWeight:dashFilter===s?600:400,whiteSpace:"nowrap"}}>
-                    {s.charAt(0).toUpperCase()+s.slice(1)}
-                  </button>
-                ))}
-                <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:12,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,whiteSpace:"nowrap"}}>View all →</button>
-              </div>
-            </div>
-
-            {/* Cases list */}
-            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-              {(()=>{
-                const filtered=cases.filter(cs=>{
-                  const stage=getCaseStage(cs);
-                  const matchStage=dashFilter==="active"?stage!=="closed":dashFilter==="closed"?stage==="closed":cs.stage===dashFilter||stage===dashFilter;
-                  const matchSearch=!dashSearch||cs.employeeName?.toLowerCase().includes(dashSearch.toLowerCase())||cs.caseType?.toLowerCase().includes(dashSearch.toLowerCase());
-                  return matchStage&&matchSearch;
-                });
-                if(filtered.length===0) return (
-                  <div style={{padding:"40px",textAlign:"center"}}>
-                    <div style={{fontSize:14,color:"#9B9098",marginBottom:8}}>{dashSearch?"No cases match your search.":"No active cases."}</div>
-                    {!dashSearch&&<button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>Create a case</button>}
-                  </div>
-                );
-                const statusMap={
-                  open:{label:"Open",color:"#6B6375",bg:"#F5F1EA"},
-                  investigation:{label:"In progress",color:"#E8622A",bg:"#FFF0EB"},
-                  inv_report:{label:"Awaiting action",color:"#7C5CFC",bg:"#EDE8FF"},
-                  disciplinary:{label:"Disciplinary",color:"#C84B2F",bg:"#FFF0ED"},
-                  closed:{label:"Closed",color:"#1A7A4A",bg:"#E8F5EE"},
-                };
-                // Home is a daily-glance dashboard, not the full case list —
-                // every other section here caps itself (top 3 actions, top 5
-                // quick links, 4 stat cards); this one used to render every
-                // matching case with no limit, which is what made the page
-                // balloon to 20+ screens tall for orgs with many cases. The
-                // full, unlimited list already lives one click away via
-                // "View all" (both above the list and here at the bottom).
-                const CASE_PREVIEW_LIMIT = 6;
-                const visible = filtered.slice(0, CASE_PREVIEW_LIMIT);
-                return (
-                  <>
-                    {visible.map((cs,i)=>{
-                      const next=getNextStep(cs);
-                      const stage=getCaseStage(cs);
-                      const st=statusMap[cs.stage||stage]||statusMap.open;
-                      const lastUpdated=cs.updatedAt||cs.createdAt;
-                      const daysAgo=lastUpdated?daysBetween(lastUpdated, Date.now()):null;
-                      return (
-                        <button key={cs.id} type="button"
-                          onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                          style={{width:"100%",display:"flex",alignItems:"center",padding:"13px 18px",border:"none",background:"none",cursor:"pointer",transition:"background 0.1s",textAlign:"left",font:"inherit",color:"inherit",borderBottom:i<visible.length-1||filtered.length>CASE_PREVIEW_LIMIT?"1px solid #F5F1EA":"none"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="#FDFAF5"}
-                          onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                          <div style={{width:36,height:36,borderRadius:"50%",background:"#EDE8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#7C5CFC",flexShrink:0,marginRight:14}}>
-                            {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
-                          </div>
-                          {/* Phase 7.5B (P0 polish) — this is the only
-                              flexible column in the row; every sibling
-                              (avatar, badge, timestamp, chevron) is
-                              flexShrink:0, so a long employee name/case
-                              type is the only thing that ever truncates,
-                              via a real ellipsis rather than an
-                              unprotected sibling getting compressed
-                              until its own content visually overlaps the
-                              next column — the confirmed bug this fixes.
-                              title= preserves the untruncated name on
-                              hover; nothing here changes what identity
-                              info is available, only how it wraps. */}
-                          <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
-                            <div title={cs.employeeName} style={{fontSize:13,fontWeight:600,color:"#1C1820",marginBottom:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cs.employeeName}</div>
-                            <div title={(cs.caseType||"HR Matter")+(next?" · "+next.label:"")} style={{fontSize:12,color:"#9B9098",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cs.caseType||"HR Matter"}{next?" · "+next.label:""}</div>
-                          </div>
-                          <div style={{marginRight:16,flexShrink:0}}>
-                            <span style={{fontSize:11,fontWeight:600,color:st.color,background:st.bg,borderRadius:20,padding:"3px 10px",whiteSpace:"nowrap"}}>{st.label}</span>
-                          </div>
-                          <div style={{textAlign:"right",flexShrink:0,minWidth:80}}>
-                            <div style={{fontSize:11,color:"#9B9098",marginBottom:1}}>Last updated</div>
-                            <div style={{fontSize:11,color:"#1C1820",fontWeight:500}}>{daysAgo===null?"—":daysAgo===0?"Today":daysAgo===1?"Yesterday":fmtDate(lastUpdated)}</div>
-                          </div>
-                          <div style={{marginLeft:12,color:"#C4BAB0",fontSize:16,flexShrink:0}}>›</div>
-                        </button>
-                      );
-                    })}
-                    {filtered.length>CASE_PREVIEW_LIMIT&&(
-                      <button onClick={()=>setScreen(SCREENS.CASES)} style={{width:"100%",padding:"12px 18px",border:"none",background:"none",cursor:"pointer",textAlign:"center",fontSize:12,color:"#7C5CFC",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>
-                        View all {filtered.length} cases →
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-            </>
-            )}
-
-            {/* Today (Phase 2A) — quieter, ambient, no card.
-                Home Composition Review, item 4 — an empty Today used to
-                spend the same two-row shape (heading row, then a second
-                row just for "No meetings logged today.") as the populated
-                case: real content earns a second row, an empty one
-                collapses onto the heading's own row instead, so it costs
-                no more vertical space than the label itself. Populated
-                still expands naturally exactly as before. */}
-            {(()=>{
-              const today=new Date();
-              const caseMeetings=cases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,employeeName:cs.employeeName,caseId:cs.id})));
-              const todayMeetings=caseMeetings.filter(m=>{
-                if(!m.date)return false;
-                const parts=m.date.split("/");
-                if(parts.length===3){const md=new Date(parts[2],parts[1]-1,parts[0]);return md.toDateString()===today.toDateString();}
-                return false;
-              });
-              const hasToday=todayMeetings.length>0;
-              return (
-                <div style={{marginTop:SPACE.xl}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:hasToday?SPACE.sm:0}}>
-                    <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
-                      <span style={{...TYPE.sectionHeading,color:COLOR.inkFaint,flexShrink:0}}>Today</span>
-                      {!hasToday&&<span style={{fontSize:12.5,color:COLOR.inkFaint}}>No meetings today.</span>}
-                    </div>
-                    <button onClick={()=>setScreen(SCREENS.CALENDAR)} style={{fontSize:12,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,flexShrink:0}}>Calendar →</button>
-                  </div>
-                  {hasToday&&(
-                    <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                      {todayMeetings.map((m,i)=>(
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",fontSize:12.5}}>
-                          <div style={{width:6,height:6,borderRadius:"50%",background:COLOR.purple,flexShrink:0}}/>
-                          <span style={{fontWeight:600,color:COLOR.ink}}>{m.employeeName}</span>
-                          <span style={{color:COLOR.inkFaint}}>· {m.type||"Meeting"}</span>
+                <div>
+                  {visibleFeed.map((item,i)=>(
+                    <div key={item.id} className="home-v2-feed-row" style={{display:"flex",alignItems:"stretch",gap:10,padding:"9px 6px 9px 10px",borderBottom:(i<visibleFeed.length-1||hiddenCount>0)?`1px solid ${COLOR.borderFaint}`:"none",borderRadius:RADIUS.surface}}>
+                      <div style={{width:2,flexShrink:0,borderRadius:2,background:ROW_ACCENT(item)}}/>
+                      <div style={{flex:1,minWidth:0,maxWidth:640}}>
+                        <div style={{...TYPE.micro,color:item.urgent?COLOR.red:COLOR.inkFaint,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:3}}>
+                          {TYPE_LABEL[item.type]||item.type}{item.risk==="HIGH"&&<span> · High risk</span>}
                         </div>
-                      ))}
+                        <button onClick={()=>goToFeedItem(item)} style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
+                          <div style={{fontSize:13.5,fontWeight:600,color:COLOR.ink,lineHeight:1.35}}>{item.title}</div>
+                          {(item.subject||item.timing)&&(
+                            <div style={{fontSize:11.5,color:COLOR.inkFaint,marginTop:1}}>{item.subject}{item.subject&&item.timing?" · ":""}{item.timing}</div>
+                          )}
+                        </button>
+                        {item.cta&&(
+                          <button onClick={()=>goToFeedItem(item)} style={{marginTop:6,fontSize:11.5,fontWeight:600,color:COLOR.purple,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>{item.cta}</button>
+                        )}
+                      </div>
                     </div>
+                  ))}
+                  {hiddenCount>0&&(
+                    <button onClick={()=>setShowAllFeed(true)} style={{width:"100%",textAlign:"center",padding:"10px 0",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:COLOR.purple,fontFamily:FONT.sans}}>View all ({feed.length}) →</button>
                   )}
                 </div>
-              );
-            })()}
+                );
+              })()}
+            </div>
 
-            {/* Compass intelligence (Phase 2A, Calm Intelligence) — the
-                single largest visual change on Home. Was a bordered card
-                sharing a whole right column with the case list, visually
-                co-equal with the user's own workload; now a quiet, ambient
-                aside stacked below it — a small dot and one line per
-                item, no box, no header treatment competing with "Active
-                cases" above. Content, ranking, and AI logic are completely
-                unchanged (topOpenSignalsOrgWide / computeStageBottlenecks,
-                same as Phase 7.5C) — this is presentation only. */}
-            {(()=>{
-              const recommendations=topOpenSignalsOrgWide(caseSignals,["next_action","process_risk"],5);
-              const bottlenecks=computeStageBottlenecks(cases, processTemplates);
-              if(recommendations.length===0&&bottlenecks.length===0) return null;
-              return (
-                <div style={{marginTop:SPACE.xl,paddingTop:SPACE.lg,borderTop:`1px solid ${COLOR.border}`}}>
-                  <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Compass intelligence</div>
-                  {recommendations.map((sig)=>{
-                    const cs=cases.find(c=>c.id===sig.caseId);
-                    const meta=signalTypeMeta(sig.type);
-                    return (
-                      <button key={sig.id} onClick={()=>{if(!cs) return; setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"5px 0",border:"none",background:"none",cursor:cs?"pointer":"default",textAlign:"left",fontFamily:FONT.sans,fontSize:12.5}}>
-                        <div style={{width:6,height:6,borderRadius:"50%",background:meta.color,flexShrink:0}}/>
-                        <span style={{color:COLOR.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sig.title}</span>
-                        <span style={{color:COLOR.inkFaint,flexShrink:0}}>· {cs?.employeeName||"Unknown case"}</span>
-                      </button>
-                    );
-                  })}
-                  {bottlenecks.slice(0,3).map((b,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",fontSize:12.5}}>
-                      <div style={{width:6,height:6,borderRadius:"50%",background:COLOR.amber,flexShrink:0}}/>
-                      <span style={{color:COLOR.ink}}>{b.processType} · {b.stage} running long</span>
-                      <span style={{color:COLOR.inkFaint}}>· avg {b.avgDays}d (target {b.targetDays}d)</span>
-                    </div>
-                  ))}
+            {/* §4 secondary rail — Today, redesigned as a compact agenda:
+                state → event/action → person, for each of today's real
+                meetings and deadlines. No fabricated times — meeting
+                records don't carry a time-of-day field, only a date, so
+                this deliberately doesn't invent one; a real time field
+                would slot into the leading badge without restructuring
+                anything else. Omitted entirely (no empty card) when
+                there's genuinely nothing today or this week (§9). */}
+            {hasToday&&(
+              <div className="home-v2-today">
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:SPACE.sm}}>
+                  <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Today</div>
+                  <button onClick={()=>setScreen(SCREENS.CALENDAR)} style={{fontSize:11,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>Calendar →</button>
                 </div>
-              );
-            })()}
+                {(todayMeetings.length>0||todayDeadlines.length>0)&&(
+                  <div style={{display:"flex",flexDirection:"column"}}>
+                    {todayMeetings.map((m,i)=>(
+                      <div key={"m"+i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:(i<todayMeetings.length-1||todayDeadlines.length>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
+                        <span style={{...TYPE.micro,color:COLOR.purple,fontWeight:700,textTransform:"uppercase",flexShrink:0,marginTop:1}}>Meeting</span>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{m.type||"Meeting"}</div>
+                          <div style={{fontSize:11.5,color:COLOR.inkFaint}}>{m.employeeName}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {todayDeadlines.map((d,i)=>(
+                      <div key={"d"+i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:i<todayDeadlines.length-1?`1px solid ${COLOR.borderFaint}`:"none"}}>
+                        <span style={{...TYPE.micro,color:COLOR.amber,fontWeight:700,textTransform:"uppercase",flexShrink:0,marginTop:1}}>Due</span>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{humanizeDeadlineTitle(d)}</div>
+                          <div style={{fontSize:11.5,color:COLOR.inkFaint}}>{d.employeeName}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {hasWeekSummary&&(
+                  <div style={{marginTop:(todayMeetings.length>0||todayDeadlines.length>0)?SPACE.sm:0,paddingTop:(todayMeetings.length>0||todayDeadlines.length>0)?SPACE.sm:0,borderTop:(todayMeetings.length>0||todayDeadlines.length>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
+                    <div style={{...TYPE.micro,color:COLOR.inkFaint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>This week</div>
+                    <div style={{fontSize:12,color:COLOR.inkSoft}}>
+                      {weekDeadlines>0&&`${weekDeadlines} deadline${weekDeadlines!==1?"s":""}`}
+                      {weekDeadlines>0&&weekMeetings>0&&" · "}
+                      {weekMeetings>0&&`${weekMeetings} meeting${weekMeetings!==1?"s":""}`}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-        </div>
-        </div>
+            {/* Home + Sidebar Product Experience pass, Part 7 — "Continue
+                working" (was "Recently active"): compact, subordinate to
+                For You, never the full Cases table/filters (Cases owns
+                that). Same data/logic, renamed to read as a return-to
+                point ("what was I working on?") rather than an activity
+                log. */}
+            <div className="home-v2-recent">
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:SPACE.sm}}>
+                <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Continue working</div>
+                <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:11,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View all cases →</button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column"}}>
+                {recentCases.map((cs,i)=>{
+                  const next=getNextStep(cs);
+                  const lastUpdated=cs.updatedAt||cs.createdAt;
+                  return (
+                    <button key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
+                      style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:"none",border:"none",padding:"10px 4px",cursor:"pointer",fontFamily:FONT.sans,borderBottom:i<recentCases.length-1?`1px solid ${COLOR.borderFaint}`:"none"}}>
+                      <div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:COLOR.purpleDeep,flexShrink:0}}>
+                        {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:COLOR.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cs.employeeName}</div>
+                        <div style={{fontSize:11.5,color:COLOR.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cs.caseType||"HR Matter"}{next?" · "+next.label:""}</div>
+                      </div>
+                      <div style={{fontSize:11,color:COLOR.inkQuiet,flexShrink:0}}>{lastUpdated?fmtDate(lastUpdated):""}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Home + Sidebar Product Experience pass, Parts 8/9 —
+                secondary rail. "Your work" now shows a real breakdown
+                (overdue / awaiting approval / due this week) instead of
+                a bare open-case count, and is omitted entirely when none
+                of the three apply. "Compass noticed" now surfaces each
+                signal's own reasoning (already AI-written at creation,
+                previously discarded here) alongside a specific action,
+                not just a title + employee name. */}
+            <div className="home-v2-secondary">
+              {hasWorkBreakdown&&(
+                <div>
+                  <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Your work</div>
+                  <div style={{fontSize:12.5,color:COLOR.inkSoft,lineHeight:1.8}}>
+                    {overdueCount>0&&<>{overdueCount} overdue</>}
+                    {overdueCount>0&&(awaitingApprovalCount>0||weekDeadlines>0)&&" · "}
+                    {awaitingApprovalCount>0&&<>{awaitingApprovalCount} awaiting approval</>}
+                    {awaitingApprovalCount>0&&weekDeadlines>0&&" · "}
+                    {weekDeadlines>0&&<>{weekDeadlines} due this week</>}
+                  </div>
+                </div>
+              )}
+              {hasCompassNoticed&&(
+                <div>
+                  <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Compass noticed</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {recommendations.map((sig)=>{
+                      const cs=cases.find(c=>c.id===sig.caseId);
+                      const meta=signalTypeMeta(sig.type);
+                      const ctaLabel = sig.type==="process_risk" ? "Review guardrail →" : "Review case →";
+                      return (
+                        <CompassNoticedItem key={sig.id} sig={sig} cs={cs} meta={meta} ctaLabel={ctaLabel}
+                          onOpenCase={()=>{setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}}/>
+                      );
+                    })}
+                    {bottlenecks.slice(0,2).map((b,i)=>(
+                      <div key={i} style={{fontSize:12.5,color:COLOR.ink}}>
+                        {b.processType} · {b.stage} running long
+                        <div style={{fontSize:11.5,color:COLOR.inkFaint,marginTop:1}}>avg {b.avgDays}d (target {b.targetDays}d)</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
       </div>
     </div>
   );

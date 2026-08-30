@@ -2,6 +2,7 @@ import { WELLBEING_RESOURCES, WELLBEING_TYPES } from '../constants';
 import { DateInput } from '../components/DateInput';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
+import { PageHeader } from '../components/design/PageHeader';
 
 export function WellbeingScreen({ wellbeingNotes, activeWellbeing, wellbeingView, setActiveWellbeing, setWellbeingView, toggleFollowUpDone, wellbeingForm, setWellbeingForm, addWellbeingNote }) {
   const typeColors = {"chat":"#7C5CFC","eap":"#4A7C6F","adjustment":"#4A6FA5","crisis":"#E8622A","return":"#D4882A","checkin":"#888"};
@@ -11,16 +12,12 @@ export function WellbeingScreen({ wellbeingNotes, activeWellbeing, wellbeingView
 
   return(
     <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 20px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-        <div>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#7C5CFC",margin:"0 0 4px",fontWeight:600}}>Mental health &amp; wellbeing</h2>
-          <p style={{fontSize:13,color:"#6B6880",margin:0}}>Confidential wellbeing case notes. Completely separate from disciplinary and performance records.</p>
-        </div>
-        <div style={{display:"flex",gap:8}}>
+      {/* Design System Convergence pass, Phase 2 — was a purple serif h2. */}
+      <PageHeader title="Mental health & wellbeing" subtitle="Confidential wellbeing case notes. Completely separate from disciplinary and performance records."
+        actions={<>
           {activeWellbeing&&<Btn variant="ghost" onClick={()=>{setActiveWellbeing(null);setWellbeingView("list");}}>← All employees</Btn>}
           <Btn onClick={()=>setWellbeingView(wellbeingView==="new"?"list":"new")}>{wellbeingView==="new"?"Cancel":"+ Add note"}</Btn>
-        </div>
-      </div>
+        </>}/>
 
       {/* Confidentiality notice */}
       <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>

@@ -1,3 +1,4 @@
+import { COLOR, SPACE, TYPE } from '../styles/tokens';
 import { SignalCard } from './SignalCard';
 import { PolicyCitation } from './PolicyCitation';
 
@@ -21,20 +22,21 @@ import { PolicyCitation } from './PolicyCitation';
 // "Proceed anyway" routes through requestPolicyDeviationReason instead of
 // the plain requestOverrideReason when a policyRef exists, capturing what
 // will actually happen (not just why) alongside the policy's own wording.
+// 10/10 pass, Part A — see UnansweredQuestionsPanel's own comment: no
+// longer its own card; composes as a "Case readiness" subsection with
+// queue rows instead of one card per signal.
 export function GuardrailsPanel({ cs, signals, changeSignalStatus, onAskWhy, createCaseTask, requestOverrideReason, requestPolicyDeviationReason }) {
   if (!signals.length) return null;
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden",marginBottom:16}}>
-      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Procedural guardrails</div>
-      </div>
-      <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:8}}>
-        {signals.map(signal=>{
+    <div>
+      <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Procedural guardrails</div>
+      <div style={{display:"flex",flexDirection:"column"}}>
+        {signals.map((signal,i)=>{
           const policyRef = signal.sourceRefs?.find(r=>r.kind==="policy");
           return (
             <div key={signal.id}>
-              <SignalCard signal={signal}
+              <SignalCard signal={signal} last={i===signals.length-1 && !policyRef}
                 onMarkResolved={()=>changeSignalStatus(signal.id, "resolved")}
                 onMarkNotRelevant={()=>changeSignalStatus(signal.id, "not_relevant")}
                 onAskWhy={()=>onAskWhy(signal)}
@@ -49,7 +51,7 @@ export function GuardrailsPanel({ cs, signals, changeSignalStatus, onAskWhy, cre
                 ]}
               />
               {policyRef&&(
-                <div style={{marginTop:8}}>
+                <div style={{marginBottom:10}}>
                   <PolicyCitation policyName={policyRef.label} clauseHeading={policyRef.clauseHeading} clauseText={policyRef.clauseText} />
                 </div>
               )}

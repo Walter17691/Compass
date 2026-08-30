@@ -16,6 +16,9 @@ test('a wellbeing follow-up date surfaces as a due-soon item with no create-task
   const followUpDate = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
 
   await login(page);
+  // Wellbeing lives inside the "HR Processes" sidebar group, which now
+  // starts collapsed (Home Composition Review, final refinement item 3).
+  await page.getByRole('button', { name: 'HR Processes' }).click();
   await page.getByRole('button', { name: 'Wellbeing', exact: true }).click();
   await expect(page.getByText('Mental health & wellbeing')).toBeVisible();
   await page.getByRole('button', { name: '+ Add note' }).click();

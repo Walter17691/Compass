@@ -51,7 +51,7 @@ export function ActivityBell({ auditLog, orgId }) {
 
   return (
     <div style={{position:"relative"}} ref={ref}>
-      <button ref={btnRef} onClick={toggle} aria-label={`Activity${unreadCount?` (${unreadCount} unread)`:""}`} style={{position:"relative",background:show?COLOR.purpleTint:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer",color:COLOR.inkSoft,fontFamily:FONT.sans}}>
+      <button ref={btnRef} onClick={toggle} aria-label={`Activity${unreadCount?` (${unreadCount} unread)`:""}`} title={`Activity${unreadCount?` (${unreadCount} unread)`:""}`} style={{position:"relative",background:show?COLOR.purpleTint:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer",color:COLOR.inkSoft,fontFamily:FONT.sans}}>
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{display:"block"}}>
           <path d="M8 1.5c-2.2 0-4 1.8-4 4v2.5c0 .6-.2 1.2-.6 1.7L2.5 11h11l-.9-1.3c-.4-.5-.6-1.1-.6-1.7V5.5c0-2.2-1.8-4-4-4z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
           <path d="M6.5 13.5a1.5 1.5 0 003 0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>

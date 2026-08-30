@@ -1,19 +1,17 @@
 import { Card, Btn } from '../components/Primitives';
 import { computeManagerPerformanceInsights } from '../lib/managerInsights';
 import { collectInterventionSignals } from '../lib/managerLearningLoop';
-import { COLOR, TYPE, FONT, RADIUS } from '../styles/tokens';
+import { COLOR, TYPE, RADIUS } from '../styles/tokens';
 
-// Phase 2C — plain ink accent, not the old fixed near-black hex: these
-// are org-wide aggregate counts, not a per-manager comparison, so
-// nothing here should read as "graded" (no red/green scoring, per the
-// Design Vision's explicit management-support-not-ranking principle).
-const StatTile = ({ label, value, detail }) => (
-  <Card style={{flex:"1 1 200px",minWidth:200,border:`1px solid ${COLOR.borderFaint}`}}>
-    <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:8}}>{label}</div>
-    <div style={{fontSize:26,fontWeight:600,color:COLOR.ink,fontFamily:FONT.serif}}>{value}</div>
-    {detail&&<div style={{fontSize:12,color:COLOR.inkFaint,marginTop:4}}>{detail}</div>}
-  </Card>
-);
+// Design System Convergence pass, Phase 4 — five equally-weighted KPI
+// cards, none more important-looking than the others, before any
+// interpretation. Organisational Intelligence's own pattern (headline
+// sentence -> compact metrics -> evidence) applies here too: same five
+// figures, same computeManagerPerformanceInsights values, now one
+// synthesised lead sentence plus a compact inline row instead of a
+// five-card wall — no single number promoted to "the" headline tile,
+// since none of the five is obviously more important than the others
+// the way Organisational Intelligence's Open Cases count was.
 
 const fmtGeneratedAt = (iso) => {
   const d = new Date(iso);
@@ -48,33 +46,24 @@ export function ManagerInsightsScreen({ cases, caseAccess, hrReviewRequests, aud
       {insights.delegatedCaseCount===0 ? (
         <Card style={{textAlign:"center",padding:"32px 20px",color:COLOR.inkFaint,fontSize:13,border:`1px solid ${COLOR.borderFaint}`}}>No investigations have been delegated yet — insights will appear here once managers start taking on investigations.</Card>
       ) : (
-        <div style={{display:"flex",flexWrap:"wrap",gap:16}}>
-          <StatTile
-            label="Avg. investigation completion time"
-            value={insights.avgInvestigationCompletionDays!==null?insights.avgInvestigationCompletionDays+" days":"Not enough data"}
-            detail={insights.investigationCompletionSampleSize>0?"Based on "+insights.investigationCompletionSampleSize+" completed investigation"+(insights.investigationCompletionSampleSize===1?"":"s"):"Assignment to submission, across all investigators"}
-          />
-          <StatTile
-            label="Investigations returned for rework"
-            value={insights.investigationsReturnedForRework}
-            detail="Sent back by HR for further investigation"
-          />
-          <StatTile
-            label="Overdue manager actions"
-            value={insights.overdueManagerActions}
-            detail="Overdue deadlines on delegated investigations"
-          />
-          <StatTile
-            label="Meeting quality gaps"
-            value={insights.meetingQualityGapsCount}
-            detail="Meetings ended despite unresolved quality check gaps"
-          />
-          <StatTile
-            label="Process deviations"
-            value={insights.processDeviationsCount}
-            detail="Recorded departures from policy, org-wide"
-          />
-        </div>
+        <>
+          <div style={{fontSize:14,color:COLOR.ink,lineHeight:1.6,marginBottom:12}}>
+            {[
+              `${insights.delegatedCaseCount} delegated investigation${insights.delegatedCaseCount===1?"":"s"}`,
+              insights.avgInvestigationCompletionDays!==null && `averaging ${insights.avgInvestigationCompletionDays} days to complete`,
+              insights.investigationsReturnedForRework>0 && `${insights.investigationsReturnedForRework} returned for rework`,
+              insights.overdueManagerActions>0 && `${insights.overdueManagerActions} overdue action${insights.overdueManagerActions===1?"":"s"}`,
+            ].filter(Boolean).join(" · ")}.
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",columnGap:24,rowGap:8,fontSize:12.5}}>
+            <span><span style={{color:COLOR.inkFaint}}>Avg. investigation completion </span><span style={{color:COLOR.ink,fontWeight:600}}>{insights.avgInvestigationCompletionDays!==null?insights.avgInvestigationCompletionDays+"d":"Not enough data"}</span></span>
+            <span><span style={{color:COLOR.inkFaint}}>Returned for rework </span><span style={{color:COLOR.ink,fontWeight:600}}>{insights.investigationsReturnedForRework}</span></span>
+            <span><span style={{color:COLOR.inkFaint}}>Overdue manager actions </span><span style={{color:COLOR.ink,fontWeight:600}}>{insights.overdueManagerActions}</span></span>
+            <span><span style={{color:COLOR.inkFaint}}>Meeting quality gaps </span><span style={{color:COLOR.ink,fontWeight:600}}>{insights.meetingQualityGapsCount}</span></span>
+            <span><span style={{color:COLOR.inkFaint}}>Process deviations </span><span style={{color:COLOR.ink,fontWeight:600}}>{insights.processDeviationsCount}</span></span>
+          </div>
+          <div style={{fontSize:11,color:COLOR.inkFaint,marginTop:8}}>{insights.investigationCompletionSampleSize>0?"Completion average based on "+insights.investigationCompletionSampleSize+" completed investigation"+(insights.investigationCompletionSampleSize===1?"":"s")+".":"Completion average: assignment to submission, across all investigators."} Returned/overdue/quality/deviation figures are organisation-wide, not attributed to any individual manager.</div>
+        </>
       )}
 
       <div style={{marginTop:36,paddingTop:28,borderTop:`1px solid ${COLOR.borderFaint}`}}>

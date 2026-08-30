@@ -391,7 +391,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [casesSearch, setCasesSearch] = useState("");
   const [casesFilter, setCasesFilter] = useState("active");
   const [casesView, setCasesView] = useState("list");
-  const [dashSearch, setDashSearch] = useState("");
   const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
   const [employeeRecords, setEmployeeRecords] = useState(orgLs("compass_employees", []));
   const saveEmployeeRecords = u => { setEmployeeRecords(u); orgLsSet("compass_employees", u); };
@@ -423,13 +422,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editLocation, setEditLocation] = useState("");
-  // Default must be one of the actual filter chips ("active", "investigation",
-  // "disciplinary", "closed") — there's no "all" chip, and the matching logic
-  // in HomeScreen has no case for it either, so "all" silently matched zero
-  // cases and the dashboard's case list showed nothing until a user manually
-  // clicked a filter, on every single fresh page load.
-  const [dashFilter, setDashFilter] = useState("active");
-
   const loadEmployeeRecords = async () => {
     if(!org?.id) return;
     try {
@@ -4409,8 +4401,14 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const [globalChatCaseRef, setGlobalChatCaseRef] = useState(null);
   const [globalChatInsightsTab, setGlobalChatInsightsTab] = useState(null);
 
-  const sendGlobalChat = async () => {
-    const question = globalChatInput.trim();
+  // IA & User Journey pass, §8 — overrideQuestion lets Home's own prompt
+  // box (a second, separate input from GlobalAssistantScreen's own) submit
+  // a question in one step rather than needing setGlobalChatInput's state
+  // update to land in a render before this closure would see it. No
+  // change to the classification/AI-reasoning logic below — only where
+  // the initial question string can come from.
+  const sendGlobalChat = async (overrideQuestion) => {
+    const question = (overrideQuestion ?? globalChatInput).trim();
     if(!question || globalChatProcessing) return;
     setGlobalChatInput("");
     const updated = [...globalChatHistory, {role:"user", content:question}];
@@ -5217,6 +5215,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // path; nothing is submitted until HR reviews the pre-filled form and
   // clicks Submit themselves.
   const [concernFormAutoOpen, setConcernFormAutoOpen] = useState(false);
+  // IA & User Journey pass, §7 — same shape as concernFormAutoOpen above,
+  // for the universal Create menu's "New task" action to open TasksScreen
+  // with its existing form already expanded.
+  const [taskFormAutoOpen, setTaskFormAutoOpen] = useState(false);
   const createConcernFromEmail = () => {
     if(!emailExtraction) return;
     setConcernForm({...EMPTY_CONCERN_FORM, employeeName: emailExtraction.employeeName||"", description: buildConcernDescriptionFromEmail(emailExtraction)});
@@ -7403,8 +7405,16 @@ Please produce:
   };
 
 
+  // IA & User Journey pass, §21 responsive check — this root wrapper never
+  // switched to a stacked layout on mobile: AppSidebar's own isMobile
+  // branch renders a <header> meant to sit ABOVE page content, but this
+  // parent stayed flexDirection:"row" (the unconditional default)
+  // regardless, so the header and the content column sat side by side,
+  // squeezing content into a sliver a few dozen pixels wide. Pre-existing
+  // gap, not introduced by the IA restructuring — found while verifying
+  // mobile support per the brief's own responsive-check requirement.
   return (
-    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",color:"#1A1535",display:"flex"}}>
+    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",color:"#1A1535",display:"flex",flexDirection:isMobile?"column":"row"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:DM Sans,system-ui,sans-serif;color:#1A1535;}
@@ -7964,9 +7974,36 @@ Please produce:
         loadBannerDismissed={loadBannerDismissed}
         onRetryLoad={loadOrgData}
         onDismissLoadBanner={()=>setLoadBannerDismissed(true)}
+        dueSoon={dueSoon}
         askCompassProps={{
           showAskCompass, setShowAskCompass, askCompassHistory, setAskCompassHistory,
           askCompass, askCompassProcessing, setAskCompassProcessing, askCompassInput, setAskCompassInput,
+        }}
+        createMenuProps={{
+          // IA & User Journey pass, §7 — universal Create pattern. Every
+          // handler below is the exact existing one its old per-screen
+          // button already called (see HomeScreen.jsx's "Start meeting",
+          // ConcernsScreen's autoOpenForm flow, CaseViewScreen.jsx:219's
+          // own "start a meeting for this case's subject" derivation) —
+          // this menu is a new front door, not new business logic.
+          onNewCase: () => setShowCasePrompt(true),
+          onNewMeeting: () => {
+            setMeetingSetup({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+            setScreen(SCREENS.HOME+"_meeting");
+          },
+          onRaiseConcern: () => { setConcernFormAutoOpen(true); setScreen(SCREENS.CONCERNS); },
+          onNewTask: () => { setTaskFormAutoOpen(true); setScreen(SCREENS.TASKS); },
+          onAddEmail: () => setScreen(SCREENS.SAVE_EMAIL),
+          isInCase: screen===SCREENS.CASE_VIEW && !!activeCaseId,
+          activeCaseName: activeCaseId ? cases.find(c=>c.id===activeCaseId)?.employeeName : null,
+          onAddEvidence: () => setCaseViewInitialTab("evidence"),
+          onAddCaseTask: () => setCaseViewInitialTab("tasks"),
+          onStartCaseMeeting: () => {
+            const cs = cases.find(c=>c.id===activeCaseId);
+            if(!cs) return;
+            setMeetingSetup({employee:cs.employeeName, employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"", manager:cs.manager||"", chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+            setScreen(SCREENS.HOME+"_meeting");
+          },
         }}
       />
 
@@ -7976,27 +8013,17 @@ Please produce:
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
 
       {/* ── Deadline banner ──
-          Phase 2A (Compass Design Vision) — also excluded from
-          CASE_VIEW, matching the existing HOME exclusion pattern. An
-          org-wide "other cases are overdue" banner sitting above a
-          specific case's own identity was the design review's most
-          visible finding: the first thing an HR professional saw when
-          opening THIS case was three unrelated deadlines from other
-          cases. The banner itself, and every other screen that still
-          shows it (Cases, Settings, Insights — none of those are in
-          scope this phase), are completely unchanged; only case_view's
-          render condition changed. */}
-      {dueSoon.some(d=>d.overdue)&&screen!==SCREENS.HOME&&screen!==SCREENS.CASE_VIEW&&(
-        <div style={{background:"#FEF0EB",borderBottom:"1px solid #E8622A33",padding:"8px 20px"}}>
-          <div style={{maxWidth:1440,margin:"0 auto",display:"flex",alignItems:"center",gap:12,fontSize:12}}>
-            <span style={{color:"#C84B2F",fontWeight:600}}>Overdue actions:</span>
-            {dueSoon.filter(d=>d.overdue).slice(0,3).map((d,i)=>(
-              <span key={i} style={{color:"#3D3560"}}>{d.employeeName} — {d.label} <span style={{color:"#C84B2F"}}>({d.daysOverdue}d overdue)</span></span>
-            ))}
-            <button onClick={()=>setScreen(SCREENS.DASHBOARD)} style={{background:"none",border:"none",color:"#C84B2F",fontSize:11,cursor:"pointer",marginLeft:"auto",textDecoration:"underline"}}>View all</button>
-          </div>
-        </div>
-      )}
+          Design System Convergence pass — the persistent full-width
+          banner (every screen except Home/Case View, permanent vertical
+          space, duplicating Home's own Needs Attention) is gone. Same
+          underlying dueSoon/overdue data is now surfaced through
+          AppSidebar's own OverdueIndicator — the same quiet,
+          click-to-expand icon pattern already established for the
+          portal-load-issue indicator and Ask Compass, living in
+          persistent nav chrome rather than pushing page content down on
+          every screen. Nothing about which items count as overdue, or
+          where "View all" leads (Home), changed — only where and how
+          large this renders. */}
 
       {/* ══ HOME ══ */}
       {screen===SCREENS.HOME&&(
@@ -8005,14 +8032,9 @@ Please produce:
           getCaseStage={getCaseStage}
           currentUser={currentUser}
           getNextStep={getNextStep}
-          setMeetingSetup={setMeetingSetup}
           setScreen={setScreen}
           setShowCasePrompt={setShowCasePrompt}
           dueSoon={dueSoon}
-          dashSearch={dashSearch}
-          setDashSearch={setDashSearch}
-          dashFilter={dashFilter}
-          setDashFilter={setDashFilter}
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           fmtDate={fmtDate}
@@ -8026,6 +8048,7 @@ Please produce:
           isHR={isHR}
           hrReviewRequests={hrReviewRequests}
           processTemplates={processTemplates}
+          onAskCompass={(q)=>{setGlobalChatInput(q);sendGlobalChat(q);setScreen(SCREENS.ASK_COMPASS);}}
         />
       )}
 
@@ -8226,7 +8249,7 @@ Please produce:
 
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
-        <CasesScreen cases={cases} casesLoading={casesLoading} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} audit={audit} />
+        <CasesScreen cases={cases} casesLoading={casesLoading} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} audit={audit} currentUserId={user?.id} />
       )}
 
       {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}
@@ -8470,6 +8493,8 @@ Please produce:
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
           fmtDate={fmtDate}
+          autoOpenForm={taskFormAutoOpen}
+          clearAutoOpenForm={()=>setTaskFormAutoOpen(false)}
         />
       )}
       {screen===SCREENS.CALENDAR&&(

@@ -4,6 +4,7 @@ import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod } 
 import { CASE_TYPE_TO_POLICY_CATEGORY } from '../lib/hearingPack';
 import { getProcessType } from '../lib/processStages';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { PageHeader } from '../components/design/PageHeader';
 
 // Process Intelligence (P16, §5) — the same computeDueSoon output the
 // overdue banner/Settings list/digest cron already read (lib/deadlines.js),
@@ -170,17 +171,18 @@ export function CalendarScreen({ dueSoon = [], setScreen, screens, setActiveCase
 
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
-      <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8E0D0",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-        <div>
-          <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",margin:0,fontWeight:400}}>Calendar</h2>
-          <p style={{fontSize:13,color:"#9B9098",margin:"2px 0 0"}}>Deadlines and reminders due within the next 14 days — months further out will show nothing yet.</p>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>setMonthOffset(m=>m-1)} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>←</button>
-          <div style={{fontSize:14,fontWeight:600,color:"#1A1535",minWidth:140,textAlign:"center"}}>{viewMonth.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</div>
-          <button onClick={()=>setMonthOffset(m=>m+1)} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>→</button>
-          {onScheduleMeeting&&<button onClick={()=>setShowScheduleModal(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Schedule meeting</button>}
-        </div>
+      {/* Design System Convergence pass, Phase 2 — standard PageHeader
+          (title/subtitle/actions), matching Cases/People/Tasks; the
+          month-nav + Schedule meeting controls move into the actions
+          slot unchanged. */}
+      <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8E0D0",padding:"16px 32px"}}>
+        <PageHeader title="Calendar" subtitle="Deadlines and reminders due within the next 14 days — months further out will show nothing yet."
+          actions={<>
+            <button onClick={()=>setMonthOffset(m=>m-1)} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>←</button>
+            <div style={{fontSize:14,fontWeight:600,color:"#1A1535",minWidth:140,textAlign:"center"}}>{viewMonth.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</div>
+            <button onClick={()=>setMonthOffset(m=>m+1)} style={{fontSize:13,background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>→</button>
+            {onScheduleMeeting&&<button onClick={()=>setShowScheduleModal(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Schedule meeting</button>}
+          </>}/>
       </div>
 
       {showScheduleModal&&(

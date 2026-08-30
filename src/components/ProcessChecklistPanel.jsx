@@ -19,8 +19,7 @@ export function ProcessChecklistPanel({ template }) {
   if (!hasDocs && !hasMeetings && !hasRoles && !policyLabel && !template.target_days) return null;
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px",marginBottom:16}}>
-      <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Process checklist</div>
+    <div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {hasDocs&&(
           <div>
