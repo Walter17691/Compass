@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LetterScreen } from '../screens/LetterScreen.jsx';
+import { isLetterApproved, createLetterApproval } from '../lib/letterApproval.js';
 
 const baseProps = {
   handleLetter: () => {}, activeLetter: 'witness-invitation', aiProcessing: false,
@@ -90,6 +92,61 @@ describe('LetterScreen — Send for acknowledgement (Phase 5, IP27)', () => {
     render(<LetterScreen {...baseProps} letterIsApproved letterApproval={letterApproval} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
     expect(screen.getByRole('button', { name: 'Send from Compass' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeInTheDocument();
+  });
+});
+
+// Human UAT remediation, Batch 1, Issue 5 — UAT reported that clicking
+// "Approve for sending" appeared to do nothing, and the flow seemed to
+// ask for confirmation twice. Reproduced here with the REAL
+// letterApproval.js functions wired exactly as App.jsx wires them
+// (letterIsApproved derived fresh each render from letterOutput+
+// letterApproval, approveLetter calling the real createLetterApproval),
+// not mocked — a mock approveLetter would hide exactly the kind of bug
+// this is checking for. Root cause found: none in this wiring itself —
+// clicking Approve DOES immediately flip the banner and unlock
+// send/download. The reported "asks for confirmation again" was the
+// still-clickable "Re-confirm approval" button label that replaces
+// "Approve for sending" once approved (existing, deliberate design: any
+// further edit/regenerate silently invalidates approval by changing the
+// snapshot, so the button must stay clickable) — worded so it reads as
+// if the first click hadn't registered. Copy fixed below to make clear
+// approval already succeeded.
+describe('LetterScreen — approval flow actually updates the UI (Human UAT remediation, Batch 1, Issue 5)', () => {
+  function ApprovalHarness(props) {
+    const [letterApproval, setLetterApproval] = useState(null);
+    const letterIsApproved = isLetterApproved(props.letterOutput, letterApproval);
+    const approveLetter = () => setLetterApproval(createLetterApproval(props.letterOutput, { by: 'Jo', type: props.activeLetter }));
+    return <LetterScreen {...props} letterApproval={letterApproval} letterIsApproved={letterIsApproved} approveLetter={approveLetter} />;
+  }
+
+  it('flips the banner and unlocks Download/Send the moment Approve is clicked — no second click needed', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ApprovalHarness {...baseProps} />);
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+    expect(screen.getByText(/drafted by AI\. Review it above/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Approve for sending' }));
+
+    expect(container.textContent).toMatch(/Approved for sending by\s*Jo/);
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+  });
+
+  it('labels the post-approval button so it reads as already-done, not as a pending second confirmation', async () => {
+    const user = userEvent.setup();
+    render(<ApprovalHarness {...baseProps} />);
+    await user.click(screen.getByRole('button', { name: 'Approve for sending' }));
+    expect(screen.queryByRole('button', { name: 'Re-confirm approval' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /already approved/i })).toBeInTheDocument();
+  });
+
+  it('does invalidate approval, honestly, once the letter text actually changes (edit/regenerate) — not a UI glitch', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ApprovalHarness {...baseProps} />);
+    await user.click(screen.getByRole('button', { name: 'Approve for sending' }));
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+    rerender(<ApprovalHarness {...baseProps} letterOutput="A regenerated, different letter body." />);
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve for sending' })).toBeInTheDocument();
   });
 });
 

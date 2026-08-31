@@ -2,7 +2,108 @@ import { describe, it, expect } from 'vitest';
 import {
   SIGNAL_TYPES, SIGNAL_STATUSES, signalTypeMeta, signalsForCase, openSignalsForCase,
   createSignal, updateSignal, setSignalStatus, supersedeOpenSignalsOfType, topOpenSignalsOrgWide,
+  findMatchingSignalByText, findMatchingSignalBySubject, findMatchingQuestionSignal,
 } from '../lib/caseSignals';
+
+// Human UAT remediation, Batch 1, Issue 6 — a human's Resolved/Not
+// relevant decision on an "unanswered question" signal used to have no
+// stable way to be recognised against a freshly AI-regenerated question,
+// since a fresh pass only ever checked currently-OPEN signals. This is
+// the identity findMatchingSignalByText gives generateUnansweredQuestions
+// (App.jsx) to respect that decision instead.
+describe('findMatchingSignalByText', () => {
+  const signals = [
+    { id: 's1', caseId: 'case1', type: 'unanswered_question', title: 'Was Sarah Jones interviewed?', status: 'not_relevant', resolvedBy: 'u1' },
+    { id: 's2', caseId: 'case1', type: 'unanswered_question', title: 'What time did the incident occur?', status: 'open' },
+    { id: 's3', caseId: 'case2', type: 'unanswered_question', title: 'Was Sarah Jones interviewed?', status: 'open' },
+  ];
+
+  it('matches on normalised text — case, punctuation, and whitespace differences do not defeat it', () => {
+    const match = findMatchingSignalByText(signals, 'case1', 'unanswered_question', '  was sarah jones interviewed  ');
+    expect(match?.id).toBe('s1');
+  });
+
+  it('does not match across a different case', () => {
+    const match = findMatchingSignalByText(signals.filter(s=>s.id!=='s1'), 'case1', 'unanswered_question', 'Was Sarah Jones interviewed?');
+    expect(match).toBeNull();
+  });
+
+  it('does not match a genuinely different question', () => {
+    const match = findMatchingSignalByText(signals, 'case1', 'unanswered_question', 'Was a companion offered at the hearing?');
+    expect(match).toBeNull();
+  });
+
+  it('returns null for empty/missing text', () => {
+    expect(findMatchingSignalByText(signals, 'case1', 'unanswered_question', '')).toBeNull();
+    expect(findMatchingSignalByText(signals, 'case1', 'unanswered_question', undefined)).toBeNull();
+  });
+});
+
+// Human UAT remediation, Batch 1, Issue 6 (hardening round 2) — the
+// scenario normalised-text matching alone cannot catch: two genuinely
+// different sentences asking the same underlying thing. `subject` is the
+// AI's own stable, factual identity for what a question concerns (e.g.
+// "John — not yet interviewed"), stored as a source_ref, checked BEFORE
+// falling back to text.
+describe('findMatchingSignalBySubject / findMatchingQuestionSignal', () => {
+  const signals = [
+    {
+      id: 's1', caseId: 'case1', type: 'unanswered_question',
+      title: 'Have you interviewed John about the incident?', status: 'not_relevant', resolvedBy: 'u1',
+      sourceRefs: [{ kind: 'subject', id: 'John — not yet interviewed', label: 'John — not yet interviewed' }],
+    },
+    {
+      id: 's2', caseId: 'case1', type: 'unanswered_question',
+      title: 'Was a companion offered at the hearing?', status: 'open', sourceRefs: [],
+    },
+    // Pre-hardening signal — no subject ref at all, same as everything
+    // created before this identity existed.
+    {
+      id: 's3', caseId: 'case1', type: 'unanswered_question',
+      title: 'What time did the incident occur?', status: 'resolved', resolvedBy: 'u1',
+    },
+  ];
+
+  it('matches a differently-worded regeneration of the same question via subject, where text matching alone would miss it', () => {
+    const byText = findMatchingSignalByText(signals, 'case1', 'unanswered_question', 'Has John been spoken to as part of the investigation?');
+    expect(byText).toBeNull(); // proves text alone genuinely cannot catch this case
+
+    const bySubject = findMatchingSignalBySubject(signals, 'case1', 'unanswered_question', 'John — not yet interviewed');
+    expect(bySubject?.id).toBe('s1');
+
+    const combined = findMatchingQuestionSignal(signals, 'case1', 'unanswered_question', {
+      subject: 'John — not yet interviewed',
+      questionText: 'Has John been spoken to as part of the investigation?',
+    });
+    expect(combined?.id).toBe('s1');
+  });
+
+  it('subject matching is not defeated by case/whitespace differences', () => {
+    const match = findMatchingSignalBySubject(signals, 'case1', 'unanswered_question', '  JOHN — Not Yet Interviewed  ');
+    expect(match?.id).toBe('s1');
+  });
+
+  it('falls back to text matching for a signal that predates the subject identity (no subject ref on file)', () => {
+    const match = findMatchingQuestionSignal(signals, 'case1', 'unanswered_question', {
+      subject: undefined,
+      questionText: 'What time did the incident occur?',
+    });
+    expect(match?.id).toBe('s3');
+  });
+
+  it('does not match a genuinely different subject about the same case — a new issue must still be able to appear', () => {
+    const match = findMatchingQuestionSignal(signals, 'case1', 'unanswered_question', {
+      subject: 'Payroll record — discrepancy unexplained',
+      questionText: 'Why does the payroll record not match the timesheet?',
+    });
+    expect(match).toBeNull();
+  });
+
+  it('never matches across a different case even with the identical subject', () => {
+    const match = findMatchingSignalBySubject(signals, 'case2', 'unanswered_question', 'John — not yet interviewed');
+    expect(match).toBeNull();
+  });
+});
 
 describe('signalTypeMeta', () => {
   it('returns the matching type meta', () => {

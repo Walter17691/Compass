@@ -131,17 +131,35 @@ describe('computeCaseRisk — outstanding grievance', () => {
     expect(computeCaseRisk(baseCase, { cases }).find(i => i.category === 'outstanding_grievance')).toBeUndefined();
   });
 
-  // Phase 6.5 hardening (P2) — was reading raw c.stage, which a case can
-  // never have explicitly set even once genuinely resolved (a signed
-  // outcome letter closes it via getCaseStage's own inference, same as
-  // every other module in the codebase resolves stage).
-  it('does not flag a grievance resolved via a signed outcome letter with no explicit stage field set', () => {
+  // Phase 6.5 hardening (P2) — originally read raw c.stage directly,
+  // missing a case genuinely closed via getCaseStage's own inference
+  // rather than an explicit stage field.
+  //
+  // Human UAT remediation, Batch 1, Issue 1 — this fixture used to rely
+  // on a signed meeting + an outcome letter alone inferring "closed" with
+  // no explicit close action at all (getCaseStage's own since-removed
+  // "hasSigned&&hasOutcome" heuristic) — exactly the document-state-
+  // becomes-case-state bug that pass fixed. A signed outcome letter with
+  // no explicit close now correctly infers "outcome", not "closed" — so
+  // it's genuinely still outstanding, and this fixture now represents a
+  // real closure the honest way: an explicit stage field, same as every
+  // real "Close case" action in the app.
+  it('does not flag a grievance genuinely closed (explicit stage), even with no separate cs.status field', () => {
     const resolvedGrievance = {
-      id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance',
+      id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance', stage: 'closed',
       meetings: [{ type: 'Grievance Hearing', letterOutput: 'Outcome: not upheld', signStatus: 'signed' }],
     };
     const cases = [baseCase, resolvedGrievance];
     expect(computeCaseRisk(baseCase, { cases }).find(i => i.category === 'outstanding_grievance')).toBeUndefined();
+  });
+
+  it('DOES flag a grievance whose outcome letter is signed but never explicitly closed — signing is not closing', () => {
+    const signedButNotClosed = {
+      id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance',
+      meetings: [{ type: 'Grievance Hearing', letterOutput: 'Outcome: not upheld', signStatus: 'signed' }],
+    };
+    const cases = [baseCase, signedButNotClosed];
+    expect(computeCaseRisk(baseCase, { cases })).toContainEqual(expect.objectContaining({ category: 'outstanding_grievance' }));
   });
 
   it('does not flag a different employee’s grievance', () => {

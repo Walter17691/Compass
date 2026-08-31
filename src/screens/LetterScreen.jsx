@@ -165,8 +165,22 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                   This letter was drafted by AI. Review it above, then approve it before it can be downloaded, printed or sent.
                 </div>
               )}
-              <Btn variant={letterIsApproved?"ghost":"primary"} onClick={approveLetter} style={{fontSize:12,padding:"6px 14px",flexShrink:0}}>
-                {letterIsApproved?"Re-confirm approval":"Approve for sending"}
+              {/* Human UAT remediation, Batch 1, Issue 5 — this used to stay
+                  a live, clickable "Re-confirm approval" button forever
+                  once approved, even with nothing to re-confirm (the text
+                  hadn't changed). Clicking it silently re-ran the exact
+                  same approval again — indistinguishable, from the
+                  outside, from the first click having failed. Once
+                  genuinely approved it's now a plain disabled confirmation,
+                  not a second gate; it only ever becomes an active
+                  "Approve for sending" button again once editing/
+                  regenerating the letter has genuinely invalidated the
+                  approval (letterIsApproved goes false — see
+                  lib/letterApproval.js's snapshot check above). The
+                  underlying gate itself — approval required before
+                  send/download — is unchanged. */}
+              <Btn variant={letterIsApproved?"ghost":"primary"} onClick={approveLetter} disabled={letterIsApproved} style={{fontSize:12,padding:"6px 14px",flexShrink:0}}>
+                {letterIsApproved?"Already approved":"Approve for sending"}
               </Btn>
             </div>
 

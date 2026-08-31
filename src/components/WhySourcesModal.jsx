@@ -2,7 +2,14 @@ import { useRef } from 'react';
 import { Btn } from './Primitives';
 import { useModalA11y } from '../hooks/useModalA11y';
 
-const KIND_LABEL = { meeting: "Meeting", evidence: "Evidence", allegation: "Allegation", document: "Document", transcript: "Meeting record", context: "Context", policy: "Policy" };
+// Human UAT remediation, Batch 1, Issue 6 (hardening round 2) — "subject"
+// is the still-to-explore question's own stable identity (caseSignals.js's
+// findMatchingSignalBySubject), not a clickable evidence citation like the
+// others here; resolveSignalRef.js already returns null for it (no id to
+// look up), so this just needs a clean label rather than the raw kind
+// string — the ref's own `label` (the subject text itself) still renders
+// via the existing `resolved?.label || ref.label` fallback below.
+const KIND_LABEL = { meeting: "Meeting", evidence: "Evidence", allegation: "Allegation", document: "Document", transcript: "Meeting record", context: "Context", policy: "Policy", subject: "Subject" };
 
 // Explainability drill-down — resolves a signal's source_refs back to the
 // case content that produced it. resolveRef is supplied by the caller

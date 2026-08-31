@@ -164,6 +164,45 @@ describe('MeetingsTab — meeting completion automation (Phase 5, IP18)', () => 
   });
 });
 
+// Human UAT remediation, Batch 1, Issue 2 — signer/date (and decline
+// reason) is real data the signature-sync poll (App.jsx) now captures
+// from signing_requests, but MeetingsTab never rendered it: a signed
+// meeting's badge said "Signed" with nothing else confirming it, which is
+// what UAT read as the notes no longer being properly accessible.
+describe('MeetingsTab — signature completion detail (Human UAT remediation, Batch 1, Issue 2)', () => {
+  it('shows who signed and when, once that data is present', () => {
+    const cs = caseWithMeeting({ signStatus: 'signed', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText(/Signed by Sam Employee on/)).toBeInTheDocument();
+  });
+
+  it('shows the decline reason distinctly when the recipient declined', () => {
+    const cs = caseWithMeeting({ signStatus: 'declined', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', declineReason: 'Disputes the accuracy of the record' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText(/Declined by Sam Employee on/)).toBeInTheDocument();
+    expect(screen.getByText(/Disputes the accuracy of the record/)).toBeInTheDocument();
+  });
+
+  it('shows no extra detail line for a still-pending (non-terminal) status, even with a signerName on file', () => {
+    const cs = caseWithMeeting({ signStatus: 'sent', signId: 'sign-1', signerName: 'Sam Employee' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.queryByText(/Signed by/)).not.toBeInTheDocument();
+  });
+
+  it('degrades gracefully when a terminal status has no synced date/signer yet (e.g. the older "Mark signed" manual override)', () => {
+    const cs = caseWithMeeting({ signStatus: 'signed', signId: 'sign-1' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText('Signed')).toBeInTheDocument();
+    expect(screen.queryByText(/Signed by/)).not.toBeInTheDocument();
+  });
+
+  it('the meeting record itself ("View notes") stays reachable regardless of signature status', () => {
+    const cs = caseWithMeeting({ signStatus: 'signed', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', record: 'The full meeting record text.' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByRole('button', { name: 'View notes' })).toBeInTheDocument();
+  });
+});
+
 // Integrations & Workflow Automation (Phase 5, IP27, §21) — the widened
 // signing_requests status vocabulary (sent/opened/signed/acknowledged/
 // declined/expired), replacing the old pending/signed-only badge.

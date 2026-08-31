@@ -28,7 +28,7 @@ import {
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
-import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase } from './lib/caseSignals';
+import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
 import { addConcernReferral, setReferralStatus, updateConcernReferral } from './lib/concernReferrals';
 import { sanitizeTriageSummary } from './lib/concernTriage';
@@ -684,56 +684,23 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     window.history.pushState(null, '', `${window.location.pathname}${nextSearch}`);
   }, [screen, activeCaseId]);
 
-  // "Send for signature" creates a real signing_requests row, and the
-  // employee's actual signature lands there once they sign via the portal
-  // — but nothing ever read that back into the case. A meeting showed
-  // "Pending signature" forever unless HR remembered to click the manual
-  // "Mark signed" button themselves after reading the notification email,
-  // with no verification a signature had actually been captured. Checks
-  // any pending meeting signatures against the real status whenever the
-  // case is opened, and syncs automatically if signed.
-  useEffect(() => {
-    if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
-    const cs = cases.find(c => c.id === activeCaseId);
-    const pending = (cs?.meetings || []).filter(m => m.signId && !isTerminalStatus(m.signStatus));
-    if (!pending.length) return;
-    let cancelled = false;
-    (async () => {
-      const changes = (await Promise.all(pending.map(async m => {
-        try {
-          // internal=1 — this is HR silently polling for a status change
-          // while viewing a case, not the employee genuinely opening
-          // their signing link; must never advance sent→opened itself
-          // (see api/signing.js's own comment on this parameter). Now a
-          // real auth boundary server-side (closes Prompt 11 audit finding
-          // 2.10, MEDIUM), so this needs authedFetch + orgId like any
-          // other org-scoped call, not a bare fetch.
-          const res = await authedFetch(`/api/signing?signId=${encodeURIComponent(m.signId)}&internal=1&orgId=${encodeURIComponent(org?.id||"")}`);
-          if (!res.ok) return null;
-          const data = await res.json();
-          return data.status && data.status !== m.signStatus ? { id: m.id, status: data.status } : null;
-        } catch { return null; }
-      }))).filter(Boolean);
-      if (cancelled || !changes.length) return;
-      const changeMap = new Map(changes.map(c => [c.id, c.status]));
-      const updated = cases.map(c => c.id === activeCaseId
-        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id) } : m) }
-        : c);
-      saveCases(updated, activeCaseId);
-    })();
-    return () => { cancelled = true; };
-    // cases/saveCases deliberately excluded — this should check once per
-    // case-view visit, not re-run on every unrelated case-data change
-    // (which would refire the check mid-edit and spam the signing API).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, activeCaseId]);
+  // Human UAT remediation, Batch 1 hardening round 2 — the signature-sync
+  // effect that used to live here (checks pending meeting signatures
+  // against the real status whenever a case is opened) was relocated
+  // below `audit`'s own declaration: it calls audit() to log a signature
+  // completion (Batch 1, Issue 3), and a lint rule (react-hooks/
+  // immutability) correctly flags calling a not-yet-declared binding
+  // regardless of how far away the actual invocation is deferred to — see
+  // its new home just after `audit` itself, a few hundred lines down,
+  // for the full effect and its own comments.
 
   // Phase 13 — "What Changed Since Last View." Reads the stored
   // last_viewed_at BEFORE recordCaseView overwrites it below, same
-  // once-per-visit shape as the signature-sync effect just above (deps
-  // deliberately just [screen, activeCaseId] — this should diff once per
-  // open, not re-run and keep sliding the comparison point forward on
-  // every unrelated case edit while the user is still looking at it).
+  // once-per-visit shape as the signature-sync effect elsewhere in this
+  // file (deps deliberately just [screen, activeCaseId] — this should
+  // diff once per open, not re-run and keep sliding the comparison point
+  // forward on every unrelated case edit while the user is still looking
+  // at it).
   useEffect(() => {
     if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
     const cs = cases.find(c => c.id === activeCaseId);
@@ -2414,6 +2381,86 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         .then(({error}) => { if(error) console.error('Audit log sync failed:', error.message); });
     }
   };
+
+  // "Send for signature" creates a real signing_requests row, and the
+  // employee's actual signature lands there once they sign via the portal
+  // — but nothing ever read that back into the case. A meeting showed
+  // "Pending signature" forever unless HR remembered to click the manual
+  // "Mark signed" button themselves after reading the notification email,
+  // with no verification a signature had actually been captured. Checks
+  // any pending meeting signatures against the real status whenever the
+  // case is opened, and syncs automatically if signed.
+  //
+  // Human UAT remediation, Batch 1 hardening round 2 — relocated here
+  // (was originally right after the URL-sync effect, much earlier in this
+  // file) purely because it calls audit() below, which must be declared
+  // first — no behavioural change, same deps, same body.
+  useEffect(() => {
+    if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
+    const cs = cases.find(c => c.id === activeCaseId);
+    const pending = (cs?.meetings || []).filter(m => m.signId && !isTerminalStatus(m.signStatus));
+    if (!pending.length) return;
+    let cancelled = false;
+    (async () => {
+      const changes = (await Promise.all(pending.map(async m => {
+        try {
+          // internal=1 — this is HR silently polling for a status change
+          // while viewing a case, not the employee genuinely opening
+          // their signing link; must never advance sent→opened itself
+          // (see api/signing.js's own comment on this parameter). Now a
+          // real auth boundary server-side (closes Prompt 11 audit finding
+          // 2.10, MEDIUM), so this needs authedFetch + orgId like any
+          // other org-scoped call, not a bare fetch.
+          const res = await authedFetch(`/api/signing?signId=${encodeURIComponent(m.signId)}&internal=1&orgId=${encodeURIComponent(org?.id||"")}`);
+          if (!res.ok) return null;
+          const data = await res.json();
+          // Human UAT remediation, Batch 1, Issue 2 — this used to keep
+          // only `status`, discarding who signed, when, and the captured
+          // signature image, even though signing_requests already stores
+          // all of it. A meeting badge that just says "Signed" with
+          // nothing else to confirm is what UAT flagged as effectively
+          // inaccessible — the case owner needs the same detail an
+          // outcome letter's signature record already shows.
+          return data.status && data.status !== m.signStatus
+            ? { id: m.id, status: data.status, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null }
+            : null;
+        } catch { return null; }
+      }))).filter(Boolean);
+      if (cancelled || !changes.length) return;
+      const changeMap = new Map(changes.map(c => [c.id, c]));
+      const updated = cases.map(c => c.id === activeCaseId
+        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason } : m) }
+        : c);
+      // Human UAT remediation, Batch 1, Issue 3 — signature completion had
+      // no notification/activity/Timeline event at all. Logged here, not
+      // in api/signing.js, because that endpoint only ever touches
+      // signing_requests — it has no case_id-aware audit() to call, and
+      // giving it one would mean either trusting an unauthenticated
+      // caller's own claim of which case this belongs to, or a second,
+      // separate lookup; this poll already has the real case/meeting in
+      // hand. Idempotency: only logged once saveCases' own optimistic-
+      // concurrency write genuinely wins (the same guard that already
+      // protects the case update itself — see saveCaseToDB's conditional
+      // .eq('updated_at', ...)) — a losing/duplicate poll (two tabs open
+      // on the same case, or this effect re-firing before the first
+      // write lands) gets `false` back and reload-only path in effect
+      // upstream, so it can never double-log the same transition.
+      saveCases(updated, activeCaseId).then(ok => {
+        if (!ok || cancelled) return;
+        changes.forEach(({ id, status }) => {
+          if (!isTerminalStatus(status)) return; // "opened" isn't a completion — only signed/acknowledged/declined are
+          const m = pending.find(p => p.id === id);
+          const outcomeText = status === "signed" ? "signed" : status === "acknowledged" ? "acknowledged" : status === "declined" ? "declined to sign" : status;
+          audit(`${m?.type || "Meeting"} notes ${outcomeText}`, cs.employeeName, activeCaseId);
+        });
+      });
+    })();
+    return () => { cancelled = true; };
+    // cases/saveCases deliberately excluded — this should check once per
+    // case-view visit, not re-run on every unrelated case-data change
+    // (which would refire the check mid-edit and spam the signing API).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, activeCaseId]);
 
   // Process Intelligence (P1) — thin App-level wrapper binding
   // requestOverride to this component's own promptDialog/audit closures.
@@ -4614,11 +4661,34 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!silent) setUnansweredLoading(l=>({...l, [cs.id]:true}));
     try {
       const context = await buildHardenedCaseContext(cs);
+      // Human UAT remediation, Batch 1, Issue 6 — a human's own Resolved/
+      // Not relevant decision on a question used to have no way to reach
+      // this prompt at all, so a fresh run had nothing telling it "this
+      // was already looked at" and simply re-raised the same ground under
+      // slightly different wording. Real signalsForCase resolvedBy is
+      // what actually distinguishes a genuine human decision from this
+      // same function's own auto-superseded entries (which never set
+      // resolvedBy) — only genuine decisions are surfaced here.
+      const priorDecisions = signalsForCase(caseSignalsRef.current, cs.id)
+        .filter(s => s.type === "unanswered_question" && s.status !== "open" && s.resolvedBy);
+      const priorSubject = s => (s.sourceRefs||[]).find(r=>r.kind==="subject")?.label;
+      const priorDecisionsText = priorDecisions.length
+        ? "\n\nALREADY REVIEWED — do not re-list any of these (recognise them by subject even if you'd now phrase the question differently) unless the case record now contains genuinely new information that specifically changes the answer (in which case, phrase it as what's newly unclear, not a repeat of the old question):\n"
+          + priorDecisions.map(s => `- Subject: "${priorSubject(s)||s.title}" — was: "${s.title}" (marked ${s.status==="not_relevant"?"not relevant":"resolved"})`).join("\n")
+        : "";
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
-        max_tokens:600,
+        max_tokens:700,
         stream:false,
-        system:"You are Compass, an Employee Relations copilot maintaining a running list of what's been explored in this case and what hasn't. Read the case record and separate topics genuinely covered (a meeting or document already addresses them) from topics that remain open — a person mentioned but not interviewed, a claim made but not checked, a date or detail nobody has confirmed. Only list a 'still to explore' item if the record itself raises it — never invent a generic question the case doesn't support. Respond ONLY with valid JSON, no other text: {\"covered\":[\"short label\",...],\"stillToExplore\":[{\"question\":\"specific open question\",\"reasoning\":\"one sentence on what in the record raises this\"}]}"+getPolicyCtx(),
+        // Human UAT remediation, Batch 1, Issue 6 (hardening round 2) —
+        // `subject` asks for the stable fact/person the question is
+        // fundamentally about (e.g. "Sarah Jones — not yet interviewed"),
+        // not a restatement of the question's own wording, so the same
+        // underlying question can be recognised across a reworded
+        // regeneration — see caseSignals.js's findMatchingQuestionSignal
+        // for exactly how this is used, and its own comment on why this
+        // is offered as a stronger fingerprint, not a semantic guarantee.
+        system:"You are Compass, an Employee Relations copilot maintaining a running list of what's been explored in this case and what hasn't. Read the case record and separate topics genuinely covered (a meeting or document already addresses them) from topics that remain open — a person mentioned but not interviewed, a claim made but not checked, a date or detail nobody has confirmed. Only list a 'still to explore' item if the record itself raises it — never invent a generic question the case doesn't support. A human reviewer's own prior judgement on a question must be respected, not silently re-litigated by a fresh pass — see below for anything already reviewed. For each still-to-explore item, also give a short, stable 'subject' naming WHO or WHAT it concerns (e.g. a person's name plus the specific gap, or a specific date/topic) — this is an identity for matching across future runs, not a rephrasing of the question, so keep it factual and consistent rather than creative. Respond ONLY with valid JSON, no other text: {\"covered\":[\"short label\",...],\"stillToExplore\":[{\"question\":\"specific open question\",\"reasoning\":\"one sentence on what in the record raises this\",\"subject\":\"short stable label for who/what this concerns\"}]}"+getPolicyCtx()+priorDecisionsText,
         messages:[{role:"user", content:"CASE RECORD:\n"+context}],
       })});
       const data = await res.json();
@@ -4632,7 +4702,17 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       openPrior.forEach(s => { const u = updated.find(x=>x.id===s.id); if(u) saveSignalToDB(u); });
       (parsed.stillToExplore||[]).forEach(q => {
         if(!q.question) return;
-        updated = createSignal(updated, cs.id, { type:"unanswered_question", title:q.question, reasoning:q.reasoning||"", source:"ai" });
+        // Backstop for the AI prompt guard above: even if the model
+        // re-lists something a human already decided (near-identical
+        // wording, or a genuinely different phrasing of the same subject,
+        // is the realistic failure mode for a re-run against materially
+        // unchanged case content), a genuine prior human decision is
+        // never silently overridden by regeneration. Subject match is
+        // tried first (survives rewording), falling back to normalised-
+        // text match for older signals with no subject on file.
+        const priorDecision = findMatchingQuestionSignal(updated, cs.id, "unanswered_question", { subject: q.subject, questionText: q.question });
+        if (priorDecision && priorDecision.status !== "open" && priorDecision.resolvedBy) return;
+        updated = createSignal(updated, cs.id, { type:"unanswered_question", title:q.question, reasoning:q.reasoning||"", source:"ai", sourceRefs: q.subject ? [{kind:"subject", id:q.subject, label:q.subject}] : [] });
       });
       setCaseSignals(updated);
       updated.filter(s=>s.caseId===cs.id && s.type==="unanswered_question" && s.status==="open").forEach(saveSignalToDB);
@@ -6343,6 +6423,14 @@ Please produce:
     generateNextBestAction(updatedCase, true);
     applyPendingMeetingSuggestions(caseId);
     audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`, caseId);
+    // Human UAT remediation, Batch 1, Issue 4 — distinct from the generic
+    // "Meeting saved" above (which fires for every save, signature-bound
+    // or not): a dedicated Timeline/audit entry specifically for "this
+    // meeting's notes were sent for signature," using the same freshly-
+    // resolved caseId (correct for a brand-new case too, unlike
+    // activeCaseId at the sendForSignature call site, which may not be
+    // set yet for a case being created by this very save).
+    if(attachedSignStatus==="sent") audit(`${meetingType?.label||"Meeting"} notes sent for signature`, caseInfo.employee, caseId);
     showToast("Meeting saved to case file");
     // The button that triggers this is labelled "Save and go to case →" —
     // it used to only save, never navigate, silently stranding the user on
@@ -7373,8 +7461,20 @@ Please produce:
     // out) or red (reserved for genuine errors/destructive/urgent, not
     // an ordinary disciplinary or appeal simply being under way — hence
     // the same amber already used for Grievance/Redundancy below).
-    if(getCaseStage(cs) === "closed") return {label:"Closed", color:"#6B6375", bg:"#F5F1EA"};
-    if(hasSigned) return {label:"Signed & closed", color:"#1A7A4A", bg:"#E8F5EE"};
+    // Human UAT remediation, Batch 1, Issue 1 — "Signed & closed" used to
+    // fire on ANY meeting merely being signed/acknowledged, regardless of
+    // whether the case was actually closed. Signing a meeting's notes
+    // (routine, mid-investigation) and closing a case (an explicit,
+    // separate action — see getCaseStage) are different concepts;
+    // conflating them here made an actively open, under-investigation
+    // case display as "Signed & closed" the moment its notes were signed.
+    // Now this can only ever refine an ALREADY-closed case's label —
+    // never independently imply closure.
+    if(getCaseStage(cs) === "closed") {
+      return hasSigned
+        ? {label:"Signed & closed", color:"#1A7A4A", bg:"#E8F5EE"}
+        : {label:"Closed", color:"#6B6375", bg:"#F5F1EA"};
+    }
     if(hasOutcomeLetter && hasPending) return {label:"Outcome — awaiting signature", color:"#B87520", bg:"#FEF5E7"};
     if(hasOutcomeLetter) return {label:"Outcome issued", color:"#1A7A4A", bg:"#E8F5EE"};
     if(types.some(t=>t.includes("appeal"))) return {label:"Appeal in progress", color:"#B87520", bg:"#FEF5E7"};

@@ -24,8 +24,12 @@ test('an approved letter offers Send from Compass and opens the send modal', asy
 
   await page.getByRole('button', { name: 'Documents', exact: true }).click();
   await page.getByRole('button', { name: 'Witness invitation' }).click();
-  await expect(page.getByText('Drafting...')).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText('Drafting...')).not.toBeVisible({ timeout: 60000 });
+  // UAT Product Hierarchy pass, Part 6 (already deployed) — the bare
+  // "Drafting..." this used to check for was replaced with a page-
+  // identity-aware "Drafting your witness invitation..." naming the
+  // actual letter type; this had gone stale without a test catching it.
+  await expect(page.getByText(/Drafting your witness invitation/)).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(/Drafting your witness invitation/)).not.toBeVisible({ timeout: 60000 });
 
   // Not yet approved — Send from Compass stays disabled, same as the
   // pre-existing Gmail/Outlook send buttons.
@@ -33,6 +37,11 @@ test('an approved letter offers Send from Compass and opens the send modal', asy
 
   await page.getByRole('button', { name: 'Approve for sending' }).click();
   await expect(page.getByRole('button', { name: 'Send from Compass' })).toBeEnabled();
+  // Human UAT remediation, Batch 1, Issue 5 — the button that replaces
+  // "Approve for sending" must never read as a fresh, pending
+  // confirmation request once approval has genuinely already succeeded.
+  await expect(page.getByRole('button', { name: 'Already approved' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Re-confirm approval' })).not.toBeVisible();
 
   await page.getByRole('button', { name: 'Send from Compass' }).click();
   await expect(page.getByRole('heading', { name: 'Email letter' })).toBeVisible({ timeout: 10000 });

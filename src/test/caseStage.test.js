@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { getCurrentRisk, getCaseStage, isGrievanceCase, withStageTransitionStamp } from '../lib/caseStage.js';
 
 describe('getCaseStage', () => {
-  it('an explicitly-tracked stage wins over the signed+outcome heuristic', () => {
+  it('an explicitly-tracked stage wins over the outcome heuristic', () => {
     // This is the appeal-window bug: a disciplinary hearing gets signed,
     // then its outcome letter is saved as a separate meeting entry — the
     // guided flow already set cs.stage to "outcome" at that point, and
@@ -30,11 +30,29 @@ describe('getCaseStage', () => {
     expect(getCaseStage({ stage: 'closed', meetings: [] })).toBe('closed');
   });
 
-  it('the signed+outcome heuristic still classifies untracked (no cs.stage) meeting-only data as closed', () => {
+  // Human UAT remediation, Batch 1, Issue 1 — a meeting's own signStatus
+  // (document-level: has THIS meeting's notes been signed/acknowledged?)
+  // used to also be read as a case-closure signal here, entirely on its
+  // own initiative — a signed investigation meeting with no stage
+  // explicitly tracked could infer "closed" the moment ANY meeting on the
+  // case also happened to carry a letterOutput, with no real "the case is
+  // actually done" action behind it. Removed entirely: signStatus no
+  // longer participates in stage inference at all. A case with an
+  // outcome letter but no explicit close action now correctly stays at
+  // "outcome" — signed or not — until the real, explicit "Close case"
+  // action sets cs.stage="closed" itself.
+  it('does not infer "closed" from a signed meeting alone — a letter having been drafted infers "outcome", never "closed", regardless of signStatus', () => {
     const cs = {
       meetings: [{ type: 'Disciplinary', signStatus: 'signed', letterOutput: 'the outcome letter' }],
     };
-    expect(getCaseStage(cs)).toBe('closed');
+    expect(getCaseStage(cs)).toBe('outcome');
+  });
+
+  it('signing an investigation meeting\'s notes does not move an in-progress case toward "outcome" or "closed" at all', () => {
+    const cs = {
+      meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'signed' }],
+    };
+    expect(getCaseStage(cs)).toBe('investigation');
   });
 
   it('infers "investigation" for a case with only an investigation meeting and no tracked stage', () => {
@@ -72,9 +90,12 @@ describe('getCaseStage — grievance-shaped cases', () => {
     expect(getCaseStage(cs)).toBe('outcome');
   });
 
-  it('infers "closed" once signed and outcome-lettered, same protection as disciplinary', () => {
+  // Human UAT remediation, Batch 1, Issue 1 — same fix as the
+  // disciplinary-shaped heuristic above: signStatus is never read as a
+  // closure signal, for the same reason.
+  it('does not infer "closed" from a signed meeting alone — an outcome letter infers "outcome", never "closed", regardless of signStatus', () => {
     const cs = { caseType: 'grievance', meetings: [{ type: 'Grievance', signStatus: 'signed', letterOutput: 'the outcome letter' }] };
-    expect(getCaseStage(cs)).toBe('closed');
+    expect(getCaseStage(cs)).toBe('outcome');
   });
 
   it('an explicitly-tracked stage still wins over the grievance heuristic', () => {

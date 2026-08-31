@@ -93,4 +93,29 @@ test('a meeting shows Signed automatically once the real signature lands, withou
 
   await expect(page.getByText('Signed', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('button', { name: 'Mark signed' })).not.toBeVisible();
+
+  // Human UAT remediation, Batch 1, Issue 1 — signing this meeting's
+  // notes must never be read as the CASE being closed. This spec's own
+  // note above still applies: /api/signing isn't proxied locally, so this
+  // whole file only exercises whatever is actually deployed at
+  // compass-lemon-iota.vercel.app — these assertions only validate the
+  // Batch 1 fix once it has actually shipped there, not against
+  // uncommitted local changes.
+  await expect(page.getByText(/Signed & closed/)).not.toBeVisible();
+  await expect(page.getByText(/^Closed$/)).not.toBeVisible();
+
+  // Human UAT remediation, Batch 1, Issue 2 — signer/date now synced down
+  // and shown alongside the badge, not just a bare "Signed".
+  await expect(page.getByText(new RegExp(`Signed by .* on`))).toBeVisible();
+
+  // Human UAT remediation, Batch 1, Issue 3/4 — signature completion now
+  // produces a real notification (Activity) and Timeline entry, not
+  // silence. Idempotency (no duplicate on a second, unrelated poll) is
+  // covered by the reload immediately above this block already having
+  // triggered the poll a second time without doubling the event.
+  await page.getByRole('button', { name: 'Activity' }).click();
+  await expect(page.getByText(/notes signed/i)).toBeVisible({ timeout: 10000 });
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click();
+  await expect(page.getByText(/notes signed/i)).toBeVisible({ timeout: 10000 });
 });

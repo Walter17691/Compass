@@ -13,12 +13,25 @@ import { isAppealMeeting, isDisciplinaryMeeting, isInvestigationMeeting, isGriev
 // dropdown, or new here), which had no dedicated stage tracking at all
 // before Process Intelligence (P2) — see processStages.js for the full
 // per-type stage registry these heuristics return ids from.
+// Human UAT remediation, Batch 1, Issue 1 — this used to also check
+// "hasSigned&&hasOutcome" to infer "closed", conflating a MEETING's own
+// signStatus (whether the employee has signed/acknowledged that specific
+// meeting's notes — a document-level fact) with the CASE's own lifecycle
+// stage. signStatus says nothing about which meeting was signed or what
+// its content was — an investigation meeting's notes being signed for
+// acknowledgement is a completely routine, mid-process event, not a
+// signal the case is done. Real case closure is always an explicit,
+// separate action (the "Close case" button/next-step, which writes
+// cs.stage="closed" directly — see CaseViewScreen.jsx) and is already
+// caught by getCaseStage()'s own "an explicitly-tracked stage always
+// wins" check above this function; this heuristic only ever runs for
+// cases with no tracked stage at all, so it has no legitimate reason to
+// guess "closed" from a document-signing fact it can't actually verify
+// means what it's assuming.
 function inferDisciplinaryStage(cs) {
   const meetings = cs.meetings||[];
   const hasOutcome = meetings.some(m=>m.letterOutput);
-  const hasSigned = meetings.some(m=>m.signStatus==="signed");
   const hasInvReport = cs.investigationReport;
-  if(hasSigned&&hasOutcome) return "closed";
   if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
   if(meetings.some(m=>isDisciplinaryMeeting(m.type))) return "disciplinary";
@@ -28,11 +41,13 @@ function inferDisciplinaryStage(cs) {
   return "intake";
 }
 
+// Human UAT remediation, Batch 1, Issue 1 — same fix as
+// inferDisciplinaryStage above: a meeting's own signStatus is document-
+// level state (has this specific meeting's notes been acknowledged?),
+// not a case-closure signal. Removed for the same reason.
 function inferGrievanceStage(cs) {
   const meetings = cs.meetings||[];
   const hasOutcome = meetings.some(m=>m.letterOutput);
-  const hasSigned = meetings.some(m=>m.signStatus==="signed");
-  if(hasSigned&&hasOutcome) return "closed";
   if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
   if(meetings.some(m=>isGrievanceMeeting(m.type))) return "hearing";
@@ -96,17 +111,21 @@ export function getCaseStage(cs) {
   if(cs.stage==="closed") return "closed";
   // An explicitly-tracked stage always wins over the heuristic below. The
   // guided flow sets cs.stage at every real transition (disciplinary,
-  // outcome, appeal, closed), including the moment an outcome letter is
-  // drafted — so a case correctly sitting at "outcome" almost immediately
-  // satisfies hasSigned&&hasOutcome too (the hearing gets signed, then the
-  // outcome letter is saved as a separate meeting entry). Checking the
-  // heuristic first used to silently reclassify that case as "closed"
+  // outcome, appeal, closed) — checking the heuristic first used to
+  // silently reclassify a case as "closed" the moment a hearing meeting
+  // happened to be signed and any meeting carried a letterOutput, even
   // while its 5-working-day ACAS appeal window was still legally live —
   // which also suppressed the appeal-window deadline in deadlines.js
   // (skips closed cases) and returned null from getNextStep, showing no
   // guidance at all during a window HR actually needs to be watching.
   // Moved here, the heuristic only ever fires for cases with no tracked
   // stage at all — meeting-only data added outside the guided flow.
+  // Human UAT remediation, Batch 1, Issue 1 — the heuristic's own
+  // "hasSigned&&hasOutcome" branch has since been removed entirely (see
+  // inferDisciplinaryStage/inferGrievanceStage below): a meeting's
+  // signStatus is document-level state that says nothing about case
+  // closure, so it's no longer used to infer "closed" at all. Real
+  // closure is always this explicit cs.stage="closed" write.
   if(cs.stage) return cs.stage;
   const type = normalizedCaseType(cs);
   if(type==="probation") return inferProbationStage(cs);

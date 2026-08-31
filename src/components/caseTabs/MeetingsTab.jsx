@@ -121,6 +121,17 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
         </div>
       </div>
+      {/* Human UAT remediation, Batch 1, Issue 2 — signer/date (and decline
+          reason, if declined) is real data this app already captures in
+          signing_requests, but was never synced down or shown anywhere:
+          the badge above said "Signed" with nothing to confirm it. */}
+      {m.signStatus&&isTerminalStatus(m.signStatus)&&(m.signedAt||m.declineReason)&&(
+        <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>
+          {m.signStatus==="declined"
+            ? <>Declined{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}{m.declineReason?`: "${m.declineReason}"`:""}</>
+            : <>{signatureStatusLabel(m.signStatus)}{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}</>}
+        </div>
+      )}
       {!m.record&&(m.agenda||m.prepQuestions?.length>0||m.attendees?.length>0)&&<ScheduledMeetingDetails m={m}/>}
       {m.record&&m.unresolvedSuggestions?.length>0&&(onAcceptSavedSuggestion||onDismissSavedSuggestion)&&(
         <div style={{marginTop:8,background:"#FDF3E8",border:"1px solid #E8C088",borderRadius:8,padding:"10px 12px"}}>
