@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Organisational ER Intelligence (Phase 6, OP6, §3) — the HR-editable
 // theme taxonomy itself. Deliberately scoped to taxonomy CRUD only
@@ -72,7 +72,7 @@ test('tagging 3 cases with a new theme surfaces a trend and its root-cause explo
   for (let i = 0; i < 3; i++) {
     const employeeName = `E2E RootCause Case ${Date.now()}-${i}`;
     await page.getByRole('button', { name: 'Home', exact: true }).click();
-    await page.getByRole('button', { name: '+ New case' }).click();
+    await openNewCaseModal(page);
     await page.getByPlaceholder('Full name').fill(employeeName);
     await page.getByRole('combobox').nth(2).selectOption('misconduct');
     const createBtn = page.getByRole('button', { name: 'Create case', exact: true });

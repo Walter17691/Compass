@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Scoped to case creation, not the full "run a meeting -> generate a
 // letter" path from the plan: that path makes a real Claude API call with
@@ -11,7 +11,7 @@ test('creates a case and it appears in the case list', async ({ page }) => {
   const employeeName = `E2E Test ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
 
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.getByRole('combobox').nth(2).selectOption('misconduct'); // combobox 0 is the employee-name input (has a datalist), 1 is Location, 2 is Case type

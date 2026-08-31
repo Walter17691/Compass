@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P1) — M9's "Proceed anyway" used to skip
 // straight past an unresolved gap with nothing recorded anywhere. It now
@@ -23,7 +23,7 @@ test('proceeding past a meeting quality check gap can be cancelled, or confirmed
   // exercises, chosen here instead of the essential-question gap so this
   // test also proves the override resolves to a real, findable case for
   // the audit-trail assertion at the end.
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

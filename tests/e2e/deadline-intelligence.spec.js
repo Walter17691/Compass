@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P16, §5) — computeDueSoon's four new
 // sources (fit note, probation review, OH referral, suspension review),
@@ -11,7 +11,7 @@ test('a probation review date entered on a case surfaces on the Calendar and lin
   await login(page);
   const employeeName = `E2E DeadlineIntel ${Date.now()}`;
 
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('probation');
   await page.getByRole('button', { name: 'Create case' }).click();

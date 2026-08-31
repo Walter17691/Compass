@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P7) — proceeding past a guardrail signal
 // that carries a real policy citation (P6) now routes through
@@ -27,7 +27,7 @@ test('proceeding past a policy-cited guardrail records a structured policy devia
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
   const employeeName = `E2E PolicyDeviation ${Date.now()}`;
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

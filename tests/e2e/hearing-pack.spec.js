@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP8, §27) — automatic
 // hearing pack. Unlike Command Bar's own AI-parsing step, this is fully
@@ -11,7 +11,7 @@ test('Generate Hearing Pack downloads a PDF from the Documents tab', async ({ pa
   const employeeName = `E2E Hearing Pack ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

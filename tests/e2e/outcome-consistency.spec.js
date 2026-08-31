@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 17 of the reasoning-layer build-out (scale/commercialisation
 // wave, after manager investigation mode). Read-only and entirely
@@ -22,7 +22,7 @@ test('a case with no comparable closed-case history shows no outcome distributio
   const employeeName = `E2E Consistency ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

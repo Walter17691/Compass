@@ -1342,7 +1342,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         const { data, error } = await supabase.from('cases').update(payload).eq('id', caseObj.id).eq('updated_at', caseObj.updatedAt).select();
         if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return false; }
         if(!data || data.length===0) {
-          showToast("This case was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
+          // UAT Product Hierarchy pass, Part 5 — the underlying stale-
+          // write protection (conditionalUpdate's conflict detection,
+          // above) is untouched; only the presentation changes. This is
+          // auto-resolved by the reload that follows, so it reads as a
+          // routine refresh rather than a system failure, and uses the
+          // "info" toast type so it auto-dismisses instead of sitting
+          // there like an unresolved error.
+          showToast("This case was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
           loadCasesFromDB();
           return false;
         }
@@ -1673,7 +1680,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       reviewed_at: new Date().toISOString()
     }).eq('id', reviewId).eq('status', 'pending').select();
     if(error) { console.error("respondToReview", error); showToast("Couldn't submit your response — "+error.message, "error"); return; }
-    if(!data?.length) { showToast("This request was already responded to by someone else — reloading the latest version", "error"); loadHrReviews(); return; }
+    if(!data?.length) { showToast("This request was already responded to by someone else — nothing further needed from you. Showing the latest version.", "info"); loadHrReviews(); return; }
     setHrReviewRequests(r=>r.map(x=>x.id===reviewId?data[0]:x));
   };
 
@@ -2998,7 +3005,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const nowIso = new Date().toISOString();
       const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'redundancy_cases', rc.id, updatedAt, {...fields, updated_at: nowIso})));
       if(conflict) {
-        showToast("This redundancy case was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        showToast("This redundancy case was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
         loadRedundancyCases();
         return;
       }
@@ -3157,7 +3164,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const nowIso = new Date().toISOString();
       const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'wellbeing_notes', note.id, updatedAt, {...fields, updated_at: nowIso})));
       if(conflict) {
-        showToast("This wellbeing note was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        showToast("This wellbeing note was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
         loadWellbeingNotes();
         return;
       }
@@ -3272,7 +3279,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const nowIso = new Date().toISOString();
       const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'allegations', allegation.id, updatedAt, {...fields, updated_at: nowIso})));
       if(conflict) {
-        showToast("This allegation was updated elsewhere — reloading the latest version so you don't overwrite it", "error");
+        showToast("This allegation was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
         loadAllegations();
         return;
       }
@@ -3551,7 +3558,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const nowIso = new Date().toISOString();
       const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'concern_referrals', referral.id, updatedAt, {...fields, updated_at: nowIso})));
       if(conflict) {
-        showToast("This concern referral was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        showToast("This concern referral was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
         loadConcernReferrals();
         return;
       }
@@ -4116,7 +4123,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const nowIso = new Date().toISOString();
       const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'case_signals', signal.id, updatedAt, {...fields, updated_at: nowIso})));
       if(conflict) {
-        showToast("This signal was changed elsewhere — reloading the latest version so you don't overwrite it", "error");
+        showToast("This signal was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
         loadCaseSignals();
         return;
       }
@@ -4212,7 +4219,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const nowIso = new Date().toISOString();
       const { error, conflict } = await withTransientRetry(() => withFkRetry(() => conditionalUpdate(supabase, 'case_tasks', task.id, updatedAt, {...fields, updated_at: nowIso})));
       if(conflict) {
-        showToast("This task was changed or deleted elsewhere — reloading the latest version so you don't overwrite it", "error");
+        showToast("This task was updated or removed — new information was added while you were working. We've refreshed it with the latest version.", "info");
         loadCaseTasks();
         return;
       }
@@ -7048,7 +7055,16 @@ Please produce:
         })});
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      if(text) { setLetterOutput(text); setLetterSources(letterSources); }
+      if(text) {
+        setLetterOutput(text); setLetterSources(letterSources);
+        // UAT Product Hierarchy pass, Part 6 — generation can genuinely
+        // outlive the user staying on this screen (this function isn't
+        // tied to LetterScreen's mount lifecycle), so completion has to be
+        // announced through the app-level toast, not just by the draft
+        // quietly appearing on a screen the user may have left.
+        const letterTypeLabels = {outcome:"outcome letter",invite:"invitation letter",appeal:"appeal outcome letter",suspension:"suspension letter",["meeting-confirmation"]:"meeting confirmation letter",["witness-invitation"]:"witness invitation",["evidence-request"]:"evidence request",["oh-consent-request"]:"OH consent request",["no-case-answer"]:"response letter"};
+        showToast(`Your ${letterTypeLabels[t]||"letter"} is ready for review`, "success");
+      }
       else { setAiError("Failed to generate letter. Please try again."); }
     } catch(e) { setAiError("Error: "+e.message); }
     setAiProcessing(false);
@@ -7349,17 +7365,25 @@ Please produce:
     // writes cs.stage, not cs.status — so this check never matched and a
     // closed case fell through to whatever heuristic below happened to
     // fire instead, sometimes as misleading as "Open — no meetings yet".
+    // UAT Product Hierarchy pass, Part 4 — case status is ordinary
+    // case-progression metadata, not a primary action, brand moment, or
+    // AI interaction, so it no longer borrows purple (which the primary
+    // "+ New meeting" button and selected nav already use — the exact
+    // "status badges competing with primary actions" the brief called
+    // out) or red (reserved for genuine errors/destructive/urgent, not
+    // an ordinary disciplinary or appeal simply being under way — hence
+    // the same amber already used for Grievance/Redundancy below).
     if(getCaseStage(cs) === "closed") return {label:"Closed", color:"#6B6375", bg:"#F5F1EA"};
     if(hasSigned) return {label:"Signed & closed", color:"#1A7A4A", bg:"#E8F5EE"};
     if(hasOutcomeLetter && hasPending) return {label:"Outcome — awaiting signature", color:"#B87520", bg:"#FEF5E7"};
     if(hasOutcomeLetter) return {label:"Outcome issued", color:"#1A7A4A", bg:"#E8F5EE"};
-    if(types.some(t=>t.includes("appeal"))) return {label:"Appeal in progress", color:"#C84B2F", bg:"#FEF0EB"};
-    if(types.some(t=>t.includes("disciplinary"))) return {label:"Disciplinary in progress", color:"#C84B2F", bg:"#FEF0EB"};
+    if(types.some(t=>t.includes("appeal"))) return {label:"Appeal in progress", color:"#B87520", bg:"#FEF5E7"};
+    if(types.some(t=>t.includes("disciplinary"))) return {label:"Disciplinary in progress", color:"#B87520", bg:"#FEF5E7"};
     if(types.some(t=>t.includes("grievance"))) return {label:"Grievance in progress", color:"#B87520", bg:"#FEF5E7"};
     if(types.some(t=>t.includes("redundancy"))) return {label:"Redundancy consultation", color:"#B87520", bg:"#FEF5E7"};
-    if(types.some(t=>t.includes("investigation"))) return {label:"Under investigation", color:"#7C5CFC", bg:"#EDE8FF"};
+    if(types.some(t=>t.includes("investigation"))) return {label:"Under investigation", color:"#6B6375", bg:"#F5F1EA"};
     if(types.some(t=>t.includes("informal")||t.includes("return")||t.includes("performance")||t.includes("pip"))) return {label:"Informal stage", color:"#6B6375", bg:"#F5F1EA"};
-    if(meetings.length === 0) return {label:"Open — no meetings yet", color:"#7C5CFC", bg:"#EDE8FF"};
+    if(meetings.length === 0) return {label:"Open — no meetings yet", color:"#6B6375", bg:"#F5F1EA"};
     return {label:"In progress", color:"#6B6375", bg:"#F5F1EA"};
   };
 
@@ -7846,13 +7870,24 @@ Please produce:
                 every toast — not just errors, which no longer
                 auto-dismiss at all — an explicit, keyboard-reachable way
                 to dismiss it instead of only ever a timeout. */}
-      {toast&&(
-        <div role={toast.type==="error"?"alert":"status"} aria-live={toast.type==="error"?"assertive":"polite"} style={{position:"fixed",bottom:isMobile?16:24,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3000,background:toast.type==="error"?"#FEF0EB":"#E8F5EE",border:`1px solid ${toast.type==="error"?"#C84B2F44":"#1A7A4A44"}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",animation:"slideIn 0.2s ease",maxWidth:isMobile?"none":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:toast.type==="error"?"#C84B2F":"#1A7A4A",flexShrink:0}}/>
-          <span style={{fontSize:14,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",flex:1}}>{toast.message}</span>
-          <button onClick={dismissToast} aria-label="Dismiss" style={{background:"none",border:"none",color:"#9B9098",fontSize:16,lineHeight:1,cursor:"pointer",padding:2,flexShrink:0,fontFamily:"DM Sans,system-ui,sans-serif"}}>×</button>
-        </div>
-      )}
+      {toast&&(()=>{
+        // UAT Product Hierarchy pass, Part 4/5 — "info" is a third,
+        // genuinely neutral toast colour (blue), distinct from the
+        // existing red=error and green=success. A case being refreshed
+        // with newer data from elsewhere is neither a failure nor a
+        // completed action of the user's own, so it no longer borrows
+        // green (success) or red (error) to say so.
+        const bg = toast.type==="error"?"#FEF0EB":toast.type==="info"?"#EAF2FA":"#E8F5EE";
+        const border = toast.type==="error"?"#C84B2F44":toast.type==="info"?"#2E6BA844":"#1A7A4A44";
+        const dot = toast.type==="error"?"#C84B2F":toast.type==="info"?"#2E6BA8":"#1A7A4A";
+        return (
+          <div role={toast.type==="error"?"alert":"status"} aria-live={toast.type==="error"?"assertive":"polite"} style={{position:"fixed",bottom:isMobile?16:24,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3000,background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",animation:"slideIn 0.2s ease",maxWidth:isMobile?"none":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:dot,flexShrink:0}}/>
+            <span style={{fontSize:14,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",flex:1}}>{toast.message}</span>
+            <button onClick={dismissToast} aria-label="Dismiss" style={{background:"none",border:"none",color:"#9B9098",fontSize:16,lineHeight:1,cursor:"pointer",padding:2,flexShrink:0,fontFamily:"DM Sans,system-ui,sans-serif"}}>×</button>
+          </div>
+        );
+      })()}
 
       {/* Phase 6.5 hardening (production regression suite) — this used
           to be its own floating overlay and went through three different

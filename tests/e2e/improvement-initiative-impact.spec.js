@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, SUPABASE_URL, SUPABASE_ANON_KEY } from './helpers.js';
+import { login, openNewCaseModal, SUPABASE_URL, SUPABASE_ANON_KEY } from './helpers.js';
 
 // Organisational ER Intelligence (Phase 6, OP23, §19) — impact tracking.
 // impactTracking.js's own MIN_DAYS_SINCE_COMPLETION (7 days) is a real
@@ -35,7 +35,7 @@ test('impact tracking compares real case volume before vs after an initiative re
   for (let i = 0; i < 3; i++) {
     const employeeName = `E2E Impact Baseline ${Date.now()}-${i}`;
     await page.getByRole('button', { name: 'Home', exact: true }).click();
-    await page.getByRole('button', { name: '+ New case' }).click();
+    await openNewCaseModal(page);
     await page.getByPlaceholder('Full name').fill(employeeName);
     await page.getByRole('combobox').nth(2).selectOption('grievance');
     const createBtn = page.getByRole('button', { name: 'Create case', exact: true });

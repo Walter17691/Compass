@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P15, §13) — the Case Risk Panel
 // (Overview tab) is an aggregator over what earlier phases already
@@ -14,7 +14,7 @@ test('case risk panel surfaces an evidence gap and missing medical info, with a 
   await login(page);
   const employeeName = `E2E CaseRisk ${Date.now()}`;
 
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   // The quick-create dropdown's raw value is "absence", not "attendance"
   // — getProcessType still maps it to the "attendance" process type

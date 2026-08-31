@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 6 of the reasoning-layer build-out (4 of 5 in the ER Intelligence
 // MVP — see plan file). The grid itself and manual link/unlink already
@@ -12,7 +12,7 @@ test('Evidence matrix shows a manually-linked item and an AI-suggested link once
   const employeeName = `E2E EvidenceMatrix ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

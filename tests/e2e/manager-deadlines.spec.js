@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP17, §22/§23) — MP7's own investigator
 // target completion date now feeds into the same shared dueSoon pipeline
@@ -17,7 +17,7 @@ test('an overdue investigator target completion date surfaces as a real deadline
   const employeeName = `E2E Deadline ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

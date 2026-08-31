@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // CasesScreen had no filter controls at all before this — grouped-by-
 // employee listing only. The shared E2E test org accumulates hundreds of
@@ -15,7 +15,7 @@ test('combining the type and date-opened filters on the Cases list narrows resul
   const today = new Date().toISOString().split('T')[0];
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('grievance');
   await page.getByRole('button', { name: 'Create case' }).click();

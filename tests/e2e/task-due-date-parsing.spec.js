@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP24, §20) — real due-date
 // parsing for a commitment a document/OH-report finding's own text
@@ -22,7 +22,7 @@ test('accepting an "action" finding with a time commitment creates a task with t
   const employeeName = `E2E DueDate ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

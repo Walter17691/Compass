@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P3) — the Timeline tab used to be a
 // purely flat chronological event list (caseTimeline.js), with no sense
@@ -19,7 +19,7 @@ test('the Timeline tab shows a stage-aware progress row that advances as the cas
   const employeeName = `E2E ProcessTimeline ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

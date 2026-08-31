@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 7 of the reasoning-layer build-out — Intelligent Document
 // Ingestion, built as a prerequisite for Phase 24 (Email integration
@@ -19,7 +19,7 @@ test('analysing an uploaded document surfaces a witness finding that creates a r
   const employeeName = `E2E DocIngest ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

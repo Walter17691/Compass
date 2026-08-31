@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, logout, SECOND_TENANT_CREDS, hasSecondTenant, requireSecondTenantOrFail, currentAccessToken, deleteCaseByEmployeeName } from './helpers.js';
+import { login, openNewCaseModal, logout, SECOND_TENANT_CREDS, hasSecondTenant, requireSecondTenantOrFail, currentAccessToken, deleteCaseByEmployeeName } from './helpers.js';
 
 // Phase 6.5 hardening (production regression suite) — every other spec in
 // this suite runs against ONE shared test org (E2E_TEST_EMAIL), which can
@@ -49,7 +49,7 @@ test('a case created in one org is invisible to a genuinely different tenant', a
   const canaryName = `Isolation Canary ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(canaryName);
   await page.getByRole('combobox').nth(2).selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case', exact: true }).click();
@@ -190,7 +190,7 @@ test('org data is namespaced in localStorage by the currently active org, not le
   // freshly-authenticated session with no activity yet genuinely has no
   // cache key at all. Creating a real case is what any user does that
   // triggers this write, so it's also the only way to test it honestly.
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(canaryName);
   await page.getByRole('combobox').nth(2).selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case', exact: true }).click();

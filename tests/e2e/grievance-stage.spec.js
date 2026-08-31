@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 10 of the gap-analysis build-out: getCaseStage()/getNextStep()
 // generalized from one hardcoded disciplinary-shaped lifecycle into a
@@ -13,7 +13,7 @@ test('a grievance case gets grievance-shaped Copilot guidance and meeting groupi
   const employeeName = `E2E Grievance ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('grievance');
   await page.getByRole('button', { name: 'Create case' }).click();

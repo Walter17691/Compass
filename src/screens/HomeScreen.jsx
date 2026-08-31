@@ -1,7 +1,5 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { SCREENS } from '../constants';
-import { topOpenSignalsOrgWide, signalTypeMeta } from '../lib/caseSignals';
-import { computeStageBottlenecks } from '../lib/processDashboard';
 import { buildForYouFeed, humanizeDeadlineTitle } from '../lib/homeFeed';
 import { requiresApproval } from '../lib/approvals';
 import { AskCompassIcon } from '../components/Icons';
@@ -13,62 +11,6 @@ import { FONT, COLOR, SPACE, RADIUS, TYPE, CONTENT_MAX_WIDTH } from '../styles/t
 const STARTER_PROMPTS = ["What needs my attention?", "Summarise my open cases", "What's overdue?"];
 
 const TYPE_LABEL = { ACTION_NEEDED: "Action needed", DEADLINE: "Deadline", APPROVAL: "Approval", FOLLOW_UP: "Follow-up" };
-
-// Home Micro-Polish pass — Compass Noticed's reasoning is real, AI-
-// written explanation text (already generated once at signal-creation
-// time, never rewritten here) that can run to several sentences. Showing
-// it in full by default let one long signal dominate the whole secondary
-// rail; showing none of it lost the "why" the brief's own Part 8 asked
-// for. This clamps the reasoning to a 3-line preview via CSS
-// line-clamp (no truncation of the underlying string — the full text is
-// always in the DOM, just visually clipped) and only offers a
-// More/Less toggle when the text actually overflows that preview,
-// measured directly via scrollHeight vs clientHeight rather than a
-// length heuristic, so short reasoning never gets a dead-end "More".
-// Title and the contextual action stay their own, more prominent
-// buttons/text — this component owns only the reasoning + its own
-// disclosure control, never the row's navigation.
-function CompassNoticedItem({ sig, cs, meta, ctaLabel, onOpenCase }) {
-  const [expanded, setExpanded] = useState(false);
-  const [canExpand, setCanExpand] = useState(false);
-  const reasoningRef = useRef(null);
-  const reasoningId = `compass-noticed-reasoning-${sig.id}`;
-
-  useEffect(() => {
-    const el = reasoningRef.current;
-    if (!el) return;
-    setCanExpand(el.scrollHeight > el.clientHeight + 1);
-  }, [sig.reasoning]);
-
-  return (
-    <div style={{display:"flex",alignItems:"flex-start",gap:8,width:"100%",fontFamily:FONT.sans}}>
-      <div style={{width:5,height:5,borderRadius:"50%",background:meta.color,flexShrink:0,marginTop:6}}/>
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{sig.title}</div>
-        {sig.reasoning&&(
-          <div ref={reasoningRef} id={reasoningId} style={{fontSize:11.5,color:COLOR.inkFaint,marginTop:2,lineHeight:1.4,...(expanded?null:{display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"})}}>
-            {sig.reasoning}
-          </div>
-        )}
-        <div style={{fontSize:11,color:COLOR.inkQuiet,marginTop:2}}>{cs?.employeeName||"Unknown case"}</div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginTop:4}}>
-          {cs&&(
-            <button onClick={onOpenCase} style={{fontSize:11.5,fontWeight:600,color:COLOR.purple,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
-              {ctaLabel}
-            </button>
-          )}
-          {canExpand&&(
-            <button onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded} aria-controls={reasoningId}
-              aria-label={expanded?`Show less detail — ${sig.title}`:`Show more detail — ${sig.title}`}
-              style={{fontSize:11,fontWeight:600,color:COLOR.inkQuiet,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
-              {expanded?"Less":"More"}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Home Experience Redesign — a busy real org can genuinely have dozens of
 // pending approvals/overdue items; the feed is already correctly
@@ -95,7 +37,7 @@ const ROW_ACCENT = (item) => item.urgent ? COLOR.red : item.type==="APPROVAL" ? 
 // invents a new legal/statutory calculation; this file only decides how
 // those existing facts are laid out and which one earns the user's
 // attention first.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setScreen, setShowCasePrompt, dueSoon, setActiveCaseId, setActiveCaseStage, fmtDate, caseSignals=[], concernReferrals=[], isHR, hrReviewRequests=[], processTemplates=[], onAskCompass }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setScreen, setShowCasePrompt, dueSoon, setActiveCaseId, setActiveCaseStage, fmtDate, concernReferrals=[], isHR, hrReviewRequests=[], onAskCompass }) {
   const [askInput, setAskInput] = useState("");
   const submitAsk = (overrideQuestion) => {
     const question = (overrideQuestion ?? askInput).trim();
@@ -181,15 +123,6 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
   const overdueCount = dueSoon.filter(d=>d.overdue).length;
   const awaitingApprovalCount = hrReviewRequests.filter(r=>r.status==="pending" && requiresApproval(r.step)).length;
   const hasWorkBreakdown = overdueCount>0 || awaitingApprovalCount>0 || weekDeadlines>0;
-
-  // §7 "Compass Noticed" — identical source/logic to the previous
-  // "Compass intelligence" block; presentation and location only changed.
-  // Part 8 — capped at 3 (was 5): each row is now taller (title +
-  // reasoning + action), so fewer, more legible rows keep the rail
-  // proportionate rather than turning it into a second feed.
-  const recommendations = topOpenSignalsOrgWide(caseSignals,["next_action","process_risk"],3);
-  const bottlenecks = computeStageBottlenecks(cases, processTemplates);
-  const hasCompassNoticed = recommendations.length>0 || bottlenecks.length>0;
 
   // §8 Continue working — max 4, sorted by recency, subordinate to For You.
   const RECENT_LIMIT = 4;
@@ -385,16 +318,22 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
               </div>
             </div>
 
-            {/* Home + Sidebar Product Experience pass, Parts 8/9 —
-                secondary rail. "Your work" now shows a real breakdown
-                (overdue / awaiting approval / due this week) instead of
-                a bare open-case count, and is omitted entirely when none
-                of the three apply. "Compass noticed" now surfaces each
-                signal's own reasoning (already AI-written at creation,
-                previously discarded here) alongside a specific action,
-                not just a title + employee name. */}
-            <div className="home-v2-secondary">
-              {hasWorkBreakdown&&(
+            {/* UAT Product Hierarchy pass, Part 1 — "Compass noticed" is
+                removed from Home entirely. Human UAT found it duplicated
+                information already available through For You, Continue
+                Working, and each case's own Case Readiness section
+                (GuardrailsPanel/UnansweredQuestionsPanel already surface
+                the exact same open signals, in context, inside the case
+                itself — see OverviewTab.jsx). Nothing about the
+                underlying signals/intelligence is touched: caseSignals
+                still exist, are still created the same way, and still
+                render inside every case's own Overview. Home simply no
+                longer duplicates them as a second, decontextualised feed.
+                "Your work" is the only thing left in this rail — a real
+                breakdown, not a vanity count, so it earns the column on
+                its own. No replacement widget was added in its place. */}
+            {hasWorkBreakdown&&(
+              <div className="home-v2-secondary">
                 <div>
                   <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Your work</div>
                   <div style={{fontSize:12.5,color:COLOR.inkSoft,lineHeight:1.8}}>
@@ -405,30 +344,8 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
                     {weekDeadlines>0&&<>{weekDeadlines} due this week</>}
                   </div>
                 </div>
-              )}
-              {hasCompassNoticed&&(
-                <div>
-                  <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Compass noticed</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {recommendations.map((sig)=>{
-                      const cs=cases.find(c=>c.id===sig.caseId);
-                      const meta=signalTypeMeta(sig.type);
-                      const ctaLabel = sig.type==="process_risk" ? "Review guardrail →" : "Review case →";
-                      return (
-                        <CompassNoticedItem key={sig.id} sig={sig} cs={cs} meta={meta} ctaLabel={ctaLabel}
-                          onOpenCase={()=>{setActiveCaseId(cs.id); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW);}}/>
-                      );
-                    })}
-                    {bottlenecks.slice(0,2).map((b,i)=>(
-                      <div key={i} style={{fontSize:12.5,color:COLOR.ink}}>
-                        {b.processType} · {b.stage} running long
-                        <div style={{fontSize:11.5,color:COLOR.inkFaint,marginTop:1}}>avg {b.avgDays}d (target {b.targetDays}d)</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
           </div>
         )}

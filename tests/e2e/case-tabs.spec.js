@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 6 of the gap-analysis build-out replaced the case view's old
 // stage-tabs-drive-everything layout with a proper named tab bar
@@ -13,7 +13,7 @@ test('People, Documents, Outcome, Meetings, and AI Assistant tabs each render di
   const employeeName = `E2E CaseTabs ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

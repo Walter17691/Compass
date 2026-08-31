@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 2 of the AI-copilot reasoning-layer build-out: a Covered / Still
 // to explore panel on the case Overview tab, built on Phase 0's
@@ -12,7 +12,7 @@ test('Compass reviews a case for covered vs still-to-explore topics, and a quest
   const employeeName = `E2E Unanswered ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByPlaceholder('Brief summary of the issue…').fill('Alleged unauthorised absence on 5 August. Manager Ryan says colleague Sarah Jones witnessed part of the conversation, but Sarah Jones has not yet been interviewed or contacted by HR in any way — this remains completely unexplored.');

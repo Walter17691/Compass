@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P10) — Decision-Maker Workspace
 // enhancement. AllegationsPanel/EvidenceMatrixPanel gain three things:
@@ -27,7 +27,7 @@ test('an allegation shows a policy citation from its own title, and records inve
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
   const employeeName = `E2E DecisionWorkspace ${Date.now()}`;
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

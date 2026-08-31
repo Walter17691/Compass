@@ -62,6 +62,16 @@ export const COLOR = {
   amberTint: "#FFF6E0",
   green: "#1A7A4A",
   greenTint: "#E8F5EE",
+
+  // UAT Product Hierarchy pass, Part 4 — the semantic model names BLUE=
+  // informational as its own category, distinct from PURPLE (brand/
+  // primary action) and GREEN (success/completed). Nothing neutrally
+  // informational had a colour of its own before this — e.g. "we
+  // refreshed this case with newer data" was being shown in the same
+  // green as a genuine success message, or the same red as a genuine
+  // error, neither of which is what it means.
+  blue: "#2E6BA8",
+  blueTint: "#EAF2FA",
 };
 
 // Caps primary reading content on very large monitors (1920px+) so rows/

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P18, §15) — the first genuinely
 // org-configurable ER process template: define required documents,
@@ -54,7 +54,7 @@ test('an org-configured process template auto-creates its default task and shows
 
   // Create a new "flexible working" case — the template should fire.
   await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('flexible working');
   await page.getByRole('button', { name: 'Create case' }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 15 of the reasoning-layer build-out (Manager Investigation Mode).
 // Reuses case_access (existed since baseline_schema_2026-08-06.sql for
@@ -16,7 +16,7 @@ test('assigning an investigator seeds the checklist as case tasks and HR sees pr
   const employeeName = `E2E Investigator ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

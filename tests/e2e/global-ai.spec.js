@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 22 of the reasoning-layer build-out — Global Compass AI. A new,
 // additive entry point ("Ask Compass" in the sidebar) alongside the
@@ -66,7 +66,7 @@ test('Ask Compass answers a specific-case question and links back to that case',
   const employeeName = `E2E GlobalAI ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByPlaceholder('Brief summary of the issue…').fill('Alleged unauthorised absence from shift on 5 August.');

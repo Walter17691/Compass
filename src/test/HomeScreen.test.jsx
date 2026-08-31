@@ -244,112 +244,26 @@ describe('HomeScreen — empty state (Home Experience Redesign, §15)', () => {
   });
 });
 
-describe('HomeScreen — Compass noticed (Home + Sidebar Product Experience pass, Part 8)', () => {
-  it('shows the signal\'s own reasoning and a type-specific action, not just a title and employee name', () => {
+// UAT Product Hierarchy pass, Part 1 — "Compass noticed" is removed from
+// Home entirely (Human UAT found it duplicated For You, Continue
+// Working, and each case's own Case Readiness section). The underlying
+// caseSignals data/handling is untouched — see OverviewTab.jsx's own
+// GuardrailsPanel/UnansweredQuestionsPanel tests for that coverage —
+// this only confirms Home no longer renders a second, decontextualised
+// feed of the same signals, and that passing the old props through no
+// longer does anything (they're accepted-and-ignored, not required).
+describe('HomeScreen — Compass noticed removed (UAT Product Hierarchy pass)', () => {
+  it('never renders a "Compass noticed" section, even when caseSignals/processTemplates are passed through', () => {
     const cases = [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }];
     const caseSignals = [{
       id: 'sig1', caseId: 'c1', type: 'process_risk', status: 'open',
-      title: 'Possible evidence gap',
-      reasoning: 'The evidence recorded in this appeal may not address the employee\'s explanation.',
+      title: 'Possible evidence gap', reasoning: 'The evidence recorded may not address the explanation.',
       createdAt: new Date().toISOString(),
     }];
-    render(<HomeScreen {...baseHomeProps} cases={cases} caseSignals={caseSignals} />);
-    expect(screen.getByText('Possible evidence gap')).toBeInTheDocument();
-    expect(screen.getByText('The evidence recorded in this appeal may not address the employee\'s explanation.')).toBeInTheDocument();
-    expect(screen.getByText('Review guardrail →')).toBeInTheDocument();
-  });
-
-  it('labels a next_action signal "Review case →" rather than the guardrail wording', () => {
-    const cases = [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }];
-    const caseSignals = [{
-      id: 'sig1', caseId: 'c1', type: 'next_action', status: 'open',
-      title: 'Next best action available', reasoning: 'A next step has been identified.',
-      createdAt: new Date().toISOString(),
-    }];
-    render(<HomeScreen {...baseHomeProps} cases={cases} caseSignals={caseSignals} />);
-    expect(screen.getByText('Review case →')).toBeInTheDocument();
-  });
-
-  it('is omitted entirely when there are no open signals or bottlenecks', () => {
-    render(<HomeScreen {...baseHomeProps} cases={[{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }]} />);
+    render(<HomeScreen {...baseHomeProps} cases={cases} caseSignals={caseSignals} processTemplates={[]} />);
     expect(screen.queryByText('Compass noticed')).not.toBeInTheDocument();
-  });
-});
-
-describe('HomeScreen — Compass noticed reasoning progressive disclosure (Home Micro-Polish pass)', () => {
-  const withOverflow = (fn) => {
-    // jsdom never lays out real box heights, so scrollHeight/clientHeight
-    // are always 0 — the component's own overflow check (scrollHeight >
-    // clientHeight) can never fire without forcing real measurements
-    // here. Stubbing both getters is the only way to exercise the "long
-    // reasoning" branch in a unit test rather than only in a live browser.
-    Object.defineProperty(window.HTMLElement.prototype, 'scrollHeight', { configurable: true, value: 120 });
-    Object.defineProperty(window.HTMLElement.prototype, 'clientHeight', { configurable: true, value: 48 });
-    try {
-      fn();
-    } finally {
-      delete window.HTMLElement.prototype.scrollHeight;
-      delete window.HTMLElement.prototype.clientHeight;
-    }
-  };
-
-  const longReasoningProps = () => ({
-    cases: [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }],
-    caseSignals: [{
-      id: 'sig1', caseId: 'c1', type: 'process_risk', status: 'open',
-      title: 'Possible evidence gap',
-      reasoning: 'The evidence recorded in this appeal may not address the employee\'s explanation, and there is no indication the original finding considered it before a decision was reached.',
-      createdAt: new Date().toISOString(),
-    }],
-  });
-
-  it('shows a "More" toggle only when the reasoning actually overflows the clamped preview', () => {
-    const cases = [{ id: 'c1', employeeName: 'Sarah Jones', stage: 'investigation', updatedAt: new Date().toISOString() }];
-    const caseSignals = [{ id: 'sig1', caseId: 'c1', type: 'next_action', status: 'open', title: 'Short one', reasoning: 'Brief reason.', createdAt: new Date().toISOString() }];
-    render(<HomeScreen {...baseHomeProps} {...{ cases, caseSignals }} />);
-    // jsdom reports scrollHeight===clientHeight (both 0) by default, so
-    // short, non-overflowing reasoning must not render a dead-end toggle.
-    expect(screen.queryByRole('button', { name: /more/i })).not.toBeInTheDocument();
-  });
-
-  it('renders the full reasoning text in the DOM even while visually clamped, with a "More" control when it overflows', () => {
-    withOverflow(() => {
-      const props = longReasoningProps();
-      render(<HomeScreen {...baseHomeProps} {...props} />);
-      expect(screen.getByText(props.caseSignals[0].reasoning)).toBeInTheDocument();
-      const more = screen.getByRole('button', { name: /show more detail/i });
-      expect(more).toHaveAttribute('aria-expanded', 'false');
-      expect(more).toHaveAttribute('aria-controls');
-      expect(more).toHaveTextContent('More');
-    });
-  });
-
-  it('expands to "Less" on click/keyboard activation, without navigating or opening a modal', () => {
-    withOverflow(() => {
-      const setScreen = vi.fn();
-      const props = longReasoningProps();
-      render(<HomeScreen {...baseHomeProps} {...props} setScreen={setScreen} />);
-      const more = screen.getByRole('button', { name: /show more detail/i });
-      fireEvent.click(more);
-      expect(screen.getByRole('button', { name: /show less detail/i })).toHaveAttribute('aria-expanded', 'true');
-      expect(screen.getByText('Less')).toBeInTheDocument();
-      expect(setScreen).not.toHaveBeenCalled();
-      // Same full text stays in the DOM before and after — nothing was
-      // regenerated, summarised, or re-fetched by expanding it.
-      expect(screen.getByText(props.caseSignals[0].reasoning)).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /show less detail/i }));
-      expect(screen.getByRole('button', { name: /show more detail/i })).toHaveAttribute('aria-expanded', 'false');
-    });
-  });
-
-  it('keeps "Review guardrail →" as its own reachable control alongside More, not replaced by it', () => {
-    withOverflow(() => {
-      const props = longReasoningProps();
-      render(<HomeScreen {...baseHomeProps} {...props} />);
-      expect(screen.getByRole('button', { name: 'Review guardrail →' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /show more detail/i })).toBeInTheDocument();
-    });
+    expect(screen.queryByText('Possible evidence gap')).not.toBeInTheDocument();
+    expect(screen.queryByText('Review guardrail →')).not.toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P6) — computeGuardrailChecks gains a new
 // check for the spec's own worked example (§2): an allegation moving past
@@ -28,7 +28,7 @@ test('an allegation with no recorded employee response is flagged with a policy 
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
   const employeeName = `E2E GuardrailAction ${Date.now()}`;
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

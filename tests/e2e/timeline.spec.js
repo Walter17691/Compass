@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // The Timeline is a read-only merge of a case's meetings, allegations,
 // and audit log — nothing new is written here, so this proves the view
@@ -9,7 +9,7 @@ test('the case timeline shows case-opened and allegation events', async ({ page 
   const employeeName = `E2E Timeline ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP22, §18) — the OH
 // referral-to-review tracker on a case's Overview tab. Fully
@@ -44,13 +44,27 @@ test('advancing the OH process through every step saves each transition, includi
   const employeeName = `E2E OhProcess ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
-  await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
+  // UAT Product Hierarchy pass, Part 2, re-audited on human review — the
+  // Occupational Health Process disclosure is now genuinely contextual
+  // (OverviewTab.jsx): visible for real OH progress/referral data already
+  // recorded, a health-relevant process type, or real wellbeing notes for
+  // this employee — not for an arbitrary misconduct case with none of
+  // those. "Long-term sickness" is a real HEALTH_RELEVANT_PROCESS_TYPES
+  // entry (caseRisk.js) and the case type this tracker is actually built
+  // for, so it shows from creation, exercising the same OH stepper
+  // mechanics this test cares about without fighting that legitimate rule.
+  await page.locator('label:text-is("Case type") + select').selectOption('long-term sickness');
   await clickAndWaitForSave(page, page.getByRole('button', { name: 'Create case' }));
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await expect(page.getByText('Occupational health process')).toBeVisible({ timeout: 10000 });
+  // The disclosure is collapsed by default for a case with no OH history
+  // yet (OverviewTab.jsx's Disclosure defaultOpen) — pre-existing
+  // behaviour, unrelated to the contextual-visibility fix above; this
+  // test never reached far enough to exercise it before that fix, since
+  // every spec in this suite was blocked at case creation until now.
+  await page.getByRole('button', { name: 'Occupational health process' }).click();
   await expect(page.getByText('Concern identified')).toBeVisible();
 
   // concern_identified -> consider_referral

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, confirmOverrideReason } from './helpers.js';
+import { login, openNewCaseModal, confirmOverrideReason } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M8) — a witness or action suggestion
 // raised live but left undecided (HR too busy taking notes to act on it
@@ -15,7 +15,7 @@ test('a suggestion left undecided during the meeting can still be approved on th
 
   await login(page);
 
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

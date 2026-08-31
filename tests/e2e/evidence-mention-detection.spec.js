@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M3) — "Evidence mentioned" in the live
 // sidebar used to be a read-only list; a witness or piece of evidence
@@ -18,7 +18,7 @@ test('accepting a live witness mention creates a real task on the matching case'
   // A case for this employee has to exist already — acceptMeetingEvidenceSuggestion
   // resolves the target case the same way saveMeetingToCase() does at save
   // time (matching by employee name), not via a pre-set link.
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Home's "Suggested for you" panel claims to be context-aware — different
 // items for an active misconduct case vs. a grievance vs. no active cases
@@ -12,7 +12,7 @@ test('a case-linked quick link opens the actual case, not just Settings', async 
   const employeeName = `E2E QuickLinks ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   // The modal has more than one plain <select> (location, case type) with
   // no accessible label association, so target by DOM adjacency to the

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP7, §7) — assignInvestigator used to just
 // grant case_access with nothing else attached. AssignInvestigatorModal
@@ -15,7 +15,7 @@ test('assigning an investigator with a narrowed scope and a due date is reflecte
   const employeeName = `E2E InvAssign ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

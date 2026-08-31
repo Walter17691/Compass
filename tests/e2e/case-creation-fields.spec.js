@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 5 of the gap-analysis build-out: the "+ New case" modal previously
 // had no owner, priority, or evidence fields, and cases.manager was never
@@ -13,7 +13,7 @@ test('evidence staged during case creation lands on the case, and priority round
   const today = new Date().toISOString().split('T')[0];
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.locator('label:text-is("Priority") + select').selectOption('high');

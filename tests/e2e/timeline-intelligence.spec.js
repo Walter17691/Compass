@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 8 of the reasoning-layer build-out (5 of 5 in the ER Intelligence
 // MVP — see plan file). buildCaseTimeline() itself is unchanged/read-only;
@@ -13,7 +13,7 @@ test('Timeline entries can be edited, excluded, opened to source, and exported',
   const employeeName = `E2E Timeline2 ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

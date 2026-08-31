@@ -25,7 +25,11 @@ const CONFLICT_OF_INTEREST_TITLES = [
   "The Appeal Manager made the original decision",
 ];
 
-const HEALTH_RELEVANT_PROCESS_TYPES = ["attendance", "long_term_sickness", "capability"];
+// Exported for OverviewTab.jsx's own health/wellbeing field visibility
+// (fit note, OH referral) — same "health context typically relevant"
+// judgement call as this file's own missing_medical_info check below, so
+// the two share one definition instead of drifting apart.
+export const HEALTH_RELEVANT_PROCESS_TYPES = ["attendance", "long_term_sickness", "capability"];
 
 function riskItem(category, label, detail, sourceRefs) {
   return { category, label, detail, sourceRefs: sourceRefs || [] };

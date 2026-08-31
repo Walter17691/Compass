@@ -300,7 +300,11 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
                             {cs.urgent&&<span style={{color:COLOR.red,fontWeight:600}}>· URGENT</span>}
                             {cs.confidential&&<span style={{color:COLOR.amber,fontWeight:600,display:"inline-flex",alignItems:"center",gap:3}}>· <LockIcon size={10} />Confidential</span>}
                           </div>
-                          {next&&!closed&&<div style={{fontSize:11,color:COLOR.purple,fontWeight:500,marginTop:4}}>Next: {next.label}</div>}
+                          {/* UAT Product Hierarchy pass, Part 7 — matches
+                              CaseViewScreen's own Case Copilot banner
+                              wording change: a recommendation, not an
+                              instruction Compass is enforcing. */}
+                          {next&&!closed&&<div style={{fontSize:11,color:COLOR.purple,fontWeight:500,marginTop:4}}>Suggested next step: {next.label}</div>}
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                           {riskStyle&&<span style={{fontSize:10,fontWeight:700,color:riskStyle.color,background:riskStyle.bg,borderRadius:4,padding:"2px 7px"}}>{risk} RISK</span>}

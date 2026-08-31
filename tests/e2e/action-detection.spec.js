@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M4) — "Actions identified" in the live
 // sidebar was read-only text; a commitment made mid-meeting ("I'll send
@@ -18,7 +18,7 @@ test('accepting a live detected action creates a real task on the matching case'
   // Needs an existing case so acceptMeetingActionSuggestion (matches by
   // employee name, same as saveMeetingToCase() at save time) can attach a
   // real task immediately.
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

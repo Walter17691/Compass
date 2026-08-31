@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP21, §15) — "Open in
 // Compass" deep link. No live HRIS platform exists to link FROM (IP19 is
@@ -13,7 +13,7 @@ test('an ?employee= deep link lands on the Open in Compass screen, and its actio
   const employeeName = `E2E OpenInCompass ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

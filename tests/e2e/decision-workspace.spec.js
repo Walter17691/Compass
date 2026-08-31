@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 16 of the reasoning-layer build-out — last of the "process
 // intelligence" wave (policy intelligence -> procedural guardrails ->
@@ -15,7 +15,7 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   const employeeName = `E2E Decision ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

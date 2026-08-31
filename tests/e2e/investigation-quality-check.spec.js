@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, confirmOverrideReason } from './helpers.js';
+import { login, openNewCaseModal, confirmOverrideReason } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP10, §16) — "Conclude investigation &
 // generate report" (and every other trigger — the case's next-step
@@ -23,7 +23,7 @@ test('an unreviewed allegation triggers the Investigation Quality Check, and sub
   const employeeName = `E2E InvQuality ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

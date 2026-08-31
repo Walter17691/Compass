@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // CasesScreen paginates employee groups 15 at a time (useLoadMore), and
 // this shared E2E test org has accumulated enough same-day "capability"
@@ -32,7 +32,7 @@ test('appeal review: generating a review creates a signal, and recording the out
   // Create a case, add an allegation, and record a finding with reasoning
   // — the Appeal review block only renders once isFindingStatus(a.status)
   // is true (same gate as Decision Workspace's reasoning block).
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('capability');
   await page.getByRole('button', { name: 'Create case' }).click();

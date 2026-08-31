@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, confirmOverrideReason } from './helpers.js';
+import { login, openNewCaseModal, confirmOverrideReason } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M11) — end-to-end verification. Builds the
 // exact scenario from the spec's own §16: a case with several allegations,
@@ -20,7 +20,7 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   // will deliberately never touch, so M9's quality check has a real gap
   // to catch computeMeetingQualityGaps compares each allegation's title
   // keywords against the current meeting's own transcript.
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

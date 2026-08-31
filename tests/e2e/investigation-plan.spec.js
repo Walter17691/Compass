@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP8, §9) — distinct from the fixed generic
 // 7-step checklist (investigationChecklist.js, seeded automatically on
@@ -16,7 +16,7 @@ test('generating an investigation plan adds case-specific tasks, tagged and visi
   const employeeName = `E2E InvPlan ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP5, §22) — the one rule
 // that's straightforwardly deterministic to trigger through the real UI
@@ -13,7 +13,7 @@ test('an overdue task surfaces a suggestion on the case Overview tab', async ({ 
   const taskName = `Chase witness statement ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

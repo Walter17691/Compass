@@ -3,6 +3,34 @@ import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
+import { PageHeader } from '../components/design/PageHeader';
+import { COLOR, TYPE, FONT } from '../styles/tokens';
+
+// UAT Product Hierarchy pass, Part 3 — this screen was the brief's own
+// flagship bad example: a bare tab row with no page identity, no case/
+// employee context, and a lone "← Back" buried in the bottom action row.
+// Reuses the same PageHeader primitive Cases/People/Insights/Settings
+// already share, and the same purple-pill local-nav style CaseViewScreen's
+// own tab bar already uses — no second design system introduced.
+const LETTER_TYPES = [
+  { id:"outcome", l:"Outcome letter" },
+  { id:"invite", l:"Invitation" },
+  { id:"appeal", l:"Appeal outcome" },
+  { id:"suspension", l:"Suspension" },
+  { id:"meeting-confirmation", l:"Meeting confirmation" },
+];
+
+// This screen is also reached directly (no tab of their own) for a few
+// other correspondence types — Documents tab's "Draft: …" shortcuts and
+// the Case Copilot's "No case to answer" letter. Named here so the page
+// title/generation text is honest about what's actually being drafted
+// instead of falling back to a bare "Letter".
+const OTHER_LETTER_LABELS = {
+  "witness-invitation": "Witness invitation",
+  "evidence-request": "Evidence request",
+  "oh-consent-request": "OH consent request",
+  "no-case-answer": "Response letter",
+};
 
 export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true }) {
   const [showHistory, setShowHistory] = useState(false);
@@ -21,20 +49,37 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
   // rule rather than a surprise error after the fact.
   const outcomeNotYetDecided = activeLetter==="outcome" && !outcomeRecorded;
   const canIssue = letterIsApproved && !outcomeNotYetDecided;
+  const activeLetterLabel = LETTER_TYPES.find(lt=>lt.id===activeLetter)?.l || OTHER_LETTER_LABELS[activeLetter] || "Letter";
   return (
     <div>
-      <div style={{borderBottom:"1px solid #E8E0D0"}}>
-        <div style={{maxWidth:1440,margin:"0 auto",padding:"0 20px",display:"flex",gap:2}}>
-          {[{id:"outcome",l:"Outcome letter"},{id:"invite",l:"Invitation"},{id:"appeal",l:"Appeal outcome"},{id:"suspension",l:"Suspension"},{id:"meeting-confirmation",l:"Meeting confirmation"}].map(lt=>(
-            <button key={lt.id} onClick={()=>handleLetter(lt.id)}
-              style={{background:"none",border:"none",borderBottom:"2px solid",borderBottomColor:activeLetter===lt.id?"#7C5CFC":"transparent",padding:"12px 16px",fontSize:13,color:activeLetter===lt.id?"#FFFFFF":"#9B9098",fontWeight:activeLetter===lt.id?600:400}}>
-              {lt.l}
-            </button>
-          ))}
+      <div style={{borderBottom:`1px solid ${COLOR.border}`,background:COLOR.paper}}>
+        <div style={{maxWidth:1440,margin:"0 auto",padding:"20px 20px 0"}}>
+          <PageHeader
+            eyebrow="Generate letter"
+            title={activeLetterLabel}
+            subtitle={caseInfo.employee?`${caseInfo.employee}${caseInfo.manager?` · Owner: ${caseInfo.manager}`:""}`:undefined}
+            actions={<Btn variant="ghost" onClick={()=>setScreen(SCREENS.REVIEW)}>← Back to case</Btn>}
+          />
+          <div style={{display:"flex",gap:2,paddingBottom:8}}>
+            {LETTER_TYPES.map(lt=>(
+              <button key={lt.id} onClick={()=>handleLetter(lt.id)}
+                style={{padding:"6px 9px",borderRadius:6,border:"none",background:activeLetter===lt.id?COLOR.purpleTint:"none",color:activeLetter===lt.id?COLOR.purpleDeep:COLOR.inkSoft,fontWeight:activeLetter===lt.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+                {lt.l}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div style={{maxWidth:900,margin:"28px auto",padding:"0 20px"}}>
-        {aiProcessing&&!letterOutput&&<div style={{textAlign:"center",padding:50}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span><div style={{color:"#6B6375",marginTop:10}}>Drafting...</div></div>}
+        {aiProcessing&&!letterOutput&&(
+          <div style={{textAlign:"center",padding:50}}>
+            <span className="pu" style={{color:COLOR.purple,fontSize:24}}>●</span>
+            <div style={{...TYPE.pageTitle,fontSize:18,color:COLOR.ink,marginTop:14}}>Drafting your {activeLetterLabel.toLowerCase()}...</div>
+            <div style={{fontSize:13,color:COLOR.inkFaint,marginTop:8,maxWidth:420,marginLeft:"auto",marginRight:"auto",lineHeight:1.6}}>
+              {caseInfo.employee?`For ${caseInfo.employee}. `:""}Compass is still working on this — feel free to switch tabs or navigate elsewhere; your draft will be here, and we'll let you know when it's ready.
+            </div>
+          </div>
+        )}
         {letterOutput&&(
           <>
             {/* Edit toggle */}
@@ -151,7 +196,6 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               <Btn variant="ghost" onClick={()=>window.print()} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Print</Btn>
               <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Copy text</Btn>
               <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
-              <Btn variant="ghost" onClick={()=>setScreen(SCREENS.REVIEW)}>← Back</Btn>
             </div>
 
             {letterHistory.length>0&&(

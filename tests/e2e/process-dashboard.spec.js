@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P17, §18) — the "Potential Bottlenecks"
 // panel needs a case that's been sitting in a stage for well over
@@ -32,7 +32,7 @@ test('a case left in its opening stage for a long time surfaces in Potential Bot
   farPast.setDate(farPast.getDate() - 500);
   await page.clock.setFixedTime(farPast);
 
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('long-term sickness');
   await page.getByRole('button', { name: 'Create case' }).click();

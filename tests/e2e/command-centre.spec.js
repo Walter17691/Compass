@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 20 of the reasoning-layer build-out — last item in the "scale/
 // commercialisation" wave. Extends HomeScreen's existing "Needs attention"
@@ -47,7 +47,7 @@ test('a freshly created case does not appear as a stale case on Home', async ({ 
   const employeeName = `E2E Centre Fresh ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Phase 24 of the reasoning-layer build-out — Email integration
 // groundwork. Real Outlook/Gmail integration needs OAuth app registration
@@ -12,7 +12,7 @@ test('pasting an email suggests the matching case and saves it as evidence once 
   const employeeName = `E2E SaveEmail ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();

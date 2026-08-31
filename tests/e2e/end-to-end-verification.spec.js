@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P20, §21) — the acceptance bar for the
 // whole phase, same shape as Meeting Intelligence's own closing spec
@@ -61,7 +61,7 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
 
   // ── Create the case ──
   await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption(caseType);
   await page.getByPlaceholder('Brief summary of the issue…').fill('Repeated unauthorised absence from shifts without prior notice or explanation.');

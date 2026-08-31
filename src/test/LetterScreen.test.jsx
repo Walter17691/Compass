@@ -150,3 +150,28 @@ describe('LetterScreen — field labelling (Phase 6.5, Batch 13)', () => {
     expect(screen.getByLabelText('Letter text')).toBeInTheDocument();
   });
 });
+
+// UAT Product Hierarchy pass, Part 3 — this screen was the brief's own bad
+// example: no page title, no case identity, only a buried "← Back". Now a
+// PageHeader names the letter type and the employee, and a single
+// "← Back to case" action replaces the old bottom-row duplicate.
+describe('LetterScreen — page identity (UAT Product Hierarchy pass, Part 3)', () => {
+  it('shows the letter type as the page title and the employee as context', () => {
+    render(<LetterScreen {...baseProps} activeLetter="outcome" />);
+    expect(screen.getByRole('heading', { name: 'Outcome letter' })).toBeInTheDocument();
+    expect(screen.getByText(/Sarah Jones/)).toBeInTheDocument();
+  });
+
+  it('provides one "Back to case" action, not a second buried one at the bottom', () => {
+    render(<LetterScreen {...baseProps} activeLetter="invite" />);
+    expect(screen.getByRole('button', { name: '← Back to case' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '← Back' })).not.toBeInTheDocument();
+  });
+
+  it('names the letter type and the employee while a draft is generating, and reassures the user they can navigate away', () => {
+    const { container } = render(<LetterScreen {...baseProps} activeLetter="appeal" aiProcessing={true} letterOutput="" />);
+    expect(container.textContent).toMatch(/Drafting your appeal outcome/i);
+    expect(screen.getByText(/For Sarah Jones/)).toBeInTheDocument();
+    expect(screen.getByText(/navigate elsewhere/i)).toBeInTheDocument();
+  });
+});

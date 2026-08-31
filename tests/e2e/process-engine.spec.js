@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Process Intelligence Phase 3 (P2) — before this, "probation"/
 // "flexible working"/"long-term sickness" were already selectable case
@@ -19,7 +19,7 @@ test('a probation case and a long-term sickness case each get their own correct 
 
   await login(page);
 
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(probationEmployee);
   await page.locator('label:text-is("Case type") + select').selectOption('probation');
   await page.getByRole('button', { name: 'Create case' }).click();
@@ -32,7 +32,7 @@ test('a probation case and a long-term sickness case each get their own correct 
   await expect(page.getByText('Next: Schedule investigation meeting', { exact: true })).not.toBeVisible();
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(sicknessEmployee);
   await page.locator('label:text-is("Case type") + select').selectOption('long-term sickness');
   await page.getByRole('button', { name: 'Create case' }).click();

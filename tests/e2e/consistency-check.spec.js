@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 async function revealCase(page, employeeName) {
   for (let i = 0; i < 20; i++) {
@@ -21,7 +21,7 @@ async function revealCase(page, employeeName) {
 // no policy identified) — "Create follow-up action" clears it without
 // blocking, same pattern as decision-quality-check.spec.js.
 async function createClosedComparableCase(page, employeeName, caseType, outcomeType, reasoning) {
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption(caseType);
   await page.getByRole('button', { name: 'Create case' }).click();
@@ -123,7 +123,7 @@ test('consistency check shows a sanction distribution and anonymised comparable 
   await createClosedComparableCase(page, nameC, caseType, 'Dismissal with notice', 'DISTINCTIVE_REASONING_C_cctv_footage');
 
   const currentName = `E2E ConsistCurrent ${suffix}`;
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(currentName);
   await page.locator('label:text-is("Case type") + select').selectOption(caseType);
   await page.getByRole('button', { name: 'Create case' }).click();

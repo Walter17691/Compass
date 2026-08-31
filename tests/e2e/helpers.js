@@ -96,6 +96,27 @@ export function requireSecondTenantOrFail() {
   }
 }
 
+// IA & User Journey pass, §7 (production change, already in the frozen
+// baseline before this fix) replaced the sidebar's standalone "+ New
+// case" button with one universal "Create" control — clicking it opens a
+// menu (role="menu", CreateMenu.jsx) whose first global item is "New
+// case", which opens the same case-creation dialog ("New case" heading,
+// Employee name/Job title/Start date/Location/Case type/Owner/Priority/
+// Description fields, "Create case" submit button) every spec below was
+// already filling in correctly — only the entry point had gone stale.
+// This helper is the one place that entry point is expressed, so a
+// future UI change to it only needs fixing here, not across every spec.
+export async function openNewCaseModal(page) {
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('menu', { name: 'Create' }).getByRole('button', { name: 'New case', exact: true }).click();
+  // 10s, not the 5s default — this shared test org has accumulated 1700+
+  // cases across this suite's history (see occupational-health-process.spec.js's
+  // own comment), which measurably slows down renders late in a run; every
+  // other spec in this suite already uses an explicit 10s timeout for
+  // exactly this reason.
+  await expect(page.getByRole('dialog').getByText('New case', { exact: true })).toBeVisible({ timeout: 10000 });
+}
+
 // Signs the current session out and waits for the login screen to come
 // back — used by tests that need to switch between two genuinely
 // different accounts within one spec (Playwright doesn't persist

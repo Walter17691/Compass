@@ -34,6 +34,11 @@ import { FONT, COLOR, TYPE, RADIUS, BUTTON, CONTENT_MAX_WIDTH } from '../styles/
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
 
+// UAT Product Hierarchy pass, Part 6 — names what's generating in the
+// Case Copilot's inline draft preview, matching the ids handleNextStepAction
+// actually passes to setDraftedType/handleLetter above.
+const DRAFTED_TYPE_LABELS = { invite:"invitation letter", outcome:"outcome letter", appeal:"appeal outcome letter", "no-case-answer":"response letter" };
+
 const TABS = [
   { id:"overview", label:"Overview" },
   { id:"timeline", label:"Timeline" },
@@ -476,7 +481,10 @@ export function CaseViewScreen({
         <div style={{background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"12px 28px",flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div style={{minWidth:0}}>
-              <div style={{fontSize:13,color:"#5B3FD4",fontWeight:600}}>Next: {nextStep.label}</div>
+              {/* UAT Product Hierarchy pass, Part 7 — "Next:" read as an
+                  instruction Compass was enforcing rather than a
+                  recommendation HR is free to act on differently. */}
+              <div style={{fontSize:13,color:"#5B3FD4",fontWeight:600}}>Suggested next step: {nextStep.label}</div>
               {nextStep.reason&&<div style={{fontSize:11,color:"#6B6375",marginTop:2}}>{nextStep.reason}</div>}
               <CaseReadinessBadge readiness={readiness}/>
               {isHR&&currentInvestigator&&(
@@ -495,8 +503,18 @@ export function CaseViewScreen({
           {/* Inline draft preview — only for letter-generating actions */}
           {showDraft&&(
             <div style={{marginTop:12,background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:10,padding:14}}>
+              {/* UAT Product Hierarchy pass, Part 6 — a bare "Drafting…"
+                  gave no sense of what was being generated, for whom, or
+                  that anything was still happening. This banner already
+                  sits below the case's full header/tabs (nothing here
+                  hides page identity), so the fix is just naming the
+                  letter type and employee and reassuring the user the
+                  rest of the case is still usable while this finishes. */}
               {aiProcessing?(
-                <div style={{fontSize:13,color:"#9B9098"}}>Drafting…</div>
+                <div>
+                  <div style={{fontSize:13,color:"#1A1535",fontWeight:600}}>Drafting your {DRAFTED_TYPE_LABELS[draftedType]||"letter"}...</div>
+                  <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>For {cs.employeeName}. Compass is still working — feel free to keep working elsewhere on this case meanwhile.</div>
+                </div>
               ):aiError?(
                 <div style={{fontSize:13,color:"#C84B2F"}}>{aiError}</div>
               ):(

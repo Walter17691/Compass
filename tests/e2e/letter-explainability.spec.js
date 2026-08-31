@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 async function revealCase(page, employeeName) {
   for (let i = 0; i < 20; i++) {
@@ -29,7 +29,7 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   const employeeName = `E2E LetterWhy ${Date.now()}`;
   const caseType = 'misconduct';
 
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption(caseType);
   await page.getByRole('button', { name: 'Create case' }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, openNewCaseModal } from './helpers.js';
 
 // Tasks (case_tasks) are new as of Phase 3 of the gap-analysis build-out.
 // This proves both surfaces stay in sync: a task added from inside a case
@@ -16,7 +16,7 @@ test('a task added on a case appears on the cross-case Tasks screen and can be c
   const taskName = `Chase evidence ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: '+ New case' }).click();
+  await openNewCaseModal(page);
   await page.getByPlaceholder('Full name').fill(employeeName);
   await page.locator('label:text-is("Case type") + select').selectOption('misconduct');
   await page.getByRole('button', { name: 'Create case' }).click();
