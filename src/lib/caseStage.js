@@ -28,9 +28,27 @@ import { isAppealMeeting, isDisciplinaryMeeting, isInvestigationMeeting, isGriev
 // cases with no tracked stage at all, so it has no legitimate reason to
 // guess "closed" from a document-signing fact it can't actually verify
 // means what it's assuming.
+// Human UAT remediation, Batch 2 hardening — letterOutput alone never
+// recorded which letter category produced it (outcome vs invite vs appeal
+// vs suspension), so "some meeting has a letterOutput" could not actually
+// distinguish a genuine outcome from a disciplinary/appeal hearing
+// invitation — drafting and saving an invitation set this exact same
+// field, and every consumer that inferred "an outcome/appeal-outcome
+// exists" from letterOutput's mere presence (this file, nextStep.js,
+// App.jsx's getCaseStatus, deadlines.js, processTimeline.js) was equally
+// fooled by it. App.jsx's saveMeetingToCaseImpl now also stamps
+// letterType (the same identity already sent to /api/send-letter when a
+// letter is actually sent) alongside letterOutput; this checks that
+// identity when it's known, and only falls back to the old any-
+// letterOutput heuristic for meetings saved before this fix existed,
+// whose real letter type was never recorded and can't be recovered.
+export function hasLetterType(meetings, type) {
+  return (meetings||[]).some(m => m.letterOutput && (m.letterType ? m.letterType === type : true));
+}
+
 function inferDisciplinaryStage(cs) {
   const meetings = cs.meetings||[];
-  const hasOutcome = meetings.some(m=>m.letterOutput);
+  const hasOutcome = hasLetterType(meetings, "outcome");
   const hasInvReport = cs.investigationReport;
   if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
@@ -47,7 +65,7 @@ function inferDisciplinaryStage(cs) {
 // not a case-closure signal. Removed for the same reason.
 function inferGrievanceStage(cs) {
   const meetings = cs.meetings||[];
-  const hasOutcome = meetings.some(m=>m.letterOutput);
+  const hasOutcome = hasLetterType(meetings, "outcome");
   if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
   if(meetings.some(m=>isGrievanceMeeting(m.type))) return "hearing";

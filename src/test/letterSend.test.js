@@ -13,6 +13,19 @@ describe('buildLetterSubject (Phase 5, IP14)', () => {
   it('defaults employee/meetingType when missing', () => {
     expect(buildLetterSubject({ type: 'outcome' })).toBe('Meeting Outcome Letter - Employee');
   });
+
+  // Human UAT remediation, Batch 2, Part 13 (adjacent finding) — invite/
+  // appeal/suspension used to fall through to the generic "... Outcome
+  // Letter" fallback too, so a hearing invitation went out mislabelled
+  // as an outcome letter — the exact bug this file's own history already
+  // fixed once for witness-invitation, just never generalised.
+  it.each([
+    ['invite', 'Invitation - Sarah Jones'],
+    ['appeal', 'Appeal outcome - Sarah Jones'],
+    ['suspension', 'Suspension - Sarah Jones'],
+  ])('uses the correct label for type "%s", not the outcome-letter fallback', (type, expected) => {
+    expect(buildLetterSubject({ type, employeeName: 'Sarah Jones' })).toBe(expected);
+  });
 });
 
 describe('buildSentLetterEvidenceItem (Phase 5, IP13)', () => {
@@ -28,6 +41,19 @@ describe('buildSentLetterEvidenceItem (Phase 5, IP13)', () => {
   it('falls back to a generic label for an unknown type', () => {
     const item = buildSentLetterEvidenceItem({ type: 'outcome', recipient: 'x@y.com', body: 'text' });
     expect(item.name).toBe('Sent: Letter');
+  });
+
+  // Human UAT remediation, Batch 2, Part 13 (adjacent finding) — a sent
+  // invitation/appeal/suspension letter used to be recorded to evidence
+  // (and from there, Timeline) as the generic "Sent: Letter", making it
+  // indistinguishable from any other sent letter on the case.
+  it.each([
+    ['invite', 'Sent: Invitation'],
+    ['appeal', 'Sent: Appeal outcome'],
+    ['suspension', 'Sent: Suspension'],
+  ])('names a sent %s letter accurately, not the generic "Sent: Letter"', (type, expectedName) => {
+    const item = buildSentLetterEvidenceItem({ type, recipient: 'x@y.com', body: 'text' });
+    expect(item.name).toBe(expectedName);
   });
 
   it('defaults addedBy to "HR Manager" when omitted', () => {

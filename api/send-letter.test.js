@@ -301,3 +301,191 @@ describe('send-letter — the full outcome decision chain (closes H10)', () => {
     expect(res.statusCode).toBe(404); // org mismatch — never reaches the outcome check at all
   });
 });
+
+// Human UAT remediation, Batch 2, Part 5/6 — "Share meeting record"
+// (App.jsx's shareRecord) sent an `html` field this handler has never
+// actually read; every call fell through to the hardcoded outcome-letter
+// template built from fields shareRecord never supplied
+// (employeeName/meetingType/date/body/managerName), producing a real
+// email reading "Dear , Please find attached the outcome letter from
+// your recent  on ." with the meeting record itself silently missing —
+// while the app showed a false "Record shared" success toast. Fixed by
+// giving documentType:"meeting_record" its own accurate template built
+// from the fields shareRecord actually sends now.
+//
+// Batch 2 hardening — the UAT sign-off required a genuine attachment, not
+// merely an honest "nothing is attached" disclaimer. shareRecord (App.jsx)
+// now always generates a real meeting-record PDF client-side and sends it
+// as a Resend attachment; these tests assert that attachment actually
+// reaches the outbound Resend payload, and that a request missing it is
+// rejected rather than silently sent.
+function stubFetchCapturing({ members = [{ role: 'hr_manager' }] } = {}) {
+  const calls = [];
+  global.fetch = vi.fn((url, options = {}) => {
+    const u = String(url);
+    calls.push({ url: u, options });
+    if (u.includes('/auth/v1/user')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'user-1' }) });
+    if (u.includes('/rest/v1/org_members')) return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
+    if (u.includes('/rest/v1/cases')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    if (u.includes('/rest/v1/case_access')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    if (u.includes('api.resend.com')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'email-1' }) });
+    return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+  });
+  return calls;
+}
+
+describe('send-letter — meeting record share (Batch 2, Part 5/6)', () => {
+  let originalFetch;
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  const shareBody = {
+    to: 'sam@acme.com',
+    subject: 'Disciplinary Record - Sam Employee',
+    orgId: 'org-1',
+    documentType: 'meeting_record',
+    recipientName: 'Sam Employee',
+    personalMessage: 'Thanks for your time today.',
+    employeeName: 'Sam Employee',
+    meetingType: 'Disciplinary',
+    date: '31/08/2026',
+    managerName: 'Alex Manager',
+    attachments: [{ filename: 'Disciplinary Record - Sam Employee.pdf', content: 'JVBERi0xLjMKdGVzdCBwZGYgYnl0ZXM=' }],
+    attachmentNames: ['Disciplinary Record - Sam Employee.pdf'],
+  };
+
+  it('sends the meeting record as a real attachment, addressed to the real recipient, with a concise body naming it', async () => {
+    const calls = stubFetchCapturing();
+    const res = mockRes();
+    await handler(req(shareBody), res);
+    expect(res.statusCode).toBe(200);
+
+    const emailCall = calls.find(c => c.url.includes('api.resend.com'));
+    const payload = JSON.parse(emailCall.options.body);
+    // The actual attachment payload reaching the mail provider — filename
+    // and bytes/content both intact, not just named in the body text.
+    expect(payload.attachments).toEqual([
+      { filename: 'Disciplinary Record - Sam Employee.pdf', content: 'JVBERi0xLjMKdGVzdCBwZGYgYnl0ZXM=' },
+    ]);
+    expect(payload.html).toContain('Dear Sam Employee,');
+    expect(payload.html).toContain('Disciplinary Record - Sam Employee.pdf');
+    expect(payload.html).toContain('Thanks for your time today.');
+    // The body is now concise — it must not attempt to re-inline the
+    // full record text now that a real attachment carries it, and must
+    // not claim "nothing is attached" since something now genuinely is.
+    expect(payload.html).not.toMatch(/nothing is attached/i);
+    expect(payload.html).not.toContain('outcome letter');
+  });
+
+  it('rejects a meeting-record share with no attachment at all — the attachment cannot silently disappear while the UI reports success', async () => {
+    stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({ ...shareBody, attachments: [], attachmentNames: [] }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toMatch(/document is missing/i);
+  });
+
+  it('rejects a meeting-record share whose attachment entries are all malformed (missing filename/content)', async () => {
+    stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({ ...shareBody, attachments: [{ filename: '', content: '' }, null] }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toMatch(/document is missing/i);
+  });
+
+  it('rejects a blank/whitespace-only recipient name rather than sending "Dear ,"', async () => {
+    stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({ ...shareBody, recipientName: '   ' }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toMatch(/recipient name/i);
+  });
+
+  it('escapes HTML in the personal message so a recipient cannot inject markup', async () => {
+    const calls = stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({ ...shareBody, personalMessage: '<script>alert(1)</script>' }), res);
+    expect(res.statusCode).toBe(200);
+    const emailCall = calls.find(c => c.url.includes('api.resend.com'));
+    const payload = JSON.parse(emailCall.options.body);
+    expect(payload.html).not.toContain('<script>');
+  });
+
+  it('still uses the letter template (not the meeting-record one) for ordinary letter sends with no documentType', async () => {
+    const calls = stubFetchCapturing();
+    const res = mockRes();
+    await handler(req(body), res);
+    expect(res.statusCode).toBe(200);
+    const emailCall = calls.find(c => c.url.includes('api.resend.com'));
+    const payload = JSON.parse(emailCall.options.body);
+    // No letterType on this fixture — an honest generic label, not a
+    // presumed "outcome letter" for a type that was never specified.
+    expect(payload.html).toContain('Please find the letter');
+    expect(payload.html).toContain('Letter content');
+  });
+
+  it('names the letter type accurately for a suspension letter specifically', async () => {
+    const calls = stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({ ...body, letterType: 'suspension' }), res);
+    const emailCall = calls.find(c => c.url.includes('api.resend.com'));
+    const payload = JSON.parse(emailCall.options.body);
+    expect(payload.html).toContain('Please find the suspension letter');
+  });
+});
+
+// Human UAT remediation, Batch 2, Part 11 — a disciplinary/appeal hearing
+// invitation had no way to actually carry the case evidence the employee
+// is entitled to see before the hearing. App.jsx's sendLetterCoordinated
+// now forwards HR's selection (the case's own existing evidence, never a
+// second store) as real Resend attachments; this also closes the same
+// false-claim gap Part 6 closed elsewhere — the old hardcoded "Please
+// find attached the outcome letter" text claimed an attachment even when
+// none existed, and called every letter type an "outcome letter"
+// regardless of what it actually was.
+describe('send-letter — evidence attachments on invitation/appeal letters (Batch 2, Part 11)', () => {
+  let originalFetch;
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('forwards selected evidence as real Resend attachments and lists them by name in the email', async () => {
+    const calls = stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({
+      ...body,
+      letterType: 'invite',
+      attachments: [{ filename: 'CCTV still.jpg', content: 'AAAA' }, { filename: 'Witness statement.pdf', content: 'BBBB' }],
+      attachmentNames: ['CCTV still.jpg', 'Witness statement.pdf'],
+    }), res);
+    expect(res.statusCode).toBe(200);
+    const emailCall = calls.find(c => c.url.includes('api.resend.com'));
+    const payload = JSON.parse(emailCall.options.body);
+    expect(payload.attachments).toEqual([
+      { filename: 'CCTV still.jpg', content: 'AAAA' },
+      { filename: 'Witness statement.pdf', content: 'BBBB' },
+    ]);
+    expect(payload.html).toContain('CCTV still.jpg');
+    expect(payload.html).toContain('Witness statement.pdf');
+    expect(payload.html).toContain('the invitation letter');
+  });
+
+  it('never claims an attachment, and never sends a Resend attachments field, when none was selected', async () => {
+    const calls = stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({ ...body, letterType: 'appeal' }), res);
+    const emailCall = calls.find(c => c.url.includes('api.resend.com'));
+    const payload = JSON.parse(emailCall.options.body);
+    expect(payload.attachments).toBeUndefined();
+    expect(payload.html).toContain('the appeal outcome letter');
+    expect(payload.html).not.toMatch(/<strong>Attached/);
+  });
+
+  it('drops a malformed attachment entry rather than forwarding it to Resend', async () => {
+    const calls = stubFetchCapturing();
+    const res = mockRes();
+    await handler(req({ ...body, attachments: [{ filename: 'ok.pdf', content: 'AAAA' }, { filename: '' }, null] }), res);
+    const emailCall = calls.find(c => c.url.includes('api.resend.com'));
+    const payload = JSON.parse(emailCall.options.body);
+    expect(payload.attachments).toEqual([{ filename: 'ok.pdf', content: 'AAAA' }]);
+  });
+});

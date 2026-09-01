@@ -1,4 +1,4 @@
-import { getCaseStage } from './caseStage.js';
+import { getCaseStage, hasLetterType } from './caseStage.js';
 import { parseFlexDate, daysBetween, addWorkingDays as addWorkingDaysDate } from './dateMath.js';
 import { DEFAULT_UK_JURISDICTION } from './ukBankHolidays.js';
 import { isDisciplinaryMeeting, isInvestigationMeeting } from './meetingTypeMatch.js';
@@ -114,7 +114,12 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     });
 
     // Appeal window — 5 working days from outcome letter
-    const outcomeLetters = meetings.filter(m=>m.letterOutput&&isDisciplinaryMeeting(m.type));
+    // Human UAT remediation, Batch 2 hardening — a disciplinary/appeal
+    // hearing invitation used to satisfy this filter just as well as a
+    // real outcome letter (both are "a disciplinary-type meeting with a
+    // letterOutput"), fabricating an appeal-window deadline the moment an
+    // invitation was drafted and saved, before any decision existed.
+    const outcomeLetters = meetings.filter(m=>isDisciplinaryMeeting(m.type)&&hasLetterType([m],"outcome"));
     outcomeLetters.forEach(m => {
       const dl = workingDaysFromDate(m.savedAt||m.date, 5);
       if(dl) addDeadline(cs.employeeName, "Employee appeal window (ACAS-recommended: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`, caseMeta);

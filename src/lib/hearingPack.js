@@ -21,6 +21,7 @@
 import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from './caseTimeline.js';
 import { allegationsForCase, evidenceForAllegation } from './allegations.js';
 import { getProcessType } from './processStages.js';
+import { newId } from './ids.js';
 
 // Reuses the two vocabularies that already exist (PROCESS_TYPES'
 // case-type ids, POLICY_CATEGORIES' category ids) rather than a new AI
@@ -73,5 +74,31 @@ export function buildHearingPackSections(cs, { allegations = [], policies = [], 
     // should say so when some of a case's own history may be missing,
     // not present a silently incomplete list as the complete record.
     auditHistoryMayBeIncomplete: mayHaveIncompleteAuditHistory(cs),
+  };
+}
+
+// Human UAT remediation, Batch 2, Part 2 — a generated hearing pack used
+// to only ever trigger a browser download (App.jsx's
+// handleGenerateHearingPack, jsPDF's doc.save()), with nothing recorded
+// on the case itself. Closing the browser's downloads panel, or coming
+// back to the case days later, left no way to find that pack again short
+// of regenerating it — and a regenerated pack reflects today's case data,
+// not necessarily the exact bundle a panel was actually handed. Reuses
+// the same evidence-item + dataUrl shape buildSentLetterEvidenceItem
+// (lib/letterSend.js) already uses for generated correspondence, rather
+// than inventing a second, hearing-pack-specific storage mechanism —
+// which also means it gets a real "Download" entry in the Documents tab
+// (lib/caseDocuments.js already surfaces any evidence item with a
+// dataUrl) and a dedicated Timeline entry (lib/caseTimeline.js) for free.
+export function buildHearingPackEvidenceItem({ dataUrl, size, addedBy }) {
+  return {
+    id: newId("ev"),
+    name: "Hearing Pack",
+    type: "application/pdf",
+    date: new Date().toLocaleDateString("en-GB"),
+    addedBy: addedBy || "HR Manager",
+    dataUrl,
+    size,
+    source: "hearing_pack",
   };
 }

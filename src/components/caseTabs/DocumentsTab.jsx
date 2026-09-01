@@ -20,7 +20,7 @@ const CORRESPONDENCE_TYPES = Object.entries(CORRESPONDENCE_TYPE_LABELS).map(([id
 // see src/lib/caseDocuments.js. Letters open in the existing Letter
 // screen (same as everywhere else generated letters are viewed); evidence
 // files download the same way the Evidence tab already does.
-export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate, onGenerateHearingPack, hearingPackGenerating, onDraftCorrespondence }) {
+export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate, onGenerateHearingPack, hearingPackGenerating, hearingPackReady, onDismissHearingPackReady, onDraftCorrespondence }) {
   const docs = deriveDocumentsForCase(cs);
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
@@ -30,6 +30,23 @@ export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate,
           <button onClick={()=>onGenerateHearingPack(cs)} disabled={!!hearingPackGenerating} style={{fontSize:11,fontWeight:600,color:"#fff",background:hearingPackGenerating?"#C4B8F8":"#7C5CFC",border:"none",borderRadius:6,padding:"6px 12px",cursor:hearingPackGenerating?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>{hearingPackGenerating?"Generating…":"Generate Hearing Pack"}</button>
         )}
       </div>
+      {/* Human UAT remediation, Batch 2 hardening — the original UAT
+          complaint was that a generated pack "should pop up when
+          generated rather than just appearing below which is not
+          obvious". This sits immediately below the Generate button (right
+          where the user's attention already is) the moment generation
+          finishes, and stays until dismissed or a fresh generation
+          replaces it — unlike the toast alone, it doesn't disappear in a
+          few seconds with no way to act on it. */}
+      {hearingPackReady&&(
+        <div style={{padding:"10px 16px",background:"#E8F5EE",borderBottom:"1px solid #D5EBDF",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Hearing pack ready</div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+            <button onClick={()=>window.open(hearingPackReady.dataUrl,"_blank")} style={{fontSize:11,fontWeight:600,color:"#fff",background:"#1A7A4A",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Review</button>
+            <button onClick={onDismissHearingPackReady} aria-label="Dismiss" style={{fontSize:13,color:"#6B6375",background:"none",border:"none",cursor:"pointer",padding:"2px 4px"}}>×</button>
+          </div>
+        </div>
+      )}
       {onDraftCorrespondence&&(
         <div style={{padding:"12px 16px",borderBottom:"1px solid #F5F1EA",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{fontSize:11,color:"#9B9098"}}>Draft:</span>

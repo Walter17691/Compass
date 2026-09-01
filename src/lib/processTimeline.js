@@ -5,7 +5,7 @@
 // getCaseStage (P1/existing) and getProcessType's stage list (P2);
 // missing-step detection reuses fields (meetings, investigationReport,
 // outcome) already read elsewhere in this codebase.
-import { getCaseStage } from './caseStage.js';
+import { getCaseStage, hasLetterType } from './caseStage.js';
 import { getProcessType, DISCIPLINARY_STAGES, GRIEVANCE_STAGES } from './processStages.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
 
@@ -35,12 +35,20 @@ const STAGE_EVIDENCE = {
     investigation: cs => (cs.meetings||[]).some(m=>isInvestigationMeeting(m.type)),
     inv_report: cs => !!cs.investigationReport,
     disciplinary: cs => (cs.meetings||[]).some(m=>isDisciplinaryMeeting(m.type)),
-    outcome: cs => !!cs.outcome || (cs.meetings||[]).some(m=>m.letterOutput),
+    // Human UAT remediation, Batch 2 hardening — a disciplinary/appeal
+    // hearing invitation's letterOutput used to satisfy this "did the
+    // outcome step actually happen" evidence check just as well as a real
+    // outcome letter.
+    outcome: cs => !!cs.outcome || hasLetterType(cs.meetings, "outcome"),
     appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type)),
   },
   grievance: {
     hearing: cs => (cs.meetings||[]).some(m=>isGrievanceMeeting(m.type)),
-    outcome: cs => !!cs.outcome || (cs.meetings||[]).some(m=>m.letterOutput),
+    // Human UAT remediation, Batch 2 hardening — a disciplinary/appeal
+    // hearing invitation's letterOutput used to satisfy this "did the
+    // outcome step actually happen" evidence check just as well as a real
+    // outcome letter.
+    outcome: cs => !!cs.outcome || hasLetterType(cs.meetings, "outcome"),
     appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type)),
   },
 };

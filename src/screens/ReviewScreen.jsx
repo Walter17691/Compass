@@ -3,6 +3,7 @@ import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
+import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
 export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
@@ -192,12 +193,14 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 <div style={{fontSize:11,fontWeight:600,color:"#7C5CFC",letterSpacing:"0.8px",textTransform:"uppercase"}}>Compass response</div>
               </div>
               <div style={{padding:"16px 20px"}}>
-                {askCompassHistory.slice(-2).map((m,i)=>(
-                  <div key={i} style={{marginBottom:10}}>
-                    <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#9B9098":"#7C5CFC",marginBottom:4}}>{m.role==="user"?"Your question":"Compass"}</div>
-                    <div style={{fontSize:14,color:m.role==="user"?"#6B6375":"#1A1535",lineHeight:1.8,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"12px 16px":"0",borderRadius:8,borderLeft:m.role==="assistant"?"3px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
-                  </div>
-                ))}
+                <AskCompassErrorBoundary>
+                  {askCompassHistory.slice(-2).map((m,i)=>(
+                    <div key={i} style={{marginBottom:10}}>
+                      <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#9B9098":"#7C5CFC",marginBottom:4}}>{m.role==="user"?"Your question":"Compass"}</div>
+                      <div style={{fontSize:14,color:m.role==="user"?"#6B6375":"#1A1535",lineHeight:1.8,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"12px 16px":"0",borderRadius:8,borderLeft:m.role==="assistant"?"3px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
+                    </div>
+                  ))}
+                </AskCompassErrorBoundary>
                 {askCompassProcessing&&<div style={{fontSize:13,color:"#9B9098",fontStyle:"italic"}}>Compass is thinking...</div>}
               </div>
             </div>

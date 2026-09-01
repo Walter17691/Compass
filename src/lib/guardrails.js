@@ -125,14 +125,25 @@ function checkEvidenceAfterReport(cs) {
   };
 }
 
-// letterOutput doesn't record which letter category was generated (outcome
-// vs invite vs suspension etc.), only the free text — this approximates
-// "a decision letter for a disciplinary/grievance hearing" via meeting
-// type, which is the pairing that normally carries a right of appeal.
-// Advisory only, so an occasional false positive (e.g. an invite letter
-// attached to a disciplinary meeting) is dismissible via "Not relevant".
+// Human UAT remediation, Batch 2 hardening — letterOutput now carries a
+// companion letterType (App.jsx's saveMeetingToCaseImpl) recording which
+// letter category actually produced it, so this can check for a genuine
+// outcome letter directly instead of approximating one via meeting type
+// plus a text-sniff for the word "appeal". Falls back to the old
+// approximation only for meetings saved before letterType existed, whose
+// real category can't be recovered. Advisory only, so an occasional false
+// positive on legacy data is dismissible via "Not relevant".
 function checkAppealClauseMissing(cs, policies) {
-  const risky = (cs.meetings || []).filter(m => (m.type === "Disciplinary" || m.type === "Grievance") && m.letterOutput && !/appeal/i.test(m.letterOutput));
+  const risky = (cs.meetings || []).filter(m => {
+    if (!(m.type === "Disciplinary" || m.type === "Grievance") || !m.letterOutput) return false;
+    const noAppealClause = !/appeal/i.test(m.letterOutput);
+    // Once letterType is known, only a genuine outcome letter needs to be
+    // flagged here — an invite/suspension letter has no reason to mention
+    // an appeal right yet. Legacy meetings with no recorded letterType
+    // keep the old approximation (any disciplinary/grievance letter
+    // lacking the word "appeal").
+    return m.letterType ? m.letterType === "outcome" && noAppealClause : noAppealClause;
+  });
   if (!risky.length) return null;
   const m = risky[0];
   const policyRef = findPolicyClauseRef(policies, ["appeal"]);

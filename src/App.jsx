@@ -11,7 +11,7 @@ import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
-import { getCaseStage, withStageTransitionStamp } from './lib/caseStage';
+import { getCaseStage, withStageTransitionStamp, hasLetterType } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
 import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, buildKnownNameTokens, filterUnsafeThemeSuggestions, isUnsafeThemeSuggestion } from './lib/themes';
@@ -59,7 +59,8 @@ import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from '
 import { buildGlobalStatsContext, inferInsightsTab, GLOBAL_CHAT_SYSTEM_PROMPT } from './lib/globalAnalytics';
 import { computeAppealIntelligence } from './lib/appealIntelligence';
 import { COMMAND_BAR_SYSTEM_PROMPT, resolveCommandBarPlan } from './lib/commandBar';
-import { buildHearingPackSections } from './lib/hearingPack';
+import { buildHearingPackSections, buildHearingPackEvidenceItem } from './lib/hearingPack';
+import { fmtMeetingTime } from './lib/meetingTiming';
 import { buildEmailEvidenceItem, buildConcernDescriptionFromEmail } from './lib/emailIngestion';
 import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLetterSubject, matchReplyToSentLetters } from './lib/letterSend';
 import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/meetingCompletion';
@@ -222,6 +223,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [aiProcessing, setAiProcessing] = useState(false);
   const [aiError, setAiError] = useState("");
   const [concludingInvestigation, setConcludingInvestigation] = useState(false);
+  // Human UAT remediation, Batch 2, Part 12 — report generation
+  // performance. Measured first: the report itself is a genuinely
+  // unavoidable ~3400-token AI generation (multi-part structure,
+  // ACAS-compliant analysis) — nothing about that latency is removable.
+  // What WAS removable was the perceived wait: this used a non-streaming
+  // call, so nothing appeared on screen until the entire document was
+  // ready, unlike every other long-form generation in this app
+  // (handleReview's meeting record, LetterScreen's letters), which
+  // already stream. Converting this one to stream too — real words
+  // appearing as they're generated — replaces a blank "Generating
+  // report..." wait with genuine progress, not a fake percentage.
+  const [investigationReportDraft, setInvestigationReportDraft] = useState("");
   const [prepNotes, setPrepNotes] = useState("");
   // Meeting Intelligence Phase 2 (M1) — structured, editable pre-meeting
   // questions alongside the free-text prep pack: {id, text, category,
@@ -633,6 +646,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [liveChatInput, setLiveChatInput] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [shareEmail, setShareEmail] = useState("");
+  const [shareRecipientName, setShareRecipientName] = useState("");
+  const [shareSubject, setShareSubject] = useState("");
+  const [sharePersonalMessage, setSharePersonalMessage] = useState("");
   const [shareProcessing, setShareProcessing] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -858,7 +874,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       managerName: caseInfo.manager||"Manager",
       documentType: "meeting_record",
       documentLabel: meetingType?.label||"Meeting",
-      documentDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+      // Human UAT remediation, Batch 2, Part 7 — caseInfo.date defaults
+      // to a raw ISO string (new Date().toISOString().split("T")[0]),
+      // which used to reach the signature/acknowledgement email
+      // unformatted (api/send-for-signature.js interpolates
+      // meetingDate directly) — an employee could receive "is ready for
+      // your signature on 2026-08-31" instead of a UK date.
+      documentDate: fmtDate(caseInfo.date)||new Date().toLocaleDateString("en-GB"),
       caseId: activeCaseId,
     });
     if(!success) return;
@@ -1687,8 +1709,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript.length]);
   const [showLetterModal, setShowLetterModal] = useState(false);
+  // Human UAT remediation, Batch 2, Part 11 (adjacent finding, HIGH
+  // PRIORITY — reproduced live) — a separate, never-updated
+  // pendingLetterTypeRef (permanently stuck at its "outcome" initial
+  // value) was what the "Draft [type] letter" modal actually read from,
+  // completely disconnected from this real, correctly-updated state.
+  // The practical effect: clicking "Draft invitation letter" from a
+  // disciplinary hearing's own prompt silently generated a full OUTCOME
+  // letter (Findings and Decision, Upheld/Not Upheld) instead — live-
+  // reproduced while investigating Part 11's evidence-attachment gap on
+  // invitations, which this also blocked from ever being reachable.
   const [pendingLetterType, setPendingLetterType] = useState("outcome");
-  const pendingLetterTypeRef = useRef("outcome");
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager",locationIds:[]});
@@ -1701,6 +1732,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [redundancyData, setRedundancyData] = useState({});
   const [showEmailLetter, setShowEmailLetter] = useState(false);
   const [emailLetterTo, setEmailLetterTo] = useState("");
+  // Human UAT remediation, Batch 2, Part 11 — a disciplinary/appeal
+  // hearing invitation had no way to attach the case evidence the
+  // employee is entitled to see before the hearing (ACAS Code of
+  // Practice) — reuses the case's own existing evidence array (with a
+  // real file behind it), never a second evidence repository.
+  const [selectedInviteEvidenceIds, setSelectedInviteEvidenceIds] = useState([]);
   // Phase 6.5 hardening (closes Prompt 11 audit finding 7.7, MEDIUM) —
   // the "Send email" button had no in-flight guard at all: the modal
   // only closes AFTER sendLetterCoordinated resolves, so it stayed open
@@ -1749,13 +1786,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // for what this replaces: a bare onKeyDown={Escape} on each dialog div
   // with no Tab-focus trapping and no focus moved into the dialog on open.
   const shareModalRef = useRef(null);
-  useModalA11y(shareModalRef, () => { setShowShareModal(false); setShareEmail(""); }, showShareModal);
+  useModalA11y(shareModalRef, () => { setShowShareModal(false); setShareEmail(""); setShareRecipientName(""); setShareSubject(""); setSharePersonalMessage(""); }, showShareModal);
   const linkCaseModalRef = useRef(null);
   useModalA11y(linkCaseModalRef, () => setShowLinkCase(false), showLinkCase && appealDetected);
   const letterModalRef = useRef(null);
   useModalA11y(letterModalRef, () => setShowLetterModal(false), showLetterModal);
   const emailLetterModalRef = useRef(null);
-  useModalA11y(emailLetterModalRef, () => { setShowEmailLetter(false); setEmailLetterTo(""); }, showEmailLetter);
+  useModalA11y(emailLetterModalRef, () => { setShowEmailLetter(false); setEmailLetterTo(""); setSelectedInviteEvidenceIds([]); }, showEmailLetter);
   const inviteLinkModalRef = useRef(null);
   useModalA11y(inviteLinkModalRef, () => setInviteLink(null), !!inviteLink);
   const signModalRef = useRef(null);
@@ -5729,6 +5766,14 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const addUtterance = async text => {
     if(!text||!text.trim()) return;
     const raw = text.trim(); setInputText(""); if(inputRef.current) inputRef.current.focus();
+    // Human UAT remediation, Batch 2, Part 4 — this is the one place
+    // every real way of adding meeting content converges (typed-then-
+    // Enter, live microphone speech, screen-audio-capture speech, an
+    // imported transcript, and the final flush on "End meeting") — unlike
+    // the textarea's own onChange, which only ever fired for the
+    // manual-typing path and left meetingStartTime unset for a meeting
+    // conducted purely by speech.
+    if(!meetingStartTime) setMeetingStartTime(new Date().toISOString());
     const pendingId = newId("utt");
     const ts = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
     setTranscript(p=>[...p,{id:pendingId, speaker:"...", text:raw, ts, pending:true}]);
@@ -5963,7 +6008,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     appealDetectedRef.current = false;
     setAppealDetected(false);
     setShowLinkCase(false);
-    const meetingEndTimeVal = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    const meetingEndTimeVal = new Date().toISOString();
     setMeetingEndTime(meetingEndTimeVal);
     const extra = inputText.trim() ? [{id:newId("utt"),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
     const allNotes = [...transcript, ...extra];
@@ -6011,7 +6056,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       ).catch(e=>{ console.error("Meeting summary generation failed:", e); return ""; });
       fullRecord = await streamClaude(
         `You are a senior UK HR documentation specialist. Generate a meeting record with EXACTLY these three sections and NO others: ## Meeting Details (date, type, attendees, purpose), ## Meeting Dialogue (what was said, in concise prose), ## HR Advisor Notes (expert legal guidance in flowing prose from a senior employment lawyer - one paragraph covering ACAS compliance, legal risks and recommended next steps). Do NOT add any other sections like Key Points, Next Steps, Summary, Actions, Risk Assessment or anything else. Three sections only. No bold, no emoji, no tables.${policies.length?" Reference company policies by name.":""} IMPORTANT: In the Meeting Dialogue section, prefix every line with initials only. Chair ${caseInfo.manager||"HR Manager"} = ${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0].toUpperCase()).join("")}. Employee ${caseInfo.employee||"Employee"} = ${(caseInfo.employee||"Employee").split(" ").map(w=>w[0].toUpperCase()).join("")}. Use ONLY these initials, never full names in the dialogue.`,
-        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}${caseInfo.employeeJobTitle?" ("+caseInfo.employeeJobTitle+")":(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle?" ("+((employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle)+")":" "}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}${caseInfo.chairJobTitle?" ("+caseInfo.chairJobTitle+")":(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title?" ("+((orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title)+")":" "}. Start time: ${meetingStartTime||"Unknown"}. End time: ${meetingEndTime||meetingEndTimeVal||"Unknown"}${adjournments.length>0?" Adjournments: "+adjournments.map(a=>a.start+(a.end?" to "+a.end:"- ongoing")+(a.reason?" ("+a.reason+")":"")).join(", "):""}. Notetaker: ${caseInfo.notetaker||"Not specified"}. Representative/companion: ${caseInfo.representative?caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")":"N/A"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]${adjournments.length>0?"\n- Adjournments: [list each adjournment with times and reason]":""}\n- Chair: [chair name and job title]\n- Notetaker: [notetaker name or "Not specified"]\n- Employee: [employee name and job title]\n- Representative/companion: [name and role, or "N/A"]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker\'s INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
+        `${meetingType?.label} meeting. Employee: ${caseInfo.employee}${caseInfo.employeeJobTitle?" ("+caseInfo.employeeJobTitle+")":(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle?" ("+((employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle)+")":" "}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}${caseInfo.chairJobTitle?" ("+caseInfo.chairJobTitle+")":(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title?" ("+((orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title)+")":" "}. Start time: ${fmtMeetingTime(meetingStartTime)||"Unknown"}. End time: ${fmtMeetingTime(meetingEndTime||meetingEndTimeVal)||"Unknown"}${adjournments.length>0?" Adjournments: "+adjournments.map(a=>a.start+(a.end?" to "+a.end:"- ongoing")+(a.reason?" ("+a.reason+")":"")).join(", "):""}. Notetaker: ${caseInfo.notetaker||"Not specified"}. Representative/companion: ${caseInfo.representative?caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")":"N/A"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]${adjournments.length>0?"\n- Adjournments: [list each adjournment with times and reason]":""}\n- Chair: [chair name and job title]\n- Notetaker: [notetaker name or "Not specified"]\n- Employee: [employee name and job title]\n- Representative/companion: [name and role, or "N/A"]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker\'s INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
       setReviewOutputOriginal(fullRecord);
@@ -6327,6 +6372,16 @@ Please produce:
       id: newId("meeting"),
       type: meetingType?.label||"Meeting",
       date: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+      // Human UAT remediation, Batch 2, Part 4 — until now the actual
+      // start/end instant only ever lived in ephemeral session state and
+      // whatever the AI happened to transcribe into reviewOutput's free-
+      // text "## Meeting Details" section; this is its first real,
+      // structured, queryable home on the saved record. Distinct from
+      // `date` above (the case's scheduled date, caseInfo.date) and from
+      // `savedAt` below (when this record was saved, not when the
+      // meeting itself began or ended).
+      startedAt: meetingStartTime || null,
+      endedAt: meetingEndTime || null,
       manager: caseInfo.manager,
       participants,
       transcript: transcript.filter(u=>!u.pending),
@@ -6342,6 +6397,20 @@ Please produce:
         return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
       })(),
       letterOutput,
+      // Human UAT remediation, Batch 2 hardening — letterOutput alone never
+      // recorded which letter category produced it (outcome vs invite vs
+      // appeal vs suspension), only the free text. Every consumer that
+      // inferred "an outcome exists" from "some meeting has a letterOutput"
+      // (caseStage.js, nextStep.js, getCaseStatus, deadlines.js,
+      // processTimeline.js) was therefore equally fooled by a disciplinary/
+      // appeal hearing INVITATION saved via this same function — drafting
+      // and saving an invitation could make the case read as though an
+      // outcome had already been issued. activeLetter is the same type
+      // identity already sent to /api/send-letter as letterType when a
+      // letter is actually sent (Part 11) — this is its first time being
+      // captured at save time too, so every consumer downstream can check
+      // the letter's real type instead of guessing from its mere presence.
+      letterType: letterOutput ? activeLetter : null,
       letterApprovedBy: letterIsApproved ? letterApproval.by : null,
       letterApprovedAt: letterIsApproved ? letterApproval.at : null,
       riskScore,
@@ -6455,19 +6524,27 @@ Please produce:
     const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"; s.onload=()=>resolve(window.jspdf.jsPDF); document.head.appendChild(s);
   });
 
-  const generatePDF = async sig => {
+  // Human UAT remediation, Batch 2 hardening (Part 5/6 follow-up) — the
+  // core layout generatePDF already used for letters, extracted so a
+  // second document type (the meeting record itself, for genuine email
+  // attachments below) can reuse the exact same jsPDF layout rather than
+  // a second, duplicate PDF-building implementation. generatePDF is now
+  // a thin wrapper over this with its own existing letterOutput/
+  // meetingType/caseInfo/letterhead closure — no behaviour change for
+  // its two existing callers (doSend's Download/Gmail/Outlook paths).
+  const buildDocumentPDF = async ({ heading, content, employee, date, chair, sig, letterheadImg }) => {
     const jsPDF = await loadJsPDF();
     const doc = new jsPDF({unit:"mm",format:"a4"});
     const M=20, W=doc.internal.pageSize.getWidth(), maxW=W-M*2;
     let y=15;
-    if(letterhead) {
-      try { const p=doc.getImageProperties(letterhead); const iW=maxW; const iH=Math.min((p.height*iW)/p.width,45); doc.addImage(letterhead,p.fileType||"PNG",M,8,iW,iH); y=iH+14; doc.setDrawColor(124,92,252); doc.setLineWidth(0.3); doc.line(M,y,W-M,y); y+=8; } catch(e){}
+    if(letterheadImg) {
+      try { const p=doc.getImageProperties(letterheadImg); const iW=maxW; const iH=Math.min((p.height*iW)/p.width,45); doc.addImage(letterheadImg,p.fileType||"PNG",M,8,iW,iH); y=iH+14; doc.setDrawColor(124,92,252); doc.setLineWidth(0.3); doc.line(M,y,W-M,y); y+=8; } catch(e){}
     }
     doc.setFontSize(9); doc.setTextColor(150); doc.text("PRIVATE & CONFIDENTIAL",M,y); y+=9;
-    doc.setFontSize(17); doc.setTextColor(30); doc.setFont("helvetica","bold"); doc.text(`${meetingType?.label} — Letter`,M,y); y+=8;
-    doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(80); doc.text(`Employee: ${caseInfo.employee||"—"} | Date: ${caseInfo.date||"—"} | Chair: ${caseInfo.manager||"—"}`,M,y); y+=7;
+    doc.setFontSize(17); doc.setTextColor(30); doc.setFont("helvetica","bold"); doc.text(heading,M,y); y+=8;
+    doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(80); doc.text(`Employee: ${employee||"—"} | Date: ${date||"—"} | Chair: ${chair||"—"}`,M,y); y+=7;
     doc.setDrawColor(124,92,252); doc.setLineWidth(0.5); doc.line(M,y,W-M,y); y+=8;
-    const clean = letterOutput.replace(/^## (.+)$/gm,"\n$1\n").replace(/^# (.+)$/gm,"\n$1\n").replace(/\*\*(.+?)\*\*/g,"$1").replace(/^[-*] /gm,"  - ");
+    const clean = (content||"").replace(/^## (.+)$/gm,"\n$1\n").replace(/^# (.+)$/gm,"\n$1\n").replace(/\*\*(.+?)\*\*/g,"$1").replace(/^[-*] /gm,"  - ");
     doc.setFontSize(11); doc.setTextColor(30); doc.setFont("helvetica","normal");
     doc.splitTextToSize(clean,maxW).forEach(line=>{
       if(y>255){doc.addPage();y=20;}
@@ -6481,11 +6558,34 @@ Please produce:
       if(sig.type==="draw"){try{doc.addImage(sig.data,"PNG",M,y,60,20);y+=24;}catch(e){}}
       else{doc.setFont("helvetica","italic");doc.setFontSize(22);doc.setTextColor(30);doc.text(sig.data,M,y+6);y+=14;}
       doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(120);
-      doc.text(`${caseInfo.manager||"HR Manager"} | ${new Date().toLocaleDateString("en-GB")}`,M,y+2);
+      doc.text(`${chair||"HR Manager"} | ${new Date().toLocaleDateString("en-GB")}`,M,y+2);
     }
     doc.setFontSize(8); doc.setTextColor(150); doc.text("Generated by Compass HR | Private & Confidential",M,287);
     return doc;
   };
+
+  const generatePDF = async sig => buildDocumentPDF({
+    heading: `${meetingType?.label} — Letter`,
+    content: letterOutput,
+    employee: caseInfo.employee, date: caseInfo.date, chair: caseInfo.manager,
+    sig, letterheadImg: letterhead,
+  });
+
+  // Human UAT remediation, Batch 2 hardening — "Share meeting record"
+  // used to send the full record inline in the email body because no
+  // attachment was believed possible. That was wrong: this flow goes
+  // through Compass's own backend (api/send-letter.js) straight to
+  // Resend, not a Gmail/Outlook web-compose link (doSend, above) — the
+  // one path in this app that genuinely can't carry a file attachment
+  // (no browser API to attach a file to a mailto:/web-compose URL).
+  // Resend's own attachments field already exists and is already used
+  // for evidence attachments on invitation letters (Part 11) — this
+  // reuses that same mechanism for the record itself.
+  const generateMeetingRecordPDF = async () => buildDocumentPDF({
+    heading: `${meetingType?.label||"Meeting"} — Record`,
+    content: reviewOutput,
+    employee: caseInfo.employee, date: fmtDate(caseInfo.date), chair: caseInfo.manager,
+  });
 
   const triggerWithSig = action => {
     // Defense in depth — LetterScreen already disables these buttons until
@@ -6501,7 +6601,13 @@ Please produce:
     const fileName = `${empName}_${meetingType?.label||"Letter"}_${new Date().toLocaleDateString("en-GB").replace(/\//g,"-")}.pdf`;
     const subj = encodeURIComponent(`${meetingType?.label} ${lTypes[activeLetter]||""} - ${caseInfo.employee||"Employee"}`);
     const to = encodeURIComponent(caseInfo.email||"");
-    const bodyText = `Please find the ${meetingType?.label} letter attached.\n\nEmployee: ${caseInfo.employee||""}\nDate: ${caseInfo.date||""}\n\nGenerated by Compass HR.\n\n---\nNote: The PDF letter has been downloaded to your device as "${fileName}". Please attach it to this email before sending.`;
+    // Human UAT remediation, Batch 2, Part 6 — this opened with "Please
+    // find the letter attached" while the very next line explained the
+    // PDF was NOT attached and had to be attached manually — a Gmail/
+    // Outlook web compose link genuinely can't carry a file attachment
+    // (no browser API for it), so the false claim was never true here.
+    // Leads with the real instruction instead of a contradicted one.
+    const bodyText = `The ${meetingType?.label} letter has been downloaded to your device as "${fileName}". Please attach it to this email before sending.\n\nEmployee: ${caseInfo.employee||""}\nDate: ${fmtDate(caseInfo.date)}\n\nGenerated by Compass HR.`;
 
     if(action==="download") {
       setPdfGenerating(true);
@@ -6707,12 +6813,48 @@ Please produce:
     return doc;
   };
 
+  // Human UAT remediation, Batch 2, Part 2 — generating a hearing pack
+  // used to only ever trigger a browser download, with nothing recorded
+  // on the case: closing the downloads panel (or coming back days later)
+  // left no way to find that exact pack again short of regenerating it
+  // against whatever the case looks like today. Now also saved as a real
+  // evidence item (buildHearingPackEvidenceItem, lib/hearingPack.js) —
+  // the same pattern sendLetterCoordinated already uses for generated
+  // correspondence — so it shows up with its own Download entry in the
+  // Documents tab (lib/caseDocuments.js) and its own Timeline entry
+  // (lib/caseTimeline.js), not just a toast that's gone in a few seconds.
   const [hearingPackGenerating, setHearingPackGenerating] = useState({});
+  // Human UAT remediation, Batch 2 hardening — the original UAT complaint
+  // was specifically that a generated Building/Hearing Pack "should pop up
+  // when generated rather than just appearing below which is not
+  // obvious". Persisting it to Documents/Timeline (above) fixed
+  // findability later, but the toast alone (auto-dismisses in a few
+  // seconds, no action on it) didn't fix the immediate moment of
+  // completion. This tracks a per-case "ready to review" banner —
+  // cleared at the start of every new generation so a stale banner from a
+  // previous pack can never linger once a fresh one is being built —
+  // rendered inline in DocumentsTab right where the user already is, with
+  // a Review action that opens the pack in a new tab (window.open on its
+  // dataUrl, the same "open the original document" pattern
+  // AllegationsPanel's openEvidence already uses) rather than navigating
+  // the user away from the case.
+  const [hearingPackReady, setHearingPackReady] = useState({});
   const handleGenerateHearingPack = async (cs) => {
     setHearingPackGenerating(g=>({...g, [cs.id]:true}));
+    setHearingPackReady(r=>({...r, [cs.id]:null}));
     try {
       const doc = await generateHearingPackPDF(cs);
+      const dataUrl = doc.output("datauristring");
       doc.save(`${(cs.employeeName||"Case").replace(/\s+/g,"_")}_Hearing_Pack.pdf`);
+      const item = buildHearingPackEvidenceItem({
+        dataUrl,
+        size: doc.output("blob").size,
+        addedBy: currentUser?.name || "HR Manager",
+      });
+      saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:[...(x.evidence||[]), item]}:x), cs.id);
+      audit("Hearing pack generated", item.name, cs.id);
+      showToast("Hearing pack downloaded — also saved to this case's Documents");
+      setHearingPackReady(r=>({...r, [cs.id]:{dataUrl, fileName:item.name}}));
     } catch(e) { console.error("generateHearingPackPDF failed:", e); showToast("Couldn't generate the hearing pack — "+e.message, "error"); }
     setHearingPackGenerating(g=>({...g, [cs.id]:false}));
   };
@@ -6740,12 +6882,20 @@ Please produce:
   // Silently skips the case-scoped steps when there's no real linked
   // case (e.g. sending from a case-less meeting session) — the send
   // itself still succeeds either way.
-  const sendLetterCoordinated = async (to) => {
+  // Human UAT remediation, Batch 2, Part 11 — evidenceItems (optional,
+  // only ever populated for a disciplinary/appeal invitation) are the
+  // case's own existing cs.evidence entries HR explicitly chose in the
+  // Email letter modal, never a second evidence store. Forwarded as
+  // real Resend attachments, not just described in the letter text — a
+  // hearing invitation that says evidence is attached must actually
+  // carry it (see Part 6's send-letter.js fix for the same principle).
+  const sendLetterCoordinated = async (to, evidenceItems = []) => {
     // IP14, §8 — the subject actually sent must match what
     // matchReplyToSentLetters later checks a reply's subject against;
     // see buildLetterSubject's own comment on the bug this fixes (every
     // type used to go out labelled "Outcome Letter").
     const subject = buildLetterSubject({ type: activeLetter, meetingType: meetingType?.label, employeeName: caseInfo.employee });
+    const attachments = evidenceItems.filter(e=>e.dataUrl).map(e=>({ filename: e.name||"evidence", content: e.dataUrl.split(",")[1]||"" }));
     const r = await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         to,
@@ -6757,7 +6907,9 @@ Please produce:
         employeeName: caseInfo.employee||"Employee",
         meetingType: meetingType?.label||"Meeting",
         managerName: caseInfo.manager||"HR Manager",
-        date: (caseInfo.date&&/^\d{4}-\d{2}-\d{2}$/.test(caseInfo.date)?caseInfo.date.split("-").reverse().join("/"):caseInfo.date)||new Date().toLocaleDateString("en-GB")
+        date: (caseInfo.date&&/^\d{4}-\d{2}-\d{2}$/.test(caseInfo.date)?caseInfo.date.split("-").reverse().join("/"):caseInfo.date)||new Date().toLocaleDateString("en-GB"),
+        attachments,
+        attachmentNames: evidenceItems.filter(e=>e.dataUrl).map(e=>e.name),
       })});
     const d = await r.json();
     if(!d.success) { showToast("Failed: "+d.error, "error"); return false; }
@@ -6781,7 +6933,7 @@ Please produce:
       if(activeLetter==="suspension") requestHrReview("suspension", activeCaseId, null, subject, false);
     }
 
-    showToast("Letter sent to "+to);
+    showToast("Letter sent to "+to+(attachments.length?` with ${attachments.length} evidence ${attachments.length===1?"attachment":"attachments"}`:""));
     return true;
   };
 
@@ -6802,7 +6954,13 @@ Please produce:
       managerName: caseInfo.manager||"HR Manager",
       documentType: "outcome_letter",
       documentLabel: subject,
-      documentDate: caseInfo.date||new Date().toLocaleDateString("en-GB"),
+      // Human UAT remediation, Batch 2, Part 7 — caseInfo.date defaults
+      // to a raw ISO string (new Date().toISOString().split("T")[0]),
+      // which used to reach the signature/acknowledgement email
+      // unformatted (api/send-for-signature.js interpolates
+      // meetingDate directly) — an employee could receive "is ready for
+      // your signature on 2026-08-31" instead of a UK date.
+      documentDate: fmtDate(caseInfo.date)||new Date().toLocaleDateString("en-GB"),
       requiresSignature: false,
       caseId: activeCaseId,
       letterType: activeLetter,
@@ -7152,6 +7310,18 @@ Please produce:
         // quietly appearing on a screen the user may have left.
         const letterTypeLabels = {outcome:"outcome letter",invite:"invitation letter",appeal:"appeal outcome letter",suspension:"suspension letter",["meeting-confirmation"]:"meeting confirmation letter",["witness-invitation"]:"witness invitation",["evidence-request"]:"evidence request",["oh-consent-request"]:"OH consent request",["no-case-answer"]:"response letter"};
         showToast(`Your ${letterTypeLabels[t]||"letter"} is ready for review`, "success");
+        // Human UAT remediation, Batch 2, Part 14 — the toast above is
+        // exactly the "genuinely outlive the user staying on this screen"
+        // case this whole function's own comment already names, but a
+        // toast auto-dismisses in a few seconds; someone who actually took
+        // the invitation to "switch tabs or navigate elsewhere" could miss
+        // it entirely with no other record it ever finished. Reuses the
+        // existing Activity/audit substrate rather than a second,
+        // bespoke notification mechanism — excluded from the case Timeline
+        // itself (lib/caseTimeline.js) since a draft can be regenerated
+        // many times before being sent, and that already has its own
+        // "Letter drafted" entry sourced from the saved meeting record.
+        if(activeCaseId) audit("Letter drafted", letterTypeLabels[t]||"letter", activeCaseId);
       }
       else { setAiError("Failed to generate letter. Please try again."); }
     } catch(e) { setAiError("Error: "+e.message); }
@@ -7183,11 +7353,20 @@ Please produce:
   // action recommendation) as input context, same "surface what Compass
   // already knows" pattern used in Phase 10's prep enhancement.
   const concludeInvestigation = async (caseId) => {
+    // Human UAT remediation, Batch 2 hardening — the trigger buttons
+    // (MeetingsTab's "Conclude investigation & generate report", the
+    // next-step banner) already disable themselves while
+    // concludingInvestigation is true, but that's a UI-only guard; this
+    // makes the function itself refuse to start a second, concurrent
+    // generation regardless of what called it, so two overlapping streams
+    // can never race to save two different reports onto the same case.
+    if(concludingInvestigation) return;
     const cs = cases.find(x=>x.id===caseId);
     if(!cs) return;
     const invMeetings = (cs.meetings||[]).filter(m=>(m.type||"").toLowerCase().includes("investigation")&&m.record);
     if(!invMeetings.length) return;
     setConcludingInvestigation(true);
+    setInvestigationReportDraft("");
     try {
       const nl = String.fromCharCode(10);
       const meetingContent = invMeetings.map((m,i)=>"Investigation meeting "+(i+1)+" — "+m.date+nl+m.record).join(nl+nl+"---"+nl+nl);
@@ -7233,13 +7412,7 @@ Please produce:
         +"## PART 3 — For HR Decision"+nl
         +"### Recommended Procedural Next Step"+nl
         +"End PART 3 with one line making clear that the final finding, sanction, and outcome decision rest with the responsible HR manager, not with this report.";
-      const res = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:3400,stream:false,
-          system:systemPrompt,
-          messages:[{role:"user",content:userPrompt}]
-        })});
-      const data = await res.json();
-      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const text = await streamClaude(systemPrompt, userPrompt, t=>setInvestigationReportDraft(t), 3400);
       if(text) {
         saveCases(cases.map(x=>x.id===caseId?{...x,investigationReport:text,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x));
         audit("Investigation report generated", cs.employeeName, caseId);
@@ -7253,6 +7426,7 @@ Please produce:
       showToast("Error generating investigation report", "error");
     }
     setConcludingInvestigation(false);
+    setInvestigationReportDraft("");
   };
 
   // Manager Enablement (Phase 4, MP10, §16) — "Submit investigation" is
@@ -7400,22 +7574,65 @@ Please produce:
   };
 
 
-  const shareRecord = async (email) => {
-    if(!email||!reviewOutput) return;
+  // Human UAT remediation, Batch 2, Part 5/6 — "Share meeting record" was
+  // silently broken: this call sent a custom `html` body the server
+  // (api/send-letter.js) has never actually read — that endpoint only
+  // ever builds its own hardcoded outcome-LETTER template from
+  // employeeName/meetingType/date/body/managerName fields, none of which
+  // this call supplied. The email that actually went out read "Dear ,
+  // Please find attached the outcome letter from your recent  on ." with
+  // an empty content box — the meeting record itself was never sent at
+  // all, while the app showed a false "Record shared" success toast.
+  // Fixed at the root: this now sends the same kind of structured,
+  // server-escaped fields the letter-sending calls already do (no raw
+  // client HTML relayed through Compass's verified domain), tagged
+  // documentType:"meeting_record" so the server can build an accurate
+  // template instead of reusing the unrelated outcome-letter one.
+  // Human UAT remediation, Batch 2 hardening — the UAT requirement was
+  // that the recipient actually receives the meeting record as a real
+  // attachment, not that Compass merely stop lying about one existing.
+  // Generates the same kind of PDF this app already generates for
+  // letters/hearing packs (buildDocumentPDF, shared layout) and sends it
+  // as a genuine Resend attachment — never a silent fallback to inlining
+  // the text if PDF generation fails; a failure here is reported as a
+  // failure, not sent anyway with the body doing the attachment's job.
+  const shareRecord = async (email, recipientName, subject, personalMessage) => {
+    if(!email||!recipientName?.trim()||!reviewOutput) return;
     setShareProcessing(true);
     try {
-      await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
+      const empName = (caseInfo.employee||"Meeting").replace(/\s+/g,"_");
+      const fileName = `${empName}_Meeting_Record_${new Date().toLocaleDateString("en-GB").replace(/\//g,"-")}.pdf`;
+      const doc = await generateMeetingRecordPDF();
+      const dataUri = doc.output("datauristring");
+      const base64 = dataUri.split(",")[1];
+      if(!base64) throw new Error("Could not generate the meeting record PDF");
+      const res = await authedFetch("/api/send-letter",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           to:email,
-          subject:(meetingType?.label||"Meeting")+" Record - "+caseInfo.employee,
+          subject: subject || (meetingType?.label||"Meeting")+" Record - "+caseInfo.employee,
           orgId: org?.id,
           caseId: activeCaseId,
-          html:"<div style='font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px'><h2 style='color:#7C5CFC'>Compass HR</h2><h3>"+( meetingType?.label||"Meeting")+" Record</h3><p><strong>Employee:</strong> "+caseInfo.employee+"</p><p><strong>Date:</strong> "+caseInfo.date+"</p><hr/><div style='white-space:pre-wrap;font-size:14px;line-height:1.6'>"+reviewOutput+"</div><p style='color:#999;font-size:12px;margin-top:20px'>Sent via Compass HR | Private and Confidential</p></div>"
+          documentType: "meeting_record",
+          recipientName: recipientName.trim(),
+          personalMessage: personalMessage||"",
+          employeeName: caseInfo.employee,
+          meetingType: meetingType?.label||"Meeting",
+          date: fmtDate(caseInfo.date),
+          managerName: caseInfo.manager||"HR",
+          attachments: [{ filename: fileName, content: base64 }],
+          attachmentNames: [fileName],
         })});
-      showToast("Record shared with "+email);
+      const data = await res.json();
+      if(!data.success) { showToast("Failed to share record — "+(data.error||"please try again"), "error"); setShareProcessing(false); return; }
+      // Human UAT remediation, Batch 2, Part 13 — sharing a meeting
+      // record left no trace on the case's own Timeline at all, one of
+      // the specific gaps the brief names ("shared" as one of the
+      // meaningful events this journey should show).
+      if(activeCaseId) audit("Meeting record shared", "Shared with "+email, activeCaseId);
+      showToast("Record shared with "+email+" — "+fileName+" attached");
       setShowShareModal(false);
-      setShareEmail("");
-    } catch(e){ showToast("Failed to share record","error"); }
+      setShareEmail(""); setShareRecipientName(""); setShareSubject(""); setSharePersonalMessage("");
+    } catch(e){ showToast("Failed to share record — "+e.message, "error"); }
     setShareProcessing(false);
   };
 
@@ -7444,7 +7661,12 @@ Please produce:
   const getCaseStatus = (cs) => {
     const meetings = cs.meetings || [];
     const types = meetings.map(m => (m.type || "").toLowerCase());
-    const hasOutcomeLetter = meetings.some(m => m.letterOutput);
+    // Human UAT remediation, Batch 2 hardening — drafting and saving a
+    // disciplinary/appeal hearing invitation used to flip this case's
+    // list badge straight to "Outcome issued" (green), since letterOutput
+    // alone couldn't tell an invitation from a real outcome. See
+    // caseStage.js's hasLetterType for the letterType-aware fix.
+    const hasOutcomeLetter = hasLetterType(meetings, "outcome");
     const hasSigned = meetings.some(m => m.signStatus === "signed" || m.signStatus === "acknowledged");
     const hasPending = meetings.some(m => m.signStatus && !isTerminalStatus(m.signStatus));
 
@@ -7511,6 +7733,19 @@ Please produce:
     try { return new Date(d).toLocaleDateString("en-GB"); } catch(e) { return d; }
   };
 
+  // Human UAT remediation, Batch 2, Part 11 — a disciplinary/appeal
+  // hearing invitation is the one letter type where ACAS expects the
+  // employee to see the evidence against them before the hearing.
+  // Reuses cs.evidence — the case's own existing evidence, filtered to
+  // items that actually have a file behind them (dataUrl); a manually
+  // logged, file-less evidence entry can't be attached. Computed
+  // unconditionally here (cheap) rather than inline in the Email letter
+  // modal's JSX, which otherwise needs an IIFE to scope this — and an
+  // IIFE newly introduced there was confusing this file's static ref-
+  // usage analysis for an unrelated, distant ref elsewhere in the
+  // component (verified via a before/after eslint diff).
+  const showEmailLetterEvidencePicker = (activeLetter==="invite"||activeLetter==="appeal");
+  const emailLetterAttachableEvidence = showEmailLetterEvidencePicker ? (cases.find(x=>x.id===activeCaseId)?.evidence||[]).filter(e=>e.dataUrl) : [];
 
   const getProceedingTitle = (cs) => {
     if(cs.proceedingTitle) return cs.proceedingTitle;
@@ -7553,26 +7788,46 @@ Please produce:
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#FDFAF5;}::-webkit-scrollbar-thumb{background:#E8E0D0;border-radius:2px;}
       `}</style>
 
-      {showShareModal&&(
-        <div role="dialog" aria-modal="true" ref={shareModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:420}}>
-            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share meeting record</h3>
-            <p style={{fontSize:13,color:"#9B9098",marginBottom:20}}>Send the meeting record to an email address</p>
-            <input value={shareEmail} onChange={e=>setShareEmail(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&shareRecord(shareEmail)}
-              placeholder="Email address"
-              aria-label="Email address"
+      {showShareModal&&(()=>{
+        const defaultShareSubject = (meetingType?.label||"Meeting")+" Record - "+caseInfo.employee;
+        const closeShareModal = () => { setShowShareModal(false); setShareEmail(""); setShareRecipientName(""); setShareSubject(""); setSharePersonalMessage(""); };
+        return (
+        <div role="dialog" aria-modal="true" aria-labelledby="share-modal-title" ref={shareModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto"}}>
+            <h3 id="share-modal-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share meeting record</h3>
+            <p style={{fontSize:13,color:"#9B9098",marginBottom:20}}>The full meeting record is included in the email below — nothing is sent as a separate file attachment.</p>
+
+            <label htmlFor="share-recipient-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Recipient name</label>
+            <input id="share-recipient-name" value={shareRecipientName} onChange={e=>setShareRecipientName(e.target.value)}
+              placeholder="e.g. Sam Employee"
+              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:14,boxSizing:"border-box"}}/>
+
+            <label htmlFor="share-recipient-email" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Recipient email</label>
+            <input id="share-recipient-email" value={shareEmail} onChange={e=>setShareEmail(e.target.value)}
+              placeholder="email@example.com"
               type="email"
-              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
+              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:14,boxSizing:"border-box"}}/>
+
+            <label htmlFor="share-subject" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Subject</label>
+            <input id="share-subject" value={shareSubject||defaultShareSubject} onChange={e=>setShareSubject(e.target.value)}
+              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:14,boxSizing:"border-box"}}/>
+
+            <label htmlFor="share-personal-message" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Personal note (optional)</label>
+            <textarea id="share-personal-message" value={sharePersonalMessage} onChange={e=>setSharePersonalMessage(e.target.value)}
+              placeholder="Add a short note for the recipient..."
+              rows={3}
+              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:16,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+
             <div style={{display:"flex",gap:8}}>
-              <Btn onClick={()=>shareRecord(shareEmail)} disabled={shareProcessing||!shareEmail.trim()} style={{flex:1}}>
+              <Btn onClick={()=>shareRecord(shareEmail, shareRecipientName, shareSubject||defaultShareSubject, sharePersonalMessage)} disabled={shareProcessing||!shareEmail.trim()||!shareRecipientName.trim()} style={{flex:1}}>
                 {shareProcessing?"Sending...":"Send"}
               </Btn>
-              <Btn variant="ghost" onClick={()=>{setShowShareModal(false);setShareEmail("");}} style={{flex:1}}>Cancel</Btn>
+              <Btn variant="ghost" onClick={closeShareModal} style={{flex:1}}>Cancel</Btn>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {showLinkCase&&appealDetected&&(
         <div role="dialog" aria-modal="true" ref={linkCaseModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -7654,15 +7909,22 @@ Please produce:
       {showLetterModal&&(
         <div role="dialog" aria-modal="true" ref={letterModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:isMobile?"calc(100vw - 32px)":480}}>
-            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Draft outcome letter</h3>
-            <p style={{fontSize:13,color:"#6B6375",marginBottom:24}}>How would you like to create the outcome letter?</p>
+            {/* Human UAT remediation, Batch 2, Part 11 (adjacent finding) —
+                this always said "outcome letter" regardless of which
+                letter type was actually being drafted, e.g. showing
+                "Draft outcome letter" when the flow that led here was
+                the disciplinary hearing's own "Draft invitation letter"
+                prompt. Same {outcome/invite/appeal} label set doSend
+                already uses for its own subject line. */}
+            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Draft {({outcome:"outcome",invite:"invitation",appeal:"appeal outcome"})[pendingLetterType]||"outcome"} letter</h3>
+            <p style={{fontSize:13,color:"#6B6375",marginBottom:24}}>How would you like to create the {({outcome:"outcome",invite:"invitation",appeal:"appeal outcome"})[pendingLetterType]||"outcome"} letter?</p>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>{setShowLetterModal(false);handleLetter(pendingLetterTypeRef.current||"outcome");}}
+              <button onClick={()=>{setShowLetterModal(false);handleLetter(pendingLetterType||"outcome");}}
                 style={{background:"#7C5CFC",border:"none",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#fff",fontWeight:600,marginBottom:4}}>Generate with Compass</div>
                 <div style={{fontSize:12,color:"#7C5CFC"}}>Compass drafts a letter based on the meeting record and UK employment law</div>
               </button>
-              <button onClick={()=>{setShowLetterModal(false);setScreen(SCREENS.TEMPLATES);setActiveLetter("outcome");}}
+              <button onClick={()=>{setShowLetterModal(false);setScreen(SCREENS.TEMPLATES);setActiveLetter(pendingLetterType||"outcome");}}
                 style={{background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:10,padding:"16px 20px",cursor:"pointer",textAlign:"left"}}>
                 <div style={{fontSize:14,color:"#1A1535",fontWeight:600,marginBottom:4}}>Use a template</div>
                 <div style={{fontSize:12,color:"#6B6880"}}>Pick from your uploaded templates and Compass will populate it with meeting details</div>
@@ -7674,25 +7936,52 @@ Please produce:
       )}
 
       {showEmailLetter&&(
-        <div role="dialog" aria-modal="true" ref={emailLetterModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
-            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Email letter</h3>
+        <div role="dialog" aria-modal="true" aria-labelledby="email-letter-modal-title" ref={emailLetterModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto"}}>
+            <h3 id="email-letter-modal-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Email letter</h3>
             <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The letter will be sent as email body and also available to download as PDF.</p>
             <label htmlFor="email-letter-to" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Recipient email</label>
             <input id="email-letter-to" value={emailLetterTo} onChange={e=>setEmailLetterTo(e.target.value)}
               placeholder="employee@company.com"
               style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
+
+            {showEmailLetterEvidencePicker&&(
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Evidence to include (optional)</div>
+                {emailLetterAttachableEvidence.length===0?(
+                  <p style={{fontSize:12,color:"#9B9098"}}>No case evidence with a file to attach yet.</p>
+                ):(
+                  <div style={{border:"1px solid #E8E0D0",borderRadius:8,maxHeight:160,overflowY:"auto"}}>
+                    {emailLetterAttachableEvidence.map((e,i)=>{
+                      const evId = e.id ?? i;
+                      const checked = selectedInviteEvidenceIds.includes(evId);
+                      return (
+                        <label key={evId} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:i<emailLetterAttachableEvidence.length-1?"1px solid #F5F1EA":"none",fontSize:13,color:"#1A1535",cursor:"pointer"}}>
+                          <input type="checkbox" checked={checked} onChange={()=>setSelectedInviteEvidenceIds(ids=>checked?ids.filter(x=>x!==evId):[...ids,evId])}/>
+                          {e.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <p style={{fontSize:11,color:"#9B9098",marginTop:6}}>
+                  {selectedInviteEvidenceIds.length===0?"No evidence will be attached.":`${selectedInviteEvidenceIds.length} item${selectedInviteEvidenceIds.length===1?"":"s"} will be attached: ${emailLetterAttachableEvidence.filter((e,i)=>selectedInviteEvidenceIds.includes(e.id??i)).map(e=>e.name).join(", ")}`}
+                </p>
+              </div>
+            )}
+
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={async()=>{
                 if(!emailLetterTo.includes("@")||letterSendProcessing) return;
                 setLetterSendProcessing(true);
                 try {
-                  const ok = await sendLetterCoordinated(emailLetterTo);
-                  if(ok) { setShowEmailLetter(false); setEmailLetterTo(""); }
+                  const selectedEvidence = emailLetterAttachableEvidence.filter((e,i)=>selectedInviteEvidenceIds.includes(e.id??i));
+                  const ok = await sendLetterCoordinated(emailLetterTo, selectedEvidence);
+                  if(ok) { setShowEmailLetter(false); setEmailLetterTo(""); setSelectedInviteEvidenceIds([]); }
                 } catch(e){ showToast("Error: "+e.message, "error"); }
                 setLetterSendProcessing(false);
               }} disabled={!emailLetterTo.includes("@")||letterSendProcessing} style={{flex:1}}>{letterSendProcessing?"Sending...":"Send email"}</Btn>
-              <Btn variant="ghost" onClick={()=>{setShowEmailLetter(false);setEmailLetterTo("");}} style={{flex:1}}>Cancel</Btn>
+              <Btn variant="ghost" onClick={()=>{setShowEmailLetter(false);setEmailLetterTo("");setSelectedInviteEvidenceIds([]);}} style={{flex:1}}>Cancel</Btn>
             </div>
           </div>
         </div>
@@ -8299,7 +8588,7 @@ Please produce:
           header={{
             showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,
             setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
-            aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, attemptSubmitInvestigation,
+            aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
             openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
             changesSinceView: changesSinceView[activeCaseId], changesSummary: changesSummary[activeCaseId],
             changesSummaryLoading: changesSummaryLoading[activeCaseId],
@@ -8324,7 +8613,7 @@ Please produce:
           }}
           meetingsTab={{ activeCaseStage, setActiveCaseStage, onAcceptSavedSuggestion: acceptSavedMeetingSuggestion, onDismissSavedSuggestion: dismissSavedMeetingSuggestion }}
           evidenceTab={{ documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding }}
-          documentsTab={{ onGenerateHearingPack: handleGenerateHearingPack, hearingPackGenerating, onDraftCorrespondence: startCaseCorrespondence }}
+          documentsTab={{ onGenerateHearingPack: handleGenerateHearingPack, hearingPackGenerating, hearingPackReady, onDismissHearingPackReady: (caseId)=>setHearingPackReady(r=>({...r,[caseId]:null})), onDraftCorrespondence: startCaseCorrespondence }}
           themesTab={{
             organisationThemes, caseThemes, themeSuggestions, themeSuggestionLoading,
             onSuggestThemes: suggestThemesForCase, onConfirmThemeSuggestion: confirmThemeSuggestion,
@@ -8361,7 +8650,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setMeetingStartTime={setMeetingStartTime} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>orgLsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} />
+        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>orgLsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} fmtDate={fmtDate} />
       )}
 
       {/* ══ REVIEW ══ */}

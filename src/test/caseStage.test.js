@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCurrentRisk, getCaseStage, isGrievanceCase, withStageTransitionStamp } from '../lib/caseStage.js';
+import { getCurrentRisk, getCaseStage, isGrievanceCase, withStageTransitionStamp, hasLetterType } from '../lib/caseStage.js';
 
 describe('getCaseStage', () => {
   it('an explicitly-tracked stage wins over the outcome heuristic', () => {
@@ -281,5 +281,69 @@ describe('withStageTransitionStamp (P17)', () => {
     const next = { id: 'c1', stage: 'closed', meetings: [] };
     const result = withStageTransitionStamp(next, prev);
     expect(result.timelineOverrides.stageEnteredAt.closed).toBeTruthy();
+  });
+});
+
+// Human UAT remediation, Batch 2 hardening — an invitation letter used to
+// be indistinguishable from a genuine outcome letter to every consumer
+// checking "does some meeting have a letterOutput" (this file, nextStep.js,
+// App.jsx's getCaseStatus, deadlines.js, processTimeline.js), because
+// letterOutput never recorded which letter category produced it.
+// App.jsx's saveMeetingToCaseImpl now stamps a companion letterType
+// alongside letterOutput; these are the four scenarios the hardening
+// request named explicitly.
+describe('invitation letters are never mistaken for an outcome (Batch 2 hardening)', () => {
+  it('A. an investigation case with a meeting carrying an invitation letterType does not read as though an outcome exists', () => {
+    const cs = {
+      caseType: 'misconduct',
+      meetings: [{ type: 'Investigation', record: 'notes', letterOutput: 'Dear Sam, please attend a disciplinary hearing...', letterType: 'invite' }],
+    };
+    // No explicit cs.stage — heuristic must classify from the meeting
+    // itself: an investigation meeting with an invitation letter is still
+    // "investigation" stage, never "outcome".
+    expect(getCaseStage(cs)).toBe('investigation');
+  });
+
+  it('B. a disciplinary hearing invitation does not advance the case past the pre-hearing stage', () => {
+    const cs = {
+      stage: 'disciplinary', // set by the guided "Proceed to disciplinary — send invitation" action
+      caseType: 'misconduct',
+      meetings: [{ type: 'Disciplinary', record: 'placeholder', signStatus: 'signed', letterOutput: 'Dear Sam, please attend a disciplinary hearing...', letterType: 'invite' }],
+    };
+    // getCaseStage: the explicit "disciplinary" stage always wins, so this
+    // asserts the lower-level signal a stageless case would fall back to.
+    expect(hasLetterType(cs.meetings, 'outcome')).toBe(false);
+  });
+
+  it('C. an appeal hearing invitation does not imply an appeal outcome has been decided', () => {
+    const cs = {
+      stage: 'appeal',
+      caseType: 'misconduct',
+      meetings: [
+        { type: 'Disciplinary', letterOutput: 'the real outcome letter', letterType: 'outcome' },
+        { type: 'Appeal', record: 'placeholder', letterOutput: 'Dear Sam, please attend your appeal hearing...', letterType: 'invite' },
+      ],
+    };
+    expect(hasLetterType(cs.meetings, 'appeal')).toBe(false);
+    expect(getCaseStage(cs)).toBe('appeal');
+  });
+
+  it('D. a genuine outcome letter is still correctly recognised as one', () => {
+    const cs = {
+      caseType: 'misconduct',
+      meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: 'Following the hearing, the decision is...', letterType: 'outcome' }],
+    };
+    expect(getCaseStage(cs)).toBe('outcome');
+    expect(hasLetterType(cs.meetings, 'outcome')).toBe(true);
+  });
+
+  it('falls back to the old any-letterOutput heuristic for legacy meetings saved before letterType existed', () => {
+    const legacyMeeting = { type: 'Disciplinary', letterOutput: 'some letter text' }; // no letterType at all
+    expect(hasLetterType([legacyMeeting], 'outcome')).toBe(true);
+    expect(hasLetterType([legacyMeeting], 'appeal')).toBe(true); // ambiguous — old data can't be recovered
+  });
+
+  it('a meeting with no letterOutput at all is never counted regardless of letterType', () => {
+    expect(hasLetterType([{ type: 'Disciplinary', letterType: 'outcome' }], 'outcome')).toBe(false);
   });
 });

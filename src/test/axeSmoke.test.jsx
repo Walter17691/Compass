@@ -4,6 +4,7 @@ import { axe } from 'jest-axe';
 import { ConfirmModal } from '../components/ConfirmModal.jsx';
 import { PromptModal } from '../components/PromptModal.jsx';
 import { WhySourcesModal } from '../components/WhySourcesModal.jsx';
+import { SignedRecordModal } from '../components/SignedRecordModal.jsx';
 import { CasesScreen } from '../screens/CasesScreen.jsx';
 import { CalendarScreen } from '../screens/CalendarScreen.jsx';
 
@@ -52,6 +53,17 @@ describe('axe accessibility smoke tests', () => {
         onClose={noop}
       />
     );
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  // Human UAT remediation, Batch 2, Part 9/16 — the durable, in-Compass
+  // signed-record viewer this batch added.
+  it('SignedRecordModal has no detectable violations, signed and acknowledged alike', async () => {
+    const meeting = { type: 'Disciplinary', date: '31/08/2026', signStatus: 'signed', signerName: 'Sam Employee', signedAt: '31/08/2026', record: 'Meeting Details\n\nType: Disciplinary', signature: 'data:image/png;base64,AAAA' };
+    const { container, rerender } = render(<SignedRecordModal meeting={meeting} fmtDate={d => d} onClose={noop} />);
+    expect(await axe(container)).toHaveNoViolations();
+
+    rerender(<SignedRecordModal meeting={{ ...meeting, signStatus: 'acknowledged', signature: null }} fmtDate={d => d} onClose={noop} />);
     expect(await axe(container)).toHaveNoViolations();
   });
 

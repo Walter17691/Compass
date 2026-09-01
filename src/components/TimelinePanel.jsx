@@ -11,6 +11,7 @@ const TYPE_STYLE = {
   outcome: { color: "#C84B2F", label: "Outcome" },
   allegation: { color: "#C84B2F", label: "Allegation" },
   email: { color: "#1C5AA0", label: "Email" },
+  document: { color: "#7C5CFC", label: "Document" },
   audit: { color: "#9B9098", label: "Activity" },
 };
 

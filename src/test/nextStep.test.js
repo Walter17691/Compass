@@ -89,6 +89,29 @@ describe('getNextStep', () => {
       });
       expect(step.action).toBe('post_outcome');
     });
+
+    // Human UAT remediation, Batch 2 hardening — a disciplinary hearing
+    // invitation used to satisfy the exact same "some disciplinary meeting
+    // has a letterOutput" check as a real outcome letter, so drafting and
+    // saving an invitation could skip "Draft outcome letter" entirely and
+    // jump straight to "Outcome issued — close or appeal" before the
+    // hearing had even happened. letterType (now stamped alongside
+    // letterOutput on save) lets this distinguish the two.
+    it('still recommends drafting the outcome letter when the only letterOutput present is an invitation, not an outcome', () => {
+      const step = getNextStep({
+        stage: 'disciplinary',
+        meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: 'Dear Sam, please attend a disciplinary hearing...', letterType: 'invite' }],
+      });
+      expect(step.action).toBe('outcome_letter');
+    });
+
+    it('legacy meetings with no recorded letterType keep the old behaviour (any letterOutput reads as the outcome)', () => {
+      const step = getNextStep({
+        stage: 'disciplinary',
+        meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: '...' /* no letterType */ }],
+      });
+      expect(step.action).toBe('post_outcome');
+    });
   });
 
   it('recommends closing the case at the outcome stage', () => {
@@ -127,6 +150,19 @@ describe('getNextStep', () => {
         meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }],
       });
       expect(step.action).toBe('close_case');
+    });
+
+    // Human UAT remediation, Batch 2 hardening — an appeal HEARING
+    // invitation (letterType "invite", drafted before the appeal hearing
+    // has even happened) used to satisfy the same "some appeal meeting has
+    // a letterOutput" check as the real appeal outcome letter, wrongly
+    // implying the appeal had already been decided.
+    it('still recommends drafting the appeal outcome letter when the only letterOutput present is an appeal-hearing invitation', () => {
+      const step = getNextStep({
+        stage: 'appeal',
+        meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: 'Dear Sam, please attend your appeal hearing...', letterType: 'invite' }],
+      });
+      expect(step.action).toBe('appeal_letter');
     });
   });
 
@@ -169,6 +205,11 @@ describe('getNextStep — grievance-shaped cases', () => {
     it('reaches post_outcome once signed with an outcome letter present, same appeal-window protection as disciplinary', () => {
       const step = getNextStep(grievanceCase('hearing', [{ type: 'Grievance', record: 'notes', signStatus: 'signed', letterOutput: '...' }]));
       expect(step.action).toBe('post_outcome');
+    });
+
+    it('still recommends drafting the outcome letter when the only letterOutput present is a hearing invitation, same fix as disciplinary', () => {
+      const step = getNextStep(grievanceCase('hearing', [{ type: 'Grievance', record: 'notes', signStatus: 'signed', letterOutput: 'Dear Sam, please attend a grievance hearing...', letterType: 'invite' }]));
+      expect(step.action).toBe('outcome_letter');
     });
   });
 

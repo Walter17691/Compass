@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildHearingPackSections } from '../lib/hearingPack.js';
+import { buildHearingPackSections, buildHearingPackEvidenceItem } from '../lib/hearingPack.js';
 
 const baseCase = {
   id: 'c1',
@@ -122,5 +122,36 @@ describe('buildHearingPackSections', () => {
       const recentCase = { ...baseCase, dateReceived: '2026-08-22' };
       expect(buildHearingPackSections(recentCase, {}).auditHistoryMayBeIncomplete).toBe(false);
     });
+  });
+});
+
+// Human UAT remediation, Batch 2, Part 2 — generating a hearing pack used
+// to only ever trigger a one-off browser download with nothing recorded
+// on the case, making it unretrievable once the downloads panel was
+// closed. buildHearingPackEvidenceItem gives it the same evidence-item +
+// dataUrl shape buildSentLetterEvidenceItem (lib/letterSend.js) already
+// uses for generated correspondence, so it can be saved onto the case
+// and picked up by the Documents tab and Timeline the same way.
+describe('buildHearingPackEvidenceItem (Batch 2, Part 2)', () => {
+  it('produces an evidence item with a real id, a PDF mime type, and the source:"hearing_pack" marker', () => {
+    const item = buildHearingPackEvidenceItem({ dataUrl: 'data:application/pdf;base64,AAAA', size: 1234, addedBy: 'Jo' });
+    expect(item.id).toBeTruthy();
+    expect(item.name).toBe('Hearing Pack');
+    expect(item.type).toBe('application/pdf');
+    expect(item.source).toBe('hearing_pack');
+    expect(item.dataUrl).toBe('data:application/pdf;base64,AAAA');
+    expect(item.size).toBe(1234);
+    expect(item.addedBy).toBe('Jo');
+  });
+
+  it('falls back to "HR Manager" when no addedBy is given', () => {
+    const item = buildHearingPackEvidenceItem({ dataUrl: 'data:application/pdf;base64,AAAA', size: 1 });
+    expect(item.addedBy).toBe('HR Manager');
+  });
+
+  it('gives each generated pack a distinct id, so multiple packs on the same case never collide', () => {
+    const a = buildHearingPackEvidenceItem({ dataUrl: 'x', size: 1 });
+    const b = buildHearingPackEvidenceItem({ dataUrl: 'x', size: 1 });
+    expect(a.id).not.toBe(b.id);
   });
 });

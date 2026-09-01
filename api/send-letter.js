@@ -2,6 +2,19 @@ import { requireCaseAccess, verifyOutcomeApproved } from './_auth.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 
+// Human UAT remediation, Batch 2, Part 11 — the non-meeting-record
+// branch below used to unconditionally say "the outcome letter"
+// regardless of letterType, so a disciplinary/appeal hearing invitation
+// email misdescribed itself as an outcome letter. Mirrors
+// LetterScreen.jsx's own lTypes map for the same three types it already
+// distinguishes when building the subject line client-side.
+const LETTER_KIND_LABEL = {
+  outcome: 'the outcome letter',
+  invite: 'the invitation letter',
+  appeal: 'the appeal outcome letter',
+  suspension: 'the suspension letter',
+};
+
 // Phase 6.5 hardening (P0) — previously verified only that SOME real
 // Supabase session was calling (any authenticated identity on the whole
 // project, including an employee portal account, not just this org's own
@@ -28,7 +41,7 @@ import { escapeHtml as esc } from './_html.js';
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { to, subject, body, orgId, caseId, letterType, employeeName, meetingType, managerName, date } = req.body;
+  const { to, subject, body, orgId, caseId, letterType, employeeName, meetingType, managerName, date, documentType, recipientName, personalMessage, attachments, attachmentNames } = req.body;
 
   // An outcome letter can only ever exist for a real, already-saved case
   // (OutcomeModal sets cases.outcome on an existing row) — unlike other
@@ -70,6 +83,61 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'A valid recipient email address is required' });
   }
 
+  // Human UAT remediation, Batch 2, Part 5 — "never 'Dear ,' with an
+  // empty name" enforced server-side too, not just by the client
+  // disabling its own Send button, since this is the endpoint that
+  // actually builds and sends the email.
+  if (documentType === 'meeting_record' && !String(recipientName || '').trim()) {
+    return res.status(400).json({ error: 'A recipient name is required' });
+  }
+
+  // Human UAT remediation, Batch 2, Part 11 — a disciplinary/appeal
+  // hearing invitation had no way to actually carry the case evidence
+  // the employee is entitled to see before the hearing; App.jsx's
+  // sendLetterCoordinated forwards HR's selection (from the case's own
+  // existing evidence, never a second store) as real Resend attachments.
+  const resendAttachments = Array.isArray(attachments)
+    ? attachments.filter(a => a && a.filename && a.content).map(a => ({ filename: String(a.filename), content: String(a.content) }))
+    : [];
+
+  // Human UAT remediation, Batch 2 hardening — the UAT requirement was a
+  // genuine attachment, not just an honest "nothing is attached"
+  // message. shareRecord (App.jsx) always generates and sends the
+  // meeting-record PDF as a real attachment before calling this endpoint
+  // — if that ever comes through empty (a client-side PDF generation
+  // failure, a caller bypassing the normal UI), this must fail loudly,
+  // not silently send an email that looks successful but never carried
+  // the document it claims to.
+  const isMeetingRecordShare = documentType === 'meeting_record';
+  if (isMeetingRecordShare && resendAttachments.length === 0) {
+    return res.status(400).json({ error: 'The meeting record document is missing — nothing was sent' });
+  }
+
+  // Human UAT remediation, Batch 2, Part 5/6 hardening — "Share meeting
+  // record" now always carries the record as a real PDF attachment
+  // (validated above), so the body stays a short, professional message
+  // that names the attachment rather than repeating its full contents.
+  const html = isMeetingRecordShare
+    ? `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+            <h2 style="color:#7C5CFC">Compass HR</h2>
+            <p>Dear ${esc(recipientName)},</p>
+            <p>${esc(managerName)} has shared the ${esc(meetingType)} meeting record${employeeName ? ` for ${esc(employeeName)}` : ''}${date ? ` dated ${esc(date)}` : ''} with you — please see the attached document${attachmentNames?.length ? ` (${attachmentNames.map(n => esc(n)).join(', ')})` : ''}.</p>
+            ${personalMessage ? `<div style="background:#f5f3ff;border-left:4px solid #7C5CFC;padding:12px 16px;margin:16px 0;font-size:14px;line-height:1.6">${esc(personalMessage)}</div>` : ''}
+            <p style="color:#666;font-size:12px">Sent via Compass HR. If you have any questions please contact ${esc(managerName)}.</p>
+          </div>
+        `
+    : `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+            <h2 style="color:#7C5CFC">Compass HR</h2>
+            <p>Dear ${esc(employeeName)},</p>
+            <p>Please find ${LETTER_KIND_LABEL[letterType] || 'the letter'} from your recent <strong>${esc(meetingType)}</strong> on <strong>${esc(date)}</strong>${attachmentNames?.length ? '' : ' below'}.</p>
+            <div style="background:#f9f9f9;border-left:4px solid #7C5CFC;padding:16px;margin:20px 0;font-family:Georgia,serif;white-space:pre-wrap;font-size:14px;line-height:1.8">${esc(body)}</div>
+            ${attachmentNames?.length ? `<p style="font-size:13px;color:#333"><strong>Attached:</strong> ${attachmentNames.map(n => esc(n)).join(', ')}</p>` : ''}
+            <p style="color:#666;font-size:12px">This letter was generated by Compass HR. If you have any questions please contact ${esc(managerName)}.</p>
+          </div>
+        `;
+
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -80,16 +148,9 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'Compass HR <notifications@mail.compasshruk.com>',
         to: [to],
-        subject: subject || `${meetingType} Outcome Letter - ${employeeName}`,
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-            <h2 style="color:#7C5CFC">Compass HR</h2>
-            <p>Dear ${esc(employeeName)},</p>
-            <p>Please find attached the outcome letter from your recent <strong>${esc(meetingType)}</strong> on <strong>${esc(date)}</strong>.</p>
-            <div style="background:#f9f9f9;border-left:4px solid #7C5CFC;padding:16px;margin:20px 0;font-family:Georgia,serif;white-space:pre-wrap;font-size:14px;line-height:1.8">${esc(body)}</div>
-            <p style="color:#666;font-size:12px">This letter was generated by Compass HR. If you have any questions please contact ${esc(managerName)}.</p>
-          </div>
-        `
+        subject: subject || (isMeetingRecordShare ? `${meetingType} Record - ${employeeName}` : `${meetingType} Outcome Letter - ${employeeName}`),
+        html,
+        ...(resendAttachments.length ? { attachments: resendAttachments } : {}),
       })
     });
 

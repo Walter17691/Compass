@@ -14,10 +14,27 @@ import { newId } from './ids.js';
 // sendLetterCoordinated) stays honest: it only ever completes a task
 // whose name matches one of these real, product-surfaced labels
 // verbatim — never a fuzzy/AI guess at intent.
+// Human UAT remediation, Batch 2, Part 13 (adjacent finding) — invite/
+// appeal/suspension were still missing from this map, so a genuine
+// disciplinary/appeal hearing invitation sent via sendLetterCoordinated
+// still hit the fallback below and went out with a subject line calling
+// it "... Outcome Letter", was recorded to evidence/Timeline as the
+// generic "Sent: Letter" (indistinguishable from any other sent letter),
+// and could never auto-complete a matching task — exactly the same class
+// of bug this comment's own history already fixed once for witness-
+// invitation, just never generalised to these three. Deliberately NOT
+// adding "outcome" — its existing fallback below already correctly
+// names it, and every existing test asserting that fallback (e.g.
+// buildLetterSubject's own "Disciplinary Outcome Letter - ...") must
+// keep passing unchanged. Labels match LetterScreen.jsx's own LETTER_TYPES
+// picker text (the actual product-surfaced names), not a new vocabulary.
 export const CORRESPONDENCE_TYPE_LABELS = {
   "witness-invitation": "Witness invitation",
   "evidence-request": "Evidence request",
   "oh-consent-request": "OH consent request",
+  "invite": "Invitation",
+  "appeal": "Appeal outcome",
+  "suspension": "Suspension",
 };
 
 function toBase64(text) {

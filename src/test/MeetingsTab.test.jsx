@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MeetingsTab } from '../components/caseTabs/MeetingsTab.jsx';
 
@@ -203,6 +203,55 @@ describe('MeetingsTab — signature completion detail (Human UAT remediation, Ba
   });
 });
 
+// Human UAT remediation, Batch 2, Part 9 — the actual signature/
+// acknowledgement was only ever visible on the external, time-limited
+// /sign/[id] link. This is the durable, in-Compass retrieval point.
+describe('MeetingsTab — signed record retrieval (Batch 2, Part 9)', () => {
+  it('offers "View signed copy" once a meeting is genuinely signed', async () => {
+    const user = userEvent.setup();
+    const cs = caseWithMeeting({ signStatus: 'signed', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', record: 'Meeting Details\n\nType: Disciplinary', signature: 'data:image/png;base64,AAAA' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    const btn = screen.getByRole('button', { name: 'View signed copy' });
+    await user.click(btn);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText(/Signed by Sam Employee on/)).toBeInTheDocument();
+    expect(within(dialog).getByAltText(/signature/i)).toBeInTheDocument();
+  });
+
+  it('offers "View signed copy" for an acknowledged (no drawn signature) document too, with no signature image', async () => {
+    const user = userEvent.setup();
+    const cs = caseWithMeeting({ signStatus: 'acknowledged', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', record: 'Outcome letter text.' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    await user.click(screen.getByRole('button', { name: 'View signed copy' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/Acknowledged by Sam Employee on/)).toBeInTheDocument();
+    expect(within(dialog).queryByAltText(/signature/i)).not.toBeInTheDocument();
+  });
+
+  it('omits "View signed copy" while still pending (nothing signed yet to view)', () => {
+    const cs = caseWithMeeting({ signStatus: 'sent', signId: 'sign-1', record: 'Draft record.' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.queryByRole('button', { name: 'View signed copy' })).not.toBeInTheDocument();
+  });
+
+  it('omits "View signed copy" for a decline — nothing was actually signed, and the decline reason is already shown inline', () => {
+    const cs = caseWithMeeting({ signStatus: 'declined', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', declineReason: 'Disputes the record', record: 'Draft record.' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.queryByRole('button', { name: 'View signed copy' })).not.toBeInTheDocument();
+  });
+
+  it('closes the signed-copy view without affecting the underlying meeting data', async () => {
+    const user = userEvent.setup();
+    const cs = caseWithMeeting({ signStatus: 'signed', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', record: 'Meeting Details' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    await user.click(screen.getByRole('button', { name: 'View signed copy' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
 // Integrations & Workflow Automation (Phase 5, IP27, §21) — the widened
 // signing_requests status vocabulary (sent/opened/signed/acknowledged/
 // declined/expired), replacing the old pending/signed-only badge.
@@ -268,5 +317,32 @@ describe('MeetingsTab — e-signature status badges (Phase 5, IP27)', () => {
     render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} saveCases={saveCases} promptDialog={() => Promise.resolve(null)} />);
     await user.click(screen.getByRole('button', { name: 'Mark signed' }));
     expect(saveCases).not.toHaveBeenCalled();
+  });
+});
+
+// Human UAT remediation, Batch 2, Part 12 — the investigation report is a
+// genuinely unavoidable long AI generation; concludeInvestigation
+// (App.jsx) now streams it instead of waiting silently for the whole
+// thing, and this live preview is what actually shows that real,
+// incrementally-arriving text — not a fabricated percentage.
+describe('MeetingsTab — investigation report generation progress (Batch 2, Part 12)', () => {
+  it('shows the live streamed draft while generating, once investigation meetings have a record', () => {
+    const cs = caseWithMeeting({ record: 'Full investigation meeting notes.' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} concludingInvestigation={true} investigationReportDraft="## Executive Summary\n\nThe investigation found..." />);
+    expect(screen.getByText(/The investigation found\.\.\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generating report...' })).toBeDisabled();
+  });
+
+  it('shows a waiting message before the first chunk has streamed in', () => {
+    const cs = caseWithMeeting({ record: 'Full investigation meeting notes.' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} concludingInvestigation={true} investigationReportDraft="" />);
+    expect(screen.getByText(/Reading the investigation record/)).toBeInTheDocument();
+  });
+
+  it('shows no live preview at all when not currently generating', () => {
+    const cs = caseWithMeeting({ record: 'Full investigation meeting notes.' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} concludingInvestigation={false} investigationReportDraft="" />);
+    expect(screen.queryByText(/Reading the investigation record/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Conclude investigation & generate report' })).toBeEnabled();
   });
 });

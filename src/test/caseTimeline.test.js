@@ -197,6 +197,48 @@ describe('buildCaseTimeline', () => {
     expect(result.filter(e => e.type === 'audit')).toHaveLength(0);
     expect(result.filter(e => e.type === 'letter')).toHaveLength(1);
   });
+
+  // Human UAT remediation, Batch 2, Part 2/13 — a generated hearing pack
+  // (source: 'hearing_pack', lib/hearingPack.js's
+  // buildHearingPackEvidenceItem) gets its own dedicated timeline entry,
+  // the same way a saved email or sent letter already do.
+  it('Batch 2 — gives a generated hearing pack its own dedicated ("document") timeline entry linking back to the Evidence tab', () => {
+    const cs = { ...baseCase, evidence: [
+      { name: 'Hearing Pack', date: '2026-08-03', addedBy: 'Jo', source: 'hearing_pack' },
+    ] };
+    const result = buildCaseTimeline(cs, [], []);
+    const documentEntries = result.filter(e => e.type === 'document');
+    expect(documentEntries).toHaveLength(1);
+    expect(documentEntries[0]).toMatchObject({ description: 'Hearing pack generated: Hearing Pack', actor: 'Jo', linkTo: { kind: 'evidence', id: 0 } });
+  });
+
+  it('Batch 2 — excludes "Hearing pack generated" audit entries so a generated pack never shows twice', () => {
+    const cs = { ...baseCase, evidence: [{ name: 'Hearing Pack', date: '2026-08-03', addedBy: 'Jo', source: 'hearing_pack' }] };
+    const auditLog = [{ ts: '2026-08-03', user: 'Jo', action: 'Hearing pack generated', detail: 'Hearing Pack', caseId: 'case1' }];
+    const result = buildCaseTimeline(cs, [], auditLog);
+    expect(result.filter(e => e.type === 'audit')).toHaveLength(0);
+    expect(result.filter(e => e.type === 'document')).toHaveLength(1);
+  });
+
+  // Human UAT remediation, Batch 2, Part 14 — "Letter drafted" is audited
+  // (App.jsx's handleLetter) purely so someone who navigated away
+  // mid-generation gets a durable Activity bell record, not to add a
+  // second Timeline entry alongside the one this file already builds
+  // from the saved meeting's own letterOutput (a draft can be
+  // regenerated several times before ever being sent).
+  it('Batch 2 — excludes "Letter drafted" audit entries entirely, since a draft can be regenerated many times before being sent', () => {
+    const cs = {
+      ...baseCase,
+      meetings: [{ id: 'm1', type: 'Disciplinary', date: '2026-08-05', letterOutput: 'Dear...', savedAt: '2026-08-05' }],
+    };
+    const auditLog = [
+      { ts: '2026-08-04', user: 'Jo', action: 'Letter drafted', detail: 'invitation letter', caseId: 'case1' },
+      { ts: '2026-08-04', user: 'Jo', action: 'Letter drafted', detail: 'invitation letter', caseId: 'case1' },
+    ];
+    const result = buildCaseTimeline(cs, [], auditLog);
+    expect(result.filter(e => e.type === 'audit')).toHaveLength(0);
+    expect(result.filter(e => e.type === 'letter' && e.description === 'Letter drafted')).toHaveLength(1);
+  });
 });
 
 // Phase 6.5 hardening (closes Prompt 11 audit finding 4.8, MEDIUM) —

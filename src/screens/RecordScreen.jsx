@@ -1,11 +1,13 @@
 import { CompassLogo } from '../components/CompassLogo';
 import { MDRenderer } from '../components/MDRenderer';
+import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 import { MeetingQualityCheckModal } from '../components/MeetingQualityCheckModal';
 import { SCREENS } from '../constants';
 import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
 import { computeCoachingTips } from '../lib/managerCoaching';
+import { fmtMeetingTime } from '../lib/meetingTiming';
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setMeetingStartTime, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip }) {
+export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip, fmtDate }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const followUpKey = meetingIntelligence?.suggestedFollowUp ? meetingIntelligence.suggestedFollowUp.text : null;
@@ -41,7 +43,7 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
             <span style={{fontSize:12,color:"#9B9098",margin:"0 6px"}}>·</span>
             <span style={{fontSize:12,color:"#1A1535",fontWeight:500}}>{caseInfo.employee||"Unknown"}</span>
             <span style={{fontSize:12,color:"#9B9098",margin:"0 6px"}}>·</span>
-            <span style={{fontSize:12,color:"#9B9098"}}>{caseInfo.date}</span>
+            <span style={{fontSize:12,color:"#9B9098"}}>{fmtDate?fmtDate(caseInfo.date):caseInfo.date}</span>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -51,7 +53,7 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
               Live
             </div>
           )}
-          {meetingStartTime&&<span style={{fontSize:12,color:"#9B9098",fontFamily:"monospace"}}>{meetingStartTime}</span>}
+          {meetingStartTime&&<span style={{fontSize:12,color:"#9B9098",fontFamily:"monospace"}}>Started {fmtMeetingTime(meetingStartTime)}</span>}
           {/* Adjourn / Reconvene button */}
           {currentAdjournment?(
             <button onClick={async ()=>{
@@ -100,7 +102,6 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
             style={{flex:1,background:"transparent",border:"none",padding:"40px 48px",fontSize:16,lineHeight:1.9,outline:"none",color:"#1A1535",resize:"none",fontFamily:"DM Sans,system-ui,sans-serif",letterSpacing:"0.1px"}}
             onChange={e=>{
               const val = e.target.value;
-              if(!meetingStartTime && val.trim()) setMeetingStartTime(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
               if(val.endsWith(String.fromCharCode(10))) {
                 const ls=val.split(String.fromCharCode(10)).filter(l=>l.trim());
                 ls.forEach(line=>addUtterance(line.trim()));
@@ -298,21 +299,14 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
               {liveChatHistory.length===0&&(
                 <div style={{fontSize:12,color:"#C4BAB0",lineHeight:1.6}}>Ask anything about the meeting or get HR advice in real time</div>
               )}
-              {liveChatHistory.map((m,i)=>(
-                <div key={i} style={{marginBottom:12}}>
-                  <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
-                  <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.role==="assistant"?(()=>{
-                  const txt=m.content.replace(/^#{1,6} /gm,"").replace(/\*\*(.+?)\*\*/g,"$1").replace(/\*(.+?)\*/g,"$1");
-                  return txt.split("\n").map((line,j)=>{
-                    if(!line.trim()) return <div key={j} style={{height:4}}/>;
-                    if(/^\d+\./.test(line.trim())) return <div key={j} style={{marginBottom:3,paddingLeft:6}}>{line.trim()}</div>;
-                    if(line.trim().startsWith("- ")||line.trim().startsWith("• ")) return <div key={j} style={{marginBottom:2,display:"flex",gap:4}}><span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{line.trim().slice(2)}</span></div>;
-                    if(line.trim()==="---") return <hr key={j} style={{border:"none",borderTop:"1px solid #E8E0D0",margin:"6px 0"}}/>;
-                    return <div key={j} style={{marginBottom:3}}>{line.trim()}</div>;
-                  });
-                })():m.content}/></div>
-                </div>
-              ))}
+              <AskCompassErrorBoundary>
+                {liveChatHistory.map((m,i)=>(
+                  <div key={i} style={{marginBottom:12}}>
+                    <div style={{fontSize:11,fontWeight:600,color:m.role==="user"?"#1A1535":"#7C5CFC",marginBottom:3}}>{m.role==="user"?"You":"Compass"}</div>
+                    <div style={{fontSize:12,color:"#3D3560",lineHeight:1.6,background:m.role==="assistant"?"#F5F3FF":"none",padding:m.role==="assistant"?"8px 10px":"0",borderRadius:6,borderLeft:m.role==="assistant"?"2px solid #7C5CFC":"none"}}><MDRenderer text={m.content}/></div>
+                  </div>
+                ))}
+              </AskCompassErrorBoundary>
               {liveChatProcessing&&<div style={{fontSize:11,color:"#9B9098",fontStyle:"italic"}}>Thinking...</div>}
             </div>
             <div style={{padding:"12px 14px",borderTop:"1px solid #EDE5D8",flexShrink:0}}>

@@ -1,4 +1,4 @@
-import { getCaseStage, isGrievanceCase } from './caseStage.js';
+import { getCaseStage, isGrievanceCase, hasLetterType } from './caseStage.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
 
 // Case Copilot's recommended next action — pure function of a case's
@@ -44,8 +44,16 @@ function disciplinaryNextStep(cs, stage) {
   const lastInv = invMeetings[invMeetings.length-1];
   const lastDisc = discMeetings[discMeetings.length-1];
   const lastAppeal = appealMeetings[appealMeetings.length-1];
-  const hasDiscOutcome = discMeetings.some(m=>m.letterOutput);
-  const hasAppealOutcome = appealMeetings.some(m=>m.letterOutput);
+  // Human UAT remediation, Batch 2 hardening — these used to check
+  // "some meeting of this type has any letterOutput at all", which a
+  // disciplinary/appeal hearing INVITATION satisfies just as well as the
+  // real outcome letter — drafting and saving an invitation could make
+  // the Copilot banner skip straight to "Outcome issued — close or
+  // appeal" without any decision ever having been made. hasLetterType
+  // checks the letter's actual recorded type when known (see
+  // caseStage.js).
+  const hasDiscOutcome = hasLetterType(discMeetings, "outcome");
+  const hasAppealOutcome = hasLetterType(appealMeetings, "appeal");
 
   switch(stage) {
     case "intake":
@@ -83,8 +91,8 @@ function grievanceNextStep(cs, stage) {
   const appealMeetings = meetings.filter(m=>isAppealMeeting(m.type));
   const lastHearing = hearingMeetings[hearingMeetings.length-1];
   const lastAppeal = appealMeetings[appealMeetings.length-1];
-  const hasHearingOutcome = hearingMeetings.some(m=>m.letterOutput);
-  const hasAppealOutcome = appealMeetings.some(m=>m.letterOutput);
+  const hasHearingOutcome = hasLetterType(hearingMeetings, "outcome");
+  const hasAppealOutcome = hasLetterType(appealMeetings, "appeal");
 
   switch(stage) {
     case "intake":

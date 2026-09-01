@@ -1,6 +1,8 @@
+import { useState, useRef, useEffect } from 'react';
 import { isGrievanceCase } from '../../lib/caseStage';
 import { isTerminalStatus, signatureStatusLabel } from '../../lib/eSignature';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
+import { SignedRecordModal } from '../SignedRecordModal';
 
 // Integrations & Workflow Automation (Phase 5, IP27, §21) — badge colour
 // per widened signing_requests status. sent/opened are both "still
@@ -36,9 +38,22 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit }) {
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
+  // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
+  // comment for why this needs a durable, in-Compass view at all.
+  const [viewingSignedMeeting, setViewingSignedMeeting] = useState(null);
+  // Human UAT remediation, Batch 2, Part 12 — keeps the live report
+  // preview scrolled to the newest text as it streams in, rather than
+  // stuck showing only the opening lines once the content outgrows the
+  // box's fixed height.
+  const investigationReportDraftRef = useRef(null);
+  useEffect(() => {
+    if (investigationReportDraftRef.current) {
+      investigationReportDraftRef.current.scrollTop = investigationReportDraftRef.current.scrollHeight;
+    }
+  }, [investigationReportDraft]);
 
   const markMeetingSigned = async m => {
     const ok = await requestManualSignatureConfirmation(promptDialog, audit, { itemLabel: `${m.type||"Meeting"} record — ${fmtDate(m.date)}`, caseId: cs.id });
@@ -119,6 +134,16 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           {m.notetakerNotesStatus==="submitted"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes awaiting review</span>}
           {m.notetakerNotesStatus==="reviewed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes reviewed</span>}
           {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
+          {/* Human UAT remediation, Batch 2, Part 9 — the only place the
+              actual signature/acknowledgement was ever visible was the
+              external, time-limited /sign/[id] link. "View notes" above
+              shows the same plain record whether or not it was signed —
+              this is the one, durable, always-available place to see the
+              signed copy itself, reading the exact fields the badge above
+              already reads, not a second status source. */}
+          {m.record&&m.signStatus&&isTerminalStatus(m.signStatus)&&m.signStatus!=="declined"&&(
+            <button onClick={()=>setViewingSignedMeeting(m)} style={{fontSize:11,background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:6,padding:"4px 10px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View signed copy</button>
+          )}
         </div>
       </div>
       {/* Human UAT remediation, Batch 1, Issue 2 — signer/date (and decline
@@ -201,10 +226,22 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
               ):invMeetings.some(m=>m.record)?(
                 <div>
                   <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to conclude.</div>
-                  <button disabled={concludingInvestigation} onClick={()=>attemptSubmitInvestigation(cs.id)}
+                  <button disabled={concludingInvestigation} aria-busy={concludingInvestigation} onClick={()=>attemptSubmitInvestigation(cs.id)}
                     style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:concludingInvestigation?"not-allowed":"pointer",opacity:concludingInvestigation?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
                     {concludingInvestigation?"Generating report...":"Conclude investigation & generate report"}
                   </button>
+                  {/* Human UAT remediation, Batch 2, Part 12 — the report
+                      itself is a genuinely unavoidable multi-part AI
+                      generation; what's removable is the perceived wait.
+                      Streams the real, actual text as Compass writes it
+                      (this app's own established pattern for other long-
+                      form generations) rather than a blank wait or a
+                      fabricated percentage. */}
+                  {concludingInvestigation&&(
+                    <div ref={investigationReportDraftRef} style={{marginTop:12,background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:"10px 12px",maxHeight:140,overflowY:"auto",fontSize:11,color:"#6B6375",lineHeight:1.6,whiteSpace:"pre-wrap"}}>
+                      {investigationReportDraft||"Reading the investigation record..."}
+                    </div>
+                  )}
                 </div>
               ):(
                 <div style={{fontSize:13,color:"#9B9098"}}>No report yet — complete investigation meetings first, then generate here.</div>
@@ -226,6 +263,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           )}
         </>
       )}
+      {viewingSignedMeeting&&<SignedRecordModal meeting={viewingSignedMeeting} fmtDate={fmtDate} onClose={()=>setViewingSignedMeeting(null)}/>}
     </>
   );
 }

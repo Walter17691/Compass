@@ -153,6 +153,22 @@ describe('computeDueSoon — case-derived ACAS/statutory deadlines', () => {
     expect(items[0].key).toContain('m1');
   });
 
+  // Human UAT remediation, Batch 2 hardening — letterOutput never recorded
+  // which letter category produced it, so a disciplinary hearing
+  // INVITATION (drafted and saved before the hearing has even happened)
+  // used to satisfy "a disciplinary meeting with a letterOutput" just as
+  // well as a real outcome letter, fabricating an appeal-window deadline
+  // with no decision ever having been made. letterType (now stamped
+  // alongside letterOutput on save) fixes this.
+  it('does not open an appeal window from a disciplinary hearing invitation, only from a genuine outcome letter', () => {
+    const cases = [{
+      id: 'c7', employeeName: 'Frank', stage: 'disciplinary',
+      meetings: [{ id: 'm1', type: 'Disciplinary', date: '13/06/2025', letterOutput: 'Dear Frank, please attend a disciplinary hearing...', letterType: 'invite' }],
+    }];
+    const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+    expect(items).toHaveLength(0);
+  });
+
   it('flags an investigation as overrunning once 21+ days have passed, due 28 days from the first meeting', () => {
     const cases = [{
       id: 'c5', employeeName: 'Dan', stage: 'investigation',

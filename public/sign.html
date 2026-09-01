@@ -4,49 +4,103 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign Document - Compass HR</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
-    <style>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+  <!--
+    Human UAT remediation, Batch 2, Part 8 — this is the one page in the
+    whole meeting journey an external recipient (the employee, not a
+    logged-in Compass user) actually lands on to review and sign their
+    meeting record. It was still on this app's old dark theme, visually
+    unrelated to every other Compass screen the employee has never seen
+    and has no reason to trust, right at the one moment trust matters
+    most. A plain, unbundled static page (Vite's public/ dir is served
+    as-is, no ES module resolution) — colours/fonts below are the same
+    values src/styles/tokens.js formalises for the rest of the app,
+    duplicated as plain CSS rather than imported, since this file
+    structurally cannot reach that module. No element id, class used by
+    the JS below, or visible text the signature-sync E2E spec
+    (tests/e2e/signature-sync.spec.js) or api/signing.js's own status
+    strings depend on has changed — this is a restyle only.
+  -->
+  <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: DM Sans, system-ui, sans-serif; background: #0D0D0F; color: #F2EDE4; min-height: 100vh; }
-    .header { background: #1C1C22; border-bottom: 1px solid #2A2A35; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
-    .logo { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #7C5CFC, #A98FFF); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px; }
+    :root {
+      --paper: #FDFAF5;
+      --surface: #FFFFFF;
+      --border: #E8E0D0;
+      --border-faint: #F1EBDD;
+      --ink: #1C1820;
+      --ink-soft: #6B6375;
+      --ink-faint: #9B9098;
+      --purple: #7C5CFC;
+      --purple-deep: #5B3FD4;
+      --purple-tint: #EDE8FF;
+      --red: #C84B2F;
+      --red-tint: #FFF0ED;
+      --green: #1A7A4A;
+      --green-tint: #E8F5EE;
+    }
+    body { font-family: "DM Sans", system-ui, sans-serif; background: var(--paper); color: var(--ink); min-height: 100vh; }
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+    .wordmark { display: flex; align-items: center; gap: 10px; }
+    .wordmark-text { font-family: "DM Serif Display", Georgia, serif; font-size: 17px; color: var(--ink); letter-spacing: -0.2px; }
     .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
-    .card { background: #1C1C22; border: 1px solid #2A2A35; border-radius: 12px; padding: 28px; margin-bottom: 24px; }
-    .label { font-size: 10px; font-weight: 600; color: #666; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
-    .value { font-size: 14px; color: #F2EDE4; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-bottom: 24px; }
+    .label { font-size: 10px; font-weight: 600; color: var(--ink-soft); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; display: block; }
+    .value { font-size: 14px; color: var(--ink); }
     .field { margin-bottom: 16px; }
-    .document { background: #141418; border: 1px solid #2A2A35; border-radius: 8px; padding: 20px; font-size: 13px; line-height: 1.8; color: #C4BDAF; white-space: pre-wrap; max-height: 400px; overflow-y: auto; margin-bottom: 20px; }
-    canvas { border: 1px solid #2A2A35; border-radius: 8px; background: #fff; cursor: crosshair; display: block; width: 100%; }
-    .btn { background: #7C5CFC; color: white; border: none; border-radius: 8px; padding: 14px 28px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 16px; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 480px) { .field-grid { grid-template-columns: 1fr; } }
+    .document { background: var(--paper); border: 1px solid var(--border); border-radius: 8px; padding: 20px; font-size: 13px; line-height: 1.8; color: var(--ink); white-space: pre-wrap; max-height: 400px; overflow-y: auto; margin-bottom: 20px; }
+    canvas { border: 1px solid var(--border); border-radius: 8px; background: #fff; cursor: crosshair; display: block; width: 100%; touch-action: none; }
+    .btn { background: var(--purple); color: white; border: none; border-radius: 8px; padding: 14px 28px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 16px; font-family: inherit; }
+    .btn:hover:not(:disabled) { background: var(--purple-deep); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-ghost { background: none; border: 1px solid #2A2A35; color: #888; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; }
-    .btn-download { background: #7C5CFC; border: none; color: white; border-radius: 8px; padding: 12px 24px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 12px; }
-    .btn-decline { background: none; border: 1px solid #5A2A2A; color: #E8622A; border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; }
-    textarea { width: 100%; background: #141418; border: 1px solid #2A2A35; border-radius: 8px; padding: 12px; font-size: 13px; color: #F2EDE4; font-family: inherit; resize: vertical; margin-bottom: 12px; }
-    h2 { font-family: DM Serif Display, Georgia, serif; font-size: 20px; color: #F2EDE4; margin-bottom: 16px; font-weight: 400; }
-    .signed-badge { display: inline-block; background: #0A2A0A; border: 1px solid #2A5A2A; color: #4CAF50; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 16px; }
-    .declined-badge { display: inline-block; background: #2A0A0A; border: 1px solid #5A2A2A; color: #E8622A; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-bottom: 16px; }
+    .btn-ghost { background: none; border: 1px solid var(--border); color: var(--ink-soft); border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; font-family: inherit; }
+    .btn-download { background: var(--purple); border: none; color: white; border-radius: 8px; padding: 12px 24px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 12px; font-family: inherit; }
+    .btn-decline { background: none; border: 1px solid var(--red); color: var(--red); border-radius: 8px; padding: 10px 20px; font-size: 13px; cursor: pointer; margin-top: 8px; width: 100%; font-family: inherit; }
+    .btn:focus-visible, .btn-ghost:focus-visible, .btn-download:focus-visible, .btn-decline:focus-visible, textarea:focus-visible, canvas:focus-visible {
+      outline: 2px solid var(--purple); outline-offset: 2px;
+    }
+    textarea { width: 100%; background: var(--paper); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 13px; color: var(--ink); font-family: inherit; resize: vertical; margin-bottom: 12px; }
+    h2 { font-family: "DM Serif Display", Georgia, serif; font-size: 20px; color: var(--ink); margin-bottom: 16px; font-weight: 400; }
+    .signed-badge { display: inline-block; background: var(--green-tint); border: 1px solid var(--green); color: var(--green); padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+    .declined-badge { display: inline-block; background: var(--red-tint); border: 1px solid var(--red); color: var(--red); padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+    .status-awaiting { color: var(--red); font-weight: 600; }
+    .status-done { color: var(--green); font-weight: 600; }
+    .status-muted { color: var(--ink-faint); font-weight: 600; }
+    @media print {
+      .header, .no-print { display: none !important; }
+      body { background: #fff; }
+      .card { border: none; padding: 0; margin-bottom: 20px; }
+      .document { max-height: none; overflow: visible; border: none; padding: 0; }
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo">C</div>
-    <div>
-      <div style="font-size:16px;font-weight:600">Compass HR</div>
-      <div style="font-size:11px;color:#666" id="page-subtitle">Electronic Signature</div>
+    <div class="wordmark">
+      <svg width="30" height="30" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+        <circle cx="50" cy="50" r="48" fill="#7C5CFC"/>
+        <polygon points="50,16 56,50 50,58 44,50" fill="#FDFAF5"/>
+        <polygon points="50,84 44,50 50,42 56,50" fill="rgba(253,250,245,0.28)"/>
+        <circle cx="50" cy="50" r="5" fill="#7C5CFC" stroke="#FDFAF5" stroke-width="2"/>
+      </svg>
+      <span class="wordmark-text">Compass</span>
     </div>
+    <div style="width:1px;height:20px;background:var(--border)"></div>
+    <div style="font-size:11px;color:var(--ink-faint)" id="page-subtitle">Electronic Signature</div>
   </div>
 
   <div class="container">
-    <div id="loading" style="text-align:center;padding:40px"><p style="color:#666">Loading document...</p></div>
+    <div id="loading" style="text-align:center;padding:40px"><p style="color:var(--ink-faint)">Loading document...</p></div>
     <div id="content" style="display:none">
       <div class="card">
         <h2 id="doc-type"></h2>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="field"><div class="label">Employee</div><div class="value" id="employee-name"></div></div>
-          <div class="field"><div class="label">Date</div><div class="value" id="meeting-date"></div></div>
-          <div class="field"><div class="label">Manager</div><div class="value" id="manager-name"></div></div>
-          <div class="field"><div class="label">Status</div><div class="value" id="status-badge"></div></div>
+        <div class="field-grid">
+          <div class="field"><span class="label">Employee</span><div class="value" id="employee-name"></div></div>
+          <div class="field"><span class="label">Date</span><div class="value" id="meeting-date"></div></div>
+          <div class="field"><span class="label">Manager</span><div class="value" id="manager-name"></div></div>
+          <div class="field"><span class="label">Status</span><div class="value" id="status-badge"></div></div>
         </div>
       </div>
 
@@ -60,26 +114,26 @@
            adjustments) shows a plain Acknowledge button instead of the
            signature canvas below; requires_signature:true (a meeting
            record, unchanged from before) keeps the drawn signature. -->
-      <div id="ack-section" class="card" style="display:none">
+      <div id="ack-section" class="card no-print" style="display:none">
         <h2>Confirm receipt</h2>
-        <p style="font-size:13px;color:#666;margin-bottom:16px">By acknowledging you confirm you have read and received this document.</p>
+        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">By acknowledging you confirm you have read and received this document.</p>
         <button class="btn" id="ack-btn" onclick="submitAcknowledgement()">Acknowledge</button>
       </div>
 
-      <div id="sign-section" class="card">
+      <div id="sign-section" class="card no-print">
         <h2>Your Signature</h2>
-        <p style="font-size:13px;color:#666;margin-bottom:16px">By signing below you confirm you have read and received a copy of this document. Your signature does not necessarily indicate agreement with its contents.</p>
-        <canvas id="sig-canvas" height="160"></canvas>
+        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">By signing below you confirm you have read and received a copy of this document. Your signature does not necessarily indicate agreement with its contents.</p>
+        <canvas id="sig-canvas" height="160" role="img" aria-label="Signature drawing area — draw your signature with a mouse, finger or stylus, or use Decline instead below if you cannot"></canvas>
         <button class="btn-ghost" onclick="clearSig()">Clear signature</button>
         <button class="btn" id="submit-btn" onclick="submitSignature()">Submit signature</button>
       </div>
 
-      <div id="decline-section" class="card">
-        <button class="btn-decline" id="decline-toggle" onclick="toggleDecline()">Decline instead</button>
+      <div id="decline-section" class="card no-print">
+        <button class="btn-decline" id="decline-toggle" onclick="toggleDecline()" aria-expanded="false" aria-controls="decline-form">Decline instead</button>
         <div id="decline-form" style="display:none;margin-top:12px">
-          <div class="label" style="margin-bottom:8px">Reason (optional)</div>
+          <label class="label" for="decline-reason" style="margin-bottom:8px">Reason (optional)</label>
           <textarea id="decline-reason" rows="3" placeholder="Let your manager know why"></textarea>
-          <button class="btn" id="decline-submit-btn" onclick="submitDecline()" style="background:#E8622A">Confirm decline</button>
+          <button class="btn" id="decline-submit-btn" onclick="submitDecline()" style="background:var(--red)">Confirm decline</button>
         </div>
       </div>
 
@@ -87,12 +141,12 @@
         <div style="text-align:center;margin-bottom:24px">
           <div class="signed-badge" id="signed-badge">✓ Signed</div>
           <h2 id="signed-heading" style="margin-top:8px">Document signed successfully</h2>
-          <p style="color:#666;font-size:14px" id="signed-when-line">Signed on <span id="signed-date"></span></p>
-          <button class="btn-download" id="download-btn" onclick="downloadSigned()" style="margin-top:16px">Download signed record</button>
+          <p style="color:var(--ink-soft);font-size:14px" id="signed-when-line">Signed on <span id="signed-date"></span></p>
+          <button class="btn-download no-print" id="download-btn" onclick="downloadSigned()" style="margin-top:16px">Download signed record</button>
         </div>
-        <div id="sig-image-wrap" style="margin-top:16px;padding:16px;background:#141418;border-radius:8px;border:1px solid #2A2A35">
-          <div style="font-size:11px;color:#444;margin-bottom:8px">EMPLOYEE SIGNATURE</div>
-          <img id="sig-image" style="max-width:300px;background:#fff;border-radius:4px;padding:8px"/>
+        <div id="sig-image-wrap" style="margin-top:16px;padding:16px;background:var(--paper);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">EMPLOYEE SIGNATURE</div>
+          <img id="sig-image" alt="Employee's drawn signature" style="max-width:300px;background:#fff;border-radius:4px;padding:8px"/>
         </div>
       </div>
 
@@ -100,14 +154,14 @@
         <div style="text-align:center">
           <div class="declined-badge">Declined</div>
           <h2 style="margin-top:8px">You've declined this document</h2>
-          <p style="color:#666;font-size:14px">Your manager has been notified.</p>
+          <p style="color:var(--ink-soft);font-size:14px">Your manager has been notified.</p>
         </div>
       </div>
 
       <div id="expired-section" style="display:none" class="card">
         <div style="text-align:center">
           <h2>This link has expired</h2>
-          <p style="color:#666;font-size:14px" id="expired-contact"></p>
+          <p style="color:var(--ink-soft);font-size:14px" id="expired-contact"></p>
         </div>
       </div>
 
@@ -118,7 +172,7 @@
       <div id="restricted-section" style="display:none" class="card">
         <div style="text-align:center">
           <h2>This link is no longer available</h2>
-          <p style="color:#666;font-size:14px">For your privacy, this document is only viewable here for a limited time after it was actioned. Please contact HR for a copy.</p>
+          <p style="color:var(--ink-soft);font-size:14px">For your privacy, this document is only viewable here for a limited time after it was actioned. Please contact HR for a copy.</p>
         </div>
       </div>
     </div>
@@ -158,7 +212,7 @@
           document.getElementById('doc-type').textContent = 'Document';
           document.getElementById('doc-content-heading').parentElement.style.display = 'none';
           document.getElementById('restricted-section').style.display = 'block';
-          document.getElementById('status-badge').innerHTML = '<span style="color:#888">' + (data.status.charAt(0).toUpperCase() + data.status.slice(1)) + '</span>';
+          document.getElementById('status-badge').innerHTML = '<span class="status-muted">' + (data.status.charAt(0).toUpperCase() + data.status.slice(1)) + '</span>';
           return;
         }
 
@@ -186,7 +240,7 @@
           // (the pre-existing, still-real behaviour signature-sync.spec.js
           // already asserts on) — only the new acknowledgement path gets
           // distinct wording.
-          document.getElementById('status-badge').innerHTML = '<span style="color:#E8622A">Awaiting ' + (data.requires_signature === false ? 'acknowledgement' : 'signature') + '</span>';
+          document.getElementById('status-badge').innerHTML = '<span class="status-awaiting">Awaiting ' + (data.requires_signature === false ? 'acknowledgement' : 'signature') + '</span>';
           if (data.requires_signature === false) {
             document.getElementById('sign-section').style.display = 'none';
             document.getElementById('ack-section').style.display = 'block';
@@ -197,7 +251,7 @@
         }
       })
       .catch(() => {
-        document.getElementById('loading').innerHTML = '<p style="color:#E8622A">Document not found or link has expired.</p>';
+        document.getElementById('loading').innerHTML = '<p style="color:var(--red)">Document not found or link has expired.</p>';
       });
 
     function hideActionSections() {
@@ -210,7 +264,7 @@
       hideActionSections();
       document.getElementById('signed-section').style.display = 'block';
       const acknowledged = data.status === 'acknowledged';
-      document.getElementById('status-badge').innerHTML = '<span style="color:#4CAF50">✓ ' + (acknowledged ? 'Acknowledged' : 'Signed') + '</span>';
+      document.getElementById('status-badge').innerHTML = '<span class="status-done">✓ ' + (acknowledged ? 'Acknowledged' : 'Signed') + '</span>';
       document.getElementById('signed-badge').textContent = acknowledged ? '✓ Acknowledged' : '✓ Signed';
       document.getElementById('signed-heading').textContent = 'Document ' + (acknowledged ? 'acknowledged' : 'signed') + ' successfully';
       const d = data.signed_at ? new Date(data.signed_at).toLocaleString('en-GB', {day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
@@ -226,13 +280,13 @@
     function showDeclined() {
       hideActionSections();
       document.getElementById('declined-section').style.display = 'block';
-      document.getElementById('status-badge').innerHTML = '<span style="color:#E8622A">Declined</span>';
+      document.getElementById('status-badge').innerHTML = '<span class="status-awaiting">Declined</span>';
     }
 
     function showExpired(data) {
       hideActionSections();
       document.getElementById('expired-section').style.display = 'block';
-      document.getElementById('status-badge').innerHTML = '<span style="color:#888">Expired</span>';
+      document.getElementById('status-badge').innerHTML = '<span class="status-muted">Expired</span>';
       document.getElementById('expired-contact').textContent = 'Please contact ' + (data.manager_name || 'your manager') + ' for a new link.';
     }
 
@@ -322,7 +376,10 @@
 
     function toggleDecline() {
       const form = document.getElementById('decline-form');
-      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      const toggle = document.getElementById('decline-toggle');
+      const expanded = form.style.display !== 'none';
+      form.style.display = expanded ? 'none' : 'block';
+      toggle.setAttribute('aria-expanded', String(!expanded));
     }
 
     function submitDecline() {

@@ -25,6 +25,12 @@
 // "Letter sent" audit_log entries are excluded here for the same
 // duplicate-avoidance reason.
 //
+// Human UAT remediation, Batch 2, Part 2/13 — a generated hearing pack
+// (evidence.source === "hearing_pack", lib/hearingPack.js's
+// buildHearingPackEvidenceItem) gets its own "document" entry type for
+// the same reason again; "Hearing pack generated" audit_log entries are
+// excluded here too.
+//
 // Phase 8 adds: a stable `key` per entry (so overrides survive a
 // regenerated timeline), `allegationId` where an entry is genuinely tied
 // to one specific allegation (only the allegation source itself — a
@@ -98,11 +104,20 @@ function rawEntries(cs, allegations, auditLog) {
       entries.push({ key: `evidence-email-${stableId}`, date: ev.date, type: "email", description: `Email saved: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: stableId }, allegationId: null });
     } else if (ev.source === "sent_letter") {
       entries.push({ key: `evidence-sent-${stableId}`, date: ev.date, type: "letter", description: `Letter sent: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: stableId }, allegationId: null });
+    } else if (ev.source === "hearing_pack") {
+      entries.push({ key: `evidence-hearingpack-${stableId}`, date: ev.date, type: "document", description: `Hearing pack generated: ${ev.name}`, actor: ev.addedBy || null, linkTo: { kind: "evidence", id: stableId }, allegationId: null });
     }
   });
 
   (auditLog || [])
-    .filter(e => e.caseId === cs.id && !(e.action || "").startsWith("Allegation") && e.action !== "Email saved to case" && e.action !== "Letter sent")
+    // Human UAT remediation, Batch 2, Part 14 — "Letter drafted" is
+    // audited (App.jsx's handleLetter) purely so it can reach the
+    // Activity bell for someone who navigated away mid-generation, not
+    // to duplicate the "Letter drafted" entry this file already builds
+    // from the saved meeting record's own letterOutput above — a draft
+    // can be regenerated several times before being sent, and every
+    // regeneration would otherwise add its own Timeline entry.
+    .filter(e => e.caseId === cs.id && !(e.action || "").startsWith("Allegation") && e.action !== "Email saved to case" && e.action !== "Letter sent" && e.action !== "Hearing pack generated" && e.action !== "Letter drafted")
     .forEach(e => {
       // Phase 6.5 hardening (structural remediation, Prompt 12 — Task/
       // Entity Identity invariant) — e.id is the row's own real database
