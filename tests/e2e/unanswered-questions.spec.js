@@ -30,9 +30,13 @@ test('Compass reviews a case for covered vs still-to-explore topics, and a quest
   await expect(questionCard.getByRole('button', { name: 'Create task' })).toBeVisible();
   await questionCard.getByRole('button', { name: 'Create task' }).click();
 
-  // Asserts against the case workspace's own "Tasks" tab badge (which
-  // shares its accessible name with the sidebar's global "Tasks" nav item,
-  // so this avoids disambiguating a click between the two) rather than
-  // navigating to the cross-case Tasks screen.
-  await expect(page.getByRole('button', { name: /^Tasks\d+$/ })).toBeVisible();
+  // E2E Navigation Alignment pass — Tasks no longer carries its own
+  // always-visible badge; it moved behind the case workspace's "More"
+  // popover (IA & User Journey pass, §11), whose own collapsed toggle
+  // now carries the *aggregate* badge (open allegations + open tasks)
+  // instead. This case has no allegations recorded, so the just-created
+  // task alone brings that count to 1 — still proves a real task landed,
+  // just via the toggle's current badge mechanics rather than a
+  // Tasks-specific one.
+  await expect(page.getByRole('button', { name: /^More\s*1$/ })).toBeVisible();
 });

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M5) — a general "here's a good next
 // question" suggestion, distinct from the existing same-meeting
@@ -14,7 +14,7 @@ test('a clear follow-up opportunity produces a suggestion that can be inserted i
   const employeeName = `E2E FollowUp ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

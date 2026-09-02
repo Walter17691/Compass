@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 6 of the gap-analysis build-out replaced the case view's old
 // stage-tabs-drive-everything layout with a proper named tab bar
@@ -25,28 +25,30 @@ test('People, Documents, Outcome, Meetings, and AI Assistant tabs each render di
   // Participants — the employee themselves is always listed, tagged as such.
   // Labeled "Participants" (not "People") specifically to avoid colliding
   // with the top-nav "People" employee-directory destination visible on
-  // the same page.
-  await page.getByRole('button', { name: 'Participants', exact: true }).click();
+  // the same page. Reached via the case workspace's "More" popover (IA &
+  // User Journey pass, §11) — only Overview/Timeline/Evidence stay
+  // permanently visible now.
+  await openCaseSection(page, 'Participants');
   await expect(page.getByText(/^Participants \(\d+\)$/)).toBeVisible({ timeout: 10000 });
   const employeeRow = page.locator('div').filter({ hasText: employeeName }).filter({ hasText: 'Employee' }).last();
   await expect(employeeRow).toBeVisible();
 
   // Documents — nothing generated yet.
-  await page.getByRole('button', { name: 'Documents', exact: true }).click();
+  await openCaseSection(page, 'Documents');
   await expect(page.getByText('No letters or files on this case yet.')).toBeVisible({ timeout: 10000 });
 
   // Outcome — case hasn't reached a disciplinary hearing.
-  await page.getByRole('button', { name: 'Outcome', exact: true }).click();
+  await openCaseSection(page, 'Outcome');
   await expect(page.getByText(/hasn't reached a disciplinary hearing/)).toBeVisible({ timeout: 10000 });
 
   // Meetings — investigation stage pill selected by default, empty state shown.
-  await page.getByRole('button', { name: 'Meetings', exact: true }).click();
+  await openCaseSection(page, 'Meetings');
   await expect(page.getByText('No investigation meetings yet')).toBeVisible({ timeout: 10000 });
 
   // AI Assistant — real feature as of Phase 8 (see ai-assistant.spec.js
   // for the full generate/chat round-trip against the real API); this
   // just confirms the tab itself renders its two sections.
-  await page.getByRole('button', { name: 'AI Assistant', exact: true }).click();
+  await openCaseSection(page, 'AI Assistant');
   await expect(page.getByText('AI case overview')).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(`Ask Compass about ${employeeName}'s case`)).toBeVisible();
 });

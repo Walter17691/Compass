@@ -8,6 +8,23 @@ import { login, openNewCaseModal } from './helpers.js';
 // no matter what was suggested or why. This proves a suggestion tied to a
 // real case now opens that case (where Case Copilot's own next-step
 // banner already has the right action), not a disconnected settings page.
+//
+// E2E Navigation Alignment pass — BOTH tests in this file now fail, and
+// neither is stale IA navigation (Create/More): commit 159943f ("Home
+// simplification... Phase 7.5C") explicitly removed the entire
+// "Suggested for you"/"Quick links" panel from Home ("removed the
+// redundant 'Quick links' suggestion list"). Confirmed via source: no
+// JSX anywhere renders "Continue disciplinary case" or calls
+// setSettingsSection("policies") any more — only stale comments
+// mentioning the old feature name remain (App.jsx, SettingsScreen.jsx).
+// This predates the Create/More redesign this pass targets and isn't a
+// navigation-path change — the destination itself no longer exists.
+// Both left failing deliberately rather than mechanically repointed at
+// a different, weaker claim (e.g. "Settings → Policies is reachable",
+// already covered elsewhere) that wouldn't actually verify what these
+// tests exist to prove. Needs a product decision (restore the
+// suggestion panel, or retire this file) — out of scope for a
+// test-only pass.
 test('a case-linked quick link opens the actual case, not just Settings', async ({ page }) => {
   const employeeName = `E2E QuickLinks ${Date.now()}`;
 
@@ -37,12 +54,10 @@ test('a case-linked quick link opens the actual case, not just Settings', async 
   await expect(page.getByText('Billing', { exact: true })).not.toBeVisible();
 });
 
+// See the file-level comment above — the no-active-case fallback item
+// this test targets was removed in the same commit, not relocated.
 test('the no-active-case fallback quick link opens Settings on the Policies tab, not Billing', async ({ page }) => {
   await login(page);
-  // No guarantee the shared E2E org has zero active cases (many other
-  // tests create them), so this exercises the same deep-link path via
-  // the always-present "View all policies & templates" link instead,
-  // which takes the identical setSettingsSection("policies") route.
   await page.getByRole('button', { name: /View all policies & templates/ }).click();
   await expect(page.getByRole('heading', { name: 'Company policies' })).toBeVisible({ timeout: 10000 });
 });

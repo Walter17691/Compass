@@ -35,15 +35,21 @@ async function goToCases(page) {
   await expect(page.getByRole('heading', { name: 'Cases' })).toBeVisible({ timeout: 10000 });
 }
 
-// OrgSwitcher's trigger button appends a "▾" marker whenever more than
-// one org is available (see OrgSwitcher.jsx) — the dropdown's own menu
-// items never carry it. Comparing an org name read from the trigger
-// against one read from a menu item without stripping this would never
-// match, silently picking the wrong "other org" or hanging forever
-// waiting for a menu item whose text doesn't actually exist.
-function stripSwitcherMarker(text) {
-  return text.replace('▾', '').trim();
-}
+// E2E Navigation Alignment pass — OrgSwitcher.jsx no longer exists as a
+// separate component (confirmed: no such file in src/ any more) and
+// there is no standalone "Switch organisation" trigger. The "Sidebar
+// footer composition pass" folded org-switching into the same Account
+// menu Sign out/Settings already live in (AppSidebar.jsx): the entire
+// account row (avatar, name, org, chevron) is one button with the fixed
+// accessible name "Account menu" — the org name is just its own visible
+// sub-text, not part of that name — and its popover is role="menu"
+// aria-label="Account" (not "Organisations"), listing every available
+// org as a plain button alongside "+ Join another organisation",
+// "Settings" and "Sign out" (src/test/AppSidebar.test.jsx's own "account
+// menu" describe block documents this exact shape). No "▾" marker is
+// appended to anything any more, so no stripping is needed either — just
+// reading the org name from its own title-bearing sub-element (the
+// second title="..." div in the trigger; the first is the user's name).
 
 test('a case created in one org is invisible to a genuinely different tenant', async ({ page }) => {
   const canaryName = `Isolation Canary ${Date.now()}`;
@@ -118,13 +124,15 @@ test('a genuinely different tenant sees its own, real case-list state, not the p
 
 test('the org switcher lists exactly this account\'s own two real memberships, and switching between them updates the active org — including a rapid A→B→A round trip', async ({ page }) => {
   await login(page, SECOND_TENANT_CREDS);
-  const switcherButton = page.getByRole('button', { name: /^Switch organisation/ });
-  const orgAName = stripSwitcherMarker(await switcherButton.textContent());
+  const switcherButton = page.getByRole('button', { name: 'Account menu' });
+  // The trigger's own org sub-text (second title-bearing div — the first
+  // is the user's name) reflects the active org without opening anything.
+  const orgAName = (await switcherButton.locator('div[title]').last().textContent()).trim();
 
   await switcherButton.click();
-  const menu = page.getByRole('menu', { name: 'Organisations' });
+  const menu = page.getByRole('menu', { name: 'Account' });
   await expect(menu).toBeVisible();
-  const orgButtons = menu.getByRole('button').filter({ hasNotText: 'Join another organisation' });
+  const orgButtons = menu.getByRole('button').filter({ hasNotText: /Join another organisation|Settings|Sign out/ });
   await expect(orgButtons).toHaveCount(2);
   const orgNames = (await orgButtons.allTextContents()).map(t => t.trim());
   // Both entries genuinely distinct orgs, not the same one rendered twice.
@@ -147,7 +155,7 @@ test('the org switcher lists exactly this account\'s own two real memberships, a
   for (let i = 0; i < 3; i++) {
     await switcherButton.click();
     const target = i % 2 === 0 ? orgAName : orgBName;
-    await page.getByRole('menu', { name: 'Organisations' }).getByRole('button', { name: target, exact: true }).click();
+    await page.getByRole('menu', { name: 'Account' }).getByRole('button', { name: target, exact: true }).click();
   }
   // Three toggles starting from B lands on: A, B, A.
   await expect(switcherButton).toContainText(orgAName, { timeout: 10000 });
@@ -155,7 +163,7 @@ test('the org switcher lists exactly this account\'s own two real memberships, a
   // The final settled state is genuinely consistent, not a stale
   // half-switched UI — reopening the menu shows the same org checked.
   await switcherButton.click();
-  const menuAgain = page.getByRole('menu', { name: 'Organisations' });
+  const menuAgain = page.getByRole('menu', { name: 'Account' });
   await expect(menuAgain).toBeVisible();
   await expect(menuAgain.getByRole('button', { name: orgAName, exact: true })).toHaveText(new RegExp(`^${orgAName}`));
   await page.keyboard.press('Escape');

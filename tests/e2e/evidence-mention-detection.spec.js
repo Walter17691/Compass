@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, startMeeting, openCaseSection } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M3) — "Evidence mentioned" in the live
 // sidebar used to be a read-only list; a witness or piece of evidence
@@ -29,7 +29,7 @@ test('accepting a live witness mention creates a real task on the matching case'
   // navigate back there first (we're currently inside the case we just
   // created).
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -58,10 +58,6 @@ test('accepting a live witness mention creates a real task on the matching case'
   await page.getByPlaceholder('Search by employee…').fill(employeeName);
   await page.getByText(employeeName).first().click();
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText(/Sarah Jones/)).toBeVisible({ timeout: 10000 });
 });

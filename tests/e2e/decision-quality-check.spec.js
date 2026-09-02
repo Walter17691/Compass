@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P11) — computeDecisionQualityGaps
 // (src/lib/decisionQuality.js) gates OutcomeModal's "Issue outcome &
@@ -14,7 +14,7 @@ test('issuing an outcome with an undecided allegation is flagged, and can be sen
 
   await login(page);
   const employeeName = `E2E QualityCheck ${Date.now()}`;
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByText('Disciplinary', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -34,20 +34,15 @@ test('issuing an outcome with an undecided allegation is flagged, and can be sen
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-
   // An allegation left undecided (still "unreviewed") is the simplest,
   // most reliable way to guarantee at least one gap.
-  await caseTabBar.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
 
-  await caseTabBar.getByRole('button', { name: 'Outcome', exact: true }).click();
+  await openCaseSection(page, 'Outcome');
   await page.getByRole('button', { name: 'Issue outcome →' }).click();
   // .last() — the OutcomeTab card underneath the modal has the exact same
   // heading text ("Issue disciplinary outcome"); the modal's own copy
@@ -89,6 +84,6 @@ test('issuing an outcome with an undecided allegation is flagged, and can be sen
   await page.getByRole('button', { name: 'Cases', exact: true }).click();
   await page.getByPlaceholder('Search by employee…').fill(employeeName);
   await page.getByText(employeeName).first().click();
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText(/Follow up on:.*Allegation not yet decided/)).toBeVisible({ timeout: 10000 });
 });

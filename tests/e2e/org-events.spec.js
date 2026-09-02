@@ -9,6 +9,7 @@ test('HR can log an organisational event, it persists across a reload, and corre
   const description = `E2E org event ${Date.now()}`;
 
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Organisational Events', exact: true }).click();
   await expect(page.getByText('Log an event', { exact: true })).toBeVisible({ timeout: 10000 });

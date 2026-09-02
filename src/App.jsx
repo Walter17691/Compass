@@ -1273,7 +1273,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const saveCaseToDB = async (caseObj) => {
-    if(!org?.id) return false;
+    if(!org?.id) return { ok: false, reason: 'error' };
     const nowIso = new Date().toISOString();
     try {
       const payload = {
@@ -1329,7 +1329,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         // overwrite a teammate's concurrent edit with our full local copy,
         // including their changes to meetings/evidence we never saw.
         const { data, error } = await supabase.from('cases').update(payload).eq('id', caseObj.id).eq('updated_at', caseObj.updatedAt).select();
-        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return false; }
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return { ok: false, reason: 'error' }; }
         if(!data || data.length===0) {
           // UAT Product Hierarchy pass, Part 5 — the underlying stale-
           // write protection (conditionalUpdate's conflict detection,
@@ -1338,13 +1338,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           // routine refresh rather than a system failure, and uses the
           // "info" toast type so it auto-dismisses instead of sitting
           // there like an unresolved error.
+          //
+          // E2E Navigation Alignment pass, outcome-recording defect (P2)
+          // — a plain `false` here was indistinguishable from a genuine
+          // save error to every caller, so OutcomeModal's finalizeOutcome
+          // (the one caller that actually branches on failure) always
+          // overwrote this exact, already-accurate message with its own
+          // generic "Couldn't record the outcome — please try again",
+          // even though nothing failed: this is a benign, already-
+          // recovered conflict (the case was refreshed by loadCasesFromDB
+          // above), not a persistence failure. reason:'conflict' lets a
+          // caller that cares tell the two apart without parsing toast
+          // text; callers that don't care (the signature-sync poll below)
+          // just keep checking `.ok`, unchanged either way.
           showToast("This case was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
           loadCasesFromDB();
-          return false;
+          return { ok: false, reason: 'conflict' };
         }
       } else {
         const { error } = await supabase.from('cases').upsert(payload).select();
-        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return false; }
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return { ok: false, reason: 'error' }; }
       }
       setCases(prev => prev.map(c => c.id===caseObj.id ? {...c, updatedAt: nowIso} : c));
       // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) —
@@ -1355,8 +1368,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // this is purely additive — the one caller that now needs a real
       // confirmation before declaring success is OutcomeModal's
       // finalizeOutcome, the highest-stakes single write in the app.
-      return true;
-    } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); return false; }
+      return { ok: true };
+    } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); return { ok: false, reason: 'error' }; }
   };
 
   const deleteCaseFromDB = async (caseId) => {
@@ -2372,7 +2385,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         const changed = stamped.find(x=>x.id===changedId);
         if(changed) return saveCaseToDB(changed);
         deleteCaseFromDB(changedId);
-        return Promise.resolve(true);
+        return Promise.resolve({ ok: true });
       } else {
         // Sync all — but only cases that actually changed. Callers build u
         // via cases.map(x => cond ? {...x, ...} : x), which preserves
@@ -2480,10 +2493,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // protects the case update itself — see saveCaseToDB's conditional
       // .eq('updated_at', ...)) — a losing/duplicate poll (two tabs open
       // on the same case, or this effect re-firing before the first
-      // write lands) gets `false` back and reload-only path in effect
-      // upstream, so it can never double-log the same transition.
-      saveCases(updated, activeCaseId).then(ok => {
-        if (!ok || cancelled) return;
+      // write lands) gets `{ ok: false }` back (reason 'error' or
+      // 'conflict' — either way this effect doesn't care which) and
+      // takes the reload-only path in effect upstream, so it can never
+      // double-log the same transition.
+      saveCases(updated, activeCaseId).then(result => {
+        if (!result?.ok || cancelled) return;
         changes.forEach(({ id, status }) => {
           if (!isTerminalStatus(status)) return; // "opened" isn't a completion — only signed/acknowledged/declined are
           const m = pending.find(p => p.id === id);

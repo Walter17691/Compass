@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP13, §7) — send-from-
 // Compass coordinated workflow. Clicking "Send email" here fires a real
@@ -22,7 +22,7 @@ test('an approved letter offers Send from Compass and opens the send modal', asy
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Documents', exact: true }).click();
+  await openCaseSection(page, 'Documents');
   await page.getByRole('button', { name: 'Witness invitation' }).click();
   // UAT Product Hierarchy pass, Part 6 (already deployed) — the bare
   // "Drafting..." this used to check for was replaced with a page-

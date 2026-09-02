@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting, openCaseSection } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP31, §28) — the unified
 // Communications tab. Deliberately scoped to a held meeting only, not
@@ -18,7 +18,7 @@ test('a held meeting appears on the Communications tab and "Open source" opens i
   const employeeName = `E2E Communications ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Informal / 1-1', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -35,12 +35,7 @@ test('a held meeting appears on the Communications tab and "Open source" opens i
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 15000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-
-  await caseTabBar.getByRole('button', { name: 'Communications', exact: true }).click();
+  await openCaseSection(page, 'Communications');
   await expect(page.getByText(/^Communications \(\d+\)$/)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('Meeting', { exact: true })).toBeVisible();
   await expect(page.getByText(/^Informal \/ 1-1 held$/)).toBeVisible();
@@ -48,8 +43,10 @@ test('a held meeting appears on the Communications tab and "Open source" opens i
   await page.getByRole('button', { name: 'Open source' }).click();
   // Informal/1-1 meetings don't map to the Investigation/Disciplinary/
   // Appeal stage tabs — they land under "Other" (same as
-  // signature-sync.spec.js's own equivalent step).
-  await expect(caseTabBar.getByRole('button', { name: 'Meetings', exact: true })).toBeVisible({ timeout: 10000 });
+  // signature-sync.spec.js's own equivalent step). "Open source" navigates
+  // internally (CaseViewScreen.jsx's linkTo handling), so the More toggle
+  // itself should now read "Meetings" rather than "More".
+  await expect(page.getByRole('button', { name: 'Meetings', exact: true })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: /^Other/ }).click();
   await expect(page.getByText('Informal / 1-1').first()).toBeVisible({ timeout: 10000 });
 });

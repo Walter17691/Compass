@@ -16,6 +16,7 @@ test('a newly raised, untriaged concern shows up on Home\'s Needs attention stri
   const employeeName = `E2E Centre ${Date.now()}`;
 
   await login(page);
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
   await page.getByRole('button', { name: 'Concerns', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'People concerns' })).toBeVisible({ timeout: 10000 });
 

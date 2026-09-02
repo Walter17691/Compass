@@ -15,6 +15,7 @@ test('dealing with a concern informally launches a real conversation and closes 
   const employeeName = `E2E Informal ${Date.now()}`;
 
   await login(page);
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
   await page.getByRole('button', { name: 'Concerns', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'People concerns' })).toBeVisible({ timeout: 10000 });
 

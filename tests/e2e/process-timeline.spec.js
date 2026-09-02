@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, startMeeting } from './helpers.js';
 
 // Process Intelligence Phase 3 (P3) — the Timeline tab used to be a
 // purely flat chronological event list (caseTimeline.js), with no sense
@@ -40,7 +40,7 @@ test('the Timeline tab shows a stage-aware progress row that advances as the cas
   // guided flow's own "Next best action" is how a real user would get
   // here, same as every other case-progression test in this suite.
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

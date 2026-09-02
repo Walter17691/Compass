@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HrDelegatedWorkScreen } from '../screens/HrDelegatedWorkScreen.jsx';
@@ -20,6 +20,15 @@ const baseProps = {
 };
 
 describe('HrDelegatedWorkScreen', () => {
+  // The fixture's targetCompletionDate ('2026-09-01') is only meaningful
+  // relative to "today" — computeDelegatedWork defaults to `new Date()`
+  // (HrDelegatedWorkScreen.jsx doesn't pass one through), so without a
+  // frozen clock this suite silently starts asserting the overdue path
+  // once the real calendar passes that date. Same pattern as
+  // processDashboard.test.js.
+  beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); vi.setSystemTime(new Date('2026-08-20T00:00:00.000Z')); });
+  afterEach(() => { vi.useRealTimers(); });
+
   it('shows an empty state when nothing is delegated', () => {
     render(<HrDelegatedWorkScreen {...baseProps} caseAccess={[]} />);
     expect(screen.getByText('No investigations currently delegated.')).toBeInTheDocument();
@@ -60,7 +69,7 @@ describe('HrDelegatedWorkScreen', () => {
   });
 
   it('clicking a row navigates to the case', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const setActiveCaseId = vi.fn();
     render(<HrDelegatedWorkScreen {...baseProps} setActiveCaseId={setActiveCaseId} />);
     await user.click(screen.getByText('Sam Employee'));
@@ -87,7 +96,7 @@ describe('HrDelegatedWorkScreen', () => {
   });
 
   it('clicking Intervene opens the modal for that case without navigating away', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const openHrInterventionModal = vi.fn();
     const setActiveCaseId = vi.fn();
     render(<HrDelegatedWorkScreen {...baseProps} openHrInterventionModal={openHrInterventionModal} setActiveCaseId={setActiveCaseId} />);

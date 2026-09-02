@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // CasesScreen paginates employee groups 15 at a time (useLoadMore); this
 // shared E2E test org has accumulated enough cases across this suite's own
@@ -58,11 +58,7 @@ test('a change made after the first view shows up as a dismissible banner on the
   // Add a task from inside the case — this writes a real "Task added"
   // audit_log entry (App.jsx's audit()), timestamped after the first
   // view's just-recorded last_viewed_at.
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText(/^Tasks \(0 open\)$/)).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add task' }).click();
   await page.getByPlaceholder('Task').fill(taskName);

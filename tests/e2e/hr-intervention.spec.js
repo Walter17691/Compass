@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP19, §15) — HR Intervention actions.
 // Reachable by the real HR E2E login (CaseViewScreen's own header
@@ -47,11 +47,7 @@ test('sending guidance creates a real task, and pausing an investigation is refl
   // specific request.
   await page.getByRole('button', { name: 'Send guidance', exact: true }).click();
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText('Guidance from HR: Please re-check the loading bay CCTV timestamps.', { exact: true })).toBeVisible({ timeout: 15000 });
 
   // Pause — a persistent "Paused" indicator now sits next to the case
@@ -65,6 +61,7 @@ test('sending guidance creates a real task, and pausing an investigation is refl
   await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible({ timeout: 10000 });
 
   // MP18's own dashboard picks the same flag up.
+  await page.locator('aside, header').getByRole('button', { name: 'Work', exact: true }).click();
   await page.locator('aside, header').getByRole('button', { name: 'Delegated Work', exact: true }).click();
   await expect(page.getByText(employeeName, { exact: true })).toBeVisible({ timeout: 10000 });
   const row = page.getByText(employeeName, { exact: true }).locator('xpath=ancestor::div[3]');

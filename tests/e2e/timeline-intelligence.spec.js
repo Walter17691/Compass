@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 8 of the reasoning-layer build-out (5 of 5 in the ER Intelligence
 // MVP — see plan file). buildCaseTimeline() itself is unchanged/read-only;
@@ -19,7 +19,7 @@ test('Timeline entries can be edited, excluded, opened to source, and exported',
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Timeline intelligence test');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();

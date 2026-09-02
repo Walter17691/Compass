@@ -9,6 +9,7 @@ test('Generate review produces a persisted, period-labelled narrative', async ({
   test.setTimeout(60000);
 
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
   await expect(page.getByText('Periodic ER review', { exact: true })).toBeVisible({ timeout: 10000 });

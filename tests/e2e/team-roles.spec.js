@@ -10,6 +10,7 @@ import { login } from './helpers.js';
 // existing in the shared test org.
 test('the invite-member role dropdown offers all 7 roles, not just the original 3', async ({ page }) => {
   await login(page);
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Team & access' }).click();
   await expect(page.getByText('Team members', { exact: true })).toBeVisible({ timeout: 10000 });

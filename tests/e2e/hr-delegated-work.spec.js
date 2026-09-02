@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP18, §14) — HR Delegated Work dashboard.
 // Unlike ManagerPortalScreen (MP16), this screen is HR-only and reachable
@@ -21,7 +21,7 @@ test('a delegated investigation with completed interviews but an unreviewed alle
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Left site without authorisation');
@@ -39,11 +39,7 @@ test('a delegated investigation with completed interviews but an unreviewed alle
   await page.getByRole('button', { name: 'Assign investigator', exact: true }).click();
   await accessSaved;
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText('Interview witnesses', { exact: true })).toBeVisible({ timeout: 10000 });
 
   const checkTask = async (name) => {
@@ -55,6 +51,7 @@ test('a delegated investigation with completed interviews but an unreviewed alle
   await checkTask('Interview witnesses');
   await checkTask('Interview the employee');
 
+  await page.locator('aside, header').getByRole('button', { name: 'Work', exact: true }).click();
   await page.locator('aside, header').getByRole('button', { name: 'Delegated Work', exact: true }).click();
   await expect(page.getByText('Delegated Work', { exact: true }).first()).toBeVisible({ timeout: 10000 });
 

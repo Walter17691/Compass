@@ -51,6 +51,7 @@ test('impact tracking compares real case volume before vs after an initiative re
     expect(backdateRes.ok()).toBeTruthy();
   }
 
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Improvement Initiatives', exact: true }).click();
   await expect(page.getByRole('button', { name: '+ New initiative' })).toBeVisible({ timeout: 10000 });

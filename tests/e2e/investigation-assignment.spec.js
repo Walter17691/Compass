@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP7, §7) — assignInvestigator used to just
 // grant case_access with nothing else attached. AssignInvestigatorModal
@@ -21,7 +21,7 @@ test('assigning an investigator with a narrowed scope and a due date is reflecte
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
 
   await page.getByRole('button', { name: '+ Add allegation' }).click();

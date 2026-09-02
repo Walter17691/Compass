@@ -43,6 +43,7 @@ test('a probation review date entered on a case surfaces on the Calendar and lin
   await caseSaved;
   await expect(dateInput).toHaveValue(targetIso);
 
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
   await page.getByRole('button', { name: 'Calendar', exact: true }).click();
   await expect(page.getByText('Calendar', { exact: true }).first()).toBeVisible({ timeout: 10000 });
   if (crossesMonth) {

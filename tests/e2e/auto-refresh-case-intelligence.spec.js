@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M7) — saving a meeting used to leave every
 // ER Intelligence panel (Next Best Action, Unanswered Questions, Evidence
@@ -20,7 +20,7 @@ test('saving a meeting auto-generates Next Best Action without a manual click', 
   const employeeName = `E2E AutoRefresh ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -38,11 +38,7 @@ test('saving a meeting auto-generates Next Best Action without a manual click', 
   await saveButton.click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
 
   // The auto-refresh call runs silently right after save, so by the time
   // this loads there should already be a real signal — never the

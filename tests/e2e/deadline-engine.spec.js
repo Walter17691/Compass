@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Phase 12 of the reasoning-layer build-out (process intelligence, after
 // company policies/procedural guardrails). computeDueSoon (lib/deadlines.js)
@@ -30,6 +30,7 @@ test('a wellbeing follow-up date surfaces as a due-soon item with no create-task
   await expect(page.getByText('E2E deadline-engine wellbeing conversation.')).toBeVisible({ timeout: 10000 });
   await saveResponse;
 
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Notifications', exact: true }).click();
   const row = page.locator('div').filter({ hasText: employeeName }).filter({ hasText: 'Wellbeing follow-up due' }).last();
@@ -43,7 +44,7 @@ test('a disciplinary outcome deadline offers a create-task affordance that lands
   const employeeName = `E2E Deadline Outcome ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Disciplinary', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -56,6 +57,7 @@ test('a disciplinary outcome deadline offers a create-task affordance that lands
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Notifications', exact: true }).click();
   // Exact match on the label matters here: creating the task adds a

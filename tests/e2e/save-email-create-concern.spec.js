@@ -11,11 +11,14 @@ test('Create New Concern from a read email pre-fills and opens the concern form'
   test.setTimeout(60000); // one real Claude call
 
   await login(page);
-  // Save email to case lives inside the "HR Processes" sidebar group,
-  // which now starts collapsed (Home Composition Review, final
-  // refinement item 3).
-  await page.locator('aside, header').getByRole('button', { name: 'HR Processes' }).click();
-  await page.locator('aside, header').getByRole('button', { name: 'Save email to case', exact: true }).click();
+  // E2E Navigation Alignment pass — "Save email to case" was never a
+  // sidebar destination at all (AppSidebar.jsx's own comment: "Save email
+  // to case was never a process — it's an action, reachable from the
+  // Create menu instead"). It's the Create menu's global "Add email to a
+  // case" item (CreateMenu.jsx); the page it opens keeps the "Save email
+  // to case" title checked below unchanged.
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('menu', { name: 'Create' }).getByRole('button', { name: 'Add email to a case', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Save email to case' })).toBeVisible({ timeout: 10000 });
 
   await page.getByPlaceholder(/From: manager@company.com/).fill(

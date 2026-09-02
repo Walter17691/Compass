@@ -29,6 +29,7 @@ async function clickAndWaitForSave(page, locator) {
 test('changing an automation level persists across a reload, and the rule stays visible at every level', async ({ page }) => {
   await login(page);
 
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Automations', exact: true }).click();
   await expect(page.getByText('Chase signature on stale meeting records', { exact: true })).toBeVisible({ timeout: 10000 });

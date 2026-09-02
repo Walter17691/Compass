@@ -7,6 +7,7 @@ import { login } from './helpers.js';
 // already-loaded orgEvents (OP15) client-side.
 test('the Risk Map tab loads real site data without erroring', async ({ page }) => {
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Risk Map', exact: true }).click();
   await expect(page.getByText('Organisational risk map', { exact: true })).toBeVisible({ timeout: 10000 });

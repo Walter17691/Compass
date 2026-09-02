@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, startMeeting, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P1) — M9's "Proceed anyway" used to skip
 // straight past an unresolved gap with nothing recorded anywhere. It now
@@ -29,14 +29,14 @@ test('proceeding past a meeting quality check gap can be cancelled, or confirmed
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -78,10 +78,6 @@ test('proceeding past a meeting quality check gap can be cancelled, or confirmed
   await page.getByRole('button', { name: 'Save and go to case →' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: 'Timeline', exact: true }).click();
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click();
   await expect(page.getByText(new RegExp(overrideReason))).toBeVisible({ timeout: 10000 });
 });

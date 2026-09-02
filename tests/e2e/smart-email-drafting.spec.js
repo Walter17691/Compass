@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP12, §6) — the three new
 // draft types (witness invitation, evidence request, OH consent
@@ -20,7 +20,7 @@ test('drafting a witness invitation from the Documents tab reaches the Letter ed
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Documents', exact: true }).click();
+  await openCaseSection(page, 'Documents');
   await expect(page.getByRole('button', { name: 'Witness invitation' })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Witness invitation' }).click();
 

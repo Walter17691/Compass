@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Process Intelligence Phase 3 (P8) — case_access already existed for
 // the disciplinary-officer/case-owner handoff flows (assignInvestigator
@@ -22,7 +22,7 @@ test('assigning a case role is visible immediately, and assigning the same perso
 
   await login(page);
   const employeeName = `E2E CaseRoles ${Date.now()}`;
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByText('Disciplinary', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByPlaceholder('e.g. Tom Norton').fill('Test Compass');

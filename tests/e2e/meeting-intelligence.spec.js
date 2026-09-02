@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Phase 10 of the reasoning-layer build-out (meeting intelligence). Fires
 // on the same throttled cadence updateLiveContext already uses (every
@@ -13,7 +13,7 @@ test('Live meeting intelligence panels populate after enough transcript is captu
   const employeeName = `E2E MeetingIntel ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

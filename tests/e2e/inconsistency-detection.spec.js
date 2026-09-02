@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Phase 3 of the reasoning-layer build-out (meeting intelligence, after
 // the ER Intelligence MVP). Compares meeting records pairwise for
@@ -12,7 +12,7 @@ test('Compass flags a potential inconsistency between two meeting records and it
   const employeeName = `E2E Inconsistency ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Investigation', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

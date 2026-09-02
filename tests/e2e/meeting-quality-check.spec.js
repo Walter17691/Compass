@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, confirmOverrideReason } from './helpers.js';
+import { login, confirmOverrideReason, startMeeting } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M9) — "End meeting" used to jump straight
 // to handleReview with no check at all, so an essential prep question left
@@ -15,7 +15,7 @@ test('an unasked essential question surfaces a non-blocking quality check before
   const employeeName = `E2E QualityCheck ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Prepare meeting' }).click();

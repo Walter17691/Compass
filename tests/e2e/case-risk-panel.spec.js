@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P15, §13) — the Case Risk Panel
 // (Overview tab) is an aggregator over what earlier phases already
@@ -24,7 +24,7 @@ test('case risk panel surfaces an evidence gap and missing medical info, with a 
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();

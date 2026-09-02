@@ -15,6 +15,7 @@ import { login } from './helpers.js';
 test('Integrations lists every tracked provider, with no health badge when there is no sync history', async ({ page }) => {
   await login(page);
 
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Integrations', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Integrations', exact: true })).toBeVisible({ timeout: 10000 });

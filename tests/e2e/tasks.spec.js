@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Tasks (case_tasks) are new as of Phase 3 of the gap-analysis build-out.
 // This proves both surfaces stay in sync: a task added from inside a case
@@ -22,13 +22,8 @@ test('a task added on a case appears on the cross-case Tasks screen and can be c
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-
   // Add a task from inside the case.
-  await caseTabBar.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText(/^Tasks \(0 open\)$/)).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add task' }).click();
   await page.getByPlaceholder('Task').fill(taskName);

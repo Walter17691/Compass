@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P18, §15) — the first genuinely
 // org-configurable ER process template: define required documents,
@@ -22,6 +22,7 @@ test('an org-configured process template auto-creates its default task and shows
   const taskName = `E2E Template Task ${Date.now()}`;
   const employeeName = `E2E Template ${Date.now()}`;
 
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Process templates', exact: true }).click();
   await expect(page.getByText('Process templates', { exact: true }).first()).toBeVisible({ timeout: 10000 });
@@ -67,14 +68,10 @@ test('an org-configured process template auto-creates its default task and shows
   await expect(page.getByText('Target: 15 days per stage', { exact: false })).toBeVisible();
 
   // The default task, auto-created as a real, working case task.
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
   // The tab's own open-task-count badge renders as an adjacent <span>
   // with no separating whitespace in the DOM, so its accessible name is
   // "Tasks1", not "Tasks" — same concatenation approval-workflow.spec.js
   // hits for its own approval-status text.
-  await caseTabBar.getByRole('button', { name: /^Tasks\d*$/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText(taskName, { exact: true })).toBeVisible({ timeout: 10000 });
 });

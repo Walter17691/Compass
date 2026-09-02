@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P20, §21) — the acceptance bar for the
 // whole phase, same shape as Meeting Intelligence's own closing spec
@@ -46,6 +46,7 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   // cases from this point on. required_documents/suggested_meetings/
   // policy/target_days are all purely informational reads with no such
   // side effect.
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Process templates', exact: true }).click();
   await expect(page.getByText('Process templates', { exact: true }).first()).toBeVisible({ timeout: 10000 });
@@ -68,11 +69,6 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-
   // Q3 — what's next. getNextStep's own rule-based recommendation, no AI.
   await expect(page.getByText(/^Next: /)).toBeVisible({ timeout: 10000 });
 
@@ -85,7 +81,7 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   await expect(page.getByText('Target: 15 days per stage', { exact: false })).toBeVisible();
 
   // ── Record a real, decided allegation — Q7's source ──
-  await caseTabBar.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
@@ -124,7 +120,7 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   // allegation with nothing linked, decided or not) fires; its own
   // "Ask why" drill-down is exactly the explainability this question is
   // really asking about. ──
-  await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByText('Case risk', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('Evidence gap (1)', { exact: true })).toBeVisible();
   const evidenceGapItem = page.getByText('No evidence linked: "Unauthorised absence"', { exact: true });
@@ -154,6 +150,7 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   await caseSaved;
   await expect(dateInput).toHaveValue(targetIso);
 
+  await page.locator('aside, header').getByRole('button', { name: 'Work', exact: true }).click();
   await page.locator('aside, header').getByRole('button', { name: 'Calendar', exact: true }).click();
   await expect(page.getByText('Calendar', { exact: true }).first()).toBeVisible({ timeout: 10000 });
   if (crossesMonth) {
@@ -168,6 +165,6 @@ test('a real case can answer all 8 of the process-intelligence acceptance questi
   // computeStageProgress. ──
   await detailItem.click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
-  await caseTabBar.getByRole('button', { name: 'Timeline', exact: true }).click();
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click();
   await expect(page.getByText('Misconduct process', { exact: true })).toBeVisible({ timeout: 10000 });
 });

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 7 of the reasoning-layer build-out — Intelligent Document
 // Ingestion, built as a prerequisite for Phase 24 (Email integration
@@ -58,10 +58,6 @@ test('analysing an uploaded document surfaces a witness finding that creates a r
   // no separating space) since accepting the finding just created its
   // first open task (same quirk decision-workspace.spec.js hits for the
   // Allegations tab).
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText(/Interview David Okafor as a potential witness/)).toBeVisible({ timeout: 10000 });
 });

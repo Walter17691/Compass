@@ -23,7 +23,9 @@ test('a policy clause cited by Next Best Action renders as a distinct citation c
   // asserted on below, not the document's own internal "Attendance
   // Policy" heading text (which never surfaces anywhere in the UI).
   const policyFileName = `E2E NBAPolicy ${Date.now()}`;
-  await page.getByRole('button', { name: /View all policies & templates/ }).click();
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Policies', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Company policies' })).toBeVisible({ timeout: 10000 });
   await page.locator('input[type="file"]').setInputFiles({
     name: `${policyFileName}.txt`,

@@ -10,6 +10,7 @@ test('Generate brief produces a persisted narrative with supporting data, not an
   test.setTimeout(60000);
 
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
   await expect(page.getByText('ER Executive Brief', { exact: true })).toBeVisible({ timeout: 10000 });

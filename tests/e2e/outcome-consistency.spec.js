@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 17 of the reasoning-layer build-out (scale/commercialisation
 // wave, after manager investigation mode). Read-only and entirely
@@ -28,7 +28,7 @@ test('a case with no comparable closed-case history shows no outcome distributio
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');

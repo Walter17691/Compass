@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P9) — hr_review_requests already existed
 // for exactly one step ("record", meeting-record review) with no UI to
@@ -15,7 +15,7 @@ test('issuing an approval-gated outcome opens a visible, actionable approval req
 
   await login(page);
   const employeeName = `E2E Approval ${Date.now()}`;
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByText('Disciplinary', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -35,11 +35,7 @@ test('issuing an approval-gated outcome opens a visible, actionable approval req
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: 'Outcome', exact: true }).click();
+  await openCaseSection(page, 'Outcome');
   await page.getByRole('button', { name: 'Issue outcome →' }).click();
   // .last() — the OutcomeTab card underneath the modal has the exact same
   // heading text ("Issue disciplinary outcome"); the modal's own copy
@@ -76,7 +72,7 @@ test('issuing an approval-gated outcome opens a visible, actionable approval req
   await page.getByRole('button', { name: 'Cases', exact: true }).click();
   await page.getByPlaceholder('Search by employee…').fill(employeeName);
   await page.getByText(employeeName).first().click();
-  await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByText('Approvals', { exact: true })).toBeVisible({ timeout: 10000 });
   // Scoped by the Approve button, not just hasText — a hasText-only chain
   // resolves to the innermost matching div, which is the label+status flex

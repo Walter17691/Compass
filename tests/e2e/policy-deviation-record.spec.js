@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, startMeeting, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P7) — proceeding past a guardrail signal
 // that carries a real policy citation (P6) now routes through
@@ -16,7 +16,9 @@ test('proceeding past a policy-cited guardrail records a structured policy devia
 
   await login(page);
   const policyFileName = `E2E DeviationPolicy ${Date.now()}`;
-  await page.getByRole('button', { name: /View all policies & templates/ }).click();
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Policies', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Company policies' })).toBeVisible({ timeout: 10000 });
   await page.locator('input[type="file"]').setInputFiles({
     name: `${policyFileName}.txt`,
@@ -33,14 +35,14 @@ test('proceeding past a policy-cited guardrail records a structured policy devia
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
   await expect(page.getByText('Allegations (1)')).toBeVisible();
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

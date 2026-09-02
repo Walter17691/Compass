@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 async function revealCase(page, employeeName) {
   for (let i = 0; i < 20; i++) {
@@ -35,7 +35,7 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
@@ -78,7 +78,7 @@ test('a generated letter shows what fed its draft via "Ask why"', async ({ page 
   await revealCase(page, employeeName);
   const checkbox = page.getByText(employeeName).locator('xpath=following::input[@type="checkbox"][1]');
   await checkbox.locator('xpath=..').click();
-  await page.getByRole('button', { name: 'Outcome', exact: true }).click();
+  await openCaseSection(page, 'Outcome');
   await page.getByRole('button', { name: 'Issue outcome →' }).click();
   // .last() — the OutcomeTab card underneath the modal has the exact same
   // heading text ("Issue disciplinary outcome"); the modal's own copy

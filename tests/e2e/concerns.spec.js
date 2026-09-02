@@ -19,6 +19,7 @@ test('a raised concern can be triaged into a real formal case', async ({ page })
   // The E2E test account is HR, so the nav label reads "Concerns" (the
   // full triage view) rather than "Raise a concern" (the non-HR
   // intake-only label) — see AppSidebar.jsx's isHR-conditional label.
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
   await page.getByRole('button', { name: 'Concerns', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'People concerns' })).toBeVisible({ timeout: 10000 });
 

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M2) — the live sidebar's "Questions asked/
 // remaining" used to be two free-text arrays the AI regenerated from
@@ -18,7 +18,7 @@ test('the live question checklist appears immediately after prep and a manual st
   const employeeName = `E2E LiveQuestions ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Prepare meeting' }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M1) — the prep pack itself was always
 // markdown-only text with no way to edit the questions it suggested.
@@ -14,7 +14,7 @@ test('prep pack generates an editable question list that can be added to, marked
   const employeeName = `E2E PrepQuestions ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Prepare meeting' }).click();

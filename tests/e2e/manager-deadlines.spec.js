@@ -37,6 +37,7 @@ test('an overdue investigator target completion date surfaces as a real deadline
   await page.getByRole('button', { name: 'Assign investigator', exact: true }).click();
   await accessSaved;
 
+  await page.locator('aside, header').getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.locator('aside, header').getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Notifications', exact: true }).click();
   await expect(page.getByText('Deadline reminders', { exact: true })).toBeVisible({ timeout: 10000 });

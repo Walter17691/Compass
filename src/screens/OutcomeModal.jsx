@@ -41,16 +41,37 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
   // the single highest-stakes write in the app, since cs.outcome is what
   // starts the real ACAS appeal-window clock and drives whether the case
   // is even considered closed (caseStage.js). saveCases now returns a
-  // real Promise<boolean> for a single-case write (passing activeCaseId
-  // as changedId) — awaited here, so success is only ever reported once
-  // the database has actually confirmed it. On failure, the modal stays
-  // open with the entered outcome/notes intact so HR can just retry,
-  // rather than silently losing what they typed.
+  // real Promise<{ok, reason?}> for a single-case write (passing
+  // activeCaseId as changedId) — awaited here, so success is only ever
+  // reported once the database has actually confirmed it. On failure,
+  // the modal stays open with the entered outcome/notes intact so HR can
+  // just retry, rather than silently losing what they typed.
+  //
+  // E2E Navigation Alignment pass, outcome-recording defect (P2) —
+  // saveCaseToDB's optimistic-concurrency guard (saveCases →
+  // saveCaseToDB's conditional .eq('updated_at', ...) in App.jsx) can
+  // fail for two entirely different reasons: a genuine persistence
+  // failure, or a stale-version conflict it has ALREADY recovered from
+  // (it shows its own accurate "this case was updated... we've refreshed
+  // it" toast and reloads the case before returning). Both used to come
+  // back as a bare `false`, so this always overwrote that accurate
+  // message with a generic "Couldn't record the outcome — please try
+  // again" — telling HR the operation failed when really the case had
+  // just been refreshed and was waiting for a conscious retry against
+  // the new data. reason:'conflict' lets this tell the two apart without
+  // parsing toast text: on a conflict, this shows nothing further (the
+  // info toast already said what happened, and `cases` — hence `cs` —
+  // re-renders with the refreshed data once loadCasesFromDB's own state
+  // update lands), the modal simply stays open exactly as it already did
+  // on any other failure, and nothing is auto-resubmitted.
   const finalizeOutcome = async () => {
     setSaving(true);
-    const ok = await saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x), activeCaseId);
+    const result = await saveCases(cases.map(x=>x.id===activeCaseId?{...x,outcome:outcomeType,outcomeDate:new Date().toISOString(),outcomeNotes:outcomeNotes}:x), activeCaseId);
     setSaving(false);
-    if(!ok) { showToast("Couldn't record the outcome — please try again", "error"); return; }
+    if(!result?.ok) {
+      if(result?.reason !== 'conflict') showToast("Couldn't record the outcome — please try again", "error");
+      return;
+    }
     const approvalAction = approvalActionForOutcome(outcomeType);
     if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
     setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");handleLetter("outcome");

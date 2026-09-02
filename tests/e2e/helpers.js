@@ -117,12 +117,93 @@ export async function openNewCaseModal(page) {
   await expect(page.getByRole('dialog').getByText('New case', { exact: true })).toBeVisible({ timeout: 10000 });
 }
 
+// E2E Navigation Alignment pass — the universal "Create" control
+// (CreateMenu.jsx) that openNewCaseModal above already opens for "New
+// case" is the same front door every other creation journey goes
+// through now too. Exposed on its own (menu left open, nothing chosen)
+// for specs that need to assert the menu's own contents rather than
+// drive straight through it — see the discoverability spec.
+export async function openCreateMenu(page) {
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(page.getByRole('menu', { name: 'Create' })).toBeVisible();
+}
+
+// E2E Navigation Alignment pass — replaces the old standalone Home
+// "Start meeting" button (removed in the IA & User Journey pass, §7)
+// with the real current path: Create → "Start a meeting" (global, lands
+// on the same meeting-type-selection screen — HomeMeetingScreen,
+// "New meeting" heading — every existing spec's downstream assertions
+// already target) or Create → "Start meeting for this case" when already
+// inside a case (pre-fills the employee/case linkage the global item
+// doesn't). Both are real handlers CreateMenu.jsx already calls — this
+// only changes which control reaches them, not what happens after.
+export async function startMeeting(page, { inCase = false } = {}) {
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  const label = inCase ? 'Start meeting for this case' : 'Start a meeting';
+  await page.getByRole('menu', { name: 'Create' }).getByRole('button', { name: label, exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'New meeting' })).toBeVisible({ timeout: 10000 });
+}
+
+// E2E Navigation Alignment pass — Case Workspace's own secondary-tab
+// popover (CaseViewScreen.jsx, IA & User Journey pass §11). Only
+// Overview/Timeline/Evidence stay permanently visible; every other
+// section (Allegations, Meetings, Participants, Tasks, Documents,
+// Communications, Themes, Outcome, AI Assistant) lives one click behind
+// this toggle. The toggle's own accessible name is dynamic — it reads
+// "More" only while none of those sections is active, and becomes the
+// active section's own label once one is open (e.g. "Allegations") — so
+// this locates it by position (always the last of the case-tab-row
+// buttons, after the three permanent ones) rather than by a name that
+// changes out from under a fixed selector.
+// Allegations and Tasks additionally carry a live badge count next to
+// their label whenever the case already has any (open allegations, open
+// tasks) — the toggle's own "More" text gets the same treatment while no
+// more-section is active (badgeCount = allegations + open tasks), e.g.
+// "More 1" (the browser's own accessible-name computation inserts a
+// space between the label and the badge's separate DOM node, regardless
+// of there being no whitespace between them in the JSX). A prefix match
+// (^label) rather than an exact one, everywhere below, is what tolerates
+// this — see unanswered-questions.spec.js for a case that needs to match
+// the exact count too and uses \s* for it.
+const CASE_TAB_LABELS = /^(More|Overview|Timeline|Evidence|Allegations|Meetings|Participants|Tasks|Documents|Communications|Themes|Outcome|AI Assistant)/;
+
+export async function openCaseMore(page) {
+  // Matching on name alone risks the wrong element on tabs whose own
+  // content happens to render a same-prefixed label (e.g. Documents'
+  // "Draft: ... Evidence request" button also starts with a case-tab
+  // keyword) — aria-haspopup="true" is unique to the toggle among
+  // same-named candidates (Create/Account menu use it too, but never
+  // share a name with a case-tab label), so combining both pins down
+  // the toggle specifically regardless of what else is on the page.
+  const toggle = page.getByRole('button', { name: CASE_TAB_LABELS }).and(page.locator('[aria-haspopup="true"]'));
+  await toggle.last().click();
+  await expect(page.getByRole('menu', { name: 'More case tabs' })).toBeVisible();
+}
+
+// E2E Navigation Alignment pass — opens More (above) then selects one of
+// the nine secondary case sections by its real, current label. Use the
+// exact tab label from CaseViewScreen.jsx's own TABS list: "Allegations",
+// "Meetings", "Participants" (not "People" — that label is reserved for
+// the org-wide employee directory), "Tasks", "Documents",
+// "Communications", "Themes", "Outcome", "AI Assistant".
+export async function openCaseSection(page, sectionLabel) {
+  await openCaseMore(page);
+  // A prefix match, not exact — see CASE_TAB_LABELS above; Allegations
+  // and Tasks items can carry their own badge count the same way.
+  await page.getByRole('menu', { name: 'More case tabs' }).getByRole('button', { name: new RegExp('^' + sectionLabel) }).click();
+}
+
 // Signs the current session out and waits for the login screen to come
 // back — used by tests that need to switch between two genuinely
 // different accounts within one spec (Playwright doesn't persist
 // anything across a full sign-out the way it might across page.goto()
 // within the same authenticated session).
 export async function logout(page) {
+  // E2E Navigation Alignment pass — "Sign out" lives inside the Account
+  // menu popover (AppSidebar.jsx, commit 2bb3fb6 "refine sidebar account
+  // and activity layout"), not as a directly-visible button; it must be
+  // opened first.
+  await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByPlaceholder('you@company.com')).toBeVisible({ timeout: 10000 });
 }

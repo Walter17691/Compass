@@ -24,6 +24,7 @@ test('Generate AI summary produces a narrative, not an error state', async ({ pa
   await login(page);
   // Organisational ER Intelligence (Phase 6, OP1) moved this screen from
   // its own sidebar row into the new Insights workspace's "Reports" tab.
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'HR Reports' })).toBeVisible({ timeout: 10000 });

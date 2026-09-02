@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Home's "Start meeting"/"Schedule meeting" and every case-contextual
 // "start a meeting" button (Cases, a case's own page, PersonViewScreen)
@@ -13,7 +13,7 @@ test('start meeting from Home offers every meeting type and reaches the live-mee
   const employeeName = `E2E Meeting ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
 
   // Spot-check formal (non-"dev"-group) types that only existed in the
   // now-deleted BriefScreen — if these are missing, the consolidation
@@ -51,7 +51,7 @@ test('start meeting from Home offers every meeting type and reaches the live-mee
 // name/role/date itself in its own first step) and jumps straight there.
 test('starting an Appraisal from the meeting-type list reaches DevelopScreen', async ({ page }) => {
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
 
   const appraisal = page.getByText('Appraisal', { exact: true });
   await appraisal.scrollIntoViewIfNeeded();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 10 of the gap-analysis build-out: getCaseStage()/getNextStep()
 // generalized from one hardcoded disciplinary-shaped lifecycle into a
@@ -25,7 +25,7 @@ test('a grievance case gets grievance-shaped Copilot guidance and meeting groupi
   await expect(page.getByText('Schedule investigation meeting')).not.toBeVisible();
 
   // Meetings tab groups by "Grievance", not Investigation/Disciplinary.
-  await page.getByRole('button', { name: 'Meetings', exact: true }).click();
+  await openCaseSection(page, 'Meetings');
   await expect(page.getByRole('button', { name: /^Grievance/ })).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('button', { name: /^Investigation/ })).not.toBeVisible();
   await expect(page.getByRole('button', { name: /^Disciplinary/ })).not.toBeVisible();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal, confirmOverrideReason } from './helpers.js';
+import { login, openNewCaseModal, confirmOverrideReason, startMeeting, openCaseSection } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP10, §16) — "Conclude investigation &
 // generate report" (and every other trigger — the case's next-step
@@ -29,7 +29,7 @@ test('an unreviewed allegation triggers the Investigation Quality Check, and sub
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Left site without authorisation');
@@ -38,7 +38,7 @@ test('an unreviewed allegation triggers the Investigation Quality Check, and sub
   // Deliberately left in its default "unreviewed" status — never touched.
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByText('Investigation', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -61,11 +61,7 @@ test('an unreviewed allegation triggers the Investigation Quality Check, and sub
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: 'Meetings', exact: true }).click();
+  await openCaseSection(page, 'Meetings');
   await expect(page.getByRole('button', { name: /Conclude investigation/ })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: /Conclude investigation/ }).click();
 
@@ -77,7 +73,7 @@ test('an unreviewed allegation triggers the Investigation Quality Check, and sub
   await confirmOverrideReason(page);
   await expect(page.getByText(/Report generated/)).toBeVisible({ timeout: 120000 });
 
-  await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByText('HR Review Gate', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('Awaiting HR review', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, startMeeting, openCaseSection } from './helpers.js';
 
 // CasesScreen paginates employee groups 15 at a time (useLoadMore), and
 // this shared E2E test org has accumulated enough same-day "capability"
@@ -38,7 +38,7 @@ test('appeal review: generating a review creates a signal, and recording the out
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
@@ -88,7 +88,7 @@ test('appeal review: generating a review creates a signal, and recording the out
   await closeSaved;
 
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Disciplinary Appeal', { exact: true }).click();
   await page.getByPlaceholder(/e.g. Sarah Johnson/).fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -168,7 +168,7 @@ test('appeal review: generating a review creates a signal, and recording the out
   await expect(caseRow).toContainText(/Appeal/);
   await caseRow.click();
 
-  await page.getByRole('button', { name: /^Allegations/ }).click();
+  await openCaseSection(page, 'Allegations');
   // .last() — the Evidence Matrix (rendered above the card list) also has
   // an "Unauthorised absence" cell sharing this text with the allegation
   // card's title; this page only ever shows the one case just navigated

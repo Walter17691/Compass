@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, startMeeting } from './helpers.js';
 
 // Appeal-phrase detection already existed in the codebase (a keyword
 // check on the live transcript that offers to link the meeting to an
@@ -53,7 +53,7 @@ test('appealing a closed case detects the appeal, links to the right case, and r
   // the transcript — this is what the detection actually keys off, not
   // the selected meeting type. "Start meeting" lives on Home, not Cases.
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Disciplinary Appeal', { exact: true }).click();
   await page.getByPlaceholder(/e.g. Sarah Johnson/).fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

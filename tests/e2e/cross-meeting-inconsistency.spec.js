@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M6) — the live inconsistency nudge only
 // ever compared the current transcript against itself, so a contradiction
@@ -20,7 +20,7 @@ test('a statement conflicting with an earlier saved meeting is flagged live in a
 
   // First meeting — establishes the earlier statement, then gets saved as
   // a real, completed meeting record on the case.
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -41,7 +41,7 @@ test('a statement conflicting with an earlier saved meeting is flagged live in a
   // Second, separate meeting on the same employee — the conflicting
   // statement this time.
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

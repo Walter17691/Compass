@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Manager Enablement (Phase 4, MP14, §10/§11) — coaching tips. Two of
 // the three triggers (wellbeing, outcome-language) are plain keyword
@@ -14,7 +14,7 @@ test('wellbeing and outcome-language mentions surface a dismissible coaching tip
   const employeeName = `E2E Coaching ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

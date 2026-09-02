@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 6 of the reasoning-layer build-out (4 of 5 in the ER Intelligence
 // MVP — see plan file). The grid itself and manual link/unlink already
@@ -25,7 +25,7 @@ test('Evidence matrix shows a manually-linked item and an AI-suggested link once
   ]);
   await expect(page.getByText('absence-cctv-log.txt')).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();

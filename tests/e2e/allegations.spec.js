@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Allegations were entirely missing as data before this — evidence had no
 // way to say which specific issue it spoke to, or whether it supported or
@@ -28,7 +28,7 @@ test('an allegation can be added, evidence linked with a stance, and its status 
   await expect(page.locator('div').filter({ hasText: /^cctv-log\.txt$/ })).toBeVisible({ timeout: 10000 });
 
   // Record the allegation from its own tab.
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Left site without authorisation');
@@ -69,7 +69,7 @@ test('an allegation can be added, evidence linked with a stance, and its status 
   await findingField.blur();
   await page.waitForTimeout(500); // let the blur-triggered save reach Supabase before reloading
   await page.reload();
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   // Wait for the list to settle (this shared test org has thousands of
   // cases/allegations, so the post-reload fetch can re-render the list
   // more than once) before clicking a specific row, same reasoning as the

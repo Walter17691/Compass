@@ -39,8 +39,14 @@ test('a wellbeing note survives clearing localStorage, proving it is cloud-synce
   await page.evaluate(() => localStorage.removeItem('compass_wellbeing'));
   await page.reload();
 
-  // The reload remounts AppSidebar, so HR Processes is collapsed again.
-  await page.getByRole('button', { name: 'HR Processes' }).click();
+  // E2E Navigation Alignment pass — the reload lands back on the same
+  // Wellbeing URL (App.jsx's readNavFromUrl/pushState keep screen and URL
+  // in sync), and AppSidebar's own expandedGroups effect auto-re-expands
+  // whichever group owns the current screen on every mount — so "HR
+  // Processes" is already open here, not collapsed. Clicking it again
+  // would toggle it shut (evidenced: this line reproducibly timed out
+  // waiting for "Wellbeing" once the group had just been closed by this
+  // exact click).
   await page.getByRole('button', { name: 'Wellbeing', exact: true }).click();
   await page.getByText(employeeName, { exact: true }).click();
   await expect(page.getByText('E2E test wellbeing conversation notes.')).toBeVisible({ timeout: 10000 });

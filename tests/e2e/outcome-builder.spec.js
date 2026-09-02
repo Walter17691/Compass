@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting, openCaseSection } from './helpers.js';
 
 // Process Intelligence Phase 3 (P12) — the outcome letter used to draw
 // only on generic case/meeting context, never the allegations, findings,
@@ -17,7 +17,7 @@ test('the outcome letter prompt is grounded in the case\'s own allegation findin
 
   await login(page);
   const employeeName = `E2E OutcomeBuilder ${Date.now()}`;
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByText('Disciplinary', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -37,14 +37,9 @@ test('the outcome letter prompt is grounded in the case\'s own allegation findin
   await page.getByRole('button', { name: /Save and go to case/ }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-
   // Record a real, decided allegation with distinctive reasoning/response
   // text — these are exactly what the old, generic prompt never saw.
-  await caseTabBar.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();
@@ -76,7 +71,7 @@ test('the outcome letter prompt is grounded in the case\'s own allegation findin
   // rationale" gap; other gaps (no evidence linked, no policy
   // identified) are expected here and cleared via "Create follow-up
   // action" (advisory only, same as decision-quality-check.spec.js).
-  await caseTabBar.getByRole('button', { name: 'Outcome', exact: true }).click();
+  await openCaseSection(page, 'Outcome');
   await page.getByRole('button', { name: 'Issue outcome →' }).click();
   // .last() — the OutcomeTab card underneath the modal has the exact same
   // heading text ("Issue disciplinary outcome"); the modal's own copy

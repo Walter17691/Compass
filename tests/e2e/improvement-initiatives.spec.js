@@ -16,6 +16,7 @@ test('HR can create an initiative, it persists across a reload, and milestones/s
   const supportingInsight = `Trend: ${title}`;
 
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Improvement Initiatives', exact: true }).click();
   await expect(page.getByRole('button', { name: '+ New initiative' })).toBeVisible({ timeout: 10000 });

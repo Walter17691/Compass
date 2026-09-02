@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 15 of the reasoning-layer build-out (Manager Investigation Mode).
 // Reuses case_access (existed since baseline_schema_2026-08-06.sql for
@@ -34,11 +34,7 @@ test('assigning an investigator seeds the checklist as case tasks and HR sees pr
 
   // The checklist landed as ordinary case_tasks — visible on this case's
   // own Tasks tab, same data the cross-case Tasks screen reads.
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText('Review the allegation(s)')).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('Interview the employee')).toBeVisible();
   await expect(page.getByText('Submit findings to HR')).toBeVisible();
@@ -46,6 +42,6 @@ test('assigning an investigator seeds the checklist as case tasks and HR sees pr
   const reviewAllegationsRow = page.locator('div').filter({ hasText: 'Review the allegation(s)' }).filter({ has: page.locator('input[type="checkbox"]') }).last();
   await reviewAllegationsRow.locator('input[type="checkbox"]').click();
 
-  await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByText('Investigation by Test Compass: 1 of 7 steps complete')).toBeVisible({ timeout: 10000 });
 });

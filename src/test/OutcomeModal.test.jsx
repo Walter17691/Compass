@@ -34,9 +34,9 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     requestOverrideReason: noop, createCaseTask: noop,
   };
 
-  it('closes the modal and shows a success toast only once saveCases resolves true', async () => {
+  it('closes the modal and shows a success toast only once saveCases resolves { ok: true }', async () => {
     const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue(true);
+    const saveCases = vi.fn().mockResolvedValue({ ok: true });
     const setShowOutcomeModal = vi.fn();
     const showToast = vi.fn();
     const handleLetter = vi.fn();
@@ -48,9 +48,9 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     expect(handleLetter).toHaveBeenCalledWith('outcome');
   });
 
-  it('keeps the modal open and shows an error toast, without declaring success, when saveCases resolves false', async () => {
+  it('keeps the modal open and shows the generic error toast, without declaring success, on a genuine persistence failure (reason: "error")', async () => {
     const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue(false);
+    const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'error' });
     const setShowOutcomeModal = vi.fn();
     const showToast = vi.fn();
     const handleLetter = vi.fn();
@@ -61,6 +61,83 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     expect(handleLetter).not.toHaveBeenCalled();
   });
 
+  // E2E Navigation Alignment pass, outcome-recording defect (P2) —
+  // reproduces the actual bug: saveCaseToDB's optimistic-concurrency
+  // guard had already recovered from a stale-version conflict (its own
+  // "this case was updated... we've refreshed it" info toast already
+  // fired, and it already called loadCasesFromDB — both happen inside
+  // saveCaseToDB itself, upstream of the mocked saveCases here) before
+  // ever returning to this modal. finalizeOutcome must not compound that
+  // with its own, wrongly-generic failure toast, must not treat it as a
+  // reason to auto-retry, and must not create a second outcome.
+  describe('distinguishes a recovered concurrency conflict from a genuine failure (outcome-recording P2 fix)', () => {
+    it('does not show the generic failure toast on a conflict (reason: "conflict")', async () => {
+      const user = userEvent.setup();
+      const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
+      const showToast = vi.fn();
+      render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={showToast} handleLetter={noop} />);
+      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      expect(showToast).not.toHaveBeenCalledWith("Couldn't record the outcome — please try again", 'error');
+      // No success toast either — this genuinely didn't succeed yet.
+      expect(showToast).not.toHaveBeenCalledWith('Outcome recorded');
+    });
+
+    it('does not close the modal, request HR review, or draft the outcome letter on a conflict — no duplicate outcome is created', async () => {
+      const user = userEvent.setup();
+      const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
+      const setShowOutcomeModal = vi.fn();
+      const requestHrReview = vi.fn();
+      const handleLetter = vi.fn();
+      render(<OutcomeModal {...baseProps} outcomeType="Final written warning" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={noop} handleLetter={handleLetter} requestHrReview={requestHrReview} />);
+      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      expect(setShowOutcomeModal).not.toHaveBeenCalled();
+      expect(requestHrReview).not.toHaveBeenCalled();
+      expect(handleLetter).not.toHaveBeenCalled();
+    });
+
+    it('does not automatically retry — saveCases is called exactly once even after a conflict resolves', async () => {
+      const user = userEvent.setup();
+      const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
+      render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={noop} handleLetter={noop} />);
+      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      // Give any stray microtask/retry a chance to fire, then confirm
+      // the count never grows on its own.
+      await new Promise(r => setTimeout(r, 50));
+      expect(saveCases).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves the entered outcome/notes after a conflict, so a conscious retry against the refreshed case can subsequently succeed', async () => {
+      const user = userEvent.setup();
+      const saveCases = vi.fn()
+        .mockResolvedValueOnce({ ok: false, reason: 'conflict' })
+        .mockResolvedValueOnce({ ok: true });
+      const setShowOutcomeModal = vi.fn();
+      const showToast = vi.fn();
+      const handleLetter = vi.fn();
+      render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
+
+      // First attempt: loses to a conflict — nothing declared, modal stays.
+      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      expect(setShowOutcomeModal).not.toHaveBeenCalled();
+
+      // The Issue outcome control is enabled again — the outcome/notes
+      // this modal holds are exactly what a retry (against the now-
+      // refreshed `cases` prop the real app would have re-rendered with)
+      // resubmits, not lost or cleared by the failed first attempt.
+      const retryButton = screen.getByRole('button', { name: /Issue outcome/ });
+      await waitFor(() => expect(retryButton).toBeEnabled());
+      await user.click(retryButton);
+      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
+      expect(showToast).toHaveBeenCalledWith('Outcome recorded');
+      expect(handleLetter).toHaveBeenCalledWith('outcome');
+    });
+  });
+
   it('disables Issue outcome and Cancel, and shows a pending label, while the save is in flight', async () => {
     const user = userEvent.setup();
     let resolveSave;
@@ -69,7 +146,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
     expect(screen.getByRole('button', { name: 'Recording outcome…' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
-    resolveSave(true);
+    resolveSave({ ok: true });
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Recording outcome…' })).not.toBeInTheDocument());
   });
 
@@ -82,7 +159,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
     await user.keyboard('{Escape}');
     expect(setShowOutcomeModal).not.toHaveBeenCalled();
-    resolveSave(true);
+    resolveSave({ ok: true });
     await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
   });
 });

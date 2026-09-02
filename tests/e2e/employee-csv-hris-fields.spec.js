@@ -17,6 +17,7 @@ test('importing an employee CSV with the new HRIS columns round-trips them on ex
   ].join('\n');
 
   await login(page);
+  await page.locator('aside, header').getByRole('button', { name: 'Organisation', exact: true }).click();
   await page.locator('aside, header').getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Employee data', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Employee records' })).toBeVisible({ timeout: 10000 });

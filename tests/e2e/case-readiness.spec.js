@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 5 of the reasoning-layer build-out (3 of 5 in the ER Intelligence
 // MVP — see plan file). Pure and deterministic, unlike Next Best Action/
@@ -16,7 +16,7 @@ test('Case readiness reflects real gaps and expands into a checklist', async ({ 
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByLabel('Description').fill('Left shift early without authorisation on 5 August.');

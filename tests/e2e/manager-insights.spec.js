@@ -32,6 +32,7 @@ test('assigning an investigator makes the case count toward Manager Performance 
   // Organisational ER Intelligence (Phase 6, OP1) moved this screen from
   // its own sidebar row into the new Insights workspace's Manager
   // Insights tab (still HR-only).
+  await page.locator('aside, header').getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.locator('aside, header').getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Manager Insights', exact: true }).click();
   await expect(page.getByText('Manager Performance Insights', { exact: true })).toBeVisible({ timeout: 10000 });

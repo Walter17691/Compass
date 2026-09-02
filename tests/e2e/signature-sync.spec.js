@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // /api/signing isn't proxied by the local vite dev server (only /api/chat
 // is — see vite.config.js and the note in playwright.config.js), so this
@@ -21,7 +21,7 @@ test('a meeting shows Signed automatically once the real signature lands, withou
   const employeeName = `E2E SignSync ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Informal / 1-1', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting } from './helpers.js';
 
 // Phase 4 of the reasoning-layer build-out (process intelligence, after
 // meeting intelligence). Unlike Next Best Action/Contradiction Detection/
@@ -16,7 +16,7 @@ test('Compass flags the same chair running both the investigation and the discip
   const chairName = 'Priya Shah';
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Investigation', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByPlaceholder('e.g. Tom Norton').fill(chairName);
@@ -57,11 +57,10 @@ test('Compass flags the same chair running both the investigation and the discip
   // ancestor whose own aggregate text also happens to contain this
   // string, and a plain ancestor:: div-count walk from an arbitrary one
   // of those starting points doesn't reliably land on the actual
-  // SignalCard (SignalCard.jsx) boundary. Same filter-by-content +
-  // filter-by-descendant-button + .last() idiom already proven elsewhere
-  // in this suite (case-changes.spec.js's own caseTabBar) — guarantees a
-  // match that both contains the signal's own title AND its own
-  // "Not relevant" button as real descendants, then picks the innermost.
+  // SignalCard (SignalCard.jsx) boundary. filter-by-content +
+  // filter-by-descendant-button + .last() guarantees a match that both
+  // contains the signal's own title AND its own "Not relevant" button as
+  // real descendants, then picks the innermost.
   const signalCard = page.locator('div')
     .filter({ hasText: 'Same person chaired the investigation and the disciplinary hearing' })
     .filter({ has: page.getByRole('button', { name: 'Not relevant' }) })

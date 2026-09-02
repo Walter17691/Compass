@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal, confirmOverrideReason } from './helpers.js';
+import { login, openNewCaseModal, confirmOverrideReason, startMeeting, openCaseSection } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M11) — end-to-end verification. Builds the
 // exact scenario from the spec's own §16: a case with several allegations,
@@ -26,7 +26,7 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   for (const title of ['Unauthorised absence', 'Verbal altercation with a colleague', 'Breach of confidentiality policy']) {
     await page.getByRole('button', { name: '+ Add allegation' }).click();
     await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill(title);
@@ -38,7 +38,7 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   // with (the spec's own worked example: "I did not speak with X after
   // the incident").
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -71,7 +71,7 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   // conflicts with meeting 1, and agrees two actions — but never mentions
   // the confidentiality allegation at all.
   await page.locator('aside, header').getByRole('button', { name: 'Home', exact: true }).click();
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -141,11 +141,6 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   await page.getByRole('button', { name: 'Save and go to case →' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-
   // M3/M4 — the accepted witness, evidence and at least one of the two
   // agreed actions all landed as real tasks on the case. Structure over
   // exact wording, same discipline as every other test in this suite —
@@ -157,7 +152,7 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   // re-detected across two AI passes before the dedup merge catches up,
   // landing two near-duplicate tasks; either is equally valid proof a
   // real task was created.
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   await expect(page.getByText(/Amir/).first()).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(/CCTV/).first()).toBeVisible();
   await expect(page.getByText(/Legal/).first()).toBeVisible();
@@ -166,11 +161,11 @@ test('the full meeting-intelligence pipeline holds together across a two-meeting
   // regeneration. Verified the same way auto-refresh-case-intelligence.spec.js
   // does: the "generate it yourself" button is never shown once a real
   // signal already exists.
-  await caseTabBar.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Ask Compass for its take' })).not.toBeVisible({ timeout: 20000 });
   await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible();
 
   // Chronology reflects both real, saved meetings without any extra step.
-  await caseTabBar.getByRole('button', { name: 'Timeline', exact: true }).click();
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click();
   await expect(page.getByText(/Investigation/).first()).toBeVisible({ timeout: 10000 });
 });

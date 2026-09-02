@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Organisational ER Intelligence (Phase 6, OP6, §3) — the HR-editable
 // theme taxonomy itself. Deliberately scoped to taxonomy CRUD only
@@ -13,6 +13,7 @@ test('HR can add a theme to the taxonomy and it persists across a reload', async
   const themeName = `E2E Theme ${Date.now()}`;
 
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Trends & Themes', exact: true }).click();
   await expect(page.getByText('Theme taxonomy', { exact: true })).toBeVisible({ timeout: 10000 });
@@ -38,6 +39,7 @@ test('HR can add a theme to the taxonomy and it persists across a reload', async
 // TrendsPanel.test.jsx against fixed, controlled data.
 test('the Trends & Themes tab loads real trend data without erroring', async ({ page }) => {
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Trends & Themes', exact: true }).click();
   // Phase 2C — heading reworded to lead with the question it answers.
@@ -61,6 +63,7 @@ test('tagging 3 cases with a new theme surfaces a trend and its root-cause explo
   const themeName = `E2E RootCause ${Date.now()}`;
 
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   await page.getByRole('button', { name: 'Trends & Themes', exact: true }).click();
   await expect(page.getByText('Theme taxonomy', { exact: true })).toBeVisible({ timeout: 10000 });
@@ -80,7 +83,7 @@ test('tagging 3 cases with a new theme surfaces a trend and its root-cause explo
     await createBtn.click();
     await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('button', { name: 'Themes', exact: true }).click();
+    await openCaseSection(page, 'Themes');
     const themePicker = page.getByRole('combobox').filter({ has: page.getByRole('option', { name: 'Add an existing theme…' }) });
     await expect(themePicker).toBeVisible({ timeout: 10000 });
     await themePicker.selectOption({ label: themeName });

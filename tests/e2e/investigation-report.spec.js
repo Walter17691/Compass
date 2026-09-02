@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers.js';
+import { login, startMeeting, openCaseSection } from './helpers.js';
 
 // Covers two real bugs found in the same flow, plus Phase 9's
 // restructuring of the report itself into the spec's full section list
@@ -32,7 +32,7 @@ test('investigation meeting saves straight into the case, and the generated repo
   const employeeName = `E2E InvReport ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await startMeeting(page);
   await page.getByText('Investigation', { exact: true }).click();
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
@@ -51,7 +51,7 @@ test('investigation meeting saves straight into the case, and the generated repo
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
   // "Conclude investigation" lives on the Meetings tab (case workspace
   // tab restructure) — not the default landing tab (Overview).
-  await page.getByRole('button', { name: 'Meetings', exact: true }).click();
+  await openCaseSection(page, 'Meetings');
   await expect(page.getByRole('button', { name: /Conclude investigation/ })).toBeVisible({ timeout: 10000 });
 
   // Bug 2: generate the report and check it's a synthesis, not a dialogue dump.

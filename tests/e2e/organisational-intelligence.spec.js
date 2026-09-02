@@ -11,6 +11,7 @@ import { login } from './helpers.js';
 // an error or an infinite loading state.
 test('the Organisational Intelligence dashboard loads real org-wide stats', async ({ page }) => {
   await login(page);
+  await page.getByRole('button', { name: 'Intelligence', exact: true }).click();
   await page.getByRole('button', { name: 'Insights', exact: true }).click();
   // The RPC can resolve fast enough that the loading text never gets
   // caught by an assertion — only the terminal states matter here: real

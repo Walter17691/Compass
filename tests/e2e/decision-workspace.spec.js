@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 16 of the reasoning-layer build-out — last of the "process
 // intelligence" wave (policy intelligence -> procedural guardrails ->
@@ -21,7 +21,7 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
@@ -77,7 +77,7 @@ test('recording a finding stamps who/when decided it, and thin reasoning trigger
   // sync. Not an exact match this time: the tab button now carries a
   // count badge ("Allegations1", no separating space in the accessible
   // name) since there's 1 allegation on the case.
-  await page.getByRole('button', { name: /^Allegations/ }).click();
+  await openCaseSection(page, 'Allegations');
   // .last() — the Evidence Matrix (rendered above the card list) also has
   // an "Unauthorised absence" cell sharing this text with the allegation
   // card's title; this page only ever shows the one case just navigated

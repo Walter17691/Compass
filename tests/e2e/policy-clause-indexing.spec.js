@@ -13,7 +13,9 @@ import { login } from './helpers.js';
 test('an uploaded policy is indexed into quotable clauses, visible inline in the library', async ({ page }) => {
   test.setTimeout(60000); // real clause-extraction AI call
   await login(page);
-  await page.getByRole('button', { name: /View all policies & templates/ }).click();
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Policies', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Company policies' })).toBeVisible({ timeout: 10000 });
 
   const policyName = `E2E ClauseIndex ${Date.now()}`;
@@ -47,7 +49,9 @@ test('an uploaded policy is indexed into quotable clauses, visible inline in the
 
 test('the policy category list includes Reasonable Adjustments and Hybrid Working', async ({ page }) => {
   await login(page);
-  await page.getByRole('button', { name: /View all policies & templates/ }).click();
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Policies', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Company policies' })).toBeVisible({ timeout: 10000 });
 
   const policyName = `E2E CategoryCheck ${Date.now()}`;

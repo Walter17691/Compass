@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 async function revealCase(page, employeeName) {
   for (let i = 0; i < 20; i++) {
@@ -27,7 +27,7 @@ async function createClosedComparableCase(page, employeeName, caseType, outcomeT
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await expect(page.getByText('Allegations (0)')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
@@ -70,7 +70,7 @@ async function createClosedComparableCase(page, employeeName, caseType, outcomeT
   await revealCase(page, employeeName);
   const checkbox = page.getByText(employeeName).locator('xpath=following::input[@type="checkbox"][1]');
   await checkbox.locator('xpath=..').click();
-  await page.getByRole('button', { name: 'Outcome', exact: true }).click();
+  await openCaseSection(page, 'Outcome');
   await page.getByRole('button', { name: 'Issue outcome →' }).click();
   // .last() — the OutcomeTab card underneath the modal has the exact same
   // heading text ("Issue disciplinary outcome"); the modal's own copy
@@ -128,7 +128,7 @@ test('consistency check shows a sanction distribution and anonymised comparable 
   await page.locator('label:text-is("Case type") + select').selectOption(caseType);
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(currentName).first()).toBeVisible({ timeout: 10000 });
-  await page.getByRole('button', { name: 'Allegations', exact: true }).click();
+  await openCaseSection(page, 'Allegations');
   await page.getByRole('button', { name: '+ Add allegation' }).click();
   await page.getByPlaceholder('e.g. Unauthorised absence on 5 August').fill('Unauthorised absence');
   await page.getByRole('button', { name: 'Add allegation', exact: true }).click();

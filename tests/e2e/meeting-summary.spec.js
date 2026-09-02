@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, confirmOverrideReason } from './helpers.js';
+import { login, confirmOverrideReason, startMeeting } from './helpers.js';
 
 // Meeting Intelligence Phase 2 (M10) — handleReview only ever produced one
 // long, formally-structured meeting record (Meeting Details / Meeting
@@ -16,7 +16,7 @@ test('ending a meeting produces a separate, collapsible meeting summary alongsid
   const employeeName = `E2E MeetingSummary ${Date.now()}`;
 
   await login(page);
-  await page.getByRole('button', { name: 'Start meeting' }).first().click();
+  await startMeeting(page);
   await page.getByPlaceholder('e.g. Sarah Johnson').fill(employeeName);
   await page.getByRole('button', { name: /^Investigation/ }).click();
   await page.getByRole('button', { name: 'Start meeting', exact: true }).click();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Phase 8 of the gap-analysis build-out: the AI Case Overview and
 // case-wide "Ask Compass" chat, both scoped strictly to this case's own
@@ -21,7 +21,7 @@ test('AI case overview generates structured sections, and Ask Compass answers a 
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText(employeeName).first()).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole('button', { name: 'AI Assistant', exact: true }).click();
+  await openCaseSection(page, 'AI Assistant');
   await expect(page.getByText('AI case overview')).toBeVisible({ timeout: 10000 });
 
   await page.getByRole('button', { name: 'Generate overview' }).click();

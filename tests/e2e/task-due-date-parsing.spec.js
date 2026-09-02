@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, openNewCaseModal } from './helpers.js';
+import { login, openNewCaseModal, openCaseSection } from './helpers.js';
 
 // Integrations & Workflow Automation (Phase 5, IP24, §20) — real due-date
 // parsing for a commitment a document/OH-report finding's own text
@@ -54,11 +54,7 @@ test('accepting an "action" finding with a time commitment creates a task with t
   await findingCard.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByText(/Suggested action:/)).not.toBeVisible();
 
-  const caseTabBar = page.locator('div')
-    .filter({ has: page.getByRole('button', { name: 'Overview', exact: true }) })
-    .filter({ has: page.getByRole('button', { name: 'Documents', exact: true }) })
-    .last();
-  await caseTabBar.getByRole('button', { name: /^Tasks/ }).click();
+  await openCaseSection(page, 'Tasks');
   const taskRow = page.getByText(/follow.?up/i).first();
   await expect(taskRow).toBeVisible({ timeout: 10000 });
   const taskCard = taskRow.locator('xpath=ancestor::div[2]');
