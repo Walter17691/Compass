@@ -26,14 +26,14 @@ describe('HomeScreen — header (Home Experience Redesign, §2)', () => {
 
   it('says "You\'re all caught up" when there is nothing in the feed', () => {
     render(<HomeScreen {...baseHomeProps} cases={[{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }]} />);
-    expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
+    expect(screen.getByText(/You're all caught up\./)).toBeInTheDocument();
   });
 
-  it('states an urgent count distinctly from a normal count', () => {
+  it('states an urgent count distinctly from a normal count, alongside today\'s date (Phase B §A)', () => {
     const overdueCase = { id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() };
     const dueSoon = [{ key: 'od1', overdue: true, daysOverdue: 2, daysLeft: 0, label: 'Overdue thing', employeeName: 'Sam', caseId: 'c1', category: 'outcome' }];
     render(<HomeScreen {...baseHomeProps} cases={[overdueCase]} dueSoon={dueSoon} />);
-    expect(screen.getByText('1 urgent item needs your attention today.')).toBeInTheDocument();
+    expect(screen.getByText(/1 thing needs you today · one is already late/)).toBeInTheDocument();
   });
 });
 
@@ -71,8 +71,16 @@ describe('HomeScreen — Ask Compass (Home Experience Redesign, §3)', () => {
   });
 });
 
-describe('HomeScreen — For You feed (Home Experience Redesign, §4/§6)', () => {
-  it('renders an overdue item with urgent (red) treatment and a case-linked feed row for a next-step action with neutral treatment', () => {
+describe('HomeScreen — Needs you today feed (Home Experience Redesign, §4/§6; Phase B §C/§E)', () => {
+  it('renders the section under its Phase B heading, inside one consolidated card', () => {
+    const cases = [{ id: 'c1', employeeName: 'Sam', stage: 'inv_report', updatedAt: new Date().toISOString() }];
+    const getNextStep = () => ({ action: 'inv_report', label: 'Submit investigation report' });
+    render(<HomeScreen {...baseHomeProps} cases={cases} getNextStep={getNextStep} />);
+    expect(screen.getByText('Needs you today')).toBeInTheDocument();
+    expect(screen.queryByText('For you')).not.toBeInTheDocument();
+  });
+
+  it('gives an overdue item a red "Late" pill and a same-day next-step action a violet "Now" pill', () => {
     const cases = [
       { id: 'c1', employeeName: 'Overdue Person', stage: 'investigation', updatedAt: new Date().toISOString() },
       { id: 'c2', employeeName: 'Action Person', stage: 'inv_report', updatedAt: new Date().toISOString() },
@@ -80,13 +88,38 @@ describe('HomeScreen — For You feed (Home Experience Redesign, §4/§6)', () =
     const dueSoon = [{ key: 'od1', overdue: true, daysOverdue: 3, daysLeft: 0, label: 'DSAR response due', employeeName: 'Overdue Person', caseId: 'c1', category: 'dsar' }];
     const getNextStep = cs => cs.id === 'c2' ? { action: 'inv_report', label: 'Submit investigation report' } : null;
     render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} getNextStep={getNextStep} />);
-    const eyebrows = screen.getAllByText('Action needed');
-    expect(eyebrows).toHaveLength(2);
-    expect(eyebrows[0]).toHaveStyle({ color: '#C2261B' });
-    expect(eyebrows[1]).not.toHaveStyle({ color: '#C2261B' });
+    expect(screen.getByText('Late')).toHaveStyle({ color: '#C2261B' });
+    expect(screen.getByText('Now')).toHaveStyle({ color: '#7A2FD8' });
     expect(screen.getByText('DSAR response overdue')).toBeInTheDocument();
     expect(screen.getByText('Submit investigation report')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submit investigation report →' })).toBeInTheDocument();
+  });
+
+  it('gives an upcoming deadline a "Tomorrow" or "N days" pill, and a quiet case a "Quiet" pill', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Soon Person', stage: 'investigation', updatedAt: new Date().toISOString() },
+      { id: 'c2', employeeName: 'Later Person', stage: 'investigation', updatedAt: new Date().toISOString() },
+      { id: 'c3', employeeName: 'Quiet Person', stage: 'investigation', updatedAt: new Date(Date.now() - 20 * 86400000).toISOString() },
+    ];
+    const dueSoon = [
+      { key: 'k1', overdue: false, daysLeft: 1, label: 'Probation review due', employeeName: 'Soon Person', caseId: 'c1', category: 'probation' },
+      { key: 'k2', overdue: false, daysLeft: 5, label: 'Probation review due', employeeName: 'Later Person', caseId: 'c2', category: 'probation' },
+    ];
+    render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} />);
+    expect(screen.getByText('Tomorrow')).toHaveStyle({ color: '#8A5A00' });
+    expect(screen.getByText('5 days')).toBeInTheDocument();
+    expect(screen.getByText('Quiet')).toBeInTheDocument();
+  });
+
+  it('shows an "All N matters" link beside the heading that opens the full case list', () => {
+    const setScreen = vi.fn();
+    const cases = [
+      { id: 'c1', employeeName: 'A', stage: 'investigation', updatedAt: new Date().toISOString() },
+      { id: 'c2', employeeName: 'B', stage: 'investigation', updatedAt: new Date().toISOString() },
+    ];
+    render(<HomeScreen {...baseHomeProps} cases={cases} setScreen={setScreen} />);
+    fireEvent.click(screen.getByRole('button', { name: 'All 2 matters →' }));
+    expect(setScreen).toHaveBeenCalledWith('cases');
   });
 
   it('navigates to the case when a feed row action is clicked', () => {
@@ -136,29 +169,22 @@ describe('HomeScreen — For You feed cap (Home + Sidebar Product Experience pas
   });
 });
 
-describe('HomeScreen — Recently active (Home Experience Redesign, §8)', () => {
-  it('shows at most 4 cases, most recently updated first, with no search/filter controls', () => {
+// Phase B, final simplification pass — "Continue working" (a recency-
+// sorted case list) is removed from Home entirely. It either repeated
+// cases already surfaced above by urgency, or surfaced cases with no live
+// next step at all — a "what was I recently doing" activity lens, not
+// "what do I need to do now". The underlying case data/navigation is not
+// touched — see CasesScreen's own tests for that coverage. This only
+// confirms Home no longer renders that second, duplicate list.
+describe('HomeScreen — Continue working removed (Phase B, final simplification pass)', () => {
+  it('never renders a "Continue working" section, even with several recently-updated open cases', () => {
     const cases = Array.from({ length: 6 }, (_, i) => ({
       id: 'c' + i, employeeName: 'Case ' + i, stage: 'investigation',
       updatedAt: new Date(Date.now() - i * 86400000).toISOString(),
     }));
     render(<HomeScreen {...baseHomeProps} cases={cases} />);
-    expect(screen.getByText('Case 0')).toBeInTheDocument();
-    expect(screen.getByText('Case 3')).toBeInTheDocument();
-    expect(screen.queryByText('Case 4')).not.toBeInTheDocument();
-    expect(screen.queryByText('Case 5')).not.toBeInTheDocument();
+    expect(screen.queryByText('Continue working')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Search cases')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Investigation' })).not.toBeInTheDocument();
-  });
-
-  it('excludes closed cases from Recently active', () => {
-    const cases = [
-      { id: 'c1', employeeName: 'Open Case', stage: 'investigation', updatedAt: new Date().toISOString() },
-      { id: 'c2', employeeName: 'Closed Case', stage: 'closed', updatedAt: new Date().toISOString() },
-    ];
-    render(<HomeScreen {...baseHomeProps} cases={cases} />);
-    expect(screen.getByText('Open Case')).toBeInTheDocument();
-    expect(screen.queryByText('Closed Case')).not.toBeInTheDocument();
   });
 });
 
@@ -194,12 +220,9 @@ describe('HomeScreen — Today rail (Home Experience Redesign, §9)', () => {
     render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} />);
     expect(screen.getByText('Meeting')).toBeInTheDocument();
     expect(screen.getByText('Due')).toBeInTheDocument();
-    // Both names also appear a second time in Recently active — these are
-    // real, distinct cases, so that's expected, not a duplication bug.
-    expect(screen.getAllByText('Sarah Jones').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('James Carter').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Investigation meeting — Sarah Jones/)).toBeInTheDocument();
     // Same human wording the feed itself uses, not the raw ACAS-citation label.
-    expect(screen.getByText('Disciplinary outcome letter due')).toBeInTheDocument();
+    expect(screen.getByText(/Disciplinary outcome letter due — James Carter/)).toBeInTheDocument();
     expect(screen.queryByText(/ACAS/)).not.toBeInTheDocument();
   });
 
@@ -215,8 +238,7 @@ describe('HomeScreen — Today rail (Home Experience Redesign, §9)', () => {
       { key: 'k2', overdue: false, daysLeft: 6, label: 'Grievance acknowledgement due (ACAS-recommended: 5 working days)', employeeName: 'Sam', caseId: 'c1', category: 'grievance' },
     ];
     render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} />);
-    expect(screen.getByText('This week')).toBeInTheDocument();
-    expect(screen.getByText('2 deadlines · 1 meeting')).toBeInTheDocument();
+    expect(screen.getByText(/This week:\s*2 deadlines · 1 meeting/)).toBeInTheDocument();
   });
 
   it('does not show "This week" when the week ahead has nothing real to summarise', () => {
@@ -225,21 +247,21 @@ describe('HomeScreen — Today rail (Home Experience Redesign, §9)', () => {
   });
 });
 
-describe('HomeScreen — empty state (Home Experience Redesign, §15)', () => {
-  it('shows a calm empty state with no For You / Recently active / Today sections, and one onboarding action', () => {
+describe('HomeScreen — empty state (Home Experience Redesign, §15; Phase B §K)', () => {
+  it('shows a calm empty state with no Needs you today / Continue working / Today sections, and one onboarding action', () => {
     const setShowCasePrompt = vi.fn();
     render(<HomeScreen {...baseHomeProps} cases={[]} setShowCasePrompt={setShowCasePrompt} />);
-    expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
-    expect(screen.queryByText('For you')).not.toBeInTheDocument();
-    expect(screen.queryByText('Recently active')).not.toBeInTheDocument();
+    expect(screen.getByText('Nothing needs you yet · Compass starts counting from the first matter you log.')).toBeInTheDocument();
+    expect(screen.queryByText('Needs you today')).not.toBeInTheDocument();
+    expect(screen.queryByText('Continue working')).not.toBeInTheDocument();
     expect(screen.queryByText('Your work')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Create your first case →' }));
     expect(setShowCasePrompt).toHaveBeenCalledWith(true);
   });
 
-  it('still shows the greeting and Ask Compass in the empty state', () => {
+  it('greets a brand-new org with "Welcome" (not a time-of-day greeting) and still shows Ask Compass', () => {
     render(<HomeScreen {...baseHomeProps} cases={[]} />);
-    expect(screen.getByText(/Good (morning|afternoon|evening), Alex/)).toBeInTheDocument();
+    expect(screen.getByText('Welcome, Alex')).toBeInTheDocument();
     expect(screen.getByLabelText('Ask Compass')).toBeInTheDocument();
   });
 });
@@ -267,17 +289,14 @@ describe('HomeScreen — Compass noticed removed (UAT Product Hierarchy pass)', 
   });
 });
 
-describe('HomeScreen — Your work breakdown (Home + Sidebar Product Experience pass, Part 9)', () => {
-  it('is omitted entirely when there is nothing overdue, awaiting approval, or due this week', () => {
-    const cases = [
-      { id: 'c1', employeeName: 'A', stage: 'investigation', updatedAt: new Date().toISOString() },
-      { id: 'c2', employeeName: 'B', stage: 'investigation', updatedAt: new Date().toISOString() },
-    ];
-    render(<HomeScreen {...baseHomeProps} cases={cases} />);
-    expect(screen.queryByText('Your work')).not.toBeInTheDocument();
-  });
-
-  it('shows a real overdue/awaiting-approval/due-this-week breakdown instead of a bare open-case count', () => {
+// Phase B, final simplification pass — "Your work" (a static overdue/
+// awaiting-approval/due-this-week count) is removed from Home entirely.
+// It restated exactly what the urgency pills in Needs You Today already
+// show item-by-item — a workload-reporting total, not an operational
+// signal. The underlying counts are not deleted; the same breakdown
+// belongs to, and remains available in, Insights.
+describe('HomeScreen — Your work removed (Phase B, final simplification pass)', () => {
+  it('never renders a "Your work" section, even with overdue/awaiting-approval/due-this-week data', () => {
     const cases = [{ id: 'c1', employeeName: 'Sam', stage: 'investigation', updatedAt: new Date().toISOString() }];
     const dueSoon = [
       { key: 'od1', overdue: true, daysOverdue: 1, daysLeft: 0, label: 'Overdue thing', employeeName: 'Sam', caseId: 'c1', category: 'outcome' },
@@ -285,7 +304,7 @@ describe('HomeScreen — Your work breakdown (Home + Sidebar Product Experience 
     ];
     const hrReviewRequests = [{ id: 'r1', case_id: 'c1', status: 'pending', step: 'dismissal' }];
     render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} hrReviewRequests={hrReviewRequests} />);
-    expect(screen.getByText('Your work')).toBeInTheDocument();
-    expect(screen.getByText('1 overdue · 1 awaiting approval · 1 due this week')).toBeInTheDocument();
+    expect(screen.queryByText('Your work')).not.toBeInTheDocument();
+    expect(screen.queryByText(/awaiting approval/)).not.toBeInTheDocument();
   });
 });

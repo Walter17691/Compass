@@ -48,6 +48,7 @@ export function buildForYouFeed({
       title: humanizeDeadlineTitle(d),
       subject: subjectWithCaseType(d.employeeName, d.caseId ? caseById.get(d.caseId) : null),
       timing: d.daysOverdue === 1 ? 'Overdue by 1 day' : `Overdue by ${d.daysOverdue} days`,
+      daysOverdue: d.daysOverdue,
       caseId: d.caseId || null,
       screen,
       cta: ctaFor(d.caseId, screen),
@@ -146,6 +147,7 @@ export function buildForYouFeed({
       title: humanizeDeadlineTitle(d),
       subject: subjectWithCaseType(d.employeeName, d.caseId ? caseById.get(d.caseId) : null),
       timing: d.daysLeft === 1 ? 'Due tomorrow' : `Due in ${d.daysLeft} days`,
+      daysLeft: d.daysLeft,
       caseId: d.caseId || null,
       screen,
       cta: ctaFor(d.caseId, screen),
@@ -163,7 +165,7 @@ export function buildForYouFeed({
     items.push({
       id: `stale:${cs.id}`, type: 'FOLLOW_UP', urgent: false,
       title: 'No recent activity', subject: subjectWithCaseType(cs.employeeName, cs),
-      timing: `${quietDays} days quiet`, caseId: cs.id, cta: 'Open case →', rank: 4,
+      timing: `${quietDays} days quiet`, quietDays, caseId: cs.id, cta: 'Open case →', rank: 4,
     });
   });
 

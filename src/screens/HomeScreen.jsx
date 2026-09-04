@@ -1,16 +1,14 @@
 import { useState, useMemo } from 'react';
 import { SCREENS } from '../constants';
 import { buildForYouFeed, humanizeDeadlineTitle } from '../lib/homeFeed';
-import { requiresApproval } from '../lib/approvals';
 import { CompassLogo } from '../components/CompassLogo';
+import { Card } from '../components/Primitives';
 import { FONT, COLOR, SPACE, RADIUS, TYPE, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
 // Home Experience Redesign — up to 3 static interaction shortcuts, not
 // AI-generated suggestions. Clicking one submits that exact question
 // through the same onAskCompass flow as typing it and pressing Enter.
 const STARTER_PROMPTS = ["What needs my attention?", "Summarise my open cases", "What's overdue?"];
-
-const TYPE_LABEL = { ACTION_NEEDED: "Action needed", DEADLINE: "Deadline", APPROVAL: "Approval", FOLLOW_UP: "Follow-up" };
 
 // Home Experience Redesign — a busy real org can genuinely have dozens of
 // pending approvals/overdue items; the feed is already correctly
@@ -21,13 +19,26 @@ const TYPE_LABEL = { ACTION_NEEDED: "Action needed", DEADLINE: "Deadline", APPRO
 // one click away via "View all," never actually hidden.
 const INITIAL_FEED_ROWS = 5;
 
-// Home UX Polish pass, §3 — a restrained left-border accent instead of a
-// coloured card background or an icon: urgent/overdue rows get the same
-// red already used for urgency everywhere else, approvals get the same
-// purple already used for the CTA colour (not a new accent), every other
-// row stays neutral. Three weights, two colours, both already in use
-// elsewhere in the product — nothing new introduced.
-const ROW_ACCENT = (item) => item.urgent ? COLOR.red : item.type==="APPROVAL" ? COLOR.purple : "transparent";
+// Phase B (Home / Today experience) — a terse urgency pill replaces the
+// old "Action needed"/"Deadline"/"Approval" category eyebrow. Every input
+// here is a fact the feed item already carries (urgent, type, the
+// daysLeft/daysOverdue lib/homeFeed.js now also passes through alongside
+// its own humanised `timing` string) — no new date maths, no new
+// severity classification invented for this. "Now" covers rows with no
+// attached future date (a pending approval or an available next-step
+// action is, by definition, work waiting today, not a countdown).
+// "Tomorrow" reuses the exact daysLeft===1 breakpoint lib/deadlines.js
+// already treats as its own bucket (see groupDueSoon's today/tomorrow/
+// later split) rather than inventing a new one.
+function urgencyPill(item) {
+  if (item.urgent) return { label: "Late", bg: COLOR.redTint, fg: COLOR.red };
+  if (item.type === "DEADLINE" && typeof item.daysLeft === "number") {
+    if (item.daysLeft === 1) return { label: "Tomorrow", bg: COLOR.amberTint, fg: COLOR.amber };
+    return { label: `${item.daysLeft} days`, bg: COLOR.neutralChipBg, fg: COLOR.neutralChipText };
+  }
+  if (item.type === "FOLLOW_UP") return { label: "Quiet", bg: COLOR.neutralChipBg, fg: COLOR.neutralChipText };
+  return { label: "Now", bg: COLOR.purpleTint, fg: COLOR.purple };
+}
 
 // Home Experience Redesign — this is the redesign of Home's COMPOSITION,
 // not its data. Every number/decision below is sourced from getNextStep,
@@ -37,7 +48,7 @@ const ROW_ACCENT = (item) => item.urgent ? COLOR.red : item.type==="APPROVAL" ? 
 // invents a new legal/statutory calculation; this file only decides how
 // those existing facts are laid out and which one earns the user's
 // attention first.
-export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setScreen, setShowCasePrompt, dueSoon, setActiveCaseId, setActiveCaseStage, fmtDate, concernReferrals=[], isHR, hrReviewRequests=[], onAskCompass }) {
+export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setScreen, setShowCasePrompt, dueSoon, setActiveCaseId, setActiveCaseStage, concernReferrals=[], isHR, hrReviewRequests=[], onAskCompass }) {
   const [askInput, setAskInput] = useState("");
   const submitAsk = (overrideQuestion) => {
     const question = (overrideQuestion ?? askInput).trim();
@@ -57,17 +68,21 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
   }), [cases, getCaseStage, getNextStep, dueSoon, concernReferrals, hrReviewRequests, isHR]);
   const urgentCount = feed.filter(f=>f.urgent).length;
 
-  // §2 — one short, real-data sentence. No vanity stats. Part 3 of the
-  // Home + Sidebar pass asks for real workload context in the literal
-  // shape "3 things need your attention today" rather than a padded
-  // "You have..." lead-in.
+  // §A/§K — one quiet line under the greeting: today's date, then the
+  // same real feed count/urgency facts already computed above (no new
+  // calculation), in one sentence rather than a separate date line plus
+  // a separate status line. A brand-new org with zero matters gets its
+  // own distinct copy (§K) rather than a reused, not-yet-true "caught up".
+  const dateLabel = new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
   const contextSentence = isQuietHome
-    ? "Employee relations case management for your organisation."
-    : feed.length===0
-      ? "You're all caught up."
-      : urgentCount>0
-        ? `${urgentCount} urgent item${urgentCount!==1?"s":""} need${urgentCount===1?"s":""} your attention today.`
-        : `${feed.length} thing${feed.length!==1?"s":""} need${feed.length===1?"s":""} your attention today.`;
+    ? "Nothing needs you yet · Compass starts counting from the first matter you log."
+    : `${dateLabel} · ${
+        feed.length===0
+          ? "You're all caught up."
+          : `${feed.length} thing${feed.length!==1?"s":""} need${feed.length===1?"s":""} you today${
+              urgentCount>0 ? ` · ${urgentCount===1?"one is":`${urgentCount} are`} already late` : ""
+            }`
+      }`;
 
   const goToFeedItem = (item) => {
     if(item.caseId) { setActiveCaseId(item.caseId); setActiveCaseStage("investigation"); setScreen(SCREENS.CASE_VIEW); return; }
@@ -114,23 +129,6 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
   const hasWeekSummary = weekMeetings>0 || weekDeadlines>0;
   const hasToday = todayMeetings.length>0 || todayDeadlines.length>0 || hasWeekSummary;
 
-  // Home + Sidebar Product Experience pass, Part 9 — "Your work" only
-  // earns its space when it can show a real breakdown (overdue / awaiting
-  // approval / due this week), each independently derivable from data
-  // already computed above or on this screen. A bare "N open cases"
-  // count told the user nothing they could act on, so the section is
-  // hidden entirely rather than shown empty when none of the three apply.
-  const overdueCount = dueSoon.filter(d=>d.overdue).length;
-  const awaitingApprovalCount = hrReviewRequests.filter(r=>r.status==="pending" && requiresApproval(r.step)).length;
-  const hasWorkBreakdown = overdueCount>0 || awaitingApprovalCount>0 || weekDeadlines>0;
-
-  // §8 Continue working — max 4, sorted by recency, subordinate to For You.
-  const RECENT_LIMIT = 4;
-  const recentCases = useMemo(() => cases
-    .filter(cs=>getCaseStage(cs)!=="closed")
-    .sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))
-    .slice(0, RECENT_LIMIT), [cases, getCaseStage]);
-
   const askBox = (
     <div style={{marginBottom:SPACE.xxl}}>
       <div style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"16px 20px",transition:"border-color 0.15s"}}
@@ -155,26 +153,25 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
   return(
     <div style={{minHeight:"100vh",background:COLOR.paper,fontFamily:FONT.sans}}>
       <style>{`
-        .home-v2-grid{display:grid;grid-template-columns:1fr 320px;grid-template-areas:"foryou today" "recent secondary";column-gap:${SPACE.xxl}px;row-gap:${SPACE.xxl}px;align-items:start;}
-        .home-v2-foryou{grid-area:foryou;min-width:0;}
-        .home-v2-today{grid-area:today;min-width:0;}
-        .home-v2-recent{grid-area:recent;min-width:0;}
-        .home-v2-secondary{grid-area:secondary;min-width:0;display:flex;flex-direction:column;gap:${SPACE.xl}px;}
         .home-v2-feed-row:hover{background:${COLOR.surface};}
-        @media (max-width:900px){
-          .home-v2-grid{grid-template-columns:1fr;grid-template-areas:"foryou" "today" "recent" "secondary";}
-        }
       `}</style>
 
       <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"32px 32px"}}>
 
-        {/* §2 Header — greeting + one real-data sentence. No creation
-            buttons here: creation is the global + Create control now,
-            not a second, Home-specific system. */}
+        {/* §A/§2 Header — greeting + one real-data sentence, no separate
+            date line (the date now lives inside that one sentence — see
+            contextSentence above). No creation buttons here: creation is
+            the global + Create control now (src/components/CreateMenu.jsx,
+            reached from the sidebar), not a second, Home-specific one —
+            Home UX Polish, §8 already deliberately toned that control down
+            to a persistent utility rather than a page-dominating CTA, so
+            duplicating "New matter"/"Start meeting" here would reintroduce
+            the second front door that pass removed. */}
         <div style={{marginBottom:SPACE.xl}}>
-          <div style={{...TYPE.micro,color:COLOR.inkFaint,marginBottom:SPACE.xs}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
           <h1 style={{...TYPE.identity,color:COLOR.ink,margin:0}}>
-            Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
+            {isQuietHome
+              ? `Welcome${currentUser?.name?", "+currentUser.name.split(" ")[0]:""}`
+              : <>Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}</>}
           </h1>
           <p style={{...TYPE.metadata,color:COLOR.inkFaint,margin:"6px 0 0"}}>{contextSentence}</p>
         </div>
@@ -186,166 +183,135 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
         {askBox}
 
         {isQuietHome ? (
-          // §15 Empty state — calm and intentional. No empty For You/
-          // Recently Active/Today tables; one restrained onboarding link
-          // reusing the exact existing case-creation handler.
-          <div style={{textAlign:"center",padding:"40px 20px"}}>
-            <div style={{fontSize:15,color:COLOR.inkSoft,marginBottom:16}}>You're all caught up.</div>
+          // §15/§K Empty state — calm and intentional. No empty For You/
+          // Recently Active/Today tables; one restrained onboarding action
+          // reusing the exact existing case-creation handler. The "nothing
+          // needs you yet" message already lives in the header sentence
+          // above, so this block doesn't repeat it — it only offers the
+          // one real, existing way to begin.
+          <div style={{textAlign:"center",padding:"32px 20px"}}>
             <button onClick={()=>setShowCasePrompt(true)} style={{fontSize:13,fontWeight:600,color:"#fff",background:COLOR.purple,border:"none",borderRadius:RADIUS.surface,padding:"10px 22px",cursor:"pointer",fontFamily:FONT.sans}}>Create your first case →</button>
           </div>
         ) : (
-          <div className="home-v2-grid">
+          <div>
 
-            {/* §4 FOR YOU — the primary surface. Each row states what
-                happened, who/what it relates to, when it matters, and
-                the one real action available. Red is reserved for
-                urgent/overdue rows only (§6) — everything else stays
-                visually neutral, distinguished by its type label. */}
-            <div className="home-v2-foryou">
-              <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>For you</div>
-              {feed.length===0 ? (
-                <div style={{fontSize:13,color:COLOR.inkFaint,padding:"12px 0"}}>Nothing needs your attention right now.</div>
-              ) : (()=>{
-                const visibleFeed = showAllFeed ? feed : feed.slice(0, INITIAL_FEED_ROWS);
-                const hiddenCount = feed.length - visibleFeed.length;
-                return (
-                <div>
-                  {visibleFeed.map((item,i)=>(
-                    <div key={item.id} className="home-v2-feed-row" style={{display:"flex",alignItems:"stretch",gap:10,padding:"9px 6px 9px 10px",borderBottom:(i<visibleFeed.length-1||hiddenCount>0)?`1px solid ${COLOR.borderFaint}`:"none",borderRadius:RADIUS.surface}}>
-                      <div style={{width:2,flexShrink:0,borderRadius:2,background:ROW_ACCENT(item)}}/>
-                      <div style={{flex:1,minWidth:0,maxWidth:640}}>
-                        <div style={{...TYPE.micro,color:item.urgent?COLOR.red:COLOR.inkFaint,fontWeight:700,marginBottom:3}}>
-                          {TYPE_LABEL[item.type]||item.type}{item.risk==="HIGH"&&<span> · High risk</span>}
-                        </div>
-                        <button onClick={()=>goToFeedItem(item)} style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
-                          <div style={{fontSize:13.5,fontWeight:600,color:COLOR.ink,lineHeight:1.35}}>{item.title}</div>
+            {/* §C/§D/§E Needs you today — the one dominant work card, rows
+                not cards. Each row states an urgency pill, who/what it
+                relates to, plain-language context, and the one real
+                action available. Same ordering §4 already implemented
+                (lib/homeFeed.js's own rank: overdue/high-risk, then
+                decisions needing you, then upcoming deadlines, then
+                quiet follow-ups) — untouched here, only the row's visual
+                treatment changed. "All N matters" opens the real, full
+                Cases list — a genuinely different destination from "View
+                all (N)" below, which only expands this same prioritised
+                feed in place; the two labels are deliberately distinct
+                so neither overstates what it does. */}
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:SPACE.sm}}>
+                <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Needs you today</div>
+                <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:11,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>All {activeCaseCount} matter{activeCaseCount!==1?"s":""} →</button>
+              </div>
+              <Card style={{padding:"6px 14px"}}>
+                {feed.length===0 ? (
+                  <div style={{fontSize:13,color:COLOR.inkFaint,padding:"12px 4px"}}>Nothing needs your attention right now.</div>
+                ) : (()=>{
+                  const visibleFeed = showAllFeed ? feed : feed.slice(0, INITIAL_FEED_ROWS);
+                  const hiddenCount = feed.length - visibleFeed.length;
+                  return (
+                  <div>
+                    {visibleFeed.map((item,i)=>{
+                      const pill = urgencyPill(item);
+                      return (
+                      <div key={item.id} className="home-v2-feed-row" style={{display:"flex",alignItems:"center",gap:12,padding:"11px 6px",borderBottom:(i<visibleFeed.length-1||hiddenCount>0)?`1px solid ${COLOR.borderFaint}`:"none",borderRadius:RADIUS.surface}}>
+                        <span style={{...TYPE.pill,display:"inline-flex",alignItems:"center",justifyContent:"center",height:24,padding:"0 9px",borderRadius:RADIUS.chip,background:pill.bg,color:pill.fg,flexShrink:0,whiteSpace:"nowrap"}}>{pill.label}</span>
+                        <button onClick={()=>goToFeedItem(item)} style={{flex:1,minWidth:0,maxWidth:640,textAlign:"left",background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
+                          <div style={{fontSize:13.5,fontWeight:600,color:COLOR.ink,lineHeight:1.35}}>{item.title}{item.risk==="HIGH"&&<span style={{color:COLOR.red}}> · High risk</span>}</div>
                           {(item.subject||item.timing)&&(
                             <div style={{fontSize:11.5,color:COLOR.inkFaint,marginTop:1}}>{item.subject}{item.subject&&item.timing?" · ":""}{item.timing}</div>
                           )}
                         </button>
                         {item.cta&&(
-                          <button onClick={()=>goToFeedItem(item)} style={{marginTop:6,fontSize:11.5,fontWeight:600,color:COLOR.purple,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>{item.cta}</button>
+                          <button onClick={()=>goToFeedItem(item)} style={{flexShrink:0,fontSize:11.5,fontWeight:600,color:COLOR.purple,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>{item.cta}</button>
                         )}
                       </div>
-                    </div>
-                  ))}
-                  {hiddenCount>0&&(
-                    <button onClick={()=>setShowAllFeed(true)} style={{width:"100%",textAlign:"center",padding:"10px 0",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:COLOR.purple,fontFamily:FONT.sans}}>View all ({feed.length}) →</button>
-                  )}
-                </div>
-                );
-              })()}
+                      );
+                    })}
+                    {hiddenCount>0&&(
+                      <button onClick={()=>setShowAllFeed(true)} style={{width:"100%",textAlign:"center",padding:"10px 0",background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:COLOR.purple,fontFamily:FONT.sans}}>View all ({feed.length}) →</button>
+                    )}
+                  </div>
+                  );
+                })()}
+              </Card>
             </div>
 
-            {/* §4 secondary rail — Today, redesigned as a compact agenda:
-                state → event/action → person, for each of today's real
-                meetings and deadlines. No fabricated times — meeting
-                records don't carry a time-of-day field, only a date, so
-                this deliberately doesn't invent one; a real time field
-                would slot into the leading badge without restructuring
-                anything else. Omitted entirely (no empty card) when
-                there's genuinely nothing today or this week (§9). */}
+            {/* Phase B, final simplification pass — Today is the one
+                secondary section that survived the audit: unlike
+                Continue Working/Your Work (removed below), it holds
+                genuinely unique, time-bound information not shown
+                anywhere else on Home — today's meetings/deadlines are
+                deliberately excluded from the feed above (daysLeft===0
+                items, §9) specifically so they'd only ever appear once,
+                here. Deliberately NOT a Card: no border, no shadow, no
+                background — quiet rows with hairline dividers only, so
+                Needs You Today remains the one dominant surface on the
+                page. No fabricated meeting times — meeting records only
+                ever carry a date, never a time-of-day. */}
             {hasToday&&(
-              <div className="home-v2-today">
+              <div style={{marginTop:SPACE.xxl}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:SPACE.sm}}>
                   <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Today</div>
-                  <button onClick={()=>setScreen(SCREENS.CALENDAR)} style={{fontSize:11,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>Calendar →</button>
+                  <button onClick={()=>setScreen(SCREENS.CALENDAR)} style={{fontSize:11,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View calendar →</button>
                 </div>
                 {(todayMeetings.length>0||todayDeadlines.length>0)&&(
-                  <div style={{display:"flex",flexDirection:"column"}}>
+                  <div>
                     {todayMeetings.map((m,i)=>(
-                      <div key={"m"+i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:(i<todayMeetings.length-1||todayDeadlines.length>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                        <span style={{...TYPE.micro,color:COLOR.purple,fontWeight:700,flexShrink:0,marginTop:1}}>Meeting</span>
-                        <div style={{minWidth:0}}>
-                          <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{m.type||"Meeting"}</div>
-                          <div style={{fontSize:11.5,color:COLOR.inkFaint}}>{m.employeeName}</div>
-                        </div>
+                      <div key={"m"+i} style={{display:"flex",alignItems:"baseline",gap:10,padding:"8px 2px",borderBottom:(i<todayMeetings.length-1||todayDeadlines.length>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
+                        <span style={{...TYPE.micro,color:COLOR.purple,fontWeight:700,flexShrink:0,width:52}}>Meeting</span>
+                        <span style={{fontSize:13,color:COLOR.ink}}>{m.type||"Meeting"} — {m.employeeName}</span>
                       </div>
                     ))}
                     {todayDeadlines.map((d,i)=>(
-                      <div key={"d"+i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:i<todayDeadlines.length-1?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                        <span style={{...TYPE.micro,color:COLOR.amber,fontWeight:700,flexShrink:0,marginTop:1}}>Due</span>
-                        <div style={{minWidth:0}}>
-                          <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{humanizeDeadlineTitle(d)}</div>
-                          <div style={{fontSize:11.5,color:COLOR.inkFaint}}>{d.employeeName}</div>
-                        </div>
+                      <div key={"d"+i} style={{display:"flex",alignItems:"baseline",gap:10,padding:"8px 2px",borderBottom:i<todayDeadlines.length-1?`1px solid ${COLOR.borderFaint}`:"none"}}>
+                        <span style={{...TYPE.micro,color:COLOR.amber,fontWeight:700,flexShrink:0,width:52}}>Due</span>
+                        <span style={{fontSize:13,color:COLOR.ink}}>{humanizeDeadlineTitle(d)} — {d.employeeName}</span>
                       </div>
                     ))}
                   </div>
                 )}
                 {hasWeekSummary&&(
-                  <div style={{marginTop:(todayMeetings.length>0||todayDeadlines.length>0)?SPACE.sm:0,paddingTop:(todayMeetings.length>0||todayDeadlines.length>0)?SPACE.sm:0,borderTop:(todayMeetings.length>0||todayDeadlines.length>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                    <div style={{...TYPE.micro,color:COLOR.inkFaint,fontWeight:700,marginBottom:2}}>This week</div>
-                    <div style={{fontSize:12,color:COLOR.inkSoft}}>
-                      {weekDeadlines>0&&`${weekDeadlines} deadline${weekDeadlines!==1?"s":""}`}
-                      {weekDeadlines>0&&weekMeetings>0&&" · "}
-                      {weekMeetings>0&&`${weekMeetings} meeting${weekMeetings!==1?"s":""}`}
-                    </div>
+                  <div style={{marginTop:SPACE.xs,paddingTop:SPACE.xs,fontSize:12,color:COLOR.inkFaint}}>
+                    This week: {weekDeadlines>0&&`${weekDeadlines} deadline${weekDeadlines!==1?"s":""}`}
+                    {weekDeadlines>0&&weekMeetings>0&&" · "}
+                    {weekMeetings>0&&`${weekMeetings} meeting${weekMeetings!==1?"s":""}`}
                   </div>
                 )}
               </div>
             )}
 
-            {/* Home + Sidebar Product Experience pass, Part 7 — "Continue
-                working" (was "Recently active"): compact, subordinate to
-                For You, never the full Cases table/filters (Cases owns
-                that). Same data/logic, renamed to read as a return-to
-                point ("what was I working on?") rather than an activity
-                log. */}
-            <div className="home-v2-recent">
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:SPACE.sm}}>
-                <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Continue working</div>
-                <button onClick={()=>setScreen(SCREENS.CASES)} style={{fontSize:11,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View all cases →</button>
-              </div>
-              <div style={{display:"flex",flexDirection:"column"}}>
-                {recentCases.map((cs,i)=>{
-                  const next=getNextStep(cs);
-                  const lastUpdated=cs.updatedAt||cs.createdAt;
-                  return (
-                    <button key={cs.id} onClick={()=>{setActiveCaseId(cs.id);setActiveCaseStage("investigation");setScreen(SCREENS.CASE_VIEW);}}
-                      style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:"none",border:"none",padding:"10px 4px",cursor:"pointer",fontFamily:FONT.sans,borderBottom:i<recentCases.length-1?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                      <div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:COLOR.purpleDeep,flexShrink:0}}>
-                        {(cs.employeeName||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()}
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:COLOR.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cs.employeeName}</div>
-                        <div style={{fontSize:11.5,color:COLOR.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cs.caseType||"HR Matter"}{next?" · "+next.label:""}</div>
-                      </div>
-                      <div style={{fontSize:11,color:COLOR.inkQuiet,flexShrink:0}}>{lastUpdated?fmtDate(lastUpdated):""}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* UAT Product Hierarchy pass, Part 1 — "Compass noticed" is
-                removed from Home entirely. Human UAT found it duplicated
-                information already available through For You, Continue
-                Working, and each case's own Case Readiness section
-                (GuardrailsPanel/UnansweredQuestionsPanel already surface
-                the exact same open signals, in context, inside the case
-                itself — see OverviewTab.jsx). Nothing about the
-                underlying signals/intelligence is touched: caseSignals
-                still exist, are still created the same way, and still
-                render inside every case's own Overview. Home simply no
-                longer duplicates them as a second, decontextualised feed.
-                "Your work" is the only thing left in this rail — a real
-                breakdown, not a vanity count, so it earns the column on
-                its own. No replacement widget was added in its place. */}
-            {hasWorkBreakdown&&(
-              <div className="home-v2-secondary">
-                <div>
-                  <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint,marginBottom:SPACE.sm}}>Your work</div>
-                  <div style={{fontSize:12.5,color:COLOR.inkSoft,lineHeight:1.8}}>
-                    {overdueCount>0&&<>{overdueCount} overdue</>}
-                    {overdueCount>0&&(awaitingApprovalCount>0||weekDeadlines>0)&&" · "}
-                    {awaitingApprovalCount>0&&<>{awaitingApprovalCount} awaiting approval</>}
-                    {awaitingApprovalCount>0&&weekDeadlines>0&&" · "}
-                    {weekDeadlines>0&&<>{weekDeadlines} due this week</>}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* UAT Product Hierarchy pass, Part 1 (Compass noticed) and
+                Phase B final simplification pass (Continue Working / Your
+                Work) — all three removed from Home. Compass noticed
+                duplicated Needs You Today/case-level guardrails (caseSignals
+                is untouched, still renders inside every case's own
+                Overview — see OverviewTab.jsx). Continue Working was a
+                recency-sorted case list that either repeated cases already
+                surfaced above by urgency, or surfaced cases with no live
+                next step at all — a "what was I recently doing" activity
+                lens, not a "what do I need to do now" one; any case is
+                still reachable via Cases' own search-by-employee (Cases
+                has no recency sort, so the specific "most recently
+                touched" quick-glance is a real, disclosed trade-off, not
+                a false equivalence — see the Phase B report). Your Work
+                was a static overdue/
+                awaiting-approval/due-this-week count already restating
+                exactly what the pills above it show item-by-item — a
+                workload-reporting widget, not an operational one; the
+                same breakdown belongs to (and remains available in)
+                Insights. No calculation, handler, or navigation target
+                was deleted — only this page's duplicate presentation of
+                them. */}
 
           </div>
         )}
