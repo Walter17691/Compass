@@ -119,33 +119,40 @@ const RAIL_HIT = 48;
 // margin on the separator itself and nowhere else, so there's exactly
 // one place spacing between groups is ever set. Intra-group spacing
 // stays the smaller, separate INTRA_GAP (each cluster's own flex gap).
-const GROUP_GAP = 8;
+// Expanded-rail composition pass — GROUP_GAP trimmed from 8 to 7 so the
+// one remaining major-transition separator (utility cluster -> primary
+// nav) lands its effective gap (7+1px hairline+7) at 15px, inside the
+// requested 12-16px "between utility cluster and primary nav" band
+// rather than just outside it at 17px.
+const GROUP_GAP = 7;
 const INTRA_GAP = 4;
 const railIconBoxStyle = {width:RAIL_HIT, height:"100%", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0};
 // height:"100%" above only resolves correctly when the box's direct
 // parent has a *definite* height to be a percentage of — true for every
-// icon box whose parent is one of the RAIL_HIT-height buttons, but not
-// for the Activity wrapper, whose parent is the header cluster's own
-// auto-height flex column. A percentage height against an indefinite
-// containing block computes as auto there, which is what let that one
-// box's true rendered height end up arbitrary instead of 48. This
-// variant is for exactly that case: no border to account for on this
-// wrapper (it's a plain span, not a bordered button), so a firm 48 is
-// already correct with nothing to subtract.
-const railIconBoxFixedStyle = {width:RAIL_HIT, height:RAIL_HIT, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0};
+// icon box whose parent is one of the RAIL_HIT-height buttons. The
+// Activity wrapper (whose parent is the header cluster's own auto-height
+// flex column, an indefinite containing block) uses .rail-activity-slot
+// instead, a CSS class rather than this JS style object, since it also
+// needs a rest-vs-open width toggle railIconBoxStyle doesn't provide.
 
-// Brand v2.0 migration — the rail's Compass row is the one place the
-// canonical lockup (mark + wordmark, §6) has to coexist with the rail's
-// existing 48px icon-slot system (RAIL_HIT), so the axis-protecting slot
-// stays exactly as it was for every other row and the spec's "gap = 40%
-// of mark width" is measured from the mark's own true edge, not the
-// slot's: the 36px mark sits centred in the 48px slot with 6px of empty
-// slot on each side already, so the label's own margin-left only needs
-// to supply the remainder (LOCKUP_GAP - that 6px inset) to land the real
-// gap on the exact spec value.
+// Brand v2.0 migration — RAIL_MARK_SIZE (36px, trim-box) is the frozen,
+// approved CLOSED-rail mark: unchanged and untouched by this pass.
 const RAIL_MARK_SIZE = 36;
-const LOCKUP_GAP = Math.round(RAIL_MARK_SIZE * 0.4);
-const railWordmarkStyle = {fontFamily:FONT.sans, fontSize:Math.round((RAIL_MARK_SIZE*0.78)/0.72), fontWeight:850, fontStretch:"100%", letterSpacing:"-0.055em", color:COLOR.ink, marginLeft:LOCKUP_GAP-(RAIL_HIT-RAIL_MARK_SIZE)/2};
+
+// Expanded rail composition pass — the open rail previously reused this
+// same 36px mark for the OPEN lockup too, computing its wordmark at
+// ~39px (round(36*.78/.72)) via the exact v2.0 ratio formula. The ratio
+// math was correct, but a 39px bold wordmark reads as a hero logo, not a
+// navigation brand header, in a 248px-wide rail sitting directly above
+// 14px nav rows. The v2.0 lockup RULES (gap = 40% of mark width, Archivo
+// 850/-0.055em/sentence case) are a function of mark size, not a fixed
+// px target — so the fix is a smaller mark for the open-lockup instance
+// specifically, run through the exact same formulas, not a shortcut that
+// breaks the relationship. The closed-rail mark (RAIL_MARK_SIZE, above)
+// is a separate, untouched rendering — see .rail-rest-mark below.
+const OPEN_MARK_SIZE = 22;
+const OPEN_LOCKUP_GAP = Math.round(OPEN_MARK_SIZE * 0.4);
+const openWordmarkStyle = {fontFamily:FONT.sans, fontSize:Math.round((OPEN_MARK_SIZE*0.78)/0.72), fontWeight:850, fontStretch:"100%", letterSpacing:"-0.055em", color:COLOR.ink, lineHeight:1};
 
 // Same canonical lockup ratios, mobile header's own mark size (unchanged
 // from before this migration — the spec doesn't give a distinct mobile
@@ -207,14 +214,21 @@ function SidebarGroup({ label, items, screen, goToScreen, expanded, onToggle }) 
   if (items.length === 0) return null;
   const groupId = `sidebar-group-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <div>
+    // Expanded rail composition pass — this div previously had no
+    // explicit width, so as a non-stretching flex child of its parent's
+    // alignItems:"center" wrapper, it shrank to its own content width
+    // and centred as an island instead of sitting on the shared left
+    // axis — the root cause of group headers reading as "floating in
+    // the middle." width:"100%" alone fixes it regardless of the
+    // parent's own alignItems value.
+    <div style={{width:"100%"}}>
       <button onClick={onToggle} aria-expanded={expanded} aria-controls={groupId}
-        style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.inkFaint,padding:"8px 14px",cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
-        <span className="rail-label" style={{fontSize:12,fontWeight:700,color:COLOR.inkFaint}}>{label}</span>
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.inkSoft,padding:"8px 8px 8px 0",cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+        <span className="rail-label" style={{fontSize:13,fontWeight:600,color:COLOR.inkSoft}}>{label}</span>
         <span className="rail-label" style={{display:"inline-flex",flexShrink:0}}><ChevronIcon expanded={expanded}/></span>
       </button>
       {expanded&&(
-        <div id={groupId} style={{display:"flex",flexDirection:"column",gap:1}}>
+        <div id={groupId} style={{display:"flex",flexDirection:"column",gap:4,marginTop:4}}>
           {items.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen} indent/>)}
         </div>
       )}
@@ -425,9 +439,22 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
           down the nav list, not in this header row), so there's no
           competition between the two. */}
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:INTRA_GAP,padding:0}}>
+        {/* Expanded rail composition pass — the resting mark (36px,
+            trim-box, frozen/protected) and the open-state lockup (a
+            smaller 22px mark + wordmark, see OPEN_MARK_SIZE above) are
+            now two separate instances toggled the same way every other
+            row's icon-vs-label pair is: .rail-rest-mark collapses to
+            width:0 on open (see <style> below) while this row's own
+            .rail-label reveals — so at rest nothing here changed at all
+            (same element, same size, same axis), and at open the small
+            lockup starts flush at the row's own left edge instead of
+            appearing after an invisible 48px gap. */}
         <button onClick={()=>goToScreen(SCREENS.HOME)} className="rail-row" style={{display:"flex",alignItems:"center",gap:0,background:"none",border:"none",padding:0,cursor:"pointer",height:RAIL_HIT}}>
-          <span style={railIconBoxStyle}><CompassLogo size={RAIL_MARK_SIZE} trimBox/></span>
-          <span className="rail-label" style={railWordmarkStyle}>Compass</span>
+          <span className="rail-rest-mark"><CompassLogo size={RAIL_MARK_SIZE} trimBox/></span>
+          <span className="rail-label" style={{display:"inline-flex",alignItems:"baseline",gap:OPEN_LOCKUP_GAP}}>
+            <CompassLogo size={OPEN_MARK_SIZE} trimBox/>
+            <span style={openWordmarkStyle}>Compass</span>
+          </span>
         </button>
         {/* Phase C (expanding sidebar rail) — Activity moved onto its own
             row directly below the tile, still left-aligned to the same
@@ -440,24 +467,29 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
             in the same 48×48 slot as every other control so its icon
             centres on the same x=36 axis; ActivityBell's own trigger
             (padding/icon size/unread badge, all separately tested) is
-            untouched, only where it sits changed. */}
-        <span style={railIconBoxFixedStyle}>
+            untouched, only where it sits changed. Expanded rail
+            composition pass — that fixed 48×48 slot previously never
+            grew on open, so the cluster's own alignItems:"center" was
+            centring Activity in
+            the middle of the open rail instead of on the shared left
+            axis. .rail-activity-slot below reuses the exact same
+            rest-vs-open width toggle every other row uses, so Activity
+            joins the same grid while staying visually the same small,
+            quiet, cardless icon it always was — ActivityBell itself is
+            still completely untouched. */}
+        <span className="rail-activity-slot">
           <ActivityBell auditLog={auditLog} orgId={org?.id}/>
         </span>
       </div>
 
-      {/* Phase C closed-rail geometry polish — GROUP_GAP is the single,
-          deliberate value for every major-group transition, applied only
-          here (as a symmetric margin around the hairline) and nowhere
-          else — the two cluster containers above/below carry zero
-          vertical padding of their own now, so there's no second,
-          uncoordinated source of spacing to drift out of sync with this
-          one. Same margin on both separators is what makes the two
-          group transitions read as the same kind of gap instead of two
-          different, accidental ones. */}
-      <div style={{width:RAIL_HIT,height:1,background:COLOR.borderFaint,margin:`${GROUP_GAP}px auto`}}/>
-
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:INTRA_GAP,padding:0}}>
+      {/* Composition pass — with the separator between header and
+          utility clusters removed (separators reduced to sparing use),
+          this marginTop is the only thing distinguishing "identity"
+          (logo/Activity) from "utility actions" (Create/Search) as two
+          related-but-distinct clusters — deliberately more than
+          INTRA_GAP's 4px (same-cluster spacing) but less than the one
+          remaining separator's ~15px (a genuine major transition). */}
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:INTRA_GAP,padding:0,marginTop:SPACE.sm}}>
         {/* IA & User Journey pass, §7 — universal Create pattern. One
             learned control instead of the New case/New meeting/New task/
             Raise concern/Add note buttons previously scattered one-per-
@@ -491,14 +523,27 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
         )}
       </div>
 
-      <div style={{width:RAIL_HIT,height:1,background:COLOR.borderFaint,margin:`${GROUP_GAP}px auto`}}/>
+      {/* Expanded rail composition pass — separators reduced to sparing
+          use per the composition review: this is now the ONLY separator
+          above the account divider (the header->utility one above was
+          removed). .rail-hr gives it the same 48px-at-rest / 100%-at-open
+          width toggle every row already uses, so it spans the shared
+          content grid once open instead of staying a small fixed-width
+          stub floating in a much wider rail. */}
+      <div className="rail-hr" style={{height:1,background:COLOR.borderFaint,margin:`${GROUP_GAP}px auto`}}/>
 
       <nav style={{display:"flex",flexDirection:"column",alignItems:"center",gap:INTRA_GAP,flex:1,minHeight:0,overflowY:"auto",paddingBottom:12}}>
         {primaryItems.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen}/>)}
         <AskCompassNavButton screen={screen} goToScreen={goToScreen}/>
         {primaryItemsAfterAsk.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen}/>)}
 
-        <div style={{width:"100%",marginTop:SPACE.sm,paddingTop:SPACE.sm,borderTop:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+        {/* Composition pass — the border here was a second separator on
+            top of the one above (removed, per "use separators sparingly");
+            pure marginTop now carries the primary-nav -> grouped-nav
+            transition (16px, matching the requested 16-20px band) with
+            nothing to draw. gap bumped 2->6 so consecutive group headers
+            read as siblings in the same list, not stacked almost flush. */}
+        <div style={{width:"100%",marginTop:SPACE.lg,display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
           {sidebarGroups.map(g=>(
             <SidebarGroup key={g.label} label={g.label} items={g.items} screen={screen} goToScreen={goToScreen}
               expanded={expandedGroups.has(g.label)} onToggle={()=>toggleGroup(g.label)}/>
@@ -591,8 +636,19 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   return (
     <>
       <style>{`
-        .app-rail{width:72px;overflowX:hidden;}
-        .app-rail:hover,.app-rail:focus-within{width:248px;box-shadow:4px 0 24px rgba(15,18,36,0.10);}
+        .app-rail{width:72px;padding:16px 8px;overflowX:hidden;}
+        /* Expanded rail composition pass — the one shared internal grid:
+           every row/cluster below is width:100% of the aside's own
+           content box (either via .rail-row's rest/open toggle or a
+           plain width:"100%" set directly), so this single padding bump
+           is what actually establishes the "approximately 16-20px"
+           internal inset requested for the open state — one change,
+           inherited by every already-100%-wide element, rather than a
+           per-row override scattered across the file. Left at 16px/8px
+           at rest (unchanged, protects the closed-rail x=36 axis, which
+           depends on the existing 8px value to centre a 48px row inside
+           a 56px content width). */
+        .app-rail:hover,.app-rail:focus-within{width:248px;padding:16px 16px;box-shadow:4px 0 24px rgba(15,18,36,0.10);}
         /* Phase C closed-rail alignment correction — max-width:0 (not just
            opacity:0) is what actually collapses a label's layout size at
            rest; opacity alone still reserves its full text width, which
@@ -608,24 +664,64 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
            on the same x=36 axis via the parent's alignItems:"center". */
         .rail-row{width:48px;}
         .app-rail:hover .rail-row,.app-rail:focus-within .rail-row{width:100%;}
+        /* CreateMenu's compact trigger sits inside its own position:relative
+           wrapper (needed for popover positioning), one level outside
+           .rail-row itself — same rest/open toggle, applied to that
+           wrapper instead, so Create's row matches everyone else's width
+           at both rail states. See CreateMenu.jsx. */
+        .rail-row-wrap{width:48px;}
+        .app-rail:hover .rail-row-wrap,.app-rail:focus-within .rail-row-wrap{width:100%;}
+        /* Expanded rail composition pass — the Compass row's resting
+           mark: unchanged 48px icon slot at rest, collapses to width:0
+           on open so the open-lockup (a .rail-label, revealed the same
+           way every other row's label is) starts flush at the row's own
+           left edge instead of after an invisible reserved icon column. */
+        .rail-rest-mark{width:48px;height:100%;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+        .app-rail:hover .rail-rest-mark,.app-rail:focus-within .rail-rest-mark{width:0;}
+        /* Same rest/open toggle as .rail-row, but justify-content flips
+           to flex-start on open instead of relying on width:100% alone —
+           Activity's own trigger is much narrower than the row, so
+           without this it centres inside the open row rather than
+           sitting on the shared left axis (the root cause of Activity
+           reading as randomly placed in the expanded rail). */
+        .rail-activity-slot{width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .app-rail:hover .rail-activity-slot,.app-rail:focus-within .rail-activity-slot{width:100%;justify-content:flex-start;}
+        /* Same toggle again, for the one remaining separator — spans the
+           shared content grid once open instead of staying a fixed 48px
+           stub off to the side of a much wider rail. */
+        .rail-hr{width:48px;}
+        .app-rail:hover .rail-hr,.app-rail:focus-within .rail-hr{width:100%;}
         .rail-alert-collapse{max-height:0;overflow:hidden;display:block;}
         .app-rail:hover .rail-alert-collapse,.app-rail:focus-within .rail-alert-collapse{max-height:120px;}
-        /* The load-issue notice's own card chrome (background/border/
-           padding) only applies once the rail is open; at rest it's a
-           plain 48×48 slot holding just the small dot. */
+        /* The load-issue notice's own chrome only applies once the rail
+           is open; at rest it's a plain 48×48 slot holding just the
+           small dot. Composition pass — this used to be a bordered/
+           tinted card (background/border/padding) that read as an
+           oversized panel next to the disciplined nav rows around it;
+           it's now a plain width:100% block on the same shared grid as
+           everything else, no card chrome, so it reads as a compact
+           inline notice instead of competing with navigation for
+           attention. The message/Retry/Dismiss content itself (and its
+           own font sizes/gaps) is unchanged — see LoadIssueNotice, whose
+           mobile (non-railCompact) rendering is a completely separate
+           style branch untouched by this rule. */
         .rail-alert-box{width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-        .app-rail:hover .rail-alert-box,.app-rail:focus-within .rail-alert-box{width:auto;height:auto;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;background:#FEF0EB;border:1px solid #C84B2F44;border-radius:8px;padding:10px 12px;gap:8px;}
+        .app-rail:hover .rail-alert-box,.app-rail:focus-within .rail-alert-box{width:100%;height:auto;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;background:none;border:none;border-radius:0;padding:0;gap:6px;}
         .rail-alert-dot{margin-top:0;}
         .app-rail:hover .rail-alert-dot,.app-rail:focus-within .rail-alert-dot{margin-top:4px;}
         @media (prefers-reduced-motion: no-preference){
-          .app-rail{transition:width 220ms cubic-bezier(.2,.8,.2,1),box-shadow 220ms cubic-bezier(.2,.8,.2,1);}
+          .app-rail{transition:width 220ms cubic-bezier(.2,.8,.2,1),padding 220ms cubic-bezier(.2,.8,.2,1),box-shadow 220ms cubic-bezier(.2,.8,.2,1);}
           .rail-label{transition:opacity 180ms ease 40ms,transform 180ms ease 40ms,max-width 220ms cubic-bezier(.2,.8,.2,1);}
           .rail-row{transition:width 220ms cubic-bezier(.2,.8,.2,1);}
+          .rail-row-wrap{transition:width 220ms cubic-bezier(.2,.8,.2,1);}
+          .rail-rest-mark{transition:width 220ms cubic-bezier(.2,.8,.2,1);}
+          .rail-activity-slot{transition:width 220ms cubic-bezier(.2,.8,.2,1);}
+          .rail-hr{transition:width 220ms cubic-bezier(.2,.8,.2,1);}
           .rail-alert-collapse{transition:max-height 220ms cubic-bezier(.2,.8,.2,1);}
         }
       `}</style>
       <div style={{width:72,flexShrink:0,height:"100vh"}}/>
-      <aside className="app-rail" style={{position:"fixed",top:0,left:0,bottom:0,zIndex:80,background:COLOR.rail,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px"}}>
+      <aside className="app-rail" style={{position:"fixed",top:0,left:0,bottom:0,zIndex:80,background:COLOR.rail,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column"}}>
         {sidebarBody}
       </aside>
     </>

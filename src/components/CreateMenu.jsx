@@ -55,7 +55,22 @@ export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask,
   ];
 
   return (
-    <div style={{position:"relative"}} ref={ref}>
+    // Expanded rail composition pass — this wrapper had no explicit
+    // width, so as a shrink-wrapped flex child containing a width:100%
+    // button (compact's own .rail-row toggle), the browser resolved its
+    // width from the button's own min/max-content rather than the
+    // sidebar's actual open content width — the root cause of Create
+    // measuring ~90px instead of matching every other row on the shared
+    // grid. Fixed via .rail-row-wrap (defined in AppSidebar.jsx's own
+    // <style> block, since compact only ever renders inside the rail):
+    // 48px at rest — the same width the shrink-wrapped div used to
+    // resolve to by coincidence, which is what let the utility cluster's
+    // alignItems:"center" land it on the shared x=36 rest axis; a plain
+    // unconditional width:100% here broke exactly that. 100% on open,
+    // same toggle every other row already uses. Scoped to compact only;
+    // every other CreateMenu call site (mobile sheet, elsewhere in the
+    // app) is untouched.
+    <div style={{position:"relative"}} className={compact?"rail-row-wrap":undefined} ref={ref}>
       {/* Home UX Polish pass, §8 — was a solid-filled purple button, the
           same visual weight as a primary "Submit"-style CTA; that read as
           more dominant than a persistent, always-visible utility should

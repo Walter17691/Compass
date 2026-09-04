@@ -480,7 +480,14 @@ describe('AppSidebar — expanding rail shell (Phase C)', () => {
 
   it('wraps the Compass wordmark and the Search label for the same reveal treatment as nav items', () => {
     render(<AppSidebar {...baseProps} isHR={true} />);
-    expect(screen.getByText('Compass', { selector: 'span.rail-label' })).toBeInTheDocument();
+    // Expanded rail composition pass — the open-state Compass lockup is
+    // now its own smaller mark + wordmark (see AppSidebar.jsx's
+    // OPEN_MARK_SIZE), nested inside the same .rail-label reveal wrapper
+    // every row's label already used, rather than being that span's
+    // direct text content — the reveal mechanic under test is unchanged,
+    // only the lockup's own internal markup one level in is.
+    const compassLabel = [...document.querySelectorAll('.rail-label')].find(el => el.textContent.includes('Compass'));
+    expect(compassLabel).toBeInTheDocument();
     const search = screen.getByRole('button', { name: /Search/ });
     expect(search.querySelector('.rail-label')).toHaveTextContent('Search');
   });
