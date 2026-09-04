@@ -1,31 +1,59 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
+/* Visual Identity pass — canonical revision per the written Compass
+   design specification. Archivo is the ONE interface font (display and
+   body alike; hierarchy comes from weight/size/tracking, never from
+   mixing families). IBM Plex Mono has been REMOVED from this load — the
+   spec is explicit that it "must not remain the metadata interface
+   font"; nothing in the token system (src/styles/tokens.js's FONT.mono)
+   references it any more, so dropping the request is safe, not merely
+   deferred. DM Serif Display/DM Sans stay loaded alongside Archivo: ~97
+   files hardcode those two as raw string literals rather than importing
+   FONT from tokens.js, and migrating every one of those call sites is
+   explicitly out of scope for a token-level pass (same category as the
+   raw-hex-colour backlog) — dropping their font would have silently
+   regressed all of them to a Georgia/system-ui fallback. This is
+   reported explicitly in the Phase A report as legacy/non-design-system
+   infrastructure, not presented as part of the approved system. */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #FDFAF5;
+  /* Canonical palette (design spec) — replaces the previous identity's
+     values (#11111B ink, #5B3DF5 violet, #FCFBFF paper) entirely. */
+  --bg: #FFFFFF;
   --bg-card: #FFFFFF;
   --bg-elevated: #FFFFFF;
-  --bg-subtle: #F5F1EA;
-  --border: #E8E0D0;
-  --border-strong: #D4C9B8;
-  --text-1: #1A1535;
-  --text-2: #6B6375;
-  --text-3: #9B9098;
-  --accent: #7C5CFC;
-  --accent-dim: rgba(124,92,252,0.10);
-  --accent-border: rgba(124,92,252,0.25);
-  --accent-text: #5B3FD4;
-  --danger: #C84B2F;
-  --danger-light: #FEF0EB;
-  --success: #1A7A4A;
+  --bg-subtle: #F7F8FC;
+  --border: #E8EAF2;
+  --border-strong: #E3E5EE;
+  --hair: #F0F1F7;
+  --text-1: #0F1224;
+  --text-2: #4A4E63;
+  --text-3: #5E627A;
+  --text-4: #8A8EA3;
+  --accent: #7A2FD8;
+  --accent-dim: rgba(122,47,216,0.10);
+  --accent-border: rgba(122,47,216,0.25);
+  --accent-text: #7A2FD8;
+  --accent-tint: #F3EDFD;
+  --danger: #C2261B;
+  --danger-light: #FCEBE9;
+  --success: #0B6B4A;
   --success-light: #E8F5EE;
-  --warning: #B87520;
-  --warning-light: #FEF5E7;
-  --shadow-sm: 0 1px 3px rgba(26,21,53,0.06), 0 1px 2px rgba(26,21,53,0.04);
-  --shadow-md: 0 4px 12px rgba(26,21,53,0.08), 0 2px 4px rgba(26,21,53,0.04);
+  --warning: #8A5A00;
+  --warning-light: #FBF3E4;
+  --shadow-sm: 0 1px 3px rgba(15,18,36,0.06), 0 1px 2px rgba(15,18,36,0.04);
+  --shadow-md: 0 4px 12px rgba(15,18,36,0.08), 0 2px 4px rgba(15,18,36,0.04);
+  /* Motion foundation (design spec §10) — reference tokens for the
+     handful of transitions already declared in this file; existing
+     per-component inline transition values elsewhere are NOT rewired to
+     these as part of this pass (that would mean touching components,
+     out of scope for a token-level revision). */
+  --motion-color: 160ms ease;
+  --motion-shadow: 160ms ease;
+  --motion-move: 200ms cubic-bezier(.2,.8,.2,1);
 
-  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Archivo', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-1);
@@ -38,42 +66,45 @@ body { margin: 0; background: var(--bg); min-height: 100vh; }
 #root { width: 100%; min-height: 100vh; text-align: left; }
 
 h1, h2, h3, h4 {
-  font-family: 'DM Serif Display', Georgia, serif;
-  font-weight: 400;
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-1);
   line-height: 1.2;
 }
 
 input, textarea, select {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Archivo', system-ui, sans-serif;
   font-size: 14px;
   color: var(--text-1);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--motion-color), box-shadow var(--motion-shadow);
 }
 input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
-button { font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer; }
-::placeholder { color: var(--text-3); }
+button { font-family: 'Archivo', system-ui, sans-serif; cursor: pointer; }
+::placeholder { color: var(--text-4); }
 
-/* Phase 6.5 hardening (accessibility pass) — restores a visible
-   keyboard-focus indicator for buttons/links/programmatically-focusable
-   elements app-wide (input/textarea/select already get one from the
-   :focus rule above). box-shadow, not outline: many components across
-   this codebase set outline:"none" inline (over 100 occurrences), and an
-   inline style always wins over a stylesheet rule for that same
-   property — a global outline override here couldn't beat it.
-   box-shadow is a different property, so it isn't shadowed the same way.
-   :focus-visible (not :focus) so a mouse click still shows no ring,
-   matching how sighted mouse users already experience every button here
-   — only keyboard/programmatic focus gets the indicator. */
+/* Phase 6.5 hardening (accessibility pass), values updated to the design
+   spec's approved focus treatment (outline: 2px solid #7A2FD8;
+   outline-offset: 3px) — implemented as box-shadow, NOT the literal
+   `outline` property, because over 100 components in this codebase set
+   `outline:"none"` inline, and an inline style always wins over a
+   stylesheet rule for that same CSS property; a real `outline` override
+   here would be silently defeated on every one of them. box-shadow is a
+   different property, so it renders the exact same visual result (a
+   3px-offset 2px violet ring) without being shadowed. :focus-visible
+   (not :focus) so a mouse click still shows no ring, matching how
+   sighted mouse users already experience every button here — only
+   keyboard/programmatic focus gets the indicator. This substitution is
+   called out explicitly in the Phase A report. */
 a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent);
   border-radius: 4px;
 }
 
@@ -93,6 +124,19 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
 
 input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
 ::selection { background: var(--accent-dim); color: var(--text-1); }
+
+/* Design spec §10 — respect prefers-reduced-motion app-wide. Purely
+   additive: has zero effect unless the user's OS/browser preference is
+   set, and doesn't touch any component's own transition/animation
+   declarations directly. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* Printing a letter or meeting record should print just that document,
    not the app chrome around it. Elements opt in with .print-area; only

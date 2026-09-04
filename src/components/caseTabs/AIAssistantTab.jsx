@@ -1,4 +1,5 @@
 import { MDRenderer } from '../MDRenderer';
+import { FONT } from '../../styles/tokens';
 
 // Two features over the same case-scoped context (src/lib/caseContext.js,
 // App.jsx's sendCaseChat/generateCaseOverview): a structured, regenerated-
@@ -18,12 +19,12 @@ export function AIAssistantTab({ cs, chatHistory, chatInput, setChatInput, chatP
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>AI case overview</div>
+          <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>AI case overview</div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {overview && !overviewLoading && (
-              <button onClick={()=>onAskWhy?.({title:"AI case overview", reasoning:"Generated from this case's own record — the allegations and meetings listed below — as of when you last generated it. Regenerating refreshes both the overview and this source list.", sourceRefs:overviewSources||[]})} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"5px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Ask why</button>
+              <button onClick={()=>onAskWhy?.({title:"AI case overview", reasoning:"Generated from this case's own record — the allegations and meetings listed below — as of when you last generated it. Regenerating refreshes both the overview and this source list.", sourceRefs:overviewSources||[]})} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"5px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Ask why</button>
             )}
-            <button onClick={generateOverview} disabled={overviewLoading} style={{fontSize:11,background:overviewLoading?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",cursor:overviewLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>{overviewLoading?"Generating…":overview?"Regenerate":"Generate overview"}</button>
+            <button onClick={generateOverview} disabled={overviewLoading} style={{fontSize:11,background:overviewLoading?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",cursor:overviewLoading?"not-allowed":"pointer",fontFamily:FONT.sans,fontWeight:600}}>{overviewLoading?"Generating…":overview?"Regenerate":"Generate overview"}</button>
           </div>
         </div>
         <div style={{padding:"16px"}}>
@@ -40,7 +41,7 @@ export function AIAssistantTab({ cs, chatHistory, chatInput, setChatInput, chatP
 
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Ask Compass about {cs.employeeName}'s case</div>
+          <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Ask Compass about {cs.employeeName}'s case</div>
         </div>
         <div style={{padding:"16px"}}>
           {chatHistory.length===0 && <div style={{fontSize:13,color:"#9B9098",marginBottom:12}}>Ask a question about this case — Compass answers only from what's recorded here, not the final decision.</div>}
@@ -51,8 +52,8 @@ export function AIAssistantTab({ cs, chatHistory, chatInput, setChatInput, chatP
           ))}
           {chatProcessing && <div style={{fontSize:13,color:"#9B9098",marginBottom:10}}>Thinking…</div>}
           <div style={{display:"flex",gap:8,marginTop:8}}>
-            <input aria-label="Ask about this case" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!chatProcessing)sendChat();}} placeholder="e.g. What evidence supports the first allegation?" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",outline:"none",fontFamily:"DM Sans,system-ui,sans-serif"}}/>
-            <button onClick={sendChat} disabled={chatProcessing||!chatInput.trim()} style={{fontSize:13,background:chatProcessing||!chatInput.trim()?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"9px 18px",color:"#fff",fontWeight:600,cursor:chatProcessing||!chatInput.trim()?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask</button>
+            <input aria-label="Ask about this case" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!chatProcessing)sendChat();}} placeholder="e.g. What evidence supports the first allegation?" style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"9px 12px",color:"#1A1535",outline:"none",fontFamily:FONT.sans}}/>
+            <button onClick={sendChat} disabled={chatProcessing||!chatInput.trim()} style={{fontSize:13,background:chatProcessing||!chatInput.trim()?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:8,padding:"9px 18px",color:"#fff",fontWeight:600,cursor:chatProcessing||!chatInput.trim()?"not-allowed":"pointer",fontFamily:FONT.sans}}>Ask</button>
           </div>
         </div>
       </div>

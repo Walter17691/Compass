@@ -14,10 +14,10 @@ import { PageHeader } from '../components/design/PageHeader';
 // genuinely show nothing; the caption below says so rather than leaving
 // an unexplained empty grid.
 const CATEGORY_COLOR = {
-  next_step:"#7C5CFC", outcome:"#C84B2F", appeal:"#B87520", investigation:"#1C5AA0",
+  next_step:"#7C5CFC", outcome:"#C84B2F", appeal:"#B87520", investigation:"#5E627A",
   grievance:"#4A7C6F", signature:"#9B59B6", dsar:"#E8622A", task:"#6B6375",
-  wellbeing:"#4A6FA5", leaver:"#888888", redundancy:"#D4882A",
-  fit_note:"#1A7A4A", probation:"#7C5CFC", oh_referral:"#4A6FA5", suspension:"#C84B2F",
+  wellbeing:"#5E627A", leaver:"#888888", redundancy:"#D4882A",
+  fit_note:"#1A7A4A", probation:"#7C5CFC", oh_referral:"#5E627A", suspension:"#C84B2F",
 };
 
 const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];

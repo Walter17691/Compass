@@ -82,8 +82,8 @@ describe('HomeScreen — For You feed (Home Experience Redesign, §4/§6)', () =
     render(<HomeScreen {...baseHomeProps} cases={cases} dueSoon={dueSoon} getNextStep={getNextStep} />);
     const eyebrows = screen.getAllByText('Action needed');
     expect(eyebrows).toHaveLength(2);
-    expect(eyebrows[0]).toHaveStyle({ color: '#C84B2F' });
-    expect(eyebrows[1]).not.toHaveStyle({ color: '#C84B2F' });
+    expect(eyebrows[0]).toHaveStyle({ color: '#C2261B' });
+    expect(eyebrows[1]).not.toHaveStyle({ color: '#C2261B' });
     expect(screen.getByText('DSAR response overdue')).toBeInTheDocument();
     expect(screen.getByText('Submit investigation report')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submit investigation report →' })).toBeInTheDocument();

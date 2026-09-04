@@ -1,4 +1,5 @@
 import { Btn } from './Primitives';
+import { COLOR } from '../styles/tokens';
 
 // Process Intelligence Phase 3 (P4) — the reusable citation shape every
 // policy-aware feature in this phase builds on (P5's Next Best Action,
@@ -23,13 +24,13 @@ export function PolicyCitation({ policyName, clauseHeading, clauseText, observat
       )}
       {observation&&(
         <div style={{marginBottom:legalNote?10:0}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Compass guidance</div>
+          <div style={{fontSize:11,fontWeight:700,color:COLOR.ink,marginBottom:4}}>Compass guidance</div>
           <div style={{fontSize:13,color:"#3D3560",lineHeight:1.6}}>{observation}</div>
         </div>
       )}
       {legalNote&&(
         <div>
-          <div style={{fontSize:10,fontWeight:700,color:"#1C5AA0",textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Legal / regulatory guidance</div>
+          <div style={{fontSize:11,fontWeight:700,color:COLOR.ink,marginBottom:4}}>Legal / regulatory guidance</div>
           <div style={{fontSize:13,color:"#3D3560",lineHeight:1.6}}>{legalNote}</div>
         </div>
       )}

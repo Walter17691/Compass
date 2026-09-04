@@ -1,5 +1,6 @@
 import { Btn, Card } from '../../components/Primitives';
 import { ROLES, roleLabel } from '../../lib/roles';
+import { FONT, COLOR } from '../../styles/tokens';
 
 export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember }) {
   if(!isHR) return null;
@@ -7,17 +8,17 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
     <>
       {org?.invite_code&&(
         <Card style={{marginBottom:20}}>
-          <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Team invite code</div>
+          <div style={{fontFamily:FONT.serif,fontSize:16,color:"#1A1535",marginBottom:4}}>Team invite code</div>
           <p style={{fontSize:12,color:"#6B6880",marginBottom:12}}>Share this code with team members to join your workspace.</p>
           <div style={{display:"flex",alignItems:"center",gap:10,background:"#F5F1EA",borderRadius:8,padding:"12px 16px"}}>
-            <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,color:"#7C5CFC",letterSpacing:4,fontWeight:700}}>{org.invite_code}</span>
+            <span style={{fontFamily:FONT.mono,fontSize:20,color:COLOR.purple,letterSpacing:4,fontWeight:700}}>{org.invite_code}</span>
             <button onClick={()=>navigator.clipboard.writeText(org.invite_code)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"4px 10px",fontSize:11,color:"#6B6375",cursor:"pointer"}}>Copy</button>
           </div>
         </Card>
       )}
 
       <Card style={{marginBottom:20}}>
-        <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",marginBottom:4}}>Team members</div>
+        <div style={{fontFamily:FONT.serif,fontSize:16,color:"#1A1535",marginBottom:4}}>Team members</div>
         <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Invite team members to your workspace. They will receive an email invite.</p>
 
         <div style={{marginBottom:16}}>

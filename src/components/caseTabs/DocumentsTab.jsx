@@ -1,6 +1,7 @@
 import { deriveDocumentsForCase } from '../../lib/caseDocuments';
 import { fmtBytes } from '../../lib/evidenceUpload';
 import { CORRESPONDENCE_TYPE_LABELS } from '../../lib/letterSend';
+import { FONT } from '../../styles/tokens';
 
 const KIND_LABEL = { letter: "Letter", report: "Report", evidence: "File" };
 const KIND_COLOR = { letter: "#B87520", report: "#7C5CFC", evidence: "#6B6375" };
@@ -25,9 +26,9 @@ export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate,
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Documents ({docs.length})</div>
+        <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Documents ({docs.length})</div>
         {onGenerateHearingPack&&(
-          <button onClick={()=>onGenerateHearingPack(cs)} disabled={!!hearingPackGenerating} style={{fontSize:11,fontWeight:600,color:"#fff",background:hearingPackGenerating?"#C4B8F8":"#7C5CFC",border:"none",borderRadius:6,padding:"6px 12px",cursor:hearingPackGenerating?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",flexShrink:0}}>{hearingPackGenerating?"Generating…":"Generate Hearing Pack"}</button>
+          <button onClick={()=>onGenerateHearingPack(cs)} disabled={!!hearingPackGenerating} style={{fontSize:11,fontWeight:600,color:"#fff",background:hearingPackGenerating?"#C4B8F8":"#7C5CFC",border:"none",borderRadius:6,padding:"6px 12px",cursor:hearingPackGenerating?"not-allowed":"pointer",fontFamily:FONT.sans,flexShrink:0}}>{hearingPackGenerating?"Generating…":"Generate Hearing Pack"}</button>
         )}
       </div>
       {/* Human UAT remediation, Batch 2 hardening — the original UAT
@@ -42,7 +43,7 @@ export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate,
         <div style={{padding:"10px 16px",background:"#E8F5EE",borderBottom:"1px solid #D5EBDF",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{fontSize:13,color:"#1A7A4A",fontWeight:600}}>Hearing pack ready</div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-            <button onClick={()=>window.open(hearingPackReady.dataUrl,"_blank")} style={{fontSize:11,fontWeight:600,color:"#fff",background:"#1A7A4A",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Review</button>
+            <button onClick={()=>window.open(hearingPackReady.dataUrl,"_blank")} style={{fontSize:11,fontWeight:600,color:"#fff",background:"#1A7A4A",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:FONT.sans}}>Review</button>
             <button onClick={onDismissHearingPackReady} aria-label="Dismiss" style={{fontSize:13,color:"#6B6375",background:"none",border:"none",cursor:"pointer",padding:"2px 4px"}}>×</button>
           </div>
         </div>
@@ -51,7 +52,7 @@ export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate,
         <div style={{padding:"12px 16px",borderBottom:"1px solid #F5F1EA",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{fontSize:11,color:"#9B9098"}}>Draft:</span>
           {CORRESPONDENCE_TYPES.map(t=>(
-            <button key={t.id} onClick={()=>onDraftCorrespondence(cs, t.id)} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{t.label}</button>
+            <button key={t.id} onClick={()=>onDraftCorrespondence(cs, t.id)} style={{fontSize:11,color:"#6B6375",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontFamily:FONT.sans}}>{t.label}</button>
           ))}
         </div>
       )}
@@ -67,7 +68,7 @@ export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate,
               </div>
             </div>
             {(d.kind==="letter"||d.kind==="report")&&(
-              <button onClick={()=>{setLetterOutput(d.content);setScreen(screens.LETTER);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"4px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500,flexShrink:0}}>View</button>
+              <button onClick={()=>{setLetterOutput(d.content);setScreen(screens.LETTER);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"4px 10px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,flexShrink:0}}>View</button>
             )}
             {d.kind==="evidence"&&d.dataUrl&&(
               <a href={d.dataUrl} download={d.label} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",borderRadius:4,padding:"4px 10px",textDecoration:"none",fontWeight:500,flexShrink:0}}>Download</a>

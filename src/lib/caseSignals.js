@@ -8,7 +8,7 @@ import { newId } from './ids.js';
 export const SIGNAL_TYPES = [
   { id: "next_action", label: "Next best action", color: "#7C5CFC" },
   { id: "inconsistency", label: "Potential inconsistency", color: "#B87520" },
-  { id: "unanswered_question", label: "Unanswered question", color: "#1C5AA0" },
+  { id: "unanswered_question", label: "Unanswered question", color: "#5E627A" },
   { id: "process_risk", label: "Procedural guardrail", color: "#C84B2F" },
 ];
 

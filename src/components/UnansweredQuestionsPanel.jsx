@@ -1,4 +1,4 @@
-import { COLOR, SPACE, TYPE } from '../styles/tokens';
+import { COLOR, SPACE, TYPE, FONT } from '../styles/tokens';
 import { CheckIcon } from './Icons';
 import { SignalCard } from './SignalCard';
 
@@ -19,7 +19,7 @@ export function UnansweredQuestionsPanel({ cs, covered = [], stillToExplore, loa
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:SPACE.sm}}>
         <div style={{...TYPE.sectionHeading,color:COLOR.inkFaint}}>Unanswered questions</div>
         <button onClick={()=>onGenerate(cs)} disabled={loading}
-          style={{fontSize:11,background:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"4px 10px",color:COLOR.inkSoft,cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          style={{fontSize:11,background:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"4px 10px",color:COLOR.inkSoft,cursor:loading?"not-allowed":"pointer",fontFamily:FONT.sans}}>
           {loading?"Reviewing the case…":(covered.length||stillToExplore.length)?"Refresh":"Review the case"}
         </button>
       </div>

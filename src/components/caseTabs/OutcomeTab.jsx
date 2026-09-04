@@ -1,5 +1,6 @@
 import { isGrievanceCase } from '../../lib/caseStage';
 import { getProcessType } from '../../lib/processStages';
+import { FONT } from '../../styles/tokens';
 
 // Phase 6.5 hardening (closes Prompt 16 audit finding H12, HIGH) — this
 // used to hardcode a fixed list of stage ids ("disciplinary"/"hearing"/
@@ -59,7 +60,7 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, canDecide 
       <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Issue {grievance?"grievance":"disciplinary"} outcome</div>
       <div style={{fontSize:12,color:"#6B6375",marginBottom:14}}>Once the hearing is complete, issue the written outcome. ACAS recommends within 5 working days of the hearing. The outcome letter starts the employee's 5-day appeal window.</div>
       {canDecide ? (
-        <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Issue outcome →</button>
+        <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Issue outcome →</button>
       ) : (
         <div style={{fontSize:12,color:"#9B9098"}}>Only HR or this case's Hearing Manager can issue the outcome.</div>
       )}

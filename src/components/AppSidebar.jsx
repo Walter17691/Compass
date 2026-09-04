@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { CompassLogo } from './CompassLogo';
 import { ActivityBell } from './ActivityBell';
-import { MenuIcon, CheckIcon, AskCompassIcon } from './Icons';
+import { MenuIcon, CheckIcon } from './Icons';
 import { CreateMenu } from './CreateMenu';
 import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { FONT, COLOR, SPACE, RADIUS } from '../styles/tokens';
@@ -42,6 +42,8 @@ const NavButton = ({s, l, screen, goToScreen, indent}) => {
   const active = screen===s;
   return (
     <button onClick={()=>goToScreen(s)}
+      onMouseEnter={e=>{if(!active) e.currentTarget.style.background=COLOR.purpleTint;}}
+      onMouseLeave={e=>{if(!active) e.currentTarget.style.background="none";}}
       style={{display:"flex",alignItems:"center",width:"100%",textAlign:"left",background:active?COLOR.purpleTint:"none",border:"none",color:active?COLOR.purple:COLOR.inkSoft,padding:indent?"8px 14px 8px 28px":"9px 14px",borderRadius:RADIUS.surface,fontSize:indent?13:13.5,fontWeight:active?600:400,cursor:"pointer",fontFamily:FONT.sans}}>
       {l}
     </button>
@@ -61,8 +63,10 @@ const AskCompassNavButton = ({ screen, goToScreen }) => {
   const active = screen===SCREENS.ASK_COMPASS;
   return (
     <button onClick={()=>goToScreen(SCREENS.ASK_COMPASS)}
+      onMouseEnter={e=>{if(!active) e.currentTarget.style.background=COLOR.purpleTint;}}
+      onMouseLeave={e=>{if(!active) e.currentTarget.style.background="none";}}
       style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:active?COLOR.purpleTint:"none",border:"none",color:active?COLOR.purple:COLOR.inkSoft,padding:"9px 14px",borderRadius:RADIUS.surface,fontSize:13.5,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>
-      <AskCompassIcon size={14} color={COLOR.purple}/> Ask Compass
+      <CompassLogo size={16}/> Ask Compass
     </button>
   );
 };
@@ -85,7 +89,7 @@ function SidebarGroup({ label, items, screen, goToScreen, expanded, onToggle }) 
     <div>
       <button onClick={onToggle} aria-expanded={expanded} aria-controls={groupId}
         style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.inkFaint,padding:"8px 14px",cursor:"pointer",fontFamily:FONT.sans}}>
-        <span style={{fontSize:10.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}</span>
+        <span style={{fontSize:12,fontWeight:700,color:COLOR.inkFaint}}>{label}</span>
         <ChevronIcon expanded={expanded}/>
       </button>
       {expanded&&(
@@ -154,7 +158,7 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
         <div role="menu" aria-label="Account" style={{...popoverStyle,minWidth:224,background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:6}}>
           {availableOrgs.length>1&&(
             <>
-              <div style={{padding:"6px 10px 2px",fontSize:10,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.06em",textTransform:"uppercase"}}>Organisation</div>
+              <div style={{padding:"6px 10px 2px",fontSize:11,fontWeight:700,color:COLOR.inkFaint}}>Organisation</div>
               {availableOrgs.map(o=>(
                 <button key={o.id} onClick={()=>{switchOrg(o.id);setShow(false);}}
                   style={{...menuItemStyle,background:o.id===org.id?COLOR.purpleTint:"none",color:o.id===org.id?COLOR.purple:COLOR.ink,fontWeight:o.id===org.id?600:400}}>
@@ -298,7 +302,7 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 8px 12px"}}>
         <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"0 6px",cursor:"pointer"}}>
           <CompassLogo size={30}/>
-          <span style={{fontFamily:FONT.serif,fontSize:17,color:COLOR.ink,letterSpacing:"-0.2px"}}>Compass</span>
+          <span style={{fontFamily:FONT.serif,fontSize:17,fontWeight:850,color:COLOR.ink,letterSpacing:"-0.055em"}}>Compass</span>
         </button>
         <ActivityBell auditLog={auditLog} orgId={org?.id}/>
       </div>
@@ -367,10 +371,10 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
         <div style={{padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:0,cursor:"pointer"}}>
             <CompassLogo size={28}/>
-            <span style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535"}}>Compass</span>
+            <span style={{fontFamily:FONT.serif,fontSize:16,fontWeight:850,color:COLOR.ink,letterSpacing:"-0.055em"}}>Compass</span>
           </button>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {meetingType&&<span style={{background:"#EDE8FF",color:"#7C5CFC",borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo?.employee||meetingType.label}</span>}
+            {meetingType&&<span style={{background:COLOR.purpleTint,color:COLOR.purple,borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo?.employee||meetingType.label}</span>}
             <ActivityBell auditLog={auditLog} orgId={org?.id}/>
             <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
           </div>
@@ -404,7 +408,7 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   }
 
   return (
-    <aside style={{width:224,flexShrink:0,height:"100vh",position:"sticky",top:0,background:COLOR.surface,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px",overflowX:"hidden"}}>
+    <aside style={{width:224,flexShrink:0,height:"100vh",position:"sticky",top:0,background:COLOR.rail,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px",overflowX:"hidden"}}>
       {sidebarBody}
     </aside>
   );

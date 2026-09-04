@@ -3,6 +3,7 @@ import { isGrievanceCase } from '../../lib/caseStage';
 import { isTerminalStatus, signatureStatusLabel } from '../../lib/eSignature';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
 import { SignedRecordModal } from '../SignedRecordModal';
+import { COLOR, FONT } from '../../styles/tokens';
 
 // Integrations & Workflow Automation (Phase 5, IP27, §21) — badge colour
 // per widened signing_requests status. sent/opened are both "still
@@ -67,11 +68,11 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
   const knownTerms = grievance ? ["grievance","appeal"] : ["investigation","disciplinary","appeal"];
   const otherMeetings = meetings.filter(m=>!knownTerms.some(t=>(m.type||"").toLowerCase().includes(t))).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const allStages = grievance ? [
-    {id:"hearing",label:"Grievance",meetings:grievanceMeetings,color:"#7C5CFC"},
+    {id:"hearing",label:"Grievance",meetings:grievanceMeetings,color:COLOR.purple},
     {id:"appeal",label:"Appeal",meetings:appealMeetings,color:"#B87520"},
     ...(otherMeetings.length>0?[{id:"other",label:"Other",meetings:otherMeetings,color:"#6B6375"}]:[]),
   ].filter(s=>s.meetings.length>0||s.id==="hearing") : [
-    {id:"investigation",label:"Investigation",meetings:invMeetings,color:"#7C5CFC"},
+    {id:"investigation",label:"Investigation",meetings:invMeetings,color:COLOR.purple},
     {id:"disciplinary",label:"Disciplinary",meetings:discMeetings,color:"#C84B2F"},
     {id:"appeal",label:"Appeal",meetings:appealMeetings,color:"#B87520"},
     ...(otherMeetings.length>0?[{id:"other",label:"Other",meetings:otherMeetings,color:"#6B6375"}]:[]),
@@ -105,13 +106,13 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
   // of the sign-status/notes controls that only make sense once the
   // meeting has actually been held.
   const ScheduledMeetingDetails = ({m}) => (
-    <div style={{marginTop:8,background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px"}}>
-      <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Scheduled — not yet held</div>
+    <div style={{marginTop:8,background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}33`,borderRadius:8,padding:"10px 12px"}}>
+      <div style={{fontSize:12,fontWeight:700,color:COLOR.purpleDeep,marginBottom:6}}>Scheduled — not yet held</div>
       {m.attendees?.length>0&&<div style={{fontSize:12,color:"#1A1535",marginBottom:6}}>Attendees: {m.attendees.join(", ")}</div>}
       {m.agenda&&<div style={{fontSize:12,color:"#1A1535",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:m.prepQuestions?.length?8:0}}>{m.agenda}</div>}
       {m.prepQuestions?.length>0&&(
         <div>
-          <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",letterSpacing:0.5,textTransform:"uppercase",marginBottom:4}}>Prep questions</div>
+          <div style={{fontSize:12,fontWeight:700,color:COLOR.purpleDeep,marginBottom:4}}>Prep questions</div>
           {m.prepQuestions.map(q=>(
             <div key={q.id} style={{fontSize:12,color:"#1A1535",marginBottom:2}}>{q.essential?"● ":"○ "}{q.text}</div>
           ))}
@@ -130,10 +131,10 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
         <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
           {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":"#B87520",background:m.riskScore.rating==="HIGH"?"#FEF0EB":"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
           {m.signStatus&&SIGN_STATUS_STYLE[m.signStatus]&&<span style={{fontSize:10,color:SIGN_STATUS_STYLE[m.signStatus].color,background:SIGN_STATUS_STYLE[m.signStatus].bg,borderRadius:4,padding:"2px 7px",fontWeight:600}}>{signatureStatusLabel(m.signStatus)}{(m.signStatus==="sent"||m.signStatus==="opened")?" — awaiting signature":""}</span>}
-          {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>markMeetingSigned(m)} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark signed</button>}
+          {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>markMeetingSigned(m)} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans}}>Mark signed</button>}
           {m.notetakerNotesStatus==="submitted"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes awaiting review</span>}
           {m.notetakerNotesStatus==="reviewed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes reviewed</span>}
-          {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
+          {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>View notes</button>}
           {/* Human UAT remediation, Batch 2, Part 9 — the only place the
               actual signature/acknowledgement was ever visible was the
               external, time-limited /sign/[id] link. "View notes" above
@@ -142,7 +143,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
               signed copy itself, reading the exact fields the badge above
               already reads, not a second status source. */}
           {m.record&&m.signStatus&&isTerminalStatus(m.signStatus)&&m.signStatus!=="declined"&&(
-            <button onClick={()=>setViewingSignedMeeting(m)} style={{fontSize:11,background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:6,padding:"4px 10px",color:"#1A7A4A",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View signed copy</button>
+            <button onClick={()=>setViewingSignedMeeting(m)} style={{fontSize:11,background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:6,padding:"4px 10px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View signed copy</button>
           )}
         </div>
       </div>
@@ -160,13 +161,13 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
       {!m.record&&(m.agenda||m.prepQuestions?.length>0||m.attendees?.length>0)&&<ScheduledMeetingDetails m={m}/>}
       {m.record&&m.unresolvedSuggestions?.length>0&&(onAcceptSavedSuggestion||onDismissSavedSuggestion)&&(
         <div style={{marginTop:8,background:"#FDF3E8",border:"1px solid #E8C088",borderRadius:8,padding:"10px 12px"}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#8A5A1E",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Not actioned during the meeting</div>
+          <div style={{fontSize:12,fontWeight:700,color:"#8A5A1E",marginBottom:6}}>Not actioned during the meeting</div>
           {m.unresolvedSuggestions.map((s,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"4px 0"}}>
               <span style={{fontSize:12,color:"#1A1535"}}>{SUGGESTION_LABEL[s.kind]?.(s)||s.description}</span>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
-                <button onClick={()=>onAcceptSavedSuggestion?.(cs,m.id,s)} style={{fontSize:11,color:"#fff",background:"#7C5CFC",border:"none",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>
-                <button onClick={()=>onDismissSavedSuggestion?.(cs,m.id,s)} style={{fontSize:11,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                <button onClick={()=>onAcceptSavedSuggestion?.(cs,m.id,s)} style={{fontSize:11,color:"#fff",background:COLOR.purple,border:"none",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Accept</button>
+                <button onClick={()=>onDismissSavedSuggestion?.(cs,m.id,s)} style={{fontSize:11,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontFamily:FONT.sans}}>Dismiss</button>
               </div>
             </div>
           ))}
@@ -176,7 +177,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
         <div style={{marginTop:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:8,padding:"10px 12px"}}>
           <div style={{fontSize:11,color:"#9B9098",marginBottom:6}}>Submitted by {m.notetakerNotesSubmittedBy||"the notetaker"}{m.notetakerNotesSubmittedAt?" · "+fmtDate(m.notetakerNotesSubmittedAt):""}</div>
           <div style={{fontSize:13,color:"#1A1535",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:10}}>{m.notetakerNotes}</div>
-          <button onClick={()=>markNotetakerNotesReviewed(m)} style={{fontSize:11,background:"#1A7A4A",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Mark reviewed</button>
+          <button onClick={()=>markNotetakerNotesReviewed(m)} style={{fontSize:11,background:"#1A7A4A",border:"none",borderRadius:6,padding:"5px 12px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Mark reviewed</button>
         </div>
       )}
     </div>
@@ -189,7 +190,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
       <div style={{display:"flex",gap:2,marginBottom:16}}>
         {allStages.map(s=>(
           <button key={s.id} onClick={()=>setActiveCaseStage(s.id)}
-            style={{padding:"6px 14px",borderRadius:6,border:"none",background:activeCaseStage===s.id||(!activeCaseStage&&s.id===allStages[0].id)?"#F5F3FF":"none",color:activeStage.id===s.id?s.color:"#6B6375",fontWeight:activeStage.id===s.id?600:400,fontSize:13,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",display:"flex",alignItems:"center",gap:5}}>
+            style={{padding:"6px 14px",borderRadius:6,border:"none",background:activeCaseStage===s.id||(!activeCaseStage&&s.id===allStages[0].id)?COLOR.purpleTint:"none",color:activeStage.id===s.id?s.color:"#6B6375",fontWeight:activeStage.id===s.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,display:"flex",alignItems:"center",gap:5}}>
             {s.label}
             {s.meetings.length>0&&<span style={{fontSize:10,background:activeStage.id===s.id?s.color:"#E8E0D0",color:activeStage.id===s.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{s.meetings.length}</span>}
           </button>
@@ -199,8 +200,8 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
       {activeStage.meetings.length>0?(
         <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
           <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{fontSize:11,fontWeight:700,color:activeStage.color,letterSpacing:"0.5px",textTransform:"uppercase"}}>Meetings ({activeStage.meetings.length})</div>
-            <button onClick={()=>startMeeting(typeFor(activeStage.id))} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>+ Add meeting</button>
+            <div style={{fontSize:14,fontWeight:700,color:activeStage.color}}>Meetings ({activeStage.meetings.length})</div>
+            <button onClick={()=>startMeeting(typeFor(activeStage.id))} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>+ Add meeting</button>
           </div>
           <div style={{padding:"0 16px"}}>
             {activeStage.meetings.map((m,i)=><MeetingRow key={m.id||i} m={m}/>)}
@@ -209,7 +210,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
       ):(
         <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0",marginBottom:16}}>
           <div style={{fontSize:14,color:"#9B9098",marginBottom:12}}>No {activeStage.label.toLowerCase()} meetings yet</div>
-          <button onClick={()=>startMeeting(typeFor(activeStage.id))} style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Start {activeStage.label.toLowerCase()} meeting</button>
+          <button onClick={()=>startMeeting(typeFor(activeStage.id))} style={{background:COLOR.purple,border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Start {activeStage.label.toLowerCase()} meeting</button>
         </div>
       )}
 
@@ -217,8 +218,8 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
         <>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Investigation report</div>
-              {cs.investigationReport&&<button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(screens.LETTER);}} style={{fontSize:11,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:500}}>View report</button>}
+              <div style={{fontSize:14,fontWeight:700,color:COLOR.purple}}>Investigation report</div>
+              {cs.investigationReport&&<button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(screens.LETTER);}} style={{fontSize:11,color:COLOR.purple,background:COLOR.purpleTint,border:"none",borderRadius:4,padding:"3px 10px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View report</button>}
             </div>
             <div style={{padding:"14px 16px"}}>{
               cs.investigationReport?(
@@ -227,7 +228,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
                 <div>
                   <div style={{fontSize:13,color:"#6B6375",marginBottom:12}}>Investigation meetings recorded. Ready to conclude.</div>
                   <button disabled={concludingInvestigation} aria-busy={concludingInvestigation} onClick={()=>attemptSubmitInvestigation(cs.id)}
-                    style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:concludingInvestigation?"not-allowed":"pointer",opacity:concludingInvestigation?0.6:1,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    style={{background:"#1C1820",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,color:"#fff",fontWeight:600,cursor:concludingInvestigation?"not-allowed":"pointer",opacity:concludingInvestigation?0.6:1,fontFamily:FONT.sans}}>
                     {concludingInvestigation?"Generating report...":"Conclude investigation & generate report"}
                   </button>
                   {/* Human UAT remediation, Batch 2, Part 12 — the report
@@ -249,10 +250,10 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
             }</div>
           </div>
           {(cs.investigationReport || (cs.meetings||[]).some(m=>(m.type||"").toLowerCase().includes("investigation")&&m.signStatus==="signed")) && !cs.disciplinaryOfficer && (
-            <div style={{marginTop:12,padding:"14px 16px",background:"#EDE8FF",borderRadius:12,border:"1px solid #C8BCFF"}}>
+            <div style={{marginTop:12,padding:"14px 16px",background:COLOR.purpleTint,borderRadius:12,border:`1px solid ${COLOR.purple}55`}}>
               <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Investigation complete</div>
               <div style={{fontSize:12,color:"#6B6375",marginBottom:12}}>Appoint a disciplinary officer to continue the process.</div>
-              <button onClick={()=>setShowHandoffModal(true)} style={{fontSize:13,background:"#7C5CFC",border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Appoint disciplinary officer →</button>
+              <button onClick={()=>setShowHandoffModal(true)} style={{fontSize:13,background:COLOR.purple,border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Appoint disciplinary officer →</button>
             </div>
           )}
           {cs.disciplinaryOfficer && (

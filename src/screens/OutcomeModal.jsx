@@ -3,6 +3,7 @@ import { approvalActionForOutcome, approvalActionLabel } from '../lib/approvals'
 import { computeDecisionQualityGaps } from '../lib/decisionQuality';
 import { DecisionQualityCheckModal } from '../components/DecisionQualityCheckModal';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { COLOR, FONT } from '../styles/tokens';
 
 // Process Intelligence (P9) — issuing the outcome itself is unchanged
 // (case saved, letter drafted); for
@@ -126,7 +127,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
         </div>
         <div style={{marginBottom:16}}>
           <label htmlFor="outcome-type" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Outcome decision</label>
-          <select id="outcome-type" value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:outcomeType?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+          <select id="outcome-type" value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:outcomeType?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
             <option value="">Select outcome…</option>
             <option value="No further action">No further action</option>
             <option value="First written warning">First written warning</option>
@@ -138,19 +139,19 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
         </div>
         <div style={{marginBottom:20}}>
           <label htmlFor="outcome-notes" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Notes <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-          <textarea id="outcome-notes" value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Any additional notes…" rows={3} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+          <textarea id="outcome-notes" value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Any additional notes…" rows={3} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
         </div>
         <div style={{background:"#FFF8F0",border:"1px solid #E8622A33",borderRadius:8,padding:"10px 14px",marginBottom:outcomeType&&approvalActionForOutcome(outcomeType)?10:20,fontSize:12,color:"#E8622A"}}>
           Issuing this outcome starts the employee's 5 working day appeal window (ACAS Code).
         </div>
         {outcomeType&&approvalActionForOutcome(outcomeType)&&(
-          <div style={{background:"#F5F3FF",border:"1px solid #D4C9F5",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:"#5B3FD4"}}>
+          <div style={{background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}44`,borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:COLOR.purpleDeep}}>
             {approvalActionLabel(approvalActionForOutcome(outcomeType))} requires sign-off — this will also open an approval request, visible on the case's Overview tab.
           </div>
         )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button onClick={close} disabled={saving} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:saving?"not-allowed":"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
-          <button disabled={!outcomeType||saving} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType||saving?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>{saving?"Recording outcome…":"Issue outcome & generate letter"}</button>
+          <button onClick={close} disabled={saving} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:saving?"not-allowed":"pointer",color:"#6B6375",fontFamily:FONT.sans}}>Cancel</button>
+          <button disabled={!outcomeType||saving} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType||saving?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Recording outcome…":"Issue outcome & generate letter"}</button>
         </div>
       </div>
     </div>

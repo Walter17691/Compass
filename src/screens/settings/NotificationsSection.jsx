@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Btn, Card } from '../../components/Primitives';
+import { FONT, COLOR } from '../../styles/tokens';
 
 export function NotificationsSection({ dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook }) {
   const [webhookUrlDraft, setWebhookUrlDraft] = useState(orgWebhookUrl||"");
@@ -31,10 +32,10 @@ export function NotificationsSection({ dueSoon, caseTasks, createCaseTask, reque
                   <span style={{color:"#6B6880",marginLeft:8}}>{d.label}</span>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                  <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:"JetBrains Mono,monospace"}}>{d.overdue?`${d.daysOverdue}d overdue`:`${d.daysLeft}d`}</span>
+                  <span style={{color:d.overdue?"#E8622A":"#888",fontFamily:FONT.mono}}>{d.overdue?`${d.daysOverdue}d overdue`:`${d.daysLeft}d`}</span>
                   {d.caseId&&createCaseTask&&!openTaskKeys.has(d.caseId+"::"+d.label)&&(
                     <button onClick={()=>createCaseTask(d.caseId, {name:d.label, dueDate:d.deadlineDate, priority:d.overdue?"high":"normal"})}
-                      style={{fontSize:10,background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",color:"#7C5CFC",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",whiteSpace:"nowrap"}}>
+                      style={{fontSize:10,background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",color:COLOR.purple,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
                       + Create task
                     </button>
                   )}

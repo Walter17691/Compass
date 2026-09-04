@@ -14,28 +14,44 @@
 // surface's flat border + radius 8) read as a visibly different, heavier
 // design language wherever it's used — now a flat bordered surface
 // matching the rest of the product.
-import { COLOR, RADIUS, SPACE, FONT } from '../styles/tokens';
+import { COLOR, RADIUS, SPACE, FONT, TYPE, GRADIENT } from '../styles/tokens';
 
+// Design spec §8 "pill" role — in practice a low-radius rounded-rect
+// chip (24px tall, 7px radius), not a true stadium pill; kept the
+// existing `Badge` name since every consumer already calls it that.
 export function Badge({ children, color=COLOR.purple }) {
-  return <span style={{fontSize:9, fontWeight:700, letterSpacing:1, color, background:color+"18", border:`1px solid ${color}33`, borderRadius:4, padding:"2px 7px"}}>{children}</span>;
+  return <span style={{...TYPE.pill, color, background:color+"18", border:`1px solid ${color}33`, borderRadius:RADIUS.chip, height:24, display:"inline-flex", alignItems:"center", padding:"0 9px", boxSizing:"border-box"}}>{children}</span>;
 }
 
 export function Btn({ children, onClick, variant="primary", disabled, style={} }) {
-  const base = { border:"none", borderRadius:RADIUS.surface, padding:"10px 20px", fontSize:13, fontWeight:600, cursor:disabled?"not-allowed":"pointer", transition:"all 0.15s", opacity:disabled?0.4:1, letterSpacing:0.2, fontFamily:FONT.sans, ...style };
+  const base = { border:"none", borderRadius:RADIUS.button, height:42, padding:"0 18px", boxSizing:"border-box", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:TYPE.button.fontSize, fontWeight:variant==="primary"?700:TYPE.button.fontWeight, cursor:disabled?"not-allowed":"pointer", transition:"background 0.16s ease, box-shadow 0.16s ease", opacity:disabled?0.4:1, fontFamily:FONT.sans, ...style };
   const vars = {
-    primary: { background:COLOR.purple, color:"#fff" },
-    secondary: { background:COLOR.surface, border:`1px solid ${COLOR.border}`, color:COLOR.inkSoft },
+    primary: { background:GRADIENT, color:"#fff" },
+    secondary: { background:COLOR.surface, border:`1px solid ${COLOR.borderStrong}`, color:COLOR.ink },
     ghost: { background:"none", border:"none", color:COLOR.inkSoft },
     danger: { background:"none", border:`1px solid ${COLOR.red}44`, color:COLOR.red },
-    blue: { background:"#1C5AA0", color:"#fff" },
+    // Was a solid blue (#1C5AA0) — the design spec has no blue application
+    // accent. These 4 call sites (Redundancy/Develop/Letter/Branding —
+    // "Mark case complete"/"Save to case"/"Upload .docx template") are
+    // ordinary strong actions, not urgency or brand/interactive moments,
+    // so they map to a solid neutral-ink fill rather than violet (which
+    // would have made them read as the page's primary action) or a
+    // downgraded outline (which would have lost their intended weight).
+    // Renamed from "blue" to "dark" since the variant key describing a
+    // colour it no longer renders would be actively misleading.
+    dark: { background:COLOR.ink, color:"#fff" },
   };
   return <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{...base,...vars[variant]}}>{children}</button>;
 }
 
 export function Card({ children, style={}, ...rest }) {
-  return <div style={{background:COLOR.surface, border:`1px solid ${COLOR.border}`, borderRadius:RADIUS.surface, padding:SPACE.xl, ...style}} {...rest}>{children}</div>;
+  return <div style={{background:COLOR.surface, border:`1px solid ${COLOR.border}`, borderRadius:RADIUS.card, boxShadow:"0 1px 2px rgba(15,18,36,0.04)", padding:SPACE.xl, ...style}} {...rest}>{children}</div>;
 }
 
+// Design spec §5 "Section title" — sentence case, 15px/700, no uppercase
+// tracking and no chip/tint treatment (the spec is explicit: "No
+// uppercase tracked-label styling. Sentence case throughout."), reversing
+// this component's previous eyebrow-badge look.
 export function SectionTitle({ children }) {
-  return <div style={{fontSize:10, fontWeight:700, letterSpacing:1.5, color:COLOR.purple, background:COLOR.purple+"18", border:`1px solid ${COLOR.purple}33`, borderRadius:4, padding:"3px 8px", display:"inline-block", marginBottom:14}}>{children}</div>;
+  return <div style={{...TYPE.sectionHeading, color:COLOR.ink, marginBottom:14}}>{children}</div>;
 }

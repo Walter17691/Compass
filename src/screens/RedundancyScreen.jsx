@@ -309,7 +309,7 @@ export function RedundancyScreen({ activeRedundancy, setActiveRedundancy, redund
                       </div>
                     </div>
                   ))}
-                  <Btn variant="blue" onClick={()=>updateRedundancyCase({status:"complete"})} style={{marginTop:12}}>Mark case complete</Btn>
+                  <Btn variant="dark" onClick={()=>updateRedundancyCase({status:"complete"})} style={{marginTop:12}}>Mark case complete</Btn>
                 </Card>
               )}
             </div>

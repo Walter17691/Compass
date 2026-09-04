@@ -1,4 +1,5 @@
 import { Component } from "react";
+import { FONT } from "./styles/tokens";
 
 export default class ErrorBoundary extends Component {
   state = { error: null };
@@ -25,7 +26,7 @@ export default class ErrorBoundary extends Component {
             <button onClick={()=>window.location.reload()} style={{fontSize:13,padding:"9px 18px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Reload page</button>
           </div>
           {this.state.error?.message && (
-            <div style={{fontSize:11,color:"#9B9098",fontFamily:"JetBrains Mono,monospace",background:"#FDFAF5",borderRadius:8,padding:"10px 12px",textAlign:"left",wordBreak:"break-word"}}>
+            <div style={{fontSize:11,color:"#9B9098",fontFamily:FONT.mono,background:"#FDFAF5",borderRadius:8,padding:"10px 12px",textAlign:"left",wordBreak:"break-word"}}>
               {this.state.error.message}
             </div>
           )}

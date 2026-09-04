@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { FONT } from '../styles/tokens';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus, APPEAL_OUTCOMES, appealOutcomeMeta } from '../lib/allegations';
 import { computeOutcomeDistribution, computeSanctionDistribution, comparableCaseSummaries } from '../lib/outcomeConsistency';
 import { appealMeetingsForCase } from '../lib/appealReview';
@@ -8,7 +9,7 @@ import { ConsistencyPanel } from './ConsistencyPanel';
 import { AppealGroundCard } from './AppealGroundCard';
 import { PolicyCitation } from './PolicyCitation';
 
-const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
+const inputStyle = { width:"100%", fontSize:13, border:"1px solid #E8E0D0", borderRadius:6, padding:"8px 10px", color:"#1A1535", outline:"none", fontFamily:FONT.sans, boxSizing:"border-box" };
 const labelStyle = { fontSize:11, color:"#9B9098", display:"block", marginBottom:4 };
 
 // The AI case overview and case-scoped AI Q&A (both later phases) are
@@ -118,8 +119,8 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
       <ConsistencyPanel cs={cs} sanctionDistribution={sanctionDistribution} comparableCases={comparableCases} consistencyReview={consistencyReview} consistencyReviewLoading={consistencyReviewLoading} onGenerateReview={generateConsistencyReview} onAskWhy={onAskWhy}/>
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Allegations ({allegations.length})</div>
-        <button onClick={()=>setShowNew(v=>!v)} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{showNew?"Cancel":"+ Add allegation"}</button>
+        <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Allegations ({allegations.length})</div>
+        <button onClick={()=>setShowNew(v=>!v)} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>{showNew?"Cancel":"+ Add allegation"}</button>
       </div>
       <div style={{padding:"16px"}}>
         {showNew && (
@@ -142,7 +143,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                 <input id="new-allegation-people" style={inputStyle} value={newForm.peopleInvolved} placeholder="Names, witnesses" onChange={e=>setNewForm(f=>({...f,peopleInvolved:e.target.value}))} />
               </div>
             </div>
-            <button onClick={submitNew} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Add allegation</button>
+            <button onClick={submitNew} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Add allegation</button>
           </div>
         )}
 
@@ -213,7 +214,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
 
                   {outcomeDistribution.applicable && (
                     <div style={{marginBottom:12,background:"#FDFAF5",border:"1px solid #EDE5D8",borderRadius:8,padding:12}}>
-                      <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>How similar cases have been decided</div>
+                      <div style={{fontSize:11,fontWeight:700,color:"#6B6375",marginBottom:8}}>How similar cases have been decided</div>
                       <div style={{fontSize:11,color:"#9B9098",marginBottom:10}}>Based on {outcomeDistribution.total} closed {cs.caseType} case{outcomeDistribution.total===1?"":"s"} at this organisation. For context only — every case turns on its own facts.</div>
                       {outcomeDistribution.distribution.map(d=>(
                         <div key={d.status} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
@@ -248,7 +249,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                         {/* Section heading, not a single control's label — the appeal outcome <select> below has its own real label. */}
                         <div style={{...labelStyle,marginBottom:0}}>Appeal review</div>
-                        <button onClick={()=>generateAppealReview(cs)} disabled={appealReviewLoading} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 10px",color:"#5B3FD4",cursor:appealReviewLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                        <button onClick={()=>generateAppealReview(cs)} disabled={appealReviewLoading} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 10px",color:"#5B3FD4",cursor:appealReviewLoading?"not-allowed":"pointer",fontFamily:FONT.sans}}>
                           {appealReviewLoading?"Reviewing…":"Generate appeal review"}
                         </button>
                       </div>
@@ -286,14 +287,14 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                     <DraftTextarea id={`allegation-witness-evidence-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.witnessEvidence||""} onCommit={v=>patchAllegation(a.id,{witnessEvidence:v})} />
                   </div>
 
-                  <div style={{fontSize:11,fontWeight:700,color:"#6B6375",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Linked evidence ({linked.length})</div>
+                  <div style={{fontSize:11,fontWeight:700,color:"#6B6375",marginBottom:8}}>Linked evidence ({linked.length})</div>
                   {linked.map(ev => (
                     <div key={ev.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F5F1EA",gap:8}}>
                       <div style={{fontSize:12,color:"#1A1535",flex:1,minWidth:0}}>{ev.name}</div>
                       <select aria-label={`Evidence stance for ${ev.name}`} value={ev.stance||"neutral"} onChange={e=>linkEvidence(a.id, ev.id, e.target.value)} style={{fontSize:11,border:"1px solid #E8E0D0",borderRadius:4,padding:"2px 6px",color:"#6B6375"}}>
                         {EVIDENCE_STANCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </select>
-                      <button onClick={()=>unlinkEvidence(ev.id)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Unlink</button>
+                      <button onClick={()=>unlinkEvidence(ev.id)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Unlink</button>
                     </div>
                   ))}
                   {evidence.filter(ev=>!ev.allegationId).length>0 && (
@@ -307,7 +308,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   {evidence.length===0 && <div style={{fontSize:12,color:"#9B9098"}}>No evidence uploaded to this case yet.</div>}
 
                   <div style={{marginTop:14,textAlign:"right"}}>
-                    <button onClick={()=>removeAllegationConfirm(a)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Remove allegation</button>
+                    <button onClick={()=>removeAllegationConfirm(a)} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Remove allegation</button>
                   </div>
                 </div>
               )}

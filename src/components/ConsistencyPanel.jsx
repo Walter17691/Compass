@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FONT } from '../styles/tokens';
 
 // Process Intelligence (P14, §11+§12 — one phase, §12 is a hard
 // constraint on §11's design, not separable). Extends the sanction/
@@ -16,9 +17,9 @@ export function ConsistencyPanel({ cs, sanctionDistribution, comparableCases, co
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:16,marginBottom:16}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,gap:10,flexWrap:"wrap"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:0.5,textTransform:"uppercase"}}>Consistency check</div>
+        <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Consistency check</div>
         {comparableCases.length>=3 && (
-          <button onClick={()=>onGenerateReview(cs)} disabled={consistencyReviewLoading} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:consistencyReviewLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <button onClick={()=>onGenerateReview(cs)} disabled={consistencyReviewLoading} style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:consistencyReviewLoading?"not-allowed":"pointer",fontFamily:FONT.sans}}>
             {consistencyReviewLoading?"Reviewing…":"Generate consistency review"}
           </button>
         )}
@@ -50,17 +51,17 @@ export function ConsistencyPanel({ cs, sanctionDistribution, comparableCases, co
               // source to cite is that anonymised basis itself, not individual
               // case ids that would defeat the anonymity.
               sourceRefs:comparableCases.length?[{kind:"context", label:"Anonymised comparable cases", detail:comparableCases.length+" closed "+cs.caseType+" case"+(comparableCases.length!==1?"s":"")+" at this organisation, matched by case type and finding."}]:[],
-            })} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Ask why</button>
+            })} style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Ask why</button>
           </div>
           {consistencyReview.similarityReasoning && (
             <div style={{marginBottom:consistencyReview.distinguishingFeatures?10:0}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#7C5CFC",textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Why these cases are comparable</div>
+              <div style={{fontSize:12,fontWeight:700,color:"#7C5CFC",marginBottom:4}}>Why these cases are comparable</div>
               <div style={{fontSize:13,color:"#3D3560",lineHeight:1.6}}>{consistencyReview.similarityReasoning}</div>
             </div>
           )}
           {consistencyReview.distinguishingFeatures && (
             <div>
-              <div style={{fontSize:10,fontWeight:700,color:"#B87520",textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>What&rsquo;s different about this case</div>
+              <div style={{fontSize:12,fontWeight:700,color:"#B87520",marginBottom:4}}>What&rsquo;s different about this case</div>
               <div style={{fontSize:13,color:"#6B5218",lineHeight:1.6}}>{consistencyReview.distinguishingFeatures}</div>
             </div>
           )}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabase'
+import { CompassLogo } from './components/CompassLogo'
 
 const V = "#7C5CFC"
 const BG = "#FDFAF5"
@@ -7,18 +8,6 @@ const CARD = "#FFFFFF"
 const BORDER = "#E8E0D0"
 const TEXT = "#1C1820"
 const MUTED = "#6B6375"
-
-function CompassLogo({ size=36 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="45" stroke={V} strokeWidth="3" fill="none"/>
-      <polygon points="50,14 54,50 50,50 46,50" transform="rotate(40 50 50)" fill={V}/>
-      <polygon points="50,86 54,50 50,50 46,50" transform="rotate(40 50 50)" fill={V} opacity="0.2"/>
-      <circle cx="50" cy="50" r="4" fill={BG}/>
-      <circle cx="50" cy="50" r="2" fill={V}/>
-    </svg>
-  )
-}
 
 export default function OrgSetup({ user, onComplete, onCancel }) {
   const pendingInvite = localStorage.getItem('compass_pending_invite') || ''
@@ -33,7 +22,7 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
     width:"100%", background:BG, border:`1.5px solid ${BORDER}`,
     borderRadius:8, padding:"11px 14px", fontSize:14,
     outline:"none", color:TEXT, boxSizing:"border-box", marginBottom:12,
-    fontFamily:"DM Sans, system-ui, sans-serif"
+    fontFamily:"Archivo, system-ui, sans-serif"
   }
 
   const handleCreate = async () => {
@@ -90,34 +79,34 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
   }
 
   return (
-    <div style={{minHeight:"100vh",background:BG,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"DM Sans, system-ui, sans-serif"}}>
+    <div style={{minHeight:"100vh",background:BG,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"Archivo, system-ui, sans-serif"}}>
       <div style={{width:"100%",maxWidth:440}}>
         {onCancel&&(
-          <button onClick={onCancel} style={{background:"none",border:"none",color:MUTED,fontSize:13,cursor:"pointer",marginBottom:16,padding:0,fontFamily:"DM Sans, system-ui, sans-serif"}}>← Back to Compass</button>
+          <button onClick={onCancel} style={{background:"none",border:"none",color:MUTED,fontSize:13,cursor:"pointer",marginBottom:16,padding:0,fontFamily:"Archivo, system-ui, sans-serif"}}>← Back to Compass</button>
         )}
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{display:"flex",justifyContent:"center",marginBottom:16}}><CompassLogo size={48}/></div>
-          <h1 style={{fontFamily:"DM Serif Display, Georgia, serif",fontSize:28,color:TEXT,margin:"0 0 8px",fontWeight:400}}>{onCancel?"Add another organisation":"Welcome to Compass"}</h1>
+          <h1 style={{fontFamily:"Archivo, system-ui, sans-serif",fontSize:28,color:TEXT,margin:"0 0 8px",fontWeight:400}}>{onCancel?"Add another organisation":"Welcome to Compass"}</h1>
           <p style={{fontSize:13,color:MUTED,margin:0}}>{onCancel?"Create a new workspace or join one with an invite code":"Set up your team workspace to get started"}</p>
         </div>
 
         {!mode?(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <button onClick={()=>setMode('create')}
-              style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:"20px 24px",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans, system-ui, sans-serif"}}>
-              <div style={{fontSize:16,color:TEXT,fontWeight:600,marginBottom:4,fontFamily:"DM Serif Display, Georgia, serif"}}>Create a new team</div>
+              style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:"20px 24px",cursor:"pointer",textAlign:"left",fontFamily:"Archivo, system-ui, sans-serif"}}>
+              <div style={{fontSize:16,color:TEXT,fontWeight:600,marginBottom:4,fontFamily:"Archivo, system-ui, sans-serif"}}>Create a new team</div>
               <div style={{fontSize:13,color:MUTED}}>Start a new Compass workspace for your organisation</div>
             </button>
             <button onClick={()=>setMode('join')}
-              style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:"20px 24px",cursor:"pointer",textAlign:"left",fontFamily:"DM Sans, system-ui, sans-serif"}}>
-              <div style={{fontSize:16,color:TEXT,fontWeight:600,marginBottom:4,fontFamily:"DM Serif Display, Georgia, serif"}}>Join an existing team</div>
+              style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:"20px 24px",cursor:"pointer",textAlign:"left",fontFamily:"Archivo, system-ui, sans-serif"}}>
+              <div style={{fontSize:16,color:TEXT,fontWeight:600,marginBottom:4,fontFamily:"Archivo, system-ui, sans-serif"}}>Join an existing team</div>
               <div style={{fontSize:13,color:MUTED}}>Enter an invite code from your HR Director</div>
             </button>
           </div>
         ) : (
           <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:28}}>
-            <button onClick={()=>{setMode(null);setError(null);}} style={{background:"none",border:"none",color:MUTED,fontSize:13,cursor:"pointer",marginBottom:16,padding:0,fontFamily:"DM Sans, system-ui, sans-serif"}}>← Back</button>
-            <h2 style={{color:TEXT,fontSize:16,fontWeight:600,margin:"0 0 20px",fontFamily:"DM Serif Display, Georgia, serif"}}>
+            <button onClick={()=>{setMode(null);setError(null);}} style={{background:"none",border:"none",color:MUTED,fontSize:13,cursor:"pointer",marginBottom:16,padding:0,fontFamily:"Archivo, system-ui, sans-serif"}}>← Back</button>
+            <h2 style={{color:TEXT,fontSize:16,fontWeight:600,margin:"0 0 20px",fontFamily:"Archivo, system-ui, sans-serif"}}>
               {mode==='create'?'Create your team':'Join a team'}
             </h2>
 
@@ -129,17 +118,17 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
               </div>
             )}
 
-            <label htmlFor="org-setup-user-name" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+            <label htmlFor="org-setup-user-name" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,marginBottom:6}}>Your name</label>
             <input id="org-setup-user-name" placeholder="e.g. Sarah Jones" value={userName} onChange={e=>setUserName(e.target.value)} style={inp}/>
 
             {mode==='create'?(
               <>
-                <label htmlFor="org-setup-org-name" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Organisation name</label>
+                <label htmlFor="org-setup-org-name" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,marginBottom:6}}>Organisation name</label>
                 <input id="org-setup-org-name" placeholder="e.g. Acme Ltd HR Team" value={orgName} onChange={e=>setOrgName(e.target.value)} style={inp}/>
               </>
             ):(
               <>
-                <label htmlFor="org-setup-invite-code" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Invite code</label>
+                <label htmlFor="org-setup-invite-code" style={{display:"block",fontSize:10,fontWeight:600,color:MUTED,marginBottom:6}}>Invite code</label>
                 <input id="org-setup-invite-code" placeholder="e.g. ABC123" value={inviteCode} onChange={e=>setInviteCode(e.target.value)} style={{...inp,textTransform:"uppercase",letterSpacing:2}}/>
                 <div style={{fontSize:11,color:MUTED,margin:"-6px 0 12px"}}>You'll join as a Location Manager — an HR Director can grant broader access afterward from Settings.</div>
               </>
@@ -148,7 +137,7 @@ export default function OrgSetup({ user, onComplete, onCancel }) {
             <button
               onClick={mode==='create'?handleCreate:handleJoin}
               disabled={loading}
-              style={{width:"100%",background:V,border:"none",borderRadius:6,padding:"12px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer",opacity:loading?0.7:1,fontFamily:"DM Sans, system-ui, sans-serif"}}>
+              style={{width:"100%",background:V,border:"none",borderRadius:6,padding:"12px",fontSize:14,color:"#fff",fontWeight:600,cursor:"pointer",opacity:loading?0.7:1,fontFamily:"Archivo, system-ui, sans-serif"}}>
               {loading?'Setting up...':(mode==='create'?'Create team':'Join team')}
             </button>
           </div>

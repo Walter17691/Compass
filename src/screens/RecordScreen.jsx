@@ -1,4 +1,5 @@
 import { CompassLogo } from '../components/CompassLogo';
+import { COLOR, FONT } from '../styles/tokens';
 import { MDRenderer } from '../components/MDRenderer';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 import { MeetingQualityCheckModal } from '../components/MeetingQualityCheckModal';
@@ -257,13 +258,13 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
               )}
               {meetingActionSuggestions.some(s=>s.status==="pending")&&(
                 <div style={{marginBottom:10}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#1C5AA0",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Actions identified</div>
+                  <div style={{fontSize:11,fontWeight:700,color:COLOR.ink}}>Actions identified</div>
                   {meetingActionSuggestions.filter(s=>s.status==="pending").map(s=>(
                     <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:6}}>
                       <span style={{fontSize:11,color:"#3D3560",lineHeight:1.5,flex:1}}>{s.description}{s.suggestedOwner?" — "+s.suggestedOwner:""}{s.suggestedDueDate?" (by "+s.suggestedDueDate+")":""}</span>
                       <div style={{display:"flex",gap:4,flexShrink:0}}>
-                        <button onClick={()=>onAcceptMeetingActionSuggestion(s)} style={{fontSize:10,color:"#fff",background:"#1C5AA0",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Accept</button>
-                        <button onClick={()=>onDismissMeetingActionSuggestion(s.id)} style={{fontSize:10,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Dismiss</button>
+                        <button onClick={()=>onAcceptMeetingActionSuggestion(s)} style={{fontSize:10,color:"#fff",background:COLOR.purple,border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Accept</button>
+                        <button onClick={()=>onDismissMeetingActionSuggestion(s.id)} style={{fontSize:10,color:"#6B6375",background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontFamily:FONT.sans}}>Dismiss</button>
                       </div>
                     </div>
                   ))}

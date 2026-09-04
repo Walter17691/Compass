@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from '../lib/caseTimeline';
 import { computeStageProgress } from '../lib/processTimeline';
 import { Btn } from './Primitives';
+import { FONT } from '../styles/tokens';
 
 const TYPE_STYLE = {
   case: { color: "#6B6375", label: "Case" },
@@ -10,12 +11,12 @@ const TYPE_STYLE = {
   report: { color: "#7C5CFC", label: "Report" },
   outcome: { color: "#C84B2F", label: "Outcome" },
   allegation: { color: "#C84B2F", label: "Allegation" },
-  email: { color: "#1C5AA0", label: "Email" },
+  email: { color: "#5E627A", label: "Email" },
   document: { color: "#7C5CFC", label: "Document" },
   audit: { color: "#9B9098", label: "Activity" },
 };
 
-const selectStyle = { fontSize:12, border:"1px solid #E8E0D0", borderRadius:6, padding:"5px 8px", color:"#6B6375", fontFamily:"DM Sans,system-ui,sans-serif" };
+const selectStyle = { fontSize:12, border:"1px solid #E8E0D0", borderRadius:6, padding:"5px 8px", color:"#6B6375", fontFamily:FONT.sans };
 
 // Phase 8 of the reasoning-layer build-out (5 of 5 in the ER Intelligence
 // MVP) — still purely a read view over buildCaseTimeline()'s merge, no
@@ -69,7 +70,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
       <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Timeline ({entries.length})</div>
+        <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Timeline ({entries.length})</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {people.length>1 && (
             <select aria-label="Filter by person" value={personFilter} onChange={e=>setPersonFilter(e.target.value)} style={selectStyle}>
@@ -95,7 +96,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
           without its own expected evidence on file. Purely derived, no
           new source of truth. */}
       <div style={{padding:"14px 16px",borderBottom:"1px solid #EDE5D8",background:"#FDFAF5"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>
+        <div style={{fontSize:13,fontWeight:700,color:"#7C5CFC",marginBottom:10}}>
           {stageProgress.processType.label} process
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:stageProgress.missingSteps.length?10:0}}>
@@ -132,9 +133,9 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
               <div style={{flexShrink:0,width:8,height:8,borderRadius:"50%",background:meta.color,marginTop:5}}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:meta.color,textTransform:"uppercase",letterSpacing:"0.4px"}}>{meta.label}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:meta.color}}>{meta.label}</span>
                   <span style={{fontSize:11,color:"#9B9098"}}>{fmtDate(e.date)}</span>
-                  {e.linkTo && onOpenSource && <button onClick={()=>onOpenSource(e.linkTo)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Open source</button>}
+                  {e.linkTo && onOpenSource && <button onClick={()=>onOpenSource(e.linkTo)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Open source</button>}
                 </div>
                 {isEditing ? (
                   <div style={{marginTop:4,display:"flex",gap:6}}>
@@ -149,8 +150,8 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
                 {e.actor && <div style={{fontSize:11,color:"#9B9098",marginTop:1}}>{e.actor}</div>}
                 {!isEditing && (onEditDescription || onToggleExclude) && (
                   <div style={{display:"flex",gap:10,marginTop:4}}>
-                    {onEditDescription && <button onClick={()=>{setEditingKey(e.key);setEditText(e.description);}} style={{fontSize:10,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Edit</button>}
-                    {onToggleExclude && <button onClick={()=>onToggleExclude(cs,e.key)} style={{fontSize:10,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Exclude</button>}
+                    {onEditDescription && <button onClick={()=>{setEditingKey(e.key);setEditText(e.description);}} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Edit</button>}
+                    {onToggleExclude && <button onClick={()=>onToggleExclude(cs,e.key)} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Exclude</button>}
                   </div>
                 )}
               </div>

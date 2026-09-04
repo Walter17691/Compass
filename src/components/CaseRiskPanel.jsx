@@ -1,4 +1,4 @@
-import { COLOR } from '../styles/tokens';
+import { COLOR, FONT } from '../styles/tokens';
 import { RISK_CATEGORIES } from '../lib/caseRisk';
 
 // Process Intelligence (P15, §13) — the aggregated view over what P6
@@ -37,7 +37,7 @@ export function CaseRiskPanel({ riskItems = [], onAskWhy }) {
                 <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{item.label}</div>
                 {item.detail && <div style={{marginTop:2,fontSize:12,color:COLOR.inkSoft}}>{item.detail}</div>}
                 {onAskWhy && item.sourceRefs?.length>0 && (
-                  <button onClick={()=>onAskWhy({title:item.label, reasoning:item.detail, sourceRefs:item.sourceRefs})} style={{marginTop:4,fontSize:11,background:"none",border:"none",padding:0,color:COLOR.red,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Ask why</button>
+                  <button onClick={()=>onAskWhy({title:item.label, reasoning:item.detail, sourceRefs:item.sourceRefs})} style={{marginTop:4,fontSize:11,background:"none",border:"none",padding:0,color:COLOR.red,cursor:"pointer",fontFamily:FONT.sans}}>Ask why</button>
                 )}
               </div>
             </div>

@@ -18,7 +18,7 @@ import { AskHrPanel } from '../AskHrPanel';
 import { CaseRiskPanel } from '../CaseRiskPanel';
 import { ProcessChecklistPanel } from '../ProcessChecklistPanel';
 import { OccupationalHealthPanel } from '../OccupationalHealthPanel';
-import { COLOR, TYPE, RADIUS, SPACE } from '../../styles/tokens';
+import { COLOR, TYPE, RADIUS, SPACE, FONT } from '../../styles/tokens';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -510,7 +510,7 @@ export function OverviewTab({
           if(!ok) return;
           caseCtx.saveCases(caseCtx.cases.filter(x=>x.id!==cs.id));
           shell.setScreen(shell.screens.CASES);
-        }} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Delete case</button>
+        }} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Delete case</button>
       </div>
     </>
   );

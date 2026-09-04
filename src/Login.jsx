@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabase'
+import { CompassLogo } from './components/CompassLogo'
 
 const C = {
   bg: "#FDFAF5",
@@ -14,17 +15,6 @@ const C = {
   errorBg: "#FFF0ED",
   success: "#1A7A4A",
   successBg: "#E8F5EE",
-}
-
-function CompassLogo({ size = 44 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill={C.accent}/>
-      <polygon points="50,16 56,50 50,58 44,50" fill={C.bg}/>
-      <polygon points="50,84 44,50 50,42 56,50" fill="rgba(253,250,245,0.28)"/>
-      <circle cx="50" cy="50" r="5" fill={C.accent} stroke={C.bg} strokeWidth="2"/>
-    </svg>
-  )
 }
 
 export default function Login({ onLogin }) {
@@ -83,7 +73,7 @@ export default function Login({ onLogin }) {
     outline: "none",
     color: C.text,
     boxSizing: "border-box",
-    fontFamily: "DM Sans, system-ui, sans-serif",
+    fontFamily: "Archivo, system-ui, sans-serif",
     transition: "border-color 0.15s",
     ...extra
   })
@@ -105,7 +95,7 @@ export default function Login({ onLogin }) {
       alignItems: "center",
       justifyContent: "center",
       padding: 20,
-      fontFamily: "DM Sans, system-ui, sans-serif"
+      fontFamily: "Archivo, system-ui, sans-serif"
     }}>
       {/* Subtle background pattern */}
       <div style={{
@@ -121,9 +111,9 @@ export default function Login({ onLogin }) {
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
             <CompassLogo size={56} />
           </div>
-          <div style={{ fontFamily: "DM Serif Display, Georgia, serif", fontSize: 32, color: C.text, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 6 }}>Compass</div>
+          <div style={{ fontFamily: "Archivo, system-ui, sans-serif", fontSize: 32, color: C.text, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 6 }}>Compass</div>
           <div style={{ fontSize: 14, color: C.muted, marginBottom: 6, fontStyle: "italic" }}>Navigate HR with confidence.</div>
-          <div style={{ fontSize: 10, color: C.subtle, letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 500 }}>UK HR Intelligence</div>
+          <div style={{ fontSize: 11, color: C.subtle, fontWeight: 500 }}>UK HR intelligence</div>
         </div>
 
         {/* Card */}
@@ -139,7 +129,7 @@ export default function Login({ onLogin }) {
             fontWeight: 700,
             color: C.text,
             marginBottom: 24,
-            fontFamily: "DM Serif Display, Georgia, serif"
+            fontFamily: "Archivo, system-ui, sans-serif"
           }}>
             {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : 'Reset password'}
           </div>
@@ -265,7 +255,7 @@ export default function Login({ onLogin }) {
               </label>
               <button
                 onClick={() => { setMode('reset'); setError(null); setMessage(null); }}
-                style={{ background: "none", border: "none", fontSize: 12, color: C.accent, cursor: "pointer", fontFamily: "DM Sans, system-ui, sans-serif", fontWeight: 500 }}
+                style={{ background: "none", border: "none", fontSize: 12, color: C.accent, cursor: "pointer", fontFamily: "Archivo, system-ui, sans-serif", fontWeight: 500 }}
               >
                 Forgot password?
               </button>
@@ -288,7 +278,7 @@ export default function Login({ onLogin }) {
               fontSize: 14,
               fontWeight: 700,
               cursor: loading ? "not-allowed" : "pointer",
-              fontFamily: "DM Sans, system-ui, sans-serif",
+              fontFamily: "Archivo, system-ui, sans-serif",
               letterSpacing: "0.2px",
               transition: "background 0.15s",
               marginBottom: 16
@@ -302,17 +292,17 @@ export default function Login({ onLogin }) {
             {mode === 'login' && (
               <>
                 Don't have an account?{' '}
-                <button onClick={() => { setMode('signup'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "DM Sans, system-ui, sans-serif" }}>Create one</button>
+                <button onClick={() => { setMode('signup'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "Archivo, system-ui, sans-serif" }}>Create one</button>
               </>
             )}
             {mode === 'signup' && (
               <>
                 Already have an account?{' '}
-                <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "DM Sans, system-ui, sans-serif" }}>Sign in</button>
+                <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "Archivo, system-ui, sans-serif" }}>Sign in</button>
               </>
             )}
             {mode === 'reset' && (
-              <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "DM Sans, system-ui, sans-serif" }}>← Back to sign in</button>
+              <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "Archivo, system-ui, sans-serif" }}>← Back to sign in</button>
             )}
           </div>
         </div>

@@ -259,7 +259,7 @@ export function DevelopScreen({ devSession, setDevSession, devStep, setDevStep, 
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 <Btn onClick={()=>navigator.clipboard.writeText(devLetter)} style={{background:"#7C5CFC",border:"none"}}>Copy letter</Btn>
-                <Btn variant="blue" onClick={()=>{saveDevMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
+                <Btn variant="dark" onClick={()=>{saveDevMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
                 <Btn variant="ghost" onClick={()=>setDevStep("summary")}>← Back</Btn>
               </div>
             </>

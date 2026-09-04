@@ -5,7 +5,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { PageHeader } from '../components/design/PageHeader';
 
 export function WellbeingScreen({ wellbeingNotes, activeWellbeing, wellbeingView, setActiveWellbeing, setWellbeingView, toggleFollowUpDone, wellbeingForm, setWellbeingForm, addWellbeingNote }) {
-  const typeColors = {"chat":"#7C5CFC","eap":"#4A7C6F","adjustment":"#4A6FA5","crisis":"#E8622A","return":"#D4882A","checkin":"#888"};
+  const typeColors = {"chat":"#7C5CFC","eap":"#4A7C6F","adjustment":"#5E627A","crisis":"#E8622A","return":"#D4882A","checkin":"#888"};
   const allEmployees = [...new Set(wellbeingNotes.map(n=>n.employeeName))];
   const employeeNotes = activeWellbeing ? wellbeingNotes.filter(n=>n.employeeName===activeWellbeing).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)) : [];
   const overdueFollowUps = wellbeingNotes.filter(n=>!n.followUpDone&&n.followUpDate&&new Date(n.followUpDate.split("/").reverse().join("-"))<new Date());

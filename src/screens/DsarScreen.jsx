@@ -8,7 +8,7 @@ import { daysBetween } from '../lib/dateMath';
 import { authedFetch } from '../lib/authedFetch';
 import { WarningIcon } from '../components/Icons';
 import { PageHeader } from '../components/design/PageHeader';
-import { COLOR, RADIUS } from '../styles/tokens';
+import { COLOR, RADIUS, FONT } from '../styles/tokens';
 
 const STATUS_LABEL = { received:"Received", in_progress:"In progress", ready_to_send:"Ready to send", completed:"Completed" };
 
@@ -234,7 +234,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
           </div>
         )}
         {hasMore&&(
-          <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:COLOR.purple,fontWeight:600,fontFamily:FONT.sans}}>
             Load more ({visibleRequests.length} of {total})
           </button>
         )}

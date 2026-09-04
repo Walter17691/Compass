@@ -1,3 +1,5 @@
+import { CompassLogo } from './components/CompassLogo'
+
 const C = {
   bg: "#FDFAF5",
   card: "#FFFFFF",
@@ -9,21 +11,10 @@ const C = {
   subtle: "#9B9098",
 }
 
-function CompassLogo({ size = 44 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill={C.accent}/>
-      <polygon points="50,16 56,50 50,58 44,50" fill={C.bg}/>
-      <polygon points="50,84 44,50 50,42 56,50" fill="rgba(253,250,245,0.28)"/>
-      <circle cx="50" cy="50" r="5" fill={C.accent} stroke={C.bg} strokeWidth="2"/>
-    </svg>
-  )
-}
-
 function Item({ title, children }) {
   return (
     <div style={{marginBottom: 22}}>
-      <div style={{fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6, fontFamily: "DM Serif Display, Georgia, serif"}}>{title}</div>
+      <div style={{fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6, fontFamily: "Archivo, system-ui, sans-serif"}}>{title}</div>
       <div style={{fontSize: 13.5, color: C.muted, lineHeight: 1.7}}>{children}</div>
     </div>
   )
@@ -32,7 +23,7 @@ function Item({ title, children }) {
 function Section({ title, children }) {
   return (
     <div style={{background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32, marginBottom: 20}}>
-      <div style={{fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 20}}>{title}</div>
+      <div style={{fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20}}>{title}</div>
       {children}
     </div>
   )
@@ -40,11 +31,11 @@ function Section({ title, children }) {
 
 export default function SecurityPage() {
   return (
-    <div style={{minHeight: "100vh", background: C.bg, fontFamily: "DM Sans, system-ui, sans-serif", padding: "60px 20px"}}>
+    <div style={{minHeight: "100vh", background: C.bg, fontFamily: "Archivo, system-ui, sans-serif", padding: "60px 20px"}}>
       <div style={{maxWidth: 720, margin: "0 auto"}}>
         <div style={{textAlign: "center", marginBottom: 48}}>
           <div style={{display: "flex", justifyContent: "center", marginBottom: 16}}><CompassLogo size={52}/></div>
-          <div style={{fontFamily: "DM Serif Display, Georgia, serif", fontSize: 30, color: C.text, marginBottom: 10}}>Security &amp; compliance</div>
+          <div style={{fontFamily: "Archivo, system-ui, sans-serif", fontSize: 30, color: C.text, marginBottom: 10}}>Security &amp; compliance</div>
           <p style={{fontSize: 14, color: C.muted, maxWidth: 480, margin: "0 auto", lineHeight: 1.7}}>
             Compass handles disciplinary, grievance and other employee relations records — data that matters and carries real legal weight. Here's what actually protects it, described plainly rather than in marketing language.
           </p>

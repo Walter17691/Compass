@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Btn, Card, Badge } from '../../components/Primitives';
 import { CheckIcon } from '../../components/Icons';
 import { POLICY_CATEGORIES } from '../../constants';
+import { FONT, COLOR } from '../../styles/tokens';
 
 export function PoliciesSection({ policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, lsSet, changePolicyCategory }) {
   const [expandedId, setExpandedId] = useState(null);
@@ -9,7 +10,7 @@ export function PoliciesSection({ policies, setPolicies, policyFileRef, handlePo
     <Card>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
         <div><h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Company policies</h3><p style={{fontSize:12,color:"#6B6375",margin:0,lineHeight:1.6}}>Upload HR policies (.docx, .txt). Compass indexes each into quotable clauses and references them in all AI outputs.</p></div>
-        <Badge color="#7C5CFC">AI</Badge>
+        <Badge color={COLOR.purple}>AI</Badge>
       </div>
       {policies.length>0&&(
         <div style={{marginBottom:14}}>
@@ -21,7 +22,7 @@ export function PoliciesSection({ policies, setPolicies, policyFileRef, handlePo
                 <div style={{padding:"9px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
                   <div style={{minWidth:0}}>
                     <span style={{fontSize:12,color:"#1A1535",fontWeight:600}}>{p.name}</span>
-                    <span style={{fontSize:10,color:"#5A5570",marginLeft:8,fontFamily:"JetBrains Mono,monospace"}}>{p.size}</span>
+                    <span style={{fontSize:10,color:"#5A5570",marginLeft:8,fontFamily:FONT.mono}}>{p.size}</span>
                     {clauses.length>0&&(
                       <button onClick={()=>setExpandedId(isExpanded?null:p.id)} style={{fontSize:10,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0,marginLeft:8}}>
                         {clauses.length} clause{clauses.length!==1?"s":""} indexed — {isExpanded?"hide":"view"}

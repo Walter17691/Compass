@@ -1,3 +1,5 @@
+import { COLOR, FONT } from '../../styles/tokens';
+
 // Left-hand rail of settings sections — replaces the old scroll-to-anchor
 // pill row with real sub-navigation: only the active section renders, so
 // the page is one short screen instead of one long scroll. Collapses to a
@@ -27,7 +29,7 @@ export function SettingsNav({ sections, active, onChange, isMobile, groups }) {
 
   if(isMobile) return (
     <select aria-label="Settings section" value={active} onChange={e=>onChange(e.target.value)}
-      style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:20,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+      style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#1A1535",outline:"none",marginBottom:20,fontFamily:FONT.sans}}>
       {groupedSections
         ? <>
             {groupedSections.map(g=>(
@@ -43,7 +45,7 @@ export function SettingsNav({ sections, active, onChange, isMobile, groups }) {
 
   const navButton = s => (
     <button key={s.id} onClick={()=>onChange(s.id)}
-      style={{textAlign:"left",background:active===s.id?"#F5F3FF":"none",border:"none",color:active===s.id?"#7C5CFC":"#6B6375",padding:"9px 12px",borderRadius:7,fontSize:13,fontWeight:active===s.id?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+      style={{textAlign:"left",background:active===s.id?COLOR.purpleTint:"none",border:"none",color:active===s.id?COLOR.purple:"#6B6375",padding:"9px 12px",borderRadius:7,fontSize:13,fontWeight:active===s.id?600:400,cursor:"pointer",fontFamily:FONT.sans}}>
       {s.label}
     </button>
   );
@@ -58,7 +60,7 @@ export function SettingsNav({ sections, active, onChange, isMobile, groups }) {
     <nav style={{display:"flex",flexDirection:"column",gap:14,width:190,flexShrink:0}}>
       {groupedSections.map(g=>(
         <div key={g.label}>
-          <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",padding:"0 12px",marginBottom:4}}>{g.label}</div>
+          <div style={{fontSize:11,fontWeight:700,color:"#9B9098",padding:"0 12px",marginBottom:4}}>{g.label}</div>
           <div style={{display:"flex",flexDirection:"column",gap:2}}>
             {g.items.map(navButton)}
           </div>

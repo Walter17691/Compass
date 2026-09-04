@@ -1,3 +1,5 @@
+import { CompassLogo } from './components/CompassLogo'
+
 const C = {
   bg: "#FDFAF5",
   card: "#FFFFFF",
@@ -11,19 +13,8 @@ const C = {
   warnText: "#8A5E10",
 }
 
-function CompassLogo({ size = 44 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill={C.accent}/>
-      <polygon points="50,16 56,50 50,58 44,50" fill={C.bg}/>
-      <polygon points="50,84 44,50 50,42 56,50" fill="rgba(253,250,245,0.28)"/>
-      <circle cx="50" cy="50" r="5" fill={C.accent} stroke={C.bg} strokeWidth="2"/>
-    </svg>
-  )
-}
-
 function H({ children }) {
-  return <div style={{fontSize: 16, fontWeight: 700, color: C.text, margin: "26px 0 10px", fontFamily: "DM Serif Display, Georgia, serif"}}>{children}</div>
+  return <div style={{fontSize: 16, fontWeight: 700, color: C.text, margin: "26px 0 10px", fontFamily: "Archivo, system-ui, sans-serif"}}>{children}</div>
 }
 
 function P({ children }) {
@@ -36,11 +27,11 @@ export default function LegalPage({ page }) {
   const isPrivacy = page === 'privacy'
   const isDpa = page === 'dpa'
   return (
-    <div style={{minHeight: "100vh", background: C.bg, fontFamily: "DM Sans, system-ui, sans-serif", padding: "60px 20px"}}>
+    <div style={{minHeight: "100vh", background: C.bg, fontFamily: "Archivo, system-ui, sans-serif", padding: "60px 20px"}}>
       <div style={{maxWidth: 680, margin: "0 auto"}}>
         <div style={{textAlign: "center", marginBottom: 32}}>
           <div style={{display: "flex", justifyContent: "center", marginBottom: 16}}><CompassLogo size={48}/></div>
-          <div style={{fontFamily: "DM Serif Display, Georgia, serif", fontSize: 28, color: C.text}}>{PAGE_TITLES[page] || "Terms of Service"}</div>
+          <div style={{fontFamily: "Archivo, system-ui, sans-serif", fontSize: 28, color: C.text}}>{PAGE_TITLES[page] || "Terms of Service"}</div>
           <p style={{fontSize: 12, color: C.subtle, marginTop: 6}}>Last updated: 7 August 2026</p>
         </div>
 

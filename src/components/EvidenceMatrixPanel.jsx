@@ -2,7 +2,7 @@ import { evidenceForAllegation, allegationStatusMeta } from '../lib/allegations'
 import { Btn } from './Primitives';
 
 const cellStyle = { padding:"10px 12px", verticalAlign:"top", fontSize:12, color:"#1A1535", borderBottom:"1px solid #F5F1EA" };
-const headStyle = { padding:"8px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#9B9098", textTransform:"uppercase", letterSpacing:0.5, borderBottom:"1px solid #E8E0D0" };
+const headStyle = { padding:"8px 12px", textAlign:"left", fontSize:12, fontWeight:700, color:"#9B9098", borderBottom:"1px solid #E8E0D0" };
 
 function EvidenceChip({ ev, onOpen }) {
   return (
@@ -29,7 +29,7 @@ export function EvidenceMatrixPanel({ cs, allegations, suggestions, suggestionsL
   return (
     <div style={{marginBottom:16}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:0.5,textTransform:"uppercase"}}>Evidence matrix</div>
+        <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Evidence matrix</div>
         {unlinkedCount>0 && (
           <button onClick={()=>onGenerateSuggestions(cs)} disabled={suggestionsLoading}
             style={{fontSize:11,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 10px",color:"#6B6375",cursor:suggestionsLoading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>

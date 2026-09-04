@@ -190,7 +190,7 @@ export function TasksScreen({ caseTasks, cases, createCaseTask, toggleCaseTaskDo
           </div>
         )}
         {hasMore && (
-          <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <button onClick={loadMore} style={{width:"100%",padding:"12px",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,cursor:"pointer",fontSize:13,color:COLOR.purple,fontWeight:600,fontFamily:FONT.sans}}>
             Load more ({total-visible.length} remaining)
           </button>
         )}

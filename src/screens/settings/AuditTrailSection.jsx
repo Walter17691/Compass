@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card } from '../../components/Primitives';
 import { useLoadMore } from '../../hooks/useLoadMore';
+import { FONT, COLOR } from '../../styles/tokens';
 
 export function AuditTrailSection({ auditLog }) {
   const [search, setSearch] = useState("");
@@ -19,7 +20,7 @@ export function AuditTrailSection({ auditLog }) {
       <div style={{maxHeight:420,overflowY:"auto"}}>
         {visible.map((e,i)=>(
           <div key={i} style={{display:"flex",gap:12,padding:"8px 0",borderBottom:"1px solid #1a1a1a",alignItems:"flex-start"}}>
-            <span style={{fontSize:10,color:"#5A5570",fontFamily:"JetBrains Mono,monospace",flexShrink:0,marginTop:1}}>{new Date(e.ts).toLocaleString("en-GB",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
+            <span style={{fontSize:10,color:"#5A5570",fontFamily:FONT.mono,flexShrink:0,marginTop:1}}>{new Date(e.ts).toLocaleString("en-GB",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
             <div>
               <span style={{fontSize:11,color:"#1A1535",fontWeight:500}}>{e.action}</span>
               {e.detail&&<span style={{fontSize:11,color:"#6B6880",marginLeft:6}}>{e.detail}</span>}
@@ -39,7 +40,7 @@ export function AuditTrailSection({ auditLog }) {
         {filtered.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>{search?"No matching entries.":"No actions logged yet"}</div>}
       </div>
       {hasMore&&(
-        <button onClick={loadMore} style={{width:"100%",marginTop:10,padding:"10px",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,cursor:"pointer",fontSize:12,color:"#7C5CFC",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <button onClick={loadMore} style={{width:"100%",marginTop:10,padding:"10px",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,cursor:"pointer",fontSize:12,color:COLOR.purple,fontWeight:600,fontFamily:FONT.sans}}>
           Load more ({visible.length} of {total})
         </button>
       )}

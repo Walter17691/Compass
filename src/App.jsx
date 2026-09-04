@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
+import { FONT, COLOR } from './styles/tokens';
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES, CONCERN_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
 import { newId } from './lib/ids';
@@ -7788,7 +7789,7 @@ Please produce:
   // gap, not introduced by the IA restructuring — found while verifying
   // mobile support per the brief's own responsive-check requirement.
   return (
-    <div style={{fontFamily:"DM Sans,system-ui,sans-serif",minHeight:"100vh",background:"#FDFAF5",color:"#1A1535",display:"flex",flexDirection:isMobile?"column":"row"}}>
+    <div style={{fontFamily:FONT.sans,minHeight:"100vh",background:COLOR.paper,color:COLOR.ink,display:"flex",flexDirection:isMobile?"column":"row"}}>
       <style>{`
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:DM Sans,system-ui,sans-serif;color:#1A1535;}
@@ -8013,7 +8014,7 @@ Please produce:
             </div>
             <div style={{background:"#F5F1EA",borderRadius:8,padding:"12px 16px",marginBottom:20}}>
               <div style={{fontSize:10,color:"#6B6880",marginBottom:4}}>Invite code</div>
-              <div style={{fontFamily:"JetBrains Mono,monospace",fontSize:20,color:"#7C5CFC",letterSpacing:4,fontWeight:700}}>{inviteLink.code}</div>
+              <div style={{fontFamily:FONT.mono,fontSize:20,color:COLOR.purple,letterSpacing:4,fontWeight:700}}>{inviteLink.code}</div>
             </div>
             <div style={{display:"flex",gap:8}}>
               <Btn onClick={()=>navigator.clipboard.writeText(inviteLink.link)} style={{flex:1}}>Copy link</Btn>
@@ -8276,19 +8277,21 @@ Please produce:
                 to dismiss it instead of only ever a timeout. */}
       {toast&&(()=>{
         // UAT Product Hierarchy pass, Part 4/5 — "info" is a third,
-        // genuinely neutral toast colour (blue), distinct from the
-        // existing red=error and green=success. A case being refreshed
-        // with newer data from elsewhere is neither a failure nor a
-        // completed action of the user's own, so it no longer borrows
-        // green (success) or red (error) to say so.
-        const bg = toast.type==="error"?"#FEF0EB":toast.type==="info"?"#EAF2FA":"#E8F5EE";
-        const border = toast.type==="error"?"#C84B2F44":toast.type==="info"?"#2E6BA844":"#1A7A4A44";
-        const dot = toast.type==="error"?"#C84B2F":toast.type==="info"?"#2E6BA8":"#1A7A4A";
+        // Genuinely neutral toast treatment for "info", distinct from
+        // error (red) and success (green) — the design spec has no blue
+        // application accent, so this is ink/neutral rather than blue. A
+        // case being refreshed with newer data from elsewhere is neither
+        // a failure nor a completed action of the user's own, so it no
+        // longer borrows green (success), red (error), or (as it used to)
+        // blue to say so.
+        const bg = toast.type==="error"?COLOR.redTint:toast.type==="info"?COLOR.rail:COLOR.greenTint;
+        const border = toast.type==="error"?`${COLOR.red}44`:toast.type==="info"?COLOR.borderStrong:`${COLOR.green}44`;
+        const dot = toast.type==="error"?COLOR.red:toast.type==="info"?COLOR.inkFaint:COLOR.green;
         return (
-          <div role={toast.type==="error"?"alert":"status"} aria-live={toast.type==="error"?"assertive":"polite"} style={{position:"fixed",bottom:isMobile?16:24,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3000,background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(26,21,53,0.14)",animation:"slideIn 0.2s ease",maxWidth:isMobile?"none":360,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+          <div role={toast.type==="error"?"alert":"status"} aria-live={toast.type==="error"?"assertive":"polite"} style={{position:"fixed",bottom:isMobile?16:24,right:isMobile?16:24,left:isMobile?16:"auto",zIndex:3000,background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(15,18,36,0.14)",animation:"slideIn 0.2s ease",maxWidth:isMobile?"none":360,fontFamily:FONT.sans}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:dot,flexShrink:0}}/>
-            <span style={{fontSize:14,color:"#1A1535",fontFamily:"DM Sans,system-ui,sans-serif",flex:1}}>{toast.message}</span>
-            <button onClick={dismissToast} aria-label="Dismiss" style={{background:"none",border:"none",color:"#9B9098",fontSize:16,lineHeight:1,cursor:"pointer",padding:2,flexShrink:0,fontFamily:"DM Sans,system-ui,sans-serif"}}>×</button>
+            <span style={{fontSize:14,color:COLOR.ink,fontFamily:FONT.sans,flex:1}}>{toast.message}</span>
+            <button onClick={dismissToast} aria-label="Dismiss" style={{background:"none",border:"none",color:"#9B9098",fontSize:16,lineHeight:1,cursor:"pointer",padding:2,flexShrink:0,fontFamily:FONT.sans}}>×</button>
           </div>
         );
       })()}
@@ -8344,20 +8347,20 @@ Please produce:
       {showGdpr && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <Card style={{maxWidth:520,width:"100%"}}>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#7C5CFC",marginBottom:8,fontWeight:600}}>Data &amp; privacy</div>
+            <div style={{fontFamily:FONT.serif,fontSize:22,color:COLOR.purple,marginBottom:8,fontWeight:600}}>Data &amp; privacy</div>
             <p style={{fontSize:13,color:"#6B6375",lineHeight:1.8,marginBottom:16}}>
               Compass stores case files, employee records, organisation settings and the audit trail in a secure cloud database, shared with your organisation. Uploaded policies and your signature/letterhead stay in this browser only. Meeting text is sent to Anthropic's API to generate outputs.
             </p>
             <div style={{background:"#FDFAF5",borderRadius:8,padding:"14px 16px",marginBottom:16}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:10}}>WHAT IS STORED</div>
+              <div style={{fontSize:12,fontWeight:700,color:COLOR.purple,marginBottom:10}}>What is stored</div>
               {["Case files, meetings and evidence — stored in the cloud, shared with your organisation","Employee records and organisation settings — stored in the cloud, shared with your organisation","Company policies you upload — in your browser only","Your signature and letterhead — in your browser only","AI processing: meeting text is sent to Anthropic's API to generate outputs"].map((item,i)=>(
                 <div key={i} style={{display:"flex",gap:8,marginBottom:6,fontSize:12,color:"#3D3560"}}>
-                  <span style={{color:"#7C5CFC",flexShrink:0}}>·</span><span>{item}</span>
+                  <span style={{color:COLOR.purple,flexShrink:0}}>·</span><span>{item}</span>
                 </div>
               ))}
             </div>
             <div style={{background:"#FDFAF5",borderRadius:8,padding:"14px 16px",marginBottom:20}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:1,marginBottom:8}}>YOUR RIGHTS</div>
+              <div style={{fontSize:12,fontWeight:700,color:COLOR.purple,marginBottom:8}}>Your rights</div>
               <div style={{fontSize:12,color:"#6B6375",lineHeight:1.7}}>You can export all your data or delete it at any time from Settings. Data is retained until you delete it. You are responsible for compliance with UK GDPR when processing employee data using this tool.</div>
             </div>
             <div style={{display:"flex",gap:10}}>
@@ -8376,9 +8379,9 @@ Please produce:
               <button onClick={()=>{setShowOnboard(false);setOnboardDone(true);lsSet("compass_onboard",true);}} style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer"}}>Skip</button>
             </div>
             <div style={{height:2,background:"#F5F1EA",borderRadius:1,marginBottom:20}}>
-              <div style={{height:2,background:"#7C5CFC",borderRadius:1,width:`${((onboardStep+1)/ONBOARD_STEPS.length)*100}%`,transition:"width 0.3s"}}/>
+              <div style={{height:2,background:COLOR.purple,borderRadius:1,width:`${((onboardStep+1)/ONBOARD_STEPS.length)*100}%`,transition:"width 0.3s"}}/>
             </div>
-            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:22,color:"#1A1535",marginBottom:10,fontWeight:600}}>{ONBOARD_STEPS[onboardStep].title}</div>
+            <div style={{fontFamily:FONT.serif,fontSize:22,color:"#1A1535",marginBottom:10,fontWeight:600}}>{ONBOARD_STEPS[onboardStep].title}</div>
             <p style={{fontSize:14,color:"#6B6375",lineHeight:1.8,marginBottom:24}}>{ONBOARD_STEPS[onboardStep].body}</p>
             <Btn onClick={()=>{
               if(onboardStep<ONBOARD_STEPS.length-1) setOnboardStep(s=>s+1);

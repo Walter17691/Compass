@@ -100,16 +100,20 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
   });
 
   // Phase 7.5B (P0 polish, item 3) — employee identity must be the
-  // visually primary heading (larger, DM Serif Display), case type/
+  // visually primary heading (larger, bold display weight), case type/
   // proceeding title secondary (smaller, muted) — the exact inverse of
   // the pre-polish styling. Asserted on the actual rendered style, not
   // just presence of both strings, since presence alone doesn't lock in
-  // which one is primary.
+  // which one is primary. Visual Identity pass (rail-reference revision)
+  // — the display font is now Archivo (FONT.serif in styles/tokens.js,
+  // same family as FONT.sans — hierarchy comes from weight/tracking, not
+  // a separate display family); the primary/secondary hierarchy this
+  // test actually locks in is unchanged.
   it('gives the employee name the primary heading style and the proceeding title a secondary style', () => {
     render(<CaseViewScreen {...baseProps} />);
     const name = screen.getByText('Sam Employee');
     const proceedingTitle = screen.getByText(/Disciplinary Investigation/);
-    expect(name.style.fontFamily).toContain('DM Serif Display');
+    expect(name.style.fontFamily).toContain('Archivo');
     expect(Number(name.style.fontSize.replace('px',''))).toBeGreaterThan(Number(proceedingTitle.style.fontSize.replace('px','')));
   });
 

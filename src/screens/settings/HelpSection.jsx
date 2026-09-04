@@ -1,4 +1,5 @@
 import { Btn, Card } from '../../components/Primitives';
+import { COLOR, FONT } from '../../styles/tokens';
 
 const FAQS = [
   { q: "What do the case status labels mean?", a: "Open — logged, no meeting yet. In progress — an investigation meeting has been held. Awaiting action — investigation report done, next step (e.g. a disciplinary hearing) not yet booked. Disciplinary — a disciplinary hearing has been held. Closed — the case is resolved." },
@@ -11,13 +12,13 @@ export function HelpSection({ setOnboardStep, setShowOnboard }) {
   return (
     <>
       <Card style={{marginBottom:16}}>
-        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
+        <h3 style={{fontFamily:FONT.serif,fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Help &amp; onboarding</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 14px"}}>Rewatch the getting started guide.</p>
         <Btn onClick={()=>{setOnboardStep(0);setShowOnboard(true);}}>Restart tour</Btn>
       </Card>
 
       <Card style={{marginBottom:16}}>
-        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Frequently asked questions</h3>
+        <h3 style={{fontFamily:FONT.serif,fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Frequently asked questions</h3>
         <div style={{marginTop:10}}>
           {FAQS.map((f,i)=>(
             <div key={i} style={{padding:"12px 0",borderTop:i>0?"1px solid #E8E0D0":"none"}}>
@@ -29,9 +30,9 @@ export function HelpSection({ setOnboardStep, setShowOnboard }) {
       </Card>
 
       <Card>
-        <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Still stuck?</h3>
+        <h3 style={{fontFamily:FONT.serif,fontSize:16,color:"#1A1535",margin:"0 0 4px"}}>Still stuck?</h3>
         <p style={{fontSize:12,color:"#6B6375",margin:"0 0 12px"}}>Email us and we'll get back to you.</p>
-        <a href="mailto:hello@compasshruk.com" style={{display:"inline-block",fontSize:13,color:"#7C5CFC",fontWeight:600,textDecoration:"none",background:"#EDE8FF",borderRadius:8,padding:"10px 20px"}}>hello@compasshruk.com</a>
+        <a href="mailto:hello@compasshruk.com" style={{display:"inline-block",fontSize:13,color:COLOR.purple,fontWeight:600,textDecoration:"none",background:COLOR.purpleTint,borderRadius:8,padding:"10px 20px"}}>hello@compasshruk.com</a>
       </Card>
     </>
   );

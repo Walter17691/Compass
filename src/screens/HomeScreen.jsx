@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { SCREENS } from '../constants';
 import { buildForYouFeed, humanizeDeadlineTitle } from '../lib/homeFeed';
 import { requiresApproval } from '../lib/approvals';
-import { AskCompassIcon } from '../components/Icons';
+import { CompassLogo } from '../components/CompassLogo';
 import { FONT, COLOR, SPACE, RADIUS, TYPE, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
 // Home Experience Redesign — up to 3 static interaction shortcuts, not
@@ -135,7 +135,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
     <div style={{marginBottom:SPACE.xxl}}>
       <div style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"16px 20px",transition:"border-color 0.15s"}}
         onFocus={e=>e.currentTarget.style.borderColor=COLOR.purple} onBlur={e=>e.currentTarget.style.borderColor=COLOR.border}>
-        <AskCompassIcon size={18} color={COLOR.purpleDeep}/>
+        <CompassLogo size={22}/>
         <input aria-label="Ask Compass" value={askInput} onChange={e=>setAskInput(e.target.value)}
           onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();submitAsk();}}}
           placeholder="Ask Compass about your people, cases or HR work…"
@@ -172,7 +172,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
             buttons here: creation is the global + Create control now,
             not a second, Home-specific system. */}
         <div style={{marginBottom:SPACE.xl}}>
-          <div style={{...TYPE.micro,color:COLOR.inkFaint,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:SPACE.xs}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
+          <div style={{...TYPE.micro,color:COLOR.inkFaint,marginBottom:SPACE.xs}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
           <h1 style={{...TYPE.identity,color:COLOR.ink,margin:0}}>
             Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"}{currentUser?.name?", "+currentUser.name.split(" ")[0]:""}
           </h1>
@@ -214,7 +214,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
                     <div key={item.id} className="home-v2-feed-row" style={{display:"flex",alignItems:"stretch",gap:10,padding:"9px 6px 9px 10px",borderBottom:(i<visibleFeed.length-1||hiddenCount>0)?`1px solid ${COLOR.borderFaint}`:"none",borderRadius:RADIUS.surface}}>
                       <div style={{width:2,flexShrink:0,borderRadius:2,background:ROW_ACCENT(item)}}/>
                       <div style={{flex:1,minWidth:0,maxWidth:640}}>
-                        <div style={{...TYPE.micro,color:item.urgent?COLOR.red:COLOR.inkFaint,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,marginBottom:3}}>
+                        <div style={{...TYPE.micro,color:item.urgent?COLOR.red:COLOR.inkFaint,fontWeight:700,marginBottom:3}}>
                           {TYPE_LABEL[item.type]||item.type}{item.risk==="HIGH"&&<span> · High risk</span>}
                         </div>
                         <button onClick={()=>goToFeedItem(item)} style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:FONT.sans}}>
@@ -255,7 +255,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
                   <div style={{display:"flex",flexDirection:"column"}}>
                     {todayMeetings.map((m,i)=>(
                       <div key={"m"+i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:(i<todayMeetings.length-1||todayDeadlines.length>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                        <span style={{...TYPE.micro,color:COLOR.purple,fontWeight:700,textTransform:"uppercase",flexShrink:0,marginTop:1}}>Meeting</span>
+                        <span style={{...TYPE.micro,color:COLOR.purple,fontWeight:700,flexShrink:0,marginTop:1}}>Meeting</span>
                         <div style={{minWidth:0}}>
                           <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{m.type||"Meeting"}</div>
                           <div style={{fontSize:11.5,color:COLOR.inkFaint}}>{m.employeeName}</div>
@@ -264,7 +264,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
                     ))}
                     {todayDeadlines.map((d,i)=>(
                       <div key={"d"+i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:i<todayDeadlines.length-1?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                        <span style={{...TYPE.micro,color:COLOR.amber,fontWeight:700,textTransform:"uppercase",flexShrink:0,marginTop:1}}>Due</span>
+                        <span style={{...TYPE.micro,color:COLOR.amber,fontWeight:700,flexShrink:0,marginTop:1}}>Due</span>
                         <div style={{minWidth:0}}>
                           <div style={{fontSize:12.5,fontWeight:600,color:COLOR.ink}}>{humanizeDeadlineTitle(d)}</div>
                           <div style={{fontSize:11.5,color:COLOR.inkFaint}}>{d.employeeName}</div>
@@ -275,7 +275,7 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
                 )}
                 {hasWeekSummary&&(
                   <div style={{marginTop:(todayMeetings.length>0||todayDeadlines.length>0)?SPACE.sm:0,paddingTop:(todayMeetings.length>0||todayDeadlines.length>0)?SPACE.sm:0,borderTop:(todayMeetings.length>0||todayDeadlines.length>0)?`1px solid ${COLOR.borderFaint}`:"none"}}>
-                    <div style={{...TYPE.micro,color:COLOR.inkFaint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>This week</div>
+                    <div style={{...TYPE.micro,color:COLOR.inkFaint,fontWeight:700,marginBottom:2}}>This week</div>
                     <div style={{fontSize:12,color:COLOR.inkSoft}}>
                       {weekDeadlines>0&&`${weekDeadlines} deadline${weekDeadlines!==1?"s":""}`}
                       {weekDeadlines>0&&weekMeetings>0&&" · "}

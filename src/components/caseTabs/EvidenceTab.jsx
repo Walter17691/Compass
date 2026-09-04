@@ -28,7 +28,7 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
 
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}><div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.5px",textTransform:"uppercase"}}>Evidence & witness statements</div></div>
+      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}><div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Evidence & witness statements</div></div>
       <div style={{padding:"16px"}}>
         {(cs.evidence||[]).length===0&&<div style={{fontSize:13,color:"#9B9098",marginBottom:12}}>No evidence added yet</div>}
         {(cs.evidence||[]).map(ev=>{
@@ -69,7 +69,7 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
                 workspace already shows. */}
             {findings.length>0&&(
               <div style={{marginTop:8,background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px"}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#5B3FD4",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Document analysed</div>
+                <div style={{fontSize:12,fontWeight:700,color:"#5B3FD4",marginBottom:6}}>Document analysed</div>
                 {findings.map(f=>(
                   <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid #EDE5FA"}}>
                     <div style={{minWidth:0,flex:1}}>

@@ -85,26 +85,26 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
             {/* Edit toggle */}
             <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:8}}>
               <button onClick={()=>onAskWhy?.({title:"This letter's draft", reasoning:"Drafted by AI from the case information below, as it stood at the moment this draft was generated. Regenerating the letter refreshes both the draft and this source list.", sourceRefs:letterSources})}
-                style={{fontSize:11,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"4px 12px",color:"#5B3FD4",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Ask why</button>
+                style={{fontSize:11,background:"none",border:`1px solid ${COLOR.purple}33`,borderRadius:6,padding:"4px 12px",color:COLOR.purpleDeep,cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Ask why</button>
               <button onClick={()=>setEditingLetter(e=>!e)}
-                style={{background:editingLetter?"#7C5CFC":"none",border:"1px solid",borderColor:editingLetter?"#7C5CFC":"#E8E0D0",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
+                style={{background:editingLetter?COLOR.purple:"none",border:"1px solid",borderColor:editingLetter?COLOR.purple:"#E8E0D0",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
                 {editingLetter?"Done editing":"Edit letter"}
               </button>
             </div>
             {editingLetter&&(
               <textarea aria-label="Letter text" value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
-                style={{width:"100%",minHeight:400,background:"#FDFAF5",border:"1px solid #7C5CFC33",borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:"DM Serif Display,Georgia,serif",marginBottom:12}}/>
+                style={{width:"100%",minHeight:400,background:"#FDFAF5",border:`1px solid ${COLOR.purple}33`,borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:FONT.sans,marginBottom:12}}/>
             )}
             {/* Sig bar */}
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:11,color:"#6B6375"}}>E-signature:</span>
                 {signature
-                  ?<span style={{fontSize:11,color:"#7C5CFC",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}><CheckIcon size={11} />{signature.type==="typed"?`"${signature.data}"`:"Drawn"}</span>
+                  ?<span style={{fontSize:11,color:COLOR.purple,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}><CheckIcon size={11} />{signature.type==="typed"?`"${signature.data}"`:"Drawn"}</span>
                   :<span style={{fontSize:11,color:"#6B6880"}}>Not added — will prompt on send</span>}
               </div>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>setShowSigPad(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#7C5CFC",cursor:"pointer"}}>{signature?"Change":"Add"}</button>
+                <button onClick={()=>setShowSigPad(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:COLOR.purple,cursor:"pointer"}}>{signature?"Change":"Add"}</button>
                 {signature&&<button onClick={onRemoveSignature||(()=>setSignature(null))} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button>}
               </div>
             </div>
@@ -209,7 +209,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               )}
               <Btn variant="ghost" onClick={()=>window.print()} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Print</Btn>
               <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Copy text</Btn>
-              <Btn variant="blue" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
+              <Btn variant="dark" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
             </div>
 
             {letterHistory.length>0&&(
