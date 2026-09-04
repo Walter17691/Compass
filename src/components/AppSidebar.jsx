@@ -43,10 +43,19 @@ const ChevronIcon = ({size=10, expanded}) => <svg width={size} height={size} vie
 function LoadIssueNotice({ dataLoadIssues, onRetryLoad, onDismissLoadBanner, railCompact=false }) {
   const message = `Couldn't load ${dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.`;
   const hideClass = railCompact ? "rail-label rail-alert-collapse" : undefined;
+  // Phase C closed-rail alignment correction — at rest this used to keep
+  // its full card padding/background even with the message/actions
+  // already collapsed, so it read as an oversized standalone card next
+  // to the now-uniform 48×48 rows around it. `rail-alert-box` (only when
+  // railCompact) moves that same padding/background/border into a CSS
+  // rule that only applies once the rail is open (see AppSidebar.jsx's
+  // <style> block), so at rest it's exactly a 48×48 slot with a small
+  // centred dot — same signal, same role/aria-live, just not a card.
   return (
-    <div role="alert" aria-live="assertive" style={{background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:RADIUS.surface,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
+    <div role="alert" aria-live="assertive" className={railCompact ? "rail-alert-box" : undefined}
+      style={railCompact ? undefined : {background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:RADIUS.surface,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
       <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-        <div style={{width:7,height:7,borderRadius:"50%",background:COLOR.red,flexShrink:0,marginTop:4}}/>
+        <div className={railCompact ? "rail-alert-dot" : undefined} style={{width:7,height:7,borderRadius:"50%",background:COLOR.red,flexShrink:0,marginTop:railCompact?undefined:4}}/>
         <span className={hideClass} style={{fontSize:12,color:COLOR.ink,lineHeight:1.4,flex:1}}>{message}</span>
       </div>
       <div className={hideClass} style={{display:"flex",gap:14,paddingLeft:15}}>
@@ -68,14 +77,94 @@ function LoadIssueNotice({ dataLoadIssues, onRetryLoad, onDismissLoadBanner, rai
 // it, and wrapping the label in .rail-label (opacity/transform only,
 // never display:none) is what lets the rail's resting width hide it
 // visually without hiding it from assistive tech.
+// Phase C closed-rail alignment correction — every row now carries its
+// icon inside a fixed 48×48 box (RAIL_HIT below) instead of a bare icon
+// next to a label whose own width used to be "invisible but still full-
+// width" at rest (opacity:0 alone doesn't collapse layout size). Two
+// changes work together to fix that: the label now also collapses to
+// max-width:0 at rest (see .rail-label), and the row itself carries
+// .rail-row (48px at rest, 100% once open) instead of a hardcoded
+// width:"100%" — so at rest a row's true rendered width is exactly the
+// 48×48 icon box, nothing wider, and the active white surface (which
+// paints the button itself) can never exceed that. The parent containers
+// centre each 48px-wide row via alignItems:"center" rather than manual
+// margin math, which is what lines every icon up on the same x=36 axis.
+// Phase C closed-rail geometry polish — the outer row previously used
+// minHeight:48 with a hardcoded 48×48 icon box inside it. min-height is
+// only a floor: the icon box's own fixed 48px height was a harder
+// content requirement, so on any row with a border (every ordinary nav
+// row, Search, Create — border-box, per index.css's global reset,
+// includes the border *within* a declared size, but only when that size
+// is a firm constraint the browser must respect, not a floor a child can
+// grow past) the button grew to 48(content) + 2(1px border × 2) = 50px
+// tall — the icon-only rows without a border (Compass tile, Account,
+// which set border:"none") were never affected, which is exactly why
+// only some rows measured 50 and others measured 48. Fixing it needs two
+// changes together: a firm `height` (not minHeight) on the row, which
+// border-box then correctly treats as inclusive of the border; and the
+// icon box filling that row's real content height (`height:"100%"`)
+// instead of asserting its own fixed 48, so it can never force the row
+// past its declared size again. Width stays a fixed RAIL_HIT regardless
+// (not 100%) so the icon never drifts from the left edge as the row
+// widens on open — only its label reveals to the right of it.
+const RAIL_HIT = 48;
+// Phase C closed-rail geometry polish — the previous inter-cluster gap
+// came from THREE different sources stacked together and never kept in
+// sync (a cluster's own bottom padding + a separator's own top margin +
+// the next cluster's own top padding), which is exactly why the two
+// group transitions measured differently (13px vs 28px) even though
+// both were "supposed" to be the same gap. Cluster containers now carry
+// zero vertical padding of their own — GROUP_GAP is the single value
+// that defines every major-group transition, applied as a symmetric
+// margin on the separator itself and nowhere else, so there's exactly
+// one place spacing between groups is ever set. Intra-group spacing
+// stays the smaller, separate INTRA_GAP (each cluster's own flex gap).
+const GROUP_GAP = 8;
+const INTRA_GAP = 4;
+const railIconBoxStyle = {width:RAIL_HIT, height:"100%", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0};
+// height:"100%" above only resolves correctly when the box's direct
+// parent has a *definite* height to be a percentage of — true for every
+// icon box whose parent is one of the RAIL_HIT-height buttons, but not
+// for the Activity wrapper, whose parent is the header cluster's own
+// auto-height flex column. A percentage height against an indefinite
+// containing block computes as auto there, which is what let that one
+// box's true rendered height end up arbitrary instead of 48. This
+// variant is for exactly that case: no border to account for on this
+// wrapper (it's a plain span, not a bordered button), so a firm 48 is
+// already correct with nothing to subtract.
+const railIconBoxFixedStyle = {width:RAIL_HIT, height:RAIL_HIT, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0};
+
+// Brand v2.0 migration — the rail's Compass row is the one place the
+// canonical lockup (mark + wordmark, §6) has to coexist with the rail's
+// existing 48px icon-slot system (RAIL_HIT), so the axis-protecting slot
+// stays exactly as it was for every other row and the spec's "gap = 40%
+// of mark width" is measured from the mark's own true edge, not the
+// slot's: the 36px mark sits centred in the 48px slot with 6px of empty
+// slot on each side already, so the label's own margin-left only needs
+// to supply the remainder (LOCKUP_GAP - that 6px inset) to land the real
+// gap on the exact spec value.
+const RAIL_MARK_SIZE = 36;
+const LOCKUP_GAP = Math.round(RAIL_MARK_SIZE * 0.4);
+const railWordmarkStyle = {fontFamily:FONT.sans, fontSize:Math.round((RAIL_MARK_SIZE*0.78)/0.72), fontWeight:850, fontStretch:"100%", letterSpacing:"-0.055em", color:COLOR.ink, marginLeft:LOCKUP_GAP-(RAIL_HIT-RAIL_MARK_SIZE)/2};
+
+// Same canonical lockup ratios, mobile header's own mark size (unchanged
+// from before this migration — the spec doesn't give a distinct mobile
+// value, only rest/open desktop ones).
+const MOBILE_MARK_SIZE = 28;
+const MOBILE_LOCKUP_GAP = Math.round(MOBILE_MARK_SIZE * 0.4);
+const mobileWordmarkStyle = {fontFamily:FONT.sans, fontSize:Math.round((MOBILE_MARK_SIZE*0.78)/0.72), fontWeight:850, fontStretch:"100%", letterSpacing:"-0.055em", color:COLOR.ink};
+
 const NavButton = ({s, l, icon:Icon, screen, goToScreen, indent}) => {
   const active = screen===s;
   return (
     <button onClick={()=>goToScreen(s)}
       onMouseEnter={e=>{if(!active) e.currentTarget.style.background=COLOR.purpleTint;}}
       onMouseLeave={e=>{if(!active) e.currentTarget.style.background="none";}}
-      style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:active?COLOR.surface:"none",border:active?`1px solid ${COLOR.border}`:"1px solid transparent",boxShadow:active?"0 1px 2px rgba(15,18,36,0.06)":"none",color:active?COLOR.ink:COLOR.inkSoft,padding:indent?"8px 14px 8px 28px":"9px 14px",borderRadius:RADIUS.surface,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
-      {Icon&&<Icon size={16} style={{flexShrink:0}}/>}
+      className="rail-row"
+      style={{display:"flex",alignItems:"center",gap:0,textAlign:"left",background:active?COLOR.surface:"none",border:active?`1px solid ${COLOR.border}`:"1px solid transparent",boxShadow:active?"0 1px 2px rgba(15,18,36,0.06)":"none",color:active?COLOR.ink:COLOR.inkSoft,padding:indent?"0 14px 0 20px":0,borderRadius:RADIUS.surface,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap",height:indent?36:RAIL_HIT}}>
+      {Icon&&(indent
+        ? <Icon size={16} style={{flexShrink:0,marginRight:10}}/>
+        : <span style={railIconBoxStyle}><Icon size={20} style={{flexShrink:0}}/></span>)}
       <span className="rail-label">{l}</span>
     </button>
   );
@@ -96,8 +185,9 @@ const AskCompassNavButton = ({ screen, goToScreen }) => {
     <button onClick={()=>goToScreen(SCREENS.ASK_COMPASS)}
       onMouseEnter={e=>{if(!active) e.currentTarget.style.background=COLOR.purpleTint;}}
       onMouseLeave={e=>{if(!active) e.currentTarget.style.background="none";}}
-      style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:active?COLOR.surface:"none",border:active?`1px solid ${COLOR.border}`:"1px solid transparent",boxShadow:active?"0 1px 2px rgba(15,18,36,0.06)":"none",color:active?COLOR.ink:COLOR.inkSoft,padding:"9px 14px",borderRadius:RADIUS.surface,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
-      <CompassLogo size={16}/><span className="rail-label">Ask Compass</span>
+      className="rail-row"
+      style={{display:"flex",alignItems:"center",gap:0,textAlign:"left",background:active?COLOR.surface:"none",border:active?`1px solid ${COLOR.border}`:"1px solid transparent",boxShadow:active?"0 1px 2px rgba(15,18,36,0.06)":"none",color:active?COLOR.ink:COLOR.inkSoft,padding:0,borderRadius:RADIUS.surface,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap",height:RAIL_HIT}}>
+      <span style={railIconBoxStyle}><CompassLogo size={20}/></span><span className="rail-label">Ask Compass</span>
     </button>
   );
 };
@@ -165,7 +255,7 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
   const menuItemStyle = {width:"100%",textAlign:"left",display:"flex",alignItems:"center",gap:6,background:"none",border:"none",borderRadius:RADIUS.surface,padding:"8px 10px",fontSize:13,color:COLOR.ink,cursor:"pointer",fontFamily:FONT.sans};
 
   return (
-    <div style={{position:"relative",width:"100%"}} ref={ref}>
+    <div style={{position:"relative",width:"100%",display:"flex",flexDirection:"column",alignItems:"center"}} ref={ref}>
       {/* Sidebar footer composition pass, Part 1 — the entire row is the
           trigger (not a tiny appended control): avatar, name, org and
           chevron all sit inside one button so there's nothing to "miss."
@@ -177,8 +267,9 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
       <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-haspopup="true" aria-expanded={show} aria-label="Account menu"
         onMouseEnter={e=>{if(!show) e.currentTarget.style.background=COLOR.paper;}}
         onMouseLeave={e=>{if(!show) e.currentTarget.style.background="none";}}
-        style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:show?COLOR.paper:"none",border:"none",padding:"6px 8px",borderRadius:RADIUS.surface,cursor:"pointer",textAlign:"left"}}>
-        <div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,color:COLOR.purpleDeep,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{initials}</div>
+        className="rail-row"
+        style={{display:"flex",alignItems:"center",gap:0,background:show?COLOR.paper:"none",border:"none",padding:0,borderRadius:RADIUS.surface,cursor:"pointer",textAlign:"left",height:RAIL_HIT}}>
+        <span style={railIconBoxStyle}><div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,color:COLOR.purpleDeep,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{initials}</div></span>
         <div className="rail-label" style={{minWidth:0,flex:1}}>
           <div title={currentUser?.name||undefined} style={{fontSize:13,fontWeight:600,color:COLOR.ink,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.name||"Account"}</div>
           {org?.name&&<div title={org.name} style={{fontSize:11,color:COLOR.inkFaint,lineHeight:1.3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{org.name}</div>}
@@ -333,10 +424,10 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
           item — visually nowhere near Ask Compass (which lives further
           down the nav list, not in this header row), so there's no
           competition between the two. */}
-      <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 8px 12px"}}>
-        <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"0 6px",cursor:"pointer",width:"100%"}}>
-          <CompassLogo size={36}/>
-          <span className="rail-label" style={{fontFamily:FONT.serif,fontSize:17,fontWeight:850,color:COLOR.ink,letterSpacing:"-0.055em"}}>Compass</span>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:INTRA_GAP,padding:0}}>
+        <button onClick={()=>goToScreen(SCREENS.HOME)} className="rail-row" style={{display:"flex",alignItems:"center",gap:0,background:"none",border:"none",padding:0,cursor:"pointer",height:RAIL_HIT}}>
+          <span style={railIconBoxStyle}><CompassLogo size={RAIL_MARK_SIZE} trimBox/></span>
+          <span className="rail-label" style={railWordmarkStyle}>Compass</span>
         </button>
         {/* Phase C (expanding sidebar rail) — Activity moved onto its own
             row directly below the tile, still left-aligned to the same
@@ -345,55 +436,69 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
             prior 224px layout) can't fit both inside the rail's 72px
             resting width without overlap; stacking keeps Activity's own
             component, handlers, and popover completely untouched — only
-            where it sits changed. */}
-        <div style={{padding:"0 6px"}}>
+            where it sits changed. Phase C alignment correction — wrapped
+            in the same 48×48 slot as every other control so its icon
+            centres on the same x=36 axis; ActivityBell's own trigger
+            (padding/icon size/unread badge, all separately tested) is
+            untouched, only where it sits changed. */}
+        <span style={railIconBoxFixedStyle}>
           <ActivityBell auditLog={auditLog} orgId={org?.id}/>
-        </div>
+        </span>
       </div>
 
-      {/* IA & User Journey pass, §7 — universal Create pattern. One
-          learned control instead of the New case/New meeting/New task/
-          Raise concern/Add note buttons previously scattered one-per-
-          screen; every action inside still calls the exact same
-          existing handler each of those buttons already called.
-          `compact` (Phase C) only changes this trigger's own alignment —
-          see CreateMenu.jsx. */}
-      <div style={{padding:"0 6px 10px"}}>
+      {/* Phase C closed-rail geometry polish — GROUP_GAP is the single,
+          deliberate value for every major-group transition, applied only
+          here (as a symmetric margin around the hairline) and nowhere
+          else — the two cluster containers above/below carry zero
+          vertical padding of their own now, so there's no second,
+          uncoordinated source of spacing to drift out of sync with this
+          one. Same margin on both separators is what makes the two
+          group transitions read as the same kind of gap instead of two
+          different, accidental ones. */}
+      <div style={{width:RAIL_HIT,height:1,background:COLOR.borderFaint,margin:`${GROUP_GAP}px auto`}}/>
+
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:INTRA_GAP,padding:0}}>
+        {/* IA & User Journey pass, §7 — universal Create pattern. One
+            learned control instead of the New case/New meeting/New task/
+            Raise concern/Add note buttons previously scattered one-per-
+            screen; every action inside still calls the exact same
+            existing handler each of those buttons already called.
+            `compact` (Phase C) only changes this trigger's own alignment —
+            see CreateMenu.jsx. */}
         <CreateMenu {...createMenuProps} compact/>
+
+        {/* IA & User Journey pass, §13 — kept as its own visible row (not
+            folded into More) since it's a distinct, universal, always-
+            relevant capability, not a specialised destination — "Search =
+            find something" per the brief's own conceptual split from Ask
+            Compass. Same SearchScreen/runSearch this always was. */}
+        <button onClick={()=>goToScreen(SCREENS.SEARCH)} className="rail-row" style={{display:"flex",alignItems:"center",gap:0,textAlign:"left",background:screen===SCREENS.SEARCH?COLOR.purpleTint:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,color:COLOR.inkFaint,padding:0,borderRadius:RADIUS.surface,fontSize:13,fontWeight:400,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap",height:RAIL_HIT}}>
+          <span style={railIconBoxStyle}><SearchIcon size={20} style={{flexShrink:0}}/></span><span className="rail-label">Search</span>
+        </button>
+
+        {/* Sidebar footer composition pass, Part 5 — an in-flow notice
+            only present for exactly as long as the underlying problem is,
+            pushing the nav down slightly rather than living in fixed
+            footer chrome. Genuinely rare (a background fetch actually
+            failing), so this cost is negligible in practice. Phase C —
+            railCompact keeps it in-flow (an earlier attempt at pulling it
+            out via position:fixed instead made Home's own row unreachable
+            underneath it — a real regression, reverted) and collapses to
+            a compact status dot at rest (see LoadIssueNotice/rail-alert-
+            box), never an oversized standalone card. */}
+        {showLoadIssue&&(
+          <LoadIssueNotice dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner} railCompact/>
+        )}
       </div>
 
-      {/* IA & User Journey pass, §13 — kept as its own visible row (not
-          folded into More) since it's a distinct, universal, always-
-          relevant capability, not a specialised destination — "Search =
-          find something" per the brief's own conceptual split from Ask
-          Compass. Same SearchScreen/runSearch this always was. */}
-      <button onClick={()=>goToScreen(SCREENS.SEARCH)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:screen===SCREENS.SEARCH?COLOR.purpleTint:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,color:COLOR.inkFaint,padding:"8px 12px",borderRadius:RADIUS.surface,fontSize:13,fontWeight:400,cursor:"pointer",fontFamily:FONT.sans,marginBottom:10,whiteSpace:"nowrap"}}>
-        <SearchIcon size={13} style={{flexShrink:0}}/> <span className="rail-label">Search</span>
-      </button>
+      <div style={{width:RAIL_HIT,height:1,background:COLOR.borderFaint,margin:`${GROUP_GAP}px auto`}}/>
 
-      {/* Sidebar footer composition pass, Part 5 — an in-flow notice
-          only present for exactly as long as the underlying problem is,
-          pushing the nav down slightly rather than living in fixed
-          footer chrome. Genuinely rare (a background fetch actually
-          failing), so this cost is negligible in practice. Phase C —
-          railCompact keeps it in-flow (an earlier attempt at pulling it
-          out via position:fixed instead made Home's own row unreachable
-          underneath it — a real regression, reverted) and instead
-          collapses its message/actions at rest via LoadIssueNotice's own
-          rail-label/rail-alert-collapse treatment, leaving just the red
-          dot visible until the rail opens. */}
-      {showLoadIssue&&(
-        <div style={{padding:"0 6px 10px"}}>
-          <LoadIssueNotice dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner} railCompact/>
-        </div>
-      )}
-
-      <nav style={{display:"flex",flexDirection:"column",gap:2,flex:1,minHeight:0,overflowY:"auto",paddingBottom:12}}>
+      <nav style={{display:"flex",flexDirection:"column",alignItems:"center",gap:INTRA_GAP,flex:1,minHeight:0,overflowY:"auto",paddingBottom:12}}>
         {primaryItems.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen}/>)}
         <AskCompassNavButton screen={screen} goToScreen={goToScreen}/>
         {primaryItemsAfterAsk.map(item=><NavButton key={item.s} {...item} screen={screen} goToScreen={goToScreen}/>)}
 
-        <div style={{marginTop:SPACE.sm,paddingTop:SPACE.sm,borderTop:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",gap:2}}>
+        <div style={{width:"100%",marginTop:SPACE.sm,paddingTop:SPACE.sm,borderTop:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
           {sidebarGroups.map(g=>(
             <SidebarGroup key={g.label} label={g.label} items={g.items} screen={screen} goToScreen={goToScreen}
               expanded={expandedGroups.has(g.label)} onToggle={()=>toggleGroup(g.label)}/>
@@ -419,16 +524,16 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
     // mobile information architecture") — the same five-destination
     // model is what a future bottom nav would read from directly.
     return (
-      <header style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",position:"sticky",top:0,zIndex:99}}>
+      <header style={{background:COLOR.surface,borderBottom:`1px solid ${COLOR.borderFaint}`,position:"sticky",top:0,zIndex:99}}>
         <div style={{padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:0,cursor:"pointer"}}>
-            <CompassLogo size={28}/>
-            <span style={{fontFamily:FONT.serif,fontSize:16,fontWeight:850,color:COLOR.ink,letterSpacing:"-0.055em"}}>Compass</span>
+          <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:MOBILE_LOCKUP_GAP,background:"none",border:"none",padding:0,cursor:"pointer"}}>
+            <CompassLogo size={MOBILE_MARK_SIZE} trimBox/>
+            <span style={mobileWordmarkStyle}>Compass</span>
           </button>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {meetingType&&<span style={{background:COLOR.purpleTint,color:COLOR.purple,borderRadius:12,padding:"2px 10px",fontSize:11,fontWeight:600}}>{caseInfo?.employee||meetingType.label}</span>}
             <ActivityBell auditLog={auditLog} orgId={org?.id}/>
-            <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",cursor:"pointer",color:"#6B6375",display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
+            <button onClick={()=>setShowMobileNav(v=>!v)} aria-label="Menu" style={{background:"none",border:`1px solid ${COLOR.borderStrong}`,borderRadius:6,padding:"6px 10px",cursor:"pointer",color:COLOR.inkFaint,display:"flex",alignItems:"center"}}><MenuIcon size={16}/></button>
           </div>
         </div>
         {showLoadIssue&&(
@@ -437,11 +542,11 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
           </div>
         )}
         {showMobileNav&&(
-          <nav style={{borderTop:"1px solid #EDE5D8",display:"flex",flexDirection:"column",padding:"6px 0",maxHeight:"70vh",overflowY:"auto"}}>
+          <nav style={{borderTop:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"6px 0",maxHeight:"70vh",overflowY:"auto"}}>
             <div style={{padding:"6px 16px 10px"}}><CreateMenu {...createMenuProps} onAfterAction={()=>setShowMobileNav(false)} /></div>
             {allNavItems.map(({s,l})=>(
               <button key={s} onClick={()=>goToScreen(s)}
-                style={{background:screen===s?"#F5F3FF":"none",border:"none",color:screen===s?"#7C5CFC":"#6B6375",padding:"10px 16px",fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",textAlign:"left"}}>
+                style={{background:screen===s?COLOR.purpleTint:"none",border:"none",color:screen===s?COLOR.purple:COLOR.inkFaint,padding:"10px 16px",fontSize:13,fontWeight:screen===s?600:400,cursor:"pointer",fontFamily:FONT.sans,textAlign:"left"}}>
                 {l}
               </button>
             ))}
@@ -449,7 +554,7 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
                 same AccountMenu as desktop (org switching/Join another
                 organisation/Settings/Sign out), so mobile isn't left
                 with a lesser, name-plus-Sign-out-only account area. */}
-            <div style={{borderTop:"1px solid #F5F1EA",marginTop:6,padding:"8px 10px 4px"}}>
+            <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,marginTop:6,padding:"8px 10px 4px"}}>
               <AccountMenu currentUser={currentUser} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg}
                 onJoinAnotherOrg={onJoinAnotherOrg} onSignOut={onSignOut} onOpenSettings={()=>{setShowMobileNav(false);goToScreen(SCREENS.SETTINGS);}}/>
             </div>
@@ -488,13 +593,34 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
       <style>{`
         .app-rail{width:72px;overflowX:hidden;}
         .app-rail:hover,.app-rail:focus-within{width:248px;box-shadow:4px 0 24px rgba(15,18,36,0.10);}
-        .rail-label{opacity:0;transform:translateX(-6px);display:inline-block;}
-        .app-rail:hover .rail-label,.app-rail:focus-within .rail-label{opacity:1;transform:translateX(0);}
+        /* Phase C closed-rail alignment correction — max-width:0 (not just
+           opacity:0) is what actually collapses a label's layout size at
+           rest; opacity alone still reserves its full text width, which
+           is exactly what was pushing icons off-centre and rows to
+           inconsistent widths before. 200px comfortably fits every real
+           label in this sidebar without clipping once revealed. */
+        .rail-label{opacity:0;transform:translateX(-6px);display:inline-block;max-width:0;overflow:hidden;white-space:nowrap;}
+        .app-rail:hover .rail-label,.app-rail:focus-within .rail-label{opacity:1;transform:translateX(0);max-width:200px;}
+        /* Every ordinary row is exactly 48px (the icon box) at rest and
+           the rail's full content width once open — this is what keeps
+           each row's own background (including the active white surface)
+           from ever exceeding 48×48 at rest, and what centres every icon
+           on the same x=36 axis via the parent's alignItems:"center". */
+        .rail-row{width:48px;}
+        .app-rail:hover .rail-row,.app-rail:focus-within .rail-row{width:100%;}
         .rail-alert-collapse{max-height:0;overflow:hidden;display:block;}
         .app-rail:hover .rail-alert-collapse,.app-rail:focus-within .rail-alert-collapse{max-height:120px;}
+        /* The load-issue notice's own card chrome (background/border/
+           padding) only applies once the rail is open; at rest it's a
+           plain 48×48 slot holding just the small dot. */
+        .rail-alert-box{width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .app-rail:hover .rail-alert-box,.app-rail:focus-within .rail-alert-box{width:auto;height:auto;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;background:#FEF0EB;border:1px solid #C84B2F44;border-radius:8px;padding:10px 12px;gap:8px;}
+        .rail-alert-dot{margin-top:0;}
+        .app-rail:hover .rail-alert-dot,.app-rail:focus-within .rail-alert-dot{margin-top:4px;}
         @media (prefers-reduced-motion: no-preference){
           .app-rail{transition:width 220ms cubic-bezier(.2,.8,.2,1),box-shadow 220ms cubic-bezier(.2,.8,.2,1);}
-          .rail-label{transition:opacity 180ms ease 40ms,transform 180ms ease 40ms;}
+          .rail-label{transition:opacity 180ms ease 40ms,transform 180ms ease 40ms,max-width 220ms cubic-bezier(.2,.8,.2,1);}
+          .rail-row{transition:width 220ms cubic-bezier(.2,.8,.2,1);}
           .rail-alert-collapse{transition:max-height 220ms cubic-bezier(.2,.8,.2,1);}
         }
       `}</style>

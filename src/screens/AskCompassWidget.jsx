@@ -48,7 +48,7 @@ export function AskCompassWidget({ showAskCompass, setShowAskCompass, askCompass
   return(
     <div style={{position:"relative"}} ref={ref}>
       <button ref={btnRef} onClick={()=>setShowAskCompass(v=>!v)} aria-label="Ask Compass — quick HR reference" title="Ask Compass — quick HR reference" style={{position:"relative",background:showAskCompass?COLOR.purpleTint:"none",border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"5px 10px",fontSize:13,cursor:"pointer",color:COLOR.inkSoft,fontFamily:FONT.sans,display:"flex",alignItems:"center"}}>
-        <CompassLogo size={16}/>
+        <CompassLogo size={18}/>
       </button>
       {showAskCompass&&popoverStyle&&(
         <div role="dialog" aria-label="Ask Compass" style={{...popoverStyle,width:360,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",border:`1px solid ${COLOR.border}`,zIndex:250,display:"flex",flexDirection:"column",overflow:"hidden"}}>

@@ -17,8 +17,12 @@ export function OnboardingWizard({ onboardingStep, setOnboardingStep, org, curre
         <div style={{padding:36}}>
           {onboardingStep===0&&(
             <>
-              <div style={{width:56,height:56,borderRadius:"50%",background:"#7C5CFC",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20}}>
-                <CompassLogo size={32}/>
+              {/* Brand v2.0 migration — the mark no longer sits inside an
+                  ad-hoc tinted circle; per spec §4 the mark stands
+                  directly on white once inside the product, tile/badge
+                  backgrounds are reserved for genuine app-icon contexts. */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-start",marginBottom:20}}>
+                <CompassLogo size={40}/>
               </div>
               <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:26,color:"#1C1820",marginBottom:8,fontWeight:400}}>Welcome to Compass</div>
               <div style={{fontSize:14,color:"#6B6375",lineHeight:1.7,marginBottom:28}}>Compass helps you manage HR cases, run ACAS-compliant meetings, generate documents, and track every step of the process — all in one place.</div>

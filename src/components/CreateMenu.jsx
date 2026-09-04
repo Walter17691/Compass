@@ -74,10 +74,25 @@ export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask,
           regardless of width, with the label simply clipped by the
           rail's own overflow:hidden until it opens — see AppSidebar.jsx's
           .rail-label rule, which this button's label participates in via
-          plain CSS descendant matching, not a prop threaded from here. */}
+          plain CSS descendant matching, not a prop threaded from here.
+          Phase C closed-rail alignment correction — `compact` also wraps
+          the icon in the same 48×48 centred box every other rail row
+          uses (via the shared .rail-row class, applied only when
+          compact), and bumps the icon from 13px to 20px to match. The
+          default (mobile-sheet) rendering is completely untouched.
+          Phase C closed-rail geometry polish — this trigger always has a
+          1px border, so `minHeight:48` let the icon box's own fixed
+          height force it to 50px tall (see AppSidebar.jsx's RAIL_HIT
+          comment for the full explanation); a firm `height:48` plus the
+          icon box filling `height:"100%"` instead of a fixed 48 fixes it
+          the same way as every other rail row. */}
       <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-expanded={show} aria-haspopup="true"
-        style={{display:"flex",alignItems:"center",justifyContent:compact?"flex-start":"center",gap:6,width:"100%",background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}33`,color:COLOR.purpleDeep,padding:"8px 14px",borderRadius:RADIUS.surface,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
-        <PlusIcon size={13} style={{flexShrink:0}}/> <span className={compact?"rail-label":undefined}>Create</span>
+        className={compact?"rail-row":undefined}
+        style={{display:"flex",alignItems:"center",justifyContent:compact?"flex-start":"center",gap:compact?0:6,width:compact?undefined:"100%",background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}33`,color:COLOR.purpleDeep,padding:compact?0:"8px 14px",height:compact?48:undefined,borderRadius:RADIUS.surface,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+        {compact
+          ? <span style={{width:48,height:"100%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><PlusIcon size={20} style={{flexShrink:0}}/></span>
+          : <PlusIcon size={13} style={{flexShrink:0}}/>}
+        <span className={compact?"rail-label":undefined}>{compact?"":" "}Create</span>
       </button>
       {show&&popoverStyle&&(
         <div role="menu" aria-label="Create" style={{...popoverStyle,width:240,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"8px"}}>

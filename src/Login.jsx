@@ -1,20 +1,28 @@
 import { useState } from 'react'
 import { supabase } from './supabase'
-import { CompassLogo } from './components/CompassLogo'
+import { CompassLockup } from './components/CompassLogo'
+import { COLOR, FONT } from './styles/tokens'
 
+// Brand v2.0 migration — this file previously ran on its own fully
+// hardcoded pre-migration palette (C.bg #FDFAF5, C.accent #7C5CFC, etc.),
+// entirely disconnected from styles/tokens.js. C now just aliases the
+// approved tokens under the same short names every input/button/copy
+// block below already reads from, so this is a values-only swap — no
+// auth call, handler, or validation rule below changed.
 const C = {
-  bg: "#FDFAF5",
-  card: "#FFFFFF",
-  accent: "#7C5CFC",
-  accentLight: "#EDE8FF",
-  border: "#E8E0D0",
-  text: "#1C1820",
-  muted: "#6B6375",
-  subtle: "#9B9098",
-  error: "#C84B2F",
-  errorBg: "#FFF0ED",
-  success: "#1A7A4A",
-  successBg: "#E8F5EE",
+  bg: COLOR.rail,
+  card: COLOR.surface,
+  accent: COLOR.purple,
+  accentLight: COLOR.purpleTint,
+  border: COLOR.border,
+  inputBorder: COLOR.borderStrong,
+  text: COLOR.ink,
+  muted: COLOR.inkSoft,
+  subtle: COLOR.inkQuiet,
+  error: COLOR.red,
+  errorBg: COLOR.redTint,
+  success: COLOR.green,
+  successBg: COLOR.greenTint,
 }
 
 export default function Login({ onLogin }) {
@@ -66,14 +74,14 @@ export default function Login({ onLogin }) {
   const inp = (extra = {}) => ({
     width: "100%",
     background: C.bg,
-    border: `1.5px solid ${C.border}`,
+    border: `1.5px solid ${C.inputBorder}`,
     borderRadius: 8,
     padding: "11px 14px",
     fontSize: 14,
     outline: "none",
     color: C.text,
     boxSizing: "border-box",
-    fontFamily: "Archivo, system-ui, sans-serif",
+    fontFamily: FONT.sans,
     transition: "border-color 0.15s",
     ...extra
   })
@@ -95,25 +103,17 @@ export default function Login({ onLogin }) {
       alignItems: "center",
       justifyContent: "center",
       padding: 20,
-      fontFamily: "Archivo, system-ui, sans-serif"
+      fontFamily: FONT.sans
     }}>
-      {/* Subtle background pattern */}
-      <div style={{
-        position: "fixed", inset: 0, pointerEvents: "none",
-        background: "radial-gradient(ellipse 80% 60% at 50% 0%, #EDE8FF44 0%, transparent 70%)",
-        zIndex: 0
-      }} />
-
       <div style={{ width: "100%", maxWidth: 420, position: "relative", zIndex: 1 }}>
 
-        {/* Logo */}
+        {/* Logo — brand v2.0 §17: 56px mark, no tile, canonical lockup */}
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <CompassLogo size={56} />
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+            <CompassLockup size={56} />
           </div>
-          <div style={{ fontFamily: "Archivo, system-ui, sans-serif", fontSize: 32, color: C.text, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 6 }}>Compass</div>
-          <div style={{ fontSize: 14, color: C.muted, marginBottom: 6, fontStyle: "italic" }}>Navigate HR with confidence.</div>
-          <div style={{ fontSize: 11, color: C.subtle, fontWeight: 500 }}>UK HR intelligence</div>
+          <div style={{ fontSize: 56, lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.04em", color: C.text, marginBottom: 10 }}>Every case, in time, on the record.</div>
+          <div style={{ fontSize: 14.5, lineHeight: 1.5, fontWeight: 500, color: C.muted, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>Employee relations case management for UK organisations. Statutory clocks, ACAS-shaped process, and a document trail that holds up.</div>
         </div>
 
         {/* Card */}
@@ -122,14 +122,14 @@ export default function Login({ onLogin }) {
           border: `1px solid ${C.border}`,
           borderRadius: 16,
           padding: 32,
-          boxShadow: "0 4px 24px rgba(124,92,252,0.07)"
+          boxShadow: "0 1px 2px rgba(15,18,36,.04), 0 10px 30px -16px rgba(15,18,36,.14)"
         }}>
           <div style={{
             fontSize: 17,
             fontWeight: 700,
             color: C.text,
             marginBottom: 24,
-            fontFamily: "Archivo, system-ui, sans-serif"
+            fontFamily: FONT.sans
           }}>
             {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : 'Reset password'}
           </div>
@@ -137,7 +137,7 @@ export default function Login({ onLogin }) {
           {/* Error */}
           {error && (
             <div style={{
-              background: C.errorBg, border: `1px solid #F5C6BB`,
+              background: C.errorBg, border: `1px solid ${C.error}33`,
               borderRadius: 8, padding: "10px 14px",
               fontSize: 13, color: C.error, marginBottom: 16
             }}>{error}</div>
@@ -146,7 +146,7 @@ export default function Login({ onLogin }) {
           {/* Success message */}
           {message && (
             <div style={{
-              background: C.successBg, border: `1px solid #A8D5B5`,
+              background: C.successBg, border: `1px solid ${C.success}33`,
               borderRadius: 8, padding: "10px 14px",
               fontSize: 13, color: C.success, marginBottom: 16
             }}>{message}</div>
@@ -164,7 +164,7 @@ export default function Login({ onLogin }) {
                   placeholder="Jane Smith"
                   style={inp()}
                   onFocus={e => e.target.style.borderColor = C.accent}
-                  onBlur={e => e.target.style.borderColor = C.border}
+                  onBlur={e => e.target.style.borderColor = C.inputBorder}
                 />
               </div>
               <div style={{ marginBottom: 16 }}>
@@ -176,7 +176,7 @@ export default function Login({ onLogin }) {
                   placeholder="Acme Ltd"
                   style={inp()}
                   onFocus={e => e.target.style.borderColor = C.accent}
-                  onBlur={e => e.target.style.borderColor = C.border}
+                  onBlur={e => e.target.style.borderColor = C.inputBorder}
                 />
               </div>
             </>
@@ -193,7 +193,7 @@ export default function Login({ onLogin }) {
               placeholder="you@company.com"
               style={inp()}
               onFocus={e => e.target.style.borderColor = C.accent}
-              onBlur={e => e.target.style.borderColor = C.border}
+              onBlur={e => e.target.style.borderColor = C.inputBorder}
               onKeyDown={e => e.key === 'Enter' && mode === 'login' && handleLogin()}
             />
           </div>
@@ -211,7 +211,7 @@ export default function Login({ onLogin }) {
                   placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'}
                   style={inp({ paddingRight: 44 })}
                   onFocus={e => e.target.style.borderColor = C.accent}
-                  onBlur={e => e.target.style.borderColor = C.border}
+                  onBlur={e => e.target.style.borderColor = C.inputBorder}
                   onKeyDown={e => e.key === 'Enter' && mode === 'login' && handleLogin()}
                 />
                 <button
@@ -225,13 +225,13 @@ export default function Login({ onLogin }) {
                   tabIndex={-1}
                 >
                   {showPassword ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
                       <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
                       <line x1="1" y1="1" x2="23" y2="23"/>
                     </svg>
                   ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                       <circle cx="12" cy="12" r="3"/>
                     </svg>
@@ -255,7 +255,7 @@ export default function Login({ onLogin }) {
               </label>
               <button
                 onClick={() => { setMode('reset'); setError(null); setMessage(null); }}
-                style={{ background: "none", border: "none", fontSize: 12, color: C.accent, cursor: "pointer", fontFamily: "Archivo, system-ui, sans-serif", fontWeight: 500 }}
+                style={{ background: "none", border: "none", fontSize: 12, color: C.accent, cursor: "pointer", fontFamily: FONT.sans, fontWeight: 500 }}
               >
                 Forgot password?
               </button>
@@ -270,7 +270,7 @@ export default function Login({ onLogin }) {
             disabled={loading}
             style={{
               width: "100%",
-              background: loading ? "#B8A9F8" : C.accent,
+              background: loading ? `${C.accent}80` : C.accent,
               color: "#fff",
               border: "none",
               borderRadius: 10,
@@ -278,8 +278,8 @@ export default function Login({ onLogin }) {
               fontSize: 14,
               fontWeight: 700,
               cursor: loading ? "not-allowed" : "pointer",
-              fontFamily: "Archivo, system-ui, sans-serif",
-              letterSpacing: "0.2px",
+              fontFamily: FONT.sans,
+              letterSpacing: "-0.01em",
               transition: "background 0.15s",
               marginBottom: 16
             }}
@@ -292,17 +292,17 @@ export default function Login({ onLogin }) {
             {mode === 'login' && (
               <>
                 Don't have an account?{' '}
-                <button onClick={() => { setMode('signup'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "Archivo, system-ui, sans-serif" }}>Create one</button>
+                <button onClick={() => { setMode('signup'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: FONT.sans }}>Create one</button>
               </>
             )}
             {mode === 'signup' && (
               <>
                 Already have an account?{' '}
-                <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "Archivo, system-ui, sans-serif" }}>Sign in</button>
+                <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: FONT.sans }}>Sign in</button>
               </>
             )}
             {mode === 'reset' && (
-              <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "Archivo, system-ui, sans-serif" }}>← Back to sign in</button>
+              <button onClick={() => { setMode('login'); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: FONT.sans }}>← Back to sign in</button>
             )}
           </div>
         </div>
