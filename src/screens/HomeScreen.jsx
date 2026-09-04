@@ -162,34 +162,39 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
         {/* Home decorative brand-mark pass — a purely decorative backdrop,
             not a second visible logo. Reuses CompassLogo's existing
             "marketing" colour variant verbatim (no violet) and the exact
-            v2.0 path geometry — nothing redrawn or approximated. The clip
-            window is its own absolutely-positioned, zero-flow-height box,
-            so it adds nothing to this column's layout height regardless of
-            crop size — greeting/Ask Compass/feed are unaffected. The
-            window itself stays pinned at top:0/right:0 (never negative) so
-            its own box can never exceed the column's viewport-safe bounds;
-            only the mark INSIDE it reaches toward the true corner via its
-            own negative offset (an earlier version put the negative offset
-            on the window itself and produced real horizontal overflow at
-            1024px). .home-masthead-mark's media query hides it below
-            tablet width.
-            Recomposition pass — the natural bottom tip sits only ~90-115px
-            above Ask Compass (that gap is fixed by the card's own page
-            position), while the full mark at 600-700px is ~360-415px tall.
-            That vertical budget is far smaller than the mark's height, so
-            *some* horizontal slice through the mark's broad middle is
-            unavoidable at the window's top edge — proved by hand from the
-            mark's own vertex coordinates. What's controllable is where that
-            slice falls relative to the page edges: right is pushed only as
-            far as keeps the true SE tip on-page (beyond roughly -0.28*size
-            the tip itself runs off the right edge), and the window is
-            narrowed to roughly where the mark's own left boundary already
-            reaches by mid-crop — so the window's left edge does the
-            cropping instead of floating uselessly in white space, leaving
-            just a narrow diagonal wedge entering near the corner rather
-            than a wide flat band spanning most of the window's width. */}
-        <div className="home-masthead-mark" aria-hidden="true" style={{position:"absolute",top:0,right:0,width:170,height:100,overflow:"hidden",pointerEvents:"none",userSelect:"none"}}>
-          <CompassLogo variant="marketing" size={650} style={{position:"absolute",top:-375,right:-155}}/>
+            v2.0 path geometry — nothing redrawn, stretched, or
+            approximated. Zero-flow-height, position:absolute, pointer-
+            events:none, aria-hidden: greeting/Ask Compass/feed are
+            completely unaffected. .home-masthead-mark's media query hides
+            it below tablet width.
+            "Option B" pass — the mark's own silhouette is far from
+            uniform: its NW-litBulge edge (steep, close to vertical) only
+            gives way to the much shallower litBulge-SE / SE-shadedBulge
+            pair once you're past litBulge's own height (path y=64.5, 87.5%
+            of the way down the mark's 12.52-71.92 span). Showing the wide
+            middle (as the previous, smaller-size pass did) reads as a
+            stout wedge; showing ONLY the region beyond that point — where
+            both boundary edges are shallow and taper together toward the
+            SE tip — reads as a genuinely elongated diagonal sliver,
+            without redrawing or stretching a single coordinate. That's
+            what size=1213 + top=-785 buys here: at screen-y=0, the visible
+            fraction is already ~0.878 (just past litBulge), so the entire
+            on-page portion is that shallow taper, not the broad kite body.
+            SE tip (path 71.92,71.92) lands at screen-y = -785 + 71.92*
+            (1213/100) = 87.5, a 30.4px gap above Ask Compass's own top
+            (117.9) — untouched below (opaque COLOR.surface,
+            position:static, no zIndex). right=-250 keeps the tip ~90px in
+            from the column's own right edge at every breakpoint (anchored
+            via `right`, holds regardless of viewport width) — close to
+            the edge, not centred. The window (700x400, pinned top:0/
+            right:0, never negative) is — as in the previous pass — sized
+            well clear of the visible geometry on every side purely to
+            contain the <svg> element's own oversized box (1213x1213, of
+            which only the mark's actual paint is non-transparent) and
+            stop it from expanding the page's scrollWidth; it does no
+            visual cropping of its own. */}
+        <div className="home-masthead-mark" aria-hidden="true" style={{position:"absolute",top:0,right:0,width:700,height:400,overflow:"hidden",pointerEvents:"none",userSelect:"none"}}>
+          <CompassLogo variant="marketing" size={1213} style={{position:"absolute",top:-785,right:-250}}/>
         </div>
 
         {/* §A/§2 Header — greeting + one real-data sentence, no separate
