@@ -161,32 +161,35 @@ export function HomeScreen({ cases, getCaseStage, currentUser, getNextStep, setS
 
         {/* Home decorative brand-mark pass — a purely decorative backdrop,
             not a second visible logo. Reuses CompassLogo's existing
-            "marketing" colour variant verbatim (no violet, the exact pair
-            the brand package's own compass-backdrop.svg documents: "the
-            mark cropped very large in the two greys... no violet") and
-            the exact v2.0 path geometry — nothing new drawn or approximated.
-            The clip window below is its own absolutely-positioned, zero-
-            flow-height box (position:absolute relative to this content
-            column), so it can be however tall the crop needs regardless of
-            the greeting's real (much shorter) content height, without
-            adding a single pixel to this column's actual layout height —
-            the greeting/Ask Compass/feed below are completely unaffected,
-            still exactly where they always were. pointerEvents:"none" +
-            aria-hidden means it can never be clicked, focused, or announced;
-            .home-masthead-mark's media query hides it below tablet width
-            rather than forcing the desktop composition into the mobile
-            header. The window itself is pinned at top:0/right:0 — flush
-            with, never past, this column's own padding-box edge — so its
-            own box can never exceed the column's (always viewport-safe)
-            width; only the mark INSIDE it (already clipped by this same
-            box) reaches toward the true corner, via its own negative
-            offset. An earlier version put the negative offset on the
-            window itself, which let the window's own box briefly outgrow
-            the column at narrower breakpoints and created real horizontal
-            overflow — caught live at 1024px, fixed by moving the offset
-            to where it's actually safe (inside the clip, not on it). */}
-        <div className="home-masthead-mark" aria-hidden="true" style={{position:"absolute",top:0,right:0,width:420,height:210,overflow:"hidden",pointerEvents:"none",userSelect:"none"}}>
-          <CompassLogo variant="marketing" size={330} style={{position:"absolute",top:-63,right:-38}}/>
+            "marketing" colour variant verbatim (no violet) and the exact
+            v2.0 path geometry — nothing redrawn or approximated. The clip
+            window is its own absolutely-positioned, zero-flow-height box,
+            so it adds nothing to this column's layout height regardless of
+            crop size — greeting/Ask Compass/feed are unaffected. The
+            window itself stays pinned at top:0/right:0 (never negative) so
+            its own box can never exceed the column's viewport-safe bounds;
+            only the mark INSIDE it reaches toward the true corner via its
+            own negative offset (an earlier version put the negative offset
+            on the window itself and produced real horizontal overflow at
+            1024px). .home-masthead-mark's media query hides it below
+            tablet width.
+            Recomposition pass — the natural bottom tip sits only ~90-115px
+            above Ask Compass (that gap is fixed by the card's own page
+            position), while the full mark at 600-700px is ~360-415px tall.
+            That vertical budget is far smaller than the mark's height, so
+            *some* horizontal slice through the mark's broad middle is
+            unavoidable at the window's top edge — proved by hand from the
+            mark's own vertex coordinates. What's controllable is where that
+            slice falls relative to the page edges: right is pushed only as
+            far as keeps the true SE tip on-page (beyond roughly -0.28*size
+            the tip itself runs off the right edge), and the window is
+            narrowed to roughly where the mark's own left boundary already
+            reaches by mid-crop — so the window's left edge does the
+            cropping instead of floating uselessly in white space, leaving
+            just a narrow diagonal wedge entering near the corner rather
+            than a wide flat band spanning most of the window's width. */}
+        <div className="home-masthead-mark" aria-hidden="true" style={{position:"absolute",top:0,right:0,width:170,height:100,overflow:"hidden",pointerEvents:"none",userSelect:"none"}}>
+          <CompassLogo variant="marketing" size={650} style={{position:"absolute",top:-375,right:-155}}/>
         </div>
 
         {/* §A/§2 Header — greeting + one real-data sentence, no separate
