@@ -2,12 +2,18 @@ import { useState, useRef, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { CompassLogo } from './CompassLogo';
 import { ActivityBell } from './ActivityBell';
-import { MenuIcon, CheckIcon } from './Icons';
+import { MenuIcon, CheckIcon, HomeIcon, CasesIcon, TasksIcon, PeopleIcon, CalendarIcon, ClipboardIcon, FlagIcon, BarChartIcon, UsersMinusIcon, HeartIcon, ShieldIcon, GearIcon } from './Icons';
 import { CreateMenu } from './CreateMenu';
 import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { FONT, COLOR, SPACE, RADIUS } from '../styles/tokens';
 
-const SearchIcon = ({size=15}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+// Phase C keyboard/rendering defect fix — this component previously only
+// destructured {size}, so the flexShrink:0 already being passed at its
+// call site below was silently dropped: with nothing preventing it, the
+// SVG shrank to width:0 inside the rail's tight 72px flex row (the same
+// class of bug ChevronIcon and every new nav icon avoided by already
+// forwarding `style`). Now consistent with those.
+const SearchIcon = ({size=15, style}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={style}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const ChevronIcon = ({size=10, expanded}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:expanded?"rotate(0deg)":"rotate(-90deg)",transition:"transform 0.12s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>;
 
 // Sidebar footer composition pass, Part 5 — this used to be a permanent
@@ -22,15 +28,28 @@ const ChevronIcon = ({size=10, expanded}) => <svg width={size} height={size} vie
 // language. Rendered above the nav list, not in the footer — it exists
 // for exactly as long as the problem does and takes zero layout space
 // once resolved/dismissed, never a permanent navigation-adjacent icon.
-function LoadIssueNotice({ dataLoadIssues, onRetryLoad, onDismissLoadBanner }) {
+// Phase C (expanding sidebar rail) — `railCompact` (default false, so the
+// mobile header's own call site renders byte-for-byte as before) hides
+// the message/actions at the rail's 72px resting width behind the same
+// opacity/transform .rail-label treatment every other row uses, plus a
+// max-height collapse (.rail-alert-collapse) so the invisible text
+// doesn't still reserve a tall, wrapped-multi-line block of dead space
+// while hidden. role="alert"/aria-live="assertive" are unconditional —
+// a screen reader still gets the full message immediately regardless of
+// the rail's visual state; only sighted-at-rest users see the small red
+// dot until they open the rail, exactly like a "Late" pill would need
+// hover context here — this genuinely can't be summarised into a dot
+// with a day count the way §13's Running-out concept can.
+function LoadIssueNotice({ dataLoadIssues, onRetryLoad, onDismissLoadBanner, railCompact=false }) {
   const message = `Couldn't load ${dataLoadIssues.length===1?dataLoadIssues[0]:`${dataLoadIssues.length} kinds of data`} — this may be a connection problem, not that there's nothing there.`;
+  const hideClass = railCompact ? "rail-label rail-alert-collapse" : undefined;
   return (
     <div role="alert" aria-live="assertive" style={{background:"#FEF0EB",border:"1px solid #C84B2F44",borderRadius:RADIUS.surface,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
       <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
         <div style={{width:7,height:7,borderRadius:"50%",background:COLOR.red,flexShrink:0,marginTop:4}}/>
-        <span style={{fontSize:12,color:COLOR.ink,lineHeight:1.4,flex:1}}>{message}</span>
+        <span className={hideClass} style={{fontSize:12,color:COLOR.ink,lineHeight:1.4,flex:1}}>{message}</span>
       </div>
-      <div style={{display:"flex",gap:14,paddingLeft:15}}>
+      <div className={hideClass} style={{display:"flex",gap:14,paddingLeft:15}}>
         <button onClick={onRetryLoad} style={{fontSize:12,fontWeight:600,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Retry</button>
         <button onClick={onDismissLoadBanner} aria-label="Dismiss" style={{fontSize:12,color:COLOR.inkFaint,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Dismiss</button>
       </div>
@@ -38,14 +57,26 @@ function LoadIssueNotice({ dataLoadIssues, onRetryLoad, onDismissLoadBanner }) {
   );
 }
 
-const NavButton = ({s, l, screen, goToScreen, indent}) => {
+// Phase C (expanding sidebar rail) — active treatment changed from a
+// full purpleTint row fill to the approved system: white surface + ink
+// text + violet icon + a subtle border, never a solid violet block. Icon
+// colour rides on the button's own `color` (currentColor) rather than a
+// separate prop, so active/inactive icon colour always matches the label
+// colour with no extra wiring. Icons are new (this sidebar had none
+// before); label text is unchanged and still the button's real
+// accessible name — the icon is aria-hidden and contributes nothing to
+// it, and wrapping the label in .rail-label (opacity/transform only,
+// never display:none) is what lets the rail's resting width hide it
+// visually without hiding it from assistive tech.
+const NavButton = ({s, l, icon:Icon, screen, goToScreen, indent}) => {
   const active = screen===s;
   return (
     <button onClick={()=>goToScreen(s)}
       onMouseEnter={e=>{if(!active) e.currentTarget.style.background=COLOR.purpleTint;}}
       onMouseLeave={e=>{if(!active) e.currentTarget.style.background="none";}}
-      style={{display:"flex",alignItems:"center",width:"100%",textAlign:"left",background:active?COLOR.purpleTint:"none",border:"none",color:active?COLOR.purple:COLOR.inkSoft,padding:indent?"8px 14px 8px 28px":"9px 14px",borderRadius:RADIUS.surface,fontSize:indent?13:13.5,fontWeight:active?600:400,cursor:"pointer",fontFamily:FONT.sans}}>
-      {l}
+      style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:active?COLOR.surface:"none",border:active?`1px solid ${COLOR.border}`:"1px solid transparent",boxShadow:active?"0 1px 2px rgba(15,18,36,0.06)":"none",color:active?COLOR.ink:COLOR.inkSoft,padding:indent?"8px 14px 8px 28px":"9px 14px",borderRadius:RADIUS.surface,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+      {Icon&&<Icon size={16} style={{flexShrink:0}}/>}
+      <span className="rail-label">{l}</span>
     </button>
   );
 };
@@ -65,8 +96,8 @@ const AskCompassNavButton = ({ screen, goToScreen }) => {
     <button onClick={()=>goToScreen(SCREENS.ASK_COMPASS)}
       onMouseEnter={e=>{if(!active) e.currentTarget.style.background=COLOR.purpleTint;}}
       onMouseLeave={e=>{if(!active) e.currentTarget.style.background="none";}}
-      style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:active?COLOR.purpleTint:"none",border:"none",color:active?COLOR.purple:COLOR.inkSoft,padding:"9px 14px",borderRadius:RADIUS.surface,fontSize:13.5,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>
-      <CompassLogo size={16}/> Ask Compass
+      style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:active?COLOR.surface:"none",border:active?`1px solid ${COLOR.border}`:"1px solid transparent",boxShadow:active?"0 1px 2px rgba(15,18,36,0.06)":"none",color:active?COLOR.ink:COLOR.inkSoft,padding:"9px 14px",borderRadius:RADIUS.surface,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+      <CompassLogo size={16}/><span className="rail-label">Ask Compass</span>
     </button>
   );
 };
@@ -88,9 +119,9 @@ function SidebarGroup({ label, items, screen, goToScreen, expanded, onToggle }) 
   return (
     <div>
       <button onClick={onToggle} aria-expanded={expanded} aria-controls={groupId}
-        style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.inkFaint,padding:"8px 14px",cursor:"pointer",fontFamily:FONT.sans}}>
-        <span style={{fontSize:12,fontWeight:700,color:COLOR.inkFaint}}>{label}</span>
-        <ChevronIcon expanded={expanded}/>
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",textAlign:"left",background:"none",border:"none",color:COLOR.inkFaint,padding:"8px 14px",cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+        <span className="rail-label" style={{fontSize:12,fontWeight:700,color:COLOR.inkFaint}}>{label}</span>
+        <span className="rail-label" style={{display:"inline-flex",flexShrink:0}}><ChevronIcon expanded={expanded}/></span>
       </button>
       {expanded&&(
         <div id={groupId} style={{display:"flex",flexDirection:"column",gap:1}}>
@@ -120,7 +151,10 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
 
   useEffect(() => {
     if (!show) return;
-    const onKeyDown = e => { if (e.key === "Escape") setShow(false); };
+    // Phase C keyboard defect fix — see CreateMenu.jsx's identical comment.
+    // Escape now returns focus to this trigger; outside mousedown still
+    // closes with no forced focus change.
+    const onKeyDown = e => { if (e.key === "Escape") { setShow(false); btnRef.current?.focus(); } };
     const onClickOutside = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('mousedown', onClickOutside);
@@ -145,11 +179,11 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
         onMouseLeave={e=>{if(!show) e.currentTarget.style.background="none";}}
         style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:show?COLOR.paper:"none",border:"none",padding:"6px 8px",borderRadius:RADIUS.surface,cursor:"pointer",textAlign:"left"}}>
         <div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,color:COLOR.purpleDeep,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{initials}</div>
-        <div style={{minWidth:0,flex:1}}>
+        <div className="rail-label" style={{minWidth:0,flex:1}}>
           <div title={currentUser?.name||undefined} style={{fontSize:13,fontWeight:600,color:COLOR.ink,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.name||"Account"}</div>
           {org?.name&&<div title={org.name} style={{fontSize:11,color:COLOR.inkFaint,lineHeight:1.3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{org.name}</div>}
         </div>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+        <svg className="rail-label" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           style={{color:COLOR.inkFaint,flexShrink:0,transform:show?"rotate(180deg)":"none",transition:"transform 0.12s"}}>
           <polyline points="18 15 12 9 6 15"/>
         </svg>
@@ -209,12 +243,12 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   // badge here is a separate, later decision, not something to
   // approximate with the total count in the meantime.
   const primaryItems = [
-    {s:SCREENS.HOME, l:"Home"},
-    {s:SCREENS.CASES, l:"Cases"},
+    {s:SCREENS.HOME, l:"Home", icon:HomeIcon},
+    {s:SCREENS.CASES, l:"Cases", icon:CasesIcon},
   ];
   const primaryItemsAfterAsk = [
-    {s:SCREENS.TASKS, l:"Tasks"},
-    {s:SCREENS.PEOPLE, l:"People"},
+    {s:SCREENS.TASKS, l:"Tasks", icon:TasksIcon},
+    {s:SCREENS.PEOPLE, l:"People", icon:PeopleIcon},
   ];
 
   // Home + Sidebar Product Experience pass, Part 1 — same semantic
@@ -234,20 +268,20 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   // built for a non-HR user, same as before.
   const sidebarGroups = [
     { label:"Work", items: [
-      {s:SCREENS.CALENDAR, l:"Calendar"},
-      isHR ? {s:SCREENS.HR_DELEGATED_WORK, l:"Delegated Work"} : {s:SCREENS.MANAGER_PORTAL, l:"My People Actions"},
-      {s:SCREENS.CONCERNS, l:isHR?"Concerns":"Raise a concern"},
+      {s:SCREENS.CALENDAR, l:"Calendar", icon:CalendarIcon},
+      isHR ? {s:SCREENS.HR_DELEGATED_WORK, l:"Delegated Work", icon:ClipboardIcon} : {s:SCREENS.MANAGER_PORTAL, l:"My People Actions", icon:ClipboardIcon},
+      {s:SCREENS.CONCERNS, l:isHR?"Concerns":"Raise a concern", icon:FlagIcon},
     ]},
     { label:"Intelligence", items: [
-      {s:SCREENS.INSIGHTS, l:"Insights"},
+      {s:SCREENS.INSIGHTS, l:"Insights", icon:BarChartIcon},
     ]},
     ...(isHR ? [{ label:"HR Processes", items: [
-      {s:SCREENS.REDUNDANCY, l:"Redundancy"},
-      {s:SCREENS.WELLBEING, l:"Wellbeing"},
-      {s:SCREENS.DSAR, l:"DSAR"},
+      {s:SCREENS.REDUNDANCY, l:"Redundancy", icon:UsersMinusIcon},
+      {s:SCREENS.WELLBEING, l:"Wellbeing", icon:HeartIcon},
+      {s:SCREENS.DSAR, l:"DSAR", icon:ShieldIcon},
     ]}] : []),
     { label:"Organisation", items: [
-      {s:SCREENS.SETTINGS, l:"Settings"},
+      {s:SCREENS.SETTINGS, l:"Settings", icon:GearIcon},
     ]},
   ].filter(g=>g.items.length>0);
   const groupLabelForScreen = (s) => sidebarGroups.find(g=>g.items.some(i=>i.s===s))?.label;
@@ -299,21 +333,33 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
           item — visually nowhere near Ask Compass (which lives further
           down the nav list, not in this header row), so there's no
           competition between the two. */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 8px 12px"}}>
-        <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"0 6px",cursor:"pointer"}}>
-          <CompassLogo size={30}/>
-          <span style={{fontFamily:FONT.serif,fontSize:17,fontWeight:850,color:COLOR.ink,letterSpacing:"-0.055em"}}>Compass</span>
+      <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 8px 12px"}}>
+        <button onClick={()=>goToScreen(SCREENS.HOME)} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"0 6px",cursor:"pointer",width:"100%"}}>
+          <CompassLogo size={36}/>
+          <span className="rail-label" style={{fontFamily:FONT.serif,fontSize:17,fontWeight:850,color:COLOR.ink,letterSpacing:"-0.055em"}}>Compass</span>
         </button>
-        <ActivityBell auditLog={auditLog} orgId={org?.id}/>
+        {/* Phase C (expanding sidebar rail) — Activity moved onto its own
+            row directly below the tile, still left-aligned to the same
+            gutter as every other row. A single header row with the tile
+            on the left and Activity space-between on the right (its
+            prior 224px layout) can't fit both inside the rail's 72px
+            resting width without overlap; stacking keeps Activity's own
+            component, handlers, and popover completely untouched — only
+            where it sits changed. */}
+        <div style={{padding:"0 6px"}}>
+          <ActivityBell auditLog={auditLog} orgId={org?.id}/>
+        </div>
       </div>
 
       {/* IA & User Journey pass, §7 — universal Create pattern. One
           learned control instead of the New case/New meeting/New task/
           Raise concern/Add note buttons previously scattered one-per-
           screen; every action inside still calls the exact same
-          existing handler each of those buttons already called. */}
+          existing handler each of those buttons already called.
+          `compact` (Phase C) only changes this trigger's own alignment —
+          see CreateMenu.jsx. */}
       <div style={{padding:"0 6px 10px"}}>
-        <CreateMenu {...createMenuProps} />
+        <CreateMenu {...createMenuProps} compact/>
       </div>
 
       {/* IA & User Journey pass, §13 — kept as its own visible row (not
@@ -321,18 +367,24 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
           relevant capability, not a specialised destination — "Search =
           find something" per the brief's own conceptual split from Ask
           Compass. Same SearchScreen/runSearch this always was. */}
-      <button onClick={()=>goToScreen(SCREENS.SEARCH)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:screen===SCREENS.SEARCH?COLOR.purpleTint:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,color:COLOR.inkFaint,padding:"8px 12px",borderRadius:RADIUS.surface,fontSize:13,fontWeight:400,cursor:"pointer",fontFamily:FONT.sans,marginBottom:10}}>
-        <SearchIcon size={13}/> Search
+      <button onClick={()=>goToScreen(SCREENS.SEARCH)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:screen===SCREENS.SEARCH?COLOR.purpleTint:COLOR.paper,border:`1px solid ${COLOR.borderFaint}`,color:COLOR.inkFaint,padding:"8px 12px",borderRadius:RADIUS.surface,fontSize:13,fontWeight:400,cursor:"pointer",fontFamily:FONT.sans,marginBottom:10,whiteSpace:"nowrap"}}>
+        <SearchIcon size={13} style={{flexShrink:0}}/> <span className="rail-label">Search</span>
       </button>
 
       {/* Sidebar footer composition pass, Part 5 — an in-flow notice
           only present for exactly as long as the underlying problem is,
           pushing the nav down slightly rather than living in fixed
           footer chrome. Genuinely rare (a background fetch actually
-          failing), so this cost is negligible in practice. */}
+          failing), so this cost is negligible in practice. Phase C —
+          railCompact keeps it in-flow (an earlier attempt at pulling it
+          out via position:fixed instead made Home's own row unreachable
+          underneath it — a real regression, reverted) and instead
+          collapses its message/actions at rest via LoadIssueNotice's own
+          rail-label/rail-alert-collapse treatment, leaving just the red
+          dot visible until the rail opens. */}
       {showLoadIssue&&(
         <div style={{padding:"0 6px 10px"}}>
-          <LoadIssueNotice dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner}/>
+          <LoadIssueNotice dataLoadIssues={dataLoadIssues} onRetryLoad={onRetryLoad} onDismissLoadBanner={onDismissLoadBanner} railCompact/>
         </div>
       )}
 
@@ -407,9 +459,49 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
     );
   }
 
+  // Phase C (expanding sidebar rail) — 72px resting / 248px on hover or
+  // focus-within, overlaying the page rather than resizing it. The
+  // in-flow spacer below is what actually reserves layout width for the
+  // content column beside AppSidebar's mount point (App.jsx's own
+  // flex:1 content div) — it never changes size, so main-content x never
+  // moves regardless of rail state. The rail itself is position:fixed
+  // (removed from normal flow entirely, so animating ITS width cannot
+  // reflow anything) and sits on top of ordinary page content at z-index
+  // 80 — above in-page sticky headers (z-index 10/99 elsewhere in the
+  // app) but comfortably below every real popover/modal in the app
+  // (CommandBarModal/Calendar dialog at 300, the smallest modals at
+  // 500+, this sidebar's own Create/Account/Activity popovers at 250 —
+  // all position:fixed already via usePopoverPosition, so they escape
+  // this container's overflowX:hidden and continue to render above it
+  // exactly as before). Hover and :focus-within share one CSS rule, so
+  // a keyboard user tabbing into any rail control expands it exactly
+  // like a mouse hover would (§17); because both states live on the
+  // same contiguous box (icon column and label area are the same
+  // element widening, not two separate regions), there is no seam for
+  // the pointer to fall through while moving from the icon rail into
+  // the revealed label area (§16). All transitions are wrapped in a
+  // prefers-reduced-motion:no-preference query, so reduced-motion users
+  // get the identical end state instantly rather than a disabled
+  // feature (§19).
   return (
-    <aside style={{width:224,flexShrink:0,height:"100vh",position:"sticky",top:0,background:COLOR.rail,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px",overflowX:"hidden"}}>
-      {sidebarBody}
-    </aside>
+    <>
+      <style>{`
+        .app-rail{width:72px;overflowX:hidden;}
+        .app-rail:hover,.app-rail:focus-within{width:248px;box-shadow:4px 0 24px rgba(15,18,36,0.10);}
+        .rail-label{opacity:0;transform:translateX(-6px);display:inline-block;}
+        .app-rail:hover .rail-label,.app-rail:focus-within .rail-label{opacity:1;transform:translateX(0);}
+        .rail-alert-collapse{max-height:0;overflow:hidden;display:block;}
+        .app-rail:hover .rail-alert-collapse,.app-rail:focus-within .rail-alert-collapse{max-height:120px;}
+        @media (prefers-reduced-motion: no-preference){
+          .app-rail{transition:width 220ms cubic-bezier(.2,.8,.2,1),box-shadow 220ms cubic-bezier(.2,.8,.2,1);}
+          .rail-label{transition:opacity 180ms ease 40ms,transform 180ms ease 40ms;}
+          .rail-alert-collapse{transition:max-height 220ms cubic-bezier(.2,.8,.2,1);}
+        }
+      `}</style>
+      <div style={{width:72,flexShrink:0,height:"100vh"}}/>
+      <aside className="app-rail" style={{position:"fixed",top:0,left:0,bottom:0,zIndex:80,background:COLOR.rail,borderRight:`1px solid ${COLOR.borderFaint}`,display:"flex",flexDirection:"column",padding:"16px 8px"}}>
+        {sidebarBody}
+      </aside>
+    </>
   );
 }

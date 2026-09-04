@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AppSidebar } from '../components/AppSidebar.jsx';
+import { COLOR } from '../styles/tokens.js';
 
 // Phase 6.5 hardening — dsar_requests' RLS was org-wide with no role
 // check (supabase/dsar_hr_only_access_2026-08-22.sql fixes this) while
@@ -413,5 +415,172 @@ describe('AppSidebar — data-load-issue notice (Sidebar footer composition pass
   it('renders the notice within the mobile header layout too, and it never lives in the account row', () => {
     render(<AppSidebar {...baseProps} isHR={true} isMobile={true} dataLoadIssues={['cases']} loadBannerDismissed={false} />);
     expect(screen.getByRole('alert')).toHaveTextContent(/Couldn't load cases/);
+  });
+});
+
+// Phase C — expanding sidebar rail. The rest/open width change and the
+// label reveal are pure CSS (a .app-rail/.rail-label rule pair reacting
+// to :hover/:focus-within), which jsdom does not lay out or compute —
+// these tests instead verify the structural contract the CSS relies on:
+// the rail wrapper and its label spans carry the right classNames, every
+// nav item still exposes the same accessible name it always did (so
+// hiding a label visually never hides it from assistive tech), and the
+// active-state visual system matches the approved white-surface spec
+// rather than the old solid-tint fill. Handler/destination/permission
+// coverage above is untouched and still exercises the exact same items.
+describe('AppSidebar — expanding rail shell (Phase C)', () => {
+  it('renders the rail as a fixed-position <aside> (not the old sticky 224px one) plus an in-flow 72px spacer', () => {
+    const { container } = render(<AppSidebar {...baseProps} isHR={true} />);
+    const rail = container.querySelector('aside.app-rail');
+    expect(rail).toBeInTheDocument();
+    expect(rail.style.position).toBe('fixed');
+    expect(rail.style.top).toBe('0px');
+    expect(rail.style.left).toBe('0px');
+    expect(rail.style.bottom).toBe('0px');
+    // The landmark itself must stay <aside> — tests/e2e/navigation-menus.spec.js
+    // scopes its own queries to `aside, header`, and screen-reader users rely
+    // on the same landmark to jump straight to navigation.
+    const spacer = container.querySelector('div');
+    expect(spacer.style.width).toBe('72px');
+  });
+
+  it('gives every primary nav item an icon plus a label wrapped for the rail\'s reveal-on-open treatment, without changing its accessible name', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    for (const name of ['Home', 'Cases', 'Tasks', 'People']) {
+      const btn = screen.getByRole('button', { name: new RegExp(`^${name}`) });
+      expect(btn.querySelector('svg')).toBeInTheDocument();
+      const label = btn.querySelector('.rail-label');
+      expect(label).toHaveTextContent(name);
+    }
+    const askCompass = screen.getByRole('button', { name: /^Ask Compass/ });
+    expect(askCompass.querySelector('.rail-label')).toHaveTextContent('Ask Compass');
+  });
+
+  it('gives grouped destinations an icon too once their section is open, with the same accessible name as before', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    const calendar = screen.getByRole('button', { name: 'Calendar' });
+    expect(calendar.querySelector('svg')).toBeInTheDocument();
+    expect(calendar.querySelector('.rail-label')).toHaveTextContent('Calendar');
+  });
+
+  it('gives the active nav item a white surface with a border/shadow, never a solid violet fill', () => {
+    render(<AppSidebar {...baseProps} screen="home" isHR={true} />);
+    const home = screen.getByRole('button', { name: /^Home/ });
+    expect(home.style.background).toBe('rgb(255, 255, 255)');
+    expect(home.style.background).not.toBe(COLOR.purpleTint);
+    expect(home.style.border).toBe('1px solid rgb(232, 234, 242)');
+  });
+
+  it('leaves an inactive nav item with no background and no border', () => {
+    render(<AppSidebar {...baseProps} screen="home" isHR={true} />);
+    const cases = screen.getByRole('button', { name: /^Cases/ });
+    expect(cases.style.background).toBe('none');
+  });
+
+  it('wraps the Compass wordmark and the Search label for the same reveal treatment as nav items', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    expect(screen.getByText('Compass', { selector: 'span.rail-label' })).toBeInTheDocument();
+    const search = screen.getByRole('button', { name: /Search/ });
+    expect(search.querySelector('.rail-label')).toHaveTextContent('Search');
+  });
+
+  it('wraps the account name/organisation block for the reveal treatment without changing its content', () => {
+    render(<AppSidebar {...baseProps} isHR={true} currentUser={{ name: 'Priya Shah' }} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    const label = trigger.querySelector('.rail-label');
+    expect(label).toHaveTextContent('Priya Shah');
+    expect(label).toHaveTextContent('Acme Ltd');
+  });
+
+  it('never renders a "Running out" deadline section — AppSidebar has no deadline data source to draw one from', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    expect(screen.queryByText('Running out')).not.toBeInTheDocument();
+  });
+
+  it('keeps the mobile Create trigger centred (not compact) — the rail-only alignment change never reaches the mobile sheet', () => {
+    render(<AppSidebar {...baseProps} isHR={true} isMobile={true} showMobileNav={true} createMenuProps={{}} />);
+    const trigger = screen.getByRole('button', { name: /Create/ });
+    expect(trigger.style.justifyContent).toBe('center');
+  });
+
+  it('still renders the plain mobile header (no rail classes) when isMobile is true', () => {
+    const { container } = render(<AppSidebar {...baseProps} isHR={true} isMobile={true} />);
+    expect(container.querySelector('.app-rail')).not.toBeInTheDocument();
+    expect(container.querySelector('header')).toBeInTheDocument();
+  });
+});
+
+// Phase C targeted defect remediation — two defects found during live
+// keyboard/pointer verification of the expanding rail:
+//
+// 1. Escape closing Create/Account/Activity after focus had moved onto an
+//    item inside the popover dropped focus to document.body (nothing else
+//    to receive it once the focused element unmounted) — invisible in the
+//    old static 224px sidebar, but the rail's :focus-within-driven
+//    collapse made it visible: losing focus collapsed the rail out from
+//    under a keyboard user mid-interaction. Fixed by returning focus to
+//    each popover's own trigger on Escape specifically (outside-click
+//    closure is untouched — no forced focus jump for a mouse user).
+//
+// 2. The Create and Search icons rendered at width:0 at the rail's 72px
+//    resting width — PlusIcon/SearchIcon only destructured {size}, so the
+//    flexShrink:0 already being passed at their call sites was silently
+//    dropped, letting the flex row shrink them under space pressure from
+//    the (invisible-but-still-laid-out) label text beside them. Fixed by
+//    having both components accept and apply `style`, matching every
+//    other Phase C icon.
+describe('AppSidebar — Account menu Escape focus restoration (Phase C targeted defect remediation)', () => {
+  it('returns focus to the Account menu trigger when Escape closes it after focus has moved onto an item inside it', async () => {
+    const user = userEvent.setup();
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    await user.click(trigger);
+    // baseProps has no second org, so "+ Join another organisation" (not
+    // the org list) is the first item in tab order, ahead of Settings.
+    await user.tab();
+    expect(screen.getByRole('button', { name: '+ Join another organisation' })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Settings' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu', { name: 'Account' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('leaves focus on the Account menu trigger when Escape closes it without focus ever having moved into it', async () => {
+    const user = userEvent.setup();
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    await user.click(trigger);
+    expect(trigger).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
+  });
+
+  it('does not force focus onto the Account menu trigger when it is closed by an outside click', async () => {
+    const user = userEvent.setup();
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    await user.click(trigger);
+    // The Home nav button is a real, always-present outside target.
+    await user.click(screen.getByRole('button', { name: /^Home/ }));
+    expect(screen.queryByRole('menu', { name: 'Account' })).not.toBeInTheDocument();
+    expect(trigger).not.toHaveFocus();
+  });
+});
+
+describe('AppSidebar — Create/Search icons protected from flex-shrink at rest (Phase C targeted defect remediation)', () => {
+  it('renders the Search icon present and explicitly protected from flex-shrink', () => {
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    const icon = screen.getByRole('button', { name: /Search/ }).querySelector('svg');
+    expect(icon).toBeInTheDocument();
+    expect(icon.style.flexShrink).toBe('0');
+  });
+
+  it('renders the Create icon (compact, rail trigger) present and explicitly protected from flex-shrink', () => {
+    render(<AppSidebar {...baseProps} isHR={true} createMenuProps={{}} />);
+    const icon = screen.getByRole('button', { name: /Create/ }).querySelector('svg');
+    expect(icon).toBeInTheDocument();
+    expect(icon.style.flexShrink).toBe('0');
   });
 });

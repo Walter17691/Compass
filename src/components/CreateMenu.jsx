@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { FONT, COLOR, RADIUS } from '../styles/tokens';
 
-const PlusIcon = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const PlusIcon = ({size=14, style}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={style}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 
 // IA & User Journey pass, §7 — one universal Create control, replacing
 // the New case / New meeting / New task / Raise a concern / Save email
@@ -16,7 +16,7 @@ const PlusIcon = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 
 // evidence / Add task) ahead of the global ones — the same contextual-
 // creation idea the brief asks for (§7), without a second, separate "+"
 // control competing with this one inside the case workspace itself.
-export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask, onAddEmail, isInCase, activeCaseName, onAddEvidence, onAddCaseTask, onStartCaseMeeting, onAfterAction }) {
+export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask, onAddEmail, isInCase, activeCaseName, onAddEvidence, onAddCaseTask, onStartCaseMeeting, onAfterAction, compact=false }) {
   const [show, setShow] = useState(false);
   const ref = useRef(null);
   const btnRef = useRef(null);
@@ -24,7 +24,15 @@ export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask,
 
   useEffect(() => {
     if (!show) return;
-    const onKeyDown = e => { if (e.key === "Escape") setShow(false); };
+    // Phase C keyboard defect fix — Escape used to only call setShow(false);
+    // if focus had moved into the popover (e.g. onto "New case"), closing it
+    // removed the focused element from the DOM with nothing to receive
+    // focus, so it fell back to document.body. That's invisible in a
+    // static sidebar, but the rail's :focus-within-driven collapse made it
+    // visible: losing focus collapsed the rail out from under the user.
+    // Returning focus to the trigger on Escape is keyboard-only — outside
+    // mousedown closes the same way it always did, with no forced focus.
+    const onKeyDown = e => { if (e.key === "Escape") { setShow(false); btnRef.current?.focus(); } };
     const onClickOutside = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('mousedown', onClickOutside);
@@ -55,9 +63,21 @@ export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask,
           the sidebar's own active nav state and Ask Compass's nav item
           already use) keeps it clearly discoverable without competing
           with the actual content of the page for attention. */}
+      {/* Phase C (expanding sidebar rail) — `compact` only ever changes
+          this trigger's own alignment/label-wrapping, never its handlers,
+          items, or popover. Default false everywhere except the new
+          desktop rail call site, so the existing sidebar-224px and
+          mobile-sheet triggers render byte-for-byte as before. Centered
+          text would overflow/misalign at the rail's 72px resting width
+          (justifyContent:"center" tries to center content wider than the
+          box); flex-start keeps the icon pinned to the fixed left edge
+          regardless of width, with the label simply clipped by the
+          rail's own overflow:hidden until it opens — see AppSidebar.jsx's
+          .rail-label rule, which this button's label participates in via
+          plain CSS descendant matching, not a prop threaded from here. */}
       <button ref={btnRef} onClick={()=>setShow(v=>!v)} aria-expanded={show} aria-haspopup="true"
-        style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}33`,color:COLOR.purpleDeep,padding:"8px 14px",borderRadius:RADIUS.surface,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>
-        <PlusIcon size={13}/> Create
+        style={{display:"flex",alignItems:"center",justifyContent:compact?"flex-start":"center",gap:6,width:"100%",background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}33`,color:COLOR.purpleDeep,padding:"8px 14px",borderRadius:RADIUS.surface,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
+        <PlusIcon size={13} style={{flexShrink:0}}/> <span className={compact?"rail-label":undefined}>Create</span>
       </button>
       {show&&popoverStyle&&(
         <div role="menu" aria-label="Create" style={{...popoverStyle,width:240,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"8px"}}>

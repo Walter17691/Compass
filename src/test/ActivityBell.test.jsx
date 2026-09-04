@@ -75,4 +75,22 @@ describe('ActivityBell', () => {
     expect(menu.style.right).not.toBe('');
     expect(menu.style.left).toBe('');
   });
+
+  // Phase C keyboard defect fix — same focus-restoration contract as
+  // CreateMenu/AccountMenu (see AppSidebar.test.jsx). The Activity popover
+  // currently has no focusable content of its own (its rows are plain
+  // divs, not buttons), so the "focus moved into the popover" scenario
+  // those two components' tests cover can't be reproduced here today —
+  // this confirms the baseline contract that will hold if it ever does:
+  // Escape closes the menu and leaves/returns focus on the trigger.
+  it('leaves focus on the trigger when Escape closes the menu', async () => {
+    const user = userEvent.setup();
+    render(<ActivityBell auditLog={auditLog} orgId="org1"/>);
+    const trigger = screen.getByRole('button', { name: /Activity/ });
+    await user.click(trigger);
+    expect(trigger).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });

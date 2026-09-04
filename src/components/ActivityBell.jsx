@@ -33,7 +33,10 @@ export function ActivityBell({ auditLog, orgId }) {
 
   useEffect(() => {
     if(!show) return;
-    const onKeyDown = e => { if(e.key==="Escape") setShow(false); };
+    // Phase C keyboard defect fix — see AppSidebar.jsx's CreateMenu/
+    // AccountMenu comment for the same contract: Escape returns focus to
+    // this trigger; outside mousedown still closes with no forced focus.
+    const onKeyDown = e => { if(e.key==="Escape") { setShow(false); btnRef.current?.focus(); } };
     const onClickOutside = e => { if(ref.current && !ref.current.contains(e.target)) setShow(false); };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('mousedown', onClickOutside);
