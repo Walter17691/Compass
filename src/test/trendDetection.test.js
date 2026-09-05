@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePctChange, isSignificantTrend, describeTrend } from '../lib/trendDetection';
+import { computePctChange, isSignificantTrend, describeTrend, isSignificantDecrease, computeOverallVolumeTrend, rankSignificantCaseTypeChanges, getTrendPeriodBounds } from '../lib/trendDetection';
 
 describe('computePctChange', () => {
   it('computes a positive percentage increase', () => {
@@ -109,5 +109,314 @@ describe('describeTrend', () => {
     expect(text).toContain('concentrated at Manchester');
     expect(text).not.toContain('Leeds');
     expect(text).not.toContain('Bristol');
+  });
+});
+
+// Insights Phase 3 (Emerging Patterns) — isSignificantDecrease is a
+// deliberate sibling to isSignificantTrend, not a generalisation of it.
+// Every test above this point exercises isSignificantTrend/describeTrend/
+// computePctChange completely unmodified — this suite only adds new
+// assertions, it does not alter any existing one, proving the existing
+// increase-only behaviour those tests already pin is untouched.
+describe('isSignificantDecrease (Insights Phase 3)', () => {
+  it('is significant when the decrease meets the threshold and the previous-period sample size', () => {
+    expect(isSignificantDecrease({ currentCount: 8, previousCount: 10 })).toBe(true); // -20%
+  });
+
+  it('is significant for a decrease beyond the threshold', () => {
+    expect(isSignificantDecrease({ currentCount: 2, previousCount: 10 })).toBe(true); // -80%
+  });
+
+  it('is not significant for a decrease below the threshold magnitude', () => {
+    expect(isSignificantDecrease({ currentCount: 9, previousCount: 10 })).toBe(false); // -10%
+  });
+
+  it('is significant exactly at the -20% boundary', () => {
+    expect(isSignificantDecrease({ currentCount: 20, previousCount: 25 })).toBe(true); // exactly -20%
+  });
+
+  it('is not significant just short of the -20% boundary', () => {
+    expect(isSignificantDecrease({ currentCount: 21, previousCount: 25 })).toBe(false); // -16%
+  });
+
+  it('floors on the PREVIOUS period sample size, not the current one — a genuine decline to near-zero must still be flagged', () => {
+    expect(isSignificantDecrease({ currentCount: 0, previousCount: 10 })).toBe(true);
+    expect(isSignificantDecrease({ currentCount: 1, previousCount: 10 })).toBe(true);
+  });
+
+  it('is not significant when the PREVIOUS count itself is below the sample floor, even with a 100% drop', () => {
+    expect(isSignificantDecrease({ currentCount: 0, previousCount: 2 })).toBe(false);
+  });
+
+  it('is not significant when previousCount is exactly at MIN_SAMPLE_SIZE-1', () => {
+    expect(isSignificantDecrease({ currentCount: 0, previousCount: 2 })).toBe(false);
+  });
+
+  it('is significant when previousCount is exactly at MIN_SAMPLE_SIZE', () => {
+    expect(isSignificantDecrease({ currentCount: 0, previousCount: 3 })).toBe(true); // -100%, previousCount=3 clears the floor
+  });
+
+  it('never fires on an increase', () => {
+    expect(isSignificantDecrease({ currentCount: 13, previousCount: 10 })).toBe(false);
+  });
+
+  it('never fires on no change', () => {
+    expect(isSignificantDecrease({ currentCount: 10, previousCount: 10 })).toBe(false);
+  });
+
+  it('handles a missing entry', () => {
+    expect(isSignificantDecrease(null)).toBe(false);
+  });
+
+  it('does not fire when previousCount is 0 (computePctChange returns null, not a fabricated -100%)', () => {
+    // previousCount=0 is already below MIN_SAMPLE_SIZE, so this is caught
+    // by the floor check first — asserted explicitly since it's also the
+    // one input shape where computePctChange itself returns null.
+    expect(isSignificantDecrease({ currentCount: 0, previousCount: 0 })).toBe(false);
+  });
+
+  it('is symmetric in magnitude with the approved increase threshold (20%), confirmed against the existing isSignificantTrend boundary', () => {
+    // +20% already clears isSignificantTrend's own >= 20 check (proven by
+    // the pre-existing 'is significant when the increase meets the
+    // threshold and sample size' test above, at 13/10 = +30%); this pins
+    // the exact +20% boundary itself, mirroring the -20% boundary test
+    // for isSignificantDecrease directly above.
+    expect(isSignificantTrend({ currentCount: 12, previousCount: 10 })).toBe(true); // exactly +20%
+    expect(isSignificantDecrease({ currentCount: 8, previousCount: 10 })).toBe(true); // exactly -20%
+  });
+});
+
+// Insights Phase 3 (Emerging Patterns), Signal 1 — computeOverallVolumeTrend
+// is deliberately NOT a sum over org_trend_detection's by_type_trend (see
+// the function's own header comment for the full reasoning): that RPC
+// excludes any case with a null/blank case_type, and such cases genuinely
+// exist (the "+ New meeting" quick-start flow creates one whenever it
+// isn't linked to a referral). This suite exists specifically to prove
+// that correctness gap is closed.
+describe('computeOverallVolumeTrend (Insights Phase 3)', () => {
+  const NOW = new Date('2026-06-01T00:00:00.000Z');
+  const daysAgoIso = (n) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000).toISOString();
+
+  // A. typed cases count
+  it('counts a typed case created in the current period', () => {
+    const cases = [{ id: '1', caseType: 'misconduct', createdAt: daysAgoIso(10) }];
+    expect(computeOverallVolumeTrend(cases, { now: NOW }).currentCount).toBe(1);
+  });
+
+  // B. blank case_type ALSO counts
+  it('counts a case with a blank case_type ("+ New meeting" quick-start flow shape)', () => {
+    const cases = [{ id: '1', caseType: '', createdAt: daysAgoIso(10) }];
+    expect(computeOverallVolumeTrend(cases, { now: NOW }).currentCount).toBe(1);
+  });
+
+  // C. null/missing case_type ALSO counts
+  it('counts a case with a null or entirely missing caseType key', () => {
+    const cases = [
+      { id: '1', caseType: null, createdAt: daysAgoIso(10) },
+      { id: '2', createdAt: daysAgoIso(10) }, // caseType key omitted entirely
+    ];
+    expect(computeOverallVolumeTrend(cases, { now: NOW }).currentCount).toBe(2);
+  });
+
+  // D. blank/null case_type cases do not fabricate a case-type category —
+  // this function has no per-type output at all, by construction; asserted
+  // via its return shape so a future refactor can't accidentally reattach
+  // a type breakdown to this specifically type-agnostic metric.
+  it('returns only currentCount/previousCount/pctChange — no case-type breakdown of any kind', () => {
+    const cases = [{ id: '1', caseType: '', createdAt: daysAgoIso(10) }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW });
+    expect(Object.keys(result).sort()).toEqual(['currentCount', 'pctChange', 'previousCount']);
+  });
+
+  // E. closed cases created in the period still count — this measures
+  // case CREATION, not current open/closed status.
+  it('counts a case created in the period even though it has since closed', () => {
+    const cases = [{ id: '1', caseType: 'misconduct', stage: 'closed', createdAt: daysAgoIso(10) }];
+    expect(computeOverallVolumeTrend(cases, { now: NOW }).currentCount).toBe(1);
+  });
+
+  // F. cases outside both windows don't count
+  it('does not count a case created well outside both comparison windows', () => {
+    const cases = [{ id: '1', caseType: 'misconduct', createdAt: daysAgoIso(400) }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(0);
+    expect(result.previousCount).toBe(0);
+  });
+
+  // G. exact boundary semantics, matching org_trend_detection's own SQL:
+  // current = [now-90d, now), previous = [now-180d, now-90d) — half-open,
+  // tiling with no gap and no overlap at the shared now-90d instant.
+  it('places a case exactly at the current-period start boundary into the current period (inclusive lower bound)', () => {
+    const cases = [{ id: '1', createdAt: new Date(NOW.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString() }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(1);
+    expect(result.previousCount).toBe(0);
+  });
+
+  it('does not place a case created exactly at "now" into the current period (exclusive upper bound)', () => {
+    const cases = [{ id: '1', createdAt: NOW.toISOString() }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(0);
+  });
+
+  it('places a case exactly at the previous-period start boundary into the previous period (inclusive lower bound)', () => {
+    const cases = [{ id: '1', createdAt: new Date(NOW.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString() }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.previousCount).toBe(1);
+    expect(result.currentCount).toBe(0);
+  });
+
+  it('the two windows tile with no gap and no double-count at the shared boundary instant', () => {
+    const sharedBoundary = new Date(NOW.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const cases = [{ id: '1', createdAt: sharedBoundary }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    // Belongs to current (inclusive lower bound) only — not previous, not both.
+    expect(result.currentCount).toBe(1);
+    expect(result.previousCount).toBe(0);
+  });
+
+  // H/I/J/K — pctChange reuses computePctChange's own established rules
+  it('pctChange for a genuine increase matches computePctChange directly', () => {
+    const cases = [
+      ...Array.from({ length: 12 }, (_, i) => ({ id: `c${i}`, createdAt: daysAgoIso(10) })),
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, createdAt: daysAgoIso(100) })),
+    ];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(12);
+    expect(result.previousCount).toBe(10);
+    expect(result.pctChange).toBe(computePctChange(12, 10));
+  });
+
+  it('previousCount=0 with currentCount>0 returns a null pctChange, not a fabricated percentage', () => {
+    const cases = [{ id: '1', createdAt: daysAgoIso(10) }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(1);
+    expect(result.previousCount).toBe(0);
+    expect(result.pctChange).toBeNull();
+  });
+
+  it('currentCount=0 with previousCount>0 returns -100%', () => {
+    const cases = [{ id: '1', createdAt: daysAgoIso(100) }];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(0);
+    expect(result.previousCount).toBe(1);
+    expect(result.pctChange).toBe(-100);
+  });
+
+  it('equal current and previous counts produce 0% change', () => {
+    const cases = [
+      { id: '1', createdAt: daysAgoIso(10) },
+      { id: '2', createdAt: daysAgoIso(100) },
+    ];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(1);
+    expect(result.previousCount).toBe(1);
+    expect(result.pctChange).toBe(0);
+  });
+
+  it('zero cases and zero previous both produce a 0-count, 0%-change result, not an error', () => {
+    const result = computeOverallVolumeTrend([], { now: NOW });
+    expect(result).toEqual({ currentCount: 0, previousCount: 0, pctChange: 0 });
+  });
+
+  it('safely ignores a case with a missing or unparseable createdAt rather than crashing', () => {
+    const cases = [
+      { id: '1', createdAt: null },
+      { id: '2', createdAt: 'not-a-date' },
+      { id: '3', createdAt: daysAgoIso(10) },
+    ];
+    const result = computeOverallVolumeTrend(cases, { now: NOW });
+    expect(result.currentCount).toBe(1);
+  });
+});
+
+describe('rankSignificantCaseTypeChanges (Insights Phase 3)', () => {
+  it('excludes entries that clear neither significance gate', () => {
+    const entries = [{ caseType: 'flat', currentCount: 10, previousCount: 10 }];
+    expect(rankSignificantCaseTypeChanges(entries)).toEqual([]);
+  });
+
+  it('includes a significant increase and a significant decrease', () => {
+    const entries = [
+      { caseType: 'grievance', currentCount: 13, previousCount: 10 }, // +30%
+      { caseType: 'absence', currentCount: 6, previousCount: 10 }, // -40%
+    ];
+    const result = rankSignificantCaseTypeChanges(entries);
+    expect(result.map(r => r.caseType)).toEqual(['absence', 'grievance']); // -40% magnitude beats +30%
+    expect(result[0].direction).toBe('decrease');
+    expect(result[1].direction).toBe('increase');
+  });
+
+  it('ranks a brand-new pattern (null pctChange) above any bounded percentage', () => {
+    const entries = [
+      { caseType: 'grievance', currentCount: 100, previousCount: 10 }, // +900%, huge but bounded
+      { caseType: 'harassment', currentCount: 4, previousCount: 0 }, // new pattern, null pctChange
+    ];
+    const result = rankSignificantCaseTypeChanges(entries);
+    expect(result[0].caseType).toBe('harassment');
+    expect(result[0].pctChange).toBeNull();
+    expect(result[0].direction).toBe('increase');
+  });
+
+  it('breaks ties in magnitude alphabetically by case type, deterministically', () => {
+    const entries = [
+      { caseType: 'zeta', currentCount: 8, previousCount: 10 }, // -20%
+      { caseType: 'alpha', currentCount: 8, previousCount: 10 }, // -20%, same magnitude
+    ];
+    const result = rankSignificantCaseTypeChanges(entries);
+    expect(result.map(r => r.caseType)).toEqual(['alpha', 'zeta']);
+  });
+
+  it('respects the existing MIN_SAMPLE_SIZE floor for increases (via isSignificantTrend) and the previous-period floor for decreases (via isSignificantDecrease)', () => {
+    const entries = [
+      { caseType: 'tiny-increase', currentCount: 2, previousCount: 1 }, // huge % but below sample floor
+      { caseType: 'tiny-decrease-base', currentCount: 0, previousCount: 2 }, // -100% but previous below floor
+    ];
+    expect(rankSignificantCaseTypeChanges(entries)).toEqual([]);
+  });
+
+  it('returns an empty array for no entries or a missing array', () => {
+    expect(rankSignificantCaseTypeChanges([])).toEqual([]);
+    expect(rankSignificantCaseTypeChanges(undefined)).toEqual([]);
+  });
+
+  it('does not mutate the input array', () => {
+    const entries = [{ caseType: 'grievance', currentCount: 13, previousCount: 10 }];
+    const copy = JSON.parse(JSON.stringify(entries));
+    rankSignificantCaseTypeChanges(entries);
+    expect(entries).toEqual(copy);
+  });
+});
+
+// Insights Phase 3, drill-down stage — getTrendPeriodBounds is the shared
+// window-boundary source both computeOverallVolumeTrend and the Cases
+// drill-down payload must use, so a click-through always returns exactly
+// the cases the displayed number counted.
+describe('getTrendPeriodBounds (Insights Phase 3)', () => {
+  const NOW = new Date('2026-06-01T00:00:00.000Z');
+
+  it('produces half-open windows that tile with no gap and no overlap', () => {
+    const bounds = getTrendPeriodBounds(NOW, 90);
+    expect(bounds.curEnd.toISOString()).toBe('2026-06-01T00:00:00.000Z');
+    expect(bounds.curStart.toISOString()).toBe('2026-03-03T00:00:00.000Z');
+    expect(bounds.prevEnd.getTime()).toBe(bounds.curStart.getTime()); // shared boundary, no gap
+    expect(bounds.prevStart.toISOString()).toBe('2025-12-03T00:00:00.000Z');
+  });
+
+  it('matches the exact boundaries computeOverallVolumeTrend uses internally', () => {
+    const bounds = getTrendPeriodBounds(NOW, 90);
+    const cases = [
+      { id: 'at-cur-start', createdAt: bounds.curStart.toISOString() }, // inclusive → current
+      { id: 'at-prev-end', createdAt: new Date(bounds.prevEnd.getTime() - 1).toISOString() }, // just before → previous
+    ];
+    const result = computeOverallVolumeTrend(cases, { now: NOW, periodDays: 90 });
+    expect(result.currentCount).toBe(1);
+    expect(result.previousCount).toBe(1);
+  });
+
+  it('defaults periodDays to 90, matching org_trend_detection\'s own default', () => {
+    const explicit = getTrendPeriodBounds(NOW, 90);
+    const defaulted = getTrendPeriodBounds(NOW);
+    expect(defaulted).toEqual(explicit);
   });
 });

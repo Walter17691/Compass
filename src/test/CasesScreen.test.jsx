@@ -247,3 +247,89 @@ describe('CasesScreen — Insights drill-down (Insights Phase 2)', () => {
     expect(screen.getAllByText('Grievance Employee').length).toBeGreaterThan(0);
   });
 });
+
+// Insights Phase 3 (Emerging Patterns drill-down) — createdFrom/createdTo
+// are a deliberately SEPARATE deep-link key pair from the existing
+// caseIds/type keys above: bound to cs.createdAt, never cs.dateReceived.
+// Not exposed as a manual UI control anywhere — deep-link-only.
+describe('CasesScreen — Insights creation-date drill-down (Insights Phase 3)', () => {
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, confirmDialog: noop, showToast: noop };
+  const dateRangeCases = [
+    { id: 'c1', employeeName: 'Inside Range', caseType: 'misconduct', stage: 'open', createdAt: '2026-06-10T00:00:00.000Z' },
+    { id: 'c2', employeeName: 'Before Range', caseType: 'misconduct', stage: 'open', createdAt: '2026-01-01T00:00:00.000Z' },
+    { id: 'c3', employeeName: 'Quick-Start No Date-Received', caseType: '', dateReceived: null, stage: 'open', createdAt: '2026-06-15T00:00:00.000Z' },
+  ];
+  const range = { createdFrom: '2026-06-01T00:00:00.000Z', createdTo: '2026-07-01T00:00:00.000Z' };
+
+  it('includes cases created inside the range and excludes those outside it', () => {
+    render(<CasesScreen {...baseProps} cases={dateRangeCases}
+      deepLink={{ initialFilters: range, clearInitialFilters: noop }} />);
+    expect(screen.getAllByText('Inside Range').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Before Range').length).toBe(0);
+  });
+
+  it('includes a "+ New meeting" quick-start-shaped case (dateReceived null) purely by createdAt', () => {
+    render(<CasesScreen {...baseProps} cases={dateRangeCases}
+      deepLink={{ initialFilters: range, clearInitialFilters: noop }} />);
+    expect(screen.getAllByText('Quick-Start No Date-Received').length).toBeGreaterThan(0);
+  });
+
+  it('shows a human-readable "From Insights" chip, never the raw createdFrom/createdTo field names', () => {
+    render(<CasesScreen {...baseProps} cases={dateRangeCases}
+      deepLink={{ initialFilters: range, clearInitialFilters: noop }} />);
+    const chip = screen.getByRole('button', { name: /Remove filter: From Insights/ });
+    expect(chip.textContent).not.toContain('createdFrom');
+    expect(chip.textContent).not.toContain('createdTo');
+  });
+
+  it('removing the "From Insights" chip restores the full list', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={dateRangeCases}
+      deepLink={{ initialFilters: range, clearInitialFilters: noop }} />);
+    expect(screen.queryAllByText('Before Range').length).toBe(0);
+    await user.click(screen.getByRole('button', { name: /Remove filter: From Insights/ }));
+    expect(screen.getAllByText('Before Range').length).toBeGreaterThan(0);
+  });
+
+  it('"Clear filters" also clears an active creation-date drill-down', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={dateRangeCases}
+      deepLink={{ initialFilters: range, clearInitialFilters: noop }} />);
+    expect(screen.queryAllByText('Before Range').length).toBe(0);
+    await user.click(screen.getByRole('button', { name: /Clear filters/ }));
+    expect(screen.getAllByText('Before Range').length).toBeGreaterThan(0);
+  });
+
+  it('a later, ordinary Cases visit (no deep link) retains no residual creation-date filter', () => {
+    render(<CasesScreen {...baseProps} cases={dateRangeCases} />);
+    expect(screen.getAllByText('Before Range').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Remove filter: From Insights/ })).not.toBeInTheDocument();
+  });
+
+  it('composes a type + creation-date drill-down (Signal 2 shape), and removing the chip clears type too when it was seeded together', async () => {
+    const user = userEvent.setup();
+    const cases = [
+      { id: 'c1', employeeName: 'Grievance Inside', caseType: 'grievance', stage: 'open', createdAt: '2026-06-10T00:00:00.000Z' },
+      { id: 'c2', employeeName: 'Misconduct Inside', caseType: 'misconduct', stage: 'open', createdAt: '2026-06-10T00:00:00.000Z' },
+    ];
+    render(<CasesScreen {...baseProps} cases={cases}
+      deepLink={{ initialFilters: { type: 'grievance', ...range }, clearInitialFilters: noop }} />);
+    expect(screen.getAllByText('Grievance Inside').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Misconduct Inside').length).toBe(0);
+    expect(screen.getByLabelText('Filter by case type')).toHaveValue('grievance');
+    await user.click(screen.getByRole('button', { name: /Remove filter: From Insights/ }));
+    expect(screen.getByLabelText('Filter by case type')).toHaveValue(''); // type cleared alongside the date range
+    expect(screen.getAllByText('Misconduct Inside').length).toBeGreaterThan(0);
+  });
+
+  it('does NOT clear type when it was not seeded together with a creation-date range (Phase 2 type-only drill-down, unaffected)', () => {
+    const cases = [
+      { id: 'c1', employeeName: 'Grievance Employee', caseType: 'grievance', stage: 'open' },
+      { id: 'c2', employeeName: 'Misconduct Employee', caseType: 'misconduct', stage: 'open' },
+    ];
+    render(<CasesScreen {...baseProps} cases={cases}
+      deepLink={{ initialFilters: { type: 'grievance' }, clearInitialFilters: noop }} />);
+    expect(screen.getByLabelText('Filter by case type')).toHaveValue('grievance');
+    expect(screen.queryByRole('button', { name: /Remove filter: From Insights/ })).not.toBeInTheDocument();
+  });
+});

@@ -64,6 +64,7 @@ export function InsightsScreen({
           {active==="overview"&&(
             <OrganisationalIntelligenceOverview
               orgId={reporting.org?.id}
+              isHR={isHR}
               cases={caseData.cases}
               dueSoon={caseData.dueSoon}
               hrReviewRequests={caseData.hrReviewRequests}

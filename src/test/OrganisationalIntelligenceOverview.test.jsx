@@ -286,4 +286,201 @@ describe('OrganisationalIntelligenceOverview', () => {
       expect(screen.queryByText('Closed Employee')).not.toBeInTheDocument();
     });
   });
+
+  // Insights Phase 3 — Emerging Patterns. TEMPORAL intelligence, kept
+  // deliberately distinct from Needs Attention (tested above). now()
+  // is frozen so window-boundary math (mirroring org_trend_detection's
+  // own 90-day/previous-90-day semantics) is deterministic.
+  describe('Emerging patterns (Insights Phase 3)', () => {
+    const daysAgo90plus = (extra) => daysAgoIso(90 + extra); // lands in the previous-90-day window
+    const daysAgoRecent = (n) => daysAgoIso(n); // lands in the current-90-day window
+
+    const mockRpc = (byTypeTrend) => rpcMock.mockImplementation((name) => {
+      if (name === 'org_insights_overview') return Promise.resolve({ data: baseOverview, error: null });
+      if (name === 'org_trend_detection') return Promise.resolve({ data: { by_type_trend: byTypeTrend || [] }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    it('is not rendered at all for a non-HR caller, even with significant underlying data', async () => {
+      mockRpc([{ caseType: 'grievance', currentCount: 13, previousCount: 10 }]);
+      const cases = Array.from({ length: 13 }, (_, i) => ({ id: `c${i}`, caseType: 'grievance', createdAt: daysAgoRecent(10) }));
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={false} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Open cases').parentElement).toHaveTextContent('4'));
+      expect(screen.queryByText('Emerging patterns')).not.toBeInTheDocument();
+    });
+
+    it('is not rendered when no signal is genuinely significant (silence, not a manufactured observation)', async () => {
+      mockRpc([{ caseType: 'grievance', currentCount: 11, previousCount: 10 }]); // +10%, below threshold
+      // Also give the type-agnostic overall-volume signal a genuine,
+      // flat previous period (11 current, 11 previous, 0%) — otherwise
+      // "11 cases, 0 previously" would independently register as its own
+      // significant "new pattern" via isSignificantTrend's null-pct
+      // branch, which is correct behaviour but not what this test means
+      // to isolate (case-type significance only).
+      const cases = [
+        ...Array.from({ length: 11 }, (_, i) => ({ id: `c${i}`, caseType: 'grievance', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 11 }, (_, i) => ({ id: `p${i}`, caseType: 'grievance', createdAt: daysAgo90plus(10) })),
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Open cases').parentElement).toHaveTextContent('4'));
+      expect(screen.queryByText('Emerging patterns')).not.toBeInTheDocument();
+    });
+
+    it('shows the overall volume signal with safe factual wording for an increase', async () => {
+      mockRpc([]);
+      const cases = [
+        ...Array.from({ length: 13 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      expect(screen.getByText('13 cases were opened in the last 90 days, up 30% from 10 in the previous 90 days.')).toBeInTheDocument();
+    });
+
+    it('shows the overall volume signal with safe factual wording for a decrease', async () => {
+      mockRpc([]);
+      const cases = [
+        ...Array.from({ length: 8 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      expect(screen.getByText('8 cases were opened in the last 90 days, down 20% from 10 in the previous 90 days.')).toBeInTheDocument();
+    });
+
+    it('shows the zero-previous-period wording without a fabricated percentage', async () => {
+      mockRpc([]);
+      const cases = Array.from({ length: 4 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', createdAt: daysAgoRecent(10) }));
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      expect(screen.getByText('4 cases were opened in the last 90 days, compared with none in the previous 90 days.')).toBeInTheDocument();
+    });
+
+    it('never uses risk/incidence/deteriorated/improved language', async () => {
+      mockRpc([{ caseType: 'grievance', currentCount: 13, previousCount: 10 }]);
+      const cases = Array.from({ length: 13 }, (_, i) => ({ id: `c${i}`, caseType: 'grievance', createdAt: daysAgoRecent(10) }));
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      const section = await screen.findByText('Emerging patterns');
+      const text = section.parentElement.textContent.toLowerCase();
+      ['risk', 'incidence', 'deteriorat', 'improv', 'caused'].forEach(word => expect(text).not.toContain(word));
+    });
+
+    it('shows up to two significant case-type signals, ranked by magnitude, alongside the overall signal — capped at 3 total', async () => {
+      mockRpc([
+        { caseType: 'grievance', currentCount: 13, previousCount: 10 }, // +30%
+        { caseType: 'absence', currentCount: 3, previousCount: 10 }, // -70%
+        { caseType: 'capability', currentCount: 20, previousCount: 10 }, // +100%
+      ]);
+      // Overall volume itself: make it significant too, so all 3 slots are exercised.
+      const cases = [
+        ...Array.from({ length: 40 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      // Overall + top 2 by magnitude (capability +100%, absence -70%) — grievance (+30%) is significant but ranked 3rd, excluded by the cap.
+      expect(screen.getByText(/40 cases were opened/)).toBeInTheDocument();
+      expect(screen.getByText(/20 capability cases were opened/)).toBeInTheDocument();
+      expect(screen.getByText(/3 absence cases were opened/)).toBeInTheDocument();
+      expect(screen.queryByText(/grievance cases were opened/)).not.toBeInTheDocument();
+    });
+
+    it('shows fewer than 3 when fewer are genuinely defensible — exactly one significant case-type signal, no significant overall change', async () => {
+      mockRpc([{ caseType: 'grievance', currentCount: 13, previousCount: 10 }]); // +30%, significant
+      // Overall volume itself: flat, not significant.
+      const cases = [
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      const section = screen.getByText('Emerging patterns').parentElement;
+      expect(within(section).getAllByText(/cases? were opened/).length).toBe(1);
+      expect(screen.getByText(/13 grievance cases were opened/)).toBeInTheDocument();
+    });
+
+    it('uses singular wording for a single-case signal', async () => {
+      mockRpc([{ caseType: 'grievance', currentCount: 1, previousCount: 10 }]); // -90%, significant decrease
+      const cases = [
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      expect(screen.getByText('1 grievance case was opened in the last 90 days, down 90% from 10 in the previous 90 days.')).toBeInTheDocument();
+    });
+
+    it('drills the overall volume signal into createdFrom/createdTo only — never the dateReceived-based from/to', async () => {
+      mockRpc([]);
+      const cases = [
+        // Marked closed so these fixtures don't also trip Phase 2's
+        // unrelated Needs Attention concentration signal (100% misconduct
+        // among currently-open cases would otherwise render a SECOND
+        // "View cases →" button) — computeOverallVolumeTrend is
+        // deliberately stage-agnostic, so closing them doesn't change
+        // what this test is actually proving.
+        ...Array.from({ length: 13 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      const onViewCases = vi.fn();
+      const user = userEvent.setup();
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} onViewCases={onViewCases}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: 'View cases →' }));
+      expect(onViewCases).toHaveBeenCalledTimes(1);
+      const payload = onViewCases.mock.calls[0][0];
+      expect(payload).toHaveProperty('createdFrom');
+      expect(payload).toHaveProperty('createdTo');
+      expect(payload).not.toHaveProperty('from');
+      expect(payload).not.toHaveProperty('to');
+      expect(payload).not.toHaveProperty('type'); // overall volume is type-agnostic by design
+    });
+
+    it('drills a case-type signal into both type and the creation-date range together', async () => {
+      mockRpc([{ caseType: 'grievance', currentCount: 13, previousCount: 10 }]);
+      const cases = [
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      const onViewCases = vi.fn();
+      const user = userEvent.setup();
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} onViewCases={onViewCases}/>);
+      await waitFor(() => expect(screen.getByText('Emerging patterns')).toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: 'View cases →' }));
+      const payload = onViewCases.mock.calls[0][0];
+      expect(payload.type).toBe('grievance');
+      expect(payload).toHaveProperty('createdFrom');
+      expect(payload).toHaveProperty('createdTo');
+    });
+
+    it('the displayed overall-volume currentCount equals the number of cases the drill-down filter actually matches', async () => {
+      mockRpc([]);
+      const { matchesCaseFilters } = await import('../lib/caseFilters');
+      const cases = [
+        ...Array.from({ length: 13 }, (_, i) => ({ id: `c${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgoRecent(10) })),
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      const onViewCases = vi.fn();
+      const user = userEvent.setup();
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} onViewCases={onViewCases}/>);
+      await waitFor(() => expect(screen.getByText('13 cases were opened in the last 90 days, up 30% from 10 in the previous 90 days.')).toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: 'View cases →' }));
+      const payload = onViewCases.mock.calls[0][0];
+      const matchCount = cases.filter(cs => matchesCaseFilters(cs, payload, () => "open")).length;
+      expect(matchCount).toBe(13); // must equal the displayed currentCount
+    });
+
+    it('does not treat a "+ New meeting" quick-start case (dateReceived null) as excluded from the overall-volume signal or its drill-down', async () => {
+      mockRpc([]);
+      const quickStartCase = { id: 'q1', caseType: '', dateReceived: null, createdAt: daysAgoRecent(10) };
+      const cases = [
+        quickStartCase,
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, caseType: 'misconduct', stage: 'closed', createdAt: daysAgo90plus(10) })),
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" isHR={true} cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      // 1 current, 10 previous → -90%, a significant decrease, proving the
+      // blank-case_type/null-dateReceived case was itself counted.
+      await waitFor(() => expect(screen.getByText(/1 case was opened in the last 90 days, down 90%/)).toBeInTheDocument());
+    });
+  });
 });

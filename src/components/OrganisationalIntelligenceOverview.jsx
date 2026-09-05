@@ -6,6 +6,7 @@ import { themeFrequency } from '../lib/themes';
 import { daysBetween } from '../lib/dateMath';
 import { getCaseStage } from '../lib/caseStage';
 import { medianOpenCaseAge, computeNeedsAttentionSignals, casesRequiringAttention, OLD_CASE_THRESHOLD_DAYS } from '../lib/needsAttention';
+import { computeOverallVolumeTrend, rankSignificantCaseTypeChanges, isSignificantTrend, isSignificantDecrease, getTrendPeriodBounds } from '../lib/trendDetection';
 import { COLOR, FONT } from '../styles/tokens';
 import { DataQualityCaveat } from './DataQualityCaveat';
 import { DataRow, RowChevron, RowPrimary, RowSecondary } from './design/DataRow';
@@ -80,6 +81,24 @@ const AttentionSignal = ({ children, onView }) => (
   </div>
 );
 
+// Insights Phase 3 (Emerging Patterns) — wording lives here, not in
+// trendDetection.js: that module owns the calculation/gating (computePctChange,
+// isSignificantTrend, isSignificantDecrease, computeOverallVolumeTrend,
+// rankSignificantCaseTypeChanges), this owns the Overview-specific sentence,
+// same split as Phase 2's Needs Attention section. Deliberately measures
+// case CREATION only ("were opened") — never "risk", "incidence", or
+// "deteriorated"/"improved", since no headcount denominator or causal
+// evidence exists anywhere in this data to support those words.
+function describeVolumeSignal({ currentCount, previousCount, pctChange, subject }) {
+  const noun = `${subject ? subject + " " : ""}case${currentCount === 1 ? "" : "s"}`;
+  const verb = currentCount === 1 ? "was" : "were";
+  if (pctChange === null) {
+    return `${currentCount} ${noun} ${verb} opened in the last 90 days, compared with none in the previous 90 days.`;
+  }
+  const direction = pctChange >= 0 ? "up" : "down";
+  return `${currentCount} ${noun} ${verb} opened in the last 90 days, ${direction} ${Math.abs(pctChange)}% from ${previousCount} in the previous 90 days.`;
+}
+
 function topEntries(obj, limit = 6) {
   return Object.entries(obj || {}).sort((a,b)=>b[1]-a[1]).slice(0, limit);
 }
@@ -112,9 +131,19 @@ function withSampleFloor(entries) {
 // covers this with its own real StatBox; Phase 7.5B removed the stale
 // "Coming... later in this phase" placeholder that used to sit in the
 // grid above, since the feature it was waiting on had already shipped.
-export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, onViewCases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
+export function OrganisationalIntelligenceOverview({ orgId, isHR, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, onViewCases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
+  // Insights Phase 3 (Emerging Patterns) — org_trend_detection default
+  // window (90 days vs previous 90 days), fetched separately from
+  // org_insights_overview above (that RPC's own p_period_days is the
+  // calendar-month-to-date window used for a completely different
+  // purpose — "opened/closed this month" — and must not be reused here).
+  // Only fetched for HR/oversight users: Emerging Patterns is gated the
+  // same way Manager Insights/Risk Map/Organisational Events/Improvement
+  // Initiatives already are (InsightsScreen.jsx's own isHR gate), so a
+  // restricted-access manager never even triggers this call.
+  const [trendData, setTrendData] = useState(null);
 
   useEffect(() => {
     if (!orgId) return;
@@ -130,6 +159,18 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
     })();
     return () => { cancelled = true; };
   }, [orgId]);
+
+  useEffect(() => {
+    if (!orgId || !isHR) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error: rpcError } = await supabase.rpc('org_trend_detection', { p_org_id: orgId });
+      if (cancelled) return;
+      if (rpcError) console.error("org_trend_detection", rpcError);
+      else setTrendData(data);
+    })();
+    return () => { cancelled = true; };
+  }, [orgId, isHR]);
 
   // computeStageDurations/computeInformalFormalSplit both iterate every
   // case (thousands, on a real org) — memoized so an unrelated re-render
@@ -155,6 +196,43 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
   const medianAge = useMemo(() => medianOpenCaseAge(cases), [cases]);
   const needsAttention = useMemo(() => computeNeedsAttentionSignals({ cases, dueSoon }), [cases, dueSoon]);
   const attentionCases = useMemo(() => casesRequiringAttention({ cases, dueSoon }), [cases, dueSoon]);
+  // Insights Phase 3 (Emerging Patterns) — TEMPORAL intelligence, kept
+  // deliberately separate from Needs Attention above (Phase 2's snapshot
+  // intelligence). computeOverallVolumeTrend runs over the same `cases`
+  // array Needs Attention already uses, no new fetch; rankSignificant
+  // CaseTypeChanges runs over org_trend_detection's own by_type_trend,
+  // fetched only for HR (trendData stays null otherwise, so this always
+  // safely evaluates to an empty ranked list for non-HR users).
+  //
+  // trendNow is frozen once per mount (a useState initializer, never
+  // updated) rather than read fresh each render — the drill-down payload
+  // below must use the EXACT same instant the displayed count was
+  // computed from, or a click-through minutes/hours after page load
+  // could very rarely land one case on the other side of a boundary,
+  // making the displayed count and the drill-down result disagree.
+  const [trendNow] = useState(() => new Date());
+  const overallVolumeTrend = useMemo(() => computeOverallVolumeTrend(cases, { now: trendNow }), [cases, trendNow]);
+  const rankedCaseTypeChanges = useMemo(
+    () => rankSignificantCaseTypeChanges(trendData?.by_type_trend),
+    [trendData]
+  );
+  // Priority order approved for this phase: overall volume first (if
+  // significant), then up to the two strongest case-type changes —
+  // never backfilled to force 3 slots when fewer are genuinely
+  // defensible ("Compass prefers silence to weak intelligence").
+  const emergingPatterns = useMemo(() => {
+    const patterns = [];
+    if (isSignificantTrend(overallVolumeTrend) || isSignificantDecrease(overallVolumeTrend)) {
+      patterns.push({ kind: "overall", ...overallVolumeTrend });
+    }
+    rankedCaseTypeChanges.slice(0, 2).forEach(entry => patterns.push({ kind: "caseType", ...entry }));
+    return patterns;
+  }, [overallVolumeTrend, rankedCaseTypeChanges]);
+  // Same trendNow/90-day window as the calculation above, exported by
+  // trendDetection.js specifically so this never independently
+  // reconstructs slightly different boundaries.
+  const trendPeriodBounds = useMemo(() => getTrendPeriodBounds(trendNow), [trendNow]);
+
   const needsAttentionOpenCount = useMemo(
     () => new Set([...needsAttention.overdueCaseIds, ...needsAttention.olderThan30CaseIds]).size,
     [needsAttention]
@@ -288,6 +366,52 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
           </AttentionSignal>
         )}
       </div>
+
+      {/* Insights Phase 3 — Emerging Patterns. TEMPORAL intelligence
+          (this period vs the previous 90 days), deliberately separate
+          from Needs Attention above (which is entirely a snapshot of
+          right now). HR/oversight-gated, same isHR gate InsightsScreen.jsx
+          already uses for Manager Insights/Risk Map/Organisational
+          Events/Improvement Initiatives — org_trend_detection (and
+          computeOverallVolumeTrend, which reads the full RLS-scoped
+          `cases` array) both reflect only the CALLING user's own
+          accessible cases, so presenting either as an org-wide statement
+          to a restricted-access manager would silently overstate its
+          scope. Maximum 3 rows, never backfilled — see emergingPatterns'
+          own derivation above for the exact priority order. */}
+      {isHR && emergingPatterns.length>0 && (
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Emerging patterns</div>
+          {emergingPatterns.map((pattern) => {
+            // Insights Phase 3 (drill-down stage) — createdFrom/createdTo,
+            // NOT the existing from/to (those filter cs.dateReceived, a
+            // different field — see caseFilters.js's own header for why
+            // reusing them would silently disagree with this signal's own
+            // count). type is added only for a case-type signal, exactly
+            // reproducing what rankSignificantCaseTypeChanges already
+            // grouped by — no case-list re-implementation, just the same
+            // creation-date window this signal was itself computed from.
+            const drillDownFilter = {
+              createdFrom: trendPeriodBounds.curStart.toISOString(),
+              createdTo: trendPeriodBounds.curEnd.toISOString(),
+              ...(pattern.kind === "caseType" ? { type: pattern.caseType } : {}),
+            };
+            return (
+              <AttentionSignal
+                key={pattern.kind === "overall" ? "overall" : pattern.caseType}
+                onView={onViewCases ? () => onViewCases(drillDownFilter) : null}
+              >
+                {describeVolumeSignal({
+                  currentCount: pattern.currentCount,
+                  previousCount: pattern.previousCount,
+                  pctChange: pattern.pctChange,
+                  subject: pattern.kind === "caseType" ? pattern.caseType : null,
+                })}
+              </AttentionSignal>
+            );
+          })}
+        </div>
+      )}
 
       {attentionCases.length>0 && (
         <div>
