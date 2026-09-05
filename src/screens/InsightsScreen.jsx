@@ -26,6 +26,7 @@ import { ImprovementInitiativesPanel } from '../components/ImprovementInitiative
 
 export function InsightsScreen({
   isHR,
+  isMobile = false,
   deepLink = {},
   caseData = {},
   orgIntel = {},
@@ -57,7 +58,7 @@ export function InsightsScreen({
       <PageHeader title="Insights" subtitle="What your Employee Relations data is telling you across every case — patterns, themes, and where to focus."/>
 
       <div style={{display:"flex",gap:32,alignItems:"flex-start"}}>
-        <SettingsNav sections={sections} active={active} onChange={v=>{setActive(v); deepLink.clearInitialSection?.();}} isMobile={false}/>
+        <SettingsNav sections={sections} active={active} onChange={v=>{setActive(v); deepLink.clearInitialSection?.();}} isMobile={isMobile}/>
 
         <div style={{flex:1,minWidth:0}}>
           {active==="overview"&&(
@@ -69,6 +70,7 @@ export function InsightsScreen({
               processTemplates={caseData.processTemplates}
               employeeRecords={caseData.employeeRecords}
               onOpenCase={(caseId, stageId)=>{nav.setActiveCaseId(caseId); nav.setActiveCaseStage(stageId); nav.setScreen(SCREENS.CASE_VIEW);}}
+              onViewCases={(filterSpec)=>{nav.setCasesInitialFilters(filterSpec); nav.setScreen(SCREENS.CASES);}}
               allegations={caseData.allegations}
               caseSignals={caseData.caseSignals}
               caseTasks={caseData.caseTasks}

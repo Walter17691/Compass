@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const rpcMock = vi.fn();
 vi.mock('../supabase', () => ({ supabase: { rpc: (...args) => rpcMock(...args) } }));
@@ -194,5 +195,95 @@ describe('OrganisationalIntelligenceOverview', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Insights Phase 2 (Overview Intelligence) — the Needs Attention /
+  // Cases Requiring Attention sections and their drill-down into the
+  // existing Cases screen. daysAgoIso builds a real relative timestamp
+  // off the current clock (no fake timers needed — these tests only
+  // depend on "more than 30 days ago", which any sufficiently old offset
+  // satisfies regardless of when the suite runs).
+  const daysAgoIso = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  describe('Needs attention / Cases requiring attention (Insights Phase 2)', () => {
+    it('shows "No cases currently require attention." when no signal fires', async () => {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      const cases = [{ id: 'c1', employeeName: 'A', caseType: 'misconduct', createdAt: daysAgoIso(2) }];
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('No cases currently require attention.')).toBeInTheDocument());
+      expect(screen.queryByText('Cases requiring attention')).not.toBeInTheDocument();
+    });
+
+    it('shows an overdue Needs Attention signal and drills down into exactly those case ids', async () => {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      const cases = [
+        { id: 'c1', employeeName: 'A', caseType: 'misconduct', createdAt: daysAgoIso(2) },
+        { id: 'c2', employeeName: 'B', caseType: 'grievance', createdAt: daysAgoIso(3) },
+      ];
+      const dueSoon = [{ caseId: 'c1', overdue: true, daysOverdue: 5 }];
+      const onViewCases = vi.fn();
+      const user = userEvent.setup();
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={dueSoon} hrReviewRequests={[]} processTemplates={[]} onViewCases={onViewCases}/>);
+      await waitFor(() => expect(screen.getByText(/case has an overdue action/)).toBeInTheDocument());
+      await user.click(screen.getAllByRole('button', { name: 'View cases →' })[0]);
+      expect(onViewCases).toHaveBeenCalledWith({ caseIds: ['c1'] });
+    });
+
+    it('shows an ageing Needs Attention signal for open cases older than 30 days, excluding closed ones', async () => {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      const cases = [
+        { id: 'old', employeeName: 'A', caseType: 'misconduct', createdAt: daysAgoIso(45) },
+        { id: 'closed-old', employeeName: 'B', caseType: 'misconduct', stage: 'closed', createdAt: daysAgoIso(900) },
+      ];
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText(/open case is more than 30 days old/)).toBeInTheDocument());
+    });
+
+    it('shows a concentration signal only once one case type reaches 50% of the open caseload', async () => {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      const cases = [
+        { id: '1', employeeName: 'A', caseType: 'misconduct', createdAt: daysAgoIso(1) },
+        { id: '2', employeeName: 'B', caseType: 'misconduct', createdAt: daysAgoIso(1) },
+        { id: '3', employeeName: 'C', caseType: 'misconduct', createdAt: daysAgoIso(1) },
+        { id: '4', employeeName: 'D', caseType: 'grievance', createdAt: daysAgoIso(1) },
+        { id: '5', employeeName: 'E', caseType: 'grievance', createdAt: daysAgoIso(1) },
+      ];
+      const onViewCases = vi.fn();
+      const user = userEvent.setup();
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={[]} hrReviewRequests={[]} processTemplates={[]} onViewCases={onViewCases}/>);
+      await waitFor(() => expect(screen.getByText(/misconduct accounts for 60% of the current open caseload/)).toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: 'View cases →' }));
+      expect(onViewCases).toHaveBeenCalledWith({ type: 'misconduct' });
+    });
+
+    it('does not render a "View cases" button when onViewCases is not supplied', async () => {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      const cases = [{ id: 'c1', employeeName: 'A', caseType: 'misconduct', createdAt: daysAgoIso(1) }];
+      const dueSoon = [{ caseId: 'c1', overdue: true, daysOverdue: 5 }];
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={dueSoon} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText(/case has an overdue action/)).toBeInTheDocument());
+      expect(screen.queryByRole('button', { name: 'View cases →' })).not.toBeInTheDocument();
+    });
+
+    it('lists cases requiring attention and opens the clicked case via onOpenCase', async () => {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      const cases = [{ id: 'c1', employeeName: 'Jamie Smith', caseType: 'misconduct', createdAt: daysAgoIso(2) }];
+      const dueSoon = [{ caseId: 'c1', overdue: true, daysOverdue: 5 }];
+      const onOpenCase = vi.fn();
+      const user = userEvent.setup();
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={dueSoon} hrReviewRequests={[]} processTemplates={[]} onOpenCase={onOpenCase}/>);
+      await waitFor(() => expect(screen.getByText('Cases requiring attention')).toBeInTheDocument());
+      await user.click(screen.getByText('Jamie Smith'));
+      expect(onOpenCase).toHaveBeenCalledWith('c1', expect.any(String));
+    });
+
+    it('excludes closed cases from Cases requiring attention even when overdue', async () => {
+      rpcMock.mockResolvedValue({ data: baseOverview, error: null });
+      const cases = [{ id: 'c1', employeeName: 'Closed Employee', caseType: 'misconduct', stage: 'closed', createdAt: daysAgoIso(900) }];
+      const dueSoon = [{ caseId: 'c1', overdue: true, daysOverdue: 500 }];
+      render(<OrganisationalIntelligenceOverview orgId="org1" cases={cases} dueSoon={dueSoon} hrReviewRequests={[]} processTemplates={[]}/>);
+      await waitFor(() => expect(screen.getByText('No cases currently require attention.')).toBeInTheDocument());
+      expect(screen.queryByText('Closed Employee')).not.toBeInTheDocument();
+    });
   });
 });

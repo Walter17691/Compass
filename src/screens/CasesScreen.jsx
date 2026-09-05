@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { getCurrentRisk } from '../lib/caseStage';
 import { matchesCaseFilters } from '../lib/caseFilters';
@@ -41,7 +41,18 @@ const selectStyle = {fontSize:12,border:`1px solid ${COLOR.border}`,borderRadius
 // Owner/priority/date-range filters only have real data to match against
 // for cases created since those fields started being written — older
 // cases won't match either, same as any additive-migration field.
-export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit, currentUserId }) {
+// Insights Phase 2 (Overview Intelligence, drill-down) — deepLink is an
+// optional, additive one-shot seed, same shape/convention as
+// InsightsScreen.jsx's own deepLink.initialSection: `initialFilters` may
+// carry any of this screen's existing filter keys (e.g. {type:"misconduct"}
+// from a case-type concentration insight) plus an Insights-only `caseIds`
+// array (e.g. from "5 cases have overdue actions") — a concrete allowlist
+// of case ids Insights already computed, applied as one further narrowing
+// filter on top of the exact same already-loaded, RLS-scoped `cases` array
+// this screen always renders from. No second case-list implementation, no
+// new query, no widening of what a user can already see — Insights only
+// ever hands over ids drawn from cases already visible to this same user.
+export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit, currentUserId, deepLink = {} }) {
   const [selected, setSelected] = useState(new Set());
   const [search, setSearch] = useState("");
   // IA & User Journey pass, §10 — Cases as a work inbox: All/Mine/Needs
@@ -66,10 +77,21 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
     return true;
   });
   const [showMoreFilters, setShowMoreFilters] = useState(false);
-  const [filters, setFilters] = useState({ type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" });
+  const DEFAULT_FILTERS = { type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" };
+  const [filters, setFilters] = useState(() => {
+    const { caseIds, ...overrides } = deepLink.initialFilters || {};
+    void caseIds;
+    return { ...DEFAULT_FILTERS, ...overrides };
+  });
+  const [caseIdFilter, setCaseIdFilter] = useState(() => deepLink.initialFilters?.caseIds ? new Set(deepLink.initialFilters.caseIds) : null);
+  // One-shot consume, same pattern as InsightsScreen's deepLink.initialSection
+  // — clears the App-level state immediately so a later, ordinary visit to
+  // this screen (via the nav rail, not another drill-down) never silently
+  // re-applies a stale Insights selection.
+  useEffect(() => { if (deepLink.initialFilters) deepLink.clearInitialFilters?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const setFilter = (key, value) => setFilters(f=>({...f, [key]:value}));
-  const clearFilters = () => { setFilters({ type:"", stage:"", status:"", locationId:"", ownerId:"", priority:"", from:"", to:"" }); setSearch(""); };
-  const activeFilterCount = Object.values(filters).filter(Boolean).length + (search?1:0);
+  const clearFilters = () => { setFilters(DEFAULT_FILTERS); setSearch(""); setCaseIdFilter(null); };
+  const activeFilterCount = Object.values(filters).filter(Boolean).length + (search?1:0) + (caseIdFilter?1:0);
   const moreFilterKeys = ["locationId","ownerId","priority","from","to"];
   const moreFilterCount = moreFilterKeys.filter(k=>filters[k]).length;
 
@@ -79,7 +101,8 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
 
   const filteredCases = segmentedCases
     .filter(cs => matchesCaseFilters(cs, filters, getCaseStage))
-    .filter(cs => !search || (cs.employeeName||"").toLowerCase().includes(search.toLowerCase()));
+    .filter(cs => !search || (cs.employeeName||"").toLowerCase().includes(search.toLowerCase()))
+    .filter(cs => !caseIdFilter || caseIdFilter.has(cs.id));
   const toggleSelected = id => setSelected(s=>{const n=new Set(s); n.has(id)?n.delete(id):n.add(id); return n;});
   // Phase 6.5 hardening (closes Prompt 11 audit finding 5.10, MEDIUM) —
   // this used to close every selected case with no check at all,
@@ -219,6 +242,7 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
                   filters.priority&&{key:"priority",label:filters.priority.charAt(0).toUpperCase()+filters.priority.slice(1)+" priority",onRemove:()=>setFilter("priority","")},
                   filters.from&&{key:"from",label:`From ${filters.from}`,onRemove:()=>setFilter("from","")},
                   filters.to&&{key:"to",label:`To ${filters.to}`,onRemove:()=>setFilter("to","")},
+                  caseIdFilter&&{key:"insightsSelection",label:`From Insights (${caseIdFilter.size} case${caseIdFilter.size===1?"":"s"})`,onRemove:()=>setCaseIdFilter(null)},
                 ].filter(Boolean).map(chip=>(
                   <button key={chip.key} onClick={chip.onRemove} aria-label={`Remove filter: ${chip.label}`} style={{display:"flex",alignItems:"center",gap:5,fontSize:11.5,fontWeight:500,color:COLOR.purple,background:COLOR.purpleTint,border:"none",borderRadius:RADIUS.pill,padding:"4px 6px 4px 10px",cursor:"pointer",fontFamily:FONT.sans}}>
                     {chip.label}

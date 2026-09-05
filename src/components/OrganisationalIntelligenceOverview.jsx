@@ -4,8 +4,11 @@ import { computeStageDurations } from '../lib/processDashboard';
 import { computeInformalFormalSplit } from '../lib/orgIntelligence';
 import { themeFrequency } from '../lib/themes';
 import { daysBetween } from '../lib/dateMath';
+import { getCaseStage } from '../lib/caseStage';
+import { medianOpenCaseAge, computeNeedsAttentionSignals, casesRequiringAttention, OLD_CASE_THRESHOLD_DAYS } from '../lib/needsAttention';
 import { COLOR, FONT } from '../styles/tokens';
 import { DataQualityCaveat } from './DataQualityCaveat';
+import { DataRow, RowChevron, RowPrimary, RowSecondary } from './design/DataRow';
 import { SiteIntelligencePanel } from './SiteIntelligencePanel';
 import { BenchmarkingPanel } from './BenchmarkingPanel';
 import { ProcessBottlenecksPanel } from './ProcessBottlenecksPanel';
@@ -65,6 +68,18 @@ const Panel = ({ title, children }) => (
   </div>
 );
 
+// Insights Phase 2 (Overview Intelligence) — one deterministic, factual
+// signal line per row, with an optional drill-down into the exact case
+// set that produced it. Never renders a "View cases" control when the
+// caller hasn't wired one up (onOpenCase-only callers, e.g. some existing
+// tests, simply get a plain line with no dead link).
+const AttentionSignal = ({ children, onView }) => (
+  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"10px 2px",borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+    <span style={{fontSize:13,color:COLOR.ink,lineHeight:1.5}}>{children}</span>
+    {onView && <button type="button" onClick={onView} style={{fontSize:12,fontWeight:600,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,flexShrink:0,padding:0,whiteSpace:"nowrap"}}>View cases →</button>}
+  </div>
+);
+
 function topEntries(obj, limit = 6) {
   return Object.entries(obj || {}).sort((a,b)=>b[1]-a[1]).slice(0, limit);
 }
@@ -97,7 +112,7 @@ function withSampleFloor(entries) {
 // covers this with its own real StatBox; Phase 7.5B removed the stale
 // "Coming... later in this phase" placeholder that used to sit in the
 // grid above, since the feature it was waiting on had already shipped.
-export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
+export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, onViewCases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
 
@@ -133,6 +148,17 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
   }, [cases, processTemplates]);
   const resolutionSplit = useMemo(() => computeInformalFormalSplit(cases), [cases]);
   const themeFrequencies = useMemo(() => themeFrequency(caseThemes, organisationThemes), [caseThemes, organisationThemes]);
+  // Insights Phase 2 (Overview Intelligence) — cases/dueSoon are the same
+  // already-loaded, RLS-scoped arrays every other calculation on this page
+  // already uses; no new fetch, no new overdue/open-case definition (see
+  // lib/needsAttention.js's own header for why).
+  const medianAge = useMemo(() => medianOpenCaseAge(cases), [cases]);
+  const needsAttention = useMemo(() => computeNeedsAttentionSignals({ cases, dueSoon }), [cases, dueSoon]);
+  const attentionCases = useMemo(() => casesRequiringAttention({ cases, dueSoon }), [cases, dueSoon]);
+  const needsAttentionOpenCount = useMemo(
+    () => new Set([...needsAttention.overdueCaseIds, ...needsAttention.olderThan30CaseIds]).size,
+    [needsAttention]
+  );
 
   if (error) {
     return <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"24px",fontSize:13,color:"#6B6375"}}>Couldn't load organisational statistics right now.</div>;
@@ -180,6 +206,7 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
   // org's size, so the sentence doesn't editorialise beyond the numbers.
   const headline = [
     `${overview.open_cases} open case${overview.open_cases===1?"":"s"}`,
+    needsAttentionOpenCount>0 && `${needsAttentionOpenCount} needing attention`,
     overdueCaseIds.size>0 && `${overdueCaseIds.size} overdue`,
     investigationCaseCount>=MIN_DURATION_SAMPLE && `investigations averaging ${avgInvestigationDays}d`,
     (resolutionSplit.informal+resolutionSplit.formal)>0 && `${resolutionSplit.informal} resolved informally, ${resolutionSplit.formal} formally`,
@@ -203,6 +230,9 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
       <StatBox large label="Open cases" value={overview.open_cases} sub={`${overview.total_cases} total · ${monthlyMovement}`}/>
 
       <div style={{display:"flex",flexWrap:"wrap",columnGap:24,rowGap:8,padding:"2px 2px"}}>
+        <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Needing attention </span><span style={{color:needsAttentionOpenCount>0?COLOR.amber:COLOR.ink,fontWeight:600}}>{needsAttentionOpenCount}</span></span>
+        {medianAge.applicable &&
+          <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Median open case age </span><span style={{color:COLOR.ink,fontWeight:600}}>{medianAge.median}d</span></span>}
         <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Overdue </span><span style={{color:overdueCaseIds.size>0?COLOR.red:COLOR.ink,fontWeight:600}}>{overdueCaseIds.size}</span></span>
         <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Returned for further investigation </span><span style={{color:returnedForFurtherInvestigation>0?COLOR.amber:COLOR.ink,fontWeight:600}}>{returnedForFurtherInvestigation}</span></span>
         <span style={{fontSize:12.5}}><span style={{color:COLOR.inkFaint}}>Informal / formal </span><span style={{color:COLOR.ink,fontWeight:600}}>{resolutionSplit.informal} / {resolutionSplit.formal}</span></span>
@@ -220,6 +250,71 @@ export function OrganisationalIntelligenceOverview({ orgId, cases, dueSoon, hrRe
         <DataQualityCaveat total={overview.closed_cases_with_duration} minRequired={MIN_DURATION_SAMPLE} label="closed cases with measurable duration"/>}
       {investigationCaseCount < MIN_DURATION_SAMPLE &&
         <DataQualityCaveat total={investigationCaseCount} minRequired={MIN_DURATION_SAMPLE} label="cases currently in investigation"/>}
+      {!medianAge.applicable &&
+        <DataQualityCaveat total={medianAge.total} minRequired={MIN_DURATION_SAMPLE} label="open cases with a known creation date"/>}
+
+      {/* Insights Phase 2 (Overview Intelligence) — the section this whole
+          phase exists for. Three deterministic, explainable signals only
+          (see lib/needsAttention.js): an overdue count already owned by
+          deadlines.js, a >30-day open-case ageing fact (a bucket, not an
+          SLA claim), and a majority case-type concentration fact (≥50% of
+          the open caseload, confirmed threshold — see that module's own
+          header for why no existing repo convention covered this). A
+          fourth candidate ("no recorded task activity") was deliberately
+          left out of this phase — case_tasks.updated_at exists in the
+          database but is never mapped into client state (App.jsx's
+          loadCaseTasks only keeps created_at), so no reliable "last
+          touched" timestamp is currently available to support that
+          statement; expanding what's fetched is a data-shape change
+          outside this phase's approved scope. */}
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Needs attention</div>
+        {needsAttention.overdueCount===0 && needsAttention.olderThan30Count===0 && !needsAttention.concentration && (
+          <div style={{fontSize:12,color:COLOR.inkFaint,padding:"10px 2px"}}>No cases currently require attention.</div>
+        )}
+        {needsAttention.overdueCount>0 && (
+          <AttentionSignal onView={onViewCases ? () => onViewCases({ caseIds: Array.from(needsAttention.overdueCaseIds) }) : null}>
+            {needsAttention.overdueCount} case{needsAttention.overdueCount===1?" has":"s have"} an overdue action.
+          </AttentionSignal>
+        )}
+        {needsAttention.olderThan30Count>0 && (
+          <AttentionSignal onView={onViewCases ? () => onViewCases({ caseIds: Array.from(needsAttention.olderThan30CaseIds) }) : null}>
+            {needsAttention.olderThan30Count} open case{needsAttention.olderThan30Count===1?" is":"s are"} more than {OLD_CASE_THRESHOLD_DAYS} days old.
+          </AttentionSignal>
+        )}
+        {needsAttention.concentration && (
+          <AttentionSignal onView={onViewCases ? () => onViewCases({ type: needsAttention.concentration.caseType }) : null}>
+            {needsAttention.concentration.caseType} accounts for {needsAttention.concentration.pct}% of the current open caseload ({needsAttention.concentration.count} of {needsAttention.concentration.totalOpen} cases).
+          </AttentionSignal>
+        )}
+      </div>
+
+      {attentionCases.length>0 && (
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:COLOR.inkFaint,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Cases requiring attention</div>
+          <div>
+            {attentionCases.map(row => {
+              const caseObj = cases.find(cs => cs.id === row.caseId);
+              return (
+                <DataRow key={row.caseId} attention>
+                  <button type="button" onClick={() => onOpenCase?.(row.caseId, caseObj ? getCaseStage(caseObj) : undefined)}
+                    style={{flex:1,minWidth:0,padding:"10px 2px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"none",border:"none",textAlign:"left",font:"inherit",color:"inherit"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <RowPrimary>{row.employeeName}</RowPrimary>
+                      <RowSecondary>
+                        <span>{row.caseType}</span>
+                        {row.age!=null && <span>· {row.age}d open</span>}
+                      </RowSecondary>
+                    </div>
+                    <span style={{fontSize:11.5,fontWeight:600,color:row.overdue?COLOR.red:COLOR.amber,textAlign:"right",flexShrink:1,minWidth:0}}>{row.reason}</span>
+                    <RowChevron/>
+                  </button>
+                </DataRow>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
         <Panel title="Cases by type">

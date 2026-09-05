@@ -179,3 +179,71 @@ describe('CasesScreen — quick segments (IA & User Journey pass, §10)', () => 
     expect(screen.queryAllByText('Other Open').length).toBe(0);
   });
 });
+
+// Insights Phase 2 (Overview Intelligence, drill-down) — deepLink is an
+// optional, additive one-shot seed (same shape/convention as
+// InsightsScreen.jsx's own deepLink.initialSection). No second case-list
+// implementation: every assertion below still reads from this same
+// screen's existing filteredCases pipeline, just pre-seeded.
+describe('CasesScreen — Insights drill-down (Insights Phase 2)', () => {
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, confirmDialog: noop, showToast: noop };
+  const drillCases = [
+    { id: 'c1', employeeName: 'Misconduct Employee', caseType: 'misconduct', stage: 'open' },
+    { id: 'c2', employeeName: 'Grievance Employee', caseType: 'grievance', stage: 'open' },
+  ];
+
+  it('seeds the type filter from deepLink.initialFilters and shows only matching cases', () => {
+    const clearInitialFilters = vi.fn();
+    render(<CasesScreen {...baseProps} cases={drillCases}
+      deepLink={{ initialFilters: { type: 'misconduct' }, clearInitialFilters }} />);
+    expect(screen.getAllByText('Misconduct Employee').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Grievance Employee').length).toBe(0);
+    expect(screen.getByLabelText('Filter by case type')).toHaveValue('misconduct');
+  });
+
+  it('seeds an exact case-id allowlist from deepLink.initialFilters.caseIds', () => {
+    render(<CasesScreen {...baseProps} cases={drillCases}
+      deepLink={{ initialFilters: { caseIds: ['c2'] }, clearInitialFilters: noop }} />);
+    expect(screen.getAllByText('Grievance Employee').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Misconduct Employee').length).toBe(0);
+  });
+
+  it('calls clearInitialFilters exactly once on mount when a deep link was supplied', () => {
+    const clearInitialFilters = vi.fn();
+    render(<CasesScreen {...baseProps} cases={drillCases}
+      deepLink={{ initialFilters: { type: 'misconduct' }, clearInitialFilters }} />);
+    expect(clearInitialFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it('never calls clearInitialFilters when no deep link was supplied (ordinary nav-rail visit)', () => {
+    const clearInitialFilters = vi.fn();
+    render(<CasesScreen {...baseProps} cases={drillCases} deepLink={{ initialFilters: null, clearInitialFilters }} />);
+    expect(clearInitialFilters).not.toHaveBeenCalled();
+  });
+
+  it('renders normally with every case visible when deepLink is omitted entirely', () => {
+    render(<CasesScreen {...baseProps} cases={drillCases} />);
+    expect(screen.getAllByText('Misconduct Employee').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Grievance Employee').length).toBeGreaterThan(0);
+  });
+
+  it('shows a removable "From Insights" chip for a case-id drill-down, and removing it restores every case', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={drillCases}
+      deepLink={{ initialFilters: { caseIds: ['c1'] }, clearInitialFilters: noop }} />);
+    expect(screen.queryAllByText('Grievance Employee').length).toBe(0);
+    const chip = screen.getByRole('button', { name: /Remove filter: From Insights/ });
+    await user.click(chip);
+    expect(screen.getAllByText('Misconduct Employee').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Grievance Employee').length).toBeGreaterThan(0);
+  });
+
+  it('"Clear filters" also clears an active case-id drill-down', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={drillCases}
+      deepLink={{ initialFilters: { caseIds: ['c1'] }, clearInitialFilters: noop }} />);
+    expect(screen.queryAllByText('Grievance Employee').length).toBe(0);
+    await user.click(screen.getByRole('button', { name: /Clear filters/ }));
+    expect(screen.getAllByText('Grievance Employee').length).toBeGreaterThan(0);
+  });
+});

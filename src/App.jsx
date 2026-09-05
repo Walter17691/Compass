@@ -2543,6 +2543,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Insights" drill-down after answering an org-wide stats question.
   const [insightsSection, setInsightsSection] = useState(null);
 
+  // Insights Phase 2 (Overview Intelligence, drill-down) — same deep-link
+  // pattern one level down: seeds CasesScreen's own filter/case-id state
+  // for one visit when a Needs Attention/Cases Requiring Attention row is
+  // clicked from Insights, then is cleared (see CasesScreen.jsx's own
+  // one-shot consume effect).
+  const [casesDeepLinkFilters, setCasesDeepLinkFilters] = useState(null);
+
   // ── Calendar integration (Google Calendar) ──
   const [calendarConnected, setCalendarConnected] = useState(false);
   useEffect(() => {
@@ -8691,7 +8698,8 @@ Please produce:
 
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
-        <CasesScreen cases={cases} casesLoading={casesLoading} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} audit={audit} currentUserId={user?.id} />
+        <CasesScreen cases={cases} casesLoading={casesLoading} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} audit={audit} currentUserId={user?.id}
+          deepLink={{ initialFilters: casesDeepLinkFilters, clearInitialFilters: ()=>setCasesDeepLinkFilters(null) }} />
       )}
 
       {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}
@@ -8740,6 +8748,7 @@ Please produce:
       {screen===SCREENS.INSIGHTS&&(
         <InsightsScreen
           isHR={isHR}
+          isMobile={isMobile}
           deepLink={{
             initialSection: insightsSection,
             clearInitialSection: ()=>setInsightsSection(null),
@@ -8765,7 +8774,7 @@ Please produce:
             reportNarrative, setReportNarrative, getCaseStage, getNextStep, fmtDate, loadJsPDF,
             org, user, memberName: member?.name||user?.email,
           }}
-          nav={{ setScreen, setActiveCaseId, setActiveCaseStage, setActivePerson }}
+          nav={{ setScreen, setActiveCaseId, setActiveCaseStage, setActivePerson, setCasesInitialFilters: setCasesDeepLinkFilters }}
         />
       )}
 

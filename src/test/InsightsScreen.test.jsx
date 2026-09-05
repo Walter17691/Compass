@@ -123,4 +123,26 @@ describe('InsightsScreen', () => {
     expect(screen.getByText('No improvement initiatives yet.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ New initiative' })).toBeInTheDocument();
   });
+
+  // Insights Phase 2 (Overview Intelligence) — closes the audit finding
+  // that this screen hardcoded isMobile={false} on its own SettingsNav
+  // tab rail, so the compact <select> mode SettingsNav already supports
+  // (and Settings itself already uses) never activated here even on a
+  // narrow viewport. isMobile is now a real, App-level prop, same as
+  // SettingsScreen already receives.
+  it('defaults to the desktop sidebar nav (buttons, not a <select>) when isMobile is omitted', () => {
+    render(<InsightsScreen isHR={true} {...requiredProps}/>);
+    expect(screen.getByRole('button', { name: 'Trends & Themes' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Settings section' })).not.toBeInTheDocument();
+  });
+
+  it('switches to the compact <select> nav when isMobile is true, and tab switching still works', async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen isHR={true} isMobile={true} {...requiredProps}/>);
+    const select = screen.getByRole('combobox', { name: 'Settings section' });
+    expect(select).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Trends & Themes' })).not.toBeInTheDocument();
+    await user.selectOptions(select, 'Reports');
+    expect(screen.getByText('HR Reports')).toBeInTheDocument();
+  });
 });
