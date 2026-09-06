@@ -100,6 +100,21 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
     const init = deepLink.initialFilters || {};
     return (init.createdFrom || init.createdTo) && init.type ? init.type : null;
   });
+  // Insights Phase 4 (Trends & Themes drill-down) — a theme signal seeds
+  // caseIds AND createdFrom/createdTo TOGETHER from the same event
+  // (themeCaseIdsInPeriod's own result is already period-scoped; the date
+  // range is included too so the resulting chip/filter state is explicit
+  // about why these particular cases were selected). Neither of the two
+  // existing drill-downs above ever does this (Phase 2's caseIds-only
+  // overdue/ageing signals carry no date range; Phase 3's date-range
+  // signal carries no caseIds) — captured once, at mount, same one-shot
+  // pattern as insightsSeededType, so this only ever reflects what THIS
+  // visit's deep link actually seeded, never a value the user later
+  // reaches by combining filters manually.
+  const [insightsSeededCaseIdsWithDateRange] = useState(() => {
+    const init = deepLink.initialFilters || {};
+    return Boolean(init.caseIds && (init.createdFrom || init.createdTo));
+  });
   // One-shot consume, same pattern as InsightsScreen's deepLink.initialSection
   // — clears the App-level state immediately so a later, ordinary visit to
   // this screen (via the nav rail, not another drill-down) never silently
@@ -118,6 +133,15 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
     createdTo: "",
     type: (insightsSeededType && f.type === insightsSeededType) ? "" : f.type,
   }));
+  // Insights Phase 4 — the theme drill-down's single combined chip clears
+  // all three of caseIds/createdFrom/createdTo atomically (one update, no
+  // intermediate render where only some have cleared), reusing
+  // clearInsightsDateRange's own type-clearing rule for consistency even
+  // though a theme drill-down never actually seeds `type`.
+  const clearInsightsThemeDrilldown = () => {
+    setCaseIdFilter(null);
+    clearInsightsDateRange();
+  };
   const activeFilterCount = Object.values(filters).filter(Boolean).length + (search?1:0) + (caseIdFilter?1:0);
   const moreFilterKeys = ["locationId","ownerId","priority","from","to"];
   const moreFilterCount = moreFilterKeys.filter(k=>filters[k]).length;
@@ -269,8 +293,23 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
                   filters.priority&&{key:"priority",label:filters.priority.charAt(0).toUpperCase()+filters.priority.slice(1)+" priority",onRemove:()=>setFilter("priority","")},
                   filters.from&&{key:"from",label:`From ${filters.from}`,onRemove:()=>setFilter("from","")},
                   filters.to&&{key:"to",label:`To ${filters.to}`,onRemove:()=>setFilter("to","")},
-                  caseIdFilter&&{key:"insightsSelection",label:`From Insights (${caseIdFilter.size} case${caseIdFilter.size===1?"":"s"})`,onRemove:()=>setCaseIdFilter(null)},
-                  (filters.createdFrom||filters.createdTo)&&{key:"insightsDateRange",label:"From Insights (opened in period)",onRemove:clearInsightsDateRange},
+                  // Insights Phase 4 — when a theme drill-down seeded
+                  // caseIds and a creation-date range TOGETHER, show one
+                  // combined chip that clears both atomically rather than
+                  // the two independent chips below (which would render
+                  // side by side and both claim "From Insights",
+                  // confusing which one to remove for "show everything
+                  // again"). Phase 2's caseIds-only and Phase 3's
+                  // date-range-only drill-downs never set
+                  // insightsSeededCaseIdsWithDateRange, so they keep
+                  // rendering as two fully independent, separately
+                  // removable chips exactly as before.
+                  ...(insightsSeededCaseIdsWithDateRange && caseIdFilter && (filters.createdFrom||filters.createdTo)
+                    ? [{key:"insightsThemeDrilldown",label:`From Insights (${caseIdFilter.size} case${caseIdFilter.size===1?"":"s"} in period)`,onRemove:clearInsightsThemeDrilldown}]
+                    : [
+                        caseIdFilter&&{key:"insightsSelection",label:`From Insights (${caseIdFilter.size} case${caseIdFilter.size===1?"":"s"})`,onRemove:()=>setCaseIdFilter(null)},
+                        (filters.createdFrom||filters.createdTo)&&{key:"insightsDateRange",label:"From Insights (opened in period)",onRemove:clearInsightsDateRange},
+                      ]),
                 ].filter(Boolean).map(chip=>(
                   <button key={chip.key} onClick={chip.onRemove} aria-label={`Remove filter: ${chip.label}`} style={{display:"flex",alignItems:"center",gap:5,fontSize:11.5,fontWeight:500,color:COLOR.purple,background:COLOR.purpleTint,border:"none",borderRadius:RADIUS.pill,padding:"4px 6px 4px 10px",cursor:"pointer",fontFamily:FONT.sans}}>
                     {chip.label}

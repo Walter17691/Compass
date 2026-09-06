@@ -24,6 +24,19 @@ describe('RootCauseExplorationPanel', () => {
     expect(rpcMock).toHaveBeenCalledWith('org_theme_root_cause', { p_org_id: 'org1', p_theme_id: 't1', p_period_days: 90 });
   });
 
+  // Insights Phase 4 (Trends & Themes) — the audit found the body copy
+  // already responsibly hedged ("areas to investigate," never a proven
+  // cause), but the visible heading itself overclaimed causal certainty
+  // ("Root-cause exploration") the underlying correlation/co-occurrence
+  // data doesn't support. UI-language correction only — the component,
+  // file, and RPC name are all unchanged.
+  it('never shows "root cause" language in its user-facing heading', async () => {
+    rpcMock.mockResolvedValue({ data: { current_count: 5, by_location: {}, co_occurring_themes: [] }, error: null });
+    render(<RootCauseExplorationPanel orgId="org1" themeId="t1" themeName="Management communication" onClose={()=>{}}/>);
+    await waitFor(() => expect(screen.getByText('Related patterns — Management communication')).toBeInTheDocument());
+    expect(screen.queryByText(/root.cause/i)).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when there are no co-occurring themes', async () => {
     rpcMock.mockResolvedValue({ data: { current_count: 3, by_location: {}, co_occurring_themes: [] }, error: null });
     render(<RootCauseExplorationPanel orgId="org1" themeId="t1" themeName="X" onClose={()=>{}}/>);

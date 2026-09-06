@@ -156,6 +156,27 @@ export function computeOverallVolumeTrend(cases, { now = new Date(), periodDays 
   return { currentCount, previousCount, pctChange: computePctChange(currentCount, previousCount) };
 }
 
+// Insights Phase 3 (Emerging Patterns) — wording sibling to describeTrend
+// above, for computeOverallVolumeTrend's output specifically. Originally
+// lived in OrganisationalIntelligenceOverview.jsx (Overview-specific
+// sentence, separate from this module's calculation/gating); moved here
+// in Insights Phase 4 so TrendsPanel.jsx can reuse the exact same wording
+// for its own overall-volume headline without a second, independently-
+// drifting copy — and so a component file exporting it doesn't trip the
+// "only export components" fast-refresh lint rule. Deliberately measures
+// case CREATION only ("were opened") — never "risk", "incidence", or
+// "deteriorated"/"improved", since no headcount denominator or causal
+// evidence exists anywhere in this data to support those words.
+export function describeVolumeSignal({ currentCount, previousCount, pctChange, subject }) {
+  const noun = `${subject ? subject + " " : ""}case${currentCount === 1 ? "" : "s"}`;
+  const verb = currentCount === 1 ? "was" : "were";
+  if (pctChange === null) {
+    return `${currentCount} ${noun} ${verb} opened in the last 90 days, compared with none in the previous 90 days.`;
+  }
+  const direction = pctChange >= 0 ? "up" : "down";
+  return `${currentCount} ${noun} ${verb} opened in the last 90 days, ${direction} ${Math.abs(pctChange)}% from ${previousCount} in the previous 90 days.`;
+}
+
 // Insights Phase 3 (Emerging Patterns), Signal 2 — deterministic ranking
 // of case-type entries from org_trend_detection's by_type_trend that
 // clear either significance gate (isSignificantTrend for an increase,
@@ -186,4 +207,60 @@ export function rankSignificantCaseTypeChanges(byTypeTrend) {
       if (magA !== magB) return magB - magA;
       return String(a.caseType).localeCompare(String(b.caseType));
     });
+}
+
+// Insights Phase 4 (Trends & Themes) — same significance gate and
+// magnitude-descending/alphabetical-tie-break ordering as
+// rankSignificantCaseTypeChanges above, but deliberately does NOT remap
+// the entry shape: TrendsPanel's existing "Explore"/"Show evidence"/
+// describeTrend consumers need the original themeId/themeName/byLocation
+// fields intact, not a caseType-shaped projection. This is a genuine
+// scope extension of what TrendsPanel already rendered (isSignificantTrend
+// only, in RPC current-count order) to also surface material declines
+// (isSignificantDecrease), in a stable, decision-relevant order instead
+// of the RPC's own raw current-count ordering — the deep-dive tab
+// deliberately shows the complete significant list, never a top-N slice.
+export function rankSignificantThemeTrends(byThemeTrend) {
+  return (byThemeTrend || [])
+    .filter(entry => isSignificantTrend(entry) || isSignificantDecrease(entry))
+    .slice()
+    .sort((a, b) => {
+      const pctA = computePctChange(a.currentCount, a.previousCount);
+      const pctB = computePctChange(b.currentCount, b.previousCount);
+      const magA = pctA === null ? Infinity : Math.abs(pctA);
+      const magB = pctB === null ? Infinity : Math.abs(pctB);
+      if (magA !== magB) return magB - magA;
+      return String(a.themeName).localeCompare(String(b.themeName));
+    });
+}
+
+// Insights Phase 4 (Trends & Themes drill-down) — resolves a theme
+// trend's currentCount back into the exact case ids it counted, so a
+// theme signal is never a dead end. Deliberately mirrors
+// org_trend_detection's own by_theme_trend semantics exactly (see
+// supabase/multi_tenant_analytics_invariant_2026-08-25.sql's
+// current_theme_cases/theme_current CTEs): a case counts if ITS OWN
+// created_at falls in the period — case_themes carries no timestamp the
+// RPC ever filters on, so the theme LINK's own age is irrelevant here,
+// only the case's. Deduplicates by case id, mirroring the RPC's own
+// `count(distinct case_id)` — a case tagged via more than one case_themes
+// row for the same theme must still surface as one case. Only ever
+// consults the `cases` array already passed in (the caller's own
+// RLS-scoped, already-authorised data) — a case_themes row referencing a
+// case absent from that array (never visible to this caller) is silently
+// skipped, never reconstructed.
+export function themeCaseIdsInPeriod(cases, caseThemes, themeId, { curStart, curEnd }) {
+  const curStartMs = curStart.getTime(), curEndMs = curEnd.getTime();
+  const taggedCaseIds = new Set(
+    (caseThemes || []).filter(t => t.themeId === themeId).map(t => t.caseId)
+  );
+  const ids = new Set();
+  (cases || []).forEach(cs => {
+    if (!taggedCaseIds.has(cs.id)) return;
+    const created = parseFlexDate(cs.createdAt);
+    if (!created) return;
+    const t = created.getTime();
+    if (t >= curStartMs && t < curEndMs) ids.add(cs.id);
+  });
+  return Array.from(ids);
 }

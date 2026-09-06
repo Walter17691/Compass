@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePctChange, isSignificantTrend, describeTrend, isSignificantDecrease, computeOverallVolumeTrend, rankSignificantCaseTypeChanges, getTrendPeriodBounds } from '../lib/trendDetection';
+import { computePctChange, isSignificantTrend, describeTrend, isSignificantDecrease, computeOverallVolumeTrend, rankSignificantCaseTypeChanges, getTrendPeriodBounds, describeVolumeSignal, rankSignificantThemeTrends, themeCaseIdsInPeriod } from '../lib/trendDetection';
 
 describe('computePctChange', () => {
   it('computes a positive percentage increase', () => {
@@ -418,5 +418,176 @@ describe('getTrendPeriodBounds (Insights Phase 3)', () => {
     const explicit = getTrendPeriodBounds(NOW, 90);
     const defaulted = getTrendPeriodBounds(NOW);
     expect(defaulted).toEqual(explicit);
+  });
+});
+
+// Insights Phase 4 (Trends & Themes) — describeVolumeSignal moved here
+// from OrganisationalIntelligenceOverview.jsx so TrendsPanel's own
+// overall-volume headline reuses the exact same wording, not a second
+// copy. No behaviour change from the move itself.
+describe('describeVolumeSignal (Insights Phase 3/4)', () => {
+  it('states a bounded percentage change with no unsupported causal language', () => {
+    const text = describeVolumeSignal({ currentCount: 42, previousCount: 33, pctChange: 27 });
+    expect(text).toBe('42 cases were opened in the last 90 days, up 27% from 33 in the previous 90 days.');
+    expect(text).not.toMatch(/risk|worsened|deteriorated|improved|caused/i);
+  });
+
+  it('states a decrease factually', () => {
+    const text = describeVolumeSignal({ currentCount: 31, previousCount: 41, pctChange: -24 });
+    expect(text).toBe('31 cases were opened in the last 90 days, down 24% from 41 in the previous 90 days.');
+  });
+
+  it('handles a zero-denominator comparison (no prior-period cases) without a fabricated percentage', () => {
+    const text = describeVolumeSignal({ currentCount: 171, previousCount: 0, pctChange: null });
+    expect(text).toBe('171 cases were opened in the last 90 days, compared with none in the previous 90 days.');
+    expect(text).not.toMatch(/%/);
+  });
+
+  it('prefixes a subject noun when provided (case-type reuse), omits it for overall volume', () => {
+    expect(describeVolumeSignal({ currentCount: 5, previousCount: 3, pctChange: 67, subject: 'grievance' }))
+      .toMatch(/^5 grievance cases were opened/);
+    expect(describeVolumeSignal({ currentCount: 5, previousCount: 3, pctChange: 67 }))
+      .toMatch(/^5 cases were opened/);
+  });
+
+  it('uses singular wording for a single case', () => {
+    expect(describeVolumeSignal({ currentCount: 1, previousCount: 0, pctChange: null })).toMatch(/^1 case was opened/);
+  });
+});
+
+// Insights Phase 4 (Trends & Themes) — theme-trend equivalent of
+// rankSignificantCaseTypeChanges, deliberately keeping the raw
+// themeId/themeName/byLocation shape intact (see the function's own
+// header for why) so existing TrendsPanel consumers (describeTrend,
+// Explore, Show evidence) keep working unmodified.
+describe('rankSignificantThemeTrends (Insights Phase 4)', () => {
+  it('excludes entries that clear neither significance gate', () => {
+    const entries = [{ themeId: 't1', themeName: 'Flat theme', currentCount: 10, previousCount: 10 }];
+    expect(rankSignificantThemeTrends(entries)).toEqual([]);
+  });
+
+  it('includes a significant increase and a significant decrease, magnitude descending', () => {
+    const entries = [
+      { themeId: 't1', themeName: 'Rota changes', currentCount: 13, previousCount: 10 }, // +30%
+      { themeId: 't2', themeName: 'Communication', currentCount: 6, previousCount: 9 }, // -33%
+    ];
+    const result = rankSignificantThemeTrends(entries);
+    expect(result.map(r => r.themeName)).toEqual(['Communication', 'Rota changes']); // -33% beats +30%
+  });
+
+  it('exactly -20% decrease clears the gate; -19.x% is suppressed', () => {
+    const atThreshold = [{ themeId: 't1', themeName: 'A', currentCount: 8, previousCount: 10 }]; // exactly -20%
+    expect(rankSignificantThemeTrends(atThreshold)).toHaveLength(1);
+    const belowThreshold = [{ themeId: 't1', themeName: 'A', currentCount: 9, previousCount: 10 }]; // -10%
+    expect(rankSignificantThemeTrends(belowThreshold)).toEqual([]);
+  });
+
+  it('suppresses a decrease when the previous-period count is below MIN_SAMPLE_SIZE, even at 100%', () => {
+    const entries = [{ themeId: 't1', themeName: 'A', currentCount: 0, previousCount: 2 }];
+    expect(rankSignificantThemeTrends(entries)).toEqual([]);
+  });
+
+  it('a decline to zero current count is included once previousCount clears the floor', () => {
+    const entries = [{ themeId: 't1', themeName: 'A', currentCount: 0, previousCount: 5 }];
+    const result = rankSignificantThemeTrends(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].currentCount).toBe(0);
+  });
+
+  it('never labels a decline as "improved" — this is a data-shape/ranking function only, no wording', () => {
+    const entries = [{ themeId: 't1', themeName: 'A', currentCount: 2, previousCount: 5 }];
+    const result = rankSignificantThemeTrends(entries);
+    expect(JSON.stringify(result)).not.toMatch(/improv/i);
+  });
+
+  it('leaves increase-only behaviour unchanged for entries that were already significant under isSignificantTrend', () => {
+    const entries = [{ themeId: 't1', themeName: 'A', currentCount: 4, previousCount: 0 }]; // new pattern
+    const result = rankSignificantThemeTrends(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].currentCount).toBe(4);
+  });
+
+  it('breaks ties in magnitude alphabetically by theme name, deterministically', () => {
+    const entries = [
+      { themeId: 't1', themeName: 'Zeta theme', currentCount: 8, previousCount: 10 }, // -20%
+      { themeId: 't2', themeName: 'Alpha theme', currentCount: 8, previousCount: 10 }, // -20%, same magnitude
+    ];
+    const result = rankSignificantThemeTrends(entries);
+    expect(result.map(r => r.themeName)).toEqual(['Alpha theme', 'Zeta theme']);
+  });
+
+  it('returns an empty array for no entries or a missing array', () => {
+    expect(rankSignificantThemeTrends([])).toEqual([]);
+    expect(rankSignificantThemeTrends(undefined)).toEqual([]);
+  });
+
+  it('does not mutate the input array', () => {
+    const entries = [{ themeId: 't1', themeName: 'A', currentCount: 13, previousCount: 10 }];
+    const copy = JSON.parse(JSON.stringify(entries));
+    rankSignificantThemeTrends(entries);
+    expect(entries).toEqual(copy);
+  });
+});
+
+// Insights Phase 4 (Trends & Themes drill-down) — resolves a theme's
+// currentCount back into real case ids, matching org_trend_detection's
+// own by_theme_trend semantics exactly (case.created_at in period, joined
+// to case_themes with no filter on the link's own timestamp).
+describe('themeCaseIdsInPeriod (Insights Phase 4)', () => {
+  const bounds = { curStart: new Date('2026-03-03T00:00:00.000Z'), curEnd: new Date('2026-06-01T00:00:00.000Z') };
+  const cases = [
+    { id: 'c1', createdAt: '2026-04-01T00:00:00.000Z' }, // in period
+    { id: 'c2', createdAt: '2026-04-15T00:00:00.000Z' }, // in period, different theme
+    { id: 'c3', createdAt: '2026-01-01T00:00:00.000Z' }, // before period
+    { id: 'c4', createdAt: '2026-04-20T00:00:00.000Z' }, // in period, tagged twice with the same theme
+    // deliberately no 'hidden' entry here — a case_themes row can
+    // reference a case this caller's own RLS-scoped `cases` array
+    // doesn't contain (e.g. narrowed access since the theme was tagged).
+  ];
+  const caseThemes = [
+    { id: 'ct1', caseId: 'c1', themeId: 'theme-a' },
+    { id: 'ct2', caseId: 'c2', themeId: 'theme-b' }, // unrelated theme
+    { id: 'ct3', caseId: 'c3', themeId: 'theme-a' }, // right theme, wrong period
+    { id: 'ct4', caseId: 'c4', themeId: 'theme-a' },
+    { id: 'ct5', caseId: 'c4', themeId: 'theme-a' }, // duplicate link, same case+theme
+    { id: 'ct6', caseId: 'hidden', themeId: 'theme-a' }, // case not visible to this caller
+  ];
+
+  it('resolves exactly the cases created in-period that carry the given theme', () => {
+    const result = themeCaseIdsInPeriod(cases, caseThemes, 'theme-a', bounds);
+    expect(new Set(result)).toEqual(new Set(['c1', 'c4']));
+  });
+
+  it('excludes an unrelated theme', () => {
+    const result = themeCaseIdsInPeriod(cases, caseThemes, 'theme-b', bounds);
+    expect(result).toEqual(['c2']);
+  });
+
+  it('excludes a case outside the period even though it carries the theme', () => {
+    const result = themeCaseIdsInPeriod(cases, caseThemes, 'theme-a', bounds);
+    expect(result).not.toContain('c3');
+  });
+
+  it('deduplicates a case with more than one case_themes row for the same theme', () => {
+    const result = themeCaseIdsInPeriod(cases, caseThemes, 'theme-a', bounds);
+    expect(result.filter(id => id === 'c4')).toHaveLength(1);
+  });
+
+  it('never reconstructs a case_themes link whose case is absent from the caller\'s own authorised `cases` array', () => {
+    const result = themeCaseIdsInPeriod(cases, caseThemes, 'theme-a', bounds);
+    expect(result).not.toContain('hidden');
+  });
+
+  it('excludes a case with an unparseable/missing createdAt rather than assuming it in-range', () => {
+    const withBadDate = [...cases, { id: 'c5', createdAt: null }];
+    const withBadTag = [...caseThemes, { id: 'ct7', caseId: 'c5', themeId: 'theme-a' }];
+    const result = themeCaseIdsInPeriod(withBadDate, withBadTag, 'theme-a', bounds);
+    expect(result).not.toContain('c5');
+  });
+
+  it('returns an empty array when nothing matches', () => {
+    expect(themeCaseIdsInPeriod(cases, caseThemes, 'no-such-theme', bounds)).toEqual([]);
+    expect(themeCaseIdsInPeriod([], [], 'theme-a', bounds)).toEqual([]);
+    expect(themeCaseIdsInPeriod(undefined, undefined, 'theme-a', bounds)).toEqual([]);
   });
 });

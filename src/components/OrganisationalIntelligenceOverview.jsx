@@ -6,7 +6,7 @@ import { themeFrequency } from '../lib/themes';
 import { daysBetween } from '../lib/dateMath';
 import { getCaseStage } from '../lib/caseStage';
 import { medianOpenCaseAge, computeNeedsAttentionSignals, casesRequiringAttention, OLD_CASE_THRESHOLD_DAYS } from '../lib/needsAttention';
-import { computeOverallVolumeTrend, rankSignificantCaseTypeChanges, isSignificantTrend, isSignificantDecrease, getTrendPeriodBounds } from '../lib/trendDetection';
+import { computeOverallVolumeTrend, rankSignificantCaseTypeChanges, isSignificantTrend, isSignificantDecrease, getTrendPeriodBounds, describeVolumeSignal } from '../lib/trendDetection';
 import { COLOR, FONT } from '../styles/tokens';
 import { DataQualityCaveat } from './DataQualityCaveat';
 import { DataRow, RowChevron, RowPrimary, RowSecondary } from './design/DataRow';
@@ -80,24 +80,6 @@ const AttentionSignal = ({ children, onView }) => (
     {onView && <button type="button" onClick={onView} style={{fontSize:12,fontWeight:600,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,flexShrink:0,padding:0,whiteSpace:"nowrap"}}>View cases →</button>}
   </div>
 );
-
-// Insights Phase 3 (Emerging Patterns) — wording lives here, not in
-// trendDetection.js: that module owns the calculation/gating (computePctChange,
-// isSignificantTrend, isSignificantDecrease, computeOverallVolumeTrend,
-// rankSignificantCaseTypeChanges), this owns the Overview-specific sentence,
-// same split as Phase 2's Needs Attention section. Deliberately measures
-// case CREATION only ("were opened") — never "risk", "incidence", or
-// "deteriorated"/"improved", since no headcount denominator or causal
-// evidence exists anywhere in this data to support those words.
-function describeVolumeSignal({ currentCount, previousCount, pctChange, subject }) {
-  const noun = `${subject ? subject + " " : ""}case${currentCount === 1 ? "" : "s"}`;
-  const verb = currentCount === 1 ? "was" : "were";
-  if (pctChange === null) {
-    return `${currentCount} ${noun} ${verb} opened in the last 90 days, compared with none in the previous 90 days.`;
-  }
-  const direction = pctChange >= 0 ? "up" : "down";
-  return `${currentCount} ${noun} ${verb} opened in the last 90 days, ${direction} ${Math.abs(pctChange)}% from ${previousCount} in the previous 90 days.`;
-}
 
 function topEntries(obj, limit = 6) {
   return Object.entries(obj || {}).sort((a,b)=>b[1]-a[1]).slice(0, limit);

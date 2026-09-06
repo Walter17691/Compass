@@ -52,6 +52,11 @@ export function InsightsScreen({
     {id:"reports", label:"Reports"},
   ];
   const [active, setActive] = useState(deepLink.initialSection && sections.some(s=>s.id===deepLink.initialSection) ? deepLink.initialSection : "overview");
+  // Shared by every Insights tab that drills into Cases (Overview's Needs
+  // Attention/Emerging Patterns, Trends & Themes' theme drill-down) — one
+  // handler, not a copy per tab, since they all do the exact same thing:
+  // seed the Cases screen's one-shot deep link and navigate there.
+  const onViewCases = (filterSpec) => { nav.setCasesInitialFilters(filterSpec); nav.setScreen(SCREENS.CASES); };
 
   return (
     <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"40px 28px",minWidth:0,width:"100%",boxSizing:"border-box"}}>
@@ -71,7 +76,7 @@ export function InsightsScreen({
               processTemplates={caseData.processTemplates}
               employeeRecords={caseData.employeeRecords}
               onOpenCase={(caseId, stageId)=>{nav.setActiveCaseId(caseId); nav.setActiveCaseStage(stageId); nav.setScreen(SCREENS.CASE_VIEW);}}
-              onViewCases={(filterSpec)=>{nav.setCasesInitialFilters(filterSpec); nav.setScreen(SCREENS.CASES);}}
+              onViewCases={onViewCases}
               allegations={caseData.allegations}
               caseSignals={caseData.caseSignals}
               caseTasks={caseData.caseTasks}
@@ -84,7 +89,7 @@ export function InsightsScreen({
           )}
           {active==="trends"&&(
             <>
-              <TrendsPanel orgId={reporting.org?.id} createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>
+              <TrendsPanel orgId={reporting.org?.id} cases={caseData.cases} caseThemes={orgIntel.caseThemes} onViewCases={onViewCases} createCaseTask={orgIntelActions.createCaseTask} improvementInitiatives={orgIntel.improvementInitiatives}/>
               <ThemeTaxonomyManager organisationThemes={orgIntel.organisationThemes} isHR={isHR} onAdd={orgIntelActions.onAddOrganisationTheme} onUpdate={orgIntelActions.onUpdateOrganisationTheme}/>
             </>
           )}

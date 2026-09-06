@@ -28,7 +28,7 @@ export function RootCauseExplorationPanel({ orgId, themeId, themeName, createCas
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E0D8FF",borderRadius:10,padding:"16px 18px",marginBottom:10}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.4px",textTransform:"uppercase"}}>Root-cause exploration — {themeName}</div>
+        <div style={{fontSize:11,fontWeight:700,color:"#7C5CFC",letterSpacing:"0.4px",textTransform:"uppercase"}}>Related patterns — {themeName}</div>
         <button onClick={onClose} aria-label="Close" style={{background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontSize:14,fontFamily:"DM Sans,system-ui,sans-serif"}}>×</button>
       </div>
 

@@ -333,3 +333,66 @@ describe('CasesScreen — Insights creation-date drill-down (Insights Phase 3)',
     expect(screen.queryByRole('button', { name: /Remove filter: From Insights/ })).not.toBeInTheDocument();
   });
 });
+
+// Insights Phase 4 (Trends & Themes drill-down) — a theme signal seeds
+// BOTH caseIds AND a creation-date range together (see themeCaseIdsInPeriod's
+// own header for why the date range travels alongside the ids). This is
+// the first drill-down to combine the two Phase 2/Phase 3 mechanisms, so
+// it needs its own single, atomically-removable chip — see
+// CasesScreen.jsx's own insightsSeededCaseIdsWithDateRange comment.
+describe('CasesScreen — Insights theme drill-down, caseIds + creation-date combined (Insights Phase 4)', () => {
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, confirmDialog: noop, showToast: noop };
+  const themeCases = [
+    { id: 'c1', employeeName: 'Tagged Inside Range', caseType: 'misconduct', stage: 'open', createdAt: '2026-06-10T00:00:00.000Z' },
+    { id: 'c2', employeeName: 'Untagged', caseType: 'misconduct', stage: 'open', createdAt: '2026-06-10T00:00:00.000Z' },
+  ];
+  const themeFilters = { caseIds: ['c1'], createdFrom: '2026-06-01T00:00:00.000Z', createdTo: '2026-07-01T00:00:00.000Z' };
+
+  it('applies both the caseIds allowlist and the creation-date range together', () => {
+    render(<CasesScreen {...baseProps} cases={themeCases}
+      deepLink={{ initialFilters: themeFilters, clearInitialFilters: noop }} />);
+    expect(screen.getAllByText('Tagged Inside Range').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Untagged').length).toBe(0);
+  });
+
+  it('shows exactly ONE combined "From Insights" chip, not two independent ones', () => {
+    render(<CasesScreen {...baseProps} cases={themeCases}
+      deepLink={{ initialFilters: themeFilters, clearInitialFilters: noop }} />);
+    expect(screen.getAllByRole('button', { name: /Remove filter: From Insights/ })).toHaveLength(1);
+  });
+
+  it('removing the combined chip clears caseIds, createdFrom, and createdTo atomically, restoring every case', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={themeCases}
+      deepLink={{ initialFilters: themeFilters, clearInitialFilters: noop }} />);
+    expect(screen.queryAllByText('Untagged').length).toBe(0);
+    await user.click(screen.getByRole('button', { name: /Remove filter: From Insights/ }));
+    expect(screen.getAllByText('Tagged Inside Range').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Untagged').length).toBeGreaterThan(0);
+    // and the chip itself is gone — nothing left to remove a second time
+    expect(screen.queryByRole('button', { name: /Remove filter: From Insights/ })).not.toBeInTheDocument();
+  });
+
+  it('"Clear filters" also clears a combined theme drill-down', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={themeCases}
+      deepLink={{ initialFilters: themeFilters, clearInitialFilters: noop }} />);
+    await user.click(screen.getByRole('button', { name: /Clear filters/ }));
+    expect(screen.getAllByText('Untagged').length).toBeGreaterThan(0);
+  });
+
+  it('a later, ordinary Cases visit (no deep link) has no residual caseIds/date-range/chip state', () => {
+    render(<CasesScreen {...baseProps} cases={themeCases} />);
+    expect(screen.getAllByText('Untagged').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Remove filter: From Insights/ })).not.toBeInTheDocument();
+  });
+
+  it('does not combine into one chip when caseIds and a date range were NOT seeded together (Phase 2/3 drill-downs stay independent)', () => {
+    render(<CasesScreen {...baseProps} cases={themeCases}
+      deepLink={{ initialFilters: { caseIds: ['c1'] }, clearInitialFilters: noop }} />);
+    const chips = screen.getAllByRole('button', { name: /Remove filter: From Insights/ });
+    expect(chips).toHaveLength(1);
+    expect(chips[0]).toHaveTextContent(/case/); // the plain caseIds-only chip, not the "in period" combined wording
+    expect(chips[0]).not.toHaveTextContent('in period');
+  });
+});
