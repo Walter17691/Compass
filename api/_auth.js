@@ -1,5 +1,4 @@
 import { supabaseRequest } from './_supabase.js';
-import { canSeeAllOrgCases } from '../src/lib/roles.js';
 import { approvalActionForOutcome } from '../src/lib/approvals.js';
 
 // Phase 7 (Controlled Beta Infrastructure Gate 3) — see api/_supabase.js
@@ -78,17 +77,48 @@ export async function requireOrgRole(req, res, orgId, roleCheck) {
   return auth;
 }
 
-// Phase 6.5 hardening (closes Prompt 16 audit finding C2, CRITICAL) —
-// api/send-letter.js and api/send-for-signature.js used to check org
-// membership alone before delivering an arbitrary, caller-supplied
-// letter under Compass's own verified sending domain: no case, no role,
-// no relationship to what was actually being sent. This is the shared
-// boundary those endpoints now require instead — the same access a case
-// is actually visible under (mirrors the live cases SELECT RLS policy):
-// an oversight role (HR/legal/auditor), the case's own creator/owner, or
-// any case_access grant, not just "some member of this org." Case
-// existence/org match is checked server-side via the service-role key —
-// never trust a client-supplied org/case pairing.
+// Commercial-readiness audit remediation (2026-09) — requireCaseAccess
+// used to re-derive "can this caller touch this case" as a hand-rolled
+// JS predicate (canSeeAllOrgCases(role) OR created_by OR owner_id OR
+// case_access). That predicate silently drifted from cases' own live
+// RLS stack in two ways, both confirmed against production pg_policies:
+// (1) CONFIDENTIALITY — canSeeAllOrgCases() includes hr_manager, but
+//     cases' own RESTRICTIVE confidentiality policy ("Confidential
+//     cases restricted to authorised staff") gates on the narrower
+//     has_confidential_case_oversight() (hr_director/legal_reviewer/
+//     auditor only) — so an hr_manager with no creator/case_access
+//     relationship to a confidential case passed this check, but could
+//     not actually SELECT the case row under RLS. owner_id alone was
+//     also treated as sufficient here, but owner_id is not one of that
+//     policy's exemption terms at all.
+// (2) LOCATION — this function never checked location, but cases' own
+//     PERMISSIVE policy ("Users can access cases in their org or
+//     assigned to them") requires can_access_case_location() OR an
+//     explicit case_access row; a location_manager's own created_by
+//     case, at a location they've since lost access to, passed here
+//     but would not be SELECT-visible under RLS either.
+// FIX: stop re-deriving the predicate in JS. Ask Postgres, as the
+// caller, whether the case is visible — the exact question RLS exists
+// to answer, and the same query the client's own supabase-js call would
+// run. This makes cases' live RLS stack (tenant boundary, location,
+// confidentiality, creator/owner/case_access) the single authoritative
+// source for every one of those dimensions, with nothing duplicated
+// here to drift again, and any future RLS hardening applies for free.
+// A separate, narrow, NON-authorizing service-role existence/tenant
+// check runs first purely to preserve the pre-existing 404 ("no such
+// case in this org") vs 403 ("case exists, you're just not authorised
+// on it") distinction — it never contributes to the access decision
+// itself, which is made exclusively by the caller-scoped query below.
+async function callerCaseVisible(req, caseId, select) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/cases?id=eq.${encodeURIComponent(caseId)}&select=${select}`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+  });
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows[0] : undefined;
+}
+
 // caseId is optional here on purpose: a brand-new case doesn't exist yet
 // at the point a meeting record is first sent for signature
 // (saveMeetingToCase is what finds-or-creates it, and that happens
@@ -102,17 +132,21 @@ export async function requireCaseAccess(req, res, orgId, caseId) {
   if (!auth) return null;
   if (!caseId) return auth;
   try {
-    const caseRes = await supabaseRequest(`cases?id=eq.${encodeURIComponent(caseId)}&select=id,org_id,created_by,owner_id,outcome`);
-    const [cs] = await caseRes.json();
-    if (!cs || cs.org_id !== orgId) { res.status(404).json({ error: 'Case not found' }); return null; }
-    if (canSeeAllOrgCases(auth.role) || cs.created_by === auth.caller.id || cs.owner_id === auth.caller.id) {
-      return { ...auth, case: cs };
-    }
+    const existsRes = await supabaseRequest(`cases?id=eq.${encodeURIComponent(caseId)}&select=id,org_id`);
+    const [exists] = await existsRes.json();
+    if (!exists || exists.org_id !== orgId) { res.status(404).json({ error: 'Case not found' }); return null; }
+
+    const cs = await callerCaseVisible(req, caseId, 'id,outcome');
+    if (!cs) { res.status(403).json({ error: 'You do not have access to this case' }); return null; }
+
+    // Non-authorizing enrichment only, run after access is already
+    // proven above — surfaces the caller's own case_access role, if
+    // any. Nothing downstream depends on this; it's informational.
     const accessRes = await supabaseRequest(`case_access?case_id=eq.${encodeURIComponent(caseId)}&user_id=eq.${encodeURIComponent(auth.caller.id)}&select=role`);
     const accessRows = await accessRes.json();
-    if (accessRows.length > 0) return { ...auth, case: cs, caseRole: accessRows[0].role };
-    res.status(403).json({ error: 'You do not have access to this case' });
-    return null;
+    const caseRole = accessRows[0]?.role;
+
+    return { ...auth, case: cs, ...(caseRole ? { caseRole } : {}) };
   } catch (e) {
     console.error('requireCaseAccess error:', e.message);
     res.status(500).json({ error: 'Could not verify case access' });

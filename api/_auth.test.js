@@ -133,13 +133,22 @@ describe('requireOrgRole', () => {
   });
 });
 
-// Phase 6.5 hardening (Prompt 16 audit, closes finding C2, CRITICAL) —
-// requireCaseAccess is the shared boundary api/send-letter.js and
-// api/send-for-signature.js now route through instead of bare
-// requireOrgMembership, closing the gap where any org member (not just
-// someone with a real relationship to the specific case) could deliver
-// an arbitrary letter under Compass's own verified sending domain.
-function stubFetchWithCase({ authOk = true, authUser = { id: 'user-1', email: 'a@b.com' }, members = [], caseRow = null, caseAccessRows = [], reviewRows = [] } = {}) {
+// Commercial-readiness audit remediation (2026-09) — requireCaseAccess no
+// longer re-derives "can this caller touch this case" as a hand-rolled JS
+// predicate (that predicate had drifted from live RLS on both
+// confidentiality and location — see api/_auth.js's own comment). It now
+// makes exactly two /rest/v1/cases calls per lookup: a service-role
+// existence/tenant check (id,org_id — never contributes to the access
+// decision, only preserves 404-vs-403 semantics), and a CALLER-SCOPED
+// call (apikey=anon, Authorization=Bearer <caller token>) that asks
+// Postgres' own live RLS stack whether the case is visible — that second
+// call's result IS the authorization decision. Tests below distinguish
+// the two calls by their distinct `select` list (id,org_id vs id,outcome)
+// since both hit the same URL shape, and drive the caller-scoped response
+// directly to simulate what live RLS does for a given scenario (RLS
+// content itself is verified separately, live, against production
+// pg_policies).
+function stubFetchWithCase({ authOk = true, authUser = { id: 'user-1', email: 'a@b.com' }, members = [], existsRow = null, callerVisibleRow = undefined, caseAccessRows = [], reviewRows = [] } = {}) {
   global.fetch = vi.fn((url) => {
     const u = String(url);
     if (u.includes('/auth/v1/user')) {
@@ -149,7 +158,15 @@ function stubFetchWithCase({ authOk = true, authUser = { id: 'user-1', email: 'a
       return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
     }
     if (u.includes('/rest/v1/cases')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(caseRow ? [caseRow] : []) });
+      // The two /rest/v1/cases calls have distinct `select` lists in the
+      // real code (existence check: id,org_id via the service key;
+      // caller-scoped RLS check: id,outcome via the caller's own bearer
+      // token) — distinguish on that rather than on headers, since the
+      // service key is unset/undefined in this test environment.
+      if (u.includes('select=id,outcome')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(callerVisibleRow ? [callerVisibleRow] : []) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(existsRow ? [existsRow] : []) });
     }
     if (u.includes('/rest/v1/case_access')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(caseAccessRows) });
@@ -174,43 +191,82 @@ describe('requireCaseAccess', () => {
     expect(result.case).toBeUndefined();
   });
 
-  it('404s when the case does not exist or belongs to a different org', async () => {
-    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-2', created_by: 'user-9', owner_id: null, outcome: '' } });
+  it('404s when the case does not exist at all', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], existsRow: null });
     const res = mockRes();
     const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
     expect(result).toBeNull();
     expect(res.statusCode).toBe(404);
   });
 
-  it('allows an HR-role member of the org regardless of case_access', async () => {
-    stubFetchWithCase({ members: [{ role: 'hr_director' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: '' } });
+  it('404s when the case belongs to a different org (no cross-tenant existence leak)', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], existsRow: { id: 'case-1', org_id: 'org-2' } });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
+    expect(result).toBeNull();
+    expect(res.statusCode).toBe(404);
+  });
+
+  // Item A/L/M of the adversarial matrix (HR Director/legal_reviewer/
+  // auditor confidential oversight): live RLS grants these roles
+  // visibility via has_confidential_case_oversight() regardless of any
+  // other relationship — simulated here by a populated caller-visible row.
+  it('allows access when the caller-scoped RLS query proves the case is visible (e.g. HR Director on a confidential case)', async () => {
+    stubFetchWithCase({ members: [{ role: 'hr_director' }], existsRow: { id: 'case-1', org_id: 'org-1' }, callerVisibleRow: { id: 'case-1', outcome: '' } });
     const res = mockRes();
     const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
     expect(result).not.toBeNull();
     expect(result.case.id).toBe('case-1');
   });
 
-  it('allows the case creator even without a case_access row', async () => {
-    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-1', owner_id: null, outcome: '' } });
+  // Items C/D of the adversarial matrix (hr_manager on a confidential
+  // case with no creator/case_access relationship, including owner-only):
+  // live RLS denies this — an empty caller-scoped result must translate
+  // to a 403, never a silent allow. This is the exact class of bug this
+  // remediation closes: requireCaseAccess previously granted access via
+  // canSeeAllOrgCases()/owner_id without ever asking RLS.
+  it('denies access when the caller-scoped RLS query returns no row — the exact confidentiality/ownership gap this fix closes', async () => {
+    stubFetchWithCase({ members: [{ role: 'hr_manager' }], existsRow: { id: 'case-1', org_id: 'org-1' }, callerVisibleRow: undefined });
     const res = mockRes();
     const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
-    expect(result).not.toBeNull();
+    expect(result).toBeNull();
+    expect(res.statusCode).toBe(403);
   });
 
-  it('allows a member holding any case_access grant on this case', async () => {
-    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: '' }, caseAccessRows: [{ role: 'notetaker' }] });
+  // Item H of the adversarial matrix (creator whose location access has
+  // since been removed): live RLS's permissive policy has no created_by
+  // exemption, so a caller-scoped query correctly returns nothing even
+  // for the case's own creator once location access is lost.
+  it('denies access to the case creator when the caller-scoped RLS query returns no row (e.g. lost location access) — the location gap this fix also closes', async () => {
+    stubFetchWithCase({ members: [{ role: 'location_manager' }], existsRow: { id: 'case-1', org_id: 'org-1' }, callerVisibleRow: undefined });
+    const res = mockRes();
+    const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
+    expect(result).toBeNull();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('queries the caller-scoped endpoint with the caller\'s own bearer token, not the service key', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], existsRow: { id: 'case-1', org_id: 'org-1' }, callerVisibleRow: { id: 'case-1', outcome: '' } });
+    const res = mockRes();
+    await requireCaseAccess({ headers: { authorization: 'Bearer caller-token-xyz' } }, res, 'org-1', 'case-1');
+    const callerScopedCall = global.fetch.mock.calls.find(([url, opts]) => String(url).includes('/rest/v1/cases') && opts.headers.Authorization === 'Bearer caller-token-xyz');
+    expect(callerScopedCall).toBeDefined();
+  });
+
+  it('surfaces the caller\'s own case_access role once access is already proven, without it affecting the decision', async () => {
+    stubFetchWithCase({ members: [{ role: 'line_manager' }], existsRow: { id: 'case-1', org_id: 'org-1' }, callerVisibleRow: { id: 'case-1', outcome: '' }, caseAccessRows: [{ role: 'notetaker' }] });
     const res = mockRes();
     const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
     expect(result).not.toBeNull();
     expect(result.caseRole).toBe('notetaker');
   });
 
-  it('403s a real org member with no relationship to the case at all — the exact gap this fix closes', async () => {
-    stubFetchWithCase({ members: [{ role: 'line_manager' }], caseRow: { id: 'case-1', org_id: 'org-1', created_by: 'user-9', owner_id: null, outcome: '' }, caseAccessRows: [] });
+  it('never exposes the outcome field or grants access before the caller-scoped check runs — 403 is returned with no case data attached', async () => {
+    stubFetchWithCase({ members: [{ role: 'hr_manager' }], existsRow: { id: 'case-1', org_id: 'org-1' }, callerVisibleRow: undefined });
     const res = mockRes();
     const result = await requireCaseAccess({ headers: { authorization: 'Bearer good' } }, res, 'org-1', 'case-1');
     expect(result).toBeNull();
-    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: 'You do not have access to this case' });
   });
 });
 

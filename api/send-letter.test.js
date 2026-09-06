@@ -8,6 +8,29 @@ function mockRes() {
   return res;
 }
 
+// Commercial-readiness audit remediation (2026-09) — api/_auth.js's
+// requireCaseAccess no longer decides case visibility itself; it asks
+// Postgres, as the caller, via a second /rest/v1/cases request scoped to
+// the caller's own bearer token (select=id,outcome), separate from the
+// service-role existence/tenant check (select=id,org_id) that ran
+// before it. This stub simulates what live RLS (cases' own authoritative
+// policy stack, verified separately against production) would return for
+// the caller-scoped request, driven by the same fixtures every existing
+// test already sets (role/created_by/owner_id/case_access/confidential)
+// — a legitimate test double standing in for Postgres, not a duplicate
+// of the authorization logic api/_auth.js itself no longer contains.
+const CONFIDENTIAL_OVERSIGHT_ROLES = new Set(['hr_director', 'legal_reviewer', 'auditor']);
+const CAN_SEE_ALL_ORG_CASES_ROLES = new Set(['hr_manager', 'hr_director', 'legal_reviewer', 'auditor']);
+function rlsWouldShowCase({ role, cs, callerId, hasCaseAccess }) {
+  if (!cs) return false;
+  const own = CAN_SEE_ALL_ORG_CASES_ROLES.has(role) || cs.created_by === callerId || cs.owner_id === callerId || hasCaseAccess;
+  if (!own) return false;
+  if (cs.confidential) {
+    return cs.created_by === callerId || hasCaseAccess || CONFIDENTIAL_OVERSIGHT_ROLES.has(role);
+  }
+  return true;
+}
+
 // Phase 6.5 hardening (High, security review) — email relay security
 // (Prompt 5, part 3). requireOrgMembership/rate-limit were already fixed;
 // this file adds direct regression coverage for unauthorised send
@@ -22,7 +45,11 @@ function stubFetch({ authOk = true, authUser = { id: 'user-1' }, members = [], e
       return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
     }
     if (u.includes('/rest/v1/cases')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(caseRow ? [caseRow] : []) });
+      if (u.includes('select=id,outcome')) {
+        const visible = rlsWouldShowCase({ role: members[0]?.role, cs: caseRow, callerId: authUser.id, hasCaseAccess: caseAccessRows.length > 0 });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(visible ? [{ id: caseRow.id, outcome: caseRow.outcome }] : []) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(caseRow ? [{ id: caseRow.id, org_id: caseRow.org_id }] : []) });
     }
     if (u.includes('/rest/v1/case_access')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(caseAccessRows) });
