@@ -2,6 +2,7 @@ import { verifyCaller } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
 import { supabaseRequest, getUserEmail } from './_supabase.js';
 import { checkRateLimit } from '../_rateLimit.js';
+import { APP_URL } from '../_appUrl.js';
 
 // Emails the new case owner when a case is reassigned to them — the only
 // step of a reassignment that needs a server (RESEND_API_KEY is server-only).
@@ -42,7 +43,6 @@ export async function reassignNotify(req, res) {
     const newOwnerEmail = await getUserEmail(newOwnerId);
     if (!newOwnerEmail) return res.status(404).json({ error: 'Could not resolve an email address for the new owner' });
 
-    const appUrl = 'https://compass-lemon-iota.vercel.app';
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -56,7 +56,7 @@ export async function reassignNotify(req, res) {
           <p><strong>${esc(callerMember.name)}</strong> has handed you the ${esc(caseType) || 'HR'} case for <strong>${esc(employeeName)}</strong> at ${esc(orgName) || 'your organisation'}.</p>
           <p>You now have access to it in Compass.</p>
           <div style="text-align:center;margin:32px 0">
-            <a href="${appUrl}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open Compass</a>
+            <a href="${APP_URL}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open Compass</a>
           </div>
         </div>`,
       }),

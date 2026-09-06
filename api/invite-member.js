@@ -1,6 +1,7 @@
 import { verifyCaller } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
 import { checkRateLimit } from './_rateLimit.js';
+import { APP_URL } from './_appUrl.js';
 
 // Phase 7 (Controlled Beta Infrastructure Gate 3) — see api/_supabase.js
 // for why this is now configurable via env var with a production fallback.
@@ -56,14 +57,7 @@ export default async function handler(req, res) {
     if (!orgRow) return res.status(404).json({ error: 'Organisation not found' });
     const { name: orgName, invite_code: inviteCode } = orgRow;
 
-    // Team Invitations P0, domain correction — the auto-generated Vercel
-    // project alias (compass-lemon-iota.vercel.app) used elsewhere in this
-    // codebase's APP_URL constants is not the customer-facing brand; use
-    // the canonical compasshruk.com domain for this customer-facing email
-    // specifically. (Every other APP_URL usage in api/ still points at the
-    // Vercel alias — out of scope here, reported separately.)
-    const appUrl = 'https://compasshruk.com';
-    const inviteLink = `${appUrl}?invite=${inviteCode}`;
+    const inviteLink = `${APP_URL}?invite=${inviteCode}`;
 
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -88,7 +82,7 @@ export default async function handler(req, res) {
           <div style="text-align:center;margin:32px 0">
             <a href="${esc(inviteLink)}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Join ${esc(orgName)}</a>
           </div>
-          <p style="color:#666;font-size:12px">Or go to ${esc(appUrl)} and use invite code: <strong>${esc(inviteCode)}</strong></p>
+          <p style="color:#666;font-size:12px">Or go to ${esc(APP_URL)} and use invite code: <strong>${esc(inviteCode)}</strong></p>
         </div>`
       })
     });

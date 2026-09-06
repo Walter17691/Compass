@@ -4,8 +4,7 @@ import { GRAPH_SCOPE } from './_outlook.js';
 import { supabaseRequest } from '../_supabase.js';
 import { logIntegrationEvent } from '../_integration_events.js';
 import { redactTokenResponse } from '../_oauthLog.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 function readCookie(req, name) {
   const header = req.headers.cookie || '';

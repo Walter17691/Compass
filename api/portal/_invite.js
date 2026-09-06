@@ -4,8 +4,7 @@ import { requireOrgRole } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
 import { checkRateLimit } from '../_rateLimit.js';
 import { isHrRole } from '../../src/lib/roles.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 export async function invite(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

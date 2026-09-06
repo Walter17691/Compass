@@ -121,7 +121,7 @@ describe('send-for-signature — signing host is never caller-controlled', () =>
 
     const emailCall = calls.find(c => c.url.includes('api.resend.com'));
     const payload = JSON.parse(emailCall.options.body);
-    expect(payload.html).toContain('https://compass-lemon-iota.vercel.app/sign/sign-123');
+    expect(payload.html).toContain('https://compasshruk.com/sign/sign-123');
     expect(payload.html).not.toContain('attacker-controlled.example.com');
   });
 });

@@ -3,8 +3,7 @@ import { signState } from './_state.js';
 import { GRAPH_SCOPE } from './_outlook.js';
 import { supabaseRequest } from '../_supabase.js';
 import { verifyCaller } from '../_auth.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 // Returns the Microsoft consent URL as JSON rather than redirecting
 // directly — mirrors api/calendar/_oauth-start.js exactly, for the same

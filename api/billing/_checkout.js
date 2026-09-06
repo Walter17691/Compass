@@ -2,8 +2,7 @@ import Stripe from 'stripe';
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
 import { isHrRole } from '../../src/lib/roles.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 // Returns the Stripe Checkout URL as JSON rather than redirecting directly
 // — a top-level window.location.href navigation can't carry a custom

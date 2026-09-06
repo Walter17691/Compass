@@ -5,8 +5,7 @@ import { computeDueSoon } from '../../src/lib/deadlines.js';
 import { mapCaseRow } from '../../src/lib/caseMapping.js';
 import { isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation } from '../../src/lib/roles.js';
 import { escapeHtml as esc } from '../_html.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 // A daily email listing everything due in the next two weeks (the in-app
 // banner's window) would repeat the same items for days and train people

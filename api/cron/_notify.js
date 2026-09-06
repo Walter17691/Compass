@@ -1,6 +1,5 @@
 import { isAllowedWebhookUrl } from './_webhookGuard.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 // Integrations & Workflow Automation (Phase 5, IP26, §16) — genuine
 // redesign, not an extension. Slack/Teams webhooks are one shared,

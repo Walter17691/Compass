@@ -2,8 +2,7 @@ import crypto from 'crypto';
 import { signState } from './_state.js';
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 // Returns the Google consent URL as JSON rather than issuing a redirect

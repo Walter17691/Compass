@@ -3,8 +3,7 @@ import { getUserEmail } from '../cron/_supabase.js';
 import { requireOrgMembership } from '../_auth.js';
 import { escapeHtml as esc } from '../_html.js';
 import { checkRateLimit } from '../_rateLimit.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 // The Employee Portal shows any meeting with a generated letter automatically
 // (api/portal/_case-detail.js) — but until now nothing told the employee a

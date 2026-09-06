@@ -2,8 +2,7 @@ import Stripe from 'stripe';
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
 import { isHrRole } from '../../src/lib/roles.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 export async function manage(req, res) {
   const caller = await verifyCaller(req);

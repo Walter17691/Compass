@@ -2,6 +2,7 @@ import { requireCaseAccess, verifyOutcomeApproved } from './_auth.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 import { documentTypeLabel } from '../src/lib/eSignature.js';
+import { APP_URL } from './_appUrl.js';
 
 // Phase 6.5 hardening (P0) — two issues, both closed the same way
 // send-letter.js's sibling fix does: (1) verified only that some real
@@ -11,12 +12,11 @@ import { documentTypeLabel } from '../src/lib/eSignature.js';
 // link's host came straight from the request body (appUrl) and was only
 // HTML-escaped, not validated, so a forged appUrl pointed the "Review
 // and Sign" button at an attacker-controlled page while keeping every
-// other visual/domain cue authentic. APP_URL is now fixed, matching the
-// same hardcoded constant api/portal/_invite.js already uses for its own
-// equivalent link — the real signing round-trip (api/signing.js) isn't
-// proxied by the local dev server anyway (see signature-sync.spec.js's
-// own comment), so this always pointed at the deployed app in practice.
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+// other visual/domain cue authentic. APP_URL is now fixed — see
+// api/_appUrl.js for the shared constant every such link now uses — the
+// real signing round-trip (api/signing.js) isn't proxied by the local dev
+// server anyway (see signature-sync.spec.js's own comment), so this
+// always pointed at the deployed app in practice.
 
 // Phase 6.5 hardening (Prompt 16 audit, closes finding C2, CRITICAL) —
 // same fix as send-letter.js's sibling: requireOrgMembership alone let

@@ -3,8 +3,7 @@ import { signState } from './_state.js';
 import { GMAIL_SCOPE } from './_gmail.js';
 import { supabaseRequest } from '../_supabase.js';
 import { verifyCaller } from '../_auth.js';
-
-const APP_URL = 'https://compass-lemon-iota.vercel.app';
+import { APP_URL } from '../_appUrl.js';
 
 // Mirrors _oauth-start.js (Outlook) and api/calendar/_oauth-start.js
 // (Google Calendar) exactly, including the state-signed + HttpOnly-cookie
