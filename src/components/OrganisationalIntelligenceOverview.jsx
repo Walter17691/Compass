@@ -114,7 +114,7 @@ function withSampleFloor(entries) {
 // covers this with its own real StatBox; Phase 7.5B removed the stale
 // "Coming... later in this phase" placeholder that used to sit in the
 // grid above, since the feature it was waiting on had already shipped.
-export function OrganisationalIntelligenceOverview({ orgId, isHR, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, onViewCases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes }) {
+export function OrganisationalIntelligenceOverview({ orgId, isHR, cases, dueSoon, hrReviewRequests, processTemplates, employeeRecords, onOpenCase, onViewCases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, caseThemes, organisationThemes, createCaseTask, improvementInitiatives }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState(false);
   // Insights Phase 3 (Emerging Patterns) — org_trend_detection default
@@ -462,11 +462,11 @@ export function OrganisationalIntelligenceOverview({ orgId, isHR, cases, dueSoon
         <ProcessBottlenecksPanel cases={cases} employeeRecords={employeeRecords} processTemplates={processTemplates} onOpenCase={onOpenCase}/>
       </div>
 
-      <AppealIntelligencePanel allegations={allegations} cases={cases} caseSignals={caseSignals}/>
+      <AppealIntelligencePanel allegations={allegations} cases={cases} caseSignals={caseSignals} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>
 
-      <CaseQualityAnalyticsPanel cases={cases} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} policies={policies} caseAccess={caseAccess} orgMembers={orgMembers} onViewCases={onViewCases}/>
+      <CaseQualityAnalyticsPanel cases={cases} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} policies={policies} caseAccess={caseAccess} orgMembers={orgMembers} onViewCases={onViewCases} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>
 
-      <HrReviewIntelligencePanel hrReviewRequests={hrReviewRequests} onViewCases={onViewCases}/>
+      <HrReviewIntelligencePanel hrReviewRequests={hrReviewRequests} onViewCases={onViewCases} createCaseTask={createCaseTask} improvementInitiatives={improvementInitiatives}/>
 
       <PolicyEffectivenessPanel caseSignals={caseSignals} hrReviewRequests={hrReviewRequests}/>
     </div>

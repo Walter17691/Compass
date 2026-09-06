@@ -21,7 +21,7 @@ const fmtGeneratedAt = (iso) => {
 // 30-day snapshot with a misleading label. Also pulls
 // org_case_stats()'s high_priority_active for real case-movement
 // context §16 asks for, that org_insights_overview doesn't carry.
-export function PeriodicReviewPanel({ org, user, memberName, isHR }) {
+export function PeriodicReviewPanel({ org, user, memberName, isHR, cases, dueSoon, hrReviewRequests, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers }) {
   const [periodType, setPeriodType] = useState(PERIOD_TYPES[0].id);
   const [reviews, setReviews] = useState([]);
   const [generating, setGenerating] = useState(false);
@@ -55,7 +55,7 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR }) {
       if (trendError) throw trendError;
       const { data: caseStats } = await supabase.rpc('org_case_stats', { p_org_id: org.id });
 
-      const inputs = buildExecutiveBriefInputs(overview, trendData);
+      const inputs = buildExecutiveBriefInputs(overview, trendData, { cases, dueSoon, hrReviewRequests, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, periodDays: period.days });
       const prompt = buildPeriodicReviewPrompt(inputs, periodType, caseStats?.high_priority_active ?? null);
       const res = await authedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1400, messages: [{ role: "user", content: prompt }] }) });
       const data = await res.json();

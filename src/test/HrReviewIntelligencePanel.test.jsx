@@ -93,3 +93,88 @@ describe('HrReviewIntelligencePanel', () => {
     expect(screen.queryByText(/SUPER SECRET/)).not.toBeInTheDocument();
   });
 });
+
+// Insights Phase 6 (Actionability) — Create Action for the pending queue
+// and the rework signal, each independently gated by adding real value
+// (a nonzero count/rework list), never rendered unconditionally.
+describe('HrReviewIntelligencePanel — Create Action (Insights Phase 6)', () => {
+  it('shows a pending-queue Create action when cases are awaiting review', () => {
+    const rows = [{ case_id: 'c1', step: 'inv_report', status: 'pending', requested_at: '2026-07-26T00:00:00.000Z' }];
+    render(<HrReviewIntelligencePanel hrReviewRequests={rows} createCaseTask={vi.fn()}/>);
+    expect(screen.getAllByRole('button', { name: 'Create action' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not show a pending-queue Create action when the queue is empty (zero-count suppression)', () => {
+    render(<HrReviewIntelligencePanel hrReviewRequests={[]} createCaseTask={vi.fn()}/>);
+    expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
+  });
+
+  it('never shows Create action when createCaseTask is not provided, even with a real pending queue', () => {
+    const rows = [{ case_id: 'c1', step: 'inv_report', status: 'pending', requested_at: '2026-07-26T00:00:00.000Z' }];
+    render(<HrReviewIntelligencePanel hrReviewRequests={rows}/>);
+    expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
+  });
+
+  it('creates a pending-queue action with a factual, aggregate insightRef', async () => {
+    const user = userEvent.setup();
+    const createCaseTask = vi.fn();
+    const rows = [
+      { case_id: 'c1', step: 'inv_report', status: 'pending', requested_at: '2026-07-26T00:00:00.000Z' },
+      { case_id: 'c2', step: 'inv_report', status: 'pending', requested_at: '2026-07-28T00:00:00.000Z' },
+    ];
+    render(<HrReviewIntelligencePanel hrReviewRequests={rows} createCaseTask={createCaseTask}/>);
+    await user.click(screen.getAllByRole('button', { name: 'Create action' })[0]);
+    await user.type(screen.getByPlaceholderText('Action to take…'), 'Review pending investigation submissions');
+    await user.click(screen.getByRole('button', { name: 'Save action' }));
+    const [caseId, fields] = createCaseTask.mock.calls[0];
+    expect(caseId).toBeNull();
+    expect(fields.insightRef).toBe('HR review: 2 cases awaiting investigation review');
+    expect(fields.insightRef).not.toContain('c1');
+    expect(fields.insightRef).not.toContain('c2');
+  });
+
+  it('shows a rework Create action only when cases were actually returned for further work, with the exact factual insightRef', async () => {
+    const user = userEvent.setup();
+    const createCaseTask = vi.fn();
+    const rows = [
+      { case_id: 'c1', step: 'inv_report', status: 'approved', requested_at: NOW_ISO },
+      { case_id: 'c2', step: 'inv_report', status: 'returned', requested_at: NOW_ISO },
+      { case_id: 'c3', step: 'inv_report', status: 'returned', requested_at: NOW_ISO },
+    ];
+    render(<HrReviewIntelligencePanel hrReviewRequests={rows} createCaseTask={createCaseTask}/>);
+    const buttons = screen.getAllByRole('button', { name: 'Create action' });
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
+    await user.click(buttons[buttons.length - 1]); // the rework action is the last Create Action control on the page
+    await user.type(screen.getByPlaceholderText('Action to take…'), 'Review recent rework');
+    await user.click(screen.getByRole('button', { name: 'Save action' }));
+    const [, fields] = createCaseTask.mock.calls[0];
+    expect(fields.insightRef).toBe('Investigation submissions returned for further work');
+    expect(fields.insightRef).not.toMatch(/poor|weak|performance/i);
+  });
+
+  it('does not show a rework Create action when nothing was returned', () => {
+    render(<HrReviewIntelligencePanel hrReviewRequests={pad(3)} createCaseTask={vi.fn()}/>);
+    // pad(3) is all-approved: only the pending-queue button could ever
+    // exist, and the queue itself is empty (all rows are inv_report,
+    // not pending) — so no Create Action button should exist at all.
+    expect(screen.queryByRole('button', { name: 'Create action' })).not.toBeInTheDocument();
+  });
+
+  it('the rework action never exposes review comments or record_snapshot content', () => {
+    const rows = [
+      { case_id: 'c1', step: 'inv_report', status: 'returned', requested_at: NOW_ISO, comments: 'SUPER SECRET REASON', record_snapshot: 'SUPER SECRET SNAPSHOT' },
+      ...pad(2),
+    ];
+    render(<HrReviewIntelligencePanel hrReviewRequests={rows} createCaseTask={vi.fn()}/>);
+    expect(screen.queryByText(/SUPER SECRET/)).not.toBeInTheDocument();
+  });
+
+  it('never labels the rework action as a performance judgement', () => {
+    const rows = [
+      { case_id: 'c1', step: 'inv_report', status: 'returned', requested_at: NOW_ISO },
+      ...pad(2),
+    ];
+    render(<HrReviewIntelligencePanel hrReviewRequests={rows} createCaseTask={vi.fn()}/>);
+    expect(screen.queryByText(/poor investigation|weak manager|performance issue/i)).not.toBeInTheDocument();
+  });
+});

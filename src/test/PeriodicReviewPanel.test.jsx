@@ -73,6 +73,39 @@ describe('PeriodicReviewPanel', () => {
     expect(trendCallDays).toBe(7);
   });
 
+  // Insights Phase 6 (Actionability + Executive Reporting) — confirms
+  // periodDays is passed through to buildExecutiveBriefInputs matching
+  // the SAME window the org_trend_detection call above already used
+  // (§19 — a period-specific movement must reflect the selected
+  // period), and that the new data props reach the persisted snapshot.
+  it('computes overall-volume movement using the same window as the selected period, and persists Phase 5 data', async () => {
+    const user = userEvent.setup();
+    let insertedRow = null;
+    fromMock.mockImplementation((table) => {
+      if (table === 'er_executive_briefs') {
+        return {
+          select: () => selectChain({ data: [], error: null }),
+          insert: (row) => { insertedRow = row; return { select: () => ({ single: () => Promise.resolve({ data: { id: 'r3', ...row, created_at: '2026-08-20T00:00:00Z' }, error: null }) }) }; },
+        };
+      }
+      return selectChain({ data: [], error: null });
+    });
+    rpcMock.mockImplementation((fn) => {
+      if (fn === 'org_insights_overview') return Promise.resolve({ data: { total_cases: 5, open_cases: 2, opened_in_period: 1, closed_in_period: 1, cases_by_type: {}, cases_by_outcome: {}, avg_case_duration_days: null }, error: null });
+      if (fn === 'org_trend_detection') return Promise.resolve({ data: { by_type_trend: [], by_theme_trend: [] }, error: null });
+      if (fn === 'org_case_stats') return Promise.resolve({ data: { high_priority_active: 0 }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+    authedFetch.mockResolvedValue({ json: () => Promise.resolve({ content: [{ type: 'text', text: 'Weekly review narrative.' }] }) });
+
+    const hrReviewRequests = [{ case_id: 'c1', step: 'inv_report', status: 'pending', requested_at: '2026-08-19T00:00:00.000Z' }];
+    render(<PeriodicReviewPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true} hrReviewRequests={hrReviewRequests}/>);
+    await waitFor(() => expect(screen.getByText('No periodic review generated yet.')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Generate review' }));
+    await waitFor(() => expect(screen.getByText('Weekly review narrative.')).toBeInTheDocument());
+    expect(insertedRow.supporting_data.processQuality.pendingHrReview.count).toBe(1);
+  });
+
   it('shows an error message when generation fails', async () => {
     const user = userEvent.setup();
     fromMock.mockReturnValue(selectChain({ data: [], error: null }));

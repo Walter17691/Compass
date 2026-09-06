@@ -58,7 +58,7 @@ function SupportingData({ data }) {
 // same shape as managerCapabilityInsights' own learning-loop pattern.
 // "Supporting data" is a deterministic listing of exactly what was fed
 // into the prompt, not an AI-guessed per-sentence link.
-export function ExecutiveBriefPanel({ org, user, memberName, isHR }) {
+export function ExecutiveBriefPanel({ org, user, memberName, isHR, cases, dueSoon, hrReviewRequests, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers }) {
   const [briefs, setBriefs] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
@@ -90,7 +90,7 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR }) {
       const { data: trendData, error: trendError } = await supabase.rpc('org_trend_detection', { p_org_id: org.id, p_period_days: 90 });
       if (trendError) throw trendError;
 
-      const inputs = buildExecutiveBriefInputs(overview, trendData);
+      const inputs = buildExecutiveBriefInputs(overview, trendData, { cases, dueSoon, hrReviewRequests, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers, periodDays: 90 });
       const prompt = buildExecutiveBriefPrompt(inputs);
       const res = await authedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1400, messages: [{ role: "user", content: prompt }] }) });
       const data = await res.json();

@@ -149,6 +149,40 @@ describe('ExecutiveBriefPanel', () => {
     expect(rpcMock.mock.calls.filter(c => c[0] === 'org_insights_overview')).toHaveLength(1);
   });
 
+  // Insights Phase 6 (Actionability + Executive Reporting) — confirms
+  // the new Phase 2-5 data props are genuinely threaded into what gets
+  // persisted, not merely accepted and ignored. The pure-function-level
+  // exhaustive coverage of each metric already lives in execBrief.test.js;
+  // this is the one integration check that ExecutiveBriefPanel actually
+  // passes its own cases/hrReviewRequests/allegations props through to
+  // buildExecutiveBriefInputs.
+  it('threads Phase 2-5 data props into the generated brief\'s persisted supporting_data', async () => {
+    const user = userEvent.setup();
+    let insertedRow = null;
+    fromMock.mockImplementation((table) => {
+      if (table === 'er_executive_briefs') {
+        return {
+          select: () => selectChain({ data: [], error: null }),
+          insert: (row) => { insertedRow = row; return { select: () => ({ single: () => Promise.resolve({ data: { id: 'b2', ...row, created_at: '2026-08-20T00:00:00Z' }, error: null }) }) }; },
+        };
+      }
+      return selectChain({ data: [], error: null });
+    });
+    rpcMock.mockImplementation((fn) => {
+      if (fn === 'org_insights_overview') return Promise.resolve({ data: { total_cases: 5, open_cases: 2, opened_in_period: 1, closed_in_period: 1, cases_by_type: {}, cases_by_outcome: {}, avg_case_duration_days: null }, error: null });
+      if (fn === 'org_trend_detection') return Promise.resolve({ data: { by_type_trend: [], by_theme_trend: [] }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+    authedFetch.mockResolvedValue({ json: () => Promise.resolve({ content: [{ type: 'text', text: 'Generated narrative text.' }] }) });
+
+    const hrReviewRequests = [{ case_id: 'c1', step: 'inv_report', status: 'pending', requested_at: '2026-08-19T00:00:00.000Z' }];
+    render(<ExecutiveBriefPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true} hrReviewRequests={hrReviewRequests}/>);
+    await waitFor(() => expect(screen.getByText('No executive brief generated yet.')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Generate brief' }));
+    await waitFor(() => expect(screen.getByText('Generated narrative text.')).toBeInTheDocument());
+    expect(insertedRow.supporting_data.processQuality.pendingHrReview.count).toBe(1);
+  });
+
   // Phase 6.5 hardening (production regression suite, concurrency) —
   // every self-fetching Insights panel in this phase (TrendsPanel,
   // RiskMapPanel, etc.) shares the same `let cancelled=false` /

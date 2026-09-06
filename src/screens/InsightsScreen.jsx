@@ -85,6 +85,8 @@ export function InsightsScreen({
               orgMembers={caseData.orgMembers}
               caseThemes={orgIntel.caseThemes}
               organisationThemes={orgIntel.organisationThemes}
+              createCaseTask={orgIntelActions.createCaseTask}
+              improvementInitiatives={orgIntel.improvementInitiatives}
             />
           )}
           {active==="trends"&&(
@@ -112,8 +114,8 @@ export function InsightsScreen({
           {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel orgId={reporting.org?.id} improvementInitiatives={orgIntel.improvementInitiatives} isHR={isHR} onAdd={orgIntelActions.onAddImprovementInitiative} onUpdate={orgIntelActions.onUpdateImprovementInitiative} caseTasks={caseData.caseTasks} cases={caseData.cases} organisationThemes={orgIntel.organisationThemes}/>}
           {active==="reports"&&(
             <>
-              <ExecutiveBriefPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR}/>
-              <PeriodicReviewPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR}/>
+              <ExecutiveBriefPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR} cases={caseData.cases} dueSoon={caseData.dueSoon} hrReviewRequests={caseData.hrReviewRequests} allegations={caseData.allegations} caseSignals={caseData.caseSignals} caseTasks={caseData.caseTasks} policies={caseData.policies} caseAccess={caseData.caseAccess} orgMembers={caseData.orgMembers}/>
+              <PeriodicReviewPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR} cases={caseData.cases} dueSoon={caseData.dueSoon} hrReviewRequests={caseData.hrReviewRequests} allegations={caseData.allegations} caseSignals={caseData.caseSignals} caseTasks={caseData.caseTasks} policies={caseData.policies} caseAccess={caseData.caseAccess} orgMembers={caseData.orgMembers}/>
               <ErReportScreen
                 cases={caseData.cases}
                 getCaseStage={reporting.getCaseStage}
