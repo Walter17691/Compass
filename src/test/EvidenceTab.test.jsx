@@ -27,11 +27,17 @@ describe('EvidenceTab — due-date preview on action findings (Phase 5, IP24)', 
   });
 });
 
-// Phase 6.5 hardening (production regression suite) — the "Remove"
-// button itself, not just the id-keying logic it depends on being
-// correct downstream. Filters by the item's own real id
-// (evidenceUpload.js's ensureEvidenceIds guarantees every item has one),
-// never by array position.
+// Evidence Deletion Auditability P0 — evidence removal moved out of this
+// component: EvidenceTab's own job is now just "ask onRemoveEvidence to
+// remove the clicked item, by id" — the confirmation, save, and audit
+// sequencing live in App.jsx's removeEvidence (composed from
+// confirmEvidenceRemoval/evidenceRemovalAuditDetail in evidenceUpload.js,
+// see evidenceUpload.test.js), so a stale-conflict or cancelled
+// confirmation can never reach this component's own concerns. Previously
+// (Phase 6.5 hardening) this test asserted the "Remove" button called
+// saveCases directly with the filtered array — that inline mutation was
+// exactly the gap the P0 closed; this file's job now is only to prove the
+// correct id is forwarded, by id and never by array position.
 describe('EvidenceTab — deleting an evidence item', () => {
   const threeItemCase = {
     id: 'c1', employeeName: 'Sarah Jones',
@@ -42,19 +48,30 @@ describe('EvidenceTab — deleting an evidence item', () => {
     ],
   };
 
-  it('removes only the clicked item, by id, leaving the other two untouched and in order', async () => {
+  it('calls onRemoveEvidence with only the clicked item\'s id, by id, never by array position', async () => {
     const user = userEvent.setup();
     const saveCases = vi.fn();
-    render(<EvidenceTab cs={threeItemCase} cases={[threeItemCase]} saveCases={saveCases} fmtDate={fmtDate} documentFindings={{}} />);
+    const onRemoveEvidence = vi.fn();
+    render(<EvidenceTab cs={threeItemCase} cases={[threeItemCase]} saveCases={saveCases} fmtDate={fmtDate} documentFindings={{}} onRemoveEvidence={onRemoveEvidence} />);
     // ev.name renders in its own inner div, a sibling-of-a-sibling of the
     // action-buttons div (not an ancestor of it) — two levels up reaches
     // the shared row wrapping both the name/meta content and the actions.
     const secondRow = screen.getByText('second.txt').closest('div').parentElement.parentElement;
     await user.click(within(secondRow).getByRole('button', { name: 'Remove' }));
-    expect(saveCases).toHaveBeenCalledTimes(1);
-    const updatedCases = saveCases.mock.calls[0][0];
-    const updatedCase = updatedCases.find(c => c.id === 'c1');
-    expect(updatedCase.evidence.map(e => e.id)).toEqual(['ev1', 'ev3']);
+    expect(onRemoveEvidence).toHaveBeenCalledTimes(1);
+    expect(onRemoveEvidence).toHaveBeenCalledWith('ev2');
+    // No longer this component's job — no direct mutation, no bypassing
+    // the confirmation/audit sequencing that now lives in App.jsx.
+    expect(saveCases).not.toHaveBeenCalled();
+  });
+
+  it('does nothing if onRemoveEvidence is not provided (defensive optional-chaining, matches onAnalyseEvidence/onAcceptFinding/onDismissFinding convention)', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn();
+    render(<EvidenceTab cs={threeItemCase} cases={[threeItemCase]} saveCases={saveCases} fmtDate={fmtDate} documentFindings={{}} />);
+    const secondRow = screen.getByText('second.txt').closest('div').parentElement.parentElement;
+    await user.click(within(secondRow).getByRole('button', { name: 'Remove' }));
+    expect(saveCases).not.toHaveBeenCalled();
   });
 });
 

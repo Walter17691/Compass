@@ -53,3 +53,31 @@ export function ensureEvidenceIds(cs) {
   if (!cs.evidence || !cs.evidence.length || cs.evidence.every(ev => ev.id)) return cs;
   return { ...cs, evidence: cs.evidence.map(ev => ev.id ? ev : { ...ev, id: crypto.randomUUID() }) };
 }
+
+// Evidence Deletion Auditability P0 — the confirmation step for removing
+// an evidence item, following the same promptDialogFn/auditFn-as-
+// parameters shape src/lib/humanOverride.js already uses for this app's
+// other confirm-then-audit actions (kept here instead of there since this
+// is a destructive-action confirmation, not a human override of an
+// unresolved system check). Only decides whether to proceed — the actual
+// removal and conditional audit stay in App.jsx's removeEvidence, which
+// needs saveCases' live cases array and its save Promise's result, not
+// something a pure lib helper should hold.
+export function confirmEvidenceRemoval(confirmDialogFn, evidenceName) {
+  return confirmDialogFn({
+    title: "Remove evidence?",
+    message: `This will permanently remove "${evidenceName}" from the case. This action cannot be undone.`,
+    confirmLabel: "Remove evidence",
+    cancelLabel: "Cancel",
+    danger: true,
+  });
+}
+
+// The audit_log detail string for a completed evidence removal.
+// Deliberately destructures only {name, type, size} rather than taking
+// the whole evidence item — so it is structurally impossible for a
+// future caller to accidentally pass dataUrl/file content into a
+// long-lived audit record, not just a convention to remember.
+export function evidenceRemovalAuditDetail({ name, type, size }) {
+  return `${name} · ${type || "Document"}${size ? ` · ${size} bytes` : ""}`;
+}

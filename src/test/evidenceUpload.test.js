@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ensureEvidenceIds, fmtBytes, readEvidenceFiles, MAX_EVIDENCE_SIZE } from '../lib/evidenceUpload.js';
+import { ensureEvidenceIds, fmtBytes, readEvidenceFiles, MAX_EVIDENCE_SIZE, confirmEvidenceRemoval, evidenceRemovalAuditDetail } from '../lib/evidenceUpload.js';
 
 // Phase 6.5 hardening (Batch 8) — fmtBytes/readEvidenceFiles had no
 // coverage at all before this; only ensureEvidenceIds (added for the P0
@@ -119,5 +119,66 @@ describe('ensureEvidenceIds', () => {
     const result = ensureEvidenceIds(cs);
     expect(result.employeeName).toBe('Sam');
     expect(result.evidence[0]).toMatchObject({ name: 'a.txt', type: 'text/plain', dataUrl: 'data:...' });
+  });
+});
+
+// Evidence Deletion Auditability P0 — evidence removal used to be an
+// inline array-filter with no confirmation and no audit call anywhere in
+// the path (App.jsx's deleteAllegation/deleteCaseTask already captured
+// the target's identity before removal and audited unconditionally
+// afterwards; evidence never went through an equivalent handler at all).
+// These two functions are the testable halves of the fix — App.jsx's
+// removeEvidence composes them with saveCases/audit, but that composition
+// isn't independently unit-tested, matching this codebase's existing
+// convention for App.jsx-level handlers (see deleteAllegation/
+// deleteCaseTask, also untested in isolation).
+describe('confirmEvidenceRemoval', () => {
+  it('shows a destructive-action confirmation naming the file, that clearly states permanence', async () => {
+    const confirmDialogFn = vi.fn().mockResolvedValue(true);
+    const result = await confirmEvidenceRemoval(confirmDialogFn, 'witness-statement.pdf');
+    expect(confirmDialogFn).toHaveBeenCalledWith({
+      title: 'Remove evidence?',
+      message: 'This will permanently remove "witness-statement.pdf" from the case. This action cannot be undone.',
+      confirmLabel: 'Remove evidence',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    expect(result).toBe(true);
+  });
+
+  it('resolves false when the confirmation is cancelled', async () => {
+    const confirmDialogFn = vi.fn().mockResolvedValue(false);
+    expect(await confirmEvidenceRemoval(confirmDialogFn, 'note.txt')).toBe(false);
+  });
+
+  it('never mentions file content, only the filename', async () => {
+    const confirmDialogFn = vi.fn().mockResolvedValue(true);
+    await confirmEvidenceRemoval(confirmDialogFn, 'medical-report.pdf');
+    const { message } = confirmDialogFn.mock.calls[0][0];
+    expect(message).not.toMatch(/data:|base64/i);
+  });
+});
+
+describe('evidenceRemovalAuditDetail', () => {
+  it('includes filename, type, and size', () => {
+    expect(evidenceRemovalAuditDetail({ name: 'witness-statement.pdf', type: 'application/pdf', size: 82431 }))
+      .toBe('witness-statement.pdf · application/pdf · 82431 bytes');
+  });
+
+  it('defaults to "Document" when type is missing', () => {
+    expect(evidenceRemovalAuditDetail({ name: 'note.txt', size: 100 })).toBe('note.txt · Document · 100 bytes');
+  });
+
+  it('omits the size segment when size is not given', () => {
+    expect(evidenceRemovalAuditDetail({ name: 'note.txt', type: 'text/plain' })).toBe('note.txt · text/plain');
+  });
+
+  it('structurally excludes dataUrl/file content — it is not in the function\'s parameter shape', () => {
+    // Passing a full evidence item (including dataUrl) proves the extra
+    // field is silently ignored, not merely "not currently included" —
+    // the function only ever destructures {name, type, size}.
+    const full = { id: 'ev1', name: 'note.txt', type: 'text/plain', size: 50, dataUrl: 'data:text/plain;base64,SGVsbG8=', addedBy: 'HR Manager', date: '2026-01-01' };
+    expect(evidenceRemovalAuditDetail(full)).not.toMatch(/data:|base64|SGVsbG8/);
+    expect(evidenceRemovalAuditDetail(full)).toBe('note.txt · text/plain · 50 bytes');
   });
 });

@@ -48,7 +48,7 @@ import { getProcessType, stageLabel } from './lib/processStages';
 import { buildEscalationContext } from './lib/escalation';
 import { EscalateToHrModal } from './screens/EscalateToHrModal';
 import { getTemplateForType, resolveDefaultTaskDueDate } from './lib/processTemplates';
-import { readEvidenceFiles, ensureEvidenceIds } from './lib/evidenceUpload';
+import { readEvidenceFiles, ensureEvidenceIds, confirmEvidenceRemoval, evidenceRemovalAuditDetail } from './lib/evidenceUpload';
 import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
@@ -1377,6 +1377,28 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     const { error } = await supabase.from('cases').delete().eq('id', caseId);
     if(error) { console.error("Delete case error:", error); showToast("Couldn't delete the case — "+error.message, "error"); }
+  };
+
+  // Evidence Deletion Auditability P0 — evidence removal used to be an
+  // inline array-filter inside EvidenceTab.jsx: no confirmation, and no
+  // audit call anywhere in the path, unlike deleteAllegation/deleteCaseTask
+  // below, which already capture the target's identity before removal and
+  // audit unconditionally afterwards. Centralises evidence removal the
+  // same way, but stricter: audits only once saveCases' own save Promise
+  // resolves ok (mirrors requestCloseCase in CaseViewScreen.jsx), so a
+  // stale-conflict or save error never produces a false "Evidence
+  // removed" record. Captures only {name, type, size} into the audit
+  // detail string — never dataUrl/file content.
+  const removeEvidence = async (caseId, evidenceId) => {
+    const cs = cases.find(c => c.id === caseId);
+    const target = (cs?.evidence || []).find(e => e.id === evidenceId);
+    if(!target) return;
+    const ok = await confirmEvidenceRemoval(confirmDialog, target.name);
+    if(!ok) return;
+    const result = await saveCases(cases.map(x => x.id===caseId ? {...x, evidence:(x.evidence||[]).filter(e=>e.id!==evidenceId)} : x), caseId);
+    if(result?.ok) {
+      audit("Evidence removed", evidenceRemovalAuditDetail(target), caseId);
+    }
   };
 
   useEffect(() => { if(org?.id) loadCasesFromDB(); }, [org?.id]);
@@ -8691,7 +8713,7 @@ Please produce:
             policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview,
           }}
           meetingsTab={{ activeCaseStage, setActiveCaseStage, onAcceptSavedSuggestion: acceptSavedMeetingSuggestion, onDismissSavedSuggestion: dismissSavedMeetingSuggestion }}
-          evidenceTab={{ documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding }}
+          evidenceTab={{ documentFindings, documentAnalysisLoading, analyseEvidenceDocument, acceptDocumentFinding, dismissDocumentFinding, removeEvidence }}
           documentsTab={{ onGenerateHearingPack: handleGenerateHearingPack, hearingPackGenerating, hearingPackReady, onDismissHearingPackReady: (caseId)=>setHearingPackReady(r=>({...r,[caseId]:null})), onDraftCorrespondence: startCaseCorrespondence }}
           themesTab={{
             organisationThemes, caseThemes, themeSuggestions, themeSuggestionLoading,
