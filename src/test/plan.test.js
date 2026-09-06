@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPro, isSubscribed, pricePerLocationFor, estimateMonthlyPrice, LOCATION_PRICE_TIERS } from '../lib/plan.js';
+import { isPro, isSubscribed, isEntitled, pricePerLocationFor, estimateMonthlyPrice, LOCATION_PRICE_TIERS } from '../lib/plan.js';
 
 describe('isPro', () => {
   it('is false for a free org, missing org, or missing plan field', () => {
@@ -21,6 +21,48 @@ describe('isSubscribed', () => {
     expect(isSubscribed({ plan: 'free', stripe_subscription_status: 'active' })).toBe(false);
     expect(isSubscribed(null)).toBe(false);
     expect(isSubscribed({})).toBe(false);
+  });
+});
+
+// Platform Admin Foundation — isEntitled is the new, provider-neutral
+// app-access gate (main.jsx), replacing isSubscribed at that one call
+// site. isSubscribed itself is untouched and still fully tested above —
+// isEntitled composes it rather than duplicating its logic.
+describe('isEntitled', () => {
+  it('is true when access_status is "active", regardless of plan/Stripe fields', () => {
+    expect(isEntitled({ access_status: 'active' })).toBe(true);
+    expect(isEntitled({ access_status: 'active', plan: 'free' })).toBe(true);
+  });
+
+  it('is false when access_status is "pending" or "suspended" and there is no active Stripe subscription', () => {
+    expect(isEntitled({ access_status: 'pending' })).toBe(false);
+    expect(isEntitled({ access_status: 'suspended' })).toBe(false);
+  });
+
+  it('a suspended negotiated customer is denied even if a stale Stripe subscription field is still active — suspension is authoritative and overrides Stripe fallback', () => {
+    // A genuinely suspended org (access_status='suspended') must be denied
+    // even if a legacy stripe_subscription_status value is still lingering
+    // as 'active' from before suspension (e.g. an operator suspended
+    // access_status without separately cancelling Stripe) — suspension is
+    // checked first and short-circuits to false, it is never overridden by
+    // the Stripe fallback path.
+    expect(isEntitled({ access_status: 'suspended', plan: 'pro', stripe_subscription_status: 'active' })).toBe(false);
+  });
+
+  it('falls back to isSubscribed for backward compatibility — a real active Stripe subscription remains sufficient on its own', () => {
+    expect(isEntitled({ plan: 'pro', stripe_subscription_status: 'active' })).toBe(true);
+    expect(isEntitled({ access_status: undefined, plan: 'pro', stripe_subscription_status: 'active' })).toBe(true);
+  });
+
+  it('is false for a brand-new/unconfigured org — fails closed', () => {
+    expect(isEntitled({})).toBe(false);
+    expect(isEntitled(null)).toBe(false);
+    expect(isEntitled(undefined)).toBe(false);
+  });
+
+  it('is false for a lapsed Stripe subscription with no access_status override', () => {
+    expect(isEntitled({ plan: 'pro', stripe_subscription_status: 'past_due' })).toBe(false);
+    expect(isEntitled({ plan: 'pro', stripe_subscription_status: 'canceled' })).toBe(false);
   });
 });
 

@@ -35,3 +35,39 @@ export function isPro(org) {
 export function isSubscribed(org) {
   return org?.plan === 'pro' && org?.stripe_subscription_status === 'active';
 }
+
+// Platform Admin Foundation — the provider-neutral replacement for
+// isSubscribed() as the app-access gate (main.jsx). Compass's Release 1.0
+// commercial model is negotiated B2B: THE COMPASS CONSULTANCY WC LTD
+// invoices customers directly, and Stripe self-service is not how a
+// customer is expected to activate. The gate this function answers is
+// "is this organisation entitled to use Compass" — not "does Stripe say
+// so" — so a negotiated/invoiced customer no longer needs to be
+// misrepresented as a fake Stripe subscriber (plan='pro' +
+// stripe_subscription_status='active' set directly via SQL) just to pass
+// the gate.
+//
+// organisations.access_status is the new, provider-neutral signal,
+// defaulting to 'pending' (fail-closed for a brand-new org, matching the
+// existing fail-closed default of plan='free'). A real, currently-active
+// Stripe subscription remains sufficient on its own for an org whose
+// access_status is still 'pending' (the default every existing row gets
+// from the migration) — checked exactly as isSubscribed() already does —
+// so an existing or future Stripe subscriber is never unexpectedly locked
+// out by this change; Stripe is additive backward compatibility here, not
+// removed.
+//
+// 'suspended' is checked FIRST and is authoritative: it blocks access
+// unconditionally, even if a stale/legacy Stripe field is still 'active'
+// underneath. Without this ordering, suspending a negotiated customer who
+// once also had Stripe fields set (or an operator suspending a Stripe
+// subscriber without separately cancelling Stripe) could silently fail to
+// actually block them — exactly the fail-open bug this function exists to
+// avoid. Caught and fixed by this function's own test suite before this
+// ever shipped.
+export function isEntitled(org) {
+  if (!org) return false;
+  if (org.access_status === 'suspended') return false;
+  if (org.access_status === 'active') return true;
+  return isSubscribed(org);
+}

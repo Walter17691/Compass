@@ -8,7 +8,7 @@ import ErrorBoundary from './ErrorBoundary.jsx'
 import SubscribeGate from './SubscribeGate.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
-import { isSubscribed } from './lib/plan.js'
+import { isEntitled } from './lib/plan.js'
 import { clearAllOrgScopedData } from './lib/storage.js'
 
 // These are mutually exclusive top-level views — a session only ever
@@ -220,10 +220,13 @@ export function Root() {
     </Suspense>
   )
 
-  // No free plan, no trial — every org needs an active Stripe subscription
-  // before it can use Compass at all. Catches both a brand-new org that
-  // just finished OrgSetup and an existing one whose subscription lapsed.
-  if (!isSubscribed(org)) return (
+  // No free plan, no trial — every org needs to be entitled (either a
+  // negotiated/invoiced customer explicitly activated via access_status, or
+  // a real active Stripe subscription — see isEntitled in lib/plan.js)
+  // before it can use Compass at all. Catches a brand-new org that just
+  // finished OrgSetup, an existing Stripe subscriber whose subscription
+  // lapsed, and a negotiated customer who hasn't been activated yet.
+  if (!isEntitled(org)) return (
     <SubscribeGate org={org} syncing={billingSyncing} onSignOut={signOut} />
   )
 
