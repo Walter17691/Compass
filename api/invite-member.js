@@ -2,15 +2,6 @@ import { verifyCaller } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
 import { checkRateLimit } from './_rateLimit.js';
 
-// Mirrors src/lib/roles.js's ROLE_LABELS — kept inline rather than
-// imported since api/ functions are a separate deployment bundle from
-// the frontend build and don't currently share modules with src/.
-const ROLE_LABELS = {
-  hr_manager: 'HR Manager', hr_director: 'HR Director', location_manager: 'Location Manager',
-  line_manager: 'Line Manager', investigator: 'Investigator',
-  legal_reviewer: 'Legal/Compliance Reviewer', auditor: 'Auditor',
-};
-
 // Phase 7 (Controlled Beta Infrastructure Gate 3) — see api/_supabase.js
 // for why this is now configurable via env var with a production fallback.
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
@@ -29,7 +20,13 @@ export default async function handler(req, res) {
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { email, name, role, orgId, locationIds } = req.body;
+  // Team Invitations P0 remediation — role/locationIds are no longer read.
+  // join_org_with_invite_code (the only path anyone actually joins through)
+  // always assigns location_manager with no locations, regardless of any
+  // role this endpoint might have claimed in the email — so accepting and
+  // echoing a caller-supplied role here was never truthful and is removed
+  // rather than kept as a decorative, non-functional parameter.
+  const { email, name, orgId } = req.body;
   if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
   try {
@@ -59,7 +56,13 @@ export default async function handler(req, res) {
     if (!orgRow) return res.status(404).json({ error: 'Organisation not found' });
     const { name: orgName, invite_code: inviteCode } = orgRow;
 
-    const appUrl = 'https://compass-lemon-iota.vercel.app';
+    // Team Invitations P0, domain correction — the auto-generated Vercel
+    // project alias (compass-lemon-iota.vercel.app) used elsewhere in this
+    // codebase's APP_URL constants is not the customer-facing brand; use
+    // the canonical compasshruk.com domain for this customer-facing email
+    // specifically. (Every other APP_URL usage in api/ still points at the
+    // Vercel alias — out of scope here, reported separately.)
+    const appUrl = 'https://compasshruk.com';
     const inviteLink = `${appUrl}?invite=${inviteCode}`;
 
     const emailRes = await fetch('https://api.resend.com/emails', {
@@ -72,13 +75,18 @@ export default async function handler(req, res) {
         from: 'Compass HR <notifications@mail.compasshruk.com>',
         to: [email],
         subject: `You've been invited to join ${orgName} on Compass HR`,
+        // Team Invitations P0 remediation — no role/location claim (the
+        // join flow always assigns Location Manager access regardless of
+        // anything stated here), no expiry/single-use claim (the shared
+        // invite code has neither), and no other statement this system
+        // doesn't actually enforce.
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px">
           <h2 style="color:#7C5CFC">Compass HR</h2>
           <p>Hi ${esc(name)},</p>
-          <p>You have been invited to join <strong>${esc(orgName)}</strong> on Compass HR as <strong>${esc(ROLE_LABELS[role]||"Location Manager")}</strong>.</p>
-          <p>Click below to create your account and get started:</p>
+          <p>You've been invited to join <strong>${esc(orgName)}</strong> on Compass HR.</p>
+          <p>Use the link below to sign in or create your account and join the organisation. You'll join with Location Manager access initially — your HR team will configure your final access afterwards.</p>
           <div style="text-align:center;margin:32px 0">
-            <a href="${esc(inviteLink)}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Accept invitation</a>
+            <a href="${esc(inviteLink)}" style="background:#7C5CFC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Join ${esc(orgName)}</a>
           </div>
           <p style="color:#666;font-size:12px">Or go to ${esc(appUrl)} and use invite code: <strong>${esc(inviteCode)}</strong></p>
         </div>`

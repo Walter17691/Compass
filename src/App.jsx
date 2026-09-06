@@ -1431,19 +1431,47 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,location_ids:locationIds}:x));
   };
 
+  // Commercial-readiness audit remediation (Team Invitations P0, 2026-09) —
+  // this used to do no network I/O at all: it just redisplayed org.invite_code
+  // in a "share this link" modal and silently discarded the entered
+  // email/role/locations, while the UI ("Sending invite...") read as if
+  // Compass had actually sent something. api/invite-member.js already
+  // existed as a real, HR-gated, rate-limited, tested endpoint — it simply
+  // had no caller. Now wired to it; role/locations are no longer collected
+  // here at all (join_org_with_invite_code always assigns location_manager
+  // regardless of any role the API email might have claimed, so asking for
+  // a role here was never truthful — see TeamAccessSection.jsx). The
+  // invite-link modal still opens afterward as an optional share/fallback
+  // aid, with copy that reflects whether the email genuinely sent.
   const inviteMember = async () => {
     if(!inviteForm.name.trim()||!inviteForm.email.trim()) return;
     setInviting(true);
+    const name = inviteForm.name.trim();
+    const email = inviteForm.email.trim();
+    // Team Invitations P0, domain correction — matches api/invite-member.js's
+    // own appUrl: the fallback copy-link shown here must be the same
+    // customer-facing link the email itself contains, not the unbranded
+    // Vercel project alias.
+    const link = `https://compasshruk.com?invite=${org.invite_code}`;
     try {
-      const link = `https://compass-lemon-iota.vercel.app?invite=${org.invite_code}`;
-      setInviteLink({
-        name: inviteForm.name.trim(),
-        email: inviteForm.email.trim(),
-        link,
-        code: org.invite_code
+      const r = await authedFetch("/api/invite-member", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ name, email, orgId: org.id })
       });
-      setInviteForm({name:"",email:"",role:"hr_manager",locationIds:[]});
-    } catch(e) { showToast("Error: "+e.message, "error"); }
+      const d = await r.json();
+      if(d.success) {
+        showToast(`Invitation sent to ${email}`, "success");
+        setInviteLink({ name, email, link, code: org.invite_code, failed:false });
+        setInviteForm({name:"",email:""});
+      } else {
+        showToast("Couldn't send the invitation — "+(d.error||"please try again"), "error");
+        setInviteLink({ name, email, link, code: org.invite_code, failed:true });
+      }
+    } catch(e) {
+      showToast("Couldn't send the invitation — "+e.message, "error");
+      setInviteLink({ name, email, link, code: org.invite_code, failed:true });
+    }
     setInviting(false);
   };
 
@@ -1736,7 +1764,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [pendingLetterType, setPendingLetterType] = useState("outcome");
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
-  const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"hr_manager",locationIds:[]});
+  // Team Invitations P0 remediation — role/locationIds removed: the join
+  // flow (join_org_with_invite_code) always assigns location_manager with
+  // no locations regardless of what's selected here, so collecting them
+  // was never truthful. See inviteMember's own comment.
+  const [inviteForm, setInviteForm] = useState({name:"",email:""});
   const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
@@ -8013,10 +8045,16 @@ Please produce:
       {inviteLink&&(
         <div role="dialog" aria-modal="true" ref={inviteLinkModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
-            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Share invite with {inviteLink.name}</h3>
-            <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>Share this link or invite code with {inviteLink.name} ({inviteLink.email}):</p>
+            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>
+              {inviteLink.failed?"Couldn't send the invitation email":`Invitation sent to ${inviteLink.name}`}
+            </h3>
+            <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>
+              {inviteLink.failed
+                ? `The email to ${inviteLink.email} didn't go out — you can share this link with them directly instead:`
+                : `They'll join with Location Manager access initially — set their final role and locations from here once they've joined. You can also share this link directly if useful:`}
+            </p>
             <div style={{background:"#F5F1EA",borderRadius:8,padding:"12px 16px",marginBottom:12}}>
-              <div style={{fontSize:10,color:"#6B6880",marginBottom:4}}>Invite link</div>
+              <div style={{fontSize:10,color:"#6B6880",marginBottom:4}}>Join link</div>
               <div style={{fontSize:12,color:"#7C5CFC",wordBreak:"break-all"}}>{inviteLink.link}</div>
             </div>
             <div style={{background:"#F5F1EA",borderRadius:8,padding:"12px 16px",marginBottom:20}}>

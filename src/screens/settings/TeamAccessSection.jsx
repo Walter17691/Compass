@@ -19,7 +19,7 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
 
       <Card style={{marginBottom:20}}>
         <div style={{fontFamily:FONT.serif,fontSize:16,color:"#1A1535",marginBottom:4}}>Team members</div>
-        <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Invite team members to your workspace. They will receive an email invite.</p>
+        <p style={{fontSize:12,color:"#6B6880",marginBottom:16}}>Invite team members to your workspace. They'll receive an email with a link to join.</p>
 
         <div style={{marginBottom:16}}>
           {teamMembers.map(m=>(
@@ -88,27 +88,13 @@ export function TeamAccessSection({ isHR, org, locations, teamMembers, editingMe
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
           <input aria-label="Email address" placeholder="Email address" type="email" value={inviteForm.email} onChange={e=>setInviteForm(p=>({...p,email:e.target.value}))}
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
-          <select aria-label="Role" value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value}))}
-            style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:12}}>
-            {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
-          </select>
-          {locations.length>0&&(
-            <fieldset style={{marginBottom:12,border:"none",padding:0}}>
-              <legend style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:8,padding:0}}>Locations</legend>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {locations.map(l=>(
-                  <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
-                    <input type="checkbox" checked={inviteForm.locationIds.includes(l.id)}
-                      onChange={e=>{
-                        setInviteForm(p=>({...p,locationIds:e.target.checked?[...p.locationIds,l.id]:p.locationIds.filter(x=>x!==l.id)}));
-                      }}
-                      style={{accentColor:"#7C5CFC"}}/>
-                    {l.name}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          )}
+          {/* Team Invitations P0 remediation — role/location controls
+              removed here: join_org_with_invite_code always assigns
+              location_manager with no locations, regardless of anything
+              selected in this form, so offering them was never truthful.
+              Role/location are still set correctly afterward via "Edit
+              access" above, once the person has actually joined. */}
+          <p style={{fontSize:11,color:"#6B6880",margin:"0 0 12px"}}>They'll join with Location Manager access initially. Once they've joined, set their final role and locations from the list above.</p>
           <Btn onClick={inviteMember} disabled={inviting||!inviteForm.name.trim()||!inviteForm.email.trim()} style={{width:"100%"}}>
             {inviting?"Sending invite...":"Send invite"}
           </Btn>
