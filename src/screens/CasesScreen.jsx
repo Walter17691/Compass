@@ -170,16 +170,39 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
   // (e.g. correcting a mistake), so this makes the loss explicit and
   // informed rather than silent, the same "surface it, don't block it"
   // approach as the general readiness indicator (caseReadiness.js).
+  // Case Closure Safety P0 remediation — three fixes to the existing
+  // bulk-close flow: (1) the confirmation used to claim cases could be
+  // "reopen[ed] individually if needed" — no such feature exists anywhere
+  // in the product, so that claim was simply false; (2) it fired one
+  // batched saveCases() and unconditionally reported every selected case
+  // as closed, even though saveCaseToDB's own optimistic-concurrency
+  // check can silently no-op a stale case (a teammate edited it since
+  // this list loaded) — awaiting each case's own save individually is
+  // what makes the true success count knowable at all; (3) no audit event
+  // was ever written for a bulk closure, unlike the single-case paths.
+  // Warning content, confirmDialog usage, and optimistic concurrency
+  // (still one saveCaseToDB call per case, still gated on updated_at) are
+  // otherwise unchanged from the existing, already-correct pattern.
   const bulkClose = async () => {
     const chosen = cases.filter(c=>selected.has(c.id));
     const liveDeadlineCaseIds = new Set(computeDueSoon(chosen).map(d=>d.caseId).filter(Boolean));
     const warning = liveDeadlineCaseIds.size > 0
       ? ` ${liveDeadlineCaseIds.size} of these ${liveDeadlineCaseIds.size===1?"has":"have"} a live deadline (e.g. an outstanding appeal window or a signature still pending) that will stop being tracked once closed.`
       : "";
-    const ok = await confirmDialog({title:`Close ${selected.size} case${selected.size!==1?"s":""}?`, message:`These will be marked closed. You can still view them, and reopen individually if needed.${warning}`, confirmLabel:"Close", danger:true});
+    const ok = await confirmDialog({title:`Close ${selected.size} case${selected.size!==1?"s":""}?`, message:`These will be marked closed. There's no general way to reopen a closed case.${warning}`, confirmLabel:"Close", danger:true});
     if(!ok) return;
-    saveCases(cases.map(c=>selected.has(c.id)?{...c,stage:"closed",closedReason:"bulk_closed"}:c));
-    showToast(`${selected.size} case${selected.size!==1?"s":""} closed`);
+    const stamped = cases.map(c=>selected.has(c.id)?{...c,stage:"closed"}:c);
+    const results = await Promise.all(chosen.map(c => saveCases(stamped, c.id)));
+    const succeeded = chosen.filter((c,i)=>results[i]?.ok);
+    succeeded.forEach(c => audit?.("Case closed", "Bulk closure", c.id));
+    const failedCount = chosen.length - succeeded.length;
+    if (failedCount === 0) {
+      showToast(`${succeeded.length} case${succeeded.length!==1?"s":""} closed`);
+    } else if (succeeded.length === 0) {
+      showToast(`Couldn't close the selected cases — they may have been changed by someone else. Try again.`, "error");
+    } else {
+      showToast(`${succeeded.length} of ${chosen.length} cases closed. ${failedCount} couldn't be updated (changed by someone else) and remain open.`, "info");
+    }
     setSelected(new Set());
   };
   // Phase 6.5 hardening (closes Prompt 11 audit finding 5.11, MEDIUM) —

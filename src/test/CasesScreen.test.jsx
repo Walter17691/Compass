@@ -72,6 +72,69 @@ describe('CasesScreen — bulk actions (Prompt 11 audit, 5.10/5.11)', () => {
     expect(arg.message).not.toContain('live deadline');
   });
 
+  // Case Closure Safety P0 remediation — bulk close previously claimed
+  // "you can... reopen individually if needed" with no such feature
+  // anywhere in the product, fired one unawaited batched save with no way
+  // to know which cases actually closed, and never wrote an audit event.
+  describe('bulk close — truthful confirmation, per-case audit, honest partial-success (Case Closure Safety P0)', () => {
+    const twoCases = [
+      { id: 'c1', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'open' },
+      { id: 'c2', employeeName: 'Jo Manager', caseType: 'misconduct', stage: 'open' },
+    ];
+
+    it('no longer claims cases can be reopened individually', async () => {
+      const user = userEvent.setup();
+      const confirmDialog = vi.fn().mockResolvedValue(false);
+      render(<CasesScreen {...baseProps} cases={[twoCases[0]]} confirmDialog={confirmDialog} />);
+      await user.click(screen.getByLabelText('Select Sam Employee'));
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      const arg = confirmDialog.mock.calls[0][0];
+      expect(arg.message).not.toMatch(/reopen individually/i);
+    });
+
+    it('cancelling the confirmation performs no save at all', async () => {
+      const user = userEvent.setup();
+      const saveCases = vi.fn();
+      render(<CasesScreen {...baseProps} cases={[twoCases[0]]} confirmDialog={vi.fn().mockResolvedValue(false)} saveCases={saveCases} />);
+      await user.click(screen.getByLabelText('Select Sam Employee'));
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      expect(saveCases).not.toHaveBeenCalled();
+    });
+
+    it('audits every case that genuinely closed, and reports the true count on full success', async () => {
+      const user = userEvent.setup();
+      const saveCases = vi.fn().mockResolvedValue({ ok: true });
+      const audit = vi.fn();
+      const showToast = vi.fn();
+      render(<CasesScreen {...baseProps} cases={twoCases} confirmDialog={vi.fn().mockResolvedValue(true)} saveCases={saveCases} audit={audit} showToast={showToast} />);
+      await user.click(screen.getByLabelText('Select Sam Employee'));
+      await user.click(screen.getByLabelText('Select Jo Manager'));
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      expect(saveCases).toHaveBeenCalledTimes(2);
+      expect(audit).toHaveBeenCalledWith('Case closed', 'Bulk closure', 'c1');
+      expect(audit).toHaveBeenCalledWith('Case closed', 'Bulk closure', 'c2');
+      expect(showToast).toHaveBeenCalledWith('2 cases closed');
+    });
+
+    it('does not claim a stale/failed case closed, and does not audit it — only genuinely-saved cases are counted', async () => {
+      const user = userEvent.setup();
+      const saveCases = vi.fn()
+        .mockImplementationOnce(() => Promise.resolve({ ok: true }))
+        .mockImplementationOnce(() => Promise.resolve({ ok: false, reason: 'conflict' }));
+      const audit = vi.fn();
+      const showToast = vi.fn();
+      render(<CasesScreen {...baseProps} cases={twoCases} confirmDialog={vi.fn().mockResolvedValue(true)} saveCases={saveCases} audit={audit} showToast={showToast} />);
+      await user.click(screen.getByLabelText('Select Sam Employee'));
+      await user.click(screen.getByLabelText('Select Jo Manager'));
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      expect(audit).toHaveBeenCalledTimes(1);
+      expect(audit).toHaveBeenCalledWith('Case closed', 'Bulk closure', 'c1');
+      const toastArgs = showToast.mock.calls.find(c => /1 of 2/.test(c[0]));
+      expect(toastArgs).toBeDefined();
+      expect(toastArgs[0]).toMatch(/couldn't be updated/i);
+    });
+  });
+
   it('records an audit entry when bulk-exporting cases (5.11)', async () => {
     const user = userEvent.setup();
     const originalCreateObjectURL = URL.createObjectURL;

@@ -20,6 +20,7 @@ import { tasksForCase, hrNoteTasks } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
 import { resolveSignalRef as resolveSignalRefFor } from '../lib/resolveSignalRef';
 import { computeCaseReadiness } from '../lib/caseReadiness';
+import { computeDueSoon } from '../lib/deadlines';
 import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
 import { investigationPlanTasks } from '../lib/investigationPlan';
 import { SignalCard } from '../components/SignalCard';
@@ -125,6 +126,12 @@ export function CaseViewScreen({
   // IA & User Journey pass, §11 — More tab popover; same open/outside-
   // click/Escape shape as AppSidebar's own More menu.
   const [showMoreTabs, setShowMoreTabs] = useState(false);
+  // Case Closure Safety P0 remediation — declared here, alongside every
+  // other hook, rather than down by requestCloseCase's own definition
+  // (which only *uses* it): this component has an early return above for
+  // a not-yet-loaded/missing case, and React's hooks must never be called
+  // conditionally relative to that.
+  const [closingCase, setClosingCase] = useState(false);
   const moreTabsRef = useRef(null);
   const moreTabsBtnRef = useRef(null);
   const moreTabsPopoverStyle = usePopoverPosition(moreTabsBtnRef, showMoreTabs, { minHeight: 260 });
@@ -266,7 +273,77 @@ export function CaseViewScreen({
       // progress.
       const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true});
     }
-    else if(nextStep.action==="close_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));}
+    else if(nextStep.action==="close_case"){requestCloseCase();}
+  };
+
+  // Case Closure Safety P0 remediation — the single, shared gate every
+  // user-triggered "close this case" action on this screen now goes
+  // through, replacing three independent one-click stage:"closed" writes
+  // that had no confirmation, no re-validation at click time, and no
+  // audit trail. Reuses nextStep.js as the sole authority on whether this
+  // case's own type-specific lifecycle actually considers it ready to
+  // close — the exact same condition that already decides whether a
+  // "Close case" button is even shown/labelled that way — rather than
+  // inventing a second, appeal-specific readiness model. This is what
+  // closes the appeal-stage bypass: the standalone appeal "Close case"
+  // button (below) used to write stage:"closed" unconditionally the
+  // moment an appeal was raised, skipping the hearing/signature/outcome-
+  // letter sequence nextStep.js itself requires before it would ever
+  // recommend closing; it now goes through this same check and is denied
+  // with the genuine next-step reason if the appeal isn't actually done.
+  // allowNoCase exists only for the "No case to answer — close" secondary
+  // action (nextStep.secondary.action==="close_no_case"), the one
+  // legitimate closure path nextStep.js models that isn't its own
+  // primary "close_case" recommendation.
+  // Warnings reuse the same signals already computed on this screen
+  // (readiness/computeDueSoon) rather than a new calculation — the same
+  // sources CasesScreen's bulkClose already relies on. closingCase itself
+  // is declared with the component's other hooks, above the early return.
+  const requestCloseCase = async ({ allowNoCase = false, closeReasonLabel = null, afterClose = null } = {}) => {
+    if (closingCase) return;
+    const primaryReady = nextStep?.action === "close_case";
+    const secondaryReady = allowNoCase && nextStep?.secondary?.action === "close_no_case";
+    if (!primaryReady && !secondaryReady) {
+      showToast(nextStep ? `This case isn't ready to close yet — try "${nextStep.label}" first.` : "This case isn't ready to close yet.", "error");
+      return;
+    }
+
+    // Set before the confirm dialog (not just around the save) so a rapid
+    // repeat click can't open a second confirmation or fire a second save
+    // while the first is still in flight — the real ConfirmModal's own
+    // full-screen overlay already prevents this visually, but the guard
+    // shouldn't depend on that alone.
+    setClosingCase(true);
+    try {
+      const warnings = [];
+      if (readiness.applicable && readiness.gaps.length > 0) {
+        warnings.push(...readiness.gaps.map(g => g.detail));
+      } else {
+        const openTasks = caseTaskList.filter(t => t.status !== "done");
+        if (openTasks.length > 0) warnings.push(openTasks.length === 1 ? "1 case task is still open." : `${openTasks.length} case tasks are still open.`);
+      }
+      const dueSoon = computeDueSoon([cs]);
+      if (dueSoon.length > 0) warnings.push(`${dueSoon.length} live deadline${dueSoon.length === 1 ? "" : "s"} (e.g. an outstanding appeal window or a signature still pending) will stop being tracked once closed.`);
+
+      const ok = await confirmDialog({
+        title: "Close this case?",
+        message: `This marks the case as closed. There's no general way to reopen it afterwards.${warnings.length ? " " + warnings.join(" ") : ""}`,
+        confirmLabel: "Close case",
+        danger: true,
+      });
+      if (!ok) return;
+
+      const previousStage = stage;
+      const result = await saveCases(cases.map(x => x.id === cs.id ? { ...x, stage: "closed" } : x), cs.id);
+      if (result?.ok) {
+        const reasonText = closeReasonLabel || nextStep?.reason || null;
+        audit("Case closed", reasonText ? `Closed from ${previousStage} — ${reasonText}` : `Closed from ${previousStage}`, cs.id);
+        showToast("Case closed");
+        afterClose?.();
+      }
+    } finally {
+      setClosingCase(false);
+    }
   };
 
   if(isAssignedNotetaker) {
@@ -382,7 +459,7 @@ export function CaseViewScreen({
             {(()=>{
               const showNextStepPrimary = nextStep&&stage!=="closed";
               const primary = showNextStepPrimary
-                ? { label: nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label, onClick: handleNextStepAction, disabled: nextStep.action==="inv_report"&&concludingInvestigation }
+                ? { label: nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label, onClick: handleNextStepAction, disabled: (nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase) }
                 : { label: "+ New meeting", onClick: startMeetingFromHeader };
               const menuActions = [
                 { label: cs.confidential?"Remove confidentiality":"Mark confidential", onClick: async()=>{
@@ -495,8 +572,8 @@ export function CaseViewScreen({
               )}
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
-              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed",closedReason:"no_case"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true});}}} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
-              <button onClick={handleNextStepAction} disabled={nextStep.action==="inv_report"&&concludingInvestigation} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:(nextStep.action==="inv_report"&&concludingInvestigation)?"not-allowed":"pointer",opacity:(nextStep.action==="inv_report"&&concludingInvestigation)?0.6:1,fontFamily:FONT.sans}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
+              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){requestCloseCase({allowNoCase:true, closeReasonLabel:"no case to answer", afterClose:()=>{setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true});}});}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
+              <button onClick={handleNextStepAction} disabled={(nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?"not-allowed":"pointer",opacity:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?0.6:1,fontFamily:FONT.sans}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
             </div>
           </div>
 
@@ -622,7 +699,7 @@ export function CaseViewScreen({
             <button onClick={()=>setShowHandoffModal(true)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
               {cs.disciplinaryOfficer?"Reassign officer":"Appoint appeal officer"}
             </button>
-            <button onClick={()=>{saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"closed"}:x));showToast("Case closed");}} style={{fontSize:12,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
+            <button onClick={()=>requestCloseCase()} disabled={closingCase} style={{fontSize:12,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:7,padding:"6px 14px",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans,fontWeight:500}}>
               Close case
             </button>
           </div>

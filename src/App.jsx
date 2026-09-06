@@ -4113,6 +4113,18 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const resolveInvestigationReview = async (reviewId, caseId, actionId, comments) => {
     const cs = cases.find(c=>c.id===caseId);
     if(!cs) return;
+    // Case Closure Safety P0 remediation — this is the one closure route
+    // that previously had neither confirmation nor a save-success check
+    // before its audit call, even though it sits among five other equally-
+    // weighted resolution buttons (Approve/Return/Clarify/Take over/
+    // Progress — HrReviewGatePanel.jsx). Gated narrowly on actionId
+    // "closed" only: every other resolution keeps its exact prior
+    // behaviour, unconfirmed, unchanged, to avoid regressing the review
+    // workflow itself.
+    if(actionId==="closed") {
+      const ok = await confirmDialog({title:"Close this case?", message:"This resolves the investigation review by closing the case. There's no general way to reopen a closed case.", confirmLabel:"Close case", danger:true});
+      if(!ok) return;
+    }
     if(actionId==="returned") {
       saveCases(cases.map(x=>x.id===caseId?{...x,stage:"investigation"}:x));
       const submitTask = investigationChecklistTasks(caseTasks, caseId).find(t=>t.name===INVESTIGATION_CHECKLIST_STEPS[INVESTIGATION_CHECKLIST_STEPS.length-1].label);
@@ -4125,8 +4137,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       saveCases(cases.map(x=>x.id===caseId?{...x,manager:member?.name||user?.email||x.manager}:x));
       audit("Case taken over by HR", member?.name||user?.email, caseId);
     } else if(actionId==="closed") {
-      saveCases(cases.map(x=>x.id===caseId?{...x,stage:"closed"}:x));
-      audit("Case closed from HR review", comments||cs.employeeName, caseId);
+      // Audit only after the save genuinely lands — a stale/failed write
+      // (optimistic-concurrency conflict) must not produce a false "case
+      // closed" audit event. saveCaseToDB already surfaces its own
+      // conflict/error toast and refreshes cases in that case.
+      const result = await saveCases(cases.map(x=>x.id===caseId?{...x,stage:"closed"}:x), caseId);
+      if(result?.ok) audit("Case closed from HR review", comments||cs.employeeName, caseId);
     } else {
       audit("Investigation review: "+actionId, comments||cs.employeeName, caseId);
     }

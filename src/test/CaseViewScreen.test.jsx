@@ -250,3 +250,163 @@ describe('CaseViewScreen — header ActionMenu (Phase 2A)', () => {
     expect(screen.getByRole('menuitem', { name: '+ New meeting' })).toBeInTheDocument();
   });
 });
+
+// Case Closure Safety P0 remediation — every user-triggered close on this
+// screen now goes through one shared requestCloseCase gate: it re-checks
+// getNextStep(cs) (never a second, invented appeal-readiness model),
+// shows a real confirmDialog with warnings built from the already-
+// computed readiness/computeDueSoon signals, and only writes+audits after
+// a genuinely successful save.
+describe('CaseViewScreen — case closure safety (Case Closure Safety P0)', () => {
+  const appealReadyNextStep = { label: 'Appeal outcome issued — close case', action: 'close_case', reason: 'The appeal is the final stage — nothing further to issue.' };
+  const appealIncompleteNextStep = { label: 'Send appeal record for signature', action: 'send_signature', reason: 'The employee should confirm the appeal hearing record is accurate.' };
+
+  function closureProps(overrides = {}) {
+    return {
+      ...baseProps,
+      shell: { ...baseProps.shell, getCaseStage: () => 'appeal', confirmDialog: vi.fn(), saveCases: vi.fn(), showToast: vi.fn(), audit: vi.fn(), ...overrides },
+    };
+  }
+
+  it('HARD BLOCKS closing an incomplete appeal: no confirm dialog, no save, no audit — surfaces the real next-step reason instead', async () => {
+    const user = userEvent.setup();
+    const props = closureProps({ getNextStep: () => appealIncompleteNextStep });
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Close case' }));
+    expect(props.shell.confirmDialog).not.toHaveBeenCalled();
+    expect(props.shell.saveCases).not.toHaveBeenCalled();
+    expect(props.shell.audit).not.toHaveBeenCalled();
+    expect(props.shell.showToast).toHaveBeenCalledWith(expect.stringContaining('Send appeal record for signature'), 'error');
+  });
+
+  it('shows a confirmation (never claiming reopening is possible) and closes once the appeal is genuinely complete', async () => {
+    const user = userEvent.setup();
+    const props = closureProps({
+      getNextStep: () => appealReadyNextStep,
+      confirmDialog: vi.fn().mockResolvedValue(true),
+      saveCases: vi.fn().mockResolvedValue({ ok: true }),
+    });
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Close case' }));
+    expect(props.shell.confirmDialog).toHaveBeenCalledTimes(1);
+    const dialogArgs = props.shell.confirmDialog.mock.calls[0][0];
+    // Honest about irreversibility is fine ("no general way to reopen");
+    // what must never appear is a claim that reopening IS possible/easy.
+    expect(dialogArgs.message).not.toMatch(/you can .*reopen|reopen.*if needed|simply reopen/i);
+    expect(props.shell.saveCases).toHaveBeenCalledTimes(1);
+    const [savedArray, changedId] = props.shell.saveCases.mock.calls[0];
+    expect(changedId).toBe('c1');
+    expect(savedArray.find(c => c.id === 'c1').stage).toBe('closed');
+    expect(props.shell.audit).toHaveBeenCalledWith('Case closed', expect.stringContaining('appeal'), 'c1');
+    expect(props.shell.showToast).toHaveBeenCalledWith('Case closed');
+  });
+
+  it('cancelling the confirmation performs no save and no audit', async () => {
+    const user = userEvent.setup();
+    const props = closureProps({
+      getNextStep: () => appealReadyNextStep,
+      confirmDialog: vi.fn().mockResolvedValue(false),
+      saveCases: vi.fn().mockResolvedValue({ ok: true }),
+    });
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Close case' }));
+    expect(props.shell.confirmDialog).toHaveBeenCalledTimes(1);
+    expect(props.shell.saveCases).not.toHaveBeenCalled();
+    expect(props.shell.audit).not.toHaveBeenCalled();
+  });
+
+  it('a stale/conflicting save (optimistic concurrency) never produces a closure audit event', async () => {
+    const user = userEvent.setup();
+    const props = closureProps({
+      getNextStep: () => appealReadyNextStep,
+      confirmDialog: vi.fn().mockResolvedValue(true),
+      saveCases: vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' }),
+    });
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Close case' }));
+    expect(props.shell.saveCases).toHaveBeenCalledTimes(1);
+    expect(props.shell.audit).not.toHaveBeenCalled();
+    expect(props.shell.showToast).not.toHaveBeenCalledWith('Case closed');
+  });
+
+  it('surfaces open case tasks and live deadlines as warnings inside the same confirmation, not as separate blockers', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        getCaseStage: () => 'appeal',
+        getNextStep: () => appealReadyNextStep,
+        caseTasks: [{ id: 't1', caseId: 'c1', status: 'open', name: 'Chase signature' }],
+        confirmDialog: vi.fn().mockResolvedValue(true),
+        saveCases: vi.fn().mockResolvedValue({ ok: true }),
+        audit: vi.fn(),
+        showToast: vi.fn(),
+      },
+    };
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Close case' }));
+    const dialogArgs = props.shell.confirmDialog.mock.calls[0][0];
+    expect(dialogArgs.message).toMatch(/case task/i);
+    // Still closes — a warning, not a hard block.
+    expect(props.shell.saveCases).toHaveBeenCalledTimes(1);
+  });
+
+  it('double-clicking the close button only opens one confirmation and performs one save', async () => {
+    const user = userEvent.setup();
+    let resolveConfirm;
+    const confirmDialog = vi.fn(() => new Promise(res => { resolveConfirm = res; }));
+    const props = closureProps({ getNextStep: () => appealReadyNextStep, confirmDialog, saveCases: vi.fn().mockResolvedValue({ ok: true }) });
+    render(<CaseViewScreen {...props} />);
+    const btn = screen.getByRole('button', { name: 'Close case' });
+    await user.click(btn);
+    await user.click(btn); // fired again while the first confirm is still pending
+    resolveConfirm(true);
+    await new Promise(r => setTimeout(r, 0));
+    expect(props.shell.confirmDialog).toHaveBeenCalledTimes(1);
+    expect(props.shell.saveCases).toHaveBeenCalledTimes(1);
+  });
+
+  it('the "No case to answer — close" path confirms, closes, and only then opens the letter draft (no duplicate letters on cancel)', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    const props = {
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        getCaseStage: () => 'inv_report',
+        getNextStep: () => ({ label: 'Proceed to disciplinary — send invitation', action: 'disciplinary_invite', secondary: { label: 'No case to answer — close', action: 'close_no_case' } }),
+        confirmDialog: vi.fn().mockResolvedValue(true),
+        saveCases: vi.fn().mockResolvedValue({ ok: true }),
+        audit: vi.fn(),
+        showToast: vi.fn(),
+        handleLetter,
+      },
+    };
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'No case to answer — close' }));
+    expect(props.shell.saveCases).toHaveBeenCalledTimes(1);
+    expect(handleLetter).toHaveBeenCalledWith('no-case-answer', { inline: true });
+    expect(props.shell.audit).toHaveBeenCalledWith('Case closed', expect.stringContaining('no case to answer'), 'c1');
+  });
+
+  it('cancelling "No case to answer — close" performs no save and never opens the letter draft', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    const props = {
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        getCaseStage: () => 'inv_report',
+        getNextStep: () => ({ label: 'Proceed to disciplinary — send invitation', action: 'disciplinary_invite', secondary: { label: 'No case to answer — close', action: 'close_no_case' } }),
+        confirmDialog: vi.fn().mockResolvedValue(false),
+        saveCases: vi.fn(),
+        handleLetter,
+      },
+    };
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'No case to answer — close' }));
+    expect(props.shell.saveCases).not.toHaveBeenCalled();
+    expect(handleLetter).not.toHaveBeenCalled();
+  });
+});
