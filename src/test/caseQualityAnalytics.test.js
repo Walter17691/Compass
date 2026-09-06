@@ -90,3 +90,52 @@ describe('computeCaseQualityAnalytics', () => {
     expect(issue.pct).toBe(Math.round((1 / 3) * 100)); // 1 of 3 total cases, not 1 of 1 applicable case
   });
 });
+
+// Insights Phase 5 (Process Quality drill-down) — caseIds is tracked
+// purely alongside the pre-existing count/pct, never in place of them.
+describe('computeCaseQualityAnalytics — caseIds (Insights Phase 5)', () => {
+  it('lists the exact, deduplicated case ids that contributed to each issue', () => {
+    const cases = [{ id: 'c1' }, { id: 'c2' }];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', title: 'X', description: 'd' },
+      { id: 'a2', caseId: 'c2', title: 'X', description: 'd' },
+    ];
+    const result = computeCaseQualityAnalytics(cases, allegations, [], [], [], [], []);
+    const issue = result.issues.find(i => i.id === 'employee_responded');
+    expect(new Set(issue.caseIds)).toEqual(new Set(['c1', 'c2']));
+  });
+
+  it('count parity: issue.count equals the number of unique case ids for every issue', () => {
+    const cases = [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', title: 'X', description: 'd' },
+      { id: 'a2', caseId: 'c2', title: 'X', description: 'd' },
+      { id: 'a3', caseId: 'c3', title: 'X', description: 'd' },
+    ];
+    const result = computeCaseQualityAnalytics(cases, allegations, [], [], [], [], []);
+    result.issues.forEach(issue => {
+      expect(issue.caseIds.length).toBe(issue.count);
+      expect(new Set(issue.caseIds).size).toBe(issue.caseIds.length); // no duplicates
+    });
+  });
+
+  it('exposes caseIds as a plain serialisable array, not a Set', () => {
+    const cases = [{ id: 'c1' }];
+    const allegations = [{ id: 'a1', caseId: 'c1', title: 'X', description: 'd' }];
+    const result = computeCaseQualityAnalytics(cases, allegations, [], [], [], [], []);
+    const issue = result.issues.find(i => i.id === 'employee_responded');
+    expect(Array.isArray(issue.caseIds)).toBe(true);
+  });
+
+  it('does not change the existing count/pct formulas by adding caseIds', () => {
+    const cases = [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }];
+    const allegations = [
+      { id: 'a1', caseId: 'c1', title: 'X', description: 'd' }, // no employeeResponse -> fails
+    ];
+    const result = computeCaseQualityAnalytics(cases, allegations, [], [], [], [], []);
+    const issue = result.issues.find(i => i.id === 'employee_responded');
+    expect(issue.count).toBe(1);
+    expect(issue.pct).toBe(100); // unchanged from the pre-existing applicable-cases formula
+    expect(issue.caseIds).toEqual(['c1']);
+  });
+});

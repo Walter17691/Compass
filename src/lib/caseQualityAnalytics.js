@@ -20,9 +20,19 @@ export const CASE_QUALITY_MIN_SAMPLE_SIZE = 3;
 
 export function computeCaseQualityAnalytics(cases, allegations, caseSignals, caseTasks, policies, caseAccess, orgMembers) {
   const tally = {};
-  const bump = (id, label, source) => {
-    if (!tally[id]) tally[id] = { id, label, count: 0, source };
+  // Insights Phase 5 (Process Quality drill-down) — caseIds is tracked
+  // as a Set purely alongside the pre-existing count, never in place of
+  // it: count keeps its exact original meaning (incremented once per
+  // bump call, unchanged formula/denominator), while caseIds
+  // deduplicates which cases contributed at all, for a "View cases"
+  // drill-down. The two can only ever diverge if a single check could
+  // legitimately fire more than once for the very same case (none of
+  // the current readiness/guardrail checks do) — this doesn't assume
+  // that never happens, it just doesn't let it corrupt case-id dedup.
+  const bump = (id, label, source, caseId) => {
+    if (!tally[id]) tally[id] = { id, label, count: 0, source, caseIds: new Set() };
     tally[id].count++;
+    tally[id].caseIds.add(caseId);
   };
 
   // computeCaseReadiness is only applicable to cases with allegations
@@ -39,16 +49,16 @@ export function computeCaseQualityAnalytics(cases, allegations, caseSignals, cas
     const readiness = computeCaseReadiness(cs, allegations, caseSignals, caseTasks);
     if (readiness.applicable) {
       applicableForReadiness++;
-      readiness.gaps.forEach(g => bump(g.id, g.label, 'readiness'));
+      readiness.gaps.forEach(g => bump(g.id, g.label, 'readiness', cs.id));
     }
-    computeGuardrailChecks(cs, allegations, policies, caseAccess, orgMembers).forEach(g => bump(g.id, g.title, 'guardrail'));
+    computeGuardrailChecks(cs, allegations, policies, caseAccess, orgMembers).forEach(g => bump(g.id, g.title, 'guardrail', cs.id));
   });
 
   const totalCases = (cases || []).length;
   const issues = Object.values(tally)
     .map(t => {
       const denominator = t.source === 'readiness' ? applicableForReadiness : totalCases;
-      return { ...t, pct: denominator > 0 ? Math.round((t.count / denominator) * 100) : 0 };
+      return { ...t, caseIds: Array.from(t.caseIds), pct: denominator > 0 ? Math.round((t.count / denominator) * 100) : 0 };
     })
     .sort((a, b) => b.count - a.count);
 
