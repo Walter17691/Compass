@@ -129,9 +129,16 @@ they'll need to make that call quickly:
 See `docs/RECOVERY.md` for the actual recovery procedures (accidental
 deletion, bad migration, failed deployment, compromised account,
 cross-tenant incident) and — importantly — for the current real
-limitation that production has no automated backups or PITR (Free-plan
-Supabase, verified this session), so "recovery" for a pure data-loss
-incident may not be fully possible until that's addressed.
+recovery mechanism: production now runs on Supabase Pro with verified
+daily managed backups (confirmed live, 2026-09-06 — a real, dated
+backup history, not just a plan-level feature), giving a normal
+Recovery Point Objective of roughly a day. Restore is whole-project
+only, so recovering a single organisation or case is a manual
+restore-into-isolated-project-and-extract procedure, not a one-click
+action — factor that into how quickly you can honestly tell a customer
+their specific data will be back. Point-in-Time Recovery is not
+currently enabled (classified P1, not required for the daily-backup
+RPO target).
 
 ## After the incident
 
