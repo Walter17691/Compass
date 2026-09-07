@@ -61,7 +61,7 @@ function PrepQuestionRow({ q, index, total, linkedCaseAllegations, linkedCaseEvi
   );
 }
 
-export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, handlePrepare, aiProcessing, setScreen, bgDoc, setBgDoc, prepNotes,
+export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, handlePrepare, aiProcessing, aiError, setScreen, bgDoc, setBgDoc, prepNotes,
   prepQuestions=[], linkedCaseAllegations=[], linkedCaseEvidence=[],
   onAddPrepQuestion, onUpdatePrepQuestionText, onRemovePrepQuestion, onMovePrepQuestion, onTogglePrepQuestionEssential, onLinkPrepQuestionToAllegation, onLinkPrepQuestionToEvidence,
 }) {
@@ -126,6 +126,15 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
         </Btn>
         <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{padding:"14px 20px",fontSize:14}}>Cancel</Btn>
       </div>
+
+      {/* Release 1.0 UAT remediation (Defect #4) — handlePrepare's own
+          catch already set aiError safely, but this screen never
+          rendered it, so a failure (e.g. AI unavailable) looked like
+          nothing happened at all. "Skip prep and start meeting now"
+          below remains the manual/skip path regardless. */}
+      {aiError&&!aiProcessing&&(
+        <div style={{textAlign:"center",color:"#C84B2F",fontSize:13,marginBottom:16}}>{aiError}</div>
+      )}
 
       <div style={{textAlign:"left",marginBottom:24}}>
         {/* Section heading — the upload control below is its own labelled

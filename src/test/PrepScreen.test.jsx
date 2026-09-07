@@ -30,6 +30,7 @@ const baseProps = {
   onTogglePrepQuestionEssential: noop,
   onLinkPrepQuestionToAllegation: noop,
   onLinkPrepQuestionToEvidence: noop,
+  aiError: '',
 };
 
 describe('PrepScreen — field labelling (Phase 6.5, Batch 13)', () => {
@@ -49,5 +50,27 @@ describe('PrepScreen — field labelling (Phase 6.5, Batch 13)', () => {
     expect(screen.getByLabelText('Question 1 text')).toBeInTheDocument();
     expect(screen.getByLabelText('Link question 1 to allegation')).toBeInTheDocument();
     expect(screen.getByLabelText('Link question 1 to evidence')).toBeInTheDocument();
+  });
+});
+
+// Release 1.0 UAT remediation (Defect #4) — handlePrepare's catch block
+// already set aiError safely (never raw provider text), but this screen
+// never rendered it, so a prep-pack generation failure looked exactly
+// like nothing happening at all. "Skip prep and start meeting now" is
+// the manual/skip path and must remain available regardless.
+describe('PrepScreen — surfaces a generation failure (Defect #4)', () => {
+  it('shows a clear error message when aiError is set and generation is not in progress', () => {
+    render(<PrepScreen {...baseProps} aiError="Compass AI is temporarily unavailable. You can retry, or skip prep and start the meeting now." />);
+    expect(screen.getByText(/Compass AI is temporarily unavailable/)).toBeInTheDocument();
+  });
+
+  it('does not show an error while generation is still in progress', () => {
+    render(<PrepScreen {...baseProps} aiError="Compass AI is temporarily unavailable." aiProcessing={true} />);
+    expect(screen.queryByText(/Compass AI is temporarily unavailable/)).not.toBeInTheDocument();
+  });
+
+  it('the manual skip path stays available regardless of aiError', () => {
+    render(<PrepScreen {...baseProps} aiError="Compass AI is temporarily unavailable." />);
+    expect(screen.getByText('Skip prep and start meeting now')).toBeInTheDocument();
   });
 });

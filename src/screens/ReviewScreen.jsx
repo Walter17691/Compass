@@ -5,7 +5,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore,
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -67,9 +67,16 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
             }} variant="ghost" style={{fontSize:13}}>Request HR review</Btn>
           )}
           <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share</Btn>
-          <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} variant="secondary" style={{fontSize:13}}>Save to case</Btn>
+          {/* Release 1.0 UAT remediation (Defect #5) — previously
+              unconditional: a failed/empty generation (reviewOutput=="")
+              could still be "saved" with an unconditional success toast.
+              Gated on real content existing, not on the absence of an
+              error — the user can still save after switching to Edit
+              record and writing something manually, since that also
+              makes reviewOutput non-empty. */}
+          <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} variant="secondary" style={{fontSize:13}} disabled={!reviewOutput?.trim()}>Save to case</Btn>
 
-<Btn onClick={()=>saveMeetingToCase()} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}}>
+<Btn onClick={()=>saveMeetingToCase()} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}} disabled={!reviewOutput?.trim()}>
             {caseInfo._linkedCaseId?"Save witness statement to case →":"Save and go to case →"}
           </Btn>
         </div>
@@ -136,11 +143,36 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 extraSections.forEach(s=>{ const si=meetingPart.indexOf(s); if(si>-1) meetingPart=meetingPart.slice(0,si); });
                 return <div style={{fontSize:14,lineHeight:1.9,color:"#1A1535"}}><MDRenderer text={meetingPart.trim()}/></div>;
               })()}
-              {reviewOutput&&editingRecord&&(
+              {/* Release 1.0 UAT remediation — was `reviewOutput&&editingRecord`,
+                  which meant a user could never write a record manually
+                  from scratch after a failed generation (reviewOutput
+                  stays "" on failure): "Edit record" toggled editingRecord
+                  but nothing rendered. Editing no longer requires
+                  pre-existing AI content. */}
+              {editingRecord&&(
                 <textarea aria-label="Meeting record" value={reviewOutput} onChange={e=>setReviewOutput(e.target.value)}
+                  placeholder="Write the meeting record..."
                   style={{width:"100%",minHeight:400,background:"none",border:"none",outline:"none",fontSize:14,lineHeight:1.9,color:"#1A1535",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
               )}
-              {aiError&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}
+              {/* Release 1.0 UAT remediation (Defect #5) — an explicit,
+                  unmissable failure state, distinct from aiError's plain
+                  inline text (which is now reserved for other, lower-
+                  stakes failures on this screen like edit/ask-Compass).
+                  Retry re-runs the exact same generation (App.jsx's
+                  handleReview is idempotent — safe to call again). The
+                  user's own meeting notes are never affected by any of
+                  this; they're a separate, untouched piece of state. */}
+              {reviewGenerationFailed&&!editingRecord&&(
+                <div style={{textAlign:"center",padding:"32px 16px"}}>
+                  <div style={{fontSize:14,color:"#C84B2F",fontWeight:600,marginBottom:6}}>Compass AI could not generate the meeting record</div>
+                  <div style={{fontSize:13,color:"#6B6375",marginBottom:16}}>Your meeting notes have been kept. Retry, or write the record manually.</div>
+                  <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+                    <Btn onClick={onRetryGeneration} disabled={aiProcessing}>{aiProcessing?"Retrying...":"Retry"}</Btn>
+                    <Btn variant="ghost" onClick={()=>setEditingRecord(true)}>Write manually</Btn>
+                  </div>
+                </div>
+              )}
+              {aiError&&!reviewGenerationFailed&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}
             </div>
             {reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5"}}>

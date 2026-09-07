@@ -246,6 +246,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [prepQuestions, setPrepQuestions] = useState([]);
   const [reviewOutput, setReviewOutput] = useState("");
   const [reviewOutputOriginal, setReviewOutputOriginal] = useState(""); // the AI's un-edited draft, kept so hand-edits can be reverted
+  // Release 1.0 UAT remediation (Defect #5) — explicit success/failure
+  // state for meeting-record generation, checked independently of
+  // reviewOutput's truthiness so a caught exception can never be
+  // confused with "no content yet". Never inferred from reviewOutput
+  // content (e.g. checking for the word "error") — set only by
+  // handleReview's own try/catch.
+  const [reviewGenerationFailed, setReviewGenerationFailed] = useState(false);
   // M10 — a second, short AI generation alongside the full record: what
   // actually matters for someone triaging the case, not the full formatted
   // dialogue. Session-local like reviewOutput; only persisted as
@@ -3248,7 +3255,14 @@ Please advise on:
 ## Common Pitfalls to Avoid`,
         t => setRedundancyAiOutput(t)
       );
-    } catch(e) { setRedundancyAiOutput("Error: "+e.message); }
+    } catch(e) {
+      // Release 1.0 UAT remediation (Defect #5 sibling) — this panel has
+      // a "Copy" action, so raw provider error text here risks an
+      // advisor copying it into real correspondence believing it's
+      // legal guidance, even though it's never auto-persisted to a case.
+      console.error("Redundancy AI advice generation failed:", e);
+      setRedundancyAiOutput("Compass AI could not generate advice. Please try again.");
+    }
     setRedundancyAiProcessing(false);
   };
 
@@ -3277,7 +3291,14 @@ Date: ${new Date().toLocaleDateString("en-GB")}
 Include all legally required elements. End with ## Next Steps checklist for HR.`,
         t => setRedundancyAiOutput(t)
       );
-    } catch(e) { setRedundancyAiOutput("Error: "+e.message); }
+    } catch(e) {
+      // Release 1.0 UAT remediation (Defect #5 sibling) — this drafts an
+      // actual redundancy letter; raw provider error text here is even
+      // higher-stakes than the advice panel above if copied into real
+      // correspondence to an at-risk employee.
+      console.error("Redundancy letter generation failed:", e);
+      setRedundancyAiOutput("Compass AI could not generate this letter. Please try again.");
+    }
     setRedundancyAiProcessing(false);
   };
 
@@ -5955,8 +5976,18 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         system:"You are a senior UK HR advisor preparing structured questions for an upcoming Employee Relations meeting. Respond ONLY with valid JSON, no other text: [{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\"}] — produce 5 to 12 concise, specific questions. Mark essential true only for questions central to the core issue(s) being addressed. reasoning is one short sentence explaining why this particular question matters, grounded in the background given — this is shown to the user as \"Why ask this?\".",
         messages:[{role:"user", content:`Meeting: ${meetingType.label}. Employee: ${caseInfo.employee}. Background: ${caseInfo.context||"None"}.${carriedContext?"\n\n"+carriedContext:""}`}],
       })});
+      // Release 1.0 UAT remediation (Defect #4 sibling) — this is the
+      // exact call that threw "SyntaxError: Unexpected end of JSON
+      // input" in production when /api/chat returned a non-ok response:
+      // res.json() on a failure body has no `content` field, so `text`
+      // became "" and JSON.parse("") throws. Checking res.ok and text
+      // presence first turns that crash into the same silent, safe
+      // no-op this function already had for a genuinely empty/malformed
+      // model response — no behaviour change on success.
+      if(!res.ok) { console.error("generatePrepQuestions: request failed", res.status); return; }
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(!text.trim()) return;
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       setPrepQuestions((Array.isArray(parsed)?parsed:[]).map((q,i)=>({
         id: newId("pq"),
@@ -6011,7 +6042,16 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         ),
         generatePrepQuestions(carriedContext),
       ]);
-    } catch(e) { setAiError(e.message); }
+    } catch(e) {
+      // Release 1.0 UAT remediation (Defect #4) — streamClaude's thrown
+      // Error embeds up to 200 chars of the raw response body in its
+      // message (now /api/chat's own safe {"ok":false,"error":{...}}
+      // envelope rather than a provider body, but still not something to
+      // show verbatim). PrepScreen now renders aiError, so this needs to
+      // read as a real sentence, not embedded JSON.
+      console.error("Prep pack generation failed:", e);
+      setAiError("Compass AI is temporarily unavailable. You can retry, or skip prep and start the meeting now.");
+    }
     setAiProcessing(false);
   };
 
@@ -6107,7 +6147,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const allNotes = [...transcript, ...extra];
     if(!allNotes.length) return;
     if(extra.length) { setTranscript(allNotes); setInputText(""); }
-    setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction("");
+    setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
     setAiProcessing(true);
     // Generate next steps deadlines
     orgLsSet("compass_meeting_draft", null); // transcript is now captured in the AI call in flight — the crash-recovery window has passed
@@ -6152,9 +6192,29 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         `${meetingType?.label} meeting. Employee: ${caseInfo.employee}${caseInfo.employeeJobTitle?" ("+caseInfo.employeeJobTitle+")":(employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle?" ("+((employeeRecords||[]).find(r=>r.name===caseInfo.employee)?.jobTitle)+")":" "}. Date: ${caseInfo.date||"today"}. Chair: ${caseInfo.manager||"Unknown"}${caseInfo.chairJobTitle?" ("+caseInfo.chairJobTitle+")":(orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title?" ("+((orgMembers||[]).find(m=>m.name===caseInfo.manager)?.job_title)+")":" "}. Start time: ${fmtMeetingTime(meetingStartTime)||"Unknown"}. End time: ${fmtMeetingTime(meetingEndTime||meetingEndTimeVal)||"Unknown"}${adjournments.length>0?" Adjournments: "+adjournments.map(a=>a.start+(a.end?" to "+a.end:"- ongoing")+(a.reason?" ("+a.reason+")":"")).join(", "):""}. Notetaker: ${caseInfo.notetaker||"Not specified"}. Representative/companion: ${caseInfo.representative?caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")":"N/A"}. Other participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"none listed"}${getPolicyCtx()}\n\nTRANSCRIPT:\n${tx}\n\nPlease produce the following sections:\n\n## Meeting Details\nInclude these fields on separate lines:\n- Type: [meeting type]\n- Date: [date]\n- Start time: [start time]\n- End time: [end time]${adjournments.length>0?"\n- Adjournments: [list each adjournment with times and reason]":""}\n- Chair: [chair name and job title]\n- Notetaker: [notetaker name or "Not specified"]\n- Employee: [employee name and job title]\n- Representative/companion: [name and role, or "N/A"]\n- Other participants: [any others or "None"]\n- Purpose: [write 1-2 sentences on the same line explaining why this meeting was held]\n\n## Meeting Dialogue\nRewrite as a clean readable conversation. Each line must start with the speaker\'s INITIALS followed by a colon (e.g. if chair is "${caseInfo.manager||"HR Manager"}" use initials "${(caseInfo.manager||"HR Manager").split(" ").map(w=>w[0]).join("")}:" and if employee is "${caseInfo.employee||"Employee"}" use initials "${(caseInfo.employee||"Employee").split(" ").map(w=>w[0]).join("")}:"). Fix any typos. One line per utterance.\n\n## Key Points\n## Employee Position\n## Management Position\n## Procedural Checks\n## Actions & Next Steps`,
         t=>setReviewOutput(t)
       );
+      // Release 1.0 UAT remediation (Defect #5) — streamClaude already
+      // throws before onChunk ever sees a non-ok response, but an
+      // interrupted stream (connection drops mid-way, after some real
+      // content already streamed in via onChunk) resolves this same
+      // await with no exception at all, and a stream that completes but
+      // never emitted a single content_block_delta resolves to "". Both
+      // are "not a valid generated record" just as much as a thrown
+      // error is — treating only exceptions as failure would let a
+      // truncated or empty record through as if it were complete.
+      if(!fullRecord.trim()) throw new Error("Compass AI returned an empty response.");
       setReviewOutputOriginal(fullRecord);
       await summaryPromise;
-    } catch(e) { setAiError(e.message); }
+    } catch(e) {
+      console.error("Meeting record generation failed:", e);
+      // Never leave partial/truncated AI output in reviewOutput — an
+      // interrupted stream can have already pushed real-looking text via
+      // onChunk before this catch runs (see comment above). The user's
+      // own meeting notes are untouched by any of this: they live in
+      // `transcript`, a separate state this function only ever reads.
+      setReviewOutput(""); setReviewOutputOriginal("");
+      setReviewGenerationFailed(true);
+      setAiError("Compass AI could not generate the meeting record. Your meeting notes have been kept — retry, or write the record manually.");
+    }
     setAiProcessing(false);
     // Auto risk score — fullRecord is preferred (the polished, structured
     // record) but falls back to the raw transcript text if the record
@@ -6258,7 +6318,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         `Meeting: ${meetingType?.label}\nEmployee: ${caseInfo.employee}\nRecord:\n${reviewOutput||tx}\n\n## Likely Outcome if Challenged at Tribunal\n## Key Vulnerabilities\n## Strongest Arguments for Employer\n## Recommended Actions to Strengthen Position\n## How Tribunals Have Approached Similar Situations`,
         t=>setPrediction(t)
       );
-    } catch(e) { setPrediction("Could not generate prediction: "+e.message); }
+    } catch(e) {
+      // Release 1.0 UAT remediation (Defect #5 sibling) — prediction is
+      // persisted verbatim into the saved meeting record (see
+      // saveMeetingToCaseImpl/appeal-meeting save); embedding e.message
+      // here would put raw provider error text into permanent case
+      // content, the same class of bug as the main record generation.
+      console.error("Prediction generation failed:", e);
+      setPrediction(null);
+    }
     setPredProcessing(false);
   };
 
@@ -6302,7 +6370,16 @@ Please produce:
 ## Manager Next Steps`,
         t => setDevSummary(t)
       );
-    } catch(e) { setDevSummary("Error generating summary: "+e.message); }
+    } catch(e) {
+      // Release 1.0 UAT remediation (Defect #5 sibling) — devSummary is
+      // persisted verbatim as the dev meeting's `record` field
+      // (saveDevMeetingToCase); embedding e.message here would put raw
+      // provider error text into a permanent case record, same class of
+      // bug as the main disciplinary/investigation record generation.
+      console.error("Dev summary generation failed:", e);
+      setDevSummary("");
+      setAiError("Compass AI could not generate the summary. Please try again.");
+    }
     setDevAiProcessing(false);
   };
 
@@ -8735,7 +8812,7 @@ Please produce:
 
 {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <PrepScreen isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} handlePrepare={handlePrepare} aiProcessing={aiProcessing} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes}
+        <PrepScreen isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} handlePrepare={handlePrepare} aiProcessing={aiProcessing} aiError={aiError} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes}
           prepQuestions={prepQuestions}
           linkedCaseAllegations={caseInfo._linkedCaseId ? allegationsForCase(allegations, caseInfo._linkedCaseId) : []}
           linkedCaseEvidence={caseInfo._linkedCaseId ? (cases.find(c=>c.id===caseInfo._linkedCaseId)?.evidence||[]) : []}
@@ -8756,7 +8833,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} riskScore={riskScore}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />

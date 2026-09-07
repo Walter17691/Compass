@@ -126,6 +126,30 @@ export default async function handler(req, res) {
       body: JSON.stringify(requestBody),
     });
 
+    // Release 1.0 UAT remediation (Defects #4/#5) — an upstream Anthropic
+    // failure (invalid/revoked key, rate limit, quota, 5xx, ...) must
+    // never be treated as generated content. Checked BEFORE branching on
+    // isStreaming: the client's own `stream:true` request doesn't change
+    // the shape of Anthropic's error body (always a single JSON object,
+    // never SSE), so a non-ok response is never piped through the
+    // streaming branch — every caller, streaming or not, gets the exact
+    // same safe, structured failure instead. This is the fix for the
+    // production incident where a revoked ANTHROPIC_API_KEY caused the
+    // raw `{"type":"error",...,"message":"API key is invalid."}` body to
+    // reach the client, which some callers then displayed as if it were
+    // AI-generated content. No provider response detail (beyond a
+    // console-logged error type, for support diagnosis) reaches the
+    // client — never the key, never headers, never a stack trace.
+    if (!response.ok) {
+      let providerErrorType = null;
+      try { providerErrorType = (await response.json())?.error?.type || null; } catch { /* non-JSON error body — nothing more to log */ }
+      console.error('[chat] Anthropic request failed', response.status, providerErrorType);
+      return res.status(502).json({
+        ok: false,
+        error: { code: 'AI_UNAVAILABLE', message: 'Compass AI is temporarily unavailable. Please try again shortly.' },
+      });
+    }
+
     if (isStreaming) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -149,6 +173,22 @@ export default async function handler(req, res) {
       res.status(response.status).json(data);
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    // Network failure, timeout, or (for the streaming branch) a mid-
+    // stream read error after response.ok was already true and bytes
+    // have potentially already been written to the client — in that
+    // case headers are already sent and a second res.status()/res.json()
+    // call would throw, so this only attempts the safe JSON error
+    // response when nothing has gone out yet. Either way, the real
+    // error is logged server-side only; the client never sees
+    // error.message (which could be a raw network/stack detail).
+    console.error('[chat] request failed:', error.message);
+    if (!res.headersSent) {
+      res.status(500).json({
+        ok: false,
+        error: { code: 'AI_REQUEST_FAILED', message: 'Compass AI is temporarily unavailable. Please try again shortly.' },
+      });
+    } else {
+      res.end();
+    }
   }
 }
