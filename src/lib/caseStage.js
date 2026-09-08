@@ -144,7 +144,26 @@ export function getCaseStage(cs) {
   // signStatus is document-level state that says nothing about case
   // closure, so it's no longer used to infer "closed" at all. Real
   // closure is always this explicit cs.stage="closed" write.
-  if(cs.stage) return cs.stage;
+  //
+  // UAT Golden Path remediation (Defect #8) — "open" is not a real,
+  // type-specific stage id anywhere in processStages.js's own registry
+  // (DISCIPLINARY_STAGES/GRIEVANCE_STAGES/etc. — every one of them starts
+  // at its own type's initial id, e.g. "intake"/"probation_started"/
+  // "absence_identified", never "open"). It's a lifecycle placeholder
+  // meaning roughly "not closed yet", written as a NOT-NULL-safe default
+  // by saveCaseToDB (App.jsx) and mapCaseRow (caseMapping.js) for any
+  // case with no real stage recorded, and by the CSV bulk-import
+  // normalizer. Treating it as an authoritative explicit stage (as any
+  // other truthy value correctly is, just above) silently froze every
+  // consumer built on this function — getNextStep's switches, and
+  // OutcomeTab's isOutcomeReachable — at "open" forever the moment a case
+  // was saved even once, since "open" matches no case in any of their
+  // per-type switches/id lists, regardless of how much real progress
+  // (e.g. a completed Disciplinary hearing) the case's meetings actually
+  // show. Falling through here for "open" restores the same heuristic a
+  // stage-less case already correctly uses below — it does not change
+  // how any genuine, type-specific stage id is handled.
+  if(cs.stage && cs.stage!=="open") return cs.stage;
   const type = normalizedCaseType(cs);
   if(type==="probation") return inferProbationStage(cs);
   if(type==="flexible working"||type==="flexible_working") return inferFlexibleWorkingStage(cs);

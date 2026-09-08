@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { OutcomeTab } from '../components/caseTabs/OutcomeTab.jsx';
+import { getCaseStage } from '../lib/caseStage.js';
+import { getNextStep } from '../lib/nextStep.js';
 
 const fmtDate = d => d;
 const reachedCase = { id: 'c1', employeeName: 'Sarah Jones', caseType: 'Misconduct', outcome: '' };
@@ -64,5 +66,50 @@ describe('OutcomeTab — reaches the outcome stage for every process type, not j
     const cs = { id: 'c5', employeeName: 'Sam Lee', caseType: 'long-term sickness', outcome: '' };
     render(<OutcomeTab cs={cs} stage="absence_identified" fmtDate={fmtDate} setShowOutcomeModal={()=>{}} canDecide={true} />);
     expect(screen.getByText(/hasn't reached/)).toBeInTheDocument();
+  });
+});
+
+// UAT Golden Path remediation (Defect #8) — end-to-end reproduction of
+// the reported bug: getCaseStage(cs) feeds the exact `stage` value
+// CaseViewScreen.jsx passes into this tab (see its own `const stage =
+// getCaseStage(cs);`), for a case shaped exactly like the Golden Path
+// case that surfaced this — a Disciplinary meeting started directly via
+// "+ New meeting" (not the guided "disciplinary_invite" action), with
+// cs.stage still holding the "open" lifecycle placeholder saveCaseToDB
+// persists by default. Before the fix, getCaseStage returned "open"
+// unconditionally and this rendered the "hasn't reached" message despite
+// the completed hearing; after the fix it must not.
+describe('OutcomeTab — Defect #8: a directly-started Disciplinary meeting must not be reported as "hasn\'t reached a disciplinary hearing"', () => {
+  const directDisciplinaryCase = {
+    id: 'golden-path',
+    employeeName: 'UAT - Test Employee (Golden Path)',
+    caseType: 'misconduct',
+    outcome: '',
+    stage: 'open', // the exact persisted value that caused the defect
+    meetings: [
+      { type: 'Investigation', record: 'the investigation record' },
+      { type: 'Disciplinary', record: 'the disciplinary hearing record' },
+    ],
+  };
+
+  it('resolves Outcome as reachable through the real getCaseStage() wiring, not a hand-picked stage prop', () => {
+    const stage = getCaseStage(directDisciplinaryCase);
+    expect(stage).toBe('disciplinary');
+    render(<OutcomeTab cs={directDisciplinaryCase} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={()=>{}} canDecide={true} />);
+    expect(screen.queryByText(/hasn't reached a disciplinary hearing/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Issue outcome →' })).toBeInTheDocument();
+  });
+
+  it('Case Copilot\'s next-step banner (getNextStep) agrees with Outcome reachability instead of contradicting it', () => {
+    // Before the fix, getNextStep(cs) also read the poisoned "open" stage
+    // and fell through disciplinaryNextStep's switch to `default: return
+    // null` — no guidance shown at all — while the case header (a
+    // separate, meeting-scanning function, App.jsx's getCaseStatus)
+    // still correctly said "Disciplinary in progress". This asserts the
+    // two stage-driven consumers (Outcome, Copilot) now agree with each
+    // other for the same persisted state, closing that contradiction.
+    const step = getNextStep(directDisciplinaryCase);
+    expect(step).not.toBeNull();
+    expect(['send_signature', 'outcome_letter']).toContain(step.action);
   });
 });

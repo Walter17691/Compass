@@ -65,6 +65,76 @@ describe('getCaseStage', () => {
   });
 });
 
+// UAT Golden Path remediation (Defect #8) — "open" is the lifecycle
+// placeholder saveCaseToDB/mapCaseRow persist for any case with no real
+// stage recorded (see the fix's own comment in caseStage.js). These are
+// the mandatory scenarios for the exact defect: a case whose stage is
+// literally "open" — not undefined, not a real process-stage id — must
+// resolve exactly as if it had no explicit stage at all, for every stage
+// of the misconduct workflow, while a genuine explicit stage (including
+// one set after "open" would otherwise have been read) still wins.
+describe('getCaseStage — the "open" lifecycle placeholder is not an authoritative stage (Defect #8)', () => {
+  it('1. new misconduct case, stage="open", no meetings -> resolves to "intake", same as no stage at all', () => {
+    expect(getCaseStage({ stage: 'open', caseType: 'misconduct', meetings: [] })).toBe('intake');
+  });
+
+  it('2. investigation completed, stage="open" -> resolves to "investigation"', () => {
+    const cs = { stage: 'open', caseType: 'misconduct', meetings: [{ type: 'Investigation', record: 'notes' }] };
+    expect(getCaseStage(cs)).toBe('investigation');
+  });
+
+  it('3. THE DEFECT: disciplinary hearing completed directly via "+ New meeting", stage="open" -> resolves to "disciplinary", not stuck at "open"', () => {
+    const cs = { stage: 'open', caseType: 'misconduct', meetings: [{ type: 'Disciplinary', record: 'the hearing record' }] };
+    expect(getCaseStage(cs)).toBe('disciplinary');
+    expect(getCaseStage(cs)).not.toBe('open');
+  });
+
+  it('4. disciplinary reached through the guided invite flow (explicit stage, not "open") is unaffected by this fix', () => {
+    const cs = { stage: 'disciplinary', caseType: 'misconduct', meetings: [] };
+    expect(getCaseStage(cs)).toBe('disciplinary');
+  });
+
+  it('5. a genuine explicit process stage (e.g. "inv_report") still wins outright, exactly as before — only the literal placeholder "open" falls through', () => {
+    const cs = { stage: 'inv_report', caseType: 'misconduct', meetings: [{ type: 'Disciplinary', record: 'x' }] };
+    expect(getCaseStage(cs)).toBe('inv_report');
+  });
+
+  it('6. outcome recorded (letter attached to the hearing), stage still "open" -> resolves to "outcome"', () => {
+    const cs = {
+      stage: 'open',
+      caseType: 'misconduct',
+      outcome: 'First written warning',
+      meetings: [{ type: 'Disciplinary', record: 'x', letterOutput: 'Following the hearing...', letterType: 'outcome' }],
+    };
+    expect(getCaseStage(cs)).toBe('outcome');
+  });
+
+  it('7. closed case with a historical disciplinary meeting does not regress — explicit "closed" still wins over everything, including this fix', () => {
+    const cs = { stage: 'closed', caseType: 'misconduct', meetings: [{ type: 'Disciplinary', record: 'x', letterOutput: 'x', letterType: 'outcome' }] };
+    expect(getCaseStage(cs)).toBe('closed');
+  });
+
+  it('8. appealed case with a historical disciplinary meeting is not pulled backwards to "disciplinary", whether stage is "open" or the real explicit "appeal"', () => {
+    const meetings = [
+      { type: 'Disciplinary', record: 'x', letterOutput: 'x', letterType: 'outcome' },
+      { type: 'Appeal', record: 'the appeal hearing' },
+    ];
+    expect(getCaseStage({ stage: 'open', caseType: 'misconduct', meetings })).toBe('appeal');
+    expect(getCaseStage({ stage: 'appeal', caseType: 'misconduct', meetings })).toBe('appeal');
+  });
+
+  it('an "open" stage falls through identically for every other process type, not just misconduct', () => {
+    expect(getCaseStage({ stage: 'open', caseType: 'grievance', meetings: [] })).toBe('intake');
+    expect(getCaseStage({ stage: 'open', caseType: 'probation', meetings: [] })).toBe('probation_started');
+    expect(getCaseStage({ stage: 'open', caseType: 'flexible working', meetings: [] })).toBe('request_received');
+    expect(getCaseStage({ stage: 'open', caseType: 'long-term sickness', meetings: [] })).toBe('absence_identified');
+  });
+
+  it('"closed" is still checked ahead of the "open" fallback regardless of caseType', () => {
+    expect(getCaseStage({ stage: 'closed', caseType: 'probation', meetings: [] })).toBe('closed');
+  });
+});
+
 describe('getCaseStage — grievance-shaped cases', () => {
   it('infers "hearing" (not "investigation") for a grievance case with a grievance meeting, since ACAS S6 has no separate investigation split', () => {
     const cs = { caseType: 'grievance', meetings: [{ type: 'Grievance', record: 'notes' }] };
