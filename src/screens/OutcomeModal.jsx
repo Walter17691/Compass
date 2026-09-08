@@ -3,7 +3,29 @@ import { approvalActionForOutcome, approvalActionLabel } from '../lib/approvals'
 import { computeDecisionQualityGaps } from '../lib/decisionQuality';
 import { DecisionQualityCheckModal } from '../components/DecisionQualityCheckModal';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { isDisciplinaryMeeting, isGrievanceMeeting } from '../lib/meetingTypeMatch';
 import { COLOR, FONT } from '../styles/tokens';
+
+// Defect #11/#12/#13 remediation — every other handleLetter call site
+// (CaseViewScreen.jsx's disciplinary_invite/outcome_letter/appeal/no-
+// case-answer actions) sets caseInfo.employee/manager and reviewOutput
+// from the authoritative case + its own relevant hearing meeting
+// immediately before drafting a letter. This modal's own "Issue outcome
+// & generate letter" button was the one call site that never did either
+// — handleLetter's prompt got no explicit "Employee: X" fact and no
+// meeting-record context at all, so the AI fell back to the case's own
+// free-text description (which named a different real participant, a
+// reporting manager, in a way that read as if they were the case
+// subject) and had no source for the hearing's actual decided warning
+// duration or hearing manager name, filling both with generic guesses.
+// Mirrors CaseViewScreen's own relevantMeeting() (a local, unexported
+// closure there) rather than importing it, since it's this small and
+// this modal has no other reason to depend on that file.
+function findOutcomeRelevantMeeting(cs) {
+  const meetings = cs?.meetings || [];
+  const matching = meetings.filter(m => isDisciplinaryMeeting(m.type) || isGrievanceMeeting(m.type));
+  return matching[matching.length - 1] || meetings[meetings.length - 1] || null;
+}
 
 // Process Intelligence (P9) — issuing the outcome itself is unchanged
 // (case saved, letter drafted); for
@@ -22,7 +44,7 @@ import { COLOR, FONT } from '../styles/tokens';
 // Intelligence's equivalent) since OutcomeModal is already a
 // self-contained modal, not a full screen orchestrated from App.jsx —
 // nothing else needs to know this check ran.
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask }) {
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, setCaseInfo, setReviewOutput }) {
   const cs = cases.find(x=>x.id===activeCaseId);
   const [showQualityCheck, setShowQualityCheck] = useState(false);
   const [qualityGaps, setQualityGaps] = useState([]);
@@ -75,7 +97,14 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
     }
     const approvalAction = approvalActionForOutcome(outcomeType);
     if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
-    setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");handleLetter("outcome");
+    setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");
+    // Defect #11/#12/#13 remediation — ground caseInfo/reviewOutput from
+    // the authoritative case and its own relevant hearing meeting before
+    // drafting the letter (see findOutcomeRelevantMeeting/comment above).
+    const meeting = findOutcomeRelevantMeeting(cs);
+    setCaseInfo(p=>({...p, employee:cs.employeeName, manager:cs.manager||"", date:meeting?.date||p.date}));
+    setReviewOutput(meeting?.record||"");
+    handleLetter("outcome");
   };
 
   const issueOutcome = () => {

@@ -11,7 +11,7 @@ const cs = { id: 'c1', employeeName: 'Sam Employee' };
 
 describe('OutcomeModal — field labelling (Phase 6.5, Batch 13)', () => {
   it('labels the outcome decision select and the notes field', () => {
-    render(<OutcomeModal cases={[cs]} activeCaseId="c1" setShowOutcomeModal={noop} outcomeType="" setOutcomeType={noop} outcomeNotes="" setOutcomeNotes={noop} saveCases={noop} showToast={noop} handleLetter={noop} startOffboarding={noop} requestHrReview={noop} allegations={[]} caseSignals={[]} requestOverrideReason={noop} createCaseTask={noop} />);
+    render(<OutcomeModal cases={[cs]} activeCaseId="c1" setShowOutcomeModal={noop} outcomeType="" setOutcomeType={noop} outcomeNotes="" setOutcomeNotes={noop} saveCases={noop} showToast={noop} handleLetter={noop} startOffboarding={noop} requestHrReview={noop} allegations={[]} caseSignals={[]} requestOverrideReason={noop} createCaseTask={noop} setCaseInfo={noop} setReviewOutput={noop} />);
     expect(screen.getByLabelText('Outcome decision')).toBeInTheDocument();
     expect(screen.getByLabelText(/Notes/)).toBeInTheDocument();
   });
@@ -31,7 +31,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
   const baseProps = {
     cases: [cs], activeCaseId: 'c1', setOutcomeType: noop, outcomeNotes: 'Documented rationale for this test.', setOutcomeNotes: noop,
     handleLetter: noop, startOffboarding: noop, requestHrReview: noop, allegations: [], caseSignals: [],
-    requestOverrideReason: noop, createCaseTask: noop,
+    requestOverrideReason: noop, createCaseTask: noop, setCaseInfo: noop, setReviewOutput: noop,
   };
 
   it('closes the modal and shows a success toast only once saveCases resolves { ok: true }', async () => {
@@ -161,5 +161,91 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     expect(setShowOutcomeModal).not.toHaveBeenCalled();
     resolveSave({ ok: true });
     await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
+  });
+});
+
+// UAT Golden Path remediation (Defect #11/#12/#13) — the actual root
+// cause: this modal's "Issue outcome & generate letter" button was the
+// only handleLetter call site in the app that never set caseInfo (or
+// reviewOutput) from the authoritative case + its hearing meeting before
+// drafting a letter, unlike CaseViewScreen.jsx's disciplinary_invite/
+// outcome_letter/appeal/no-case-answer actions, which all do this
+// immediately before their own handleLetter calls. With no explicit
+// "Employee: X" fact, the AI fell back to inferring the recipient from
+// the case's own free-text description — which named a different real
+// participant (a reporting manager) — producing an apparently-valid
+// letter addressed to the wrong person. These tests verify the fix:
+// caseInfo/reviewOutput are now grounded from cs/its hearing meeting
+// immediately before handleLetter fires.
+describe('OutcomeModal — grounds caseInfo/reviewOutput before drafting the outcome letter (Defect #11/#12/#13)', () => {
+  const goldenPathCase = {
+    id: 'c1',
+    employeeName: 'UAT - Test Employee (Golden Path)',
+    manager: 'Walter Carta',
+    description: "Allegation: repeated late arrival without notice. O'Brien-Test's manager (Site Lead) raised the concern.",
+    meetings: [
+      { id: 'm1', type: 'Investigation', date: '2026-09-07', record: 'Investigation record text.' },
+      { id: 'm2', type: 'Disciplinary', date: '2026-09-08', record: 'The panel decided a first written warning, to remain on file for six months.' },
+    ],
+  };
+  const groundingProps = {
+    cases: [goldenPathCase], activeCaseId: 'c1', setOutcomeType: noop,
+    outcomeNotes: 'Documented rationale for this test.', setOutcomeNotes: noop,
+    startOffboarding: noop, requestHrReview: noop, allegations: [], caseSignals: [],
+    requestOverrideReason: noop, createCaseTask: noop, saveCases: vi.fn().mockResolvedValue({ ok: true }),
+    setShowOutcomeModal: noop, showToast: noop,
+  };
+
+  it('sets caseInfo.employee to the case\'s real employeeName, never a name pulled from the case narrative', async () => {
+    const user = userEvent.setup();
+    const setCaseInfo = vi.fn();
+    render(<OutcomeModal {...groundingProps} outcomeType="First written warning" handleLetter={noop} setCaseInfo={setCaseInfo} setReviewOutput={noop} />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(setCaseInfo).toHaveBeenCalled());
+    const updater = setCaseInfo.mock.calls[0][0];
+    const result = updater({});
+    expect(result.employee).toBe('UAT - Test Employee (Golden Path)');
+    expect(result.employee).not.toMatch(/O'Brien-Test/);
+    expect(result.manager).toBe('Walter Carta');
+  });
+
+  it('sets reviewOutput to the relevant Disciplinary meeting\'s own record, grounding the AI on the real hearing decision (six months, not a guessed default)', async () => {
+    const user = userEvent.setup();
+    const setReviewOutput = vi.fn();
+    render(<OutcomeModal {...groundingProps} outcomeType="First written warning" handleLetter={noop} setCaseInfo={noop} setReviewOutput={setReviewOutput} />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(setReviewOutput).toHaveBeenCalledWith(expect.stringContaining('six months')));
+  });
+
+  it('grounds before calling handleLetter, so the AI request is never sent ungrounded', async () => {
+    const user = userEvent.setup();
+    const calls = [];
+    const setCaseInfo = () => calls.push('setCaseInfo');
+    const handleLetter = () => calls.push('handleLetter');
+    render(<OutcomeModal {...groundingProps} outcomeType="First written warning" handleLetter={handleLetter} setCaseInfo={setCaseInfo} setReviewOutput={noop} />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(calls).toContain('handleLetter'));
+    expect(calls.indexOf('setCaseInfo')).toBeLessThan(calls.indexOf('handleLetter'));
+  });
+
+  it('picks the most recent Disciplinary/Grievance meeting when several meetings exist, not just the last meeting overall', async () => {
+    const user = userEvent.setup();
+    const caseWithTrailingNote = {
+      ...goldenPathCase,
+      meetings: [...goldenPathCase.meetings, { id: 'm3', type: 'Informal check-in', date: '2026-09-09', record: 'Unrelated later note.' }],
+    };
+    const setReviewOutput = vi.fn();
+    render(<OutcomeModal {...groundingProps} cases={[caseWithTrailingNote]} outcomeType="First written warning" handleLetter={noop} setCaseInfo={noop} setReviewOutput={setReviewOutput} />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(setReviewOutput).toHaveBeenCalledWith(expect.stringContaining('six months')));
+  });
+
+  it('falls back to the last meeting overall when no Disciplinary/Grievance meeting exists', async () => {
+    const user = userEvent.setup();
+    const caseNoHearing = { ...goldenPathCase, meetings: [{ id: 'm1', type: 'Informal chat', date: '2026-09-01', record: 'Only an informal chat happened.' }] };
+    const setReviewOutput = vi.fn();
+    render(<OutcomeModal {...groundingProps} cases={[caseNoHearing]} outcomeType="First written warning" handleLetter={noop} setCaseInfo={noop} setReviewOutput={setReviewOutput} />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(setReviewOutput).toHaveBeenCalledWith('Only an informal chat happened.'));
   });
 });

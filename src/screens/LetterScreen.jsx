@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
 import { PageHeader } from '../components/design/PageHeader';
 import { COLOR, TYPE, FONT } from '../styles/tokens';
+import { validateFormalLetter } from '../lib/letterValidation';
 
 // UAT Product Hierarchy pass, Part 3 — this screen was the brief's own
 // flagship bad example: a bare tab row with no page identity, no case/
@@ -32,7 +33,7 @@ const OTHER_LETTER_LABELS = {
   "no-case-answer": "Response letter",
 };
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true, outcomeValue }) {
   const [showHistory, setShowHistory] = useState(false);
   // Phase 6.5 hardening (closes Prompt 16 audit finding H10, HIGH) — an
   // "Outcome letter" can be reached before any real outcome decision
@@ -48,7 +49,23 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
   // half of the same fix, so the block reads as an explained product
   // rule rather than a surprise error after the fact.
   const outcomeNotYetDecided = activeLetter==="outcome" && !outcomeRecorded;
-  const canIssue = letterIsApproved && !outcomeNotYetDecided;
+  // Defect #11/#12/#13 remediation — re-validated live against whatever
+  // text is actually in letterOutput right now (not just a frozen
+  // snapshot from the moment generation finished), so a user who hand-
+  // corrects a wrongly-addressed draft via "Edit letter" un-blocks
+  // save/send the moment their edit fixes it — this gate must never
+  // outlive a real fix, only a real problem. A letter can look complete
+  // (no aiError, non-empty text) while still failing this — e.g.
+  // addressed to the wrong person — so it's a distinct check from the
+  // existing outcomeNotYetDecided/approval gates, not a replacement for
+  // either.
+  const letterValidation = useMemo(
+    () => validateFormalLetter(letterOutput, {employeeName: caseInfo.employee, outcome: outcomeValue, letterType: activeLetter}),
+    [letterOutput, caseInfo.employee, outcomeValue, activeLetter]
+  );
+  const letterGroundingFailed = !letterValidation.valid;
+  const canIssue = letterIsApproved && !outcomeNotYetDecided && !letterGroundingFailed;
+  const cantIssueReason = letterGroundingFailed?"Fix the issues above before this draft can be used":outcomeNotYetDecided?"Record the outcome first":"Approve the letter first";
   const activeLetterLabel = LETTER_TYPES.find(lt=>lt.id===activeLetter)?.l || OTHER_LETTER_LABELS[activeLetter] || "Letter";
   return (
     <div>
@@ -137,6 +154,30 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
               </div>
             )}
 
+            {/* Defect #11/#12/#13 remediation — a formal letter that
+                fails validateFormalLetter's grounding checks (wrong/
+                missing recipient, wrong outcome) must never be
+                presentable as a normal, ready-to-approve draft — this is
+                a hard stop, not an "approve anyway" override like the
+                existing Decision Quality Check, because the underlying
+                problem is a factual error in a formal document, not a
+                procedural judgement call. Never shows the raw AI/
+                provider response — just what's wrong and what to do. */}
+            {letterGroundingFailed&&(
+              <div style={{background:"#FEF0EB",border:"1px solid #E8A08A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#B8341F",marginBottom:6}}>This draft needs review before it can be used</div>
+                <ul style={{margin:0,paddingLeft:18,fontSize:12,color:"#8A2A18"}}>
+                  {letterValidation.issues.map((issue,i)=>(<li key={i} style={{marginBottom:2}}>{issue}</li>))}
+                </ul>
+                <div style={{fontSize:12,color:"#8A2A18",marginTop:8}}>
+                  Downloading, sending, signing and saving are disabled for this draft. You can edit the text above to correct it, or regenerate.
+                </div>
+                <Btn variant="secondary" onClick={()=>handleLetter(activeLetter)} disabled={aiProcessing} style={{marginTop:10,fontSize:12,padding:"6px 14px"}}>
+                  {aiProcessing?"Regenerating...":"Regenerate"}
+                </Btn>
+              </div>
+            )}
+
             {/* AI-approval gate — this letter was drafted by AI and carries
                 real legal/financial weight once it reaches the employee, so
                 sending it requires an explicit human sign-off tied to this
@@ -179,15 +220,15 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                   lib/letterApproval.js's snapshot check above). The
                   underlying gate itself — approval required before
                   send/download — is unchanged. */}
-              <Btn variant={letterIsApproved?"ghost":"primary"} onClick={approveLetter} disabled={letterIsApproved} style={{fontSize:12,padding:"6px 14px",flexShrink:0}}>
+              <Btn variant={letterIsApproved?"ghost":"primary"} onClick={approveLetter} disabled={letterIsApproved||letterGroundingFailed} title={letterGroundingFailed?"Fix the issues above before this draft can be approved":undefined} style={{fontSize:12,padding:"6px 14px",flexShrink:0}}>
                 {letterIsApproved?"Already approved":"Approve for sending"}
               </Btn>
             </div>
 
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send via Gmail</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send via Outlook</Btn>
+              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
+              <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send via Gmail</Btn>
+              <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send via Outlook</Btn>
               {onSendFromCompass&&(
                 // Integrations & Workflow Automation (Phase 5, IP13, §7) —
                 // unlike "Send via Gmail/Outlook" above (download a PDF,
@@ -197,7 +238,7 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                 // the rest of the coordinated workflow — save a sent copy,
                 // add a timeline event, complete a matching task, log an
                 // audit event — as one action.
-                <Btn variant="secondary" onClick={onSendFromCompass} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send from Compass</Btn>
+                <Btn variant="secondary" onClick={onSendFromCompass} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send from Compass</Btn>
               )}
               {onSendForAcknowledgement&&(
                 // Integrations & Workflow Automation (Phase 5, IP27, §21) —
@@ -205,11 +246,18 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                 // receipt), this tracks whether the employee has actually
                 // opened and acknowledged the letter via the same
                 // signing_requests lifecycle meeting records already use.
-                <Btn variant="secondary" onClick={onSendForAcknowledgement} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Send for acknowledgement</Btn>
+                <Btn variant="secondary" onClick={onSendForAcknowledgement} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send for acknowledgement</Btn>
               )}
-              <Btn variant="ghost" onClick={()=>window.print()} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Print</Btn>
-              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!canIssue} title={canIssue?undefined:outcomeNotYetDecided?"Record the outcome first":"Approve the letter first"}>Copy text</Btn>
-              <Btn variant="dark" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}}>Save to case</Btn>
+              <Btn variant="ghost" onClick={()=>window.print()} disabled={!canIssue} title={canIssue?undefined:cantIssueReason}>Print</Btn>
+              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!canIssue} title={canIssue?undefined:cantIssueReason}>Copy text</Btn>
+              {/* Defect #11/#12/#13 remediation — this had no gate at all
+                  before: a letter that failed every other check above
+                  could still be permanently attached to the case via this
+                  one button. Only gated on letterGroundingFailed, not the
+                  full canIssue (outcomeNotYetDecided/approval are about
+                  readiness to issue externally, not about whether the
+                  draft is safe to keep as an internal record at all). */}
+              <Btn variant="dark" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}} disabled={letterGroundingFailed} title={letterGroundingFailed?cantIssueReason:undefined}>Save to case</Btn>
             </div>
 
             {letterHistory.length>0&&(

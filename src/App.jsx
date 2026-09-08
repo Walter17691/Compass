@@ -28,6 +28,7 @@ import {
 } from './lib/prepQuestions';
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
+import { validateFormalLetter } from './lib/letterValidation';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -7472,6 +7473,12 @@ Please produce:
       const data = await res.json();
       const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
       if(text) {
+        // Defect #11/#12/#13 remediation — verify the AI's own response
+        // actually reflects the deterministic facts it was given (chiefly:
+        // is this letter actually addressed to this case's employee?)
+        // before treating it as a valid, ready-for-review draft. See
+        // lib/letterValidation.js for what this does and doesn't check.
+        const validation = validateFormalLetter(text, {employeeName: caseInfo.employee, outcome: activeCase?.outcome, letterType: t});
         setLetterOutput(text); setLetterSources(letterSources);
         // UAT Product Hierarchy pass, Part 6 — generation can genuinely
         // outlive the user staying on this screen (this function isn't
@@ -7479,19 +7486,25 @@ Please produce:
         // announced through the app-level toast, not just by the draft
         // quietly appearing on a screen the user may have left.
         const letterTypeLabels = {outcome:"outcome letter",invite:"invitation letter",appeal:"appeal outcome letter",suspension:"suspension letter",["meeting-confirmation"]:"meeting confirmation letter",["witness-invitation"]:"witness invitation",["evidence-request"]:"evidence request",["oh-consent-request"]:"OH consent request",["no-case-answer"]:"response letter"};
-        showToast(`Your ${letterTypeLabels[t]||"letter"} is ready for review`, "success");
-        // Human UAT remediation, Batch 2, Part 14 — the toast above is
-        // exactly the "genuinely outlive the user staying on this screen"
-        // case this whole function's own comment already names, but a
-        // toast auto-dismisses in a few seconds; someone who actually took
-        // the invitation to "switch tabs or navigate elsewhere" could miss
-        // it entirely with no other record it ever finished. Reuses the
-        // existing Activity/audit substrate rather than a second,
-        // bespoke notification mechanism — excluded from the case Timeline
-        // itself (lib/caseTimeline.js) since a draft can be regenerated
-        // many times before being sent, and that already has its own
-        // "Letter drafted" entry sourced from the saved meeting record.
-        if(activeCaseId) audit("Letter drafted", letterTypeLabels[t]||"letter", activeCaseId);
+        if(!validation.valid) {
+          showToast(`This ${letterTypeLabels[t]||"letter"} needs review before it can be used — see the warning below`, "error");
+        } else {
+          showToast(`Your ${letterTypeLabels[t]||"letter"} is ready for review`, "success");
+          // Human UAT remediation, Batch 2, Part 14 — the toast above is
+          // exactly the "genuinely outlive the user staying on this screen"
+          // case this whole function's own comment already names, but a
+          // toast auto-dismisses in a few seconds; someone who actually took
+          // the invitation to "switch tabs or navigate elsewhere" could miss
+          // it entirely with no other record it ever finished. Reuses the
+          // existing Activity/audit substrate rather than a second,
+          // bespoke notification mechanism — excluded from the case Timeline
+          // itself (lib/caseTimeline.js) since a draft can be regenerated
+          // many times before being sent, and that already has its own
+          // "Letter drafted" entry sourced from the saved meeting record.
+          // Skipped on failed validation — an unusable draft isn't a real
+          // "letter drafted" event worth recording in the case's history.
+          if(activeCaseId) audit("Letter drafted", letterTypeLabels[t]||"letter", activeCaseId);
+        }
       }
       else { setAiError("Failed to generate letter. Please try again."); }
     } catch(e) { setAiError("Error: "+e.message); }
@@ -8841,7 +8854,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} outcomeValue={cases.find(x=>x.id===activeCaseId)?.outcome} />
       )}
 
       {/* ══ DASHBOARD ══ */}
@@ -9254,6 +9267,8 @@ Please produce:
           caseSignals={caseSignals}
           requestOverrideReason={requestOverrideReason}
           createCaseTask={createCaseTask}
+          setCaseInfo={setCaseInfo}
+          setReviewOutput={setReviewOutput}
         />
       )}
       </div>

@@ -208,6 +208,85 @@ describe('LetterScreen — field labelling (Phase 6.5, Batch 13)', () => {
   });
 });
 
+// UAT Golden Path remediation (Defect #11/#12/#13) — this is the safe-
+// failure half of the fix: even a correctly-grounded call site can't
+// guarantee the AI's own response always reflects it, so this screen re-
+// validates whatever text is actually in letterOutput right now (see its
+// own letterValidation useMemo) rather than trusting a one-time snapshot
+// from generation. A draft that fails must never be presentable as a
+// normal, ready-to-approve/send/save letter.
+describe('LetterScreen — formal-letter grounding gate (Defect #11/#12/#13)', () => {
+  const wrongPersonProps = {
+    ...baseProps,
+    activeLetter: 'outcome',
+    letterOutput: "Dear O'Brien-Test,\n\nOutcome: First written warning.",
+    caseInfo: { employee: 'UAT - Test Employee (Golden Path)', manager: 'Walter Carta' },
+    outcomeValue: 'First written warning',
+    outcomeRecorded: true,
+    letterIsApproved: false,
+  };
+
+  it('shows a clear warning banner naming the actual problem, with no raw AI/provider text', () => {
+    render(<LetterScreen {...wrongPersonProps} />);
+    expect(screen.getByText(/needs review before it can be used/i)).toBeInTheDocument();
+    // "O'Brien-Test" legitimately also appears in the raw letter body
+    // rendered above the banner — this just confirms the banner's own
+    // issue text mentions it too, not that it's the only occurrence.
+    expect(screen.getAllByText(/O'Brien-Test/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/JSON|SyntaxError|stack|position \d+/i)).not.toBeInTheDocument();
+  });
+
+  it('disables Download/Send/Print/Copy even when the letter would otherwise be approved and issuable', () => {
+    render(<LetterScreen {...wrongPersonProps} letterIsApproved={true} letterApproval={{ by: 'Jo', at: new Date().toISOString() }} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send via Gmail' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send via Outlook' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send from Compass' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Copy text' })).toBeDisabled();
+  });
+
+  it('disables "Approve for sending" itself, not just the actions after approval', () => {
+    render(<LetterScreen {...wrongPersonProps} />);
+    expect(screen.getByRole('button', { name: 'Approve for sending' })).toBeDisabled();
+  });
+
+  it('disables "Save to case" — an invalid draft must not be permanently attached to the case either', () => {
+    render(<LetterScreen {...wrongPersonProps} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
+  });
+
+  it('offers a Retry action that regenerates via handleLetter', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    render(<LetterScreen {...wrongPersonProps} handleLetter={handleLetter} />);
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    expect(handleLetter).toHaveBeenCalledWith('outcome');
+  });
+
+  it('does not show the grounding banner or block actions for a correctly-addressed letter', () => {
+    const correctProps = { ...wrongPersonProps, letterOutput: 'Dear UAT - Test Employee (Golden Path),\n\nOutcome: First written warning.', letterIsApproved: true, letterApproval: { by: 'Jo', at: new Date().toISOString() } };
+    render(<LetterScreen {...correctProps} />);
+    expect(screen.queryByText(/needs review before it can be used/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+  });
+
+  it('re-validates live: a manual edit that fixes the recipient un-blocks save/send without needing a fresh AI generation', () => {
+    const { rerender } = render(<LetterScreen {...wrongPersonProps} letterIsApproved={true} letterApproval={{ by: 'Jo', at: new Date().toISOString() }} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
+    rerender(<LetterScreen {...wrongPersonProps} letterOutput={'Dear UAT - Test Employee (Golden Path),\n\nOutcome: First written warning.'} letterIsApproved={true} letterApproval={{ by: 'Jo', at: new Date().toISOString() }} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+  });
+
+  it('does not apply the grounding gate to letter types that are not addressed to the case\'s own employee (e.g. witness invitation)', () => {
+    render(<LetterScreen {...wrongPersonProps} activeLetter="witness-invitation" letterIsApproved={true} letterApproval={{ by: 'Jo', at: new Date().toISOString() }} />);
+    expect(screen.queryByText(/needs review before it can be used/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+  });
+});
+
 // UAT Product Hierarchy pass, Part 3 — this screen was the brief's own bad
 // example: no page title, no case identity, only a buried "← Back". Now a
 // PageHeader names the letter type and the employee, and a single
