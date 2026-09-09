@@ -36,6 +36,60 @@ function isBracketedPlaceholder(value) {
   return /^\[.*\]$/.test((value || "").trim());
 }
 
+// Defect #19 remediation — semantic, wording-agnostic detection of an
+// unresolved employee-identity placeholder, rather than one fixed regex
+// tied to a single exact phrasing (the previous /\[\s*employee'?s?\s*name\s*\]/i
+// missed the AI's actual "[Employee Full Name]" output because of the
+// inserted word "Full"). Checks each bracketed span's own words rather
+// than the whole letter at once, so "[Appeal Officer Name and Job Title]"
+// or "[Company Name]" — genuinely different, out-of-scope placeholders
+// (see #13) — never match just because "name" appears somewhere in the
+// letter. A bracket counts as an employee-identity placeholder once its
+// own contents include both "employee" and "name" as whole words, in
+// either order, tolerating filler words ("full", "of") and a possessive
+// apostrophe (straight or curly) — covering every variant named in the
+// #19 remediation brief without hardcoding each one individually.
+function hasEmployeeIdentityPlaceholder(text) {
+  const brackets = (text || "").match(/\[[^\]]{0,60}\]/g) || [];
+  return brackets.some(b => {
+    const words = b
+      .toLowerCase()
+      .replace(/['’]s\b/g, "")
+      .replace(/[^a-z]+/g, " ")
+      .split(" ")
+      .filter(Boolean);
+    return words.includes("employee") && words.includes("name");
+  });
+}
+
+// Defect #18 remediation — semantic, wording-agnostic detection of an
+// unresolved warning-DURATION placeholder, replacing the previous
+// /\[\s*[\dXx]*\s*months?\s*\]/i, whose `*` (zero-or-more) quantifier
+// matched a bare "[Month]" — an entirely unrelated calendar-month
+// placeholder in the incident narrative — as if it were a duration
+// placeholder. Two independent shapes, both requiring at least one
+// digit/X character actually inside (or immediately preceding, for the
+// "[X] months" split form) the bracket, so a content-only word like
+// "Month" can never match on its own:
+//   - a count placeholder directly paired with "month(s)": [12 months],
+//     [X months], [XX months], [6 months], optionally "insert"-prefixed,
+//     or the same count split across the bracket boundary: [X] months.
+//   - a semantic duration-word placeholder with no count at all:
+//     [duration], [warning duration], [insert warning duration],
+//     [warning period], [number of months].
+// Deliberately still scoped to duration-shaped wording, not every
+// bracket in the letter — a bare [Month], [Date], [Date 1] etc. never
+// matches either shape, so this doesn't regress into #18's own bug in
+// the opposite direction (see the remediation's own "do not create a
+// generic square-brackets rule" instruction).
+function hasWarningDurationPlaceholder(text) {
+  const t = text || "";
+  const countPlaceholderRe = /\[\s*(?:insert\s+)?[\dXx]+\s*months?\s*\]/i;
+  const splitCountPlaceholderRe = /\[\s*[\dXx]+\s*\]\s*months?\b/i;
+  const semanticPlaceholderRe = /\[\s*(?:insert\s+)?(?:the\s+)?(?:warning\s+)?(?:duration|period)\s*\]|\[\s*number\s+of\s+months\s*\]/i;
+  return countPlaceholderRe.test(t) || splitCountPlaceholderRe.test(t) || semanticPlaceholderRe.test(t);
+}
+
 // Letter types genuinely addressed to the case's own employee. Witness
 // invitations and evidence requests go to a different, unrelated
 // recipient by design; an investigation report is an internal document,
@@ -61,19 +115,37 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
 
   if (employeeName) {
     const salutation = extractLetterSalutation(letterText);
+    let recipientIssueFlagged = false;
     if (!salutation) {
       issues.push("Could not find a recipient salutation (\"Dear ...,\") in the generated letter.");
-    } else if (!isBracketedPlaceholder(salutation)) {
+      recipientIssueFlagged = true;
+    } else if (isBracketedPlaceholder(salutation)) {
+      // Defect #19 remediation — a bracketed salutation can never
+      // deterministically "resolve to" the known employee regardless of
+      // its exact wording, so this no longer depends on recognising any
+      // specific placeholder phrasing: any "Dear [...]," is unresolved on
+      // its own terms. See hasEmployeeIdentityPlaceholder's own comment
+      // for the secondary, wording-based net below.
+      issues.push("Letter still contains an unresolved employee-name placeholder.");
+      recipientIssueFlagged = true;
+    } else {
       const normSalutation = normalizeName(salutation);
       const normEmployee = normalizeName(employeeName);
       const matches = !!normSalutation && !!normEmployee
         && (normSalutation.includes(normEmployee) || normEmployee.includes(normSalutation));
       if (!matches) {
         issues.push(`Letter is addressed to "${salutation}", not the case's employee ("${employeeName}").`);
+        recipientIssueFlagged = true;
       }
     }
-    if (/\[\s*employee'?s?\s*name\s*\]/i.test(letterText || "")) {
-      issues.push("Letter contains an unresolved [Employee Name] placeholder even though the employee's name is known.");
+    // Defense-in-depth: an employee-identity placeholder elsewhere in the
+    // letter (e.g. the address block above an otherwise-resolved-looking
+    // salutation) even when the salutation check above didn't already
+    // catch it. Skipped once the salutation check already flagged an
+    // issue, so a single root cause doesn't produce two near-duplicate
+    // messages in the banner.
+    if (!recipientIssueFlagged && hasEmployeeIdentityPlaceholder(letterText)) {
+      issues.push("Letter still contains an unresolved employee-name placeholder.");
     }
   }
 
@@ -106,8 +178,8 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
     if (mentionedDurations.some(n => n !== Number(warningDurationMonths))) {
       issues.push(`Letter states a warning duration other than the recorded ${warningDurationMonths} months.`);
     }
-    if (/\[\s*[\dXx]*\s*months?\s*\]/i.test(text)) {
-      issues.push("Letter contains an unresolved warning-duration placeholder even though the duration is known.");
+    if (hasWarningDurationPlaceholder(text)) {
+      issues.push("Letter still contains an unresolved warning-duration placeholder.");
     }
   }
 
