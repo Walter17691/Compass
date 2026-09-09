@@ -113,6 +113,7 @@ export function CaseViewScreen({
   const {
     showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,
     setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
+    setOutcomeType, setCompletingOutcomeDetails,
     aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
     openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
     changesSinceView, changesSummary, changesSummaryLoading,
@@ -756,7 +757,7 @@ export function CaseViewScreen({
             <ThemesTab cs={cs} organisationThemes={themesTab.organisationThemes} caseThemes={themesTab.caseThemes} suggestions={themesTab.themeSuggestions?.[cs.id]} suggesting={!!themesTab.themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={themesTab.onSuggestThemes} onConfirmSuggestion={themesTab.onConfirmThemeSuggestion} onDismissSuggestion={themesTab.onDismissThemeSuggestion} onAssignExisting={themesTab.onAssignExistingTheme} onRemove={themesTab.onRemoveTheme}/>
           )}
           {activeTab==="outcome"&&(
-            <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={canDecide}/>
+            <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={canDecide}/>
           )}
           {activeTab==="ai"&&(
             <AIAssistantTab cs={cs} chatHistory={aiTab.caseChatHistory[cs.id]||[]} chatInput={aiTab.caseChatInput} setChatInput={aiTab.setCaseChatInput} chatProcessing={aiTab.caseChatProcessing} sendChat={()=>aiTab.sendCaseChat(cs)} overview={aiTab.caseOverview[cs.id]} overviewLoading={!!aiTab.caseOverviewLoading[cs.id]} generateOverview={()=>aiTab.generateCaseOverview(cs)} overviewSources={aiTab.caseOverviewSources?.[cs.id]} onAskWhy={setWhySignal}/>

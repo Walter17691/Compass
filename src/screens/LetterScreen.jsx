@@ -33,7 +33,7 @@ const OTHER_LETTER_LABELS = {
   "no-case-answer": "Response letter",
 };
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true, outcomeValue }) {
+export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true, outcomeValue, warningDurationMonths, warningExpiresAt }) {
   const [showHistory, setShowHistory] = useState(false);
   // Phase 6.5 hardening (closes Prompt 16 audit finding H10, HIGH) — an
   // "Outcome letter" can be reached before any real outcome decision
@@ -60,8 +60,8 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
   // existing outcomeNotYetDecided/approval gates, not a replacement for
   // either.
   const letterValidation = useMemo(
-    () => validateFormalLetter(letterOutput, {employeeName: caseInfo.employee, outcome: outcomeValue, letterType: activeLetter}),
-    [letterOutput, caseInfo.employee, outcomeValue, activeLetter]
+    () => validateFormalLetter(letterOutput, {employeeName: caseInfo.employee, outcome: outcomeValue, letterType: activeLetter, warningDurationMonths, warningExpiresAt}),
+    [letterOutput, caseInfo.employee, outcomeValue, activeLetter, warningDurationMonths, warningExpiresAt]
   );
   const letterGroundingFailed = !letterValidation.valid;
   const canIssue = letterIsApproved && !outcomeNotYetDecided && !letterGroundingFailed;

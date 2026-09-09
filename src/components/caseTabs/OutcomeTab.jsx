@@ -1,5 +1,6 @@
 import { isGrievanceCase } from '../../lib/caseStage';
 import { getProcessType } from '../../lib/processStages';
+import { isWarningOutcome } from '../../lib/outcomeTypes';
 import { FONT } from '../../styles/tokens';
 
 // Phase 6.5 hardening (closes Prompt 16 audit finding H12, HIGH) — this
@@ -33,7 +34,19 @@ function isOutcomeReachable(cs, stage) {
 // its own tab now, so it reads the case's actual lifecycle stage
 // directly to decide what to show. "hearing" is grievance's equivalent
 // in-progress stage to disciplinary's "disciplinary".
-export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, canDecide }) {
+// Defect #12/#14 remediation — an outcome recorded before
+// outcome_issued_at/warning_duration_months existed (or one whose HR
+// user simply hadn't been asked for a duration yet, pre-remediation) has
+// outcome set but warningDurationMonths null. Distinct from
+// "reassessing whether the sanction should have been different" — this
+// never touches cs.outcome itself, so it's offered whenever a warning
+// outcome is missing its structured metadata, regardless of how it got
+// that way.
+function needsOutcomeDetailsCompletion(cs) {
+  return isWarningOutcome(cs.outcome) && !cs.warningDurationMonths;
+}
+
+export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcomeType, setCompletingOutcomeDetails, canDecide }) {
   const grievance = isGrievanceCase(cs);
   const reached = isOutcomeReachable(cs, stage);
 
@@ -46,11 +59,25 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, canDecide 
   }
 
   if (cs.outcome) {
+    const needsCompletion = needsOutcomeDetailsCompletion(cs);
     return (
       <div style={{background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:12,padding:"16px 20px"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#1A7A4A",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Outcome issued</div>
         <div style={{fontSize:14,fontWeight:600,color:"#1C1820",marginBottom:4}}>{cs.outcome}</div>
-        <div style={{fontSize:12,color:"#6B6375"}}>Issued {fmtDate(cs.outcomeDate)} · Appeal window: 5 working days from issue</div>
+        <div style={{fontSize:12,color:"#6B6375"}}>Issued {cs.outcomeIssuedAt?fmtDate(cs.outcomeIssuedAt):"date not recorded"} · Appeal window: 5 working days from issue</div>
+        {cs.warningDurationMonths&&(
+          <div style={{fontSize:12,color:"#6B6375",marginTop:2}}>Warning duration: {cs.warningDurationMonths} month{cs.warningDurationMonths===1?"":"s"}{cs.warningExpiresAt?` · Expires ${fmtDate(cs.warningExpiresAt)}`:""}</div>
+        )}
+        {needsCompletion&&(
+          canDecide ? (
+            <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #A8D5B5"}}>
+              <div style={{fontSize:12,color:"#1A7A4A",marginBottom:8}}>This warning is missing its duration — complete the outcome details to ground the formal letter and appeal/expiry tracking correctly.</div>
+              <button onClick={()=>{setOutcomeType(cs.outcome);setCompletingOutcomeDetails(true);setShowOutcomeModal(true);}} style={{fontSize:12,background:"none",border:"1px solid #1A7A4A",borderRadius:8,padding:"8px 16px",color:"#1A7A4A",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Complete outcome details</button>
+            </div>
+          ) : (
+            <div style={{fontSize:12,color:"#6B6375",marginTop:10}}>This warning is missing its duration — only HR or this case's Hearing Manager can complete it.</div>
+          )
+        )}
       </div>
     );
   }

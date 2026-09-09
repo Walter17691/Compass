@@ -441,6 +441,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [outcomeType, setOutcomeType] = useState("");
   const [outcomeNotes, setOutcomeNotes] = useState("");
+  // Defect #12/#14 remediation — true when OutcomeModal was opened via
+  // OutcomeTab's "Complete outcome details" action (an existing outcome
+  // missing structured warning/issue-date metadata) rather than its
+  // normal "Issue outcome" button. See OutcomeModal.jsx's own comments
+  // for why this needs to be a distinct, explicit flag rather than
+  // inferred from cs.outcome already being set — an appeal can
+  // legitimately re-open the normal issue flow on an already-decided
+  // case too, which is not the same thing as completing missing metadata.
+  const [completingOutcomeDetails, setCompletingOutcomeDetails] = useState(false);
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editLocation, setEditLocation] = useState("");
@@ -1250,7 +1259,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // across requests, or rows can be skipped or duplicated between
       // pages.
       const { data, error } = await fetchAllPages((from, to) => supabase.from('cases')
-        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority')
+        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority')
         .eq('org_id', org.id)
         .order('created_at', { ascending: false })
         .range(from, to));
@@ -1298,6 +1307,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         date_received: caseObj.dateReceived || null,
         urgency: caseObj.urgency || "normal",
         outcome: caseObj.outcome || "",
+        // Defect #12/#14 remediation — previously captured by OutcomeModal
+        // and silently discarded here (no columns existed). See
+        // supabase/warning_duration_outcome_metadata_2026-09-09.sql.
+        outcome_issued_at: caseObj.outcomeIssuedAt || null,
+        outcome_notes: caseObj.outcomeNotes || null,
+        warning_duration_months: caseObj.warningDurationMonths || null,
+        warning_expires_at: caseObj.warningExpiresAt || null,
         investigation_report: caseObj.investigationReport || null,
         investigation_report_date: caseObj.investigationReportDate || null,
         disciplinary_officer: caseObj.disciplinaryOfficer || null,
@@ -7418,6 +7434,12 @@ Please produce:
         activeCase?.description ? "Case description: "+activeCase.description : "",
         activeCase?.outcome ? "Outcome decision: "+activeCase.outcome : "",
         activeCase?.outcomeNotes ? "Outcome rationale recorded by HR: "+activeCase.outcomeNotes : "",
+        // Defect #12 remediation — deterministic, HR-entered facts (never
+        // AI-authored or inferred) so the letter states the real, recorded
+        // duration/expiry instead of guessing one. See lib/letterValidation.js
+        // for the corresponding post-generation check.
+        activeCase?.warningDurationMonths ? "Warning duration: "+activeCase.warningDurationMonths+" month"+(activeCase.warningDurationMonths===1?"":"s")+" (state this exact figure — do not use a different or placeholder duration)" : "",
+        activeCase?.warningExpiresAt ? "Warning expires: "+new Date(activeCase.warningExpiresAt).toLocaleDateString("en-GB") : "",
         meetingType?.label ? "Meeting type: "+meetingType.label : "",
         evidenceList ? "Evidence gathered:"+nl+evidenceList : "",
         prevMeetings ? "Previous meetings: "+prevMeetings : "",
@@ -7441,7 +7463,7 @@ Please produce:
 
       const letterInstructions = {
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. If the letter states a specific deadline (e.g. to confirm attendance or submit evidence), use a placeholder such as [X working days] rather than a specific number — ACAS does not mandate a fixed notice period for this letter type, so any specific day-count you're not given below would be invented, not real guidance. Follow ACAS Code of Practice.",
-        "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; any sanction imposed (e.g. [First Written Warning]) and its duration (e.g. [12 months], matching the uploaded policy's own stated duration where one is referenced below); where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal within 5 working days. Follow ACAS Code of Practice.",
+        "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; the sanction imposed, stated exactly as given in the outcome decision below (never invented or reworded to a different sanction); where the information below states a warning duration and/or expiry date, state that exact duration/date (never substitute a generic or example figure of your own) — where neither is given below, use a placeholder such as [X months] rather than guessing a number; where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal within 5 working days. Follow ACAS Code of Practice.",
         "appeal": "a formal appeal outcome letter. Include: grounds of appeal considered, outcome of the appeal, reasons, whether original decision is upheld or overturned, confirmation this is the final stage. Follow ACAS Code of Practice.",
         "investigation-report": "a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed (infer from meeting record), findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections.","no-case-answer": "a formal letter to the employee confirming no case to answer. Include: that an investigation has been completed, that no further action will be taken, that the matter is now closed, and that the record will be kept confidential. Warm but professional tone.","grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
         "warning": "a formal written warning letter. Include: nature of misconduct, previous warnings if any, expected improvement, review period, consequence of further misconduct, right of appeal. Follow ACAS Code of Practice.",
@@ -7478,7 +7500,7 @@ Please produce:
         // is this letter actually addressed to this case's employee?)
         // before treating it as a valid, ready-for-review draft. See
         // lib/letterValidation.js for what this does and doesn't check.
-        const validation = validateFormalLetter(text, {employeeName: caseInfo.employee, outcome: activeCase?.outcome, letterType: t});
+        const validation = validateFormalLetter(text, {employeeName: caseInfo.employee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt});
         setLetterOutput(text); setLetterSources(letterSources);
         // UAT Product Hierarchy pass, Part 6 — generation can genuinely
         // outlive the user staying on this screen (this function isn't
@@ -8779,6 +8801,7 @@ Please produce:
           header={{
             showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,
             setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
+            setOutcomeType, setCompletingOutcomeDetails,
             aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
             openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
             changesSinceView: changesSinceView[activeCaseId], changesSummary: changesSummary[activeCaseId],
@@ -8854,7 +8877,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} outcomeValue={cases.find(x=>x.id===activeCaseId)?.outcome} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} outcomeValue={cases.find(x=>x.id===activeCaseId)?.outcome} warningDurationMonths={cases.find(x=>x.id===activeCaseId)?.warningDurationMonths} warningExpiresAt={cases.find(x=>x.id===activeCaseId)?.warningExpiresAt} />
       )}
 
       {/* ══ DASHBOARD ══ */}
@@ -9269,6 +9292,9 @@ Please produce:
           createCaseTask={createCaseTask}
           setCaseInfo={setCaseInfo}
           setReviewOutput={setReviewOutput}
+          audit={audit}
+          completingOutcomeDetails={completingOutcomeDetails}
+          setCompletingOutcomeDetails={setCompletingOutcomeDetails}
         />
       )}
       </div>

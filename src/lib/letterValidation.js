@@ -53,7 +53,7 @@ export const EMPLOYEE_DIRECTED_LETTER_TYPES = [
 // compose. Never invents a missing fact to "fix" a check — an unresolved
 // [placeholder] for something Compass genuinely doesn't hold structured
 // data for (e.g. company address) is not flagged here.
-export function validateFormalLetter(letterText, { employeeName, outcome, letterType } = {}) {
+export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt } = {}) {
   const issues = [];
   if (!EMPLOYEE_DIRECTED_LETTER_TYPES.includes(letterType)) {
     return { valid: true, issues };
@@ -81,6 +81,52 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
     const hasOutcome = (letterText || "").toLowerCase().includes(outcome.toLowerCase());
     if (!hasOutcome) {
       issues.push(`Letter does not appear to state the recorded outcome ("${outcome}").`);
+    }
+  }
+
+  // Defect #12 remediation — deterministic warning-duration/expiry
+  // checks. Only runs for outcome letters where a structured duration is
+  // actually recorded (non-warning outcomes, and warnings decided before
+  // this remediation existed, correctly have nothing to check here — see
+  // OutcomeTab's own "Complete outcome details" path for the latter).
+  if (letterType === "outcome" && warningDurationMonths) {
+    const text = letterText || "";
+    const correctDurationRe = new RegExp(`\\b${warningDurationMonths}\\s*months?\\b`, "i");
+    if (!correctDurationRe.test(text)) {
+      issues.push(`Letter does not state the recorded warning duration ("${warningDurationMonths} months").`);
+    }
+    // A stray different duration mentioned near warning/duration wording
+    // (e.g. the model reverting to a generic "12 months" example) even
+    // if the correct figure also happens to appear elsewhere. Proximity-
+    // scoped to warning-ish wording rather than any "N months" anywhere,
+    // since a letter can legitimately mention unrelated month figures
+    // (e.g. length of service).
+    const warningContextRe = /(?:remain|active|period|duration|warning|file|record)[^.]{0,60}?(\d{1,3})\s*months?/gi;
+    const mentionedDurations = [...text.matchAll(warningContextRe)].map(m => Number(m[1]));
+    if (mentionedDurations.some(n => n !== Number(warningDurationMonths))) {
+      issues.push(`Letter states a warning duration other than the recorded ${warningDurationMonths} months.`);
+    }
+    if (/\[\s*[\dXx]*\s*months?\s*\]/i.test(text)) {
+      issues.push("Letter contains an unresolved warning-duration placeholder even though the duration is known.");
+    }
+  }
+
+  if (letterType === "outcome" && warningExpiresAt) {
+    const text = letterText || "";
+    const expiryMentionIdx = text.search(/expir/i);
+    if (expiryMentionIdx !== -1) {
+      const window = text.slice(Math.max(0, expiryMentionIdx - 80), expiryMentionIdx + 80);
+      const expiry = new Date(warningExpiresAt);
+      const correctYear = String(expiry.getFullYear());
+      const correctMonthLong = expiry.toLocaleDateString("en-GB", {month: "long"});
+      const correctMonthShort = expiry.toLocaleDateString("en-GB", {month: "short"});
+      const correctSlashMonth = `/${String(expiry.getMonth() + 1).padStart(2, "0")}/`;
+      const mentionsCorrectDate = window.includes(correctYear)
+        && (window.toLowerCase().includes(correctMonthLong.toLowerCase()) || window.toLowerCase().includes(correctMonthShort.toLowerCase()) || window.includes(correctSlashMonth));
+      const mentionsAnyDate = /\d{1,2}\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)|\d{1,2}\/\d{1,2}\/\d{2,4}/i.test(window);
+      if (mentionsAnyDate && !mentionsCorrectDate) {
+        issues.push(`Letter appears to state an expiry date other than the recorded ${expiry.toLocaleDateString("en-GB")}.`);
+      }
     }
   }
 

@@ -35,7 +35,7 @@ describe('buildCaseContext', () => {
   });
 
   it('includes the investigation report and outcome when present', () => {
-    const cs = { ...baseCase, investigationReport: 'Findings: substantiated.', outcome: 'Final written warning', outcomeDate: '2026-08-10' };
+    const cs = { ...baseCase, investigationReport: 'Findings: substantiated.', outcome: 'Final written warning', outcomeIssuedAt: '2026-08-10' };
     const ctx = buildCaseContext(cs, [], []);
     expect(ctx).toContain('Findings: substantiated.');
     expect(ctx).toContain('OUTCOME ISSUED: Final written warning on 2026-08-10');

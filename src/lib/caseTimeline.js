@@ -83,7 +83,12 @@ function rawEntries(cs, allegations, auditLog) {
   }
 
   if (cs.outcome) {
-    entries.push({ key: "outcome", date: cs.outcomeDate || cs.dateReceived, type: "outcome", description: `Outcome issued: ${cs.outcome}`, actor: null, linkTo: { kind: "outcome" }, allegationId: null });
+    // Defect #14 remediation — outcomeIssuedAt is now actually persisted
+    // (see supabase/warning_duration_outcome_metadata_2026-09-09.sql);
+    // dateReceived remains the fallback only for outcomes recorded before
+    // that column existed, exactly as it already was for the discarded
+    // outcomeDate field this replaces.
+    entries.push({ key: "outcome", date: cs.outcomeIssuedAt || cs.dateReceived, type: "outcome", description: `Outcome issued: ${cs.outcome}`, actor: null, linkTo: { kind: "outcome" }, allegationId: null });
   }
 
   (allegations || []).filter(a => a.caseId === cs.id).forEach(a => {

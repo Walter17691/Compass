@@ -95,7 +95,7 @@ export function buildCaseContext(cs, allegations = [], tasks = [], meetingSummar
   }
 
   if (cs.investigationReport) parts.push("INVESTIGATION REPORT:\n" + cs.investigationReport.slice(0, 2000));
-  if (cs.outcome) parts.push(`OUTCOME ISSUED: ${cs.outcome}${cs.outcomeDate ? " on " + cs.outcomeDate : ""}`);
+  if (cs.outcome) parts.push(`OUTCOME ISSUED: ${cs.outcome}${cs.outcomeIssuedAt ? " on " + cs.outcomeIssuedAt : ""}`);
 
   const openTasks = tasks.filter(t => t.status !== "done");
   if (openTasks.length) parts.push("OPEN TASKS:\n" + openTasks.map(t => `- ${t.name}${t.dueDate ? " (due " + t.dueDate + ")" : ""}`).join("\n"));

@@ -14,6 +14,15 @@ function outcomeLetterAddressedTo(name, { outcome = 'First written warning' } = 
   return `[Company Name]\n\n8 September 2026\n\nPrivate and Confidential\n\nDear ${name},\n\nOutcome of Disciplinary Hearing\n\nI am writing to confirm the outcome of the disciplinary hearing. The sanction imposed is: ${outcome}. This warning will remain on your file for 6 months. You have the right to appeal within 5 working days.\n\nYours sincerely,\n[Hearing Manager Name]`;
 }
 
+// Defect #12 remediation — a variant with the duration/expiry sentence
+// fully controllable, for the warning-duration-specific checks below
+// (outcomeLetterAddressedTo above always hardcodes "6 months", which
+// isn't useful for testing what happens when the stated duration is
+// wrong, missing, or an unresolved placeholder).
+function outcomeLetterWithDuration(name, { outcome = 'First written warning', durationSentence = '', expirySentence = '' } = {}) {
+  return `[Company Name]\n\n8 September 2026\n\nDear ${name},\n\nThe sanction imposed is: ${outcome}. ${durationSentence} ${expirySentence} You have the right to appeal within 5 working days.\n\nYours sincerely,\n[Hearing Manager Name]`;
+}
+
 describe('extractLetterSalutation', () => {
   it('extracts the name from a "Dear X," salutation', () => {
     expect(extractLetterSalutation('Private and Confidential\n\nDear Jane Smith,\n\nBody...')).toBe('Jane Smith');
@@ -130,6 +139,89 @@ describe('validateFormalLetter — letter-type scope', () => {
       const result = validateFormalLetter(wrongLetter, {employeeName: goldenPathEmployee, outcome: '', letterType});
       expect(result.valid, `expected ${letterType} to be validated`).toBe(false);
     }
+  });
+});
+
+// UAT Golden Path remediation (Defect #12) — the exact production
+// scenario: employee "UAT - Test Employee (Golden Path)", hearing
+// decision of "First written warning" with a real 6-month duration
+// (warning_duration_months=6), letter incorrectly generated a bare
+// "[12 months]" placeholder. Every scenario the remediation's own test
+// plan named explicitly.
+describe('validateFormalLetter — warning duration (Defect #12, Golden Path fixture)', () => {
+  const employeeName = goldenPathEmployee;
+  const outcome = 'First written warning';
+  const warningDurationMonths = 6;
+  const warningExpiresAt = '2027-03-07'; // 2026-09-07 + 6 calendar months
+
+  it('the recorded 6-month duration, correctly stated, is valid', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome, durationSentence: 'This warning will remain active on your file for a period of 6 months.'});
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths});
+    expect(result.valid).toBe(true);
+  });
+
+  it('a stated 12 months cannot pass validation when the recorded duration is 6', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome, durationSentence: 'This warning will remain active on your file for a period of 12 months.'});
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths});
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => /12 months|6 months/.test(i))).toBe(true);
+  });
+
+  it('an unresolved "[12 months]" placeholder cannot pass validation even though a duration is recorded', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome, durationSentence: 'This warning will remain active on your file for a period of [12 months].'});
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths});
+    expect(result.valid).toBe(false);
+  });
+
+  it('an unresolved generic "[X months]" placeholder cannot pass validation either', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome, durationSentence: 'This warning will remain active on your file for a period of [X months].'});
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths});
+    expect(result.valid).toBe(false);
+  });
+
+  it('omitting the duration entirely cannot pass validation when a duration is recorded', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome, durationSentence: 'This warning will remain active on your file.'});
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths});
+    expect(result.valid).toBe(false);
+  });
+
+  it('the correct calculated expiry date, stated, is valid', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome,
+      durationSentence: 'This warning will remain active on your file for a period of 6 months,',
+      expirySentence: 'and will expire on 07 March 2027.',
+    });
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths, warningExpiresAt});
+    expect(result.valid).toBe(true);
+  });
+
+  it('a wrong stated expiry date cannot pass validation', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome,
+      durationSentence: 'This warning will remain active on your file for a period of 6 months,',
+      expirySentence: 'and will expire on 07 September 2027.',
+    });
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths, warningExpiresAt});
+    expect(result.valid).toBe(false);
+  });
+
+  it('does not check duration/expiry at all when no structured duration is recorded (e.g. a historical case awaiting completion)', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome, durationSentence: 'This warning will remain active on your file for a period of [X months].'});
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths: null, warningExpiresAt: null});
+    expect(result.valid).toBe(true);
+  });
+
+  it('does not require a warning duration for a non-warning outcome', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome: 'No further action', durationSentence: ''});
+    const result = validateFormalLetter(letter, {employeeName, outcome: 'No further action', letterType: 'outcome', warningDurationMonths: null});
+    expect(result.valid).toBe(true);
+  });
+
+  it('a letter mentioning an unrelated month figure (e.g. length of service) does not falsely trigger the wrong-duration check', () => {
+    const letter = outcomeLetterWithDuration(employeeName, {outcome,
+      durationSentence: 'This warning will remain active on your file for a period of 6 months.',
+      expirySentence: 'You have been employed here for 18 months prior to this hearing.',
+    });
+    const result = validateFormalLetter(letter, {employeeName, outcome, letterType: 'outcome', warningDurationMonths});
+    expect(result.valid).toBe(true);
   });
 });
 

@@ -45,7 +45,7 @@ describe('buildCaseTimeline', () => {
   });
 
   it('includes an investigation report entry and an outcome entry when present', () => {
-    const cs = { ...baseCase, investigationReport: 'text', investigationReportDate: '2026-08-04', outcome: 'Final written warning', outcomeDate: '2026-08-06' };
+    const cs = { ...baseCase, investigationReport: 'text', investigationReportDate: '2026-08-04', outcome: 'Final written warning', outcomeIssuedAt: '2026-08-06' };
     const result = buildCaseTimeline(cs, [], []);
     expect(result.find(e => e.type === 'report')).toMatchObject({ description: 'Investigation report generated' });
     expect(result.find(e => e.type === 'outcome')).toMatchObject({ description: 'Outcome issued: Final written warning' });
@@ -79,7 +79,7 @@ describe('buildCaseTimeline', () => {
       ...baseCase,
       dateReceived: '2026-08-05',
       meetings: [{ id: 'm1', type: 'Investigation meeting', date: '2026-08-01' }],
-      outcome: 'Dismissal', outcomeDate: '2026-08-10',
+      outcome: 'Dismissal', outcomeIssuedAt: '2026-08-10',
     };
     const result = buildCaseTimeline(cs, [], []);
     const dates = result.map(e => e.date);

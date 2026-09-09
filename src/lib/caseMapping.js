@@ -15,6 +15,13 @@ export function mapCaseRow(row) {
     dateReceived: row.date_received || "",
     urgency: row.urgency || "normal",
     outcome: row.outcome || "",
+    // Defect #12/#14 remediation — these four were previously captured
+    // by OutcomeModal but never persisted (no columns existed); see
+    // supabase/warning_duration_outcome_metadata_2026-09-09.sql.
+    outcomeIssuedAt: row.outcome_issued_at || null,
+    outcomeNotes: row.outcome_notes || "",
+    warningDurationMonths: row.warning_duration_months || null,
+    warningExpiresAt: row.warning_expires_at || null,
     investigationReport: row.investigation_report || null,
     investigationReportDate: row.investigation_report_date || null,
     disciplinaryOfficer: row.disciplinary_officer || null,

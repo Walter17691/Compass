@@ -311,3 +311,38 @@ describe('LetterScreen — page identity (UAT Product Hierarchy pass, Part 3)', 
     expect(screen.getByText(/navigate elsewhere/i)).toBeInTheDocument();
   });
 });
+
+// UAT Golden Path remediation (Defect #12) — the grounding gate (already
+// proven for wrong-recipient in the describe block above) extended to
+// warning duration/expiry. Same mechanism, same live re-validation —
+// tested separately here so a regression specific to duration wiring
+// (warningDurationMonths/warningExpiresAt props not reaching
+// validateFormalLetter) shows up distinctly from a recipient regression.
+describe('LetterScreen — warning duration grounding gate (Defect #12)', () => {
+  const warningLetterProps = {
+    ...baseProps,
+    activeLetter: 'outcome',
+    caseInfo: { employee: 'UAT - Test Employee (Golden Path)', manager: 'Walter Carta' },
+    outcomeValue: 'First written warning',
+    outcomeRecorded: true,
+    warningDurationMonths: 6,
+    warningExpiresAt: '2027-03-07',
+    letterIsApproved: true,
+    letterApproval: { by: 'Jo', at: new Date().toISOString() },
+  };
+
+  it('blocks a letter stating the wrong duration ([12 months] instead of the recorded 6)', () => {
+    const letterOutput = "Dear UAT - Test Employee (Golden Path),\n\nOutcome: First written warning. This warning will remain active on your file for a period of [12 months].";
+    render(<LetterScreen {...warningLetterProps} letterOutput={letterOutput} />);
+    expect(screen.getByText(/needs review before it can be used/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+  });
+
+  it('allows a letter stating the correct 6-month duration', () => {
+    const letterOutput = "Dear UAT - Test Employee (Golden Path),\n\nOutcome: First written warning. This warning will remain active on your file for a period of 6 months.";
+    render(<LetterScreen {...warningLetterProps} letterOutput={letterOutput} />);
+    expect(screen.queryByText(/needs review before it can be used/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+  });
+});
