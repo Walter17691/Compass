@@ -70,6 +70,22 @@ function disciplinaryNextStep(cs, stage) {
       if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", meetingType:"disciplinary", primary:true, reason:"ACAS Code: confirm the decision in writing, normally within 5 working days of the hearing."};
       return {label:"Outcome issued — close or appeal", action:"post_outcome", meetingType:"disciplinary", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
     case "outcome":
+      // Defect #17 remediation — "outcome" stage is now reached as soon as
+      // cs.outcome is decided (caseStage.js's inferDisciplinaryStage), which
+      // can happen before its formal letter has ever been drafted or saved
+      // (OutcomeModal's finalizeOutcome sets cs.outcome and opens a letter
+      // draft, but nothing requires that draft to be saved before HR moves
+      // on). Previously this branch assumed "outcome" stage could only ever
+      // mean a saved letter already existed (the only way to reach it used
+      // to be a saved letter itself, via hasLetterType) and went straight to
+      // "Close case" unconditionally — which, combined with "disciplinary"
+      // stage checking hearing-signature before its own outcome-letter
+      // check, left no reachable next-step suggestion at all for a decided-
+      // but-undocumented outcome. hasDiscOutcome (defined above from the
+      // same discMeetings/hasLetterType check "disciplinary" stage already
+      // used) now gates the same way here: draft the letter first if it's
+      // missing, only offer to close once it's actually been saved.
+      if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", meetingType:"disciplinary", primary:true, reason:"ACAS Code: confirm the decision in writing, normally within 5 working days of the hearing."};
       return {label:"Close case", action:"close_case", meetingType:"disciplinary", primary:true, reason:"Outcome has been issued and no appeal is in progress."};
     case "appeal":
       if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-disciplinary", primary:true, reason:"An appeal has been raised but not yet heard."};
@@ -103,6 +119,11 @@ function grievanceNextStep(cs, stage) {
       if(!hasHearingOutcome) return {label:"Draft grievance outcome letter", action:"outcome_letter", meetingType:"grievance", primary:true, reason:"ACAS Code: confirm the outcome in writing without unreasonable delay."};
       return {label:"Outcome issued — close or appeal", action:"post_outcome", meetingType:"grievance", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
     case "outcome":
+      // Defect #17 remediation — same fix as disciplinaryNextStep's own
+      // "outcome" branch above, for the same reason (a grievance decision
+      // can now reach "outcome" stage via cs.outcome alone, before its
+      // letter has been saved).
+      if(!hasHearingOutcome) return {label:"Draft grievance outcome letter", action:"outcome_letter", meetingType:"grievance", primary:true, reason:"ACAS Code: confirm the outcome in writing without unreasonable delay."};
       return {label:"Close case", action:"close_case", meetingType:"grievance", primary:true, reason:"Outcome has been issued and no appeal is in progress."};
     case "appeal":
       if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-grievance", primary:true, reason:"An appeal has been raised but not yet heard."};

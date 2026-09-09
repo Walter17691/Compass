@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getNextStep } from '../lib/nextStep.js';
+import { getCaseStage } from '../lib/caseStage.js';
 
 describe('getNextStep', () => {
   it('returns null for a closed case', () => {
@@ -114,9 +115,162 @@ describe('getNextStep', () => {
     });
   });
 
-  it('recommends closing the case at the outcome stage', () => {
+  // Defect #17 remediation — "outcome" stage no longer implies a saved
+  // letter already exists (see caseStage.js's inferDisciplinaryStage,
+  // which now reaches "outcome" from cs.outcome alone). With zero
+  // meetings there is definitely no saved outcome letter, so the correct
+  // recommendation is to draft one, not to close the case with no written
+  // confirmation ever having been issued to the employee.
+  it('recommends drafting the outcome letter at the outcome stage when none has been saved yet', () => {
     const step = getNextStep({ stage: 'outcome', meetings: [] });
+    expect(step.action).toBe('outcome_letter');
+  });
+
+  it('recommends closing the case at the outcome stage once the letter has actually been saved', () => {
+    const step = getNextStep({
+      stage: 'outcome',
+      meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: '...', letterType: 'outcome' }],
+    });
     expect(step.action).toBe('close_case');
+  });
+
+  // Defect #17 remediation — full state matrix (Scenarios A-J from the
+  // remediation report), run through the real getCaseStage(cs) -> getNextStep(cs)
+  // pipeline together, not a hand-picked literal `stage`, since the actual
+  // bug was in how the two functions' assumptions interacted — a case
+  // with cs.stage still "open" (the untouched lifecycle placeholder every
+  // real case starts with — see caseStage.js's Defect #8 comment).
+  describe('Defect #17 — full state matrix (getCaseStage + getNextStep together)', () => {
+    const openCase = (overrides = {}) => ({ stage: 'open', caseType: 'misconduct', meetings: [], ...overrides });
+
+    // A. Disciplinary hearing completed, no outcome, hearing unsigned.
+    it('A. hearing held and unsigned, no outcome yet -> send hearing record for signature', () => {
+      const cs = openCase({ meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: null }] });
+      expect(getCaseStage(cs)).toBe('disciplinary');
+      expect(getNextStep(cs).action).toBe('send_signature');
+    });
+
+    // B. Disciplinary hearing completed, no outcome, hearing signed.
+    it('B. hearing held and signed, no outcome yet -> draft outcome letter (pre-decision Copilot suggestion, unchanged)', () => {
+      const cs = openCase({ meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: 'signed' }] });
+      expect(getCaseStage(cs)).toBe('disciplinary');
+      expect(getNextStep(cs).action).toBe('outcome_letter');
+    });
+
+    // C. Outcome issued, no outcome letter, hearing unsigned — THE Defect
+    // #17 reproduction case (Golden Path's exact shape).
+    it('C. outcome issued, no letter saved, hearing unsigned -> outcome letter reachable, not stuck on signature', () => {
+      const cs = openCase({
+        outcome: 'First written warning',
+        meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: null }],
+      });
+      expect(getCaseStage(cs)).toBe('outcome');
+      expect(getNextStep(cs).action).toBe('outcome_letter');
+    });
+
+    // D. Outcome issued, no outcome letter, hearing signed.
+    it('D. outcome issued, no letter saved, hearing signed -> outcome letter reachable', () => {
+      const cs = openCase({
+        outcome: 'First written warning',
+        meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: 'signed' }],
+      });
+      expect(getCaseStage(cs)).toBe('outcome');
+      expect(getNextStep(cs).action).toBe('outcome_letter');
+    });
+
+    // E. Outcome issued, letter saved, hearing unsigned — the decision's
+    // own existence must not be hidden just because a document-level
+    // acknowledgement (hearing signature) never happened.
+    it('E. outcome issued, letter saved, hearing unsigned -> close or appeal, unsigned hearing does not block this', () => {
+      const cs = openCase({
+        outcome: 'First written warning',
+        meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: null, letterOutput: 'the letter', letterType: 'outcome' }],
+      });
+      expect(getCaseStage(cs)).toBe('outcome');
+      expect(getNextStep(cs).action).toBe('close_case');
+    });
+
+    // F. Outcome issued, letter saved, hearing signed.
+    it('F. outcome issued, letter saved, hearing signed -> close or appeal', () => {
+      const cs = openCase({
+        outcome: 'First written warning',
+        meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: 'signed', letterOutput: 'the letter', letterType: 'outcome' }],
+      });
+      expect(getCaseStage(cs)).toBe('outcome');
+      expect(getNextStep(cs).action).toBe('close_case');
+    });
+
+    // G. Outcome letter sent/acknowledgement pending — sending/acknowledgement
+    // status lives on the meeting/signing-request records, not on stage;
+    // once the letter is saved (letterOutput set, regardless of whether it
+    // has since been sent for acknowledgement), stage/next-step read the
+    // same as F. Nothing in this remediation introduces a third
+    // "sent, awaiting acknowledgement" stage.
+    it('G. outcome letter saved and already sent for acknowledgement -> same as F, stage does not regress while awaiting acknowledgement', () => {
+      const cs = openCase({
+        outcome: 'First written warning',
+        meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: 'signed', letterOutput: 'the letter', letterType: 'outcome' }],
+      });
+      expect(getCaseStage(cs)).toBe('outcome');
+      expect(getNextStep(cs).action).toBe('close_case');
+    });
+
+    // H. Closed case — historical unsigned meetings must never pull a
+    // closed case backward.
+    it('H. case explicitly closed -> stays closed regardless of unsigned historical meetings', () => {
+      const cs = { stage: 'closed', caseType: 'misconduct', outcome: 'First written warning', meetings: [{ type: 'Disciplinary', record: 'x', signStatus: null }] };
+      expect(getCaseStage(cs)).toBe('closed');
+      expect(getNextStep(cs)).toBeNull();
+    });
+
+    // I. Appealed case — appeal stays authoritative, not pulled backward by
+    // an unsigned historical disciplinary hearing record.
+    it('I. case appealed -> appeal stays authoritative, not pulled back to "disciplinary" by an unsigned original hearing', () => {
+      const cs = openCase({
+        outcome: 'First written warning',
+        meetings: [
+          { type: 'Disciplinary', record: 'x', signStatus: null, letterOutput: 'the letter', letterType: 'outcome' },
+          { type: 'Appeal', record: null },
+        ],
+      });
+      expect(getCaseStage(cs)).toBe('appeal');
+      expect(getNextStep(cs).action).toBe('start_appeal_meeting');
+    });
+
+    // J. No outcome, but a letter artifact exists on a meeting that was
+    // never actually saved as one (no letterOutput at all — an ephemeral,
+    // unsaved AI draft never reaches this far; see App.jsx's
+    // saveMeetingToCase, the only place letterOutput is ever written).
+    // This must not fabricate a decision that was never made.
+    it('J. no outcome, no saved letter artifact -> does not fabricate a decision; case stays at its real pre-decision stage', () => {
+      const cs = openCase({ meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: 'signed' }] });
+      expect(cs.outcome).toBeFalsy();
+      expect(getCaseStage(cs)).toBe('disciplinary');
+      expect(getNextStep(cs).action).toBe('outcome_letter');
+    });
+
+    // The exact Golden Path production fixture (case
+    // fff06d56-c3bb-4627-92f9-c7066d74b295) as it stood when Defect #17
+    // was discovered: stage="open", outcome decided and fully detailed,
+    // disciplinary meeting recorded but never signed, no letter ever saved.
+    it('Golden Path fixture: getCaseStage resolves to "outcome" and the outcome letter is reachable with no signature send and no re-issue required', () => {
+      const goldenPath = {
+        stage: 'open',
+        caseType: 'misconduct',
+        outcome: 'First written warning',
+        outcomeIssuedAt: '2026-09-07T00:00:00.000Z',
+        warningDurationMonths: 6,
+        warningExpiresAt: '2027-03-07',
+        meetings: [
+          { type: 'Investigation', record: 'the investigation record', signStatus: null, letterOutput: null, letterType: null },
+          { type: 'Disciplinary', record: 'the disciplinary hearing record', signStatus: null, letterOutput: null, letterType: null },
+        ],
+      };
+      expect(getCaseStage(goldenPath)).toBe('outcome');
+      const step = getNextStep(goldenPath);
+      expect(step.action).toBe('outcome_letter');
+      expect(step.label).toBe('Draft outcome letter');
+    });
   });
 
   describe('appeal stage', () => {
@@ -213,8 +367,15 @@ describe('getNextStep — grievance-shaped cases', () => {
     });
   });
 
-  it('recommends closing at the outcome stage', () => {
-    expect(getNextStep(grievanceCase('outcome')).action).toBe('close_case');
+  // Defect #17 remediation — same fix as the disciplinary "outcome" stage
+  // test above, mirrored for grievance.
+  it('recommends drafting the outcome letter at the outcome stage when none has been saved yet', () => {
+    expect(getNextStep(grievanceCase('outcome')).action).toBe('outcome_letter');
+  });
+
+  it('recommends closing at the outcome stage once the letter has actually been saved', () => {
+    const step = getNextStep(grievanceCase('outcome', [{ type: 'Grievance', record: 'notes', signStatus: 'signed', letterOutput: '...', letterType: 'outcome' }]));
+    expect(step.action).toBe('close_case');
   });
 
   describe('appeal stage', () => {

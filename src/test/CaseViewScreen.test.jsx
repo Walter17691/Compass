@@ -410,3 +410,76 @@ describe('CaseViewScreen — case closure safety (Case Closure Safety P0)', () =
     expect(handleLetter).not.toHaveBeenCalled();
   });
 });
+
+// Defect #17 remediation — the Outcome tab's own always-available
+// "Draft outcome letter" route, exercised through the real CaseViewScreen
+// (not just the OutcomeTab unit in isolation), using the exact Golden
+// Path production shape: outcome decided, hearing record unsigned, no
+// letter ever saved. Proves the restored route grounds caseInfo/
+// reviewOutput/meetingType from the case's own hearing meeting and calls
+// the one shared handleLetter("outcome", {inline:true}) pipeline — the
+// same call every other letter-drafting path already uses — without
+// writing cs.stage or touching cs.outcome.
+describe('CaseViewScreen — Outcome tab "Draft outcome letter" route (Defect #17)', () => {
+  const goldenPathShapedCase = {
+    id: 'c1', employeeName: 'UAT - Test Employee (Golden Path)', manager: 'Walter Carta',
+    caseType: 'misconduct', confidential: false, outcome: 'First written warning',
+    outcomeIssuedAt: '2026-09-07T00:00:00.000Z', warningDurationMonths: 6, warningExpiresAt: '2027-03-07',
+    evidence: [],
+    meetings: [
+      { type: 'Investigation', date: '2026-09-07', record: 'the investigation record', signStatus: null },
+      { type: 'Disciplinary', date: '2026-09-07', record: 'the disciplinary hearing record', signStatus: null },
+    ],
+  };
+
+  it('is offered and, on click, grounds the letter from the case\'s own hearing meeting and drafts via the shared handleLetter pipeline — no signature send, no re-issue, no stage write required', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    const setCaseInfo = vi.fn();
+    const setReviewOutput = vi.fn();
+    const saveCases = vi.fn();
+    const props = {
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        cases: [goldenPathShapedCase],
+        getCaseStage: () => 'outcome',
+        getNextStep: () => ({ label: 'Draft outcome letter', action: 'outcome_letter', meetingType: 'disciplinary' }),
+        setCaseInfo, setReviewOutput, saveCases, handleLetter,
+      },
+      initialTab: 'outcome',
+    };
+    render(<CaseViewScreen {...props} />);
+    // Scoped to the Outcome tab's own panel — the Copilot banner/compact
+    // header also render a same-labelled primary action for this same
+    // nextStep in this fixture, which is expected (see the "unavoidable
+    // consequence of correcting #17" note in the remediation report); this
+    // test targets the Outcome tab's own durable, always-available route.
+    const outcomePanel = within(screen.getByText('Outcome issued').parentElement);
+    await user.click(outcomePanel.getByRole('button', { name: 'Draft outcome letter' }));
+    expect(handleLetter).toHaveBeenCalledWith('outcome', { inline: true });
+    expect(setReviewOutput).toHaveBeenCalledWith('the disciplinary hearing record');
+    // No stage write: getCaseStage already infers "outcome" from
+    // cs.outcome directly (caseStage.js) — this route has no business
+    // deciding a stage, unlike the Copilot's own outcome_letter next-step
+    // handler (which does write stage:"outcome", preserved unchanged).
+    expect(saveCases).not.toHaveBeenCalled();
+  });
+
+  it('remains reachable even though the hearing record is unsigned and the case has never been sent for signature', async () => {
+    const props = {
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        cases: [goldenPathShapedCase],
+        getCaseStage: () => 'outcome',
+        getNextStep: () => ({ label: 'Draft outcome letter', action: 'outcome_letter', meetingType: 'disciplinary' }),
+      },
+      initialTab: 'outcome',
+    };
+    render(<CaseViewScreen {...props} />);
+    expect(goldenPathShapedCase.meetings.every(m => m.signStatus !== 'signed')).toBe(true);
+    const outcomePanel = within(screen.getByText('Outcome issued').parentElement);
+    expect(outcomePanel.getByRole('button', { name: 'Draft outcome letter' })).toBeInTheDocument();
+  });
+});

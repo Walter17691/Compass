@@ -46,9 +46,29 @@ export function hasLetterType(meetings, type) {
   return (meetings||[]).some(m => m.letterOutput && (m.letterType ? m.letterType === type : true));
 }
 
+// Defect #17 remediation — cs.outcome (the actual, HR-write-protected
+// decision — see protect_case_hr_only_columns in
+// warning_duration_outcome_metadata_2026-09-09.sql) is now checked ahead
+// of the legacy hasLetterType heuristic, matching the convention every
+// other case-type's own inference function already used (inferProbationStage/
+// inferFlexibleWorkingStage/inferLongTermSicknessStage below all check
+// cs.outcome directly and always have). Before this, a disciplinary
+// decision recorded via OutcomeTab/OutcomeModal (which sets cs.outcome
+// immediately, independent of whether its letter was ever drafted or
+// saved) left the case stuck inferring "disciplinary" until someone
+// separately saved an outcome letter onto a meeting — which orphaned the
+// only UI route to that letter, since nextStep.js's "disciplinary" stage
+// branch checks hearing-signature before it ever checks for an outcome at
+// all (see disciplinaryNextStep's own comment). hasLetterType stays as a
+// fallback purely for legacy cases that predate cs.outcome existing at
+// all but do have a saved outcome letter (e.g. a case created before this
+// column existed) — an unsaved, ephemeral draft can never satisfy it
+// (hasLetterType requires m.letterOutput, only ever set by
+// saveMeetingToCase), so this can't be tricked into fabricating a
+// decision that was never actually made.
 function inferDisciplinaryStage(cs) {
   const meetings = cs.meetings||[];
-  const hasOutcome = hasLetterType(meetings, "outcome");
+  const hasOutcome = !!cs.outcome || hasLetterType(meetings, "outcome");
   const hasInvReport = cs.investigationReport;
   if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
@@ -65,7 +85,9 @@ function inferDisciplinaryStage(cs) {
 // not a case-closure signal. Removed for the same reason.
 function inferGrievanceStage(cs) {
   const meetings = cs.meetings||[];
-  const hasOutcome = hasLetterType(meetings, "outcome");
+  // Defect #17 remediation — same cs.outcome-first fix as
+  // inferDisciplinaryStage above, for the same reason.
+  const hasOutcome = !!cs.outcome || hasLetterType(meetings, "outcome");
   if(meetings.some(m=>isAppealMeeting(m.type))) return "appeal";
   if(hasOutcome) return "outcome";
   if(meetings.some(m=>isGrievanceMeeting(m.type))) return "hearing";

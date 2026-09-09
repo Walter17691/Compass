@@ -1,4 +1,4 @@
-import { isGrievanceCase } from '../../lib/caseStage';
+import { isGrievanceCase, hasLetterType } from '../../lib/caseStage';
 import { getProcessType } from '../../lib/processStages';
 import { isWarningOutcome } from '../../lib/outcomeTypes';
 import { FONT } from '../../styles/tokens';
@@ -46,9 +46,21 @@ function needsOutcomeDetailsCompletion(cs) {
   return isWarningOutcome(cs.outcome) && !cs.warningDurationMonths;
 }
 
-export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcomeType, setCompletingOutcomeDetails, canDecide }) {
+export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcomeType, setCompletingOutcomeDetails, canDecide, onDraftOutcomeLetter }) {
   const grievance = isGrievanceCase(cs);
   const reached = isOutcomeReachable(cs, stage);
+  // Defect #17 remediation — a durable, always-available route to the
+  // outcome letter, independent of Case Copilot's own single-track "next
+  // step" suggestion (nextStep.js), which moves on to "Close case" the
+  // moment the letter's been saved once and has no way back. cs.outcome
+  // being set is the only precondition — never gated on hearing-signature
+  // status (see the #17 report: no product rule anywhere actually
+  // requires that ordering, only this Copilot suggestion used to assume
+  // it) and never gated on canDecide (drafting/regenerating a letter
+  // writes nothing to the HR-only-protected outcome columns; only
+  // "Issue outcome"/"Complete outcome details" do, and those already
+  // enforce it above).
+  const hasSavedOutcomeLetter = hasLetterType(cs.meetings || [], "outcome");
 
   if (!reached) {
     return (
@@ -77,6 +89,11 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
           ) : (
             <div style={{fontSize:12,color:"#6B6375",marginTop:10}}>This warning is missing its duration — only HR or this case's Hearing Manager can complete it.</div>
           )
+        )}
+        {onDraftOutcomeLetter&&(
+          <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #A8D5B5"}}>
+            <button onClick={onDraftOutcomeLetter} style={{fontSize:12,background:"none",border:"1px solid #1A7A4A",borderRadius:8,padding:"8px 16px",color:"#1A7A4A",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>{hasSavedOutcomeLetter?"Regenerate outcome letter":"Draft outcome letter"}</button>
+          </div>
         )}
       </div>
     );

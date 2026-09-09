@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
-import { getCurrentRisk } from '../lib/caseStage';
+import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 import { MDRenderer } from '../components/MDRenderer';
 import { LockIcon } from '../components/Icons';
 import { AllegationsPanel } from '../components/AllegationsPanel';
@@ -275,6 +275,25 @@ export function CaseViewScreen({
       const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true});
     }
     else if(nextStep.action==="close_case"){requestCloseCase();}
+  };
+
+  // Defect #17 remediation — a durable, always-available way to draft or
+  // regenerate the outcome letter once cs.outcome is decided, independent
+  // of Case Copilot's own single-track nextStep suggestion (which moves on
+  // to "Close case" the moment a letter's been saved once, with no way
+  // back — see nextStep.js's "outcome" stage branch). Mirrors the grounding
+  // handleNextStepAction's own "outcome_letter" branch already does (same
+  // relevant-meeting lookup, same caseInfo/reviewOutput/meetingType setup,
+  // same handleLetter("outcome", {inline:true}) call — the one shared
+  // generation pipeline, not a second weaker route) but deliberately does
+  // NOT write cs.stage: getCaseStage now infers "outcome" from cs.outcome
+  // directly (caseStage.js), so no manual stage write is needed here, and
+  // not writing one avoids ever pinning an explicit stage this action has
+  // no business deciding.
+  const draftOutcomeLetter = () => {
+    const relevant = meetings.filter(m=>(m.type||"").toLowerCase().includes(isGrievanceCase(cs)?"grievance":"disciplinary"))[0]||meetings[meetings.length-1];
+    if(relevant){setReviewOutput(relevant.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:relevant.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===relevant.type)||null);}
+    setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});
   };
 
   // Case Closure Safety P0 remediation — the single, shared gate every
@@ -757,7 +776,7 @@ export function CaseViewScreen({
             <ThemesTab cs={cs} organisationThemes={themesTab.organisationThemes} caseThemes={themesTab.caseThemes} suggestions={themesTab.themeSuggestions?.[cs.id]} suggesting={!!themesTab.themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={themesTab.onSuggestThemes} onConfirmSuggestion={themesTab.onConfirmThemeSuggestion} onDismissSuggestion={themesTab.onDismissThemeSuggestion} onAssignExisting={themesTab.onAssignExistingTheme} onRemove={themesTab.onRemoveTheme}/>
           )}
           {activeTab==="outcome"&&(
-            <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={canDecide}/>
+            <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={canDecide} onDraftOutcomeLetter={draftOutcomeLetter}/>
           )}
           {activeTab==="ai"&&(
             <AIAssistantTab cs={cs} chatHistory={aiTab.caseChatHistory[cs.id]||[]} chatInput={aiTab.caseChatInput} setChatInput={aiTab.setCaseChatInput} chatProcessing={aiTab.caseChatProcessing} sendChat={()=>aiTab.sendCaseChat(cs)} overview={aiTab.caseOverview[cs.id]} overviewLoading={!!aiTab.caseOverviewLoading[cs.id]} generateOverview={()=>aiTab.generateCaseOverview(cs)} overviewSources={aiTab.caseOverviewSources?.[cs.id]} onAskWhy={setWhySignal}/>

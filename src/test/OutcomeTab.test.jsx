@@ -186,3 +186,56 @@ describe('OutcomeTab — outcome date/duration/expiry display and completion pat
     expect(calls).toContain('setShowOutcomeModal');
   });
 });
+
+// Defect #17 remediation — a durable, always-available route to the
+// outcome letter once cs.outcome is decided, independent of Case
+// Copilot's own single-track next-step suggestion. Never gated on
+// canDecide: drafting/regenerating a letter writes nothing to the
+// HR-only-protected outcome columns (only Issue/Complete outcome do,
+// already gated above).
+describe('OutcomeTab — draft/regenerate outcome letter (Defect #17)', () => {
+  it('does not render the button at all when no onDraftOutcomeLetter handler is supplied', () => {
+    const decided = { ...reachedCase, outcome: 'First written warning' };
+    render(<OutcomeTab cs={decided} stage="outcome" fmtDate={fmtDate} setShowOutcomeModal={()=>{}} canDecide={true} />);
+    expect(screen.queryByRole('button', { name: /outcome letter/i })).not.toBeInTheDocument();
+  });
+
+  it('offers "Draft outcome letter" when an outcome is decided but no letter has ever been saved', () => {
+    const decided = { ...reachedCase, outcome: 'First written warning', meetings: [] };
+    render(<OutcomeTab cs={decided} stage="outcome" fmtDate={fmtDate} setShowOutcomeModal={()=>{}} onDraftOutcomeLetter={()=>{}} canDecide={true} />);
+    expect(screen.getByRole('button', { name: 'Draft outcome letter' })).toBeInTheDocument();
+  });
+
+  it('offers "Regenerate outcome letter" once a letter has already been saved to a meeting', () => {
+    const decided = {
+      ...reachedCase, outcome: 'First written warning',
+      meetings: [{ type: 'Disciplinary', letterOutput: 'Dear Sarah...', letterType: 'outcome' }],
+    };
+    render(<OutcomeTab cs={decided} stage="outcome" fmtDate={fmtDate} setShowOutcomeModal={()=>{}} onDraftOutcomeLetter={()=>{}} canDecide={true} />);
+    expect(screen.getByRole('button', { name: 'Regenerate outcome letter' })).toBeInTheDocument();
+  });
+
+  it('offers the button even when the caller cannot decide — drafting a letter is not a protected-column write', () => {
+    const decided = { ...reachedCase, outcome: 'First written warning', meetings: [] };
+    render(<OutcomeTab cs={decided} stage="outcome" fmtDate={fmtDate} setShowOutcomeModal={()=>{}} onDraftOutcomeLetter={()=>{}} canDecide={false} />);
+    expect(screen.getByRole('button', { name: 'Draft outcome letter' })).toBeInTheDocument();
+  });
+
+  it('offers the button even when the hearing record is unsigned — the Golden Path reproduction shape', () => {
+    const goldenPathShaped = {
+      ...reachedCase, outcome: 'First written warning',
+      meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: null }],
+    };
+    render(<OutcomeTab cs={goldenPathShaped} stage="outcome" fmtDate={fmtDate} setShowOutcomeModal={()=>{}} onDraftOutcomeLetter={()=>{}} canDecide={true} />);
+    expect(screen.getByRole('button', { name: 'Draft outcome letter' })).toBeInTheDocument();
+  });
+
+  it('calls the handler on click and does not itself touch cs.outcome or re-issue anything', async () => {
+    const user = userEvent.setup();
+    let calls = 0;
+    const decided = { ...reachedCase, outcome: 'First written warning', meetings: [] };
+    render(<OutcomeTab cs={decided} stage="outcome" fmtDate={fmtDate} setShowOutcomeModal={()=>{}} onDraftOutcomeLetter={()=>{calls++;}} canDecide={true} />);
+    await user.click(screen.getByRole('button', { name: 'Draft outcome letter' }));
+    expect(calls).toBe(1);
+  });
+});

@@ -109,6 +109,23 @@ describe('getCaseStage — the "open" lifecycle placeholder is not an authoritat
     expect(getCaseStage(cs)).toBe('outcome');
   });
 
+  // Defect #17 remediation — cs.outcome (the actual, HR-protected
+  // decision) is now authoritative for stage inference, ahead of whether
+  // a letter has ever been drafted/saved. This is the exact Golden Path
+  // reproduction: a disciplinary outcome decided via OutcomeTab/
+  // OutcomeModal sets cs.outcome immediately but never touches meeting
+  // letterOutput/letterType — only an explicit "Save to case" on the
+  // drafted letter does that (App.jsx's saveMeetingToCase).
+  it('6b. Defect #17: outcome decided via OutcomeModal (cs.outcome set), no letter ever saved, hearing unsigned -> resolves to "outcome", not stuck at "disciplinary"', () => {
+    const cs = {
+      stage: 'open',
+      caseType: 'misconduct',
+      outcome: 'First written warning',
+      meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: null }],
+    };
+    expect(getCaseStage(cs)).toBe('outcome');
+  });
+
   it('7. closed case with a historical disciplinary meeting does not regress — explicit "closed" still wins over everything, including this fix', () => {
     const cs = { stage: 'closed', caseType: 'misconduct', meetings: [{ type: 'Disciplinary', record: 'x', letterOutput: 'x', letterType: 'outcome' }] };
     expect(getCaseStage(cs)).toBe('closed');
@@ -165,6 +182,13 @@ describe('getCaseStage — grievance-shaped cases', () => {
   // closure signal, for the same reason.
   it('does not infer "closed" from a signed meeting alone — an outcome letter infers "outcome", never "closed", regardless of signStatus', () => {
     const cs = { caseType: 'grievance', meetings: [{ type: 'Grievance', signStatus: 'signed', letterOutput: 'the outcome letter' }] };
+    expect(getCaseStage(cs)).toBe('outcome');
+  });
+
+  // Defect #17 remediation — same cs.outcome-first fix as the
+  // disciplinary-shaped heuristic, mirrored for grievance.
+  it('infers "outcome" once cs.outcome is set, even with no letter ever saved', () => {
+    const cs = { caseType: 'grievance', outcome: 'Upheld', meetings: [{ type: 'Grievance', record: 'notes', signStatus: null }] };
     expect(getCaseStage(cs)).toBe('outcome');
   });
 
