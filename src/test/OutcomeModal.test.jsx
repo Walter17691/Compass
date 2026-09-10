@@ -46,7 +46,11 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     expect(saveCases).toHaveBeenCalledWith(expect.any(Array), 'c1');
     await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
     expect(showToast).toHaveBeenCalledWith('Outcome recorded');
-    expect(handleLetter).toHaveBeenCalledWith('outcome');
+    // Defect #20 remediation — handleLetter now receives the employee/
+    // manager/date this modal just computed directly (rather than relying
+    // on handleLetter's own closure over caseInfo state, which the
+    // synchronous setCaseInfo call just above hasn't flushed into yet).
+    expect(handleLetter).toHaveBeenCalledWith('outcome', { employeeName: 'Sam Employee', manager: '', date: undefined });
   });
 
   it('keeps the modal open and shows the generic error toast, without declaring success, on a genuine persistence failure (reason: "error")', async () => {
@@ -136,7 +140,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
       await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
       expect(showToast).toHaveBeenCalledWith('Outcome recorded');
-      expect(handleLetter).toHaveBeenCalledWith('outcome');
+      expect(handleLetter).toHaveBeenCalledWith('outcome', { employeeName: 'Sam Employee', manager: '', date: undefined });
     });
   });
 

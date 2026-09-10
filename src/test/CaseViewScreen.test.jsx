@@ -386,7 +386,9 @@ describe('CaseViewScreen — case closure safety (Case Closure Safety P0)', () =
     render(<CaseViewScreen {...props} />);
     await user.click(screen.getByRole('button', { name: 'No case to answer — close' }));
     expect(props.shell.saveCases).toHaveBeenCalledTimes(1);
-    expect(handleLetter).toHaveBeenCalledWith('no-case-answer', { inline: true });
+    // Defect #20 remediation — handleLetter now receives employee/manager
+    // directly rather than relying on its own closure over caseInfo state.
+    expect(handleLetter).toHaveBeenCalledWith('no-case-answer', { inline: true, employeeName: 'Sam Employee', manager: 'Alex Manager' });
     expect(props.shell.audit).toHaveBeenCalledWith('Case closed', expect.stringContaining('no case to answer'), 'c1');
   });
 
@@ -457,7 +459,11 @@ describe('CaseViewScreen — Outcome tab "Draft outcome letter" route (Defect #1
     // test targets the Outcome tab's own durable, always-available route.
     const outcomePanel = within(screen.getByText('Outcome issued').parentElement);
     await user.click(outcomePanel.getByRole('button', { name: 'Draft outcome letter' }));
-    expect(handleLetter).toHaveBeenCalledWith('outcome', { inline: true });
+    // Defect #20 remediation — handleLetter now receives employee/manager/
+    // date directly rather than relying on its own closure over caseInfo
+    // state (which the setCaseInfo call just above hasn't flushed into yet
+    // at the moment handleLetter itself runs).
+    expect(handleLetter).toHaveBeenCalledWith('outcome', { inline: true, employeeName: 'UAT - Test Employee (Golden Path)', manager: 'Walter Carta', date: '2026-09-07' });
     expect(setReviewOutput).toHaveBeenCalledWith('the disciplinary hearing record');
     // No stage write: getCaseStage already infers "outcome" from
     // cs.outcome directly (caseStage.js) — this route has no business

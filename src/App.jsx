@@ -29,6 +29,7 @@ import {
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter } from './lib/letterValidation';
+import { resolveLetterGrounding, buildRecipientInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -7385,7 +7386,13 @@ Please produce:
     return fn ? fn(emp, chair, dt, mt) : null;
   };
 
-  const handleLetter = async (type, {inline}={}) => {
+  // Defect #20 remediation — see lib/letterGrounding.js's own comment for
+  // the root cause (a stale closure over caseInfo state). employeeName/
+  // manager/date let a caller supply the value it just computed directly;
+  // every affected call site now does (App.jsx's own modal confirm flow,
+  // CaseViewScreen.jsx's next-step/outcome-tab/appeal actions,
+  // OutcomeModal.jsx's finalizeOutcome).
+  const handleLetter = async (type, {inline, employeeName, manager, date}={}) => {
     const t = type||"outcome"; setAiError("");
     // Regenerating overwrites letterOutput — keep the draft being replaced
     // so it's not just silently gone.
@@ -7398,7 +7405,8 @@ Please produce:
       const evidenceList = (caseInfo.evidence||[]).map((e,i)=>(i+1)+". "+e.name+" ("+e.type+", "+e.date+")").join(nl);
       // Pull additional context from active case
       const activeCase = cases.find(x=>x.id===activeCaseId);
-      const empRec = getEmployeeRecord(caseInfo.employee)||{};
+      const { employee: groundedEmployee, manager: groundedManager, date: groundedDate } = resolveLetterGrounding({ caseInfo, overrides: { employeeName, manager, date } });
+      const empRec = getEmployeeRecord(groundedEmployee)||{};
       const prevMeetings = activeCase?(activeCase.meetings||[]).slice(-3).map(m=>m.type+" on "+m.date+(m.record?" — "+m.record.slice(0,100):"")).join("; "):"";
       // Outcome Builder (P12) — an outcome letter used to draw only on the
       // generic case/meeting context above, the same as every other letter
@@ -7424,10 +7432,11 @@ Please produce:
           +"  Outstanding uncertainty: "+(a.outstandingUncertainty||"none recorded");
       }).join(nl+nl) : "";
       const context = [
-        caseInfo.employee ? "Employee: "+caseInfo.employee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
-        caseInfo.manager ? "Chair/Manager: "+caseInfo.manager : "",
+        groundedEmployee ? "Employee: "+groundedEmployee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
+        buildRecipientInstruction(groundedEmployee, t),
+        groundedManager ? "Chair/Manager: "+groundedManager : "",
         caseInfo.representative ? "Representative/companion: "+caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")" : "",
-        caseInfo.date ? "Meeting date: "+caseInfo.date : "",
+        groundedDate ? "Meeting date: "+groundedDate : "",
         empRec.startDate ? "Employee start date: "+empRec.startDate : "",
         empRec.location ? "Location: "+empRec.location : "",
         activeCase?.caseType ? "Case type: "+activeCase.caseType : "",
@@ -7500,7 +7509,7 @@ Please produce:
         // is this letter actually addressed to this case's employee?)
         // before treating it as a valid, ready-for-review draft. See
         // lib/letterValidation.js for what this does and doesn't check.
-        const validation = validateFormalLetter(text, {employeeName: caseInfo.employee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt});
+        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt});
         setLetterOutput(text); setLetterSources(letterSources);
         // UAT Product Hierarchy pass, Part 6 — generation can genuinely
         // outlive the user staying on this screen (this function isn't

@@ -161,7 +161,13 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
     const meeting = findOutcomeRelevantMeeting(cs);
     setCaseInfo(p=>({...p, employee:cs.employeeName, manager:cs.manager||"", date:meeting?.date||p.date}));
     setReviewOutput(meeting?.record||"");
-    handleLetter("outcome");
+    // Defect #20 remediation — handleLetter is a closure over App.jsx's
+    // own caseInfo state; setCaseInfo above only schedules that update,
+    // it isn't visible yet in this same synchronous handler. Passing the
+    // employee/manager/date this modal just computed directly means
+    // handleLetter's own AI grounding and validation call both use the
+    // real value instead of whatever caseInfo held before this click.
+    handleLetter("outcome", {employeeName:cs.employeeName, manager:cs.manager||"", date:meeting?.date});
   };
 
   const issueOutcome = () => {

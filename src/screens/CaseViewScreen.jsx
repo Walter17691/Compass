@@ -263,8 +263,8 @@ export function CaseViewScreen({
     if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.meetingType||"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
     else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
     else if(nextStep.action==="inv_report"){attemptSubmitInvestigation(cs.id);}
-    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true});}
-    else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});}
+    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}
+    else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});}
     else if(nextStep.action==="appeal_letter"){
       // Was previously handled identically to outcome_letter — drafted
       // an "outcome" letter and regressed stage from "appeal" back to
@@ -272,7 +272,7 @@ export function CaseViewScreen({
       // that point. The appeal is the final stage (ACAS Code); this
       // only closes on an explicit close_case, never silently un-does
       // progress.
-      const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true});
+      const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});
     }
     else if(nextStep.action==="close_case"){requestCloseCase();}
   };
@@ -293,7 +293,7 @@ export function CaseViewScreen({
   const draftOutcomeLetter = () => {
     const relevant = meetings.filter(m=>(m.type||"").toLowerCase().includes(isGrievanceCase(cs)?"grievance":"disciplinary"))[0]||meetings[meetings.length-1];
     if(relevant){setReviewOutput(relevant.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:relevant.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===relevant.type)||null);}
-    setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true});
+    setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:relevant?.date});
   };
 
   // Case Closure Safety P0 remediation — the single, shared gate every
@@ -592,7 +592,7 @@ export function CaseViewScreen({
               )}
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
-              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){requestCloseCase({allowNoCase:true, closeReasonLabel:"no case to answer", afterClose:()=>{setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true});}});}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
+              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){requestCloseCase({allowNoCase:true, closeReasonLabel:"no case to answer", afterClose:()=>{setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}});}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
               <button onClick={handleNextStepAction} disabled={(nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?"not-allowed":"pointer",opacity:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?0.6:1,fontFamily:FONT.sans}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
             </div>
           </div>
@@ -706,7 +706,7 @@ export function CaseViewScreen({
           <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Paste the employee appeal — Compass will use this for the appeal hearing:</div>
           <textarea aria-label="Employee appeal text" value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))} rows={3} style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:FONT.sans,boxSizing:"border-box",marginBottom:8}}/>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));setShowAppealInput(p=>({...p,[cs.id]:false}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);handleLetter("invite");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Start appeal and send invitation</button>
+            <button onClick={()=>{saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));setShowAppealInput(p=>({...p,[cs.id]:false}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);handleLetter("invite",{employeeName:cs.employeeName,manager:cs.manager||""});}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Start appeal and send invitation</button>
             <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
           </div>
         </div>
