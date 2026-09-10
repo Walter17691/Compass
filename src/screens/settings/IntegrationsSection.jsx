@@ -60,8 +60,8 @@ function HealthBadge({ id, health }) {
 // disconnect handlers (connectOutlookMail etc.) — this is the new
 // canonical home for their status, not a second implementation of the
 // OAuth flow already wired into SaveEmailScreen/HomeScreen.
-export function IntegrationsSection({ isHR, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, orgWebhookUrl, orgWebhookType, integrationEvents, onManageNotifications }) {
-  const allRows = computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, ms365CalendarConnected, orgWebhookUrl, orgWebhookType });
+export function IntegrationsSection({ isHR, mailConnected, mailboxEmail, onConnectMail, onDisconnectMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, calendarReconnectRequired, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, orgWebhookUrl, orgWebhookType, integrationEvents, onManageNotifications }) {
+  const allRows = computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, calendarReconnectRequired, ms365CalendarConnected, orgWebhookUrl, orgWebhookType });
   // Client IA cleanup, §4 — unsupported/roadmap entries (HRIS,
   // Occupational Health, e-signature, document storage) no longer sit in
   // the primary list badged "Requires administrator", which implied an

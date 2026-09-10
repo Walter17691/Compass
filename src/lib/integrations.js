@@ -37,7 +37,7 @@ export const INTEGRATION_CATALOG = [
 // can say so honestly rather than implying an admin could act on it
 // today (per the spec's own "do not hard-code integrations that do not
 // yet have working APIs").
-export function computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, ms365CalendarConnected, orgWebhookUrl, orgWebhookType } = {}) {
+export function computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailConnected, gmailboxEmail, calendarConnected, calendarReconnectRequired, ms365CalendarConnected, orgWebhookUrl, orgWebhookType } = {}) {
   return INTEGRATION_CATALOG.map(entry => {
     if (entry.id === "outlook_mail") {
       return { ...entry, status: mailConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: mailConnected ? mailboxEmail : null, lastSync: null };
@@ -46,7 +46,20 @@ export function computeIntegrationStatuses({ mailConnected, mailboxEmail, gmailC
       return { ...entry, status: gmailConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: gmailConnected ? gmailboxEmail : null, lastSync: null };
     }
     if (entry.id === "google_calendar") {
-      return { ...entry, status: calendarConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: calendarConnected ? "Deadlines sync automatically" : null, lastSync: null };
+      // Defect #1 remediation — a calendar_connections row existing only
+      // proves Google once issued a token; it says nothing about whether
+      // that token still works. calendarReconnectRequired (derived from
+      // the same integration_events history the Health badge below
+      // already reads — see App.jsx/summarizeIntegrationHealth) lets this
+      // say "Connection error" honestly, rather than "Connected" merely
+      // because the row still exists after Google has rejected it.
+      const status = !calendarConnected ? INTEGRATION_STATUS.NOT_CONNECTED
+        : calendarReconnectRequired ? INTEGRATION_STATUS.CONNECTION_ERROR
+        : INTEGRATION_STATUS.CONNECTED;
+      const detail = status === INTEGRATION_STATUS.CONNECTED ? "Deadlines sync automatically"
+        : status === INTEGRATION_STATUS.CONNECTION_ERROR ? "Reconnect required"
+        : null;
+      return { ...entry, status, detail, lastSync: null };
     }
     if (entry.id === "ms365_calendar") {
       return { ...entry, status: ms365CalendarConnected ? INTEGRATION_STATUS.CONNECTED : INTEGRATION_STATUS.NOT_CONNECTED, detail: null, lastSync: null };

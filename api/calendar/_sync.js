@@ -3,6 +3,17 @@ import { getValidAccessToken, googleCalendarRequest, deadlineToGoogleEvent } fro
 import { requireOrgMembership } from '../_auth.js';
 import { logIntegrationEvent } from '../_integration_events.js';
 
+// Defect #1 remediation — Google OAuth error codes that mean the stored
+// credential itself is invalid/revoked and reconnecting is the only way
+// forward. invalid_grant is the actual production repro (a revoked/
+// expired refresh token); invalid_client/unauthorized_client are the
+// same "this credential/config can't work as stored" family in Google's
+// own OAuth error vocabulary. Deliberately NOT included: anything that
+// could describe a transient condition (rate limits, 5xx, network
+// errors) — those must never be classified as reconnect-required (see
+// this file's own catch block below).
+const CREDENTIAL_INVALID_CODES = new Set(['invalid_grant', 'invalid_client', 'unauthorized_client']);
+
 // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
 // looked the connection up by user_id alone, with no orgId in the
 // request at all. A multi-org user's sync while working in Org A could
@@ -92,8 +103,28 @@ export async function sync(req, res) {
     await logIntegrationEvent({ orgId: connection.org_id, userId, provider: 'google_calendar', eventType: 'sync', status: 'success', detail: `${created} created, ${updated} updated, ${deleted} deleted` });
     res.status(200).json({ success: true, created, updated, deleted });
   } catch (e) {
-    console.error('Calendar sync error:', e.message);
-    if (connection) await logIntegrationEvent({ orgId: connection.org_id, userId, provider: 'google_calendar', eventType: 'sync', status: 'error', detail: e.message });
-    res.status(500).json({ error: e.message });
+    // Defect #1 remediation — a raw provider error (e.message could
+    // contain Google's own wording, which varies release to release and
+    // is meaningless to an HR user) must never reach the client or a log
+    // line verbatim; only a stable, sanitized code/message pair, matching
+    // api/chat.js's own AI_UNAVAILABLE contract (Defect #5) for the exact
+    // same reason. reconnectRequired is the one case this function
+    // classifies specially — see CREDENTIAL_INVALID_CODES above — every
+    // other failure (network error, malformed response, Google 429/5xx,
+    // an unexpected Supabase error) is treated as temporary: it must not
+    // mark the connection as needing reconnection, so a real outage
+    // doesn't get permanently misclassified as a revoked credential.
+    const reconnectRequired = CREDENTIAL_INVALID_CODES.has(e.providerErrorCode);
+    console.error('[calendar] sync failed', reconnectRequired ? 'reconnect_required' : 'provider_error', e.providerErrorCode || e.message);
+    if (connection) {
+      await logIntegrationEvent({
+        orgId: connection.org_id, userId, provider: 'google_calendar', eventType: 'sync', status: 'error',
+        detail: reconnectRequired ? 'CALENDAR_RECONNECT_REQUIRED' : 'Sync failed — provider error',
+      });
+    }
+    if (reconnectRequired) {
+      return res.status(409).json({ ok: false, error: { code: 'CALENDAR_RECONNECT_REQUIRED', message: 'Google Calendar needs to be reconnected.' } });
+    }
+    res.status(502).json({ ok: false, error: { code: 'CALENDAR_SYNC_UNAVAILABLE', message: 'Google Calendar sync is temporarily unavailable. Please try again shortly.' } });
   }
 }

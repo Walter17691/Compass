@@ -25,6 +25,29 @@ describe('computeIntegrationStatuses', () => {
     const rows = computeIntegrationStatuses({ calendarConnected: true });
     const cal = rows.find(r => r.id === 'google_calendar');
     expect(cal.status).toBe(INTEGRATION_STATUS.CONNECTED);
+    expect(cal.detail).toBe('Deadlines sync automatically');
+  });
+
+  // Defect #1 remediation — a calendar_connections row existing only
+  // proves Google once issued a token; it says nothing about whether
+  // that token still works. Must never say "Connected" once Google has
+  // rejected the credential (the actual production repro: invalid_grant).
+  it('marks Google Calendar as a connection error when reconnect is required, even though a connection row still exists', () => {
+    const rows = computeIntegrationStatuses({ calendarConnected: true, calendarReconnectRequired: true });
+    const cal = rows.find(r => r.id === 'google_calendar');
+    expect(cal.status).toBe(INTEGRATION_STATUS.CONNECTION_ERROR);
+    expect(cal.detail).toBe('Reconnect required');
+  });
+
+  it('never shows a connection error when there is no connection at all, regardless of calendarReconnectRequired', () => {
+    const rows = computeIntegrationStatuses({ calendarConnected: false, calendarReconnectRequired: true });
+    const cal = rows.find(r => r.id === 'google_calendar');
+    expect(cal.status).toBe(INTEGRATION_STATUS.NOT_CONNECTED);
+  });
+
+  it('marks Google Calendar connected (not an error) when calendarReconnectRequired is false or omitted', () => {
+    const rows = computeIntegrationStatuses({ calendarConnected: true, calendarReconnectRequired: false });
+    expect(rows.find(r => r.id === 'google_calendar').status).toBe(INTEGRATION_STATUS.CONNECTED);
   });
 
   it('marks Gmail connected with the mailbox as detail when gmailConnected is true', () => {

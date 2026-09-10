@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { FONT, COLOR } from './styles/tokens';
 import { MEETING_TYPES, SCREENS, SPEAKERS, NEXT_STEPS_MAP, DEV_MEETING_CONFIG, DEV_TEMPLATES, TEMPLATES, WELLBEING_RESOURCES, WELLBEING_TYPES, POLICY_CATEGORIES, CONCERN_TYPES } from './constants';
 import { streamClaude } from './lib/streamClaude';
@@ -78,6 +78,7 @@ import { authedFetch } from './lib/authedFetch';
 import { useFonts } from './hooks/useFonts';
 import { useModalA11y } from './hooks/useModalA11y';
 import { addLoadIssue, removeLoadIssue } from './lib/dataLoadIssues';
+import { summarizeIntegrationHealth } from './lib/integrationHealth';
 import { AppSidebar } from './components/AppSidebar';
 import { Badge, Btn, Card, SectionTitle } from './components/Primitives';
 import { MDRenderer } from './components/MDRenderer';
@@ -2631,6 +2632,30 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── Calendar integration (Google Calendar) ──
   const [calendarConnected, setCalendarConnected] = useState(false);
+  // Defect #1 remediation — a connection row existing (calendarConnected)
+  // only proves Google once issued a token; it says nothing about whether
+  // that token still works. Seeded from the org's own already-loaded
+  // integration_events (see loadIntegrationEvents/summarizeIntegrationHealth
+  // — the exact same data Settings' own Integration Health panel already
+  // reads, so this can never disagree with it) rather than new schema:
+  // once the most recent Google Calendar sync/connect attempt on record
+  // was classified as needing reconnection, this starts true and the
+  // repeated-sync effect below skips entirely until a fresh sync attempt
+  // succeeds or a reconnect completes.
+  // A pure derivation from already-loaded data, not state-in-an-effect:
+  // recomputes automatically whenever integrationEvents itself changes
+  // (e.g. the periodic isHR reload), with no separate render pass needed
+  // just to copy one into the other.
+  const calendarHealthReconnectRequired = useMemo(() => {
+    const health = summarizeIntegrationHealth(integrationEvents).google_calendar;
+    return !!(health?.lastErrorDetail === 'CALENDAR_RECONNECT_REQUIRED' && health?.recentFailureCount > 0);
+  }, [integrationEvents]);
+  // Live, in-session corrections that integrationEvents alone can't
+  // reflect immediately: the very first sync failure this session (before
+  // any reload of integrationEvents) and a fresh reconnect completing.
+  // null = defer entirely to the derived value above.
+  const [calendarReconnectOverride, setCalendarReconnectOverride] = useState(null);
+  const calendarReconnectRequired = calendarReconnectOverride ?? calendarHealthReconnectRequired;
   useEffect(() => {
     // Phase 6.5 hardening (closes Prompt 16 audit finding C3, CRITICAL) —
     // scoped to the active org now, not just the signed-in user — a
@@ -2644,14 +2669,23 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const params = new URLSearchParams(window.location.search);
     const calendarParam = params.get("calendar");
     if(!calendarParam) return;
-    if(calendarParam==="connected") { setCalendarConnected(true); showToast("Google Calendar connected"); }
+    if(calendarParam==="connected") { setCalendarConnected(true); setCalendarReconnectOverride(false); showToast("Google Calendar connected"); }
     else if(calendarParam==="error") { showToast("Couldn't connect Google Calendar — please try again"); }
     params.delete("calendar");
     const newUrl = window.location.pathname + (params.toString()?"?"+params.toString():"");
     window.history.replaceState({}, "", newUrl);
   }, []);
   useEffect(() => {
-    if(!calendarConnected || !user?.id) return;
+    // Defect #1 remediation — a known reconnect-required state must not
+    // keep re-attempting a credential Google has already rejected on
+    // every dueSoon change (the production symptom: a failing
+    // /api/calendar/sync request on every Home load). Temporary failures
+    // (network blips, Google 429/5xx) deliberately do NOT set
+    // calendarReconnectRequired (see api/calendar/_sync.js's own
+    // classification), so those keep retrying normally on the next
+    // dueSoon change — only a genuinely invalid/revoked credential stops
+    // this effect from firing at all.
+    if(!calendarConnected || calendarReconnectRequired || !user?.id) return;
     const timeout = setTimeout(() => {
       // Google Calendar is outside Compass's own access control (RLS
       // already scopes dueSoon to cases this user can see, but a shared
@@ -2662,10 +2696,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       authedFetch("/api/calendar/sync", {
         method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({ deadlines: dueSoon.filter(d => !d.confidential), orgId: org?.id }),
+      }).then(r=>r.json()).then(data => {
+        // Defect #1 remediation — the very first time this session's sync
+        // discovers the credential is invalid, stop hammering immediately
+        // rather than waiting for the next integration_events reload.
+        if(data?.error?.code === 'CALENDAR_RECONNECT_REQUIRED') setCalendarReconnectOverride(true);
       }).catch(e => console.error("Calendar sync failed:", e));
     }, 3000);
     return () => clearTimeout(timeout);
-  }, [dueSoon, calendarConnected, user?.id, org?.id]);
+  }, [dueSoon, calendarConnected, calendarReconnectRequired, user?.id, org?.id]);
   const connectGoogleCalendar = async () => {
     if(!user?.id || !org?.id) return;
     try {
@@ -9092,7 +9131,7 @@ Please produce:
           branding={{ wordTemplate, setWordTemplate, orgLsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad }}
           policies={{ policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, changePolicyCategory }}
           templates={{ starterTemplates, saveStarterTemplates, leaverTemplates, saveLeaverTemplates, processTemplates, saveProcessTemplate, promptDialog, confirmDialog }}
-          integrations={{ mailConnected, mailboxEmail, onConnectMail: connectOutlookMail, onDisconnectMail: disconnectOutlookMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, integrationEvents, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook }}
+          integrations={{ mailConnected, mailboxEmail, onConnectMail: connectOutlookMail, onDisconnectMail: disconnectOutlookMail, gmailConnected, gmailboxEmail, connectGmail, disconnectGmail, calendarConnected, calendarReconnectRequired, connectGoogleCalendar, disconnectGoogleCalendar, ms365CalendarConnected, connectMs365Calendar, disconnectMs365Calendar, integrationEvents, orgWebhookUrl, orgWebhookType, saveOrgWebhook, sendTestWebhook }}
           notifications={{ dueSoon, caseTasks, createCaseTask, requestNotifications, notifGranted, emailDigestOptIn, toggleEmailDigest }}
           automation={{ automationLevels, saveAutomationLevel }}
           dataPrivacy={{ exportCSV, exportPDF, cases, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, dataRetentionYears, saveDataRetentionYears, ukJurisdiction, saveUkJurisdiction }}

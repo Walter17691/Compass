@@ -83,6 +83,25 @@ describe('IntegrationsSection', () => {
     expect(disconnectGoogleCalendar).toHaveBeenCalledTimes(1);
   });
 
+  // Defect #1 remediation — a calendar_connections row existing only
+  // proves Google once issued a token; it says nothing about whether
+  // that token still works. Must show "Connection error", not
+  // "Connected", once Google has rejected the credential, and the
+  // action must be to reconnect (Connect, reusing the existing OAuth
+  // flow), not Disconnect.
+  it('shows Google Calendar as a connection error, not Connected, when reconnect is required — and offers Connect (reconnect), not Disconnect', async () => {
+    const user = userEvent.setup();
+    const connectGoogleCalendar = vi.fn();
+    const disconnectGoogleCalendar = vi.fn();
+    render(<IntegrationsSection calendarConnected calendarReconnectRequired connectGoogleCalendar={connectGoogleCalendar} disconnectGoogleCalendar={disconnectGoogleCalendar} />);
+    const calendarRow = screen.getByText('Google Calendar').closest('div').parentElement.parentElement;
+    expect(calendarRow).toHaveTextContent('Connection error');
+    expect(calendarRow).not.toHaveTextContent('Connected');
+    await user.click(within(calendarRow).getByRole('button', { name: 'Connect' }));
+    expect(connectGoogleCalendar).toHaveBeenCalledTimes(1);
+    expect(disconnectGoogleCalendar).not.toHaveBeenCalled();
+  });
+
   it('shows Microsoft 365 Calendar as connected and calls disconnectMs365Calendar', async () => {
     const user = userEvent.setup();
     const disconnectMs365Calendar = vi.fn();

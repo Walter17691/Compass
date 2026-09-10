@@ -1,3 +1,5 @@
+import { redactTokenResponse } from '../_oauthLog.js';
+
 // Converts the app's "DD/MM/YYYY" date strings into Google Calendar's
 // all-day-event date format. Deadlines have no time-of-day (see plan doc),
 // so every synced event is an all-day event. Google's all-day `end.date`
@@ -60,7 +62,22 @@ export async function getValidAccessToken(connection) {
     }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error('Failed to refresh Google access token: ' + JSON.stringify(data));
+  if (!res.ok) {
+    // Defect #1 remediation — the production repro: Google's token
+    // endpoint rejects a revoked/expired refresh token with a stable
+    // error code (invalid_grant), not a generic failure. Callers need
+    // that code to distinguish "this credential needs reconnecting" from
+    // a transient provider issue, so it's attached to the thrown error
+    // rather than only living inside the message string. redactTokenResponse
+    // (already used by the OAuth callback for the identical reason) strips
+    // anything token-shaped before this ever reaches a log line or an API
+    // response — Google's own error body for a refresh failure doesn't
+    // echo back token values, but this stays defensive against any
+    // provider response shape rather than assuming that forever.
+    const err = new Error('Google token refresh failed: ' + JSON.stringify(redactTokenResponse(data)));
+    err.providerErrorCode = data?.error || 'unknown';
+    throw err;
+  }
   return {
     accessToken: data.access_token,
     newExpiresAt: new Date(Date.now() + data.expires_in * 1000).toISOString(),
