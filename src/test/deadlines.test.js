@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { computeDueSoon, groupDueSoon } from '../lib/deadlines.js';
+import { computeDueSoon, groupDueSoon, computeAppealDeadline } from '../lib/deadlines.js';
 
 describe('computeDueSoon — daysOverdue', () => {
   it('reports the actual number of days overdue, not always zero', () => {
@@ -167,6 +167,133 @@ describe('computeDueSoon — case-derived ACAS/statutory deadlines', () => {
     }];
     const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
     expect(items).toHaveLength(0);
+  });
+
+  // Defect #16 remediation — the appeal window must anchor to
+  // cs.outcomeIssuedAt (the actual, structured decision date) once it
+  // exists, never to the saved outcome letter's own savedAt/date.
+  // Re-saving or regenerating the letter days (or weeks) later must never
+  // silently move a statutory-guidance deadline forward. Scenario labels
+  // (A-L) match the remediation brief's own test matrix.
+  describe('appeal window anchor (Defect #16)', () => {
+    it('A. outcome_issued_at present, letter saved same day -> anchors to outcome_issued_at', () => {
+      const cases = [{
+        id: 'a1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', savedAt: '2025-06-13T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }],
+      }];
+      const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+      expect(items[0].deadlineDate).toBe('20/06/2025');
+    });
+
+    it('B. outcome_issued_at present, letter saved 3 days later -> deadline does not move', () => {
+      const cases = [{
+        id: 'b1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', savedAt: '2025-06-16T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }],
+      }];
+      const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+      expect(items[0].deadlineDate).toBe('20/06/2025');
+    });
+
+    it('C. letter regenerated 8 days later -> deadline still does not move', () => {
+      const cases = [{
+        id: 'c1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', savedAt: '2025-06-21T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }],
+      }];
+      const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+      expect(items[0].deadlineDate).toBe('20/06/2025');
+    });
+
+    it('D. letter savedAt predates outcome_issued_at (malformed historical data) -> still anchors to outcome_issued_at', () => {
+      const cases = [{
+        id: 'd1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', savedAt: '2025-06-01T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }],
+      }];
+      const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+      expect(items[0].deadlineDate).toBe('20/06/2025');
+    });
+
+    it('E. historical case with no outcome_issued_at but a valid legacy hearing date -> anchors to the hearing date', () => {
+      const cases = [{
+        id: 'e1', employeeName: 'Legacy', outcome: 'Final written warning',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', letterOutput: '...', letterType: 'outcome' }],
+      }];
+      const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+      expect(items[0].deadlineDate).toBe('20/06/2025');
+    });
+
+    it('F. historical case with no outcome_issued_at and no hearing date, only savedAt -> falls back to savedAt as a last resort', () => {
+      const cases = [{
+        id: 'f1', employeeName: 'VeryLegacy', outcome: 'Final written warning',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: null, savedAt: '2025-06-13T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }],
+      }];
+      const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+      expect(items[0].deadlineDate).toBe('20/06/2025');
+    });
+
+    it('G/H. a Friday issue date crosses both weekends correctly (5 working days, Fri -> Fri)', () => {
+      const cases = [{
+        id: 'gh1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', letterOutput: '...', letterType: 'outcome' }],
+      }];
+      const items = computeDueSoon(cases, [], today).filter(d => d.category === 'appeal');
+      expect(items[0].deadlineDate).toBe('20/06/2025');
+    });
+
+    it('I/L. Golden Path exact production shape: issue Monday 2026-09-07, letter saved Thursday 2026-09-10 -> deadline Monday 2026-09-14, not moved by the save', () => {
+      const cases = [{
+        id: 'golden-path', employeeName: 'UAT - Test Employee (Golden Path)', outcome: 'First written warning',
+        outcomeIssuedAt: '2026-09-07', warningDurationMonths: 6, warningExpiresAt: '2027-03-07',
+        meetings: [
+          { id: 'm0', type: 'Investigation', date: '2026-09-07' },
+          { id: 'm1', type: 'Disciplinary', date: '2026-09-07', savedAt: '2026-09-10T19:55:00.878Z', letterOutput: '...', letterType: 'outcome' },
+        ],
+      }];
+      const laterToday = new Date('2026-09-10');
+      const items = computeDueSoon(cases, [], laterToday).filter(d => d.category === 'appeal');
+      expect(items).toHaveLength(1);
+      expect(items[0].deadlineDate).toBe('14/09/2026');
+    });
+
+    it('J. entering an appeal stage does not change the original appeal-window computation', () => {
+      const baseCase = {
+        id: 'j1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13', stage: 'outcome',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', letterOutput: '...', letterType: 'outcome' }],
+      };
+      const appealedCase = { ...baseCase, stage: 'appeal', meetings: [...baseCase.meetings, { id: 'm2', type: 'Disciplinary Appeal', date: '2025-06-25' }] };
+      const before = computeDueSoon([baseCase], [], today).filter(d => d.category === 'appeal');
+      const after = computeDueSoon([appealedCase], [], today).filter(d => d.category === 'appeal');
+      expect(before[0].deadlineDate).toBe(after[0].deadlineDate);
+    });
+
+    it('K. computeAppealDeadline (used for display) returns the same value regardless of the case being open or closed', () => {
+      const openCase = {
+        id: 'k1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', letterOutput: '...', letterType: 'outcome' }],
+      };
+      const closedCase = { ...openCase, stage: 'closed' };
+      expect(computeAppealDeadline(openCase).getTime()).toBe(computeAppealDeadline(closedCase).getTime());
+    });
+  });
+
+  describe('computeAppealDeadline (Defect #16, shared with OutcomeTab display)', () => {
+    it('returns null when no outcome letter has been saved yet, even if cs.outcome is already set', () => {
+      const cs = { id: 'n1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13', meetings: [] };
+      expect(computeAppealDeadline(cs)).toBeNull();
+    });
+
+    it('returns null for a case with no meetings and no outcome at all', () => {
+      expect(computeAppealDeadline({ id: 'n2', employeeName: 'Nobody', meetings: [] })).toBeNull();
+    });
+
+    it('matches computeDueSoon\'s own appeal-window date exactly for the same case', () => {
+      const cs = {
+        id: 'm1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2025-06-13',
+        meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13', savedAt: '2025-06-16T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }],
+      };
+      const dueSoonDeadline = computeDueSoon([cs], [], today).find(d => d.category === 'appeal').deadlineDate;
+      const directDeadline = computeAppealDeadline(cs).toLocaleDateString('en-GB');
+      expect(directDeadline).toBe(dueSoonDeadline);
+    });
   });
 
   it('flags an investigation as overrunning once 21+ days have passed, due 28 days from the first meeting', () => {

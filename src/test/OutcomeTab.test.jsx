@@ -144,6 +144,25 @@ describe('OutcomeTab — outcome date/duration/expiry display and completion pat
     expect(screen.getByText(/Expires 2027-03-07/)).toBeInTheDocument();
   });
 
+  // Defect #16 remediation — the same computeAppealDeadline computation
+  // computeDueSoon's own due/overdue tracking uses (lib/deadlines.js),
+  // surfaced here so this text can never independently disagree with the
+  // deadline actually being tracked elsewhere in the app.
+  it('shows the actual computed appeal deadline once an outcome letter has been saved (Defect #16)', () => {
+    const decided = {
+      ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07',
+      meetings: [{ id: 'm1', type: 'Disciplinary', date: '2026-09-07', savedAt: '2026-09-10T19:55:00.878Z', letterOutput: '...', letterType: 'outcome' }],
+    };
+    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+    expect(screen.getByText(/Deadline/)).toBeInTheDocument();
+  });
+
+  it('does not show a deadline before any outcome letter has been saved — nothing real to anchor one to yet', () => {
+    const decided = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', meetings: [] };
+    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+    expect(screen.queryByText(/Deadline/)).not.toBeInTheDocument();
+  });
+
   it('offers "Complete outcome details" for a warning outcome missing its duration, when the caller can decide', () => {
     const incomplete = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: null, warningDurationMonths: null };
     render(<OutcomeTab cs={incomplete} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);

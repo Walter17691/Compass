@@ -1,6 +1,7 @@
 import { isGrievanceCase, hasLetterType } from '../../lib/caseStage';
 import { getProcessType } from '../../lib/processStages';
 import { isWarningOutcome } from '../../lib/outcomeTypes';
+import { computeAppealDeadline } from '../../lib/deadlines';
 import { FONT } from '../../styles/tokens';
 
 // Phase 6.5 hardening (closes Prompt 16 audit finding H12, HIGH) — this
@@ -72,11 +73,18 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
 
   if (cs.outcome) {
     const needsCompletion = needsOutcomeDetailsCompletion(cs);
+    // Defect #16 remediation — the same anchor computeDueSoon's own
+    // due/overdue tracking uses (lib/deadlines.js), so this text can never
+    // silently disagree with the deadline actually being tracked. Only
+    // resolves once an outcome letter has actually been saved (matching
+    // computeDueSoon's own condition for generating this deadline at all);
+    // before that there's nothing real to display yet.
+    const appealDeadline = computeAppealDeadline(cs);
     return (
       <div style={{background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:12,padding:"16px 20px"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#1A7A4A",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Outcome issued</div>
         <div style={{fontSize:14,fontWeight:600,color:"#1C1820",marginBottom:4}}>{cs.outcome}</div>
-        <div style={{fontSize:12,color:"#6B6375"}}>Issued {cs.outcomeIssuedAt?fmtDate(cs.outcomeIssuedAt):"date not recorded"} · Appeal window: 5 working days from issue</div>
+        <div style={{fontSize:12,color:"#6B6375"}}>Issued {cs.outcomeIssuedAt?fmtDate(cs.outcomeIssuedAt):"date not recorded"} · Appeal window: 5 working days from issue{appealDeadline?` · Deadline ${fmtDate(appealDeadline)}`:""}</div>
         {cs.warningDurationMonths&&(
           <div style={{fontSize:12,color:"#6B6375",marginTop:2}}>Warning duration: {cs.warningDurationMonths} month{cs.warningDurationMonths===1?"":"s"}{cs.warningExpiresAt?` · Expires ${fmtDate(cs.warningExpiresAt)}`:""}</div>
         )}

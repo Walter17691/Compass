@@ -57,6 +57,41 @@ import { isDisciplinaryMeeting, isInvestigationMeeting } from './meetingTypeMatc
 // site keeps working unchanged, defaulting to England & Wales
 // (ukBankHolidays.js's own default), while a caller that knows an org's
 // real configured jurisdiction can pass it through.
+// Defect #16 remediation — the appeal window's anchor date. cs.outcomeIssuedAt
+// (Defect #12/#14's structured decision date) is authoritative once it
+// exists: the saved outcome letter is documentation OF the decision, not
+// the decision itself, so re-saving or regenerating it must never
+// silently move a statutory-guidance deadline forward. Historical cases
+// decided before outcomeIssuedAt existed fall back to the same "last
+// relevant hearing meeting's own date" signal OutcomeModal.jsx's own
+// findOutcomeRelevantMeeting already trusts for exactly this "what date
+// was this actually decided" question (its historical "Complete outcome
+// details" flow) — before finally falling back to the letter meeting's
+// own savedAt/date as a last resort, so a case with neither of the above
+// (very old/malformed data) still gets a deadline rather than none.
+function appealWindowAnchor(cs, outcomeLetterMeeting) {
+  if (cs.outcomeIssuedAt) return cs.outcomeIssuedAt;
+  const hearings = (cs.meetings || []).filter(m => isDisciplinaryMeeting(m.type));
+  const lastHearing = hearings[hearings.length - 1];
+  if (lastHearing?.date) return lastHearing.date;
+  return outcomeLetterMeeting?.savedAt || outcomeLetterMeeting?.date;
+}
+
+// Shared with OutcomeTab.jsx (its own displayed "Appeal window" deadline)
+// so the UI can never independently drift from what computeDueSoon's
+// due/overdue tracking below actually anchors to — one computation, not
+// two maintained separately. Returns null once no outcome letter has
+// actually been saved yet (nothing to anchor a real deadline to), or if
+// no anchor date can be determined at all.
+export function computeAppealDeadline(cs, ukJurisdiction = DEFAULT_UK_JURISDICTION) {
+  const meetings = cs?.meetings || [];
+  const outcomeLetterMeetings = meetings.filter(m => isDisciplinaryMeeting(m.type) && hasLetterType([m], "outcome"));
+  const latest = outcomeLetterMeetings[outcomeLetterMeetings.length - 1];
+  if (!latest) return null;
+  const anchor = appealWindowAnchor(cs, latest);
+  return addWorkingDaysDate(anchor, 5, ukJurisdiction);
+}
+
 export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = [], caseAccess = [], ukJurisdiction = DEFAULT_UK_JURISDICTION) {
   // Phase 7.5C — leaverInstances no longer generates a deadline (see the
   // comment where its loop used to be, below) but stays a real parameter
@@ -121,7 +156,7 @@ export function computeDueSoon(cases, dsarRequests = [], today = new Date(), cas
     // invitation was drafted and saved, before any decision existed.
     const outcomeLetters = meetings.filter(m=>isDisciplinaryMeeting(m.type)&&hasLetterType([m],"outcome"));
     outcomeLetters.forEach(m => {
-      const dl = workingDaysFromDate(m.savedAt||m.date, 5);
+      const dl = workingDaysFromDate(appealWindowAnchor(cs, m), 5);
       if(dl) addDeadline(cs.employeeName, "Employee appeal window (ACAS-recommended: 5 working days)", dl, "appeal", `${cs.id}:appeal:${m.id}`, caseMeta);
     });
 
