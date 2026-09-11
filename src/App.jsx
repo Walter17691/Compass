@@ -75,6 +75,7 @@ import { isHrRole } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
+import { safeJson } from './lib/safeJson';
 import { useFonts } from './hooks/useFonts';
 import { useModalA11y } from './hooks/useModalA11y';
 import { addLoadIssue, removeLoadIssue } from './lib/dataLoadIssues';
@@ -1512,7 +1513,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ name, email, orgId: org.id, role: inviteForm.role, locationIds: inviteForm.locationIds })
       });
-      const d = await r.json();
+      const d = await safeJson(r);
       if(d.success) {
         showToast(`Invitation sent to ${email}`, "success");
         setInviteForm({name:"",email:"",role:"",locationIds:[]});
@@ -1530,7 +1531,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     try {
       const r = await authedFetch(`/api/team/team-invites?orgId=${encodeURIComponent(org.id)}`);
-      const d = await r.json();
+      const d = await safeJson(r);
       if(d.invites) setPendingInvites(d.invites);
     } catch(e) { console.error("loadPendingInvites", e); }
   };
@@ -1541,7 +1542,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ action:"revoke", orgId: org.id, inviteId })
       });
-      const d = await r.json();
+      const d = await safeJson(r);
       if(d.success) { showToast("Invitation revoked"); loadPendingInvites(); }
       else showToast("Couldn't revoke the invitation — "+(d.error||"please try again"), "error");
     } catch(e) { showToast("Couldn't revoke the invitation — "+e.message, "error"); }
@@ -1554,7 +1555,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ action:"resend", orgId: org.id, inviteId })
       });
-      const d = await r.json();
+      const d = await safeJson(r);
       if(d.success) { showToast("Invitation resent"); loadPendingInvites(); }
       else showToast("Couldn't resend the invitation — "+(d.error||"please try again"), "error");
     } catch(e) { showToast("Couldn't resend the invitation — "+e.message, "error"); }

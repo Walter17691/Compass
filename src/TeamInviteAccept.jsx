@@ -3,6 +3,7 @@ import Login from './Login.jsx'
 import { CompassLockup } from './components/CompassLogo'
 import { COLOR, FONT } from './styles/tokens'
 import { authedFetch } from './lib/authedFetch.js'
+import { safeJson } from './lib/safeJson.js'
 
 // NEW-6/NEW-8 remediation — this is the one screen a ?teamInvite=TOKEN
 // link ever routes to, rendered from main.jsx BEFORE the ordinary
@@ -25,7 +26,7 @@ export default function TeamInviteAccept({ token, user, onLogin, onAccepted, onD
     if (!user) return
     let cancelled = false
     authedFetch(`/api/team/accept-team-invite?token=${encodeURIComponent(token)}`)
-      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(r => safeJson(r).then(d => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
         if (cancelled) return
         if (!ok) { setError(d.error || 'This invitation could not be found.'); setStatus('error'); return }
@@ -42,7 +43,7 @@ export default function TeamInviteAccept({ token, user, onLogin, onAccepted, onD
       const r = await authedFetch('/api/team/accept-team-invite', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
       })
-      const d = await r.json()
+      const d = await safeJson(r)
       if (!r.ok || !d.success) { setError(d.error || 'Could not accept this invitation.'); setStatus('error'); return }
       onAccepted({ org: { id: d.orgId, name: d.orgName } })
     } catch (e) {
