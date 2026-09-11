@@ -302,7 +302,7 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
   it('scenario B — logged in as the invited email: shows the acceptance screen, never silently renders Home', async () => {
     setPendingInvite();
     authedFetch.mockImplementation((url) => {
-      if (String(url).includes('/api/accept-team-invite')) {
+      if (String(url).includes('/api/team/accept-team-invite')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'hr@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
@@ -316,10 +316,10 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
   it('scenario B — accepting calls the atomic accept endpoint and lands in the new org, not the previous one', async () => {
     setPendingInvite();
     authedFetch.mockImplementation((url, options) => {
-      if (String(url).includes('/api/accept-team-invite') && (!options || options.method !== 'POST')) {
+      if (String(url).includes('/api/team/accept-team-invite') && (!options || options.method !== 'POST')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'hr@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
       }
-      if (String(url).includes('/api/accept-team-invite') && options?.method === 'POST') {
+      if (String(url).includes('/api/team/accept-team-invite') && options?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, orgId: 'org-a', orgName: 'Acme', role: 'auditor' }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
@@ -335,7 +335,7 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
   it('scenario C — logged in as a different email: explains the mismatch, never silently consumes the invitation', async () => {
     setPendingInvite();
     authedFetch.mockImplementation((url) => {
-      if (String(url).includes('/api/accept-team-invite')) {
+      if (String(url).includes('/api/team/accept-team-invite')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'someone-else@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
@@ -349,7 +349,7 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
   it('scenario C — signing out preserves the pending invitation and returns to the logged-out invite screen', async () => {
     setPendingInvite();
     authedFetch.mockImplementation((url) => {
-      if (String(url).includes('/api/accept-team-invite')) {
+      if (String(url).includes('/api/team/accept-team-invite')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'someone-else@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
@@ -368,7 +368,7 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
   it('dismissing an invalid/expired invitation clears it and proceeds to the ordinary app', async () => {
     setPendingInvite();
     authedFetch.mockImplementation((url) => {
-      if (String(url).includes('/api/accept-team-invite')) {
+      if (String(url).includes('/api/team/accept-team-invite')) {
         return Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'This invitation has expired' }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });

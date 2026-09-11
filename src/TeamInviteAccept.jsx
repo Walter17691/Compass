@@ -24,7 +24,7 @@ export default function TeamInviteAccept({ token, user, onLogin, onAccepted, onD
     // no state update is needed here at all.
     if (!user) return
     let cancelled = false
-    authedFetch(`/api/accept-team-invite?token=${encodeURIComponent(token)}`)
+    authedFetch(`/api/team/accept-team-invite?token=${encodeURIComponent(token)}`)
       .then(r => r.json().then(d => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
         if (cancelled) return
@@ -39,7 +39,7 @@ export default function TeamInviteAccept({ token, user, onLogin, onAccepted, onD
   const accept = async () => {
     setStatus('accepting')
     try {
-      const r = await authedFetch('/api/accept-team-invite', {
+      const r = await authedFetch('/api/team/accept-team-invite', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
       })
       const d = await r.json()

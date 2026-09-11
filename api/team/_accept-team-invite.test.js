@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler from './accept-team-invite.js';
-import { hashTeamInviteToken } from './_teamInviteToken.js';
+import { acceptTeamInvite as handler } from './_accept-team-invite.js';
+import { hashTeamInviteToken } from '../_teamInviteToken.js';
 
 function mockRes() {
   const res = { statusCode: null, body: null };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import handler from './team-invites.js';
+import { teamInvites as handler } from './_team-invites.js';
 
 function mockRes() {
   const res = { statusCode: null, body: null };

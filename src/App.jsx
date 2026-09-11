@@ -1483,7 +1483,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // this used to do no network I/O at all: it just redisplayed org.invite_code
   // in a "share this link" modal and silently discarded the entered
   // email/role/locations, while the UI ("Sending invite...") read as if
-  // Compass had actually sent something. api/invite-member.js already
+  // Compass had actually sent something. api/team/_invite-member.js already
   // existed as a real, HR-gated, rate-limited, tested endpoint — it simply
   // had no caller. Now wired to it; role/locations are no longer collected
   // here at all (join_org_with_invite_code always assigns location_manager
@@ -1493,7 +1493,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // aid, with copy that reflects whether the email genuinely sent.
   // NEW-8 remediation — the invitation now carries its own intended
   // role/locations, applied atomically when it's accepted (see
-  // api/accept-team-invite.js), instead of every invitee silently
+  // api/team/_accept-team-invite.js), instead of every invitee silently
   // joining as Location Manager pending a manual follow-up correction.
   // There is no client-visible fallback link any more: the per-invitation
   // token only ever exists in the email itself (never returned to the
@@ -1507,7 +1507,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const name = inviteForm.name.trim();
     const email = inviteForm.email.trim();
     try {
-      const r = await authedFetch("/api/invite-member", {
+      const r = await authedFetch("/api/team/invite-member", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ name, email, orgId: org.id, role: inviteForm.role, locationIds: inviteForm.locationIds })
@@ -1529,7 +1529,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const loadPendingInvites = async () => {
     if(!org?.id) return;
     try {
-      const r = await authedFetch(`/api/team-invites?orgId=${encodeURIComponent(org.id)}`);
+      const r = await authedFetch(`/api/team/team-invites?orgId=${encodeURIComponent(org.id)}`);
       const d = await r.json();
       if(d.invites) setPendingInvites(d.invites);
     } catch(e) { console.error("loadPendingInvites", e); }
@@ -1537,7 +1537,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const revokeInvite = async (inviteId) => {
     try {
-      const r = await authedFetch("/api/team-invites", {
+      const r = await authedFetch("/api/team/team-invites", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ action:"revoke", orgId: org.id, inviteId })
       });
@@ -1550,7 +1550,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const resendInvite = async (inviteId) => {
     setResendingInviteId(inviteId);
     try {
-      const r = await authedFetch("/api/team-invites", {
+      const r = await authedFetch("/api/team/team-invites", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ action:"resend", orgId: org.id, inviteId })
       });

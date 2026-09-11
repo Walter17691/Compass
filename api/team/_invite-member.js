@@ -1,9 +1,9 @@
-import { verifyCaller } from './_auth.js';
-import { escapeHtml as esc } from './_html.js';
-import { checkRateLimit } from './_rateLimit.js';
-import { APP_URL } from './_appUrl.js';
-import { ROLE_LABELS } from '../src/lib/roles.js';
-import { generateTeamInviteToken } from './_teamInviteToken.js';
+import { verifyCaller } from '../_auth.js';
+import { escapeHtml as esc } from '../_html.js';
+import { checkRateLimit } from '../_rateLimit.js';
+import { APP_URL } from '../_appUrl.js';
+import { ROLE_LABELS } from '../../src/lib/roles.js';
+import { generateTeamInviteToken } from '../_teamInviteToken.js';
 
 const INVITE_EXPIRY_DAYS = 7;
 // hr_director is deliberately absent — ordinary team invitations must
@@ -26,7 +26,11 @@ async function supabaseRequest(path, options = {}) {
   });
 }
 
-export default async function handler(req, res) {
+// Final security gate (2026-09-11) — moved under api/team/ (from a
+// top-level api/invite-member.js) purely to stay within the Vercel
+// Hobby-plan 12-serverless-function-per-deployment limit; see
+// api/team/[...action].js's own header comment. No behavioural change.
+export async function inviteMember(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const caller = await verifyCaller(req);
@@ -34,7 +38,7 @@ export default async function handler(req, res) {
 
   // NEW-8 remediation — an invitation now carries its own intended role
   // and (where the role uses it) location scope, applied atomically when
-  // the invitation is accepted (see api/accept-team-invite.js). Every
+  // the invitation is accepted (see api/team/_accept-team-invite.js). Every
   // invitee previously joined as location_manager with zero locations
   // regardless of what this endpoint claimed in the email, since
   // join_org_with_invite_code hardcoded that — this endpoint now creates

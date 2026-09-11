@@ -1,6 +1,6 @@
-import { verifyCaller } from './_auth.js';
-import { ROLE_LABELS } from '../src/lib/roles.js';
-import { hashTeamInviteToken } from './_teamInviteToken.js';
+import { verifyCaller } from '../_auth.js';
+import { ROLE_LABELS } from '../../src/lib/roles.js';
+import { hashTeamInviteToken } from '../_teamInviteToken.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -36,7 +36,12 @@ async function supabaseRpc(fn, args) {
 // elsewhere. Both endpoints only ever handle the token in its hashed
 // form past this point; the raw value from the URL is hashed immediately
 // and never stored, logged, or echoed back.
-export default async function handler(req, res) {
+//
+// Also moved under api/team/ (from a top-level api/accept-team-invite.js)
+// purely to stay within the Vercel Hobby-plan 12-serverless-function-per-
+// deployment limit; see api/team/[...action].js's own header comment. No
+// behavioural change.
+export async function acceptTeamInvite(req, res) {
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
 

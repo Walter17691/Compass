@@ -96,7 +96,7 @@ export function TeamAccessSection({ isHR, currentUserRole, locations, teamMember
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:8,boxSizing:"border-box"}}/>
           {/* NEW-8 remediation — the invitation now carries its own
               intended access level, applied atomically when it's
-              accepted (see api/accept-team-invite.js), instead of every
+              accepted (see api/team/_accept-team-invite.js), instead of every
               invitee silently joining as Location Manager pending a
               manual follow-up correction. hr_director is never offered
               here — see TEAM_INVITE_ROLES's own comment. */}
