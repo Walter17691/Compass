@@ -385,6 +385,92 @@ describe('validateFormalLetter — combined production-draft fixture (Defects #1
   });
 });
 
+// NEW-1 remediation — the exact acceptance matrix from the remediation
+// brief. outcome_issued_at = 2026-09-07 (Monday), authoritative deadline
+// = 2026-09-14 (Monday, 5 working days later) throughout, matching the
+// Golden Path fixture and computeAuthoritativeAppealDeadline's own test
+// coverage (deadlines.test.js).
+describe('validateFormalLetter — appeal deadline (NEW-1)', () => {
+  const employeeName = goldenPathEmployee;
+  const outcome = 'First written warning';
+  const appealDeadline = '2026-09-14';
+
+  function outcomeLetterWithAppeal(name, { letterDate = '10 September 2026', appealSentence } = {}) {
+    return `[Company Name]\n\n${letterDate}\n\nDear ${name},\n\nThe sanction imposed is: ${outcome}. This warning will remain on your file for 6 months. ${appealSentence}\n\nYours sincerely,\n[Hearing Manager Name]`;
+  }
+
+  it('A. issue and letter dated the same day, explicit correct deadline -> PASS', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { letterDate: '7 September 2026', appealSentence: 'If you wish to appeal, you must submit your appeal by 14 September 2026.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline });
+    expect(result.valid).toBe(true);
+  });
+
+  it('B. letter dated later than issue, explicit correct deadline -> PASS', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'If you wish to appeal, you must submit your appeal by 14 September 2026.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline });
+    expect(result.valid).toBe(true);
+  });
+
+  it('C. letter dated later, explicit WRONG concrete deadline (17 September) -> FAIL', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'If you wish to appeal, you must submit your appeal by 17 September 2026.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => /appeal deadline other than the authoritative date/i.test(i))).toBe(true);
+  });
+
+  it('D. only relative "date of this letter" wording, no explicit date -> FAIL (this is the exact original repro)', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'You must appeal in writing within 5 working days of the date of this letter.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => /does not state the authoritative appeal deadline/i.test(i))).toBe(true);
+  });
+
+  it('E. letter regenerated after the deadline has passed, still states the correct original deadline -> PASS', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { letterDate: '15 September 2026', appealSentence: 'If you wish to appeal, you must submit your appeal by 14 September 2026.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline });
+    expect(result.valid).toBe(true);
+  });
+
+  it('F. correct explicit deadline plus harmless generic relative wording -> PASS', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'You must submit your appeal by 14 September 2026, within the appeal period.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline });
+    expect(result.valid).toBe(true);
+  });
+
+  it('G. correct explicit deadline plus contradictory "date of this letter" wording -> FAIL even though the correct date is also present', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'You must submit your appeal by 14 September 2026, being within five working days from the date of this letter.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => /ties the appeal deadline to the date of this letter/i.test(i))).toBe(true);
+  });
+
+  it('H. no computable authoritative deadline -> no fabricated deadline, relative-only wording passes', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'You must appeal in writing within 5 working days of the date of this letter.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline: null });
+    expect(result.valid).toBe(true);
+  });
+
+  it('I. recipient/outcome/duration/expiry checks are unaffected by the new appeal-deadline check', () => {
+    const letter = outcomeLetterWithDuration(employeeName, { outcome, durationSentence: 'This warning will remain active on your file for a period of 6 months,', expirySentence: 'and will expire on 07 March 2027. You must submit your appeal by 14 September 2026.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', warningDurationMonths: 6, warningExpiresAt: '2027-03-07', appealDeadline });
+    expect(result.valid).toBe(true);
+  });
+
+  it('J. Golden Path exact fixture: 14 September 2026 is required', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'If you wish to appeal, you must submit your appeal by 14 September 2026.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'outcome', appealDeadline: '2026-09-14' });
+    expect(result.valid).toBe(true);
+    const wrongLetter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'You must appeal in writing within 5 working days of the date of this letter.' });
+    expect(validateFormalLetter(wrongLetter, { employeeName, outcome, letterType: 'outcome', appealDeadline: '2026-09-14' }).valid).toBe(false);
+  });
+
+  it('does not run this check at all for non-outcome letter types', () => {
+    const letter = outcomeLetterWithAppeal(employeeName, { appealSentence: 'You must appeal in writing within 5 working days of the date of this letter.' });
+    const result = validateFormalLetter(letter, { employeeName, outcome, letterType: 'appeal', appealDeadline });
+    expect(result.valid).toBe(true);
+  });
+});
+
 describe('validateFormalLetter — malformed/empty AI response', () => {
   it('treats an empty string as invalid for an employee-directed letter with a known employee', () => {
     const result = validateFormalLetter('', {employeeName: goldenPathEmployee, outcome: '', letterType: 'outcome'});

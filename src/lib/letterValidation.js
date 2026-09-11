@@ -107,7 +107,7 @@ export const EMPLOYEE_DIRECTED_LETTER_TYPES = [
 // compose. Never invents a missing fact to "fix" a check — an unresolved
 // [placeholder] for something Compass genuinely doesn't hold structured
 // data for (e.g. company address) is not flagged here.
-export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt } = {}) {
+export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt, appealDeadline } = {}) {
   const issues = [];
   if (!EMPLOYEE_DIRECTED_LETTER_TYPES.includes(letterType)) {
     return { valid: true, issues };
@@ -199,6 +199,57 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
       if (mentionsAnyDate && !mentionsCorrectDate) {
         issues.push(`Letter appears to state an expiry date other than the recorded ${expiry.toLocaleDateString("en-GB")}.`);
       }
+    }
+  }
+
+  // NEW-1 remediation — deterministic appeal-deadline check. appealDeadline
+  // is the same authoritative, cs.outcomeIssuedAt-anchored date #16
+  // already computes (see computeAuthoritativeAppealDeadline in
+  // deadlines.js); this only runs once Compass actually has one to check
+  // against (a historical case with no computable anchor is never held
+  // to a fabricated deadline — see deadlines.js's own comment on that
+  // fallback). Deliberately narrow: this never tries to parse the
+  // letter's own printed document date out of its free text (fragile,
+  // and the wrong thing to fix — the letter is allowed to be dated
+  // whenever it's actually produced; see letterGrounding.js's own
+  // comment). It only checks, near the letter's own appeal-rights
+  // wording, whether (a) the correct date is stated anywhere at all, (b)
+  // a different concrete date is stated instead, and (c) the letter ties
+  // the window to the letter's own date/receipt — a fixed, narrow phrase
+  // set — regardless of whether that specific phrasing happens to be
+  // numerically correct in this instance, since once an authoritative
+  // date exists the letter should state it plainly rather than leave the
+  // reader to compute their own from a self-referential anchor that can
+  // silently drift on a future redraft.
+  if (letterType === "outcome" && appealDeadline) {
+    const text = letterText || "";
+    const deadline = new Date(appealDeadline);
+    const correctYear = String(deadline.getFullYear());
+    const correctMonthLong = deadline.toLocaleDateString("en-GB", { month: "long" });
+    const correctMonthShort = deadline.toLocaleDateString("en-GB", { month: "short" });
+    const correctDay = deadline.getDate();
+    const correctSlash = `${String(correctDay).padStart(2, "0")}/${String(deadline.getMonth() + 1).padStart(2, "0")}/${correctYear}`;
+    const correctDateRe = new RegExp(`\\b0?${correctDay}(?:st|nd|rd|th)?\\s+(?:${correctMonthLong}|${correctMonthShort})\\.?,?\\s+${correctYear}\\b`, "i");
+    const formattedCorrect = deadline.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const statesCorrectDate = correctDateRe.test(text) || text.includes(correctSlash);
+
+    // Narrow window around each "appeal" mention — the known
+    // formal-letter appeal section — rather than scanning the whole
+    // letter for any date.
+    const appealWindows = [...text.matchAll(/appeal/gi)].map(m => text.slice(Math.max(0, m.index - 100), m.index + 250));
+    const combinedAppealText = appealWindows.join(" ");
+    const anyDateRe = /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+\d{4}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/i;
+    const wrongDateNearAppeal = anyDateRe.test(combinedAppealText) && !correctDateRe.test(combinedAppealText) && !combinedAppealText.includes(correctSlash);
+    const relativeLetterAnchorRe = /date\s+of\s+this\s+letter|this\s+letter'?s?\s+date|letter\s+date|date\s+you\s+receiv\w*\s+this\s+letter|receipt\s+of\s+this\s+letter/i;
+    const hasRelativeLetterAnchor = relativeLetterAnchorRe.test(combinedAppealText);
+
+    if (wrongDateNearAppeal) {
+      issues.push(`Letter states an appeal deadline other than the authoritative date (${formattedCorrect}).`);
+    } else if (!statesCorrectDate) {
+      issues.push(`Letter does not state the authoritative appeal deadline (${formattedCorrect}).`);
+    }
+    if (hasRelativeLetterAnchor) {
+      issues.push(`Letter ties the appeal deadline to the date of this letter, which can differ from the authoritative deadline (${formattedCorrect}).`);
     }
   }
 

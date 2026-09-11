@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLetterGrounding, buildRecipientInstruction } from '../lib/letterGrounding.js';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction } from '../lib/letterGrounding.js';
 
 const goldenPathEmployee = 'UAT - Test Employee (Golden Path)';
 
@@ -88,5 +88,34 @@ describe('buildRecipientInstruction — Golden Path generation context (Defect #
     expect(buildRecipientInstruction('', 'outcome')).toBe('');
     expect(buildRecipientInstruction(null, 'outcome')).toBe('');
     expect(buildRecipientInstruction(undefined, 'outcome')).toBe('');
+  });
+});
+
+// NEW-1 remediation — the authoritative appeal deadline supplied as a
+// deterministic fact, the same pattern buildRecipientInstruction above
+// already established.
+describe('buildAppealDeadlineInstruction (NEW-1)', () => {
+  it('states the Golden Path exact deadline in long-form English', () => {
+    const instruction = buildAppealDeadlineInstruction('2026-09-14', 'outcome');
+    expect(instruction).toContain('14 September 2026');
+    expect(instruction).toContain('AUTHORITATIVE APPEAL DEADLINE');
+  });
+
+  it('instructs the model not to derive the date from the letter\'s own document date', () => {
+    const instruction = buildAppealDeadlineInstruction('2026-09-14', 'outcome');
+    expect(instruction.toLowerCase()).toMatch(/not derive a different date from this letter/);
+    expect(instruction.toLowerCase()).toMatch(/never write that the appeal window runs from the date of this letter/);
+  });
+
+  it('is only produced for outcome letters, not other letter types', () => {
+    expect(buildAppealDeadlineInstruction('2026-09-14', 'invite')).toBe('');
+    expect(buildAppealDeadlineInstruction('2026-09-14', 'appeal')).toBe('');
+    expect(buildAppealDeadlineInstruction('2026-09-14', 'dismissal')).toBe('');
+  });
+
+  it('is not produced when no authoritative deadline is known (never fabricates one)', () => {
+    expect(buildAppealDeadlineInstruction(null, 'outcome')).toBe('');
+    expect(buildAppealDeadlineInstruction(undefined, 'outcome')).toBe('');
+    expect(buildAppealDeadlineInstruction('', 'outcome')).toBe('');
   });
 });

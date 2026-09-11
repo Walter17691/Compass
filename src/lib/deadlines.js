@@ -92,6 +92,23 @@ export function computeAppealDeadline(cs, ukJurisdiction = DEFAULT_UK_JURISDICTI
   return addWorkingDaysDate(anchor, 5, ukJurisdiction);
 }
 
+// NEW-1 remediation — computeAppealDeadline above deliberately returns
+// null until an outcome letter has actually been saved (it's the
+// post-save due-soon/OutcomeTab display signal: nothing to show an
+// "appeal window" for before a letter exists). Drafting/grounding an
+// outcome letter happens BEFORE that save, so it needs the same
+// authoritative deadline computed from cs.outcomeIssuedAt alone, without
+// waiting for a saved letter to exist. Shares the exact same anchor
+// (appealWindowAnchor) and working-day arithmetic (addWorkingDaysDate)
+// as computeAppealDeadline — no second calculation of the 5-working-day
+// rule, and no change to appealWindowAnchor's own fallback hierarchy.
+export function computeAuthoritativeAppealDeadline(cs, ukJurisdiction = DEFAULT_UK_JURISDICTION) {
+  if (!cs) return null;
+  const anchor = appealWindowAnchor(cs);
+  if (!anchor) return null;
+  return addWorkingDaysDate(anchor, 5, ukJurisdiction);
+}
+
 export function computeDueSoon(cases, dsarRequests = [], today = new Date(), caseTasks = [], wellbeingNotes = [], leaverInstances = [], redundancyCases = [], caseAccess = [], ukJurisdiction = DEFAULT_UK_JURISDICTION) {
   // Phase 7.5C — leaverInstances no longer generates a deadline (see the
   // comment where its loop used to be, below) but stays a real parameter

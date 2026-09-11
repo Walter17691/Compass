@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { computeDueSoon, groupDueSoon, computeAppealDeadline } from '../lib/deadlines.js';
+import { computeDueSoon, groupDueSoon, computeAppealDeadline, computeAuthoritativeAppealDeadline } from '../lib/deadlines.js';
 
 describe('computeDueSoon — daysOverdue', () => {
   it('reports the actual number of days overdue, not always zero', () => {
@@ -293,6 +293,40 @@ describe('computeDueSoon — case-derived ACAS/statutory deadlines', () => {
       const dueSoonDeadline = computeDueSoon([cs], [], today).find(d => d.category === 'appeal').deadlineDate;
       const directDeadline = computeAppealDeadline(cs).toLocaleDateString('en-GB');
       expect(directDeadline).toBe(dueSoonDeadline);
+    });
+  });
+
+  describe('computeAuthoritativeAppealDeadline (NEW-1 — pre-save letter grounding)', () => {
+    it('Golden Path exact fixture: outcome_issued_at 2026-09-07, no saved letter yet -> 14 September 2026', () => {
+      const cs = { id: 'golden-path', employeeName: 'UAT - Test Employee (Golden Path)', outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', meetings: [] };
+      expect(computeAuthoritativeAppealDeadline(cs).toLocaleDateString('en-GB')).toBe('14/09/2026');
+    });
+
+    it('unlike computeAppealDeadline, does not require an outcome letter to already be saved', () => {
+      const cs = { id: 'n1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', meetings: [] };
+      expect(computeAppealDeadline(cs)).toBeNull();
+      expect(computeAuthoritativeAppealDeadline(cs)).not.toBeNull();
+    });
+
+    it('regenerating/redrafting a letter later does not move the deadline, matching #16', () => {
+      const cs = { id: 'r1', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', meetings: [] };
+      const laterCs = { ...cs, meetings: [{ id: 'm1', type: 'Disciplinary', date: '2026-09-07', savedAt: '2026-09-15T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }] };
+      expect(computeAuthoritativeAppealDeadline(cs).getTime()).toBe(computeAuthoritativeAppealDeadline(laterCs).getTime());
+    });
+
+    it('matches computeAppealDeadline exactly once a letter has been saved (same anchor, same arithmetic)', () => {
+      const cs = { id: 'm2', employeeName: 'Golden', outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', meetings: [{ id: 'm1', type: 'Disciplinary', date: '2026-09-07', savedAt: '2026-09-10T10:00:00.000Z', letterOutput: '...', letterType: 'outcome' }] };
+      expect(computeAuthoritativeAppealDeadline(cs).getTime()).toBe(computeAppealDeadline(cs).getTime());
+    });
+
+    it('falls back to the last hearing date when no outcome_issued_at exists (legacy case)', () => {
+      const cs = { id: 'legacy1', employeeName: 'Legacy', outcome: 'Final written warning', meetings: [{ id: 'm1', type: 'Disciplinary', date: '2025-06-13' }] };
+      expect(computeAuthoritativeAppealDeadline(cs).toLocaleDateString('en-GB')).toBe('20/06/2025');
+    });
+
+    it('returns null when no anchor can be determined at all (no fabricated deadline)', () => {
+      expect(computeAuthoritativeAppealDeadline({ id: 'none1', employeeName: 'Nobody', meetings: [] })).toBeNull();
+      expect(computeAuthoritativeAppealDeadline(null)).toBeNull();
     });
   });
 

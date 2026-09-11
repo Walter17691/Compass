@@ -41,3 +41,24 @@ export function buildRecipientInstruction(employeeName, letterType) {
   if (!employeeName || !EMPLOYEE_DIRECTED_LETTER_TYPES.includes(letterType)) return "";
   return `INTENDED RECIPIENT: ${employeeName}. Address this letter to this exact person, by this exact name, in both the recipient block and the salutation ("Dear ${employeeName},"). Do not address it to any other person named in this case's context (e.g. a manager, witness, or reporting colleague) even if they are mentioned prominently elsewhere. Do not leave the recipient's name as a placeholder (e.g. [Employee Name]) — this fact is already known and must be used exactly as given.`;
 }
+
+// NEW-1 remediation — an outcome letter's appeal deadline used to be
+// left entirely to the model's own judgement ("the right of appeal
+// within 5 working days", with no anchor point given), so it reliably
+// anchored that relative clause to the only date visibly present in its
+// own draft: the letter's own document date. That's wrong whenever the
+// letter is drafted/redrafted on a later date than the hearing/decision
+// itself (routine — review, editing, sign-off delay), because Compass's
+// own tracked deadline (#16) is deliberately anchored to
+// cs.outcomeIssuedAt instead, specifically so redrafting a letter can
+// never silently move the real deadline. Supplying the already-computed,
+// authoritative date as a deterministic fact — the same pattern
+// buildRecipientInstruction above already established for the
+// recipient — closes that gap at generation time; validateFormalLetter
+// (letterValidation.js) remains the actual safety net regardless of
+// whether the model follows this instruction.
+export function buildAppealDeadlineInstruction(appealDeadlineIso, letterType) {
+  if (!appealDeadlineIso || letterType !== "outcome") return "";
+  const formatted = new Date(appealDeadlineIso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return `AUTHORITATIVE APPEAL DEADLINE: ${formatted}. This is the exact, final date already computed under Compass's own ACAS 5-working-day appeal rule from the recorded decision date — it is a known case fact, not something for you to calculate. Do not derive a different date from this letter's own document date, from today's date, or from when this letter happens to be drafted, saved, or regenerated. State this exact date as the appeal deadline (e.g. "you must submit your appeal by ${formatted}"). If you also use relative wording (e.g. "within 5 working days"), it must describe this same date and must not anchor it to the date of this letter — never write that the appeal window runs from the date of this letter, this letter's date, or the date the employee receives this letter, since that could produce a different date than the one given here.`;
+}

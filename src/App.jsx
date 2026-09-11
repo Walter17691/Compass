@@ -9,7 +9,7 @@ import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
 import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, capRecentForCache } from './lib/storage';
 import { findEmployeeByName } from './lib/employeeRecords';
-import { computeDueSoon } from './lib/deadlines';
+import { computeDueSoon, computeAuthoritativeAppealDeadline } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage, withStageTransitionStamp, hasLetterType } from './lib/caseStage';
@@ -29,7 +29,7 @@ import {
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter } from './lib/letterValidation';
-import { resolveLetterGrounding, buildRecipientInstruction } from './lib/letterGrounding';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -7457,6 +7457,14 @@ Please produce:
       // and reading the decision-maker's own decisionReasoning/
       // investigatorFinding/outstandingUncertainty fields concludeInvestigation
       // doesn't need (it runs before any finding exists).
+      // NEW-1 remediation — the authoritative, cs.outcomeIssuedAt-anchored
+      // appeal deadline (#16), computed here at grounding time — before
+      // any outcome letter is saved — rather than left for the model to
+      // infer relative to this letter's own document date. See
+      // computeAuthoritativeAppealDeadline's own comment (deadlines.js)
+      // for why this isn't the same function OutcomeTab/computeDueSoon use.
+      const appealDeadline = t==="outcome" && activeCase ? computeAuthoritativeAppealDeadline(activeCase) : null;
+      const appealDeadlineIso = appealDeadline ? appealDeadline.toISOString().split("T")[0] : null;
       const allegationOutcomeContext = t==="outcome" && activeCase ? allegationsForCase(allegations, activeCase.id).map(a => {
         const linked = evidenceForAllegation(activeCase.evidence||[], a.id);
         const supporting = linked.filter(ev=>ev.stance==="supports").map(ev=>ev.name);
@@ -7473,6 +7481,7 @@ Please produce:
       const context = [
         groundedEmployee ? "Employee: "+groundedEmployee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
         buildRecipientInstruction(groundedEmployee, t),
+        buildAppealDeadlineInstruction(appealDeadlineIso, t),
         groundedManager ? "Chair/Manager: "+groundedManager : "",
         caseInfo.representative ? "Representative/companion: "+caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")" : "",
         groundedDate ? "Meeting date: "+groundedDate : "",
@@ -7511,7 +7520,7 @@ Please produce:
 
       const letterInstructions = {
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. If the letter states a specific deadline (e.g. to confirm attendance or submit evidence), use a placeholder such as [X working days] rather than a specific number — ACAS does not mandate a fixed notice period for this letter type, so any specific day-count you're not given below would be invented, not real guidance. Follow ACAS Code of Practice.",
-        "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; the sanction imposed, stated exactly as given in the outcome decision below (never invented or reworded to a different sanction); where the information below states a warning duration and/or expiry date, state that exact duration/date (never substitute a generic or example figure of your own) — where neither is given below, use a placeholder such as [X months] rather than guessing a number; where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal within 5 working days. Follow ACAS Code of Practice.",
+        "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; the sanction imposed, stated exactly as given in the outcome decision below (never invented or reworded to a different sanction); where the information below states a warning duration and/or expiry date, state that exact duration/date (never substitute a generic or example figure of your own) — where neither is given below, use a placeholder such as [X months] rather than guessing a number; where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal. If an AUTHORITATIVE APPEAL DEADLINE is given in the information below, state that exact date as the deadline by which the employee must appeal — do not calculate your own date from this letter's own date or from today, and do not phrase the window as running from the date of this letter. If no authoritative appeal deadline is given below, use relative wording such as 'within 5 working days of the date of this letter' instead. Follow ACAS Code of Practice.",
         "appeal": "a formal appeal outcome letter. Include: grounds of appeal considered, outcome of the appeal, reasons, whether original decision is upheld or overturned, confirmation this is the final stage. Follow ACAS Code of Practice.",
         "investigation-report": "a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed (infer from meeting record), findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections.","no-case-answer": "a formal letter to the employee confirming no case to answer. Include: that an investigation has been completed, that no further action will be taken, that the matter is now closed, and that the record will be kept confidential. Warm but professional tone.","grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
         "warning": "a formal written warning letter. Include: nature of misconduct, previous warnings if any, expected improvement, review period, consequence of further misconduct, right of appeal. Follow ACAS Code of Practice.",
@@ -7548,7 +7557,7 @@ Please produce:
         // is this letter actually addressed to this case's employee?)
         // before treating it as a valid, ready-for-review draft. See
         // lib/letterValidation.js for what this does and doesn't check.
-        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt});
+        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt, appealDeadline: appealDeadlineIso});
         setLetterOutput(text); setLetterSources(letterSources);
         // UAT Product Hierarchy pass, Part 6 — generation can genuinely
         // outlive the user staying on this screen (this function isn't
