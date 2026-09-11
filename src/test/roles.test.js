@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLES, ROLE_LABELS, roleLabel, isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation } from '../lib/roles';
+import { ROLES, ROLE_LABELS, TEAM_INVITE_ROLES, LOCATION_SCOPED_ROLES, ROLE_DESCRIPTIONS, roleLabel, isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation, canManageDirectorTier } from '../lib/roles';
 
 describe('ROLES / ROLE_LABELS', () => {
   it('has exactly 7 roles', () => {
@@ -90,5 +90,49 @@ describe('canAccessCaseLocation', () => {
 
   it('is false for a location_manager with a real, non-matching assigned-locations list — the one real restriction this function enforces', () => {
     expect(canAccessCaseLocation('location_manager', ['loc-2', 'loc-3'], 'loc-1')).toBe(false);
+  });
+});
+
+// NEW-8 remediation
+describe('TEAM_INVITE_ROLES', () => {
+  it('excludes hr_director', () => {
+    expect(TEAM_INVITE_ROLES.some(r => r.id === 'hr_director')).toBe(false);
+  });
+
+  it('includes every other role', () => {
+    expect(TEAM_INVITE_ROLES).toHaveLength(6);
+    ['hr_manager', 'location_manager', 'line_manager', 'investigator', 'legal_reviewer', 'auditor'].forEach(id => {
+      expect(TEAM_INVITE_ROLES.some(r => r.id === id)).toBe(true);
+    });
+  });
+});
+
+describe('LOCATION_SCOPED_ROLES / ROLE_DESCRIPTIONS', () => {
+  it('only location_manager is location-scoped', () => {
+    expect(LOCATION_SCOPED_ROLES.has('location_manager')).toBe(true);
+    expect(LOCATION_SCOPED_ROLES.has('line_manager')).toBe(false);
+    expect(LOCATION_SCOPED_ROLES.has('hr_manager')).toBe(false);
+  });
+
+  it('has a description for every invitable role', () => {
+    TEAM_INVITE_ROLES.forEach(r => expect(ROLE_DESCRIPTIONS[r.id]).toBeTruthy());
+  });
+});
+
+// NEW-9 remediation — client-side mirror of
+// protect_org_member_privilege_columns()'s hr_director-tier check.
+describe('canManageDirectorTier (NEW-9)', () => {
+  it('an hr_director can manage any row, director or not', () => {
+    expect(canManageDirectorTier('hr_director', 'hr_director')).toBe(true);
+    expect(canManageDirectorTier('hr_director', 'hr_manager')).toBe(true);
+  });
+
+  it('an hr_manager can manage a non-director row', () => {
+    expect(canManageDirectorTier('hr_manager', 'hr_manager')).toBe(true);
+    expect(canManageDirectorTier('hr_manager', 'location_manager')).toBe(true);
+  });
+
+  it('an hr_manager cannot manage an existing hr_director row', () => {
+    expect(canManageDirectorTier('hr_manager', 'hr_director')).toBe(false);
   });
 });

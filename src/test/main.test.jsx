@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState, useEffect } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { authedFetch } from '../lib/authedFetch.js';
 
 // Phase 6.5 hardening — tenant isolation (P0). Tests that main.jsx's
 // Root() genuinely remounts Compass on every org switch (key={org.id}),
@@ -262,5 +263,121 @@ describe('Root — shared-device sign-out clears cached ER data (Phase 6.5, High
 
     expect(localStorage.getItem('org-a:compass_cases')).toBeNull();
     expect(localStorage.getItem('org-b:compass_wellbeing')).toBeNull();
+  });
+});
+
+// NEW-6 remediation — a pending team invitation (?teamInvite=TOKEN,
+// captured to localStorage by main.jsx before this describe block even
+// renders) must preserve its context through every auth state Root()
+// can be in, rather than an already-authenticated user silently seeing
+// their own unrelated Home screen with the invite left dangling. Renders
+// the real TeamInviteAccept component (not mocked) through Root() itself,
+// so this exercises the actual routing decision in main.jsx, not a
+// reimplementation of it.
+describe('Root — pending team invitation preserved across auth state (NEW-6)', () => {
+  beforeEach(() => {
+    instanceCounter = 0; localStorage.clear(); vi.clearAllMocks();
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: { user: FAKE_USER } } });
+    supabaseMock.from.mockImplementation((table) => ({ select: () => ({ eq: () => Promise.resolve(table === 'org_members' ? { data: MEMBERSHIPS } : { data: [] }) }) }));
+  });
+
+  const setPendingInvite = () => window.history.pushState({}, '', '/?teamInvite=the-token');
+
+  it('captures ?teamInvite= into localStorage and strips it from the URL', async () => {
+    setPendingInvite();
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    render(<Root/>);
+    await waitFor(() => expect(localStorage.getItem('compass_pending_team_invite')).toBe('the-token'));
+    expect(window.location.search).not.toContain('teamInvite');
+  });
+
+  it('scenario A — logged out: shows the invite context and an embedded login, not the ordinary Login screen alone', async () => {
+    setPendingInvite();
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByText(/invited to join a team on Compass HR/i)).toBeInTheDocument());
+    expect(screen.getByPlaceholderText('you@company.com')).toBeInTheDocument();
+  });
+
+  it('scenario B — logged in as the invited email: shows the acceptance screen, never silently renders Home', async () => {
+    setPendingInvite();
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/accept-team-invite')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'hr@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByText(/You're invited to join Acme/i)).toBeInTheDocument());
+    expect(screen.getByText(/Auditor/)).toBeInTheDocument();
+    expect(screen.queryByTestId('org-id')).not.toBeInTheDocument();
+  });
+
+  it('scenario B — accepting calls the atomic accept endpoint and lands in the new org, not the previous one', async () => {
+    setPendingInvite();
+    authedFetch.mockImplementation((url, options) => {
+      if (String(url).includes('/api/accept-team-invite') && (!options || options.method !== 'POST')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'hr@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
+      }
+      if (String(url).includes('/api/accept-team-invite') && options?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, orgId: 'org-a', orgName: 'Acme', role: 'auditor' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    const user = userEvent.setup();
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByRole('button', { name: /accept invitation/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /accept invitation/i }));
+    await waitFor(() => expect(screen.getByTestId('org-id')).toHaveTextContent('org-a'));
+    expect(localStorage.getItem('compass_pending_team_invite')).toBeNull();
+  });
+
+  it('scenario C — logged in as a different email: explains the mismatch, never silently consumes the invitation', async () => {
+    setPendingInvite();
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/accept-team-invite')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'someone-else@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByText(/Different account signed in/i)).toBeInTheDocument());
+    expect(screen.getByText(/someone-else@example.com/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /accept invitation/i })).not.toBeInTheDocument();
+  });
+
+  it('scenario C — signing out preserves the pending invitation and returns to the logged-out invite screen', async () => {
+    setPendingInvite();
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/accept-team-invite')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'someone-else@example.com', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    const user = userEvent.setup();
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument());
+
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    await user.click(screen.getByRole('button', { name: /sign out/i }));
+
+    expect(localStorage.getItem('compass_pending_team_invite')).toBe('the-token');
+    await waitFor(() => expect(screen.getByText(/invited to join a team on Compass HR/i)).toBeInTheDocument());
+  });
+
+  it('dismissing an invalid/expired invitation clears it and proceeds to the ordinary app', async () => {
+    setPendingInvite();
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/accept-team-invite')) {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'This invitation has expired' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    const user = userEvent.setup();
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue to compass/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /continue to compass/i }));
+    expect(localStorage.getItem('compass_pending_team_invite')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('org-id')).toBeInTheDocument());
   });
 });

@@ -1491,36 +1491,74 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // a role here was never truthful — see TeamAccessSection.jsx). The
   // invite-link modal still opens afterward as an optional share/fallback
   // aid, with copy that reflects whether the email genuinely sent.
+  // NEW-8 remediation — the invitation now carries its own intended
+  // role/locations, applied atomically when it's accepted (see
+  // api/accept-team-invite.js), instead of every invitee silently
+  // joining as Location Manager pending a manual follow-up correction.
+  // There is no client-visible fallback link any more: the per-invitation
+  // token only ever exists in the email itself (never returned to the
+  // client), so unlike the old shared org.invite_code there is nothing
+  // safe to reconstruct or copy here — a failed send now also cleanly
+  // deletes the unusable invitation server-side rather than leaving a
+  // dangling one, so "try again" is the only correct recovery either way.
   const inviteMember = async () => {
-    if(!inviteForm.name.trim()||!inviteForm.email.trim()) return;
+    if(!inviteForm.name.trim()||!inviteForm.email.trim()||!inviteForm.role) return;
     setInviting(true);
     const name = inviteForm.name.trim();
     const email = inviteForm.email.trim();
-    // Team Invitations P0, domain correction — matches api/invite-member.js's
-    // own appUrl: the fallback copy-link shown here must be the same
-    // customer-facing link the email itself contains, not the unbranded
-    // Vercel project alias.
-    const link = `https://compasshruk.com?invite=${org.invite_code}`;
     try {
       const r = await authedFetch("/api/invite-member", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ name, email, orgId: org.id })
+        body: JSON.stringify({ name, email, orgId: org.id, role: inviteForm.role, locationIds: inviteForm.locationIds })
       });
       const d = await r.json();
       if(d.success) {
         showToast(`Invitation sent to ${email}`, "success");
-        setInviteLink({ name, email, link, code: org.invite_code, failed:false });
-        setInviteForm({name:"",email:""});
+        setInviteForm({name:"",email:"",role:"",locationIds:[]});
+        loadPendingInvites();
       } else {
         showToast("Couldn't send the invitation — "+(d.error||"please try again"), "error");
-        setInviteLink({ name, email, link, code: org.invite_code, failed:true });
       }
     } catch(e) {
       showToast("Couldn't send the invitation — "+e.message, "error");
-      setInviteLink({ name, email, link, code: org.invite_code, failed:true });
     }
     setInviting(false);
+  };
+
+  const loadPendingInvites = async () => {
+    if(!org?.id) return;
+    try {
+      const r = await authedFetch(`/api/team-invites?orgId=${encodeURIComponent(org.id)}`);
+      const d = await r.json();
+      if(d.invites) setPendingInvites(d.invites);
+    } catch(e) { console.error("loadPendingInvites", e); }
+  };
+
+  const revokeInvite = async (inviteId) => {
+    try {
+      const r = await authedFetch("/api/team-invites", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ action:"revoke", orgId: org.id, inviteId })
+      });
+      const d = await r.json();
+      if(d.success) { showToast("Invitation revoked"); loadPendingInvites(); }
+      else showToast("Couldn't revoke the invitation — "+(d.error||"please try again"), "error");
+    } catch(e) { showToast("Couldn't revoke the invitation — "+e.message, "error"); }
+  };
+
+  const resendInvite = async (inviteId) => {
+    setResendingInviteId(inviteId);
+    try {
+      const r = await authedFetch("/api/team-invites", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ action:"resend", orgId: org.id, inviteId })
+      });
+      const d = await r.json();
+      if(d.success) { showToast("Invitation resent"); loadPendingInvites(); }
+      else showToast("Couldn't resend the invitation — "+(d.error||"please try again"), "error");
+    } catch(e) { showToast("Couldn't resend the invitation — "+e.message, "error"); }
+    setResendingInviteId(null);
   };
 
   // ── Locations ──
@@ -1778,7 +1816,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     setDataLoadIssues([]);
     setCaseSignalsLoaded(false);
-    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
+    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
     if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); loadRedundancyCases(); }
   };
   useEffect(loadOrgData, [org?.id, isHR, user?.id]);
@@ -1812,13 +1850,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [pendingLetterType, setPendingLetterType] = useState("outcome");
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
-  // Team Invitations P0 remediation — role/locationIds removed: the join
-  // flow (join_org_with_invite_code) always assigns location_manager with
-  // no locations regardless of what's selected here, so collecting them
-  // was never truthful. See inviteMember's own comment.
-  const [inviteForm, setInviteForm] = useState({name:"",email:""});
+  // NEW-8 remediation — role/locationIds are collected here and applied
+  // atomically on acceptance (see inviteMember's own comment).
+  const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"",locationIds:[]});
   const [inviting, setInviting] = useState(false);
-  const [inviteLink, setInviteLink] = useState(null);
+  const [pendingInvites, setPendingInvites] = useState([]);
+  const [resendingInviteId, setResendingInviteId] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
   const [processTemplates, setProcessTemplates] = useState([]);
@@ -1887,8 +1924,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   useModalA11y(letterModalRef, () => setShowLetterModal(false), showLetterModal);
   const emailLetterModalRef = useRef(null);
   useModalA11y(emailLetterModalRef, () => { setShowEmailLetter(false); setEmailLetterTo(""); setSelectedInviteEvidenceIds([]); }, showEmailLetter);
-  const inviteLinkModalRef = useRef(null);
-  useModalA11y(inviteLinkModalRef, () => setInviteLink(null), !!inviteLink);
   const signModalRef = useRef(null);
   useModalA11y(signModalRef, () => setShowSignModal(false), showSignModal);
   const letterAckModalRef = useRef(null);
@@ -8249,32 +8284,6 @@ Please produce:
         </div>
       )}
 
-      {inviteLink&&(
-        <div role="dialog" aria-modal="true" ref={inviteLinkModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:480}}>
-            <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>
-              {inviteLink.failed?"Couldn't send the invitation email":`Invitation sent to ${inviteLink.name}`}
-            </h3>
-            <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>
-              {inviteLink.failed
-                ? `The email to ${inviteLink.email} didn't go out — you can share this link with them directly instead:`
-                : `They'll join with Location Manager access initially — set their final role and locations from here once they've joined. You can also share this link directly if useful:`}
-            </p>
-            <div style={{background:"#F5F1EA",borderRadius:8,padding:"12px 16px",marginBottom:12}}>
-              <div style={{fontSize:10,color:"#6B6880",marginBottom:4}}>Join link</div>
-              <div style={{fontSize:12,color:"#7C5CFC",wordBreak:"break-all"}}>{inviteLink.link}</div>
-            </div>
-            <div style={{background:"#F5F1EA",borderRadius:8,padding:"12px 16px",marginBottom:20}}>
-              <div style={{fontSize:10,color:"#6B6880",marginBottom:4}}>Invite code</div>
-              <div style={{fontFamily:FONT.mono,fontSize:20,color:COLOR.purple,letterSpacing:4,fontWeight:700}}>{inviteLink.code}</div>
-            </div>
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={()=>navigator.clipboard.writeText(inviteLink.link)} style={{flex:1}}>Copy link</Btn>
-              <Btn variant="ghost" onClick={()=>setInviteLink(null)} style={{flex:1}}>Done</Btn>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showSignModal&&(
         <div role="dialog" aria-modal="true" ref={signModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -9134,7 +9143,7 @@ Please produce:
           auditLog={auditLog}
           lsSet={lsSet}
           org={{ org, locations, deleteLocation, addLocation, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers }}
-          team={{ teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember }}
+          team={{ teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, currentUserRole: member?.role, pendingInvites, loadPendingInvites, revokeInvite, resendInvite, resendingInviteId }}
           portal={{ portalAccounts, revokePortalAccess }}
           employeeData={{ employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate }}
           branding={{ wordTemplate, setWordTemplate, orgLsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad }}

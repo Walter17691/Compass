@@ -18,6 +18,7 @@ const Compass = lazy(() => import('./App.jsx'))
 const OrgSetup = lazy(() => import('./OrgSetup.jsx'))
 const PortalSignup = lazy(() => import('./PortalSignup.jsx'))
 const PortalApp = lazy(() => import('./portal/PortalApp.jsx').then(m => ({ default: m.PortalApp })))
+const TeamInviteAccept = lazy(() => import('./TeamInviteAccept.jsx'))
 
 const LoadingFallback = () => (
   <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#FDFAF5'}}>
@@ -39,6 +40,7 @@ export function Root() {
   // needs the single active org) doesn't need to change at all.
   const [memberships, setMemberships] = useState([])
   const [activeOrgId, setActiveOrgId] = useState(() => localStorage.getItem('compass_active_org'))
+  const [pendingTeamInvite, setPendingTeamInvite] = useState(() => localStorage.getItem('compass_pending_team_invite') || new URLSearchParams(window.location.search).get('teamInvite'))
   const [portalAccount, setPortalAccount] = useState(null) // null = not checked/not a portal user, { employeeName } = is one
   const [loading, setLoading] = useState(true)
   const [addingOrg, setAddingOrg] = useState(false) // true while an existing user is joining/creating an additional org via the switcher
@@ -113,20 +115,28 @@ export function Root() {
   }
 
   useEffect(() => {
-    // Capture ?invite=CODE (HR-staff org join) and ?portalInvite=TOKEN
-    // (employee portal) into localStorage immediately, before the user
+    // Capture ?portalInvite=TOKEN (employee portal) and ?teamInvite=TOKEN
+    // (team member, NEW-8) into localStorage immediately, before the user
     // signs up/confirms their email/logs in — the URL query string does
     // not survive the email-confirmation redirect, so the URL alone can't
-    // carry this across signup. OrgSetup/loadPortalStatus read these back
-    // from localStorage instead. Distinct param names since they drive
-    // two entirely separate identity systems (HR staff vs. employees).
+    // carry this across signup. loadPortalStatus reads the former back
+    // from localStorage; pendingTeamInvite's own lazy initializer already
+    // reads ?teamInvite= directly (see its useState above), so this only
+    // needs to persist it to localStorage for a reload/redirect to
+    // survive — no setState call needed here (react-hooks/
+    // set-state-in-effect). ?invite=CODE (the old shared org-wide join
+    // code) is deliberately no longer captured here at all — final
+    // security gate revoked that RPC's authenticated EXECUTE grant
+    // entirely (see supabase/team_invites_and_hr_director_boundary_
+    // 2026-09-11.sql's own Part 3), so an old link containing it is now
+    // silently ignored rather than leading to a permission-denied error.
     const params = new URLSearchParams(window.location.search)
-    const invite = params.get('invite')
     const portalInvite = params.get('portalInvite')
-    if(invite) localStorage.setItem('compass_pending_invite', invite.trim())
+    const teamInvite = params.get('teamInvite')
     if(portalInvite) localStorage.setItem('compass_pending_portal_invite', portalInvite.trim())
-    if(invite || portalInvite) {
-      params.delete('invite'); params.delete('portalInvite')
+    if(teamInvite) localStorage.setItem('compass_pending_team_invite', teamInvite.trim())
+    if(portalInvite || teamInvite) {
+      params.delete('invite'); params.delete('portalInvite'); params.delete('teamInvite')
       const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '')
       window.history.replaceState({}, '', newUrl)
     }
@@ -195,6 +205,36 @@ export function Root() {
   // clearAllOrgScopedData() (src/lib/storage.js) is the single list this
   // and the in-app "Delete all data" flow both now share.
   const signOut = async () => { await supabase.auth.signOut(); clearAllOrgScopedData(); setUser(null); setMemberships([]); setPortalAccount(null) }
+
+  // NEW-6 remediation — a pending team invitation is checked BEFORE the
+  // ordinary logged-out/OrgSetup branching below, and regardless of
+  // whether `user` is already set, so opening the link preserves its
+  // context through every auth state: logged out (TeamInviteAccept shows
+  // the invite context above an embedded Login), already logged in as
+  // the invited email (shows the accept screen directly, never silently
+  // redirecting into that user's own unrelated Home), or logged in as a
+  // different email (explains the mismatch and offers to sign out,
+  // without ever silently consuming the invitation). Previously, an
+  // already-logged-in user opening this link saw neither of these — the
+  // invite code just sat in localStorage until they later, unrelatedly,
+  // used "Join another organisation", at which point OrgSetup would pick
+  // it up with no context about where it came from.
+  if (pendingTeamInvite) {
+    const clearPendingInvite = () => { localStorage.removeItem('compass_pending_team_invite'); setPendingTeamInvite(null) }
+    return <Suspense fallback={<LoadingFallback/>}>
+      <TeamInviteAccept
+        token={pendingTeamInvite}
+        user={user}
+        onLogin={setUser}
+        onAccepted={({org}) => {
+          clearPendingInvite()
+          loadOrg(user).then(()=>switchOrg(org.id))
+        }}
+        onDismiss={clearPendingInvite}
+        onSignOut={signOut}
+      />
+    </Suspense>
+  }
 
   if (!user) {
     // A pending portal invite means this person followed an employee
