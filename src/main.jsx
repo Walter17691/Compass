@@ -10,6 +10,8 @@ import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
 import { isEntitled } from './lib/plan.js'
 import { clearAllOrgScopedData } from './lib/storage.js'
+import { CompassLogo } from './components/CompassLogo.jsx'
+import { COLOR } from './styles/tokens.js'
 
 // These are mutually exclusive top-level views — a session only ever
 // renders one of them, so splitting them out keeps (say) an HR user's
@@ -20,9 +22,19 @@ const PortalSignup = lazy(() => import('./PortalSignup.jsx'))
 const PortalApp = lazy(() => import('./portal/PortalApp.jsx').then(m => ({ default: m.PortalApp })))
 const TeamInviteAccept = lazy(() => import('./TeamInviteAccept.jsx'))
 
+// NEW-7 (P3 branding/polish) — this was still on the pre-brand-v2.0
+// palette (#FDFAF5/#7C5CFC, see Login.jsx's own comment on that same old
+// palette), the one visible flash of off-brand UI left anywhere in the
+// app: every lazy-loaded top-level view (Compass, OrgSetup, PortalSignup,
+// PortalApp, TeamInviteAccept) renders this as its Suspense fallback, and
+// the auth-bootstrap `loading` state below duplicated the same old colors
+// inline. Fixed centrally, once, here — not as an invitation-only special
+// case — since ordinary login/session restoration hits this exact
+// component on every single load.
 const LoadingFallback = () => (
-  <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#FDFAF5'}}>
-    <span className="pu" style={{color:'#7C5CFC',fontSize:24}}>●</span>
+  <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16,background:COLOR.rail}}>
+    <CompassLogo size={32} />
+    <span className="pu" style={{color:COLOR.purple,fontSize:24}}>●</span>
   </div>
 )
 
@@ -191,11 +203,7 @@ export function Root() {
   if (window.location.pathname === '/terms') return <LegalPage page="terms"/>
   if (window.location.pathname === '/dpa') return <LegalPage page="dpa"/>
 
-  if (loading) return (
-    <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span>
-    </div>
-  )
+  if (loading) return <LoadingFallback/>
 
   // Phase 6.5 hardening (High, security review) — previously left every
   // org-scoped localStorage cache (cases, wellbeing notes, employee

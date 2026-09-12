@@ -468,3 +468,34 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
     await waitFor(() => expect(screen.getByTestId('org-id')).toBeInTheDocument());
   });
 });
+
+// NEW-7 (P3 branding/polish) — the auth-bootstrap loading state (shown on
+// every app load, before any user-specific branching — invitation,
+// ordinary login, or otherwise) was still on the pre-brand-v2.0 palette
+// (#FDFAF5/#7C5CFC). A real UAT run surfaced it as a visible beige flash
+// during the transition into Compass. Fixed centrally in LoadingFallback,
+// reused by both the Suspense fallback and the top-level `loading` state,
+// rather than as an invitation-only special case.
+describe('Root — branded loading state (NEW-7)', () => {
+  beforeEach(() => {
+    instanceCounter = 0; localStorage.clear(); vi.clearAllMocks();
+    supabaseMock.from.mockImplementation((table) => ({ select: () => ({ eq: () => Promise.resolve(table === 'org_members' ? { data: MEMBERSHIPS } : { data: [] }) }) }));
+  });
+
+  it('renders the current brand background and mark, never the old pre-brand-v2.0 palette', async () => {
+    let resolveSession;
+    supabaseMock.auth.getSession.mockReturnValue(new Promise(resolve => { resolveSession = resolve; }));
+    const { container } = render(<Root/>);
+
+    // Still in the auth-bootstrap `loading` state — getSession hasn't
+    // resolved yet.
+    const loadingDiv = container.querySelector('div');
+    expect(loadingDiv.style.background).not.toMatch(/#FDFAF5|253, ?250, ?245/i);
+    expect(loadingDiv.style.background).toBe('rgb(247, 248, 252)'); // COLOR.rail
+    expect(container.querySelector('svg')).toBeInTheDocument(); // CompassLogo mark
+    expect(container.innerHTML).not.toContain('#7C5CFC');
+
+    resolveSession({ data: { session: { user: FAKE_USER } } });
+    await waitFor(() => expect(screen.getByTestId('org-id')).toBeInTheDocument());
+  });
+});
