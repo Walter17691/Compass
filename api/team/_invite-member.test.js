@@ -267,6 +267,26 @@ describe('invite-member — truthful email copy and unique token link', () => {
     const sent = emailCalls[0];
     expect(sent.html).toMatch(/expir/i);
   });
+
+  // NEW-11 remediation — the email is the invited person's onboarding
+  // entry point, so it must tell them who invited them (when known) and,
+  // critically, that THEY create their own password — never one the
+  // admin set on their behalf.
+  it('names the inviting HR admin when their org_members name is known', async () => {
+    const { emailCalls } = stubFetch({ members: [{ role: 'hr_manager', name: 'Pat HR' }] });
+    const res = mockRes();
+    await handler(req(), res);
+    expect(emailCalls[0].html).toContain('Pat HR');
+  });
+
+  it('never mentions a password, temporary password, or invite code — only that the recipient creates their own credentials', async () => {
+    const { emailCalls } = stubFetch({ members: [{ role: 'hr_manager', name: 'Pat HR' }] });
+    const res = mockRes();
+    await handler(req(), res);
+    const html = emailCalls[0].html.toLowerCase();
+    expect(html).not.toMatch(/temporary password|your password is|invite code|invite_code/);
+    expect(html).toMatch(/you'll create your password|sign in/);
+  });
 });
 
 describe('invite-member — audit trail', () => {

@@ -1515,7 +1515,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       });
       const d = await safeJson(r);
       if(d.success) {
-        showToast(`Invitation sent to ${email}`, "success");
+        showToast(`Invitation sent to ${email} — they'll receive an email to create their Compass account and join ${org.name}.`, "success", 6000);
         setInviteForm({name:"",email:"",role:"",locationIds:[]});
         loadPendingInvites();
       } else {

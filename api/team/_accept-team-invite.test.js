@@ -11,8 +11,9 @@ function mockRes() {
 
 function stubFetch({
   authOk = true, authUser = { id: 'user-1', email: 'invited@acme.com' },
-  invite = { email: 'invited@acme.com', intended_role: 'hr_manager', status: 'pending', expires_at: '2099-01-01T00:00:00.000Z', org_id: 'org-1' },
+  invite = { name: 'Sam Invitee', email: 'invited@acme.com', intended_role: 'hr_manager', status: 'pending', expires_at: '2099-01-01T00:00:00.000Z', org_id: 'org-1', created_by: 'inviter-1' },
   organisations = [{ name: 'Acme' }],
+  orgMembers = [{ name: 'Pat Inviter' }],
   rpcOk = true, rpcResult = [{ org_id: 'org-1', org_name: 'Acme', role: 'hr_manager' }], rpcError = null,
 } = {}) {
   const calls = [];
@@ -31,6 +32,9 @@ function stubFetch({
     if (u.includes('/rest/v1/organisations')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(organisations) });
     }
+    if (u.includes('/rest/v1/org_members')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(orgMembers) });
+    }
     if (u.includes('/rest/v1/audit_log')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     }
@@ -46,11 +50,16 @@ describe('accept-team-invite — authorisation', () => {
   beforeEach(() => { originalFetch = global.fetch; });
   afterEach(() => { global.fetch = originalFetch; });
 
-  it('rejects an unauthenticated caller on GET', async () => {
+  // NEW-11 remediation — a brand-new invitee has no Compass account yet,
+  // so no access token to send. GET must work without one so the
+  // activation screen can show who invited them, to what org, and at
+  // what role BEFORE they create an account. Only the raw, unguessable
+  // token itself gates this — never a caller's identity.
+  it('does NOT require authentication for GET — a not-yet-signed-up invitee must be able to preview the invitation', async () => {
     stubFetch({ authOk: false });
     const res = mockRes();
     await handler(req({ method: 'GET' }), res);
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(200);
   });
 
   it('rejects an unauthenticated caller on POST', async () => {
@@ -82,6 +91,26 @@ describe('accept-team-invite — GET status', () => {
     expect(res.body.invitedEmail).toBe('invited@acme.com');
     expect(res.body.roleLabel).toBe('HR Manager');
     expect(res.body.status).toBe('pending');
+  });
+
+  // NEW-11 remediation — the activation screen needs enough context to
+  // greet a brand-new invitee by name and tell them who invited them,
+  // before any account exists.
+  it('includes the invited name, inviter name, and expiry for the activation screen', async () => {
+    stubFetch();
+    const res = mockRes();
+    await handler(req({ method: 'GET' }), res);
+    expect(res.body.invitedName).toBe('Sam Invitee');
+    expect(res.body.inviterName).toBe('Pat Inviter');
+    expect(res.body.expiresAt).toBe('2099-01-01T00:00:00.000Z');
+  });
+
+  it('omits the inviter name gracefully rather than failing, if the inviter has no org_members row', async () => {
+    stubFetch({ orgMembers: [] });
+    const res = mockRes();
+    await handler(req({ method: 'GET' }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.inviterName).toBeNull();
   });
 
   it('reports an expired invitation even though its DB status is still "pending"', async () => {
@@ -135,6 +164,35 @@ describe('accept-team-invite — POST acceptance, identity derived server-side',
     expect(rpcCall.body.p_token_hash).toBe(hashTeamInviteToken('the-raw-token'));
     expect(rpcCall.body.p_verified_email).toBeUndefined();
     expect(JSON.stringify(rpcCall.body)).not.toContain('email');
+  });
+
+  // Final pre-deployment gate — a direct, tampered request is the actual
+  // threat model here: the locked email field on the activation screen is
+  // a UX nicety, not a security boundary. Proves an attacker who crafts
+  // their own POST body (bypassing the UI entirely) cannot smuggle a
+  // different email, role, location, or org through to the RPC — the
+  // handler only ever reads req.body.token and forwards its hash; every
+  // other field the request might contain is silently ignored, and the
+  // intended role/locations/org actually granted come exclusively from
+  // the DB row the token itself resolves to, never from the request.
+  it('ignores every attacker-supplied field beyond the token — role, email, org, and location cannot be smuggled through the request body', async () => {
+    const { calls } = stubFetch();
+    const res = mockRes();
+    await handler(req({
+      body: {
+        token: 'the-raw-token',
+        email: 'attacker@evil.com',
+        p_verified_email: 'attacker@evil.com',
+        intended_role: 'hr_director',
+        role: 'hr_director',
+        intended_location_ids: ['loc-attacker'],
+        org_id: 'org-attacker',
+        user_id: 'attacker-id',
+      },
+    }), res);
+    const rpcCall = calls.find(c => c.url.includes('rpc/accept_team_invite'));
+    expect(Object.keys(rpcCall.body)).toEqual(['p_token_hash']);
+    expect(rpcCall.body.p_token_hash).toBe(hashTeamInviteToken('the-raw-token'));
   });
 
   it('never sends the raw token anywhere, only its hash', async () => {

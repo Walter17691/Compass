@@ -27,6 +27,8 @@ const supabaseMock = {
     getSession: vi.fn(() => Promise.resolve({ data: { session: { user: FAKE_USER } } })),
     onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
     signOut: vi.fn(() => Promise.resolve()),
+    signUp: vi.fn(() => Promise.resolve({ data: { user: FAKE_USER, session: { user: FAKE_USER } }, error: null })),
+    signInWithPassword: vi.fn(() => Promise.resolve({ data: { user: FAKE_USER, session: { user: FAKE_USER } }, error: null })),
   },
   from: vi.fn((table) => ({
     select: () => ({
@@ -291,12 +293,68 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
     expect(window.location.search).not.toContain('teamInvite');
   });
 
-  it('scenario A — logged out: shows the invite context and an embedded login, not the ordinary Login screen alone', async () => {
+  // NEW-11 remediation — a brand-new invitee sees the org/role/inviter
+  // context and a locked invited-email account-activation form, never
+  // the ordinary Login screen's freely-editable email field. Previously
+  // this branch skipped the status fetch entirely while logged out
+  // (the GET required auth), so a logged-out invitee saw no context at
+  // all — just a generic sign-in/sign-up form with no indication of
+  // what they were even signing up for.
+  it('scenario A — logged out, new invitee: shows invite context and a locked-email account-activation form, never an editable email field', async () => {
     setPendingInvite();
     supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/team/accept-team-invite')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedName: 'Sam Invitee', invitedEmail: 'sam@acme.com', inviterName: 'Pat HR', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
     render(<Root/>);
-    await waitFor(() => expect(screen.getByText(/invited to join a team on Compass HR/i)).toBeInTheDocument());
-    expect(screen.getByPlaceholderText('you@company.com')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Pat HR/)).toBeInTheDocument());
+    expect(screen.getByText(/Acme/)).toBeInTheDocument();
+    expect(screen.getByText(/sam@acme\.com/)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('you@company.com')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create account & join Compass/i })).toBeInTheDocument();
+  });
+
+  it('scenario A — creating an account calls Supabase signUp with the invitation\'s own (locked) email, never a client-editable one', async () => {
+    setPendingInvite();
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/team/accept-team-invite')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedName: 'Sam Invitee', invitedEmail: 'sam@acme.com', inviterName: null, roleLabel: 'Auditor (read-only)', status: 'pending' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    const user = userEvent.setup();
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Create account & join Compass/i })).toBeInTheDocument());
+    await user.type(screen.getByLabelText('Password'), 'a-strong-password');
+    await user.type(screen.getByLabelText('Confirm password'), 'a-strong-password');
+    await user.click(screen.getByRole('button', { name: /Create account & join Compass/i }));
+    await waitFor(() => expect(supabaseMock.auth.signUp).toHaveBeenCalled());
+    expect(supabaseMock.auth.signUp.mock.calls[0][0].email).toBe('sam@acme.com');
+  });
+
+  // NEW-11 remediation — scenario B: an invited email that already has a
+  // Compass account signs in through the same locked-email form, never
+  // creating a duplicate account.
+  it('scenario B — logged out, existing account: switching to "Sign in" calls signInWithPassword with the invitation\'s own email', async () => {
+    setPendingInvite();
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/team/accept-team-invite')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedName: 'Sam Invitee', invitedEmail: 'sam@acme.com', inviterName: 'Pat HR', roleLabel: 'Auditor (read-only)', status: 'pending' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    const user = userEvent.setup();
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByLabelText('Password'), 'my-existing-password');
+    await user.click(screen.getByRole('button', { name: /Sign in & continue/i }));
+    await waitFor(() => expect(supabaseMock.auth.signInWithPassword).toHaveBeenCalledWith({ email: 'sam@acme.com', password: 'my-existing-password' }));
   });
 
   it('scenario B — logged in as the invited email: shows the acceptance screen, never silently renders Home', async () => {
@@ -328,8 +386,36 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
     render(<Root/>);
     await waitFor(() => expect(screen.getByRole('button', { name: /accept invitation/i })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: /accept invitation/i }));
+    // NEW-11 remediation — acceptance now shows an explicit "Welcome to
+    // Acme, you've joined as Auditor" confirmation before handing off to
+    // Compass, rather than silently landing in Home with no
+    // acknowledgement anything happened.
+    await waitFor(() => expect(screen.getByText(/Welcome to Acme/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /Continue to Compass/i }));
     await waitFor(() => expect(screen.getByTestId('org-id')).toHaveTextContent('org-a'));
     expect(localStorage.getItem('compass_pending_team_invite')).toBeNull();
+  });
+
+  // NEW-11 remediation — an expired invitation used to only be caught
+  // once accept_team_invite itself rejected the POST, meaning a
+  // brand-new invitee could go through the entire create-a-password
+  // journey only to be told "expired" at the very last step. Now caught
+  // from the GET status, before any account is created or password
+  // collected.
+  it('an expired invitation is rejected before signup, not after a full account-creation attempt', async () => {
+    setPendingInvite();
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    authedFetch.mockImplementation((url) => {
+      if (String(url).includes('/api/team/accept-team-invite')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ orgName: 'Acme', invitedEmail: 'sam@acme.com', roleLabel: 'Auditor (read-only)', status: 'expired' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ isPortalUser: false }) });
+    });
+    render(<Root/>);
+    await waitFor(() => expect(screen.getByText(/Invitation unavailable/i)).toBeInTheDocument());
+    expect(screen.getByText(/expired/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create account & join Compass/i })).not.toBeInTheDocument();
+    expect(supabaseMock.auth.signUp).not.toHaveBeenCalled();
   });
 
   it('scenario C — logged in as a different email: explains the mismatch, never silently consumes the invitation', async () => {
@@ -362,7 +448,8 @@ describe('Root — pending team invitation preserved across auth state (NEW-6)',
     await user.click(screen.getByRole('button', { name: /sign out/i }));
 
     expect(localStorage.getItem('compass_pending_team_invite')).toBe('the-token');
-    await waitFor(() => expect(screen.getByText(/invited to join a team on Compass HR/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /Create account & join Compass/i })).toBeInTheDocument());
+    expect(screen.getByText(/someone-else@example\.com/)).toBeInTheDocument();
   });
 
   it('dismissing an invalid/expired invitation clears it and proceeds to the ordinary app', async () => {
