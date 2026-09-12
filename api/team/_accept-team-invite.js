@@ -4,6 +4,11 @@ import { hashTeamInviteToken } from '../_teamInviteToken.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// Public anon key — safe to duplicate here (already shipped in the client
+// bundle, see api/_auth.js's own copy of the same value). Used only to
+// forward the CALLER's own bearer token below, never as a credential by
+// itself.
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
 
 async function supabaseRequest(path, options = {}) {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -12,10 +17,27 @@ async function supabaseRequest(path, options = {}) {
   });
 }
 
-async function supabaseRpc(fn, args) {
+// P1 fix (2026-09-12) — this previously authenticated the RPC call as the
+// SERVICE ROLE (apikey+Authorization both SUPABASE_KEY), which meant
+// auth.uid()/auth.jwt() inside accept_team_invite() always saw a
+// service-role JWT with no 'sub' claim — auth.uid() IS NULL for every
+// service-role-authenticated request, confirmed directly against this
+// project (`set local request.jwt.claims to '{"role":"service_role"}';
+// select auth.uid()` returns null). accept_team_invite's own first check
+// (`if auth.uid() is null then raise exception 'Not authenticated'`) was
+// therefore unconditionally true, regardless of which real user called
+// this endpoint — the acceptance RPC could never succeed, for anyone,
+// ever. This is the exact "Not authenticated" error a real invited user
+// hit in production. Fixed by forwarding the CALLER's own bearer token
+// (already verified once by verifyCaller) as Authorization, with apikey
+// as the public anon key — the same pattern api/_auth.js's own
+// callerCaseVisible() already uses correctly elsewhere in this codebase.
+// auth.uid()/auth.jwt() now correctly resolve to the real calling user,
+// exactly as accept_team_invite's own SECURITY DEFINER design assumes.
+async function supabaseRpc(fn, args, callerAccessToken) {
   return fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${callerAccessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(args),
   });
 }
@@ -100,9 +122,10 @@ export async function acceptTeamInvite(req, res) {
 
   const caller = await verifyCaller(req);
   if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+  const callerAccessToken = (req.headers.authorization || '').replace(/^Bearer /, '');
 
   try {
-    const rpcRes = await supabaseRpc('accept_team_invite', { p_token_hash: tokenHash });
+    const rpcRes = await supabaseRpc('accept_team_invite', { p_token_hash: tokenHash }, callerAccessToken);
     const rpcData = await rpcRes.json();
     if (!rpcRes.ok) {
       const message = rpcData?.message || 'Could not accept this invitation';

@@ -68,7 +68,19 @@ export default function TeamInviteAccept({ token, user, onLogin, onAccepted, onD
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
       })
       const d = await safeJson(r)
-      if (!r.ok || !d.success) { setError(d.error || 'Could not accept this invitation.'); setStatus('error'); return }
+      // P1 fix (2026-09-12) — a failed accept attempt is NOT the same
+      // state as "this invitation is permanently gone" (status==='error',
+      // set only by the GET preview for a genuinely not-found/expired/
+      // revoked/already-accepted invitation). Conflating the two was the
+      // exact defect that let a real production accept failure (caused
+      // by an unrelated server-side bug, since fixed) fall through
+      // "Continue to Compass" straight into OrgSetup's founding-org flow
+      // — a zero-org, still-invited account created a whole new
+      // duplicate organisation and became its HR Director. A failed
+      // accept attempt now keeps the invitation intact and offers Try
+      // again, never treating a transient/server failure as license to
+      // found an organisation.
+      if (!r.ok || !d.success) { setError(d.error || 'Could not accept this invitation.'); setStatus('acceptError'); return }
       // NEW-11 remediation — an explicit "you're in" confirmation,
       // naming the org and role, rather than silently handing off
       // straight into Compass's ordinary Home screen with no
@@ -77,7 +89,7 @@ export default function TeamInviteAccept({ token, user, onLogin, onAccepted, onD
       setStatus('joined')
     } catch (e) {
       setError(e.message)
-      setStatus('error')
+      setStatus('acceptError')
     }
   }
 
@@ -99,6 +111,22 @@ export default function TeamInviteAccept({ token, user, onLogin, onAccepted, onD
       <h3 style={{ fontFamily: FONT.serif, fontSize: 18, color: COLOR.ink, marginBottom: 12 }}>Invitation unavailable</h3>
       <p style={{ fontSize: 13, color: COLOR.inkSoft, marginBottom: 20 }}>{error}</p>
       <button onClick={onDismiss} style={{ background: COLOR.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Continue to Compass</button>
+    </>)
+  }
+
+  // P1 fix (2026-09-12) — distinct from status==='error': the invitation
+  // itself is still valid (it passed the GET preview check), only the
+  // accept attempt itself failed. "Try again" re-attempts the same
+  // explicit action rather than discarding the invitation — this screen
+  // deliberately has no "Continue to Compass"/dismiss action that would
+  // silently drop a still-invited, zero-org account into OrgSetup's
+  // founding-org flow.
+  if (status === 'acceptError') {
+    return wrap(<>
+      <h3 style={{ fontFamily: FONT.serif, fontSize: 18, color: COLOR.ink, marginBottom: 12 }}>Couldn't complete your invitation</h3>
+      <p style={{ fontSize: 13, color: COLOR.inkSoft, marginBottom: 20 }}>{error}</p>
+      <button onClick={accept} style={{ background: COLOR.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginRight: 8 }}>Try again</button>
+      <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: COLOR.inkSoft, fontSize: 13, cursor: 'pointer' }}>Not now</button>
     </>)
   }
 

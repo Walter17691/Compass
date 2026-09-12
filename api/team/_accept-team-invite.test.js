@@ -19,7 +19,7 @@ function stubFetch({
   const calls = [];
   global.fetch = vi.fn((url, options) => {
     const u = String(url);
-    calls.push({ url: u, method: options?.method || 'GET', body: options?.body ? (() => { try { return JSON.parse(options.body); } catch { return options.body; } })() : null });
+    calls.push({ url: u, method: options?.method || 'GET', headers: options?.headers || {}, body: options?.body ? (() => { try { return JSON.parse(options.body); } catch { return options.body; } })() : null });
     if (u.includes('/auth/v1/user')) {
       return Promise.resolve({ ok: authOk, json: () => Promise.resolve(authUser) });
     }
@@ -164,6 +164,34 @@ describe('accept-team-invite — POST acceptance, identity derived server-side',
     expect(rpcCall.body.p_token_hash).toBe(hashTeamInviteToken('the-raw-token'));
     expect(rpcCall.body.p_verified_email).toBeUndefined();
     expect(JSON.stringify(rpcCall.body)).not.toContain('email');
+  });
+
+  // P1 fix (2026-09-12) — a real production accept attempt failed with
+  // "Not authenticated" from accept_team_invite() itself. Root cause,
+  // proven directly against the database: auth.uid() reads the JWT's own
+  // 'sub' claim, and this endpoint was authenticating its RPC call as the
+  // SERVICE ROLE (no 'sub' claim — auth.uid() IS NULL for any
+  // service-role-authenticated request), not as the calling user. The
+  // RPC's own first check (`if auth.uid() is null then raise exception
+  // 'Not authenticated'`) was therefore unconditionally true regardless
+  // of who actually called this endpoint — no one could ever accept an
+  // invitation. This asserts the RPC call is authenticated as the real
+  // caller (their own bearer token as Authorization, the public anon key
+  // as apikey) — never the service-role key — so auth.uid()/auth.jwt()
+  // inside the SECURITY DEFINER function resolve to the real user.
+  it('authenticates the RPC call as the real calling user, never as the service role', async () => {
+    const { calls } = stubFetch();
+    const res = mockRes();
+    await handler(req({ headers: { authorization: 'Bearer callers-own-access-token' } }), res);
+    const rpcCall = calls.find(c => c.url.includes('rpc/accept_team_invite'));
+    // The exact bug: this must be the caller's own token, never the
+    // service key (which would make auth.uid() resolve to null).
+    expect(rpcCall.headers.Authorization).toBe('Bearer callers-own-access-token');
+    // apikey must be the public anon key — the standard pairing for an
+    // authenticated-as-user PostgREST call, matching api/_auth.js's own
+    // callerCaseVisible() convention.
+    expect(rpcCall.headers.apikey).toMatch(/^eyJ/);
+    expect(rpcCall.headers.apikey).not.toBe(rpcCall.headers.Authorization.replace('Bearer ', ''));
   });
 
   // Final pre-deployment gate — a direct, tampered request is the actual

@@ -147,3 +147,84 @@ describe('TeamInviteAccept — account creation never auto-accepts the invitatio
     expect(screen.queryByText(/Confirm your email/i)).not.toBeInTheDocument();
   });
 });
+
+// P1 fix (2026-09-12) — a real production accept attempt failed (root
+// cause: a separate server-side bug authenticating the RPC as the
+// service role instead of the caller, now fixed). The failure screen the
+// user landed on offered only "Continue to Compass", which called
+// onDismiss — discarding the still-valid pending invitation and
+// dropping a zero-org, still-invited account into OrgSetup's founding
+// flow. The user then created a duplicate "Compass LTD" organisation and
+// became its HR Director. These tests lock in the fix: a failed accept
+// attempt must never look or behave like "this invitation is gone."
+describe('TeamInviteAccept — a failed accept attempt never discards the invitation or implies abandonment', () => {
+  const MATCHING_USER = { id: 'u1', email: 'sam@acme.com' };
+
+  function stubInviteWithFailingAccept(invite = INVITE, acceptError = 'Not authenticated') {
+    authedFetchMock.mockImplementation((url, options) => {
+      const u = String(url);
+      if (u.includes('/api/team/accept-team-invite') && (!options || options.method !== 'POST')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(invite) });
+      }
+      if (u.includes('/api/team/accept-team-invite') && options?.method === 'POST') {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({ error: acceptError }) });
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+    });
+  }
+
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('shows a distinct "couldn\'t complete" state, never the "Invitation unavailable" copy used for a genuinely gone invitation', async () => {
+    stubInviteWithFailingAccept();
+    const user = userEvent.setup();
+    render(<TeamInviteAccept token="tok" user={MATCHING_USER} onLogin={vi.fn()} onAccepted={vi.fn()} onDismiss={vi.fn()} onSignOut={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept invitation/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /Accept invitation/i }));
+    expect(await screen.findByText(/Couldn't complete your invitation/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Invitation unavailable/i)).not.toBeInTheDocument();
+  });
+
+  it('never offers a "Continue to Compass" dismiss action on a failed accept attempt', async () => {
+    stubInviteWithFailingAccept();
+    const user = userEvent.setup();
+    render(<TeamInviteAccept token="tok" user={MATCHING_USER} onLogin={vi.fn()} onAccepted={vi.fn()} onDismiss={vi.fn()} onSignOut={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept invitation/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /Accept invitation/i }));
+    await screen.findByText(/Couldn't complete your invitation/i);
+    expect(screen.queryByRole('button', { name: /Continue to Compass/i })).not.toBeInTheDocument();
+  });
+
+  it('"Try again" re-attempts acceptance rather than abandoning the invitation', async () => {
+    stubInviteWithFailingAccept();
+    const user = userEvent.setup();
+    render(<TeamInviteAccept token="tok" user={MATCHING_USER} onLogin={vi.fn()} onAccepted={vi.fn()} onDismiss={vi.fn()} onSignOut={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept invitation/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /Accept invitation/i }));
+    await screen.findByText(/Couldn't complete your invitation/i);
+
+    // The retry succeeds this time — proving "Try again" genuinely calls
+    // accept() again rather than being a dead end.
+    authedFetchMock.mockImplementation((url, options) => {
+      const u = String(url);
+      if (u.includes('/api/team/accept-team-invite') && options?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, orgId: 'org-a', orgName: 'Acme', role: 'hr_manager' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(INVITE) });
+    });
+    await user.click(screen.getByRole('button', { name: /Try again/i }));
+    expect(await screen.findByText(/Welcome to Acme/i)).toBeInTheDocument();
+  });
+
+  it('an explicit "Not now" on the failure screen still calls onDismiss — deliberate abandonment remains available', async () => {
+    stubInviteWithFailingAccept();
+    const onDismiss = vi.fn();
+    const user = userEvent.setup();
+    render(<TeamInviteAccept token="tok" user={MATCHING_USER} onLogin={vi.fn()} onAccepted={vi.fn()} onDismiss={onDismiss} onSignOut={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept invitation/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /Accept invitation/i }));
+    await screen.findByText(/Couldn't complete your invitation/i);
+    await user.click(screen.getByRole('button', { name: /Not now/i }));
+    expect(onDismiss).toHaveBeenCalled();
+  });
+});
