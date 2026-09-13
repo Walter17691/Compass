@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLES, ROLE_LABELS, TEAM_INVITE_ROLES, LOCATION_SCOPED_ROLES, ROLE_DESCRIPTIONS, roleLabel, isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation, canManageDirectorTier } from '../lib/roles';
+import { ROLES, ROLE_LABELS, TEAM_INVITE_ROLES, LOCATION_SCOPED_ROLES, ROLE_DESCRIPTIONS, roleLabel, isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canManageDirectorTier, CASE_ACCESS_LEVELS, CASE_ACCESS_LEVEL_LABELS, DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE, defaultCaseAccessLevelForRole } from '../lib/roles';
 
 describe('ROLES / ROLE_LABELS', () => {
   it('has exactly 7 roles', () => {
@@ -70,26 +70,47 @@ describe('canSeeAllOrgCases (Phase 4, MP1)', () => {
   });
 });
 
-// Phase 6.5 hardening — mirrors can_access_case_location() in
-// supabase/manager_enablement_case_access_2026-08-13.sql exactly.
-describe('canAccessCaseLocation', () => {
-  it('is true for every non-location_manager role, regardless of location', () => {
-    expect(canAccessCaseLocation('hr_director', null, 'loc-1')).toBe(true);
-    expect(canAccessCaseLocation('line_manager', ['loc-2'], 'loc-1')).toBe(true);
-    expect(canAccessCaseLocation('investigator', [], 'loc-1')).toBe(true);
+// Three-level case-access model (2026-09-13) — canAccessCaseLocation()
+// and its describe block are removed along with it: location has no role
+// in case visibility under the new model (see roles.js's own removal
+// comment for the full history of what superseded it and when).
+describe('CASE_ACCESS_LEVELS / DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE', () => {
+  it('defines exactly three levels, 1 through 3', () => {
+    expect(CASE_ACCESS_LEVELS.map(l => l.id)).toEqual([1, 2, 3]);
   });
 
-  it('is true for a location_manager with no locations assigned yet', () => {
-    expect(canAccessCaseLocation('location_manager', null, 'loc-1')).toBe(true);
-    expect(canAccessCaseLocation('location_manager', [], 'loc-1')).toBe(true);
+  it('CASE_ACCESS_LEVEL_LABELS has an entry for every level', () => {
+    CASE_ACCESS_LEVELS.forEach(l => expect(CASE_ACCESS_LEVEL_LABELS[l.id]).toBe(l.label));
   });
 
-  it('is true for a location_manager whose assigned locations include the case\'s own', () => {
-    expect(canAccessCaseLocation('location_manager', ['loc-1', 'loc-2'], 'loc-1')).toBe(true);
+  // Matches the approved role → default-level mapping exactly.
+  it('maps HR Director, HR Manager, Legal Reviewer, and Auditor to Level 1', () => {
+    expect(DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE.hr_director).toBe(1);
+    expect(DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE.hr_manager).toBe(1);
+    expect(DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE.legal_reviewer).toBe(1);
+    expect(DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE.auditor).toBe(1);
   });
 
-  it('is false for a location_manager with a real, non-matching assigned-locations list — the one real restriction this function enforces', () => {
-    expect(canAccessCaseLocation('location_manager', ['loc-2', 'loc-3'], 'loc-1')).toBe(false);
+  it('maps Location Manager and Line Manager to Level 2', () => {
+    expect(DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE.location_manager).toBe(2);
+    expect(DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE.line_manager).toBe(2);
+  });
+
+  it('maps Investigator to Level 3', () => {
+    expect(DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE.investigator).toBe(3);
+  });
+
+  // Fail-closed migration principle, mirrored client-side: an unrecognised
+  // role must never silently resolve to the most-open level.
+  it('defaultCaseAccessLevelForRole fails closed to Level 3 for an unrecognised role', () => {
+    expect(defaultCaseAccessLevelForRole('some_future_role')).toBe(3);
+    expect(defaultCaseAccessLevelForRole(undefined)).toBe(3);
+  });
+
+  it('defaultCaseAccessLevelForRole returns the correct default for every known role', () => {
+    expect(defaultCaseAccessLevelForRole('hr_director')).toBe(1);
+    expect(defaultCaseAccessLevelForRole('location_manager')).toBe(2);
+    expect(defaultCaseAccessLevelForRole('investigator')).toBe(3);
   });
 });
 

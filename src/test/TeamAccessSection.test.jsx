@@ -9,14 +9,15 @@ import { TeamAccessSection } from '../screens/settings/TeamAccessSection.jsx';
 const noop = () => {};
 // NEW-8 remediation — inviteForm now carries role/locationIds, applied
 // atomically on acceptance (see TeamAccessSection.jsx/App.jsx).
-const inviteForm = { name: '', email: '', role: '', locationIds: [] };
+// caseAccessLevel added for the three-level case-access model (2026-09-13).
+const inviteForm = { name: '', email: '', role: '', locationIds: [], caseAccessLevel: undefined };
 const locations = [{ id: 'l1', name: 'Manchester' }];
-const teamMembers = [{ id: 'm1', name: 'Sam Employee', role: 'hr_manager', location_ids: [] }];
+const teamMembers = [{ id: 'm1', name: 'Sam Employee', role: 'hr_manager', location_ids: [], case_access_level: 1 }];
 
 const baseProps = {
   isHR: true, currentUserRole: 'hr_director', org: {}, locations, teamMembers,
   editingMember: null, setEditingMember: noop, removeMember: noop, updateMemberRole: noop,
-  assignLocations: noop, inviteForm, setInviteForm: noop, inviting: false, inviteMember: noop,
+  updateCaseAccessLevel: noop, assignLocations: noop, inviteForm, setInviteForm: noop, inviting: false, inviteMember: noop,
   pendingInvites: [], revokeInvite: noop, resendInvite: noop, resendingInviteId: null,
 };
 
@@ -39,20 +40,20 @@ describe('TeamAccessSection — field labelling (Phase 6.5, Batch 13)', () => {
 // invitee silently joining as Location Manager pending a manual
 // follow-up correction.
 describe('TeamAccessSection — invite form collects intended access level (NEW-8)', () => {
-  it('renders an Access level select in the invite-new-member form', () => {
+  it('renders a Role select in the invite-new-member form', () => {
     render(<TeamAccessSection {...baseProps} teamMembers={[]} />);
-    expect(screen.getByLabelText('Access level')).toBeInTheDocument();
+    expect(screen.getByLabelText('Role')).toBeInTheDocument();
   });
 
-  it('never offers HR Director as an invite access level', () => {
+  it('never offers HR Director as an invite role', () => {
     render(<TeamAccessSection {...baseProps} teamMembers={[]} />);
-    const select = screen.getByLabelText('Access level');
+    const select = screen.getByLabelText('Role');
     expect(within(select).queryByText('HR Director')).not.toBeInTheDocument();
   });
 
-  it('offers every other role as an invite access level', () => {
+  it('offers every other role', () => {
     render(<TeamAccessSection {...baseProps} teamMembers={[]} />);
-    const select = screen.getByLabelText('Access level');
+    const select = screen.getByLabelText('Role');
     ['HR Manager', 'Location Manager', 'Line Manager', 'Investigator', 'Legal/Compliance Reviewer', 'Auditor (read-only)'].forEach(label => {
       expect(within(select).getByText(label)).toBeInTheDocument();
     });
@@ -95,6 +96,52 @@ describe('TeamAccessSection — invite form collects intended access level (NEW-
     render(<TeamAccessSection {...baseProps} editingMember="m1" />);
     expect(screen.getByLabelText('Role for Sam Employee')).toBeInTheDocument();
     expect(screen.getByText('Manchester')).toBeInTheDocument();
+  });
+});
+
+// Three-level case-access model (2026-09-13) — case access is a fully
+// independent field from role, on both the invite form and the per-member
+// Edit access panel: see TeamAccessSection.jsx's own comment on why it
+// never auto-changes when role does for an existing member.
+describe('TeamAccessSection — case access level (three-level model)', () => {
+  it('shows the role\'s suggested default level once a role is picked on the invite form', () => {
+    render(<TeamAccessSection {...baseProps} teamMembers={[]} inviteForm={{ ...inviteForm, role: 'investigator' }} />);
+    expect(screen.getByLabelText('Case access')).toBeInTheDocument();
+    expect(screen.getByLabelText('Case access').value).toBe('3');
+  });
+
+  it('does not render the Case access selector before a role is chosen', () => {
+    render(<TeamAccessSection {...baseProps} teamMembers={[]} />);
+    expect(screen.queryByLabelText('Case access')).not.toBeInTheDocument();
+  });
+
+  it('shows the member\'s current case access level in their summary line', () => {
+    render(<TeamAccessSection {...baseProps} />);
+    expect(screen.getByText(/Level 1 — Full access/)).toBeInTheDocument();
+  });
+
+  it('renders an independent Case access selector in Edit access, alongside Role', () => {
+    render(<TeamAccessSection {...baseProps} editingMember="m1" />);
+    expect(screen.getByLabelText('Role for Sam Employee')).toBeInTheDocument();
+    expect(screen.getByLabelText('Case access for Sam Employee')).toBeInTheDocument();
+    expect(screen.getByLabelText('Case access for Sam Employee').value).toBe('1');
+  });
+
+  it('calls updateCaseAccessLevel, not updateMemberRole, when the Case access selector changes', async () => {
+    const user = userEvent.setup();
+    const updateCaseAccessLevel = vi.fn();
+    const updateMemberRole = vi.fn();
+    render(<TeamAccessSection {...baseProps} editingMember="m1" updateCaseAccessLevel={updateCaseAccessLevel} updateMemberRole={updateMemberRole} />);
+    await user.selectOptions(screen.getByLabelText('Case access for Sam Employee'), '3');
+    expect(updateCaseAccessLevel).toHaveBeenCalledWith('m1', 3);
+    expect(updateMemberRole).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a pending invitation\'s intended case access level', () => {
+    const pendingInvites = [{ id: 'inv-1', name: 'Alex Newperson', email: 'alex@acme.com', roleLabel: 'Auditor (read-only)', caseAccessLevel: 1, locationIds: [], createdAt: '2026-09-01T00:00:00.000Z', expired: false }];
+    render(<TeamAccessSection {...baseProps} pendingInvites={pendingInvites} />);
+    const pendingCard = screen.getByText('Pending invitations').parentElement;
+    expect(within(pendingCard).getByText(/Level 1 — Full access/)).toBeInTheDocument();
   });
 });
 

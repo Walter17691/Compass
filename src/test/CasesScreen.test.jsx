@@ -187,6 +187,37 @@ describe('CasesScreen — loading state (Phase 6.5, P1)', () => {
   });
 });
 
+// Three-level case-access model (2026-09-13) — Level 3 members cannot
+// raise cases; App.jsx passes canCreateCase={false} for them, and this
+// screen's own header "+ New case" and empty-state "Create first case →"
+// buttons must both disappear rather than lead to a DB-level rejection.
+describe('CasesScreen — Level 3 cannot create cases (three-level model)', () => {
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, confirmDialog: noop, showToast: noop };
+
+  it('shows "+ New case" in the header by default (canCreateCase defaults to true)', () => {
+    render(<CasesScreen {...baseProps} cases={cases} casesLoading={false} />);
+    expect(screen.getByRole('button', { name: '+ New case' })).toBeInTheDocument();
+  });
+
+  it('hides "+ New case" in the header when canCreateCase is false', () => {
+    render(<CasesScreen {...baseProps} cases={cases} casesLoading={false} canCreateCase={false} />);
+    expect(screen.queryByRole('button', { name: '+ New case' })).not.toBeInTheDocument();
+    // "+ New meeting" is unaffected — only case creation is Level-3-gated.
+    expect(screen.getByRole('button', { name: '+ New meeting' })).toBeInTheDocument();
+  });
+
+  it('hides "Create first case →" and shows a non-actionable empty state when canCreateCase is false', () => {
+    render(<CasesScreen {...baseProps} cases={[]} casesLoading={false} canCreateCase={false} />);
+    expect(screen.getByText('No cases yet')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create first case →' })).not.toBeInTheDocument();
+  });
+
+  it('still shows "Create first case →" when canCreateCase is true', () => {
+    render(<CasesScreen {...baseProps} cases={[]} casesLoading={false} canCreateCase={true} />);
+    expect(screen.getByRole('button', { name: 'Create first case →' })).toBeInTheDocument();
+  });
+});
+
 // IA & User Journey pass, §10 — Cases as a work inbox: a top-level
 // All/Mine/Needs attention/Closed segment, additional to (not replacing)
 // the existing type/stage/status filters. "Mine" reuses the ownerId a

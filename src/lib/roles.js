@@ -24,10 +24,12 @@ export const ROLE_LABELS = Object.fromEntries(ROLES.map(r => [r.id, r.label]));
 // protect_org_member_privilege_columns fix) — never through invitation.
 export const TEAM_INVITE_ROLES = ROLES.filter(r => r.id !== "hr_director");
 
-// Roles whose actual authorization model is scoped by assigned
-// locations (canAccessCaseLocation). Kept separate from the general role
-// list so the invite form only asks for locations where they mean
-// something, rather than showing the field for every role.
+// Roles that collect assigned locations as organisational/reporting
+// metadata — since the three-level case-access model (2026-09-13),
+// location no longer scopes case visibility at all (see this file's own
+// canAccessCaseLocation removal note below). Kept separate from the
+// general role list so the invite form only asks for locations where
+// they're collected, rather than showing the field for every role.
 export const LOCATION_SCOPED_ROLES = new Set(["location_manager"]);
 
 // Short, honest, already-real descriptions for the invite form — same
@@ -35,12 +37,72 @@ export const LOCATION_SCOPED_ROLES = new Set(["location_manager"]);
 // what the role can actually do today, not aspirational copy.
 export const ROLE_DESCRIPTIONS = {
   hr_manager: "Full access to organisation cases and HR actions, except reserved administrator functions.",
-  location_manager: "Sees and can contribute to cases at their assigned location(s) only.",
+  // NEW-16 hygiene fix (2026-09-13) — this previously said "Sees and can
+  // contribute to cases at their assigned location(s) only," describing
+  // behaviour manager_enablement_case_access_2026-08-13.sql deliberately
+  // removed weeks earlier (that migration's own comment: "narrowing it is
+  // a deliberate, confirmed behaviour change, not an oversight"). Assigned
+  // locations are still collected and stored, but do not currently grant
+  // case visibility on their own — access today is identical to
+  // line_manager's model. Corrected so this invite-form copy matches what
+  // actually happens, not what it used to do.
+  location_manager: "Sees cases they create or are explicitly given access to. Assigned location(s) are recorded for reference but do not currently grant additional case visibility.",
   line_manager: "Sees cases they own or are explicitly given access to.",
-  investigator: "No case access until individually assigned to a specific case.",
+  // Three-level case-access model (2026-09-13) — this description was
+  // already the stated intent, but the old model didn't actually deliver
+  // it: an Investigator who personally raised a case still saw it via
+  // created_by, same as every other non-oversight role. Level 3 (the new
+  // default for this role) makes it genuinely true — case_access is the
+  // only path to visibility, and Investigator can no longer create/raise
+  // cases at all.
+  investigator: "No case access until individually assigned to a specific case. Cannot raise new cases.",
   legal_reviewer: "Access to HR review requests and cases with confidential-case oversight.",
   auditor: "Read-only access; cannot create, edit, or delete records.",
 };
+
+// Three-level case-access model (2026-09-13) — replaces role-name-list-
+// based case visibility (can_see_all_org_cases) and location-based
+// visibility (can_access_case_location, confirmed dead in practice since
+// manager_enablement_case_access_2026-08-13.sql) with one explicit,
+// independently-persisted column: org_members.case_access_level.
+//
+// Deliberately NOT the same column as org_members.access_level, which is
+// a pre-existing, completely unrelated feature (organisational seniority,
+// used only by HandoffModal.jsx to decide who's senior enough to be
+// appointed an impartial ACAS disciplinary officer). Reusing that name
+// would have silently corrupted that feature.
+//
+// Role is unchanged and still governs CAPABILITIES (who can invite team
+// members, manage settings, appoint a disciplinary officer, approve HR
+// Review Gate sign-off, take HR Intervention actions). case_access_level
+// governs a different question entirely: which cases a person can see.
+// Role selection suggests a default level (below); the two are
+// independently persisted and one never silently changes the other.
+export const CASE_ACCESS_LEVELS = [
+  { id: 1, label: "Level 1 — Full access", description: "Can see all cases." },
+  { id: 2, label: "Level 2 — Raised + assigned", description: "Can see cases they raise and cases assigned to them." },
+  { id: 3, label: "Level 3 — Assigned only", description: "Can only see cases assigned to them." },
+];
+
+export const CASE_ACCESS_LEVEL_LABELS = Object.fromEntries(CASE_ACCESS_LEVELS.map(l => [l.id, l.label]));
+
+// Fail-closed by design: an unrecognised role has no entry here at all,
+// so callers must handle "no default" explicitly (Level 3, never a silent
+// Level 1) rather than this map quietly answering for a role it's never
+// seen — the exact same principle the production migration itself uses.
+export const DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE = {
+  hr_director: 1,
+  hr_manager: 1,
+  legal_reviewer: 1,
+  auditor: 1,
+  location_manager: 2,
+  line_manager: 2,
+  investigator: 3,
+};
+
+export function defaultCaseAccessLevelForRole(role) {
+  return DEFAULT_CASE_ACCESS_LEVEL_BY_ROLE[role] ?? 3;
+}
 
 export function roleLabel(role) {
   return ROLE_LABELS[role] || role || "Team member";
@@ -80,17 +142,12 @@ export function canSeeAllOrgCases(role) {
   return isHrRole(role) || hasConfidentialOversight(role);
 }
 
-// Phase 6.5 hardening — client-side mirror of can_access_case_location()
-// in supabase/manager_enablement_case_access_2026-08-13.sql /
-// role_expansion_2026-08-09.sql, added so api/cron/_digest.js (which runs
-// on the service-role key and so has no RLS of its own to lean on) can
-// replicate the real per-recipient visibility rule instead of a looser
-// approximation. Only a location_manager with a real, non-empty assigned-
-// locations list is filtered by location at all — everyone else
-// (including a location_manager with no locations assigned yet) sees
-// every location, matching the SQL function's own documented reasoning.
-export function canAccessCaseLocation(role, memberLocationIds, caseLocationId) {
-  if (role !== "location_manager") return true;
-  if (!memberLocationIds || memberLocationIds.length === 0) return true;
-  return memberLocationIds.includes(caseLocationId);
-}
+// canAccessCaseLocation() — REMOVED (2026-09-13, three-level case-access
+// model). It mirrored can_access_case_location(), whose effect on actual
+// case visibility was already confirmed dead in production before this
+// removal (manager_enablement_case_access_2026-08-13.sql had already
+// superseded it). Its one live caller, api/cron/_digest.js's
+// isAuthorisedFor, now checks case_access_level directly instead — see
+// that file's own comment for the DB ↔ digest parity table. Locations
+// play no role in case visibility under the new model at all; they
+// remain useful organisational/reporting metadata only.

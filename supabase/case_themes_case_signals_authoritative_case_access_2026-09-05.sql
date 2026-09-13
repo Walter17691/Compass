@@ -82,7 +82,13 @@
 -- case_tasks (already fixed and frozen), nor the `cases` policies themselves
 -- (the authoritative model, unchanged).
 --
--- STATUS: NOT YET DEPLOYED. Pending review.
+-- STATUS: DEPLOYED — confirmed live via direct pg_policy query against
+-- production during the three-level case-access model's final security
+-- review (2026-09-13): `case_themes` and `case_signals` both carry exactly
+-- this migration's bare `EXISTS (SELECT 1 FROM cases c WHERE c.id = ...
+-- case_id)` predicate today. This header was never updated after
+-- deployment — that staleness itself fooled an automated research pass
+-- into reporting a false "still vulnerable" finding during that review.
 -- ============================================================================
 
 drop policy if exists "Users can manage themes for cases they can access" on public.case_themes;

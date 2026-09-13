@@ -88,6 +88,16 @@ describe('team-invites — GET list, authorisation', () => {
     await handler({ method: 'GET', headers: { authorization: 'Bearer x' }, query: { orgId: 'org-1' } }, res);
     expect(res.body.invites[0].expired).toBe(true);
   });
+
+  // Three-level case-access model (2026-09-13) — the pending-invitations
+  // list surfaces the intended level alongside role/locations so Team &
+  // Access can show what a not-yet-accepted invite will grant.
+  it('surfaces the intended case access level', async () => {
+    stubFetch({ invites: [{ id: 'inv-1', name: 'Sam', email: 'sam@acme.com', intended_role: 'auditor', intended_location_ids: [], intended_case_access_level: 1, created_at: '2026-09-01T00:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z', status: 'pending' }] });
+    const res = mockRes();
+    await handler({ method: 'GET', headers: { authorization: 'Bearer x' }, query: { orgId: 'org-1' } }, res);
+    expect(res.body.invites[0].caseAccessLevel).toBe(1);
+  });
 });
 
 describe('team-invites — revoke', () => {
@@ -171,12 +181,13 @@ describe('team-invites — resend (rotate token)', () => {
     expect(emailCalls[0].html).toMatch(/\?teamInvite=/);
   });
 
-  it('preserves the original intended role and locations on the rotated invitation', async () => {
-    const { calls } = stubFetch({ invites: [{ id: 'inv-1', name: 'Sam', email: 'sam@acme.com', intended_role: 'location_manager', intended_location_ids: ['loc-9'], status: 'pending' }] });
+  it('preserves the original intended role, locations, and case access level on the rotated invitation', async () => {
+    const { calls } = stubFetch({ invites: [{ id: 'inv-1', name: 'Sam', email: 'sam@acme.com', intended_role: 'location_manager', intended_location_ids: ['loc-9'], intended_case_access_level: 2, status: 'pending' }] });
     const res = mockRes();
     await handler(req(), res);
     const createCall = calls.find(c => c.url.includes('/rest/v1/team_invites') && c.method === 'POST');
     expect(createCall.body.intended_role).toBe('location_manager');
+    expect(createCall.body.intended_case_access_level).toBe(2);
     expect(createCall.body.intended_location_ids).toEqual(['loc-9']);
   });
 

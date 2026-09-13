@@ -71,7 +71,7 @@ import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/empl
 import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
 import { appealLinkCandidates } from './lib/appealLink';
-import { isHrRole } from './lib/roles';
+import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
@@ -1480,6 +1480,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,location_ids:locationIds}:x));
   };
 
+  // Three-level case-access model (2026-09-13) — unlike updateMemberRole
+  // (ROLE-CHANGE AUDIT GAP — P2 BACKLOG, deliberately left unfixed here),
+  // this NEW functionality must be audited from the moment it exists: a
+  // change to which cases someone can see is exactly the kind of event a
+  // future incident review would need to reconstruct.
+  const updateCaseAccessLevel = async (memberId, caseAccessLevel) => {
+    const previousMember = teamMembers.find(x=>x.id===memberId);
+    const { error } = await supabase.from("org_members").update({case_access_level: caseAccessLevel}).eq("id", memberId);
+    if(error) { console.error("updateCaseAccessLevel", error); showToast("Couldn't update case access — "+error.message, "error"); return; }
+    setTeamMembers(m=>m.map(x=>x.id===memberId?{...x,case_access_level:caseAccessLevel}:x));
+    audit(
+      "Case access level changed",
+      `${previousMember?.name||"Unknown"}: ${CASE_ACCESS_LEVEL_LABELS[previousMember?.case_access_level]||"unset"} → ${CASE_ACCESS_LEVEL_LABELS[caseAccessLevel]}`
+    );
+  };
+
   // Commercial-readiness audit remediation (Team Invitations P0, 2026-09) —
   // this used to do no network I/O at all: it just redisplayed org.invite_code
   // in a "share this link" modal and silently discarded the entered
@@ -1511,12 +1527,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const r = await authedFetch("/api/team/invite-member", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ name, email, orgId: org.id, role: inviteForm.role, locationIds: inviteForm.locationIds })
+        body: JSON.stringify({ name, email, orgId: org.id, role: inviteForm.role, locationIds: inviteForm.locationIds, caseAccessLevel: inviteForm.caseAccessLevel })
       });
       const d = await safeJson(r);
       if(d.success) {
         showToast(`Invitation sent to ${email} — they'll receive an email to create their Compass account and join ${org.name}.`, "success", 6000);
-        setInviteForm({name:"",email:"",role:"",locationIds:[]});
+        setInviteForm({name:"",email:"",role:"",locationIds:[],caseAccessLevel:undefined});
         loadPendingInvites();
       } else {
         showToast("Couldn't send the invitation — "+(d.error||"please try again"), "error");
@@ -1853,7 +1869,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [teamMembers, setTeamMembers] = useState([]);
   // NEW-8 remediation — role/locationIds are collected here and applied
   // atomically on acceptance (see inviteMember's own comment).
-  const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"",locationIds:[]});
+  // caseAccessLevel added for the three-level case-access model
+  // (2026-09-13) — undefined here lets the API's own
+  // defaultCaseAccessLevelForRole(role) supply the suggested default until
+  // the admin explicitly overrides it via the invite form's own selector.
+  const [inviteForm, setInviteForm] = useState({name:"",email:"",role:"",locationIds:[],caseAccessLevel:undefined});
   const [inviting, setInviting] = useState(false);
   const [pendingInvites, setPendingInvites] = useState([]);
   const [resendingInviteId, setResendingInviteId] = useState(null);
@@ -8333,7 +8353,27 @@ Please produce:
       {showSigPad && <SignaturePad onSave={handleSaveSignature} onClose={()=>{setShowSigPad(false);setPendingSend(null);}} />}
 
       {/* Case file prompt */}
-      {showCasePrompt&&(
+      {/* Three-level case-access model (2026-09-13) — this modal is the
+          real terminal choke point for case creation: CreateMenu's own
+          onNewCase is gated (see its call site's comment), but
+          HomeScreen/OnboardingWizard/OpenInCompassScreen all call
+          setShowCasePrompt(true) directly, bypassing CreateMenu entirely.
+          Gating the render here, rather than each of those call sites
+          individually, means every current AND future caller of
+          setShowCasePrompt is covered by one check instead of needing to
+          remember this rule at each new one. A denial message (not a
+          silent no-op) so clicking one of those buttons doesn't look
+          broken for a Level 3 member. */}
+      {showCasePrompt&&member?.case_access_level===3&&(
+        <div role="dialog" aria-modal="true" tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+            <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1C1820",marginBottom:8}}>Can't create a case</div>
+            <p style={{fontSize:13,color:"#6B6880",marginBottom:20}}>Your case access level doesn't allow raising new cases. Ask an HR Director or HR Manager to change it if this is unexpected.</p>
+            <button onClick={closeCasePrompt} style={{width:"100%",background:"#7C5CFC",border:"none",borderRadius:10,padding:"12px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Close</button>
+          </div>
+        </div>
+      )}
+      {showCasePrompt&&member?.case_access_level!==3&&(
         <div role="dialog" aria-modal="true" ref={casePromptModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:520,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
@@ -8690,7 +8730,13 @@ Please produce:
           // ConcernsScreen's autoOpenForm flow, CaseViewScreen.jsx:219's
           // own "start a meeting for this case's subject" derivation) —
           // this menu is a new front door, not new business logic.
-          onNewCase: () => setShowCasePrompt(true),
+          // Three-level case-access model (2026-09-13) — Level 3 members
+          // cannot raise cases at all (see supabase/three_level_case_access_
+          // 2026-09-13.sql's "Level 3 cannot create cases" INSERT policy,
+          // the real, authoritative enforcement). Passing undefined here
+          // (rather than a handler that would just fail server-side) hides
+          // "New case" from CreateMenu's popover entirely for them.
+          onNewCase: member?.case_access_level === 3 ? undefined : () => setShowCasePrompt(true),
           onNewMeeting: () => {
             setMeetingSetup({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
             setScreen(SCREENS.HOME+"_meeting");
@@ -8955,7 +9001,8 @@ Please produce:
       {/* ══ CASES ══ */}
       {screen===SCREENS.CASES&&(
         <CasesScreen cases={cases} casesLoading={casesLoading} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} audit={audit} currentUserId={user?.id}
-          deepLink={{ initialFilters: casesDeepLinkFilters, clearInitialFilters: ()=>setCasesDeepLinkFilters(null) }} />
+          deepLink={{ initialFilters: casesDeepLinkFilters, clearInitialFilters: ()=>setCasesDeepLinkFilters(null) }}
+          canCreateCase={member?.case_access_level !== 3} />
       )}
 
       {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}
@@ -9144,7 +9191,7 @@ Please produce:
           auditLog={auditLog}
           lsSet={lsSet}
           org={{ org, locations, deleteLocation, addLocation, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers }}
-          team={{ teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, currentUserRole: member?.role, pendingInvites, loadPendingInvites, revokeInvite, resendInvite, resendingInviteId }}
+          team={{ teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, updateCaseAccessLevel, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, currentUserRole: member?.role, pendingInvites, loadPendingInvites, revokeInvite, resendInvite, resendingInviteId }}
           portal={{ portalAccounts, revokePortalAccess }}
           employeeData={{ employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate }}
           branding={{ wordTemplate, setWordTemplate, orgLsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad }}

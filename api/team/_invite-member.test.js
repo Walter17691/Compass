@@ -149,6 +149,41 @@ describe('invite-member — intended role validation (NEW-8)', () => {
   );
 });
 
+// Three-level case-access model (2026-09-13) — invitations now carry an
+// intended_case_access_level alongside intended_role, applied atomically at
+// acceptance. Server-side validated the same way role already is: never
+// trusted purely from a hidden UI state.
+describe('invite-member — intended case access level (three-level model)', () => {
+  let originalFetch;
+  beforeEach(() => { originalFetch = global.fetch; });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('defaults to the role\'s default level when caseAccessLevel is omitted', async () => {
+    const { calls } = stubFetch({ members: [{ role: 'hr_manager' }] });
+    const res = mockRes();
+    await handler(req({ ...body, role: 'investigator', locationIds: [] }), res);
+    expect(res.statusCode).toBe(200);
+    const createCall = calls.find(c => c.url.includes('/rest/v1/team_invites') && c.method === 'POST');
+    expect(createCall.body.intended_case_access_level).toBe(3);
+  });
+
+  it('accepts an explicit override that differs from the role default', async () => {
+    const { calls } = stubFetch({ members: [{ role: 'hr_director' }] });
+    const res = mockRes();
+    await handler(req({ ...body, role: 'line_manager', caseAccessLevel: 1 }), res);
+    expect(res.statusCode).toBe(200);
+    const createCall = calls.find(c => c.url.includes('/rest/v1/team_invites') && c.method === 'POST');
+    expect(createCall.body.intended_case_access_level).toBe(1);
+  });
+
+  it('rejects a caseAccessLevel outside 1-3, failing closed rather than silently defaulting', async () => {
+    stubFetch({ members: [{ role: 'hr_manager' }] });
+    const res = mockRes();
+    await handler(req({ ...body, caseAccessLevel: 4 }), res);
+    expect(res.statusCode).toBe(400);
+  });
+});
+
 describe('invite-member — Location Manager location requirement (NEW-8)', () => {
   let originalFetch;
   beforeEach(() => { originalFetch = global.fetch; });

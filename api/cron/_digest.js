@@ -3,7 +3,7 @@ import { fetchAllPagesServer } from '../_paginatedFetch.js';
 import { postWebhook } from './_notify.js';
 import { computeDueSoon } from '../../src/lib/deadlines.js';
 import { mapCaseRow } from '../../src/lib/caseMapping.js';
-import { isHrRole, hasConfidentialOversight, canSeeAllOrgCases, canAccessCaseLocation } from '../../src/lib/roles.js';
+import { isHrRole } from '../../src/lib/roles.js';
 import { escapeHtml as esc } from '../_html.js';
 import { APP_URL } from '../_appUrl.js';
 
@@ -53,20 +53,23 @@ async function sendDigestEmail(email, items) {
 // unlike every in-app view of dueSoon (the overdue banner, cases list),
 // which Postgres RLS already scopes to cases the logged-in user can see.
 //
-// Phase 6.5 hardening (P0) — this used to check only the confidential
-// flag (creator/case_access/hr_director), which is real but incomplete:
-// it's just one of three RLS policies actually layered on cases.SELECT.
-// The other two apply regardless of confidentiality — a location_manager
-// or line_manager only sees cases they created, own, or hold case_access
-// on (manager_enablement_case_access_2026-08-13.sql's own restrictive
-// policy, deliberately narrowing even NON-confidential visibility), and
-// a location_manager with real assigned locations is further filtered to
-// their own sites (can_access_case_location()). Without this, every
-// opted-in member — regardless of role or location — got emailed every
-// non-confidential deadline org-wide, which real in-app browsing (RLS-
-// protected) would never show them. This function now mirrors all three
-// policies exactly; see src/lib/roles.js's canAccessCaseLocation/
-// canSeeAllOrgCases/hasConfidentialOversight for the individual pieces.
+// Three-level case-access model (2026-09-13) — DB ↔ digest parity table.
+// cases' own RLS (supabase/three_level_case_access_2026-09-13.sql) now
+// reduces to exactly three routes to a case, and this function mirrors
+// each one directly against org_members.case_access_level:
+//   Level 1                         → sees every case in the org, full stop.
+//   Level 2 AND cases.created_by=me → sees cases they personally created.
+//   case_access row for (case, me)  → sees that case, regardless of level.
+// Confidentiality is no longer a separate check: the migration folded it
+// into this same predicate (a Level 1 member or a Level 2 creator sees a
+// confidential case exactly like a non-confidential one — there is no
+// separate "confidential oversight" role list anymore), so deadline.
+// confidential no longer needs to be read here. Location plays no role in
+// case visibility under this model at all (superseded
+// can_access_case_location(), confirmed dead before the rewrite), so
+// member.location_ids is no longer fetched or checked. owner_id is
+// deliberately excluded too — case_access is the sole assignment
+// mechanism the three-level model recognises.
 //
 // wellbeing deadlines have no case behind them at all — wellbeing_notes'
 // own RLS is narrower still (is_hr_role: hr_manager/hr_director only,
@@ -105,21 +108,10 @@ export function isAuthorisedFor(deadline, member, caseAccessByCase, casesById = 
   if (!cs) return false; // can't verify against real case data — fail closed
 
   const hasCaseAccess = (caseAccessByCase.get(deadline.caseId) || new Set()).has(member.user_id);
+  if (hasCaseAccess) return true;
 
-  // Mirrors "Users can access cases in their org or assigned to them" (PERMISSIVE).
-  const locationOk = canAccessCaseLocation(member.role, member.location_ids, cs.locationId);
-  if (!(locationOk || hasCaseAccess)) return false;
-
-  // Mirrors "Non-oversight members restricted to their own assigned
-  // cases" (RESTRICTIVE) — applies to every case, confidential or not.
-  const ownershipOk = canSeeAllOrgCases(member.role) || cs.createdBy === member.user_id || cs.ownerId === member.user_id || hasCaseAccess;
-  if (!ownershipOk) return false;
-
-  // Mirrors "Confidential cases restricted to authorised staff" (RESTRICTIVE).
-  if (deadline.confidential) {
-    return cs.createdBy === member.user_id || hasCaseAccess || hasConfidentialOversight(member.role);
-  }
-  return true;
+  if (member.case_access_level === 1) return true;
+  return member.case_access_level === 2 && cs.createdBy === member.user_id;
 }
 
 export async function runDigest() {
@@ -154,12 +146,11 @@ export async function runDigest() {
     const urgent = dueSoon.filter(isUrgent);
     if (urgent.length === 0) continue;
 
-    // location_ids added for canAccessCaseLocation; casesById gives
-    // isAuthorisedFor the same location_id/owner_id/created_by every
-    // other RLS-equivalent check in this codebase reads off the raw row.
-    const { data: members } = await fetchAllPagesServer(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id,role,location_ids&order=user_id.asc`);
+    // case_access_level is the sole role/location-independent input
+    // isAuthorisedFor needs from org_members under the three-level model.
+    const { data: members } = await fetchAllPagesServer(`org_members?org_id=eq.${org.id}&email_digest_opt_in=eq.true&select=user_id,role,case_access_level&order=user_id.asc`);
 
-    const casesById = new Map(rows.map(r => [r.id, { locationId: r.location_id, ownerId: r.owner_id, createdBy: r.created_by }]));
+    const casesById = new Map(rows.map(r => [r.id, { createdBy: r.created_by }]));
 
     const { data: caseAccessRows } = await fetchAllPagesServer(`case_access?org_id=eq.${org.id}&select=case_id,user_id&order=case_id.asc`);
     const caseAccessByCase = new Map();

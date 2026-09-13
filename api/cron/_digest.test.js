@@ -1,115 +1,97 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { isAuthorisedFor, runDigest, digestHtml } from './_digest.js';
 
-// Phase 6.5 hardening (P0) — isAuthorisedFor now mirrors all three RLS
-// policies actually layered on cases.SELECT (location, non-oversight
-// ownership scoping, and confidentiality), not just confidentiality
-// alone. See _digest.js's own header comment for the full reasoning.
+// Three-level case-access model (2026-09-13) — isAuthorisedFor's case-scoped
+// branch now mirrors cases' own case_access_level-based RLS exactly (see
+// _digest.js's own header comment for the DB ↔ digest parity table).
+// Confidentiality and location no longer participate at all: a Level 1
+// member sees a confidential case exactly like a non-confidential one, and
+// location_ids is not even fetched anymore. The caseless-category branch
+// (wellbeing/dsar/redundancy/leaver) is unaffected — it still gates on
+// isHrRole(member.role), a capability question untouched by this migration.
 describe('isAuthorisedFor', () => {
-  const alice = { user_id: 'alice', role: 'hr_manager' };
-  const bob = { user_id: 'bob', role: 'hr_manager' };
-  const dana = { user_id: 'dana', role: 'hr_director' };
-  const leo = { user_id: 'leo', role: 'legal_reviewer' };
-  const locMgr = { user_id: 'locmgr', role: 'location_manager', location_ids: ['site-a'] };
-  const lineMgr = { user_id: 'linemgr', role: 'line_manager' };
+  const level1 = { user_id: 'l1', role: 'hr_manager', case_access_level: 1 };
+  const level1b = { user_id: 'l1b', role: 'hr_director', case_access_level: 1 };
+  const level2Creator = { user_id: 'alice', role: 'line_manager', case_access_level: 2 };
+  const level2NotCreator = { user_id: 'l2', role: 'line_manager', case_access_level: 2 };
+  const level3 = { user_id: 'l3', role: 'investigator', case_access_level: 3 };
+  const lineMgr = { user_id: 'linemgr', role: 'line_manager', case_access_level: 2 };
+  const alice = { user_id: 'alice', role: 'hr_manager' }; // caseless-category fixture, role-only
+  const leo = { user_id: 'leo', role: 'legal_reviewer' }; // caseless-category fixture, role-only
 
-  const caseC1 = { locationId: 'site-a', ownerId: null, createdBy: 'alice' };
+  const caseC1 = { createdBy: 'alice' };
   const casesById = new Map([['c1', caseC1]]);
 
-  describe('confidential deadlines', () => {
-    it('blocks an unrelated hr_manager', () => {
-      const d = { confidential: true, caseId: 'c1' };
-      expect(isAuthorisedFor(d, bob, new Map(), casesById)).toBe(false);
+  describe('case-scoped deadlines, confidential or not — confidentiality no longer changes the outcome', () => {
+    it('Level 1 sees any case in the org, confidential or not', () => {
+      const confidential = { confidential: true, caseId: 'c1' };
+      const nonConfidential = { confidential: false, caseId: 'c1' };
+      expect(isAuthorisedFor(confidential, level1, new Map(), casesById)).toBe(true);
+      expect(isAuthorisedFor(nonConfidential, level1, new Map(), casesById)).toBe(true);
     });
 
-    it('lets the case creator see their own confidential deadline', () => {
+    it('a second Level 1 member (different role) sees it too — the level, not the role name, is what matters', () => {
       const d = { confidential: true, caseId: 'c1' };
-      expect(isAuthorisedFor(d, alice, new Map(), casesById)).toBe(true);
+      expect(isAuthorisedFor(d, level1b, new Map(), casesById)).toBe(true);
     });
 
-    it('lets an hr_director see it regardless of case ownership', () => {
-      const d = { confidential: true, caseId: 'c1' };
-      expect(isAuthorisedFor(d, dana, new Map(), casesById)).toBe(true);
+    it('Level 2 sees a case they created, confidential or not', () => {
+      const confidential = { confidential: true, caseId: 'c1' };
+      const nonConfidential = { confidential: false, caseId: 'c1' };
+      expect(isAuthorisedFor(confidential, level2Creator, new Map(), casesById)).toBe(true);
+      expect(isAuthorisedFor(nonConfidential, level2Creator, new Map(), casesById)).toBe(true);
     });
 
-    it('lets a legal_reviewer see it (confidentiality oversight is broader than plain HR)', () => {
-      const d = { confidential: true, caseId: 'c1' };
-      expect(isAuthorisedFor(d, leo, new Map(), casesById)).toBe(true);
+    it('Level 2, NOT the creator, no case_access: blocked regardless of confidentiality', () => {
+      const confidential = { confidential: true, caseId: 'c1' };
+      const nonConfidential = { confidential: false, caseId: 'c1' };
+      expect(isAuthorisedFor(confidential, level2NotCreator, new Map(), casesById)).toBe(false);
+      expect(isAuthorisedFor(nonConfidential, level2NotCreator, new Map(), casesById)).toBe(false);
     });
 
-    it('lets a member explicitly granted case_access see it', () => {
+    it('Level 3 with no case_access: blocked regardless of confidentiality', () => {
+      const confidential = { confidential: true, caseId: 'c1' };
+      const nonConfidential = { confidential: false, caseId: 'c1' };
+      expect(isAuthorisedFor(confidential, level3, new Map(), casesById)).toBe(false);
+      expect(isAuthorisedFor(nonConfidential, level3, new Map(), casesById)).toBe(false);
+    });
+
+    it('an explicit case_access grant overrides level entirely, including for Level 3 on a confidential case', () => {
       const d = { confidential: true, caseId: 'c1' };
-      const caseAccessByCase = new Map([['c1', new Set(['bob'])]]);
-      expect(isAuthorisedFor(d, bob, caseAccessByCase, casesById)).toBe(true);
+      const caseAccessByCase = new Map([['c1', new Set(['l3'])]]);
+      expect(isAuthorisedFor(d, level3, caseAccessByCase, casesById)).toBe(true);
     });
 
     it('does not leak access across unrelated cases', () => {
       const d = { confidential: true, caseId: 'c2' };
-      const caseAccessByCase = new Map([['c1', new Set(['bob'])]]);
-      const twoCases = new Map([['c1', caseC1], ['c2', { locationId: 'site-a', ownerId: null, createdBy: 'alice' }]]);
-      expect(isAuthorisedFor(d, bob, caseAccessByCase, twoCases)).toBe(false);
+      const caseAccessByCase = new Map([['c1', new Set(['l3'])]]);
+      const twoCases = new Map([['c1', caseC1], ['c2', { createdBy: 'alice' }]]);
+      expect(isAuthorisedFor(d, level3, caseAccessByCase, twoCases)).toBe(false);
     });
   });
 
-  describe('non-confidential deadlines — ownership scoping applies regardless (real, previously-missing restriction)', () => {
-    it('an hr_manager (canSeeAllOrgCases) sees any non-confidential case in the org', () => {
+  describe('DELIBERATE BEHAVIOUR CHANGE: owner_id and location no longer participate', () => {
+    it('a Level 2 member who owns the case (owner_id) but did not create it is still blocked — owner_id was excluded from the three-level model by design', () => {
       const d = { confidential: false, caseId: 'c1' };
-      expect(isAuthorisedFor(d, bob, new Map(), casesById)).toBe(true);
+      const owned = new Map([['c1', { createdBy: 'someone-else' }]]);
+      expect(isAuthorisedFor(d, lineMgr, new Map(), owned)).toBe(false);
     });
 
-    it('a line_manager who neither created, owns, nor holds case_access on the case is blocked, even though it is not confidential', () => {
+    it('location is never consulted anymore — a Level 2 member sees their own created case regardless of any location field', () => {
       const d = { confidential: false, caseId: 'c1' };
-      expect(isAuthorisedFor(d, lineMgr, new Map(), casesById)).toBe(false);
-    });
-
-    it('a line_manager who created the case can see it', () => {
-      const d = { confidential: false, caseId: 'c1' };
-      const linemgrAsCreator = { user_id: 'linemgr', role: 'line_manager' };
-      const owned = new Map([['c1', { ...caseC1, createdBy: 'linemgr' }]]);
-      expect(isAuthorisedFor(d, linemgrAsCreator, new Map(), owned)).toBe(true);
-    });
-
-    it('a line_manager who owns the case (owner_id) can see it', () => {
-      const d = { confidential: false, caseId: 'c1' };
-      const owned = new Map([['c1', { ...caseC1, ownerId: 'linemgr' }]]);
-      expect(isAuthorisedFor(d, lineMgr, new Map(), owned)).toBe(true);
-    });
-
-    it('a line_manager with case_access can see it', () => {
-      const d = { confidential: false, caseId: 'c1' };
-      const caseAccessByCase = new Map([['c1', new Set(['linemgr'])]]);
-      expect(isAuthorisedFor(d, lineMgr, caseAccessByCase, casesById)).toBe(true);
+      const created = new Map([['c1', { createdBy: 'linemgr' }]]);
+      const creator = { user_id: 'linemgr', role: 'location_manager', case_access_level: 2 };
+      expect(isAuthorisedFor(d, creator, new Map(), created)).toBe(true);
     });
   });
 
-  describe('location scoping — location_manager only', () => {
-    it('a location_manager assigned to the case\'s own site sees it (as creator/owner/case_access — location alone is not enough per the real RLS shape)', () => {
-      const d = { confidential: false, caseId: 'c1' };
-      const owned = new Map([['c1', { ...caseC1, createdBy: 'locmgr' }]]);
-      expect(isAuthorisedFor(d, locMgr, new Map(), owned)).toBe(true);
-    });
-
-    it('a location_manager assigned to a DIFFERENT site is blocked even if they created the case', () => {
-      const d = { confidential: false, caseId: 'c1' };
-      const elsewhere = new Map([['c1', { locationId: 'site-b', ownerId: null, createdBy: 'locmgr' }]]);
-      expect(isAuthorisedFor(d, locMgr, new Map(), elsewhere)).toBe(false);
-    });
-
-    it('a location_manager with no locations assigned yet is not filtered by location at all', () => {
-      const d = { confidential: false, caseId: 'c1' };
-      const unassigned = { user_id: 'locmgr2', role: 'location_manager', location_ids: [] };
-      const owned = new Map([['c1', { ...caseC1, createdBy: 'locmgr2' }]]);
-      expect(isAuthorisedFor(d, unassigned, new Map(), owned)).toBe(true);
-    });
-  });
-
-  describe('wellbeing deadlines — no case, narrower is_hr_role-only RLS', () => {
+  describe('wellbeing deadlines — no case, narrower is_hr_role-only RLS (unaffected by the three-level model)', () => {
     it('an hr_manager can see a wellbeing deadline', () => {
       const d = { category: 'wellbeing', confidential: true, caseId: null };
       expect(isAuthorisedFor(d, alice, new Map())).toBe(true);
     });
 
-    it('a legal_reviewer/auditor cannot — wellbeing_notes RLS is is_hr_role only, narrower than case confidentiality oversight', () => {
+    it('a legal_reviewer/auditor cannot — wellbeing_notes RLS is is_hr_role only', () => {
       const d = { category: 'wellbeing', confidential: true, caseId: null };
       expect(isAuthorisedFor(d, leo, new Map())).toBe(false);
     });
@@ -120,14 +102,6 @@ describe('isAuthorisedFor', () => {
     });
   });
 
-  // Phase 6.5 hardening (closes Prompt 11 audit finding 2.6, MEDIUM) —
-  // dsar/redundancy used to fall through the same blanket "no case, so
-  // authorised" branch as leaver, which really is org-wide (leaver_instances'
-  // own SELECT RLS has no role check). dsar_requests and redundancy_cases
-  // are both is_hr_role-only in their live RLS — a non-HR opted-in member
-  // was receiving an email naming an employee and their DSAR due date
-  // every morning, directly disclosing who had filed a subject access
-  // request.
   describe('leaver deadlines with no case at all — genuinely org-wide RLS', () => {
     it('is authorised for any org member, matching leaver_instances\' own SELECT RLS', () => {
       const d = { category: 'leaver', confidential: false, caseId: null };
@@ -135,7 +109,7 @@ describe('isAuthorisedFor', () => {
     });
   });
 
-  describe('dsar deadlines with no case at all — is_hr_role-only RLS (Prompt 11 audit, 2.6)', () => {
+  describe('dsar deadlines with no case at all — is_hr_role-only RLS', () => {
     it('an hr_manager can see a DSAR deadline', () => {
       const d = { category: 'dsar', confidential: false, caseId: null };
       expect(isAuthorisedFor(d, alice, new Map())).toBe(true);
@@ -152,7 +126,7 @@ describe('isAuthorisedFor', () => {
     });
   });
 
-  describe('redundancy deadlines with no case at all — is_hr_role-only RLS (Prompt 11 audit, 2.6 sibling)', () => {
+  describe('redundancy deadlines with no case at all — is_hr_role-only RLS', () => {
     it('an hr_manager can see a redundancy consultation deadline', () => {
       const d = { category: 'redundancy', confidential: false, caseId: null };
       expect(isAuthorisedFor(d, alice, new Map())).toBe(true);
@@ -174,7 +148,7 @@ describe('isAuthorisedFor', () => {
   describe('defensive: a case referenced by a deadline but missing from casesById', () => {
     it('fails closed rather than guessing', () => {
       const d = { confidential: false, caseId: 'unknown-case' };
-      expect(isAuthorisedFor(d, dana, new Map(), casesById)).toBe(false);
+      expect(isAuthorisedFor(d, level1, new Map(), casesById)).toBe(false);
     });
   });
 });

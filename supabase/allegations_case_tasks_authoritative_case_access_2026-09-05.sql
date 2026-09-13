@@ -74,7 +74,15 @@
 -- and frozen, commit c55d3226b0bb313991586c2f265a8bf8f4f52825) or the
 -- `cases` policies themselves (the authoritative model, unchanged).
 --
--- STATUS: NOT YET DEPLOYED. Pending review — see security report.
+-- STATUS: DEPLOYED — confirmed live via direct pg_policy query against
+-- production during the three-level case-access model's final security
+-- review (2026-09-13): `allegations` and `case_tasks`' case-scoped branch
+-- both carry exactly this migration's bare `EXISTS (SELECT 1 FROM cases
+-- c WHERE c.id = ...case_id)` predicate today. This header was never
+-- updated after deployment — that staleness itself fooled an automated
+-- research pass into reporting a false "still vulnerable" finding during
+-- that review. Left as a durable warning: update STATUS at deploy time,
+-- not "when convenient."
 -- ============================================================================
 
 drop policy if exists "Users can manage allegations for cases they can access" on public.allegations;

@@ -52,7 +52,7 @@ const selectStyle = {fontSize:12,border:`1px solid ${COLOR.border}`,borderRadius
 // this screen always renders from. No second case-list implementation, no
 // new query, no widening of what a user can already see — Insights only
 // ever hands over ids drawn from cases already visible to this same user.
-export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit, currentUserId, deepLink = {} }) {
+export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit, currentUserId, deepLink = {}, canCreateCase = true }) {
   const [selected, setSelected] = useState(new Set());
   const [search, setSearch] = useState("");
   // IA & User Journey pass, §10 — Cases as a work inbox: All/Mine/Needs
@@ -239,8 +239,12 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
                   which one is visually dominant changed. */}
               <button onClick={()=>setScreen(SCREENS.HOME+"_meeting")}
                 style={{...BUTTON.secondary,fontSize:13,padding:"9px 18px"}}>+ New meeting</button>
-              <button onClick={()=>{setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});setScreen(SCREENS.INTAKE);}}
-                style={{...BUTTON.primary,fontSize:13,padding:"9px 18px"}}>+ New case</button>
+              {/* Three-level case-access model (2026-09-13) — Level 3
+                  members cannot raise cases; this is IntakeScreen's other
+                  entry point besides CreateMenu's "New case" (see
+                  CreateMenu.jsx's own comment), so it needs the same gate. */}
+              {canCreateCase&&<button onClick={()=>{setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});setScreen(SCREENS.INTAKE);}}
+                style={{...BUTTON.primary,fontSize:13,padding:"9px 18px"}}>+ New case</button>}
             </>}
           />
         </div>
@@ -258,8 +262,8 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
           <EmptyState message="Loading cases…"/>
         )}
         {cases.length===0&&!casesLoading&&(
-          <EmptyState title="No cases yet" message="Create a case to start managing HR proceedings"
-            action={<button onClick={()=>setScreen(SCREENS.INTAKE)} style={{...BUTTON.primary,fontSize:14,padding:"12px 28px"}}>Create first case →</button>}/>
+          <EmptyState title="No cases yet" message={canCreateCase ? "Create a case to start managing HR proceedings" : "You'll see cases here once you're assigned to one."}
+            action={canCreateCase ? <button onClick={()=>setScreen(SCREENS.INTAKE)} style={{...BUTTON.primary,fontSize:14,padding:"12px 28px"}}>Create first case →</button> : undefined}/>
         )}
         {cases.length>0&&(
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:SPACE.md}}>

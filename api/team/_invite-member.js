@@ -1,7 +1,7 @@
 import { verifyCaller } from '../_auth.js';
 import { checkRateLimit } from '../_rateLimit.js';
 import { APP_URL } from '../_appUrl.js';
-import { ROLE_LABELS } from '../../src/lib/roles.js';
+import { ROLE_LABELS, defaultCaseAccessLevelForRole } from '../../src/lib/roles.js';
 import { generateTeamInviteToken } from '../_teamInviteToken.js';
 import { sendTeamInviteEmail } from './_inviteEmail.js';
 
@@ -44,11 +44,24 @@ export async function inviteMember(req, res) {
   // join_org_with_invite_code hardcoded that — this endpoint now creates
   // a real per-invitation record instead of emailing the org's shared,
   // permanent invite_code.
-  const { email, name, orgId, role, locationIds } = req.body;
+  const { email, name, orgId, role, locationIds, caseAccessLevel } = req.body;
   if (!orgId) return res.status(400).json({ error: 'orgId is required' });
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name is required' });
   if (!email || !String(email).trim()) return res.status(400).json({ error: 'email is required' });
-  if (!ASSIGNABLE_ROLES.includes(role)) return res.status(400).json({ error: 'A valid access level is required' });
+  if (!ASSIGNABLE_ROLES.includes(role)) return res.status(400).json({ error: 'A valid role is required' });
+
+  // Three-level case-access model (2026-09-13) — the invite form suggests
+  // defaultCaseAccessLevelForRole(role) but the inviter can override it;
+  // an explicit value must be one of the three real levels (fail closed,
+  // never silently coerced), an omitted one falls back to the role default.
+  let resolvedCaseAccessLevel;
+  if (caseAccessLevel === undefined || caseAccessLevel === null) {
+    resolvedCaseAccessLevel = defaultCaseAccessLevelForRole(role);
+  } else if (caseAccessLevel === 1 || caseAccessLevel === 2 || caseAccessLevel === 3) {
+    resolvedCaseAccessLevel = caseAccessLevel;
+  } else {
+    return res.status(400).json({ error: 'caseAccessLevel must be 1, 2, or 3' });
+  }
 
   const trimmedLocationIds = LOCATION_SCOPED_ROLES.has(role) ? (Array.isArray(locationIds) ? locationIds.filter(Boolean) : []) : [];
   if (LOCATION_SCOPED_ROLES.has(role) && trimmedLocationIds.length === 0) {
@@ -112,6 +125,7 @@ export async function inviteMember(req, res) {
         token_hash: tokenHash,
         intended_role: role,
         intended_location_ids: trimmedLocationIds,
+        intended_case_access_level: resolvedCaseAccessLevel,
         created_by: caller.id,
         expires_at: expiresAt,
       }),

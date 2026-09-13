@@ -41,13 +41,20 @@ export function CreateMenu({ onNewCase, onNewMeeting, onRaiseConcern, onNewTask,
 
   const run = (fn) => { fn?.(); setShow(false); onAfterAction?.(); };
 
+  // Three-level case-access model (2026-09-13) — Level 3 members cannot
+  // raise cases at all. App.jsx's own call site passes onNewCase as
+  // undefined for a Level 3 caller rather than this component knowing
+  // about roles/levels itself; the filter below hides any item whose
+  // handler was withheld this way instead of rendering a button that
+  // would fail against the DB-level INSERT policy (the real, authoritative
+  // enforcement) if clicked.
   const globalItems = [
     { l:"New case", fn:onNewCase },
     { l:"Start a meeting", fn:onNewMeeting },
     { l:"Raise a concern", fn:onRaiseConcern },
     { l:"New task", fn:onNewTask },
     { l:"Add email to a case", fn:onAddEmail },
-  ];
+  ].filter(item=>item.fn);
   const caseItems = [
     { l:"Start meeting for this case", fn:onStartCaseMeeting },
     { l:"Add evidence", fn:onAddEvidence },

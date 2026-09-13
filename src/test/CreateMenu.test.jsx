@@ -98,6 +98,17 @@ describe('CreateMenu', () => {
   // dropped and the icon collapsed to width:0 inside the rail's 72px
   // resting width. Asserts the icon is present and explicitly protected
   // from shrinking, in both the default and compact (rail) trigger modes.
+  // Three-level case-access model (2026-09-13) — App.jsx passes onNewCase
+  // as undefined for a Level 3 caller instead of a real handler; this menu
+  // hides the item entirely rather than rendering a button that would
+  // fail against the DB-level INSERT policy if clicked.
+  it('hides "New case" when onNewCase is not provided, without hiding the other global actions', () => {
+    render(<CreateMenu onNewMeeting={() => {}} onRaiseConcern={() => {}} onNewTask={() => {}} onAddEmail={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Create/ }));
+    expect(screen.queryByRole('button', { name: 'New case' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start a meeting' })).toBeInTheDocument();
+  });
+
   it('renders the Create icon protected from flex-shrink, in both default and compact mode', () => {
     const { rerender } = render(<CreateMenu onNewCase={() => {}} />);
     let icon = screen.getByRole('button', { name: /Create/ }).querySelector('svg');

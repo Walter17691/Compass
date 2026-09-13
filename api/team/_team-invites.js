@@ -49,12 +49,13 @@ export async function teamInvites(req, res) {
     if (error) return res.status(error.status).json({ error: error.message });
 
     try {
-      const listRes = await supabaseRequest(`team_invites?org_id=eq.${encodeURIComponent(orgId)}&status=eq.pending&select=id,name,email,intended_role,intended_location_ids,created_at,expires_at&order=created_at.desc`);
+      const listRes = await supabaseRequest(`team_invites?org_id=eq.${encodeURIComponent(orgId)}&status=eq.pending&select=id,name,email,intended_role,intended_location_ids,intended_case_access_level,created_at,expires_at&order=created_at.desc`);
       const invites = await listRes.json();
       res.status(200).json({ invites: (invites || []).map(i => ({
         id: i.id, name: i.name, email: i.email,
         role: i.intended_role, roleLabel: ROLE_LABELS[i.intended_role] || i.intended_role,
         locationIds: i.intended_location_ids || [],
+        caseAccessLevel: i.intended_case_access_level,
         createdAt: i.created_at,
         expired: new Date(i.expires_at).getTime() < Date.now(),
       })) });
@@ -122,6 +123,7 @@ export async function teamInvites(req, res) {
         body: JSON.stringify({
           org_id: orgId, name: invite.name, email: invite.email, token_hash: tokenHash,
           intended_role: invite.intended_role, intended_location_ids: invite.intended_location_ids,
+          intended_case_access_level: invite.intended_case_access_level,
           created_by: caller.id, expires_at: expiresAt,
         }),
       });

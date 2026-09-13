@@ -1,10 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { canSeeAllOrgCases, hasConfidentialOversight, canAccessCaseLocation } from '../lib/roles';
 
 // Security remediation (2026-09-05) — regression coverage for the
 // allegations / case_tasks access gap found during the Insights Phase 1
 // audit and closed by
 // supabase/allegations_case_tasks_authoritative_case_access_2026-09-05.sql.
+//
+// Superseded predicate (2026-09-13) — the three-level case-access model
+// (supabase/three_level_case_access_2026-09-13.sql) rewrote `cases`' own
+// restrictive policy from role+location-based to case_access_level-based,
+// and folded confidentiality into that same predicate (Level 1/2/3's
+// confidential rule is now identical to their ordinary rule — see that
+// migration's own header for the product decision behind this). Because
+// allegations/case_tasks delegate to `cases`' RLS via a bare
+// `EXISTS (SELECT 1 FROM cases ...)` with no logic of their own (confirmed
+// live via pg_policy during the three-level-model implementation), no SQL
+// change was needed to either table — but this file's JS mirror of the
+// delegated predicate must be updated to match, or it silently documents a
+// retired security model.
 //
 // Same approach as src/test/hrReviewRequestsAccess.test.js: a pure-JS
 // mirror of the live SQL predicate, unit-tested exhaustively, defined here
@@ -21,27 +33,21 @@ import { canSeeAllOrgCases, hasConfidentialOversight, canAccessCaseLocation } fr
 // property of the fix's design (one delegated predicate, not four), not an
 // oversight in the test.
 
-// Mirrors `cases`' own combined effective SELECT/write visibility — see
-// hrReviewRequestsAccess.test.js for the full derivation. This is the
-// predicate both allegations and case_tasks (case-scoped) now delegate to.
-function parentCaseAccess({ role, sameOrg, memberLocationIds, caseLocationId, isCreator, isOwner, hasCaseAccess, confidential }) {
-  const permissive = (sameOrg && canAccessCaseLocation(role, memberLocationIds, caseLocationId)) || hasCaseAccess;
-  if (!permissive) return false;
-  const confidentialOk = !confidential || isCreator || hasCaseAccess || hasConfidentialOversight(role);
-  if (!confidentialOk) return false;
-  return canSeeAllOrgCases(role) || isCreator || isOwner || hasCaseAccess;
-}
-
-// The historical predicate both allegations' single FOR ALL policy and
-// case_tasks' case-scoped branch used from their respective last-touched
-// dates (role_expansion_2026-08-09.sql / org_insight_actions_2026-08-20.sql)
-// until this fix. Missing the ownership (R_own) term entirely. Kept here
-// only so the "before" half of the regression assertions is the real
-// historical predicate, not a hypothetical.
-function vulnerableChildPredicate({ role, sameOrg, memberLocationIds, caseLocationId, isCreator, hasCaseAccess, confidential }) {
-  const permissive = (sameOrg && canAccessCaseLocation(role, memberLocationIds, caseLocationId)) || hasCaseAccess;
-  if (!permissive) return false;
-  return !confidential || isCreator || hasCaseAccess || hasConfidentialOversight(role);
+// Mirrors `cases`' own combined effective SELECT/write visibility under the
+// three-level model: Level 1 sees everything in-org; Level 2 sees what they
+// created; anyone (any level, any org) with an explicit case_access grant
+// sees that case regardless. Deliberately has no `role`, `location`, or
+// `confidential` parameter — none of the three participate in this
+// predicate anymore. `isOwner` (cases.owner_id) is also deliberately absent:
+// the three-level model excludes owner_id from case visibility by design
+// (case_access is the sole assignment mechanism — see the migration's own
+// "why not owner_id" note), which is a real, deliberate behaviour change
+// from the predicate this file tested before.
+function parentCaseAccess({ sameOrg, caseAccessLevel, isCreator, hasCaseAccess }) {
+  if (hasCaseAccess) return true;
+  if (!sameOrg) return false;
+  if (caseAccessLevel === 1) return true;
+  return caseAccessLevel === 2 && isCreator === true;
 }
 
 // case_tasks' org-level branch (case_id IS NULL) — unaffected by this fix,
@@ -65,112 +71,67 @@ function canUpdateAllegation(oldRow, newRow) {
   return parentCaseAccess(oldRow) && parentCaseAccess(newRow);
 }
 
-const noRelationship = { isCreator: false, isOwner: false, hasCaseAccess: false };
+const noRelationship = { isCreator: false, hasCaseAccess: false };
 
-describe('allegations / case_tasks (case-scoped) — access matrix, post-fix', () => {
-  it('A. HR/oversight: ALLOW', () => {
-    expect(parentCaseAccess({ role: 'hr_manager', sameOrg: true, confidential: false, ...noRelationship })).toBe(true);
+describe('allegations / case_tasks (case-scoped) — access matrix, three-level model', () => {
+  it('A. Level 1, no other relationship: ALLOW', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 1, ...noRelationship })).toBe(true);
   });
-  it('B. Owner, no other relationship: ALLOW (see the correction below — this was never actually denied before either)', () => {
-    expect(parentCaseAccess({ role: 'line_manager', sameOrg: true, confidential: false, isCreator: false, isOwner: true, hasCaseAccess: false })).toBe(true);
+  it('B. Level 2, creator: ALLOW', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 2, isCreator: true, hasCaseAccess: false })).toBe(true);
   });
-  it('C. Creator: ALLOW', () => {
-    expect(parentCaseAccess({ role: 'line_manager', sameOrg: true, confidential: false, isCreator: true, isOwner: false, hasCaseAccess: false })).toBe(true);
+  it('C. Level 2, NOT creator, no case_access: DENY', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 2, ...noRelationship })).toBe(false);
   });
-  it('D. Explicit case_access: ALLOW', () => {
-    expect(parentCaseAccess({ role: 'investigator', sameOrg: true, confidential: false, isCreator: false, isOwner: false, hasCaseAccess: true })).toBe(true);
+  it('D. Level 3, explicit case_access: ALLOW', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 3, isCreator: false, hasCaseAccess: true })).toBe(true);
   });
-  it('E. Same-org bystander, no relationship: DENY', () => {
-    expect(parentCaseAccess({ role: 'line_manager', sameOrg: true, confidential: false, ...noRelationship })).toBe(false);
+  it('E. Level 3, no relationship: DENY', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 3, ...noRelationship })).toBe(false);
   });
-  it('F. Same-location bystander, no relationship: DENY', () => {
-    expect(parentCaseAccess({
-      role: 'location_manager', sameOrg: true, memberLocationIds: ['loc-1'], caseLocationId: 'loc-1', confidential: false, ...noRelationship,
-    })).toBe(false);
+  it('F. DELIBERATE BEHAVIOUR CHANGE: owner_id alone (not creator, no case_access) no longer grants access — owner_id was excluded from the three-level model by design, since case_access is now the sole assignment mechanism', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 3, isCreator: false, hasCaseAccess: false })).toBe(false);
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 2, isCreator: false, hasCaseAccess: false })).toBe(false);
   });
-  it('G. Cross-org: DENY', () => {
-    expect(parentCaseAccess({ role: 'hr_director', sameOrg: false, confidential: false, ...noRelationship })).toBe(false);
+  it('G. Cross-org, no case_access: DENY even at Level 1 (level is scoped to org_members.org_id)', () => {
+    expect(parentCaseAccess({ sameOrg: false, caseAccessLevel: 1, ...noRelationship })).toBe(false);
   });
-  it('H. Confidential, no oversight: DENY', () => {
-    expect(parentCaseAccess({ role: 'hr_manager', sameOrg: true, confidential: true, ...noRelationship })).toBe(false);
-    expect(parentCaseAccess({ role: 'line_manager', sameOrg: true, confidential: true, ...noRelationship })).toBe(false);
+  it('H. Confidentiality no longer changes the outcome: Level 1 sees confidential cases exactly like non-confidential ones (folded into one predicate by the migration)', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 1, ...noRelationship })).toBe(true);
   });
-  it('I. Confidential + authorised case_access: ALLOW', () => {
-    expect(parentCaseAccess({ role: 'investigator', sameOrg: true, confidential: true, isCreator: false, isOwner: false, hasCaseAccess: true })).toBe(true);
+  it('I. Level 2 + creator sees their own confidential case with no other flag needed', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 2, isCreator: true, hasCaseAccess: false })).toBe(true);
   });
-  it('J. legal_reviewer / auditor: ALLOW', () => {
-    expect(parentCaseAccess({ role: 'legal_reviewer', sameOrg: true, confidential: false, ...noRelationship })).toBe(true);
-    expect(parentCaseAccess({ role: 'auditor', sameOrg: true, confidential: true, ...noRelationship })).toBe(true);
-  });
-  it('K. location_manager, same location, no case relationship: DENY', () => {
-    expect(parentCaseAccess({
-      role: 'location_manager', sameOrg: true, memberLocationIds: null, caseLocationId: 'loc-1', confidential: false, ...noRelationship,
-    })).toBe(false);
-  });
-});
-
-describe('the core invariant, confirmed against the real historical predicate', () => {
-  it('CONFIRMS THE BUG: the old predicate allowed a same-org bystander the parent case already denied', () => {
-    const scenario = { role: 'line_manager', sameOrg: true, confidential: false, ...noRelationship };
-    expect(parentCaseAccess(scenario)).toBe(false);
-    expect(vulnerableChildPredicate(scenario)).toBe(true);
-  });
-  it('CONFIRMS THE FIX: allegations/case_tasks visibility is now exactly parentCaseAccess', () => {
-    const scenario = { role: 'line_manager', sameOrg: true, confidential: false, ...noRelationship };
-    expect(parentCaseAccess(scenario)).toBe(false); // fixed child predicate === parentCaseAccess by construction of the migration
-  });
-  it('confidentiality was never broken — old and new predicates already agreed', () => {
-    const scenario = { role: 'line_manager', sameOrg: true, confidential: true, ...noRelationship };
-    expect(parentCaseAccess(scenario)).toBe(false);
-    expect(vulnerableChildPredicate(scenario)).toBe(false);
-  });
-  it('legitimate access (HR/creator/case_access/oversight) is unaffected by the fix', () => {
-    const legitimateScenarios = [
-      { role: 'hr_manager', sameOrg: true, confidential: false, ...noRelationship },
-      { role: 'line_manager', sameOrg: true, confidential: false, isCreator: true, isOwner: false, hasCaseAccess: false },
-      { role: 'investigator', sameOrg: true, confidential: true, isCreator: false, isOwner: false, hasCaseAccess: true },
-      { role: 'hr_director', sameOrg: true, confidential: true, ...noRelationship },
-    ];
-    legitimateScenarios.forEach(scenario => {
-      expect(parentCaseAccess(scenario)).toBe(true);
-      expect(vulnerableChildPredicate(scenario)).toBe(true); // was already correctly allowed before too
-    });
-  });
-  it('CORRECTION to an earlier audit claim: there is no "owner inconsistency" for this fix to correct. Because vulnerableChildPredicate = P AND R_conf and parentCaseAccess = P AND R_conf AND R_own (one extra ANDed term), parentCaseAccess\'s allowed-set is always a SUBSET of vulnerableChildPredicate\'s — adding a restriction can only narrow access, never widen it. It is mathematically impossible for parentCaseAccess to allow something vulnerableChildPredicate denied. An owner-only relationship was already allowed under the old predicate for a non-confidential case (same as everyone, via P alone) and is denied under BOTH old and new predicates for a confidential case (R_conf has no owner_id OR-term — that gap is on `cases` itself, unrelated to and unaffected by this fix).', () => {
-    const ownerNonConfidential = { role: 'line_manager', sameOrg: true, confidential: false, isCreator: false, isOwner: true, hasCaseAccess: false };
-    const ownerConfidential = { role: 'line_manager', sameOrg: true, confidential: true, isCreator: false, isOwner: true, hasCaseAccess: false };
-    expect(parentCaseAccess(ownerNonConfidential)).toBe(true);
-    expect(vulnerableChildPredicate(ownerNonConfidential)).toBe(true); // already allowed before — no correction needed
-    expect(parentCaseAccess(ownerConfidential)).toBe(false); // owner_id is not an R_conf term, on `cases` itself
-    expect(vulnerableChildPredicate(ownerConfidential)).toBe(false); // denied identically before and after
+  it('J. case_access grants access regardless of level, including Level 3 on a case they did not create', () => {
+    expect(parentCaseAccess({ sameOrg: true, caseAccessLevel: 3, isCreator: false, hasCaseAccess: true })).toBe(true);
   });
 });
 
 describe('write-matrix — SELECT / INSERT / UPDATE / DELETE (identical predicate by design: USING === WITH CHECK)', () => {
-  const bystander = { role: 'line_manager', sameOrg: true, confidential: false, ...noRelationship };
-  const owner = { role: 'line_manager', sameOrg: true, confidential: false, isCreator: false, isOwner: true, hasCaseAccess: false };
+  const bystander = { sameOrg: true, caseAccessLevel: 3, ...noRelationship };
+  const level1 = { sameOrg: true, caseAccessLevel: 1, ...noRelationship };
 
-  it('SELECT: bystander denied, owner allowed', () => {
+  it('SELECT: Level-3 bystander denied, Level 1 allowed', () => {
     expect(parentCaseAccess(bystander)).toBe(false);
-    expect(parentCaseAccess(owner)).toBe(true);
+    expect(parentCaseAccess(level1)).toBe(true);
   });
-  it('INSERT: cannot create a child row under a case the caller cannot access; owner can', () => {
+  it('INSERT: cannot create a child row under a case the caller cannot access; Level 1 can', () => {
     expect(parentCaseAccess(bystander)).toBe(false);
-    expect(parentCaseAccess(owner)).toBe(true);
+    expect(parentCaseAccess(level1)).toBe(true);
   });
-  it('UPDATE: cannot update a child row under a hidden case; owner can update their own', () => {
+  it('UPDATE: cannot update a child row under a hidden case; Level 1 can update freely', () => {
     expect(canUpdateAllegation(bystander, bystander)).toBe(false);
-    expect(canUpdateAllegation(owner, owner)).toBe(true);
+    expect(canUpdateAllegation(level1, level1)).toBe(true);
   });
-  it('DELETE: cannot delete a child row under a hidden case; owner can delete their own', () => {
+  it('DELETE: cannot delete a child row under a hidden case; Level 1 can', () => {
     expect(parentCaseAccess(bystander)).toBe(false);
-    expect(parentCaseAccess(owner)).toBe(true);
+    expect(parentCaseAccess(level1)).toBe(true);
   });
 });
 
 describe('UPDATE row-reassignment — allegations moving between cases (WITH CHECK on the NEW row, USING on the OLD row)', () => {
-  const authorisedCase = { role: 'line_manager', sameOrg: true, confidential: false, isCreator: true, isOwner: false, hasCaseAccess: false };
-  const unauthorisedCase = { role: 'line_manager', sameOrg: true, confidential: false, ...noRelationship };
+  const authorisedCase = { sameOrg: true, caseAccessLevel: 2, isCreator: true, hasCaseAccess: false };
+  const unauthorisedCase = { sameOrg: true, caseAccessLevel: 2, ...noRelationship };
 
   it('cannot move an allegation FROM an authorised case TO an unauthorised one', () => {
     expect(canUpdateAllegation(authorisedCase, unauthorisedCase)).toBe(false);
@@ -183,7 +144,7 @@ describe('UPDATE row-reassignment — allegations moving between cases (WITH CHE
   });
 });
 
-describe('case_tasks — org-level branch (case_id IS NULL) is unchanged by this fix', () => {
+describe('case_tasks — org-level branch (case_id IS NULL) is unchanged by the three-level model', () => {
   it('legitimate same-org user: unchanged (allowed before and after)', () => {
     expect(orgLevelTaskAccess({ sameOrg: true })).toBe(true);
   });
@@ -194,8 +155,8 @@ describe('case_tasks — org-level branch (case_id IS NULL) is unchanged by this
 
 describe('case_tasks — UPDATE transitions between case_id states', () => {
   const orgLevelOld = { caseIdIsNull: true, sameOrg: true };
-  const authorisedCaseRow = { caseIdIsNull: false, role: 'line_manager', sameOrg: true, confidential: false, isCreator: true, isOwner: false, hasCaseAccess: false };
-  const unauthorisedCaseRow = { caseIdIsNull: false, role: 'line_manager', sameOrg: true, confidential: false, ...noRelationship };
+  const authorisedCaseRow = { caseIdIsNull: false, sameOrg: true, caseAccessLevel: 2, isCreator: true, hasCaseAccess: false };
+  const unauthorisedCaseRow = { caseIdIsNull: false, sameOrg: true, caseAccessLevel: 2, ...noRelationship };
 
   it('NULL → authorised case: ALLOWED', () => {
     expect(canUpdateCaseTask(orgLevelOld, authorisedCaseRow)).toBe(true);

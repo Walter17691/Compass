@@ -69,7 +69,19 @@
 -- migration's scope and is reported, not fixed, here (see the accompanying
 -- security report).
 --
--- STATUS: NOT YET DEPLOYED. Pending review — see security report.
+-- STATUS: DEPLOYED — confirmed live via direct pg_policy query against
+-- production during the three-level case-access model's final security
+-- review (2026-09-13): hr_review_requests_select_case_scoped carries
+-- exactly this migration's bare `EXISTS (SELECT 1 FROM cases c WHERE
+-- c.id = ...case_id)` predicate today. This header was never updated
+-- after deployment — that staleness itself fooled an automated research
+-- pass into reporting a false "still vulnerable" finding during that
+-- review. The audit_log gap this file's own comment above foreshadowed
+-- ("may carry the same class of gap... reported, not fixed, here") was
+-- confirmed real during that same review and fixed in
+-- supabase/three_level_case_access_2026-09-13.sql's own Part 9 — audit_log
+-- was still calling can_access_case_location() directly and had never
+-- been migrated to a `cases`-delegated predicate at all.
 -- ============================================================================
 
 drop policy if exists "hr_review_requests_select_case_scoped" on public.hr_review_requests;

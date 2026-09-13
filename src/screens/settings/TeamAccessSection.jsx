@@ -1,8 +1,8 @@
 import { Btn, Card } from '../../components/Primitives';
-import { ROLES, TEAM_INVITE_ROLES, LOCATION_SCOPED_ROLES, ROLE_DESCRIPTIONS, roleLabel, canManageDirectorTier } from '../../lib/roles';
+import { ROLES, TEAM_INVITE_ROLES, LOCATION_SCOPED_ROLES, ROLE_DESCRIPTIONS, roleLabel, canManageDirectorTier, CASE_ACCESS_LEVELS, CASE_ACCESS_LEVEL_LABELS, defaultCaseAccessLevelForRole } from '../../lib/roles';
 import { FONT } from '../../styles/tokens';
 
-export function TeamAccessSection({ isHR, currentUserRole, locations, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, pendingInvites, revokeInvite, resendInvite, resendingInviteId }) {
+export function TeamAccessSection({ isHR, currentUserRole, locations, teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, updateCaseAccessLevel, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, pendingInvites, revokeInvite, resendInvite, resendingInviteId }) {
   if(!isHR) return null;
   const inviteRoleIsLocationScoped = LOCATION_SCOPED_ROLES.has(inviteForm.role);
   const canSendInvite = !inviting && inviteForm.name.trim() && inviteForm.email.trim() && inviteForm.role
@@ -30,6 +30,7 @@ export function TeamAccessSection({ isHR, currentUserRole, locations, teamMember
                   <div style={{fontSize:14,color:"#1A1535"}}>{m.name||"Unknown"}</div>
                   <div style={{fontSize:11,color:"#6B6880"}}>
                     {roleLabel(m.role)}
+                    {" · "}{CASE_ACCESS_LEVEL_LABELS[m.case_access_level] || "Case access unset"}
                     {(m.location_ids||[]).length>0&&" · "+locations.filter(l=>(m.location_ids||[]).includes(l.id)).map(l=>l.name).join(", ")}
                   </div>
                 </div>
@@ -51,9 +52,20 @@ export function TeamAccessSection({ isHR, currentUserRole, locations, teamMember
                 <div style={{background:"#F5F1EA",borderRadius:8,padding:"10px 14px",marginTop:4}}>
                   <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Role</div>
                   <select aria-label={`Role for ${m.name||"Unknown"}`} value={m.role} onChange={e=>updateMemberRole(m.id,e.target.value)}
-                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:locations.length>0?12:0}}>
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:12}}>
                     {ROLES.filter(r=>r.id!=="hr_director"||currentUserRole==="hr_director").map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
+                  {/* Three-level case-access model (2026-09-13) — case
+                      access is independently persisted from role and never
+                      auto-changes when role does; changing which cases a
+                      person can see must always be its own deliberate act,
+                      never a side effect of a role edit. */}
+                  <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Case access</div>
+                  <select aria-label={`Case access for ${m.name||"Unknown"}`} value={m.case_access_level||""} onChange={e=>updateCaseAccessLevel(m.id,Number(e.target.value))}
+                    style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:12,color:"#1A1535",outline:"none",marginBottom:8}}>
+                    {CASE_ACCESS_LEVELS.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}
+                  </select>
+                  {m.case_access_level&&<p style={{fontSize:11,color:"#6B6880",margin:"0 0 12px"}}>{CASE_ACCESS_LEVELS.find(l=>l.id===m.case_access_level)?.description}</p>}
                   {/* Phase 6.5 hardening (closes independent audit finding
                       6.1) — the role selector above used to be nested
                       inside this same locations.length>0 gate, so "Edit
@@ -64,7 +76,8 @@ export function TeamAccessSection({ isHR, currentUserRole, locations, teamMember
                       block, which is genuinely meaningless with zero
                       locations to assign, stays conditional. */}
                   {locations.length>0&&(<>
-                    <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
+                    <div style={{fontSize:10,color:"#6B6880",marginBottom:4,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Location access</div>
+                    <p style={{fontSize:11,color:"#6B6880",margin:"0 0 8px"}}>Recorded for reference — does not affect which cases this person can see.</p>
                     <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                       {locations.map(l=>(
                         <label key={l.id} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A1535"}}>
@@ -100,12 +113,23 @@ export function TeamAccessSection({ isHR, currentUserRole, locations, teamMember
               invitee silently joining as Location Manager pending a
               manual follow-up correction. hr_director is never offered
               here — see TEAM_INVITE_ROLES's own comment. */}
-          <select aria-label="Access level" value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value,locationIds:[]}))}
+          <select aria-label="Role" value={inviteForm.role} onChange={e=>setInviteForm(p=>({...p,role:e.target.value,locationIds:[],caseAccessLevel:defaultCaseAccessLevelForRole(e.target.value)}))}
             style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:4,boxSizing:"border-box"}}>
-            <option value="">Select access level…</option>
+            <option value="">Select role…</option>
             {TEAM_INVITE_ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
           {inviteForm.role&&<p style={{fontSize:11,color:"#6B6880",margin:"0 0 8px"}}>{ROLE_DESCRIPTIONS[inviteForm.role]}</p>}
+          {/* Three-level case-access model (2026-09-13) — role selection
+              above suggests this default (defaultCaseAccessLevelForRole),
+              but it's a fully independent, explicit field: the admin can
+              override it before sending the invite. */}
+          {inviteForm.role&&(<>
+            <select aria-label="Case access" value={inviteForm.caseAccessLevel||defaultCaseAccessLevelForRole(inviteForm.role)} onChange={e=>setInviteForm(p=>({...p,caseAccessLevel:Number(e.target.value)}))}
+              style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"8px 12px",fontSize:13,outline:"none",color:"#1A1535",marginBottom:4,boxSizing:"border-box"}}>
+              {CASE_ACCESS_LEVELS.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}
+            </select>
+            <p style={{fontSize:11,color:"#6B6880",margin:"0 0 8px"}}>{CASE_ACCESS_LEVELS.find(l=>l.id===(inviteForm.caseAccessLevel||defaultCaseAccessLevelForRole(inviteForm.role)))?.description}</p>
+          </>)}
           {inviteRoleIsLocationScoped&&(
             <div style={{marginBottom:12}}>
               <div style={{fontSize:10,color:"#6B6880",marginBottom:8,fontWeight:600,letterSpacing:1,textTransform:"uppercase"}}>Locations</div>
@@ -147,6 +171,7 @@ export function TeamAccessSection({ isHR, currentUserRole, locations, teamMember
                 <div style={{fontSize:14,color:"#1A1535"}}>{inv.name} <span style={{color:"#6B6880",fontWeight:400}}>· {inv.email}</span></div>
                 <div style={{fontSize:11,color:inv.expired?"#C84B2F":"#6B6880"}}>
                   {inv.roleLabel}
+                  {" · "}{CASE_ACCESS_LEVEL_LABELS[inv.caseAccessLevel] || "Case access unset"}
                   {inv.locationIds?.length>0&&" · "+locations.filter(l=>inv.locationIds.includes(l.id)).map(l=>l.name).join(", ")}
                   {" · Invited "}{new Date(inv.createdAt).toLocaleDateString("en-GB")}
                   {inv.expired&&" · Expired"}
