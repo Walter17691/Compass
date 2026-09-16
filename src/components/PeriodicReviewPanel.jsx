@@ -26,6 +26,10 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR, cases, dueSoo
   const [reviews, setReviews] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  // Insights Visual Upgrade, Phase 1 — same fix as ExecutiveBriefPanel:
+  // only the latest review renders by default, history behind an
+  // explicit toggle. No data deleted or hidden from the database.
+  const [showHistory, setShowHistory] = useState(false);
   // Phase 6.5 hardening (Batch 8) — same fix as ExecutiveBriefPanel: a
   // failed load silently left reviews at its initial [], indistinguishable
   // from "genuinely no reviews generated yet."
@@ -95,12 +99,17 @@ export function PeriodicReviewPanel({ org, user, memberName, isHR, cases, dueSoo
       {loadError && <div style={{fontSize:13,color:COLOR.red,marginBottom:12}}>Couldn't load the periodic review history right now.</div>}
       {reviews.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:COLOR.inkFaint}}>No periodic review generated yet.</div>}
 
-      {reviews.map(r => (
+      {(showHistory ? reviews : reviews.slice(0, 1)).map(r => (
         <div key={r.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${COLOR.borderFaint}`}}>
           <div style={{fontSize:11,color:COLOR.inkFaint,marginBottom:8}}>{periodTypeLabel(r.period_type)} · generated {fmtGeneratedAt(r.created_at)}{r.generated_by_name?" by "+r.generated_by_name:""}</div>
           <div style={{fontSize:13,color:COLOR.ink,lineHeight:1.8,whiteSpace:"pre-wrap",maxWidth:"min(720px, 100%)"}}>{r.narrative}</div>
         </div>
       ))}
+      {reviews.length>1 && (
+        <button onClick={()=>setShowHistory(s=>!s)} style={{fontSize:12,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600,padding:0}}>
+          {showHistory?"Hide past reviews":`View past reviews (${reviews.length-1})`}
+        </button>
+      )}
     </div>
   );
 }

@@ -33,9 +33,48 @@ const nav = {
 const requiredProps = { caseData, reporting, nav };
 
 describe('InsightsScreen', () => {
-  it('defaults to the Organisational Intelligence tab', () => {
+  // Insights Visual Upgrade, Phase 1 — Reports is now first/default,
+  // replacing Organisational Intelligence (previously default, now
+  // second). See the Insights Product & UX Review's primary finding.
+  it('defaults to the Reports tab', () => {
     render(<InsightsScreen isHR={true} {...requiredProps}/>);
-    expect(screen.getByText(/Loading organisational statistics/)).toBeInTheDocument();
+    expect(screen.getByText('Understand case activity, outcomes and emerging trends.')).toBeInTheDocument();
+  });
+
+  it('renders Reports as the first tab button, before every other section', () => {
+    render(<InsightsScreen isHR={true} {...requiredProps}/>);
+    const buttons = screen.getAllByRole('button').filter(b =>
+      ['Reports', 'Organisational Intelligence', 'Trends & Themes', 'Early Signals', 'Manager Insights', 'Organisational Events', 'Risk Map', 'Improvement Initiatives'].includes(b.textContent)
+    );
+    expect(buttons[0]).toHaveTextContent('Reports');
+  });
+
+  it('lists Reports as the first option in the mobile section selector', () => {
+    render(<InsightsScreen isHR={true} isMobile={true} {...requiredProps}/>);
+    const select = screen.getByRole('combobox', { name: 'Settings section' });
+    expect(select.querySelectorAll('option')[0]).toHaveTextContent('Reports');
+  });
+
+  it('still defaults to Reports for a non-HR user (Reports has never been HR-gated)', () => {
+    render(<InsightsScreen isHR={false} {...requiredProps}/>);
+    expect(screen.getByText('Understand case activity, outcomes and emerging trends.')).toBeInTheDocument();
+  });
+
+  // Existing deep links must keep working after the reorder — a caller
+  // targeting any section by id (e.g. from an "Emerging patterns"
+  // drill-down elsewhere in the app) should land on that exact section,
+  // never silently fall back to the new default.
+  it.each(['overview', 'trends', 'early-signals', 'manager', 'org-events', 'risk-map', 'improvement-initiatives'])(
+    'still honours an existing deep link to "%s" after the Reports reorder',
+    (sectionId) => {
+      render(<InsightsScreen isHR={true} {...requiredProps} deepLink={{ initialSection: sectionId }}/>);
+      expect(screen.queryByText('Understand case activity, outcomes and emerging trends.')).not.toBeInTheDocument();
+    }
+  );
+
+  it('a deep link to "reports" still opens Reports explicitly', () => {
+    render(<InsightsScreen isHR={true} {...requiredProps} deepLink={{ initialSection: 'reports' }}/>);
+    expect(screen.getByText('Understand case activity, outcomes and emerging trends.')).toBeInTheDocument();
   });
 
   it('shows Manager Insights, Risk Map, and Improvement Initiatives tabs only for HR', () => {
@@ -64,7 +103,7 @@ describe('InsightsScreen', () => {
     const user = userEvent.setup();
     render(<InsightsScreen isHR={true} {...requiredProps}/>);
     await user.click(screen.getByRole('button', { name: 'Reports' }));
-    expect(screen.getByText('HR Reports')).toBeInTheDocument();
+    expect(screen.getByText('Understand case activity, outcomes and emerging trends.')).toBeInTheDocument();
   });
 
   it('shows the Early Signals tab for both HR and non-HR', () => {
@@ -143,6 +182,6 @@ describe('InsightsScreen', () => {
     expect(select).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Trends & Themes' })).not.toBeInTheDocument();
     await user.selectOptions(select, 'Reports');
-    expect(screen.getByText('HR Reports')).toBeInTheDocument();
+    expect(screen.getByText('Understand case activity, outcomes and emerging trends.')).toBeInTheDocument();
   });
 });

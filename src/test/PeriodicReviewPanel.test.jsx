@@ -42,6 +42,34 @@ describe('PeriodicReviewPanel', () => {
     expect(screen.getByText(/Weekly ER Review · generated/)).toBeInTheDocument();
   });
 
+  // Insights Visual Upgrade, Phase 1 — same "latest only, history behind
+  // a toggle" fix as ExecutiveBriefPanel.
+  it('shows only the latest review by default, with older ones behind a "View past reviews" toggle', async () => {
+    const user = userEvent.setup();
+    fromMock.mockReturnValue(selectChain({
+      data: [
+        { id: 'r2', period_type: 'weekly', narrative: 'Newest review text', created_at: '2026-08-08T00:00:00Z' },
+        { id: 'r1', period_type: 'weekly', narrative: 'Older review text', created_at: '2026-08-01T00:00:00Z' },
+      ],
+      error: null,
+    }));
+    render(<PeriodicReviewPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true}/>);
+    await waitFor(() => expect(screen.getByText('Newest review text')).toBeInTheDocument());
+    expect(screen.queryByText('Older review text')).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: 'View past reviews (1)' });
+    await user.click(toggle);
+    expect(screen.getByText('Older review text')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide past reviews' })).toBeInTheDocument();
+  });
+
+  it('does not show a history toggle when there is only one review', async () => {
+    fromMock.mockReturnValue(selectChain({ data: [{ id: 'r1', period_type: 'weekly', narrative: 'Only review', created_at: '2026-08-01T00:00:00Z' }], error: null }));
+    render(<PeriodicReviewPanel org={{ id: 'org1' }} user={{ id: 'u1' }} memberName="Jo Smith" isHR={true}/>);
+    await waitFor(() => expect(screen.getByText('Only review')).toBeInTheDocument());
+    expect(screen.queryByText(/View past reviews/)).not.toBeInTheDocument();
+  });
+
   it('generates a weekly review using a 7-day window and tags it with period_type', async () => {
     const user = userEvent.setup();
     let insertedRow = null;

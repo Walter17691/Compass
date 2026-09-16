@@ -51,6 +51,35 @@ describe('ExecutiveBriefPanel', () => {
     expect(screen.queryByText(/- Review the grievance process/)).not.toBeInTheDocument();
   });
 
+  // Insights Visual Upgrade, Phase 1 — only the latest brief renders by
+  // default; older ones sit behind an explicit "View past briefs" toggle
+  // (no data hidden from the DB, purely a rendering choice).
+  it('shows only the latest brief by default, with older ones behind a "View past briefs" toggle', async () => {
+    const user = userEvent.setup();
+    fromMock.mockReturnValue(selectChain({
+      data: [
+        { id: 'b2', narrative: 'Newest brief text', created_at: '2026-08-02T00:00:00Z', supporting_data: null },
+        { id: 'b1', narrative: 'Older brief text', created_at: '2026-08-01T00:00:00Z', supporting_data: null },
+      ],
+      error: null,
+    }));
+    render(<ExecutiveBriefPanel org={{ id: 'org1' }} user={{ id: 'u1' }} isHR={true}/>);
+    await waitFor(() => expect(screen.getByText('Newest brief text')).toBeInTheDocument());
+    expect(screen.queryByText('Older brief text')).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: 'View past briefs (1)' });
+    await user.click(toggle);
+    expect(screen.getByText('Older brief text')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide past briefs' })).toBeInTheDocument();
+  });
+
+  it('does not show a history toggle when there is only one brief', async () => {
+    fromMock.mockReturnValue(selectChain({ data: [{ id: 'b1', narrative: 'Only brief', created_at: '2026-08-01T00:00:00Z', supporting_data: null }], error: null }));
+    render(<ExecutiveBriefPanel org={{ id: 'org1' }} user={{ id: 'u1' }} isHR={true}/>);
+    await waitFor(() => expect(screen.getByText('Only brief')).toBeInTheDocument());
+    expect(screen.queryByText(/View past briefs/)).not.toBeInTheDocument();
+  });
+
   it('renders the whole narrative as before when it has no bullet list (older briefs, or non-compliant generation)', async () => {
     const narrative = 'A plain narrative with no bullet points at all.';
     fromMock.mockReturnValue(selectChain({ data: [{ id: 'b1', narrative, created_at: '2026-08-01T00:00:00Z', supporting_data: null }], error: null }));

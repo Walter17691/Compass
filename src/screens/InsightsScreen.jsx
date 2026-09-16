@@ -15,6 +15,7 @@ import { RiskMapPanel } from '../components/RiskMapPanel';
 import { ExecutiveBriefPanel } from '../components/ExecutiveBriefPanel';
 import { PeriodicReviewPanel } from '../components/PeriodicReviewPanel';
 import { ImprovementInitiativesPanel } from '../components/ImprovementInitiativesPanel';
+import { ManagementAnalysisSection } from '../components/ManagementAnalysisSection';
 
 // Organisational ER Intelligence (Phase 6, OP1, §1) — the new "Insights"
 // home replacing AppSidebar.jsx's two flat, disconnected rows
@@ -41,7 +42,16 @@ export function InsightsScreen({
   // row (§6, §13) — Org Events is viewable by any org member per its
   // own RLS, but the tab itself stays behind isHR since logging/
   // exploring correlation (its only real actions) are HR-only anyway.
+  // Insights Visual Upgrade, Phase 1 — Reports is now the first/default
+  // tab (previously last), per the Insights Product & UX Review's
+  // primary finding: a senior HR user should see the management
+  // dashboard within seconds of opening Insights, not after clicking
+  // through 7 other tabs. Every other tab keeps its existing id/label/
+  // position relative to each other — this phase is deliberately bounded
+  // to Reports' own content and position, not a redistribution of the
+  // rest of Insights (see the review's §2/§19 phasing).
   const sections = [
+    {id:"reports", label:"Reports"},
     {id:"overview", label:"Organisational Intelligence"},
     {id:"trends", label:"Trends & Themes"},
     {id:"early-signals", label:"Early Signals"},
@@ -49,9 +59,8 @@ export function InsightsScreen({
     ...(isHR ? [{id:"org-events", label:"Organisational Events"}] : []),
     ...(isHR ? [{id:"risk-map", label:"Risk Map"}] : []),
     ...(isHR ? [{id:"improvement-initiatives", label:"Improvement Initiatives"}] : []),
-    {id:"reports", label:"Reports"},
   ];
-  const [active, setActive] = useState(deepLink.initialSection && sections.some(s=>s.id===deepLink.initialSection) ? deepLink.initialSection : "overview");
+  const [active, setActive] = useState(deepLink.initialSection && sections.some(s=>s.id===deepLink.initialSection) ? deepLink.initialSection : "reports");
   // Shared by every Insights tab that drills into Cases (Overview's Needs
   // Attention/Emerging Patterns, Trends & Themes' theme drill-down) — one
   // handler, not a copy per tab, since they all do the exact same thing:
@@ -114,12 +123,12 @@ export function InsightsScreen({
           {active==="improvement-initiatives"&&isHR&&<ImprovementInitiativesPanel orgId={reporting.org?.id} improvementInitiatives={orgIntel.improvementInitiatives} isHR={isHR} onAdd={orgIntelActions.onAddImprovementInitiative} onUpdate={orgIntelActions.onUpdateImprovementInitiative} caseTasks={caseData.caseTasks} cases={caseData.cases} organisationThemes={orgIntel.organisationThemes}/>}
           {active==="reports"&&(
             <>
-              <ExecutiveBriefPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR} cases={caseData.cases} dueSoon={caseData.dueSoon} hrReviewRequests={caseData.hrReviewRequests} allegations={caseData.allegations} caseSignals={caseData.caseSignals} caseTasks={caseData.caseTasks} policies={caseData.policies} caseAccess={caseData.caseAccess} orgMembers={caseData.orgMembers}/>
-              <PeriodicReviewPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR} cases={caseData.cases} dueSoon={caseData.dueSoon} hrReviewRequests={caseData.hrReviewRequests} allegations={caseData.allegations} caseSignals={caseData.caseSignals} caseTasks={caseData.caseTasks} policies={caseData.policies} caseAccess={caseData.caseAccess} orgMembers={caseData.orgMembers}/>
               <ErReportScreen
                 cases={caseData.cases}
                 getCaseStage={reporting.getCaseStage}
                 employeeRecords={caseData.employeeRecords}
+                dueSoon={caseData.dueSoon}
+                onViewCases={onViewCases}
                 setReportNarrative={reporting.setReportNarrative}
                 reportNarrative={reporting.reportNarrative}
                 setActiveCaseId={nav.setActiveCaseId}
@@ -133,6 +142,15 @@ export function InsightsScreen({
                 organisationThemes={orgIntel.organisationThemes}
                 isHR={isHR}
               />
+              {/* Insights Visual Upgrade, Phase 1 — the two persisted-
+                  history AI narrative panels, previously rendered
+                  unconditionally expanded ABOVE the dashboard above.
+                  Collapsed by default now, below it — see
+                  ManagementAnalysisSection's own header comment. */}
+              <ManagementAnalysisSection>
+                <ExecutiveBriefPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR} cases={caseData.cases} dueSoon={caseData.dueSoon} hrReviewRequests={caseData.hrReviewRequests} allegations={caseData.allegations} caseSignals={caseData.caseSignals} caseTasks={caseData.caseTasks} policies={caseData.policies} caseAccess={caseData.caseAccess} orgMembers={caseData.orgMembers}/>
+                <PeriodicReviewPanel org={reporting.org} user={reporting.user} memberName={reporting.memberName} isHR={isHR} cases={caseData.cases} dueSoon={caseData.dueSoon} hrReviewRequests={caseData.hrReviewRequests} allegations={caseData.allegations} caseSignals={caseData.caseSignals} caseTasks={caseData.caseTasks} policies={caseData.policies} caseAccess={caseData.caseAccess} orgMembers={caseData.orgMembers}/>
+              </ManagementAnalysisSection>
             </>
           )}
 

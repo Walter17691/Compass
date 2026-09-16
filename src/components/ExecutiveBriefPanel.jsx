@@ -62,6 +62,13 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR, cases, dueSoo
   const [briefs, setBriefs] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  // Insights Visual Upgrade, Phase 1 — every past generation used to
+  // render fully expanded, stacked forever (the exact "unbounded AI
+  // history" the product review found dominating the top of Reports).
+  // Only the latest entry renders by default now; older ones sit behind
+  // an explicit "View past briefs" toggle. No data is deleted or
+  // hidden from the database — this is a rendering choice only.
+  const [showHistory, setShowHistory] = useState(false);
   // Phase 6.5 hardening (Batch 8) — a failed load silently left briefs
   // at its initial [], which the empty state below couldn't distinguish
   // from "genuinely no briefs generated yet" — a real load failure
@@ -125,7 +132,7 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR, cases, dueSoo
       {loadError && <div style={{fontSize:13,color:COLOR.red,marginBottom:12}}>Couldn't load the executive brief history right now.</div>}
       {briefs.length === 0 && !generating && !loadError && <div style={{fontSize:13,color:COLOR.inkFaint}}>No executive brief generated yet.</div>}
 
-      {briefs.map(b => {
+      {(showHistory ? briefs : briefs.slice(0, 1)).map(b => {
         const { summary, recommendations } = splitBriefNarrative(b.narrative);
         return (
           <div key={b.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${COLOR.borderFaint}`}}>
@@ -143,6 +150,11 @@ export function ExecutiveBriefPanel({ org, user, memberName, isHR, cases, dueSoo
           </div>
         );
       })}
+      {briefs.length>1 && (
+        <button onClick={()=>setShowHistory(s=>!s)} style={{fontSize:12,color:COLOR.purple,background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600,padding:0}}>
+          {showHistory?"Hide past briefs":`View past briefs (${briefs.length-1})`}
+        </button>
+      )}
     </div>
   );
 }
