@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction } from '../lib/letterGrounding.js';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction } from '../lib/letterGrounding.js';
 
 const goldenPathEmployee = 'UAT - Test Employee (Golden Path)';
 
@@ -117,5 +117,63 @@ describe('buildAppealDeadlineInstruction (NEW-1)', () => {
     expect(buildAppealDeadlineInstruction(null, 'outcome')).toBe('');
     expect(buildAppealDeadlineInstruction(undefined, 'outcome')).toBe('');
     expect(buildAppealDeadlineInstruction('', 'outcome')).toBe('');
+  });
+});
+
+// Final pre-deployment review (2026-09-16) — "upheld" is genuinely
+// ambiguous read in isolation: "the appeal is upheld" (employee succeeds)
+// and "the original decision is upheld" (employee's appeal fails) are
+// opposite outcomes. Proves, for all four stored appeal_outcome values,
+// that the generated instruction states the correct, unambiguous effect
+// on the original decision and can never be read as the inverted result —
+// closing the risk at the deterministic-grounding layer Compass actually
+// controls, the same layer buildAppealDeadlineInstruction/
+// buildRecipientInstruction already close their own risks at.
+describe('buildAppealOutcomeInstruction (final pre-deployment review)', () => {
+  const baseAllegation = { title: 'Unauthorised absence', status: 'substantiated', appealReasoning: 'New evidence changes the picture.', appealDecidedAt: '2026-09-10T00:00:00.000Z' };
+
+  it('upheld: states the appeal succeeded AND that the original decision is overturned — never that the decision is upheld', () => {
+    const instruction = buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: 'upheld' }, 'Priya Shah');
+    expect(instruction).toContain('AUTHORITATIVE APPEAL OUTCOME (state exactly this result — never invent or infer a different one): Appeal upheld');
+    expect(instruction).toContain('the original decision is overturned and does not stand');
+    expect(instruction.toLowerCase()).not.toMatch(/original decision (is unchanged|remains in force)/);
+  });
+
+  it('partially_upheld: states the original decision is varied, not simply upheld or overturned', () => {
+    const instruction = buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: 'partially_upheld' }, 'Priya Shah');
+    expect(instruction).toContain('AUTHORITATIVE APPEAL OUTCOME (state exactly this result — never invent or infer a different one): Partially upheld');
+    expect(instruction).toContain('the original decision is varied');
+  });
+
+  it('not_upheld: states the original decision stands — never that the appeal succeeded', () => {
+    const instruction = buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: 'not_upheld' }, 'Priya Shah');
+    expect(instruction).toContain('AUTHORITATIVE APPEAL OUTCOME (state exactly this result — never invent or infer a different one): Not upheld');
+    expect(instruction).toContain('the original decision is unchanged and remains in force');
+    expect(instruction.toLowerCase()).not.toMatch(/original decision is overturned/);
+  });
+
+  it('further_investigation_required: states the outcome but makes no claim about the original decision\'s fate', () => {
+    const instruction = buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: 'further_investigation_required' }, null);
+    expect(instruction).toContain('Further investigation required');
+    expect(instruction).not.toContain('Effect on the original decision');
+  });
+
+  it('warns the model against deriving the effect from the bare word "upheld"', () => {
+    const instruction = buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: 'upheld' }, 'Priya Shah');
+    expect(instruction.toLowerCase()).toContain('describes whether the appeal succeeded, not the original decision');
+  });
+
+  it('states the appeal officer and decision date when given, and omits them cleanly when not', () => {
+    const withOfficer = buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: 'upheld' }, 'Priya Shah');
+    expect(withOfficer).toContain('Appeal decided by: Priya Shah');
+    expect(withOfficer).toContain('Appeal decided on: 10/09/2026');
+    const withoutOfficer = buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: 'upheld', appealDecidedAt: null }, null);
+    expect(withoutOfficer).not.toContain('Appeal decided by:');
+    expect(withoutOfficer).not.toContain('Appeal decided on:');
+  });
+
+  it('returns empty for an allegation with no recorded appeal outcome (never fabricates one)', () => {
+    expect(buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: null }, null)).toBe('');
+    expect(buildAppealOutcomeInstruction(null, null)).toBe('');
   });
 });

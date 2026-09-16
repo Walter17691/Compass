@@ -188,3 +188,19 @@ export async function verifyOutcomeApproved(caseId, outcomeType) {
   const rows = await reviewRes.json();
   return rows.length > 0;
 }
+
+// Appeal workflow (2026-09) — mirrors verifyOutcomeApproved's role in the
+// outcome-letter gate above: an appeal outcome letter must not be
+// sendable before a real appeal decision has actually been recorded
+// (allegations.appeal_outcome, protected server-side by
+// protect_allegations_appeal_decision_columns), so drafting/regenerating
+// the letter itself can never stand in for the decision it's meant to
+// communicate. Any allegation on the case having a recorded
+// appeal_outcome is sufficient — appeal decisions are recorded per
+// allegation, and this only needs to prove at least one genuine decision
+// exists for the case being written about.
+export async function verifyAppealDecisionRecorded(caseId) {
+  const res = await supabaseRequest(`allegations?case_id=eq.${encodeURIComponent(caseId)}&appeal_outcome=not.is.null&select=id&limit=1`);
+  const rows = await res.json();
+  return rows.length > 0;
+}

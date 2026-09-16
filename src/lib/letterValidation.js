@@ -107,7 +107,7 @@ export const EMPLOYEE_DIRECTED_LETTER_TYPES = [
 // compose. Never invents a missing fact to "fix" a check — an unresolved
 // [placeholder] for something Compass genuinely doesn't hold structured
 // data for (e.g. company address) is not flagged here.
-export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt, appealDeadline } = {}) {
+export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt, appealDeadline, appealOutcomeLabel, appealEffectTag } = {}) {
   const issues = [];
   if (!EMPLOYEE_DIRECTED_LETTER_TYPES.includes(letterType)) {
     return { valid: true, issues };
@@ -153,6 +153,43 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
     const hasOutcome = (letterText || "").toLowerCase().includes(outcome.toLowerCase());
     if (!hasOutcome) {
       issues.push(`Letter does not appear to state the recorded outcome ("${outcome}").`);
+    }
+  }
+
+  // Independent appeal officer workflow (2026-09-16) — same deterministic
+  // check, one stage later. appealOutcomeLabel is only ever passed when
+  // exactly one allegation on the case has a recorded appeal outcome (see
+  // App.jsx's own call site) — a case with several allegations that were
+  // each decided differently on appeal has no single "the" outcome to
+  // check the letter against, so this deliberately stays silent rather
+  // than flagging a false mismatch.
+  if (letterType === "appeal" && appealOutcomeLabel) {
+    const hasAppealOutcome = (letterText || "").toLowerCase().includes(appealOutcomeLabel.toLowerCase());
+    if (!hasAppealOutcome) {
+      issues.push(`Letter does not appear to state the recorded appeal outcome ("${appealOutcomeLabel}").`);
+    }
+  }
+
+  // Final pre-deployment review (2026-09-16) — "upheld" is genuinely
+  // ambiguous read in isolation ("the appeal is upheld" vs. "the original
+  // decision is upheld" are opposite outcomes). buildAppealOutcomeInstruction
+  // (letterGrounding.js) already gives the model the correct, unambiguous
+  // effect on the original decision as a deterministic fact; this is
+  // defense in depth against a stray contradicting sentence slipping
+  // through anyway. Proximity-scoped to "original decision" wording, same
+  // shape as the warning-duration check above, rather than scanning the
+  // whole letter for any use of "upheld"/"overturned" — those words
+  // legitimately also appear describing the original hearing's own
+  // outcome earlier in the letter.
+  if (letterType === "appeal" && appealEffectTag) {
+    const text = letterText || "";
+    const decisionMentions = [...text.matchAll(/original decision[^.]{0,120}/gi)].map(m => m[0].toLowerCase());
+    const mentionsAny = (phrases) => decisionMentions.some(m => phrases.some(p => m.includes(p)));
+    if (appealEffectTag === "overturned" && mentionsAny(["upheld", "stands", "remains in force", "unchanged"])) {
+      issues.push("Letter may state that the original decision stands/is upheld, but the recorded appeal outcome means it was overturned.");
+    }
+    if (appealEffectTag === "unchanged" && mentionsAny(["overturned", "overturn", "quashed", "set aside"])) {
+      issues.push("Letter may state that the original decision was overturned, but the recorded appeal outcome means it is unchanged.");
     }
   }
 

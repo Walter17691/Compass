@@ -26,6 +26,28 @@ export function appealMeetingsForCase(cs) {
   return (cs?.meetings || []).filter(m => (m.type || "").toLowerCase().includes("appeal") && m.record);
 }
 
+// Independent appeal officer workflow (2026-09-16) — false-positive fix
+// for App.jsx's live-transcript "Appeal detected" prompt. The bare
+// substring "appeal" used to match a hearing chair reading out the
+// standard end-of-meeting notice ("you have the right to appeal this
+// decision") exactly the same as an employee actually raising one — both
+// silently opened the same confirmation prompt. Stripping just that one
+// narrow, near-universally informational phrasing out of the transcript
+// before checking means anything that survives is either one of the more
+// specific phrases below, or a genuine use of "appeal" outside that one
+// known false-positive pattern — a targeted exclusion, not a rewrite into
+// a broad classifier. Extracted as a pure function (App.jsx's own
+// detection previously wasn't independently testable) — advisory either
+// way: this only decides whether to open a confirmation prompt, never
+// whether to actually record an appeal (recordAppealReceived, App.jsx, is
+// the one place that happens, and only on an explicit human click).
+export function transcriptMentionsAppeal(transcriptText) {
+  const lower = (transcriptText || "").toLowerCase();
+  const withoutNotice = lower.replace(/\bright to appeal\b|\bentitled to appeal\b/g, "");
+  const unambiguousPhrases = ["original decision", "grounds of appeal", "outcome being appealed"];
+  return unambiguousPhrases.some(w => lower.includes(w)) || withoutNotice.includes("appeal");
+}
+
 // Process Intelligence (P13) — restructures the appeal review from one
 // combined blob per allegation to one card per distinct ground of
 // appeal (an allegation can have several — e.g. "the sanction was

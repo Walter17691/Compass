@@ -61,7 +61,7 @@ function ReadOnlyField({ label, value, placeholder }) {
   );
 }
 
-export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, canDecide=true }) {
+export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, canDecide=true, canDecideAppeal=true }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -258,12 +258,27 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                       ))}
                       <div style={{marginTop:10}}>
                         <label htmlFor={`allegation-appeal-outcome-${a.id}`} style={labelStyle}>Appeal outcome — recorded by the chair, never Compass</label>
-                        <select id={`allegation-appeal-outcome-${a.id}`} value={a.appealOutcome||""} onChange={e=>recordAppealOutcome(a.id, e.target.value, a.appealReasoning||"")} style={{...inputStyle,width:"auto"}}>
-                          <option value="" disabled>Not yet decided</option>
-                          {APPEAL_OUTCOMES.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
-                        </select>
+                        {/* Independent appeal officer workflow (2026-09-16) —
+                            gated to canDecideAppeal (HR or this case's
+                            appointed appeal_manager), not canDecide (which
+                            also covers the original disciplinary_officer,
+                            who does not automatically gain appeal-decision
+                            authority). Mirrors
+                            protect_allegations_appeal_decision_columns(). */}
+                        {canDecideAppeal ? (
+                          <select id={`allegation-appeal-outcome-${a.id}`} value={a.appealOutcome||""} onChange={e=>recordAppealOutcome(a.id, e.target.value, a.appealReasoning||"")} style={{...inputStyle,width:"auto"}}>
+                            <option value="" disabled>Not yet decided</option>
+                            {APPEAL_OUTCOMES.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
+                          </select>
+                        ) : (
+                          <div style={{fontSize:13,color:a.appealOutcome?"#1A1535":"#9B9098",padding:"8px 10px",background:"#FFFFFF",border:"1px solid #EDE5D8",borderRadius:6}}>{a.appealOutcome ? appealOutcomeMeta(a.appealOutcome)?.label : "Not yet decided"}</div>
+                        )}
                         {a.appealOutcome && (
-                          <DraftTextarea aria-label="Appeal decision reasoning" style={{...inputStyle,resize:"vertical",background:"#FFFFFF",marginTop:8}} rows={2} value={a.appealReasoning||""} placeholder="Reasoning for the appeal decision." onCommit={v=>recordAppealOutcome(a.id, a.appealOutcome, v)} />
+                          canDecideAppeal ? (
+                            <DraftTextarea aria-label="Appeal decision reasoning" style={{...inputStyle,resize:"vertical",background:"#FFFFFF",marginTop:8}} rows={2} value={a.appealReasoning||""} placeholder="Reasoning for the appeal decision." onCommit={v=>recordAppealOutcome(a.id, a.appealOutcome, v)} />
+                          ) : (
+                            <ReadOnlyField label="Appeal decision reasoning" value={a.appealReasoning} placeholder="Not yet recorded" />
+                          )
                         )}
                         {a.appealDecidedAt && (
                           <div style={{fontSize:11,color:"#9B9098",marginTop:6}}>

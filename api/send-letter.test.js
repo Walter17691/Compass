@@ -346,14 +346,26 @@ describe('send-letter — the full outcome decision chain (closes H10)', () => {
 // as a Resend attachment; these tests assert that attachment actually
 // reaches the outbound Resend payload, and that a request missing it is
 // rejected rather than silently sent.
-function stubFetchCapturing({ members = [{ role: 'hr_manager' }] } = {}) {
+function stubFetchCapturing({ members = [{ role: 'hr_manager' }], allegationsRows = [{ id: 'allegation-1' }], caseRow = { id: 'case-1', org_id: 'org-1', outcome: 'written_warning' } } = {}) {
   const calls = [];
   global.fetch = vi.fn((url, options = {}) => {
     const u = String(url);
     calls.push({ url: u, options });
     if (u.includes('/auth/v1/user')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'user-1' }) });
     if (u.includes('/rest/v1/org_members')) return Promise.resolve({ ok: true, json: () => Promise.resolve(members) });
-    if (u.includes('/rest/v1/cases')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    // Independent appeal officer workflow (2026-09-16) — verifyAppealDecisionRecorded's
+    // allegations?...&appeal_outcome=not.is.null lookup. Defaults to "a decision
+    // already exists" so pre-existing tests that send letterType:'appeal' without
+    // caring about appeal authorization keep passing unchanged.
+    if (u.includes('/rest/v1/allegations')) return Promise.resolve({ ok: true, json: () => Promise.resolve(allegationsRows) });
+    if (u.includes('/rest/v1/cases')) {
+      // requireCaseAccess's own existence/tenant check (select=id,org_id)
+      // and its separate caller-scoped RLS-simulating visibility check
+      // (select=id,outcome) both hit this same substring match — only
+      // resolve a row when a caseId was actually passed in the request.
+      if (u.includes(`id=eq.${caseRow.id}`)) return Promise.resolve({ ok: true, json: () => Promise.resolve([caseRow]) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     if (u.includes('/rest/v1/case_access')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     if (u.includes('api.resend.com')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'email-1' }) });
     return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
@@ -499,7 +511,10 @@ describe('send-letter — evidence attachments on invitation/appeal letters (Bat
   it('never claims an attachment, and never sends a Resend attachments field, when none was selected', async () => {
     const calls = stubFetchCapturing();
     const res = mockRes();
-    await handler(req({ ...body, letterType: 'appeal' }), res);
+    // Independent appeal officer workflow (2026-09-16) — letterType:'appeal'
+    // now requires caseId (to verify a real appeal decision exists);
+    // stubFetchCapturing's default allegationsRows satisfies that check.
+    await handler(req({ ...body, letterType: 'appeal', caseId: 'case-1' }), res);
     const emailCall = calls.find(c => c.url.includes('api.resend.com'));
     const payload = JSON.parse(emailCall.options.body);
     expect(payload.attachments).toBeUndefined();

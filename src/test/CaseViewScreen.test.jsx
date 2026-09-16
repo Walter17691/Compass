@@ -25,10 +25,10 @@ const baseProps = {
     setMeetingType: noop, showToast: noop, currentUser: { user_id: 'u1', name: 'Test User' },
     setLetterOutput: noop, handleLetter: noop, isHR: true, caseAccess: [], allegations: [], auditLog: [],
     caseTasks: [], createCaseTask: noop, caseSignals: [], changeSignalStatus: noop, toggleCaseTaskDone: noop,
-    setShowHandoffModal: noop, generateInvestigationPlan: noop, investigationPlanLoading: {},
+    setShowHandoffModal: noop, setShowAppealOfficerModal: noop, generateInvestigationPlan: noop, investigationPlanLoading: {},
   },
   header: {
-    showAppealInput: {}, setShowAppealInput: noop, appealText: {}, setAppealText: noop,
+    showAppealInput: {}, setShowAppealInput: noop, appealText: {}, setAppealText: noop, recordAppealReceived: async () => true,
     setShowReassignModal: noop, setShowAssignInvestigatorModal: noop, setShowOutcomeModal: noop,
     setShowSignModal: noop, letterOutput: '', aiProcessing: false, aiError: null, toggleNextStepDone: noop,
     concludingInvestigation: false, attemptSubmitInvestigation: noop, openEscalateModal: noop,
@@ -508,5 +508,82 @@ describe('CaseViewScreen — Outcome tab "Draft outcome letter" route (Defect #1
     expect(goldenPathShapedCase.meetings.every(m => m.signStatus !== 'signed')).toBe(true);
     const outcomePanel = within(screen.getByText('Outcome issued').parentElement);
     expect(outcomePanel.getByRole('button', { name: 'Draft outcome letter' })).toBeInTheDocument();
+  });
+});
+
+// Independent appeal officer workflow (2026-09-16) — this banner used to
+// read/write the wrong relationship entirely: it derived the displayed
+// "officer" from cs.disciplinaryOfficer (a different person by design)
+// and its button opened HandoffModal, which grants
+// case_access.role:"disciplinary_officer" and regresses cases.stage back
+// to "disciplinary" — the exact bug the whole appeal-officer design
+// review was built around. This locks in the fix: the real appeal_manager
+// case_access relationship, the dedicated AppealOfficerModal, and HR-only
+// visibility of the appoint/reassign control.
+describe('CaseViewScreen — appeal-in-progress banner (Independent appeal officer workflow)', () => {
+  const appealCase = { ...cs, meetings: [] };
+
+  it('shows "No officer assigned" and, for HR, an "Appoint appeal officer" button that opens AppealOfficerModal (not HandoffModal)', async () => {
+    const user = userEvent.setup();
+    const setShowAppealOfficerModal = vi.fn();
+    const setShowHandoffModal = vi.fn();
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, setShowAppealOfficerModal, setShowHandoffModal }} />);
+    expect(screen.getByText(/No officer assigned/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Appoint appeal officer' }));
+    expect(setShowAppealOfficerModal).toHaveBeenCalledWith(true);
+    expect(setShowHandoffModal).not.toHaveBeenCalled();
+  });
+
+  it('shows the real appeal_manager\'s name from case_access, not cs.disciplinaryOfficer', () => {
+    const caseWithStaleDisciplinaryOfficer = { ...appealCase, disciplinaryOfficer: 'Wrong Person' };
+    const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
+    const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah' }];
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [caseWithStaleDisciplinaryOfficer], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers }} />);
+    expect(screen.getByText('Appeal in progress · Officer: Priya Shah')).toBeInTheDocument();
+    expect(screen.queryByText(/Wrong Person/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reassign officer' })).toBeInTheDocument();
+  });
+
+  it('hides the appoint/reassign control from a non-HR user, matching the destructive-hardening UI pattern', () => {
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: false }} />);
+    expect(screen.getByText(/No officer assigned/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Appoint appeal officer' })).not.toBeInTheDocument();
+  });
+});
+
+// Independent appeal officer workflow (2026-09-16) — "Employee is
+// appealing" used to write stage:"appeal" directly with no deadline check
+// and no audit trail. It's now routed through recordAppealReceived
+// (App.jsx), and this button must not proceed to draft/send the hearing
+// invitation if that's declined (e.g. a late-appeal reason prompt was
+// cancelled) — half-applying the transition (invite sent, no actual
+// stage change recorded) would be worse than not proceeding at all.
+describe('CaseViewScreen — "Employee is appealing" routes through recordAppealReceived', () => {
+  const closedCase = { ...cs, meetings: [] };
+
+  it('calls recordAppealReceived with the case id and the pasted appeal text, and proceeds to draft the invite on success', async () => {
+    const user = userEvent.setup();
+    const recordAppealReceived = vi.fn().mockResolvedValue(true);
+    const handleLetter = vi.fn();
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed', handleLetter }}
+      header={{ ...baseProps.header, showAppealInput: { c1: true }, appealText: { c1: 'I want to appeal this decision.' }, recordAppealReceived }}
+    />);
+    await user.click(screen.getByRole('button', { name: 'Start appeal and send invitation' }));
+    expect(recordAppealReceived).toHaveBeenCalledWith('c1', { appealText: 'I want to appeal this decision.' });
+    expect(handleLetter).toHaveBeenCalledWith('invite', expect.objectContaining({ employeeName: 'Sam Employee' }));
+  });
+
+  it('does not draft/send the invite when recordAppealReceived resolves false (e.g. a late-appeal reason prompt was cancelled)', async () => {
+    const user = userEvent.setup();
+    const recordAppealReceived = vi.fn().mockResolvedValue(false);
+    const handleLetter = vi.fn();
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed', handleLetter }}
+      header={{ ...baseProps.header, showAppealInput: { c1: true }, appealText: { c1: 'I want to appeal this decision.' }, recordAppealReceived }}
+    />);
+    await user.click(screen.getByRole('button', { name: 'Start appeal and send invitation' }));
+    expect(recordAppealReceived).toHaveBeenCalled();
+    expect(handleLetter).not.toHaveBeenCalled();
   });
 });

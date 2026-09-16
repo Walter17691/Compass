@@ -125,6 +125,78 @@ describe('validateFormalLetter — outcome checks, across every outcome type', (
   });
 });
 
+// Independent appeal officer workflow (2026-09-16) — same deterministic
+// check, one stage later: the appeal outcome letter must state the real,
+// recorded appeal outcome, not a different or invented one.
+describe('validateFormalLetter — appeal outcome check', () => {
+  const employeeName = 'Sarah Jones';
+  function appealLetterAddressedTo(name, { resultText = 'Not upheld' } = {}) {
+    return `[Company Name]\n\nDear ${name},\n\nAppeal Outcome\n\nHaving considered the grounds of appeal, the outcome of your appeal is: ${resultText}. This is the final stage of the internal procedure.\n\nYours sincerely,\n[Appeal Officer Name]`;
+  }
+
+  it('accepts a letter that states the recorded appeal outcome', () => {
+    const letter = appealLetterAddressedTo(employeeName, {resultText: 'Not upheld'});
+    const result = validateFormalLetter(letter, {employeeName, letterType: 'appeal', appealOutcomeLabel: 'Not upheld'});
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a letter stating a different appeal outcome than the one actually recorded', () => {
+    const letter = appealLetterAddressedTo(employeeName, {resultText: 'Upheld'});
+    const result = validateFormalLetter(letter, {employeeName, letterType: 'appeal', appealOutcomeLabel: 'Not upheld'});
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('Not upheld'))).toBe(true);
+  });
+
+  it('skips the check when no single authoritative appeal outcome was resolved (e.g. multi-allegation split decision)', () => {
+    const letter = appealLetterAddressedTo(employeeName, {resultText: 'Something unrelated'});
+    const result = validateFormalLetter(letter, {employeeName, letterType: 'appeal', appealOutcomeLabel: null});
+    expect(result.valid).toBe(true);
+  });
+});
+
+// Final pre-deployment review (2026-09-16) — defense in depth against the
+// letter inverting "upheld"'s meaning: catches a stray sentence near
+// "original decision" wording that contradicts the recorded appeal
+// outcome's real effect, even if the correct outcome label also appears
+// correctly elsewhere in the letter.
+describe('validateFormalLetter — appeal outcome inversion check (final pre-deployment review)', () => {
+  const employeeName = 'Sarah Jones';
+
+  it('flags a letter that says the original decision "stands" when the appeal was actually upheld (overturned)', () => {
+    const letter = `Dear ${employeeName},\n\nYour appeal outcome is: Appeal upheld.\n\nThe original decision stands and remains in effect.\n\nYours sincerely,\n[Appeal Officer Name]`;
+    const result = validateFormalLetter(letter, {employeeName, letterType: 'appeal', appealOutcomeLabel: 'Appeal upheld', appealEffectTag: 'overturned'});
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('overturned'))).toBe(true);
+  });
+
+  it('flags a letter that says the original decision was "overturned" when the appeal was actually not upheld (unchanged)', () => {
+    const letter = `Dear ${employeeName},\n\nYour appeal outcome is: Not upheld.\n\nThe original decision has been overturned.\n\nYours sincerely,\n[Appeal Officer Name]`;
+    const result = validateFormalLetter(letter, {employeeName, letterType: 'appeal', appealOutcomeLabel: 'Not upheld', appealEffectTag: 'unchanged'});
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('unchanged'))).toBe(true);
+  });
+
+  it('accepts a correctly-worded letter for each effect tag', () => {
+    const upheldLetter = `Dear ${employeeName},\n\nYour appeal outcome is: Appeal upheld.\n\nThe original decision is overturned with immediate effect.\n\nYours sincerely,\n[Appeal Officer Name]`;
+    expect(validateFormalLetter(upheldLetter, {employeeName, letterType: 'appeal', appealOutcomeLabel: 'Appeal upheld', appealEffectTag: 'overturned'}).valid).toBe(true);
+
+    const unchangedLetter = `Dear ${employeeName},\n\nYour appeal outcome is: Not upheld.\n\nThe original decision remains unchanged.\n\nYours sincerely,\n[Appeal Officer Name]`;
+    expect(validateFormalLetter(unchangedLetter, {employeeName, letterType: 'appeal', appealOutcomeLabel: 'Not upheld', appealEffectTag: 'unchanged'}).valid).toBe(true);
+  });
+
+  it('does not flag "upheld" wording when the letter never mentions "original decision" at all (nothing to scan)', () => {
+    const letter = `Dear ${employeeName},\n\nYour appeal outcome is: Appeal upheld. The final written warning issued on 1 August 2026 no longer applies.\n\nYours sincerely,\n[Appeal Officer Name]`;
+    const result = validateFormalLetter(letter, {employeeName, letterType: 'appeal', appealOutcomeLabel: 'Appeal upheld', appealEffectTag: 'overturned'});
+    expect(result.valid).toBe(true);
+  });
+
+  it('is skipped for non-appeal letter types and when no effect tag is known', () => {
+    const letter = `Dear ${employeeName},\n\nThe original decision stands.\n\nYours sincerely,\n[Hearing Manager]`;
+    expect(validateFormalLetter(letter, {employeeName, letterType: 'outcome', appealEffectTag: 'overturned'}).valid).toBe(true);
+    expect(validateFormalLetter(letter, {employeeName, letterType: 'appeal', appealEffectTag: null}).valid).toBe(true);
+  });
+});
+
 describe('validateFormalLetter — letter-type scope', () => {
   it('skips validation entirely for an internal, non-employee-directed type (investigation report)', () => {
     const letter = outcomeLetterAddressedTo("O'Brien-Test");

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { requestOverride, requestPolicyDeviation, requestManualSignatureConfirmation } from '../lib/humanOverride';
+import { requestOverride, requestPolicyDeviation, requestManualSignatureConfirmation, requestLateAppealAcceptance } from '../lib/humanOverride';
 
 describe('requestOverride', () => {
   it('returns false and never calls audit when the prompt is cancelled', async () => {
@@ -147,5 +147,49 @@ describe('requestManualSignatureConfirmation', () => {
     const auditFn = vi.fn();
     await requestManualSignatureConfirmation(promptDialogFn, auditFn, { itemLabel: 'Witness statement — statement.pdf' });
     expect(promptDialogFn.mock.calls[0][0].message).toContain('Witness statement — statement.pdf');
+  });
+});
+
+// Independent appeal officer workflow (2026-09-16) — ACAS's 5-working-day
+// appeal window is advisory guidance, not a hard cut-off: a late appeal
+// must never be silently rejected, but accepting one is a real,
+// documented departure worth its own required-reason audit trail.
+describe('requestLateAppealAcceptance', () => {
+  const deadline = '2026-08-01T00:00:00.000Z';
+
+  it('returns false and never calls audit when the prompt is cancelled', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue(null);
+    const auditFn = vi.fn();
+    const result = await requestLateAppealAcceptance(promptDialogFn, auditFn, { deadline, caseId: 'case-1' });
+    expect(result).toBe(false);
+    expect(auditFn).not.toHaveBeenCalled();
+  });
+
+  it('records a stable, templated audit entry including the deadline and the reason given', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue({ reason: 'Employee was on long-term sick leave' });
+    const auditFn = vi.fn();
+    const result = await requestLateAppealAcceptance(promptDialogFn, auditFn, { deadline, caseId: 'case-1' });
+    expect(result).toBe(true);
+    expect(auditFn).toHaveBeenCalledWith(
+      'Late appeal accepted exceptionally',
+      expect.stringContaining('Employee was on long-term sick leave'),
+      'case-1'
+    );
+    expect(auditFn.mock.calls[0][1]).toContain('01/08/2026');
+  });
+
+  it('marks the reason field required — an unexplained late acceptance is exactly the gap being closed', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue(null);
+    const auditFn = vi.fn();
+    await requestLateAppealAcceptance(promptDialogFn, auditFn, { deadline, caseId: 'case-1' });
+    const reasonField = promptDialogFn.mock.calls[0][0].fields.find(f => f.key === 'reason');
+    expect(reasonField.required).toBe(true);
+  });
+
+  it('states the deadline in the prompt message', async () => {
+    const promptDialogFn = vi.fn().mockResolvedValue(null);
+    const auditFn = vi.fn();
+    await requestLateAppealAcceptance(promptDialogFn, auditFn, { deadline, caseId: 'case-1' });
+    expect(promptDialogFn.mock.calls[0][0].message).toContain('01/08/2026');
   });
 });

@@ -90,11 +90,29 @@ export function removeAllegation(allegations, allegationId) {
 // top of the original finding, not a replacement of it: the finding
 // (status/decidedBy/decidedAt) stays exactly as recorded, and the appeal
 // outcome is its own accountability trail alongside it.
+// Final pre-deployment review (2026-09-16) — "upheld" is genuinely
+// ambiguous in isolation: "the appeal is upheld" (the employee's appeal
+// succeeds) and "the original decision is upheld" (the appeal fails, the
+// decision stands) are opposite outcomes in practice. Traced every
+// consumer in the codebase (AllegationsPanel's own "Appeal upheld" label,
+// appealIntelligence.js's SUCCESSFUL_OUTCOMES=["upheld","partially_upheld"],
+// AppealIntelligencePanel's "successful appeals" language, the audit text
+// at App.jsx's recordAppealOutcome) — every one of them consistently means
+// "the APPEAL is upheld" (id/label pairing here is the one place that
+// meaning is defined; nothing overrides or reinterprets it downstream).
+// effectOnOriginalDecision makes that logical consequence for the
+// ORIGINAL DECISION explicit and machine-readable, rather than leaving an
+// AI letter-drafter to derive it from the bare word "upheld" — which, read
+// in isolation next to "the original decision", risks exactly the
+// opposite conclusion. See letterGrounding.js's buildAppealOutcomeInstruction.
+// effectTag is a short, code-comparable form of effectOnOriginalDecision
+// (letterValidation.js's own defense-in-depth inversion check compares
+// against this rather than pattern-matching the long-form sentence).
 export const APPEAL_OUTCOMES = [
-  { id: "upheld", label: "Appeal upheld" },
-  { id: "partially_upheld", label: "Partially upheld" },
-  { id: "not_upheld", label: "Not upheld" },
-  { id: "further_investigation_required", label: "Further investigation required" },
+  { id: "upheld", label: "Appeal upheld", effectOnOriginalDecision: "The appeal succeeded: the original decision is overturned and does not stand.", effectTag: "overturned" },
+  { id: "partially_upheld", label: "Partially upheld", effectOnOriginalDecision: "The appeal partly succeeded: the original decision is varied — partly overturned, partly upheld.", effectTag: "varied" },
+  { id: "not_upheld", label: "Not upheld", effectOnOriginalDecision: "The appeal did not succeed: the original decision is unchanged and remains in force.", effectTag: "unchanged" },
+  { id: "further_investigation_required", label: "Further investigation required", effectOnOriginalDecision: null, effectTag: null },
 ];
 
 export function appealOutcomeMeta(outcome) {

@@ -108,6 +108,49 @@ describe('AllegationsPanel — decision-field gating (canDecide)', () => {
   });
 });
 
+// Independent appeal officer workflow (2026-09-16) — the appeal outcome
+// select/reasoning box used to be editable by anyone who reached this
+// panel at all, regardless of canDecide (which itself only covers the
+// original disciplinary decision, not the appeal). canDecideAppeal is the
+// dedicated gate: HR or this case's own appointed appeal_manager,
+// deliberately separate from canDecide since the original
+// disciplinary_officer does not automatically gain appeal-decision
+// authority.
+describe('AllegationsPanel — appeal-outcome gating (canDecideAppeal)', () => {
+  const csWithAppeal = { ...cs, meetings: [{ type: 'Disciplinary Appeal', record: {} }] };
+
+  it('renders the appeal outcome as an editable select when canDecideAppeal is true (default)', async () => {
+    render(<AllegationsPanel {...baseProps} cs={csWithAppeal} />);
+    await expandAllegation();
+    expect(screen.getByLabelText(/Appeal outcome/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Appeal outcome/).tagName).toBe('SELECT');
+  });
+
+  it('renders the appeal outcome and reasoning as read-only text, not editable controls, when canDecideAppeal is false', async () => {
+    const decidedAllegation = { ...allegation, appealOutcome: 'upheld', appealReasoning: 'New evidence changes the picture.' };
+    render(<AllegationsPanel {...baseProps} cs={csWithAppeal} allegations={[decidedAllegation]} allAllegations={[decidedAllegation]} canDecideAppeal={false} />);
+    await expandAllegation();
+    expect(screen.queryByLabelText(/Appeal outcome/)).not.toBeInTheDocument();
+    expect(screen.getByText('Appeal upheld')).toBeInTheDocument();
+    expect(screen.getByText('New evidence changes the picture.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Appeal decision reasoning')).not.toBeInTheDocument();
+  });
+
+  it('shows "Not yet decided" read-only when canDecideAppeal is false and no outcome is recorded yet', async () => {
+    render(<AllegationsPanel {...baseProps} cs={csWithAppeal} canDecideAppeal={false} />);
+    await expandAllegation();
+    expect(screen.getByText('Not yet decided')).toBeInTheDocument();
+  });
+
+  it('keeps the appeal outcome read-only even for the original disciplinary_officer (canDecide=true, canDecideAppeal=false)', async () => {
+    const decidedAllegation = { ...allegation, appealOutcome: 'not_upheld' };
+    render(<AllegationsPanel {...baseProps} cs={csWithAppeal} allegations={[decidedAllegation]} allAllegations={[decidedAllegation]} canDecide={true} canDecideAppeal={false} />);
+    await expandAllegation();
+    expect(screen.queryByLabelText(/Appeal outcome/)).not.toBeInTheDocument();
+    expect(screen.getByText('Not upheld')).toBeInTheDocument();
+  });
+});
+
 // Phase 6.5 hardening (P0, Cluster 7) — these fields used to call
 // patchAllegation (a full-row upsert) on every keystroke. Now they persist
 // only on blur, via a local draft (DraftTextarea in AllegationsPanel.jsx).

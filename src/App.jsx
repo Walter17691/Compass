@@ -26,10 +26,10 @@ import {
   linkPrepQuestionToEvidence as linkPrepQuestionToEvidenceHelper,
   setPrepQuestionStatus as setPrepQuestionStatusHelper,
 } from './lib/prepQuestions';
-import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning } from './lib/appealReview';
+import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, transcriptMentionsAppeal } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter } from './lib/letterValidation';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction } from './lib/letterGrounding';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -44,7 +44,7 @@ import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { conditionalUpdate, enqueueSave, withTransientRetry } from './lib/optimisticSave';
-import { requestOverride, requestPolicyDeviation } from './lib/humanOverride';
+import { requestOverride, requestPolicyDeviation, requestLateAppealAcceptance } from './lib/humanOverride';
 import { caseRoleLabel } from './lib/caseRoles';
 import { getProcessType, stageLabel } from './lib/processStages';
 import { buildEscalationContext } from './lib/escalation';
@@ -126,6 +126,7 @@ const CalendarScreen = lazy(() => import('./screens/CalendarScreen').then(m => (
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { CommandBarModal } from './screens/CommandBarModal';
 import { HandoffModal } from './screens/HandoffModal';
+import { AppealOfficerModal } from './screens/AppealOfficerModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
 import { AssignInvestigatorModal } from './screens/AssignInvestigatorModal';
 import { HrInterventionModal } from './screens/HrInterventionModal';
@@ -407,6 +408,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [orgRoles, setOrgRoles] = useState([]);
   const [orgMembers, setOrgMembers] = useState([]);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
+  const [showAppealOfficerModal, setShowAppealOfficerModal] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [showAssignInvestigatorModal, setShowAssignInvestigatorModal] = useState(false);
@@ -4255,6 +4257,60 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     showToast(targetMember.name+" assigned as "+caseRoleLabel(roleId));
   };
 
+  // Independent appeal officer workflow (2026-09-16) — appointment,
+  // replacement, and revocation are all enforced authoritatively by
+  // appoint_appeal_manager()/revoke_appeal_manager()
+  // (supabase/appeal_officer_workflow_2026-09-16.sql): HR-only, with an
+  // independence conflict check against allegations.decided_by. Each RPC
+  // writes its own atomic, unforgeable audit entry — no separate audit()
+  // call here, matching delete_case's established pattern. Returns
+  // {ok, error} rather than throwing/toasting directly, so
+  // AppealOfficerModal can distinguish an INDEPENDENCE_CONFLICT response
+  // (which it turns into its own exceptional-appointment flow) from any
+  // other failure.
+  const appointAppealManager = async (caseId, memberUserId, overrideReason) => {
+    const { error } = await supabase.rpc('appoint_appeal_manager', { p_case_id: caseId, p_user_id: memberUserId, p_override_reason: overrideReason || null });
+    if(!error) await loadCaseAccess();
+    return { ok: !error, error: error?.message };
+  };
+
+  const revokeAppealManager = async (caseId) => {
+    const { error } = await supabase.rpc('revoke_appeal_manager', { p_case_id: caseId });
+    if(error) { console.error('revokeAppealManager', error); showToast("Couldn't revoke the appeal officer — "+error.message, "error"); return; }
+    await loadCaseAccess();
+    showToast("Appeal officer revoked");
+  };
+
+  // Independent appeal officer workflow (2026-09-16) — the ONE
+  // authoritative "appeal received" transition. Before this, two separate
+  // call sites (the AI-detected "link appeal to existing case" modal, and
+  // CaseViewScreen's explicit "Employee is appealing" flow) each wrote
+  // stage:"appeal" directly, with no deadline check and no audit trail —
+  // an appeal was indistinguishable from any other stage edit. Both now
+  // funnel through this. AI/keyword detection (appealDetected,
+  // src/lib/aiDetection or similar) only ever opens a confirmation UI —
+  // it never calls this itself; a human always makes the actual click
+  // that reaches this function, matching every other AI-suggests/
+  // human-confirms gate in this codebase.
+  //
+  // computeAuthoritativeAppealDeadline is advisory ACAS guidance, not a
+  // hard legal cut-off, so a late appeal is never rejected here — it's
+  // routed through requestLateAppealAcceptance's required-reason prompt
+  // instead (humanOverride.js), and the caller (a real button click)
+  // simply doesn't proceed if that's cancelled.
+  const recordAppealReceived = async (caseId, applyFields = {}) => {
+    const cs = cases.find(x => x.id === caseId);
+    if (!cs) return false;
+    const deadline = computeAuthoritativeAppealDeadline(cs);
+    if (deadline && new Date() > new Date(deadline)) {
+      const accepted = await requestLateAppealAcceptance(promptDialog, audit, { deadline, caseId });
+      if (!accepted) return false;
+    }
+    saveCases(cases.map(x => x.id === caseId ? { ...x, stage: "appeal", ...applyFields } : x), caseId);
+    audit("Appeal received", cs.employeeName || "", caseId);
+    return true;
+  };
+
   // Manager Enablement (Phase 4, MP11, §17) — the HR Review Gate's own
   // action set (HrReviewGatePanel.jsx), distinct from respondToReview's
   // plain approve/reject that the outcome-approval flow (OutcomeModal,
@@ -6291,9 +6347,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     let fullRecord = "";
     try {
       const tx = allNotes.slice(-60).map(u=>u.text).join("\n");
-          // Appeal detection
-      const appealWords = ["appeal","original decision","grounds of appeal","outcome being appealed"];
-      if(!appealDetectedRef.current && appealWords.some(w=>tx.toLowerCase().includes(w))){
+      // Appeal detection — see transcriptMentionsAppeal (lib/appealReview.js)
+      // for the false-positive fix (2026-09-16) that excludes the standard
+      // "you have the right to appeal this decision" end-of-meeting notice.
+      if(!appealDetectedRef.current && transcriptMentionsAppeal(tx)){
         appealDetectedRef.current = true;
         setAppealDetected(true);
         setShowLinkCase(true);
@@ -6785,7 +6842,15 @@ Please produce:
     generateEvidenceSuggestions(updatedCase, true);
     generateNextBestAction(updatedCase, true);
     applyPendingMeetingSuggestions(caseId);
-    audit("Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`, caseId);
+    // Independent appeal officer workflow (2026-09-16) — an appeal
+    // hearing used to be indistinguishable in the audit trail from any
+    // other meeting save ("Meeting saved"), even though it's the one
+    // meeting type that directly precedes recording an appeal decision.
+    // Matches the established case-insensitive "appeal" substring
+    // convention every other appeal-stage check in this codebase already
+    // uses (appealMeetingsForCase, isOriginalDecisionMeeting's exclusion).
+    const isAppealMeeting = (meetingType?.label||"").toLowerCase().includes("appeal");
+    audit(isAppealMeeting?"Appeal hearing recorded":"Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`, caseId);
     // Human UAT remediation, Batch 1, Issue 4 — distinct from the generic
     // "Meeting saved" above (which fires for every save, signature-bound
     // or not): a dedicated Timeline/audit entry specifically for "this
@@ -7545,6 +7610,34 @@ Please produce:
           +"  Contrary evidence: "+(contrary.join(", ")||"none linked")+nl
           +"  Outstanding uncertainty: "+(a.outstandingUncertainty||"none recorded");
       }).join(nl+nl) : "";
+      // Independent appeal officer workflow (2026-09-16) — an appeal
+      // outcome letter used to be drafted with none of the appeal's own
+      // facts in context: only the generic case/employee/meeting-
+      // transcript block every letter type shares (which does include
+      // the ORIGINAL outcome via activeCase?.outcome above, but nothing
+      // about the appeal itself). The instruction below tells the model
+      // to include "grounds of appeal considered, outcome of the appeal,
+      // reasons, whether the original decision is upheld or overturned"
+      // — on a model instructed to "never refuse... use [placeholder] for
+      // anything unknown" that was never actually told these facts WERE
+      // unknown, that's an invitation to invent them. Same deterministic-
+      // field, "state this exact X, never invent" pattern as
+      // allegationOutcomeContext/buildAppealDeadlineInstruction above.
+      const appealGroundSignals = t==="appeal" && activeCase ? caseSignals.filter(s=>s.caseId===activeCase.id && s.status==="open" && (s.title||"").startsWith("Appeal ground:")).map(s=>"- "+s.reasoning).join(nl) : "";
+      const appealOfficerAccess = t==="appeal" && activeCase ? caseAccess.find(a=>a.caseId===activeCase.id && a.role==="appeal_manager") : null;
+      const appealOfficerName = appealOfficerAccess ? orgMembers.find(m=>m.user_id===appealOfficerAccess.userId)?.name : null;
+      const appealHearingMeeting = t==="appeal" && activeCase ? (activeCase.meetings||[]).slice().reverse().find(m=>(m.type||"").toLowerCase().includes("appeal") && m.record) : null;
+      const appealAllegationContext = t==="appeal" && activeCase ? allegationsForCase(allegations, activeCase.id).filter(a=>a.appealOutcome).map(a => {
+        const decidedByName = a.appealDecidedBy ? orgMembers.find(m=>m.user_id===a.appealDecidedBy)?.name : null;
+        return buildAppealOutcomeInstruction(a, decidedByName);
+      }).join(nl+nl) : "";
+      // Single-outcome case only (see letterValidation.js's own comment on
+      // why a multi-allegation split appeal decision isn't checked here).
+      const singleAppealOutcomeAllegation = appealAllegationContext && activeCase && allegationsForCase(allegations, activeCase.id).filter(a=>a.appealOutcome).length===1
+        ? allegationsForCase(allegations, activeCase.id).find(a=>a.appealOutcome)
+        : null;
+      const appealOutcomeLabelForValidation = singleAppealOutcomeAllegation ? appealOutcomeMeta(singleAppealOutcomeAllegation.appealOutcome)?.label : null;
+      const appealEffectTagForValidation = singleAppealOutcomeAllegation ? appealOutcomeMeta(singleAppealOutcomeAllegation.appealOutcome)?.effectTag : null;
       const context = [
         groundedEmployee ? "Employee: "+groundedEmployee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
         buildRecipientInstruction(groundedEmployee, t),
@@ -7568,6 +7661,15 @@ Please produce:
         evidenceList ? "Evidence gathered:"+nl+evidenceList : "",
         prevMeetings ? "Previous meetings: "+prevMeetings : "",
         allegationOutcomeContext ? "Allegations and findings on record:"+nl+allegationOutcomeContext : "",
+        // Independent appeal officer workflow (2026-09-16) — appeal-letter
+        // grounding. Each falls back to an explicit "not recorded"/
+        // placeholder instruction rather than silently omitting the line,
+        // so a gap reads to the model as a known unknown, not an invitation
+        // to fill in something plausible-sounding.
+        t==="appeal" ? "Appeal officer who heard/decided this appeal: "+(appealOfficerName||"not recorded — use a placeholder such as [Appeal Officer Name and Job Title] rather than inventing a name") : "",
+        t==="appeal" ? "Grounds of appeal raised by the employee:"+nl+(appealGroundSignals||"not recorded — use a placeholder such as [grounds of appeal] rather than inventing specific grounds") : "",
+        t==="appeal" && appealHearingMeeting ? "Appeal hearing record ("+appealHearingMeeting.type+" on "+appealHearingMeeting.date+"):"+nl+appealHearingMeeting.record.slice(0,1200) : "",
+        t==="appeal" ? "Appeal outcome per allegation (authoritative where present — never invent a different result, reasoning, decision-maker, or date):"+nl+(appealAllegationContext||"No appeal outcome has been recorded yet — state clearly that the decision is pending, or use a placeholder, rather than inventing one") : "",
         reviewOutput ? "Meeting record:"+nl+reviewOutput.slice(0,1200) : "",
         tx ? "Transcript:"+nl+tx.slice(0,800) : "",
       ].filter(Boolean).join(nl) + getPolicyCtx();
@@ -7588,7 +7690,7 @@ Please produce:
       const letterInstructions = {
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. If the letter states a specific deadline (e.g. to confirm attendance or submit evidence), use a placeholder such as [X working days] rather than a specific number — ACAS does not mandate a fixed notice period for this letter type, so any specific day-count you're not given below would be invented, not real guidance. Follow ACAS Code of Practice.",
         "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; the sanction imposed, stated exactly as given in the outcome decision below (never invented or reworded to a different sanction); where the information below states a warning duration and/or expiry date, state that exact duration/date (never substitute a generic or example figure of your own) — where neither is given below, use a placeholder such as [X months] rather than guessing a number; where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal. If an AUTHORITATIVE APPEAL DEADLINE is given in the information below, state that exact date as the deadline by which the employee must appeal — do not calculate your own date from this letter's own date or from today, and do not phrase the window as running from the date of this letter. If no authoritative appeal deadline is given below, use relative wording such as 'within 5 working days of the date of this letter' instead. Follow ACAS Code of Practice.",
-        "appeal": "a formal appeal outcome letter. Include: grounds of appeal considered, outcome of the appeal, reasons, whether original decision is upheld or overturned, confirmation this is the final stage. Follow ACAS Code of Practice.",
+        "appeal": "a formal appeal outcome letter. Include: the grounds of appeal considered (stated exactly as given below — never invent different grounds), the outcome of the appeal and the reasons for it (grounded in the authoritative appeal outcome/reasoning below where available, not a generic restatement), the effect on the original decision exactly as given below under 'Effect on the original decision' (never derive this yourself from the word 'upheld' alone — 'upheld' describes whether the APPEAL succeeded, not the original decision, and the two have opposite practical effect), the name of the appeal officer who heard/decided the appeal exactly as given below (never invent a different name), and confirmation this is the final stage of the internal procedure. If no appeal outcome has been recorded yet, say so clearly and do not state a result. Follow ACAS Code of Practice.",
         "investigation-report": "a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed (infer from meeting record), findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections.","no-case-answer": "a formal letter to the employee confirming no case to answer. Include: that an investigation has been completed, that no further action will be taken, that the matter is now closed, and that the record will be kept confidential. Warm but professional tone.","grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
         "warning": "a formal written warning letter. Include: nature of misconduct, previous warnings if any, expected improvement, review period, consequence of further misconduct, right of appeal. Follow ACAS Code of Practice.",
         "dismissal": "a formal dismissal letter. Include: reason for dismissal, date employment ends, notice period or payment in lieu, final pay arrangements, right of appeal within 5 working days. Follow ERA 1996 and ACAS Code of Practice.",
@@ -7624,7 +7726,7 @@ Please produce:
         // is this letter actually addressed to this case's employee?)
         // before treating it as a valid, ready-for-review draft. See
         // lib/letterValidation.js for what this does and doesn't check.
-        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt, appealDeadline: appealDeadlineIso});
+        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt, appealDeadline: appealDeadlineIso, appealOutcomeLabel: appealOutcomeLabelForValidation, appealEffectTag: appealEffectTagForValidation});
         setLetterOutput(text); setLetterSources(letterSources);
         // UAT Product Hierarchy pass, Part 6 — generation can genuinely
         // outlive the user staying on this screen (this function isn't
@@ -8167,7 +8269,7 @@ Please produce:
             {(() => { const linkCandidates = appealLinkCandidates(cases, caseInfo.employee); return linkCandidates.length>0?(
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
                 {linkCandidates.map(cs=>(
-                  <button key={cs.id} onClick={()=>{
+                  <button key={cs.id} onClick={async ()=>{
                     const meeting = {
                       id: newId("meeting"),
                       type: meetingType?.label||"Appeal",
@@ -8215,7 +8317,17 @@ Please produce:
                     // them has a stale updatedAt (near-guaranteed in an
                     // org with hundreds of cases and ongoing activity),
                     // silently reverting this exact update before it lands.
-                    saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",meetings:[...x.meetings,meeting]}:x), cs.id);
+                    //
+                    // Routed through recordAppealReceived (2026-09-16) —
+                    // appealDetected only ever opened this confirmation
+                    // modal; this click is the human confirmation that
+                    // actually records the appeal, so it's the one place a
+                    // deadline check and "Appeal received" audit entry
+                    // belong. A cancelled late-appeal reason prompt aborts
+                    // the whole link (meeting stays undrafted, modal stays
+                    // open) rather than half-applying the transition.
+                    const ok = await recordAppealReceived(cs.id, { meetings:[...cs.meetings, meeting] });
+                    if(!ok) return;
                     setCaseInfo(p=>({...p,employee:cs.employeeName,email:cs.email||""}));
                     setShowLinkCase(false);
                     setAppealDetected(false);
@@ -8920,10 +9032,11 @@ Please produce:
             setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
             setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
             createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
+            setShowAppealOfficerModal,
             generateInvestigationPlan, investigationPlanLoading, promptDialog, audit,
           }}
           header={{
-            showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,
+            showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
             setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
             setOutcomeType, setCompletingOutcomeDetails,
             aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
@@ -9331,6 +9444,21 @@ Please produce:
           org={org}
           user={user}
           setActiveCaseStage={setActiveCaseStage}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ── Independent Appeal Officer Modal (2026-09-16) ── */}
+      {showAppealOfficerModal&&(
+        <AppealOfficerModal
+          cases={cases}
+          activeCaseId={activeCaseId}
+          orgMembers={orgMembers}
+          caseAccess={caseAccess}
+          onClose={()=>setShowAppealOfficerModal(false)}
+          appointAppealManager={appointAppealManager}
+          revokeAppealManager={revokeAppealManager}
+          confirmDialog={confirmDialog}
           showToast={showToast}
         />
       )}

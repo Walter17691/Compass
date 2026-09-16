@@ -108,10 +108,11 @@ export function CaseViewScreen({
     setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
     setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
     createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
+    setShowAppealOfficerModal,
     generateInvestigationPlan, investigationPlanLoading, promptDialog, audit,
   } = shell;
   const {
-    showAppealInput, setShowAppealInput, appealText, setAppealText, setShowReassignModal,
+    showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
     setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
     setOutcomeType, setCompletingOutcomeDetails,
     aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
@@ -205,6 +206,14 @@ export function CaseViewScreen({
   const currentInvestigatorAccess = caseInvestigatorAccess[caseInvestigatorAccess.length-1];
   const currentInvestigator = currentInvestigatorAccess ? orgMembers.find(m=>m.user_id===currentInvestigatorAccess.userId) : null;
   const myAccess = caseAccess.find(a=>a.caseId===cs.id && a.userId===currentUser?.user_id);
+  // Independent appeal officer workflow (2026-09-16) — the one authoritative
+  // appeal_manager relationship for this case, read the same way as
+  // currentInvestigator above. Deliberately not derived from
+  // cs.disciplinaryOfficer, which names a different person by design.
+  const currentAppealManagerAccess = caseAccess.find(a=>a.caseId===cs.id && a.role==="appeal_manager");
+  const currentAppealManager = currentAppealManagerAccess ? orgMembers.find(m=>m.user_id===currentAppealManagerAccess.userId) : null;
+  const appealManagerName = currentAppealManager?.name || null;
+  const isMyAppealManagerAssignment = myAccess?.role==="appeal_manager";
   const isAssignedInvestigator = !isHR && myAccess?.role==="investigator";
   // Manager Enablement (Phase 4, MP2) — same restricted-view branch-point
   // as isAssignedInvestigator above, one case_access role earlier in the
@@ -224,6 +233,15 @@ export function CaseViewScreen({
   // they still see these fields (context they may legitimately need), just
   // read-only.
   const canDecide = isHR || (myAccess?.role==="disciplinary_officer");
+  // Independent appeal officer workflow (2026-09-16) — the appeal-decision
+  // gate is deliberately separate from canDecide above. The original
+  // disciplinary_officer does not gain appeal-decision authority merely
+  // from that role (per the approved spec); only HR or this case's
+  // currently-appointed appeal_manager may record an appeal outcome. This
+  // mirrors protect_allegations_appeal_decision_columns() in
+  // appeal_officer_workflow_2026-09-16.sql exactly, so the UI never offers
+  // a control that the database would then reject.
+  const canDecideAppeal = isHR || isMyAppealManagerAssignment;
   const checklistTasks = investigationChecklistTasks(caseTasks, cs.id);
   const planTasks = investigationPlanTasks(caseTasks, cs.id);
   const guidanceTasks = hrNoteTasks(caseTasks, cs.id);
@@ -717,7 +735,20 @@ export function CaseViewScreen({
           <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Paste the employee appeal — Compass will use this for the appeal hearing:</div>
           <textarea aria-label="Employee appeal text" value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))} rows={3} style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:FONT.sans,boxSizing:"border-box",marginBottom:8}}/>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"appeal",appealText:appealText[cs.id]||""}:x));setShowAppealInput(p=>({...p,[cs.id]:false}));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);handleLetter("invite",{employeeName:cs.employeeName,manager:cs.manager||""});}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Start appeal and send invitation</button>
+            <button onClick={async ()=>{
+              // Routed through recordAppealReceived (2026-09-16) — the one
+              // authoritative "appeal received" transition, deadline-
+              // checked and audited. A cancelled late-appeal reason prompt
+              // aborts here: the invite is never drafted/sent and the
+              // input stays open, rather than half-applying the stage
+              // change with no record of why a late appeal was accepted.
+              const ok = await recordAppealReceived(cs.id, { appealText: appealText[cs.id] || "" });
+              if(!ok) return;
+              setShowAppealInput(p=>({...p,[cs.id]:false}));
+              setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
+              setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);
+              handleLetter("invite",{employeeName:cs.employeeName,manager:cs.manager||""});
+            }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Start appeal and send invitation</button>
             <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
           </div>
         </div>
@@ -725,11 +756,19 @@ export function CaseViewScreen({
       {/* Appeal — option to proceed to new disciplinary if appeal upheld/dismissed */}
       {stage==="appeal"&&(
         <div style={{background:"#FDFAF5",borderBottom:"1px solid #E8E0D0",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-          <div style={{fontSize:12,color:"#9B9098"}}>Appeal in progress · {cs.disciplinaryOfficer?"Officer: "+cs.disciplinaryOfficer:"No officer assigned"}</div>
+          {/* Independent appeal officer workflow (2026-09-16) — reads the
+              real, authoritative appeal_manager case_access relationship,
+              not cs.disciplinaryOfficer (that field belongs to the
+              original disciplinary hand-off and is a different person by
+              design — see AppealOfficerModal.jsx's own header comment for
+              why this used to be wrongly conflated). */}
+          <div style={{fontSize:12,color:"#9B9098"}}>Appeal in progress · {appealManagerName?"Officer: "+appealManagerName:"No officer assigned"}</div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setShowHandoffModal(true)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
-              {cs.disciplinaryOfficer?"Reassign officer":"Appoint appeal officer"}
-            </button>
+            {isHR&&(
+              <button onClick={()=>setShowAppealOfficerModal(true)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
+                {appealManagerName?"Reassign officer":"Appoint appeal officer"}
+              </button>
+            )}
             <button onClick={()=>requestCloseCase()} disabled={closingCase} style={{fontSize:12,color:"#1A7A4A",background:"#E8F5EE",border:"none",borderRadius:7,padding:"6px 14px",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans,fontWeight:500}}>
               Close case
             </button>
@@ -763,7 +802,7 @@ export function CaseViewScreen({
             <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={timeline.toggleTimelineExclude} onEditDescription={timeline.editTimelineDescription} onGenerateRelevance={timeline.generateTimelineRelevance} relevanceLoading={timeline.timelineRelevanceLoading?.[cs.id]} loadJsPDF={timeline.loadJsPDF}/>
           )}
           {activeTab==="allegations"&&(
-            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide}/>
+            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal}/>
           )}
           {activeTab==="meetings"&&(
             <MeetingsTab cs={cs} cases={cases} saveCases={saveCases} activeCaseStage={meetingsTab.activeCaseStage} setActiveCaseStage={meetingsTab.setActiveCaseStage} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} orgMembers={orgMembers} setScreen={setScreen} screens={screens} setReviewOutput={setReviewOutput} setMeetingType={setMeetingType} meetingTypes={MEETING_TYPES} fmtDate={fmtDate} attemptSubmitInvestigation={attemptSubmitInvestigation} concludingInvestigation={concludingInvestigation} investigationReportDraft={investigationReportDraft} setShowHandoffModal={setShowHandoffModal} setLetterOutput={setLetterOutput} onAcceptSavedSuggestion={meetingsTab.onAcceptSavedSuggestion} onDismissSavedSuggestion={meetingsTab.onDismissSavedSuggestion} promptDialog={promptDialog} audit={audit}/>

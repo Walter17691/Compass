@@ -90,3 +90,28 @@ export async function requestManualSignatureConfirmation(promptDialogFn, auditFn
   auditFn("Marked signed outside Compass", `${itemLabel} — ${detail}`, caseId);
   return true;
 }
+
+// Independent appeal officer workflow (2026-09-16) — ACAS's 5-working-day
+// appeal window (computeAuthoritativeAppealDeadline, deadlines.js) is
+// statutory guidance, not a hard legal cut-off: Compass must never
+// silently reject a late appeal, but accepting one past the window is a
+// real, documented departure worth its own audit trail — same required-
+// reason shape as requestManualSignatureConfirmation above, one stable
+// action label ("Late appeal accepted exceptionally") a future reviewer
+// can filter on. recordAppealReceived (App.jsx) is the only caller —
+// every "employee is appealing" confirmation funnels through it, so this
+// prompt is the one place a late appeal ever gets accepted.
+export async function requestLateAppealAcceptance(promptDialogFn, auditFn, { deadline, caseId=null } = {}) {
+  const deadlineLabel = new Date(deadline).toLocaleDateString("en-GB");
+  const values = await promptDialogFn({
+    title: "Appeal received after deadline",
+    message: `The appeal window closed on ${deadlineLabel}. This appeal is being accepted after that deadline — why is it being accepted anyway?`,
+    fields: [{ key:"reason", label:"Reason for accepting this late appeal", required:true, placeholder:"e.g. Employee was on long-term sick leave during the appeal window" }],
+    confirmLabel: "Accept late appeal",
+  });
+  if(!values) return false;
+  const reason = (values.reason||"").trim();
+  const receivedLabel = new Date().toLocaleDateString("en-GB");
+  auditFn("Late appeal accepted exceptionally", `Deadline was ${deadlineLabel} — received ${receivedLabel} — reason: ${reason}`, caseId);
+  return true;
+}

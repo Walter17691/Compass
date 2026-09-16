@@ -14,15 +14,21 @@ describe('caseRoleLabel', () => {
 
 describe('ASSIGNABLE_ROLES', () => {
   it('only covers the roles with no pre-existing dedicated assignment flow', () => {
-    expect(ASSIGNABLE_ROLE_IDS).toEqual(['appeal_manager', 'notetaker', 'employee_manager', 'approver']);
+    expect(ASSIGNABLE_ROLE_IDS).toEqual(['notetaker', 'employee_manager', 'approver']);
     expect(ASSIGNABLE_ROLES.map(r => r.id)).toEqual(ASSIGNABLE_ROLE_IDS);
   });
 
-  it('excludes roles that already have their own UI (investigator, case_owner, disciplinary_officer)', () => {
+  it('excludes roles that already have their own UI (investigator, case_owner, disciplinary_officer, appeal_manager)', () => {
     const assignableIds = ASSIGNABLE_ROLES.map(r => r.id);
     expect(assignableIds).not.toContain('investigator');
     expect(assignableIds).not.toContain('case_owner');
     expect(assignableIds).not.toContain('disciplinary_officer');
+    // Independent appeal officer workflow (2026-09-16) — appeal_manager
+    // moved to its own HR-only, independence-checked appointment flow
+    // (AppealOfficerModal.jsx / appoint_appeal_manager()); this generic
+    // panel's assignCaseRole is now too broad for it (see caseRoles.js's
+    // own comment).
+    expect(assignableIds).not.toContain('appeal_manager');
   });
 
   it('every assignable role is also present in the full CASE_ROLES vocabulary', () => {

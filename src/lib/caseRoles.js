@@ -7,6 +7,19 @@
 // only covers the ones that had no UI at all before this phase: Appeal
 // Manager, Notetaker, the employee's own line manager, and an Approver
 // (the role P9's approval workflows gate on).
+//
+// Independent appeal officer workflow (2026-09-16) — Appeal Manager
+// removed from ASSIGNABLE_ROLE_IDS. It now has its own dedicated,
+// authoritative appointment flow (AppealOfficerModal.jsx, backed by
+// appoint_appeal_manager()/revoke_appeal_manager()), which is HR-only and
+// independence-checked — deliberately stricter than can_grant_case_access
+// (any existing case_access holder), which is what this generic panel's
+// assignCaseRole ultimately relies on. Leaving it assignable here would
+// let CaseRolesPanel offer a control that now fails server-side for
+// anyone who isn't HR, and would bypass the independence check entirely
+// for anyone who is. CASE_ROLES keeps the id/label pair — this role still
+// exists and is still meaningful — only its generic assignment path is
+// removed.
 export const CASE_ROLES = [
   { id: "case_owner", label: "Case Owner" },
   { id: "investigator", label: "Investigator" },
@@ -17,7 +30,7 @@ export const CASE_ROLES = [
   { id: "approver", label: "Approver" },
 ];
 
-export const ASSIGNABLE_ROLE_IDS = ["appeal_manager", "notetaker", "employee_manager", "approver"];
+export const ASSIGNABLE_ROLE_IDS = ["notetaker", "employee_manager", "approver"];
 export const ASSIGNABLE_ROLES = CASE_ROLES.filter(r => ASSIGNABLE_ROLE_IDS.includes(r.id));
 
 export function caseRoleLabel(roleId) {

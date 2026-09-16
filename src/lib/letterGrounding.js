@@ -1,4 +1,5 @@
 import { EMPLOYEE_DIRECTED_LETTER_TYPES } from './letterValidation';
+import { appealOutcomeMeta, allegationStatusMeta } from './allegations';
 
 // Defect #20 remediation — every real call site that starts a fresh
 // letter draft does setCaseInfo(...) then calls handleLetter(...)
@@ -61,4 +62,29 @@ export function buildAppealDeadlineInstruction(appealDeadlineIso, letterType) {
   if (!appealDeadlineIso || letterType !== "outcome") return "";
   const formatted = new Date(appealDeadlineIso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   return `AUTHORITATIVE APPEAL DEADLINE: ${formatted}. This is the exact, final date already computed under Compass's own ACAS 5-working-day appeal rule from the recorded decision date — it is a known case fact, not something for you to calculate. Do not derive a different date from this letter's own document date, from today's date, or from when this letter happens to be drafted, saved, or regenerated. State this exact date as the appeal deadline (e.g. "you must submit your appeal by ${formatted}"). If you also use relative wording (e.g. "within 5 working days"), it must describe this same date and must not anchor it to the date of this letter — never write that the appeal window runs from the date of this letter, this letter's date, or the date the employee receives this letter, since that could produce a different date than the one given here.`;
+}
+
+// Final pre-deployment review (2026-09-16) — "upheld" is genuinely
+// ambiguous read in isolation ("the appeal is upheld" vs. "the original
+// decision is upheld" are opposite outcomes). APPEAL_OUTCOMES'
+// effectOnOriginalDecision (allegations.js) is the single source of truth
+// for what each stored value means for the original decision; this makes
+// that explicit and unmissable in the grounding text rather than letting
+// the model derive it from the bare word "upheld" sitting next to
+// "original decision" — the exact conflation risk a naive reading invites.
+export function buildAppealOutcomeInstruction(allegation, decidedByName) {
+  if (!allegation?.appealOutcome) return "";
+  const nl = String.fromCharCode(10);
+  const meta = appealOutcomeMeta(allegation.appealOutcome);
+  const label = meta?.label || allegation.appealOutcome;
+  let text = `- "${allegation.title}"` + nl
+    + "  Original finding: " + (allegationStatusMeta(allegation.status)?.label || allegation.status) + nl
+    + "  AUTHORITATIVE APPEAL OUTCOME (state exactly this result — never invent or infer a different one): " + label + nl;
+  if (meta?.effectOnOriginalDecision) {
+    text += "  Effect on the original decision (state this explicitly, exactly as given — the word \"upheld\" above describes whether the APPEAL succeeded, not the original decision, and reading it the other way round would invert the result): " + meta.effectOnOriginalDecision + nl;
+  }
+  text += "  Appeal decision reasoning, as recorded by the appeal officer (state this — do not invent your own reasons): " + (allegation.appealReasoning || "not recorded") + nl;
+  if (decidedByName) text += "  Appeal decided by: " + decidedByName + nl;
+  if (allegation.appealDecidedAt) text += "  Appeal decided on: " + new Date(allegation.appealDecidedAt).toLocaleDateString("en-GB");
+  return text;
 }

@@ -1,8 +1,9 @@
-import { requireCaseAccess, verifyOutcomeApproved } from './_auth.js';
+import { requireCaseAccess, verifyOutcomeApproved, verifyAppealDecisionRecorded } from './_auth.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 import { documentTypeLabel } from '../src/lib/eSignature.js';
 import { APP_URL } from './_appUrl.js';
+import { isHrRole } from '../src/lib/roles.js';
 
 // Phase 6.5 hardening (P0) — two issues, both closed the same way
 // send-letter.js's sibling fix does: (1) verified only that some real
@@ -41,6 +42,9 @@ export default async function handler(req, res) {
   if (letterType === 'outcome' && !caseId) {
     return res.status(400).json({ error: 'caseId is required for an outcome letter' });
   }
+  if (letterType === 'appeal' && !caseId) {
+    return res.status(400).json({ error: 'caseId is required for an appeal outcome letter' });
+  }
 
   const auth = await requireCaseAccess(req, res, orgId, caseId);
   if (!auth) return;
@@ -52,6 +56,17 @@ export default async function handler(req, res) {
         ? "This outcome requires HR sign-off before its letter can be sent — it hasn't been approved yet."
         : "This case has no recorded outcome yet — record the outcome before sending an outcome letter.";
       return res.status(403).json({ error: message });
+    }
+  }
+
+  // Appeal workflow (2026-09) — same gate as send-letter.js's sibling.
+  if (letterType === 'appeal') {
+    if (!(isHrRole(auth.role) || auth.caseRole === 'appeal_manager')) {
+      return res.status(403).json({ error: "Only HR or this case's appointed appeal officer can send the appeal outcome letter." });
+    }
+    const decided = await verifyAppealDecisionRecorded(caseId);
+    if (!decided) {
+      return res.status(403).json({ error: 'This case has no recorded appeal decision yet — record the appeal outcome before sending the appeal letter.' });
     }
   }
 

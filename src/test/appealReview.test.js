@@ -1,5 +1,36 @@
 import { describe, it, expect } from 'vitest';
-import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, parseAppealGroundReasoning } from '../lib/appealReview';
+import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, parseAppealGroundReasoning, transcriptMentionsAppeal } from '../lib/appealReview';
+
+describe('transcriptMentionsAppeal', () => {
+  it('does not trigger on the standard informational appeal-rights notice alone', () => {
+    expect(transcriptMentionsAppeal("You have the right to appeal this decision within 5 working days.")).toBe(false);
+    expect(transcriptMentionsAppeal("You are entitled to appeal against this outcome.")).toBe(false);
+  });
+
+  it('still triggers when the employee actually raises an appeal', () => {
+    expect(transcriptMentionsAppeal("I would like to appeal this decision.")).toBe(true);
+    expect(transcriptMentionsAppeal("She said she wants to appeal.")).toBe(true);
+  });
+
+  it('still triggers on the other unambiguous appeal phrases', () => {
+    expect(transcriptMentionsAppeal("Let's discuss the grounds of appeal.")).toBe(true);
+    expect(transcriptMentionsAppeal("This meeting concerns the original decision.")).toBe(true);
+    expect(transcriptMentionsAppeal("We are here about the outcome being appealed.")).toBe(true);
+  });
+
+  it('triggers when a genuine appeal mention appears alongside the informational notice', () => {
+    expect(transcriptMentionsAppeal("You have the right to appeal this decision. I want to appeal now.")).toBe(true);
+  });
+
+  it('returns false for a transcript with no appeal-related content at all', () => {
+    expect(transcriptMentionsAppeal("We discussed the timeline for the investigation.")).toBe(false);
+  });
+
+  it('handles empty/undefined input', () => {
+    expect(transcriptMentionsAppeal("")).toBe(false);
+    expect(transcriptMentionsAppeal(undefined)).toBe(false);
+  });
+});
 
 describe('newEvidenceSinceFinding', () => {
   const decidedAllegation = { id: 'a1', decidedAt: '2026-08-01T00:00:00.000Z' };
