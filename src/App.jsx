@@ -1400,9 +1400,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); return { ok: false, reason: 'error' }; }
   };
 
+  // Destructive & Decision Authorization hardening (2026-09-13) — case
+  // deletion is now HR-only, enforced authoritatively by delete_case()
+  // (supabase/destructive_decision_authorization_2026-09-13.sql), not by
+  // this raw table delete. The RPC also atomically writes a
+  // structurally-unforgeable "Case deleted" audit entry — no separate
+  // audit() call needed here.
   const deleteCaseFromDB = async (caseId) => {
     if(!org?.id) return;
-    const { error } = await supabase.from('cases').delete().eq('id', caseId);
+    const { error } = await supabase.rpc('delete_case', { p_case_id: caseId });
     if(error) { console.error("Delete case error:", error); showToast("Couldn't delete the case — "+error.message, "error"); }
   };
 
@@ -2564,7 +2570,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     };
     setAuditLog(p => [entry, ...p].slice(0, 500)); // optimistic — cloud is the source of truth on next load
     if(org?.id && user?.id) {
-      withFkRetry(() => supabase.from('audit_log').insert({ org_id: org.id, user_id: user.id, user_name: userName, action, detail, case_id: caseId, ai_prepared: aiPrepared, approved_by: approvedBy, data_used: dataUsed }))
+      // Destructive & Decision Authorization hardening (2026-09-13) —
+      // routed through log_audit_event() instead of a direct insert, so
+      // user_id/user_name/case-access are server-derived and unforgeable
+      // rather than trusted from this client call. Zero other call sites
+      // changed — all ~60 callers of audit() funnel through this one line.
+      withFkRetry(() => supabase.rpc('log_audit_event', { p_org_id: org.id, p_action: action, p_detail: detail, p_case_id: caseId, p_ai_prepared: aiPrepared, p_approved_by: approvedBy, p_data_used: dataUsed }))
         .then(({error}) => { if(error) console.error('Audit log sync failed:', error.message); });
     }
   };
@@ -9002,7 +9013,7 @@ Please produce:
       {screen===SCREENS.CASES&&(
         <CasesScreen cases={cases} casesLoading={casesLoading} locations={locations} orgMembers={orgMembers} setIntake={setIntake} setScreen={setScreen} getCaseStage={getCaseStage} setActiveCaseId={setActiveCaseId} setActiveCaseStage={setActiveCaseStage} getNextStep={getNextStep} getProceedingTitle={getProceedingTitle} getCaseStatus={getCaseStatus} saveCases={saveCases} confirmDialog={confirmDialog} showToast={showToast} audit={audit} currentUserId={user?.id}
           deepLink={{ initialFilters: casesDeepLinkFilters, clearInitialFilters: ()=>setCasesDeepLinkFilters(null) }}
-          canCreateCase={member?.case_access_level !== 3} />
+          canCreateCase={member?.case_access_level !== 3} isHR={isHR} />
       )}
 
       {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}

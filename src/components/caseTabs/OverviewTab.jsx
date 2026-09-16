@@ -504,14 +504,25 @@ export function OverviewTab({
         <CaseRiskPanel riskItems={riskItems} onAskWhy={caseActions.onAskWhy} />
       </div>
 
-      <div style={{textAlign:"right",marginTop:SPACE.lg}}>
-        <button onClick={async()=>{
-          const ok = await shell.confirmDialog({title:"Delete case", message:"This will permanently delete this case and all its meeting records. This cannot be undone.", confirmLabel:"Delete", danger:true});
-          if(!ok) return;
-          caseCtx.saveCases(caseCtx.cases.filter(x=>x.id!==cs.id));
-          shell.setScreen(shell.screens.CASES);
-        }} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Delete case</button>
-      </div>
+      {/* Destructive & Decision Authorization hardening (2026-09-13) —
+          case deletion is now HR-only, enforced authoritatively by
+          delete_case() (see App.jsx's deleteCaseFromDB). Hidden here for
+          non-HR rather than left to fail server-side: saveCases updates
+          local case-list state before the DB call resolves (see its own
+          comment), so a guaranteed-to-be-rejected delete would otherwise
+          make the case visibly vanish and then need a reload to reappear.
+          review.isApprover is this screen's existing isHR flag, already
+          threaded through the same review prop bundle used just above. */}
+      {review.isApprover&&(
+        <div style={{textAlign:"right",marginTop:SPACE.lg}}>
+          <button onClick={async()=>{
+            const ok = await shell.confirmDialog({title:"Delete case", message:"This will permanently delete this case and all its meeting records. This cannot be undone.", confirmLabel:"Delete", danger:true});
+            if(!ok) return;
+            caseCtx.saveCases(caseCtx.cases.filter(x=>x.id!==cs.id));
+            shell.setScreen(shell.screens.CASES);
+          }} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Delete case</button>
+        </div>
+      )}
     </>
   );
 }

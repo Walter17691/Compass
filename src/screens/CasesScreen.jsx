@@ -52,7 +52,7 @@ const selectStyle = {fontSize:12,border:`1px solid ${COLOR.border}`,borderRadius
 // this screen always renders from. No second case-list implementation, no
 // new query, no widening of what a user can already see — Insights only
 // ever hands over ids drawn from cases already visible to this same user.
-export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit, currentUserId, deepLink = {}, canCreateCase = true }) {
+export function CasesScreen({ cases, casesLoading, locations, orgMembers, setIntake, setScreen, getCaseStage, setActiveCaseId, setActiveCaseStage, getNextStep, getProceedingTitle, getCaseStatus, saveCases, confirmDialog, showToast, audit, currentUserId, deepLink = {}, canCreateCase = true, isHR = false }) {
   const [selected, setSelected] = useState(new Set());
   const [search, setSearch] = useState("");
   // IA & User Journey pass, §10 — Cases as a work inbox: All/Mine/Needs
@@ -183,7 +183,15 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
   // Warning content, confirmDialog usage, and optimistic concurrency
   // (still one saveCaseToDB call per case, still gated on updated_at) are
   // otherwise unchanged from the existing, already-correct pattern.
+  // Destructive & Decision Authorization hardening (2026-09-13) — case
+  // closure is now HR-only, enforced authoritatively by
+  // protect_case_closure_trigger. This early check just gives a clean
+  // message instead of a raw Postgres error and avoids the case
+  // optimistically vanishing from the list only to fail server-side (see
+  // saveCases' own comment on why cases state updates before the DB call
+  // resolves).
   const bulkClose = async () => {
+    if(!isHR) { showToast("Only HR can close a case.", "error"); return; }
     const chosen = cases.filter(c=>selected.has(c.id));
     const liveDeadlineCaseIds = new Set(computeDueSoon(chosen).map(d=>d.caseId).filter(Boolean));
     const warning = liveDeadlineCaseIds.size > 0
@@ -254,7 +262,7 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
           <div style={{position:"sticky",top:0,zIndex:10,display:"flex",alignItems:"center",gap:12,background:COLOR.ink,borderRadius:RADIUS.surface,padding:"12px 16px",marginBottom:SPACE.lg}}>
             <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{selected.size} selected</span>
             <button onClick={bulkExport} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:FONT.sans}}>Export</button>
-            <button onClick={bulkClose} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:FONT.sans}}>Close</button>
+            {isHR&&<button onClick={bulkClose} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:FONT.sans}}>Close</button>}
             <button onClick={()=>setSelected(new Set())} style={{fontSize:12,background:"none",border:"none",color:COLOR.inkQuiet,cursor:"pointer",marginLeft:"auto",fontFamily:FONT.sans}}>Clear</button>
           </div>
         )}

@@ -329,6 +329,27 @@ describe('CaseViewScreen — case closure safety (Case Closure Safety P0)', () =
     expect(props.shell.showToast).not.toHaveBeenCalledWith('Case closed');
   });
 
+  // Destructive & Decision Authorization hardening (2026-09-13) — case
+  // closure is now HR-only, enforced authoritatively by
+  // protect_case_closure_trigger; requestCloseCase checks isHR before
+  // even the readiness check, so a non-HR user gets a clear denial rather
+  // than a misleading "not ready yet" message.
+  it('blocks a non-HR user from closing a case, even when the case is genuinely ready: no confirm dialog, no save, no audit', async () => {
+    const user = userEvent.setup();
+    const props = closureProps({
+      isHR: false,
+      getNextStep: () => appealReadyNextStep,
+      confirmDialog: vi.fn().mockResolvedValue(true),
+      saveCases: vi.fn().mockResolvedValue({ ok: true }),
+    });
+    render(<CaseViewScreen {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Close case' }));
+    expect(props.shell.confirmDialog).not.toHaveBeenCalled();
+    expect(props.shell.saveCases).not.toHaveBeenCalled();
+    expect(props.shell.audit).not.toHaveBeenCalled();
+    expect(props.shell.showToast).toHaveBeenCalledWith('Only HR can close a case.', 'error');
+  });
+
   it('surfaces open case tasks and live deadlines as warnings inside the same confirmation, not as separate blockers', async () => {
     const user = userEvent.setup();
     const props = {

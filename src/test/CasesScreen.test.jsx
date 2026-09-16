@@ -42,7 +42,11 @@ describe('CasesScreen — field labelling (Phase 6.5, Batch 13)', () => {
 // first case" prompt to an org that may already have thousands.
 // Phase 6.5 hardening (closes Prompt 11 audit findings 5.10/5.11, MEDIUM)
 describe('CasesScreen — bulk actions (Prompt 11 audit, 5.10/5.11)', () => {
-  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, showToast: noop };
+  // Destructive & Decision Authorization hardening (2026-09-13) — bulk
+  // Close is now HR-only; isHR:true here since every test in this block
+  // exercises the Close button as a legitimate HR action. See the
+  // dedicated describe block below for the non-HR-cannot-close coverage.
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, showToast: noop, isHR: true };
   const soon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10); // 3 days from now — always within the 14-day due-soon window
 
   it('warns in the confirm dialog when a selected case has a live deadline (5.10)', async () => {
@@ -162,6 +166,31 @@ describe('CasesScreen — bulk actions (Prompt 11 audit, 5.10/5.11)', () => {
 
     await user.click(screen.getByLabelText('Select Sam Employee'));
     await expect(user.click(screen.getByRole('button', { name: 'Export' }))).resolves.not.toThrow();
+  });
+});
+
+// Destructive & Decision Authorization hardening (2026-09-13) — case
+// closure is now HR-only, enforced authoritatively by
+// protect_case_closure_trigger; the bulk "Close" button is hidden for
+// non-HR (isHR defaults to false) rather than left to fail server-side,
+// per the review's own "UI should reflect the authoritative rule" note.
+describe('CasesScreen — bulk close is hidden for non-HR (Destructive & Decision Authorization)', () => {
+  const baseProps = { locations: [], orgMembers: [], setIntake: noop, setScreen: noop, getCaseStage: ()=>"open", setActiveCaseId: noop, setActiveCaseStage: noop, getNextStep: ()=>null, getProceedingTitle: cs=>cs.employeeName, getCaseStatus: ()=>"active", saveCases: noop, showToast: noop, confirmDialog: noop };
+  const oneCase = [{ id: 'c1', employeeName: 'Sam Employee', caseType: 'misconduct', stage: 'open' }];
+
+  it('does not render the bulk Close button for a non-HR user, even with cases selected', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={oneCase} isHR={false} />);
+    await user.click(screen.getByLabelText('Select Sam Employee'));
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument();
+  });
+
+  it('renders the bulk Close button for an HR user with cases selected', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={oneCase} isHR={true} />);
+    await user.click(screen.getByLabelText('Select Sam Employee'));
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 });
 

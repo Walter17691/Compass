@@ -193,3 +193,21 @@ describe('OverviewTab — card order (Phase 7.5B, item 4)', () => {
     expect(text.indexOf('Employee raised a concern about a colleague.')).toBeLessThan(text.indexOf('Risk & tribunal exposure'));
   });
 });
+
+// Destructive & Decision Authorization hardening (2026-09-13) — case
+// deletion is now HR-only, enforced authoritatively by delete_case()
+// (App.jsx's deleteCaseFromDB). The "Delete case" button is hidden for
+// non-HR rather than left to fail server-side. review.isApprover is this
+// screen's existing isHR flag (defaults to false in baseProps above — no
+// prior test in this file ever exercised this button at all).
+describe('OverviewTab — Delete case is HR-only (Destructive & Decision Authorization)', () => {
+  it('does not render "Delete case" for a non-HR user', () => {
+    render(<OverviewTab {...baseProps} />);
+    expect(screen.queryByRole('button', { name: 'Delete case' })).not.toBeInTheDocument();
+  });
+
+  it('renders "Delete case" for an HR user', () => {
+    render(<OverviewTab {...baseProps} review={{ ...baseProps.review, isApprover: true }} />);
+    expect(screen.getByRole('button', { name: 'Delete case' })).toBeInTheDocument();
+  });
+});

@@ -321,6 +321,17 @@ export function CaseViewScreen({
   // is declared with the component's other hooks, above the early return.
   const requestCloseCase = async ({ allowNoCase = false, closeReasonLabel = null, afterClose = null } = {}) => {
     if (closingCase) return;
+    // Destructive & Decision Authorization hardening (2026-09-13) — case
+    // closure is now HR-only, enforced authoritatively by
+    // protect_case_closure_trigger. Checked here, before the readiness
+    // check, so a non-HR user gets a clear "you can't" message rather
+    // than the misleading "not ready yet" one (which implies it would
+    // work once ready). This is the single gate both the "Suggested next
+    // step" close-case button and the appeal-stage standalone Close
+    // button go through — neither is individually role-gated, since the
+    // former also handles other, non-close next-step actions that remain
+    // available to non-HR users.
+    if (!isHR) { showToast("Only HR can close a case.", "error"); return; }
     const primaryReady = nextStep?.action === "close_case";
     const secondaryReady = allowNoCase && nextStep?.secondary?.action === "close_no_case";
     if (!primaryReady && !secondaryReady) {
