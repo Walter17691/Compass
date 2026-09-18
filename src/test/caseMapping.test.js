@@ -51,6 +51,7 @@ describe('mapCaseRow', () => {
     suspension_review_date: '2026-08-06',
     investigation_paused: true,
     oh_process: 'referred',
+    appeal_text: 'I believe the decision was too severe given my record.',
   };
 
   it('maps every snake_case column to its camelCase field, values preserved', () => {
@@ -97,6 +98,7 @@ describe('mapCaseRow', () => {
       suspensionReviewDate: '2026-08-06',
       investigationPaused: true,
       ohProcess: 'referred',
+      appealText: 'I believe the decision was too severe given my record.',
     });
   });
 
@@ -145,6 +147,7 @@ describe('mapCaseRow', () => {
       suspensionReviewDate: null,
       investigationPaused: false,
       ohProcess: null,
+      appealText: '',
     });
   });
 
@@ -174,7 +177,7 @@ describe('mapCaseRow', () => {
   // failing because the real select list changed, that's the signal to
   // update this copy AND check mapCaseRow wasn't left behind.
   it('maps every column loadCasesFromDB actually selects — a stale copy of its own select() list', () => {
-    const selectedColumns = 'id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority'.split(',');
+    const selectedColumns = 'id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority,appeal_text'.split(',');
     const row = Object.fromEntries(selectedColumns.map(col => [col, `SENTINEL:${col}`]));
     // meetings/evidence/next_steps/timeline_overrides genuinely aren't
     // strings on a real row (jsonb/array columns) — a string sentinel for

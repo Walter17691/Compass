@@ -1,0 +1,74 @@
+-- ============================================================================
+-- Appeal receipt grounds — 2026-09-18 (Appeal UAT: record-appeal save flow)
+--
+-- "Employee is appealing" already durably transitions cases.stage to
+-- 'appeal' the moment HR records the appeal (recordAppealReceived,
+-- App.jsx — deadline-checked and audited) — but the employee's own appeal
+-- text typed into that same panel was only ever merged into the in-memory
+-- case object and the compass_cases localStorage cache, never written to
+-- this table: there is no column for it, saveCaseToDB's payload doesn't
+-- include it, and mapCaseRow doesn't restore it. A browser refresh (or
+-- the next loadCasesFromDB re-fetch, which always wins over the local
+-- cache) silently discards it — unacceptable for an authoritative HR
+-- record.
+--
+-- Named appeal_text (not appeal_grounds/appeal_reasoning) for two
+-- reasons: (1) exact 1:1 correspondence with the client's own appealText
+-- state (App.jsx), matching this schema's established camelCase<->
+-- snake_case convention throughout (outcomeIssuedAt<->outcome_issued_at,
+-- warningDurationMonths<->warning_duration_months, etc.); (2)
+-- appeal_reasoning already exists on this table
+-- (appeal_review_2026-08-12.sql) for a different, later-stage concept —
+-- HR's own reasoning when DECIDING the appeal outcome — and
+-- lib/appealReview.js separately encodes a per-issue "ground of appeal"
+-- structure inside case_signals.reasoning for AI-assisted appeal review.
+-- appeal_text avoids colliding with either: it is specifically and only
+-- the employee's own raw appeal statement as recorded at receipt time,
+-- verbatim, nothing derived or structured.
+--
+-- Additive and nullable — every existing case (including any already in
+-- stage='appeal') remains valid with no backfill. Historical appeal
+-- grounds cannot be reliably recovered from meeting transcripts, letters,
+-- or AI-generated text (recordAppealReceived never captured this before
+-- today), so this deliberately stays NULL for every pre-existing case
+-- rather than inferring/fabricating a value — see the accompanying
+-- review's own note on production rows already in stage='appeal'.
+-- ============================================================================
+
+alter table public.cases
+  add column if not exists appeal_text text null;
+
+comment on column public.cases.appeal_text is
+  'Employee''s recorded grounds/reason for appeal, entered verbatim by HR via the "Employee is appealing" panel at the moment the appeal is received. Distinct from appeal_reasoning (HR''s own reasoning when later deciding the appeal outcome) and from the per-issue "ground of appeal" structure lib/appealReview.js encodes inside case_signals.reasoning for AI-assisted appeal review — this column is the original, unstructured, HR-entered statement only. Null when no appeal has been recorded, and for any appeal recorded before this column existed (no reliable historical source to backfill from).';
+
+-- No new trigger or policy change needed, and none added here.
+--
+-- The existing "Case write access scoped by case_access_level" RESTRICTIVE
+-- policy (three_level_case_access_2026-09-13.sql) already governs every
+-- UPDATE to this table, including cases.stage itself — there is no
+-- additional HR-only gate on the appeal-received transition today
+-- (confirmed against the live code: the "Employee is appealing" button
+-- and recordAppealReceived() carry no isHR/role check at all; any
+-- case_access_level 1/2/3 holder who can already write this case can
+-- already set stage='appeal'). appeal_text is written in the exact same
+-- single UPDATE statement as stage (App.jsx's saveCaseToDB builds one
+-- payload object covering both), so giving appeal_text a stricter,
+-- HR-only gate — e.g. adding it to protect_case_hr_only_columns, which
+-- guards outcome/outcome_issued_at/outcome_notes/warning_duration_months/
+-- warning_expires_at specifically because ONLY HR or the case's
+-- disciplinary_officer may ever set those — would create a broken,
+-- inconsistent state: a non-HR case_access holder could set
+-- stage='appeal' in that same statement but have appeal_text silently
+-- rejected by the trigger, reintroducing exactly the "stage saved but
+-- content silently lost" risk this migration exists to close.
+--
+-- appeal_text therefore intentionally matches stage's existing
+-- protection tier (the general case_access_level policy), not outcome's
+-- stricter one. It is still fully covered by every existing cases-wide
+-- protection that has nothing to do with column identity:
+--   - block_auditor_write_cases (auditor_read_only_enforcement_
+--     2026-08-26.sql) unconditionally rejects any write to this row from
+--     an 'auditor'-role member, regardless of which columns changed.
+--   - Both the permissive and restrictive cases policies are org_id-
+--     scoped, so tenant isolation and Level 1/2/3 visibility apply to
+--     this column exactly as they already do to every other case field.

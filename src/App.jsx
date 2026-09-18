@@ -1264,7 +1264,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // across requests, or rows can be skipped or duplicated between
       // pages.
       const { data, error } = await fetchAllPages((from, to) => supabase.from('cases')
-        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority')
+        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority,appeal_text')
         .eq('org_id', org.id)
         .order('created_at', { ascending: false })
         .range(from, to));
@@ -1350,6 +1350,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         oh_process: caseObj.ohProcess || null,
         suspension_review_date: caseObj.suspensionReviewDate || null,
         investigation_paused: caseObj.investigationPaused || false,
+        // Appeal UAT remediation (2026-09-18) — see supabase/appeal_
+        // receipt_grounds_2026-09-18.sql. Written in this same payload/
+        // same statement as stage, so an appeal's stage transition and
+        // its grounds text always land together or not at all.
+        appeal_text: caseObj.appealText || null,
         updated_at: nowIso,
       };
 
@@ -4306,7 +4311,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const accepted = await requestLateAppealAcceptance(promptDialog, audit, { deadline, caseId });
       if (!accepted) return false;
     }
-    saveCases(cases.map(x => x.id === caseId ? { ...x, stage: "appeal", ...applyFields } : x), caseId);
+    // Appeal UAT remediation (2026-09-18) — this used to fire-and-forget
+    // saveCases and report success unconditionally, so a failed/blocked
+    // DB write (e.g. a dropped connection, or the optimistic-concurrency
+    // conflict check in saveCaseToDB) would still create the "Appeal
+    // received" audit entry and tell the caller it succeeded, even though
+    // nothing was actually persisted. saveCases already returns the real
+    // saveCaseToDB Promise<{ok,...}> when given a changedId — awaiting it
+    // here means the audit only ever follows a genuinely landed write,
+    // and the caller (the "Save appeal" button) only reports success once
+    // stage and appeal_text have actually committed together, in the one
+    // atomic UPDATE saveCaseToDB already builds for every case field.
+    const result = await saveCases(cases.map(x => x.id === caseId ? { ...x, stage: "appeal", ...applyFields } : x), caseId);
+    if (!result?.ok) return false;
     audit("Appeal received", cs.employeeName || "", caseId);
     return true;
   };

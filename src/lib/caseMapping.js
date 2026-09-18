@@ -49,5 +49,9 @@ export function mapCaseRow(row) {
     suspensionReviewDate: row.suspension_review_date || null,
     investigationPaused: row.investigation_paused || false,
     ohProcess: row.oh_process || null,
+    // Appeal UAT remediation (2026-09-18) — see supabase/appeal_receipt_
+    // grounds_2026-09-18.sql. Null for cases with no appeal recorded, or
+    // recorded before this column existed.
+    appealText: row.appeal_text || "",
   };
 }

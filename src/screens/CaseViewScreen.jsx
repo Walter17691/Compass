@@ -732,23 +732,32 @@ export function CaseViewScreen({
       )}
       {showAppealInput[cs.id]&&(
         <div style={{background:"#FEF5E7",borderBottom:"1px solid #F5E6C4",padding:"14px 28px",flexShrink:0}}>
-          <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Paste the employee appeal — Compass will use this for the appeal hearing:</div>
+          <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Record the employee's appeal grounds:</div>
           <textarea aria-label="Employee appeal text" value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))} rows={3} style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:FONT.sans,boxSizing:"border-box",marginBottom:8}}/>
           <div style={{display:"flex",gap:8}}>
+            {/* Appeal UAT remediation (2026-09-18) — this used to be
+                "Start appeal and send invitation", which recorded the
+                appeal AND immediately navigated into the AI letter
+                composer as one inseparable action — the authoritative
+                appeal-received event (stage + audit) was already fully
+                persisted before that navigation happened, but there was
+                no way to record the appeal and stop there. Save appeal
+                now does exactly what recordAppealReceived already does on
+                its own: persist stage="appeal" and the grounds text in
+                one atomic write, log "Appeal received", and close this
+                panel — no meeting context, no AI call, no screen
+                navigation. Preparing the appeal hearing invitation
+                remains fully reachable afterward via the case's own
+                existing "Suggested next step: Start appeal hearing"
+                action (getNextStep, lib/nextStep.js — already resolves to
+                meetingType:"appeal-disciplinary" the moment stage is
+                "appeal"), so nothing about reaching the invitation is
+                lost by removing the combined shortcut. */}
             <button onClick={async ()=>{
-              // Routed through recordAppealReceived (2026-09-16) — the one
-              // authoritative "appeal received" transition, deadline-
-              // checked and audited. A cancelled late-appeal reason prompt
-              // aborts here: the invite is never drafted/sent and the
-              // input stays open, rather than half-applying the stage
-              // change with no record of why a late appeal was accepted.
               const ok = await recordAppealReceived(cs.id, { appealText: appealText[cs.id] || "" });
               if(!ok) return;
               setShowAppealInput(p=>({...p,[cs.id]:false}));
-              setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));
-              setMeetingType(MEETING_TYPES.find(t=>t.id==="appeal-disciplinary")||null);
-              handleLetter("invite",{employeeName:cs.employeeName,manager:cs.manager||""});
-            }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Start appeal and send invitation</button>
+            }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Save appeal</button>
             <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
           </div>
         </div>
@@ -773,6 +782,20 @@ export function CaseViewScreen({
               Close case
             </button>
           </div>
+          {/* Appeal UAT remediation (2026-09-18) — the durably-persisted
+              grounds (cases.appeal_text), displayed concisely in the same
+              existing appeal-stage bar rather than a new permanent
+              Overview section. Read-only: once stage is "appeal" the
+              recording panel above no longer renders, and there is no
+              other control that writes this field — see the migration's
+              own header for why an audited edit model wasn't built for
+              Release 1.0. */}
+          {cs.appealText&&(
+            <div style={{fontSize:12,color:"#6B6375",width:"100%"}}>
+              <span style={{fontWeight:600,color:"#9B9098"}}>Appeal grounds: </span>
+              {cs.appealText.length>200?cs.appealText.slice(0,200)+"…":cs.appealText}
+            </div>
+          )}
         </div>
       )}
 

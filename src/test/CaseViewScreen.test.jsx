@@ -554,36 +554,110 @@ describe('CaseViewScreen — appeal-in-progress banner (Independent appeal offic
 // Independent appeal officer workflow (2026-09-16) — "Employee is
 // appealing" used to write stage:"appeal" directly with no deadline check
 // and no audit trail. It's now routed through recordAppealReceived
-// (App.jsx), and this button must not proceed to draft/send the hearing
-// invitation if that's declined (e.g. a late-appeal reason prompt was
-// cancelled) — half-applying the transition (invite sent, no actual
-// stage change recorded) would be worse than not proceeding at all.
-describe('CaseViewScreen — "Employee is appealing" routes through recordAppealReceived', () => {
+// (App.jsx).
+//
+// Appeal UAT remediation (2026-09-18) — the combined "Start appeal and
+// send invitation" button (record + immediately open the AI letter
+// composer as one inseparable action) is replaced by a standalone "Save
+// appeal" button: recordAppealReceived is the one authoritative "appeal
+// received" transition (deadline-checked, audited, and — as of this
+// remediation — durably persists the grounds text too), and Save appeal
+// must record it and stop, never drafting/sending an invitation, setting
+// meeting context, or navigating anywhere. Preparing the appeal hearing
+// invitation remains reachable afterward via the case's own existing
+// "Suggested next step" mechanism (lib/nextStep.js), not tested here —
+// see nextStep.test.js for that coverage.
+describe('CaseViewScreen — "Employee is appealing" routes through recordAppealReceived (Save appeal)', () => {
   const closedCase = { ...cs, meetings: [] };
 
-  it('calls recordAppealReceived with the case id and the pasted appeal text, and proceeds to draft the invite on success', async () => {
+  it('calls recordAppealReceived with the case id and the pasted appeal text', async () => {
+    const user = userEvent.setup();
+    const recordAppealReceived = vi.fn().mockResolvedValue(true);
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed' }}
+      header={{ ...baseProps.header, showAppealInput: { c1: true }, appealText: { c1: 'I want to appeal this decision.' }, recordAppealReceived }}
+    />);
+    await user.click(screen.getByRole('button', { name: 'Save appeal' }));
+    expect(recordAppealReceived).toHaveBeenCalledWith('c1', { appealText: 'I want to appeal this decision.' });
+  });
+
+  it('does not draft a letter, does not set meeting context, and does not navigate — Save appeal records and stops', async () => {
     const user = userEvent.setup();
     const recordAppealReceived = vi.fn().mockResolvedValue(true);
     const handleLetter = vi.fn();
+    const setMeetingType = vi.fn();
+    const setCaseInfo = vi.fn();
+    const setScreen = vi.fn();
     render(<CaseViewScreen {...baseProps}
-      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed', handleLetter }}
+      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed', handleLetter, setMeetingType, setCaseInfo, setScreen }}
       header={{ ...baseProps.header, showAppealInput: { c1: true }, appealText: { c1: 'I want to appeal this decision.' }, recordAppealReceived }}
     />);
-    await user.click(screen.getByRole('button', { name: 'Start appeal and send invitation' }));
-    expect(recordAppealReceived).toHaveBeenCalledWith('c1', { appealText: 'I want to appeal this decision.' });
-    expect(handleLetter).toHaveBeenCalledWith('invite', expect.objectContaining({ employeeName: 'Sam Employee' }));
+    await user.click(screen.getByRole('button', { name: 'Save appeal' }));
+    expect(handleLetter).not.toHaveBeenCalled();
+    expect(setMeetingType).not.toHaveBeenCalled();
+    expect(setScreen).not.toHaveBeenCalled();
   });
 
-  it('does not draft/send the invite when recordAppealReceived resolves false (e.g. a late-appeal reason prompt was cancelled)', async () => {
+  it('closes the appeal-input panel on success', async () => {
+    const user = userEvent.setup();
+    const recordAppealReceived = vi.fn().mockResolvedValue(true);
+    const setShowAppealInput = vi.fn();
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed' }}
+      header={{ ...baseProps.header, showAppealInput: { c1: true }, appealText: { c1: 'I want to appeal this decision.' }, recordAppealReceived, setShowAppealInput }}
+    />);
+    await user.click(screen.getByRole('button', { name: 'Save appeal' }));
+    expect(setShowAppealInput).toHaveBeenCalledWith(expect.any(Function));
+    expect(setShowAppealInput.mock.calls[0][0]({ c1: true })).toEqual({ c1: false });
+  });
+
+  it('leaves the panel open and records nothing further when recordAppealReceived resolves false (e.g. a late-appeal reason prompt was cancelled)', async () => {
     const user = userEvent.setup();
     const recordAppealReceived = vi.fn().mockResolvedValue(false);
-    const handleLetter = vi.fn();
+    const setShowAppealInput = vi.fn();
     render(<CaseViewScreen {...baseProps}
-      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed', handleLetter }}
+      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed' }}
+      header={{ ...baseProps.header, showAppealInput: { c1: true }, appealText: { c1: 'I want to appeal this decision.' }, recordAppealReceived, setShowAppealInput }}
+    />);
+    await user.click(screen.getByRole('button', { name: 'Save appeal' }));
+    expect(recordAppealReceived).toHaveBeenCalled();
+    expect(setShowAppealInput).not.toHaveBeenCalled();
+  });
+
+  it('does not create a meeting — no meeting-setup handler is invoked by Save appeal', async () => {
+    const user = userEvent.setup();
+    const recordAppealReceived = vi.fn().mockResolvedValue(true);
+    const setMeetingSetup = vi.fn();
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [closedCase], getCaseStage: () => 'closed', setMeetingSetup }}
       header={{ ...baseProps.header, showAppealInput: { c1: true }, appealText: { c1: 'I want to appeal this decision.' }, recordAppealReceived }}
     />);
-    await user.click(screen.getByRole('button', { name: 'Start appeal and send invitation' }));
-    expect(recordAppealReceived).toHaveBeenCalled();
-    expect(handleLetter).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Save appeal' }));
+    expect(setMeetingSetup).not.toHaveBeenCalled();
+  });
+});
+
+// Appeal UAT remediation (2026-09-18) — the persisted grounds
+// (cases.appeal_text) are displayed concisely inside the existing
+// appeal-in-progress bar once recorded.
+describe('CaseViewScreen — appeal grounds display', () => {
+  it('displays the persisted appeal grounds once the case is in the appeal stage', () => {
+    const caseWithGrounds = { ...cs, meetings: [], appealText: 'The sanction was too severe given my record.' };
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [caseWithGrounds], getCaseStage: () => 'appeal', isHR: true }} />);
+    expect(screen.getByText(/The sanction was too severe given my record\./)).toBeInTheDocument();
+  });
+
+  it('does not render an "Appeal grounds" line when none was recorded', () => {
+    const caseWithoutGrounds = { ...cs, meetings: [], appealText: '' };
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [caseWithoutGrounds], getCaseStage: () => 'appeal', isHR: true }} />);
+    expect(screen.queryByText('Appeal grounds:')).not.toBeInTheDocument();
+  });
+
+  it('truncates very long grounds text rather than growing the bar unboundedly', () => {
+    const longText = 'A'.repeat(250);
+    const caseWithLongGrounds = { ...cs, meetings: [], appealText: longText };
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [caseWithLongGrounds], getCaseStage: () => 'appeal', isHR: true }} />);
+    expect(screen.getByText(/A{200}…/)).toBeInTheDocument();
+    expect(screen.queryByText(longText)).not.toBeInTheDocument();
   });
 });
