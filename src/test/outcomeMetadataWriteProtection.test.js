@@ -34,6 +34,12 @@ const OUTCOME_METADATA_COLUMNS = [
   'outcome_notes',
   'warning_duration_months',
   'warning_expires_at',
+  // Appeal Independence P1 (2026-09-18) — added to the SAME OR-chained
+  // guard in supabase/appeal_independence_decision_maker_2026-09-18.sql,
+  // since disciplinary_decided_by is written in the exact same atomic
+  // saveCases() call as outcome/outcomeIssuedAt/etc. by
+  // OutcomeModal.finalizeOutcome() — one shared boundary, not a new one.
+  'disciplinary_decided_by',
 ];
 
 describe('protect_case_hr_only_columns — outcome metadata boundary (Defect #12/#14)', () => {
@@ -100,5 +106,11 @@ describe('protect_case_hr_only_columns — outcome metadata boundary (Defect #12
     // replacement with different semantics.
     expect(outcomeMetadataWriteAllowedByTrigger({ role: 'hr_manager', isDisciplinaryOfficer: false })).toBe(true);
     expect(outcomeMetadataWriteAllowedByTrigger({ role: 'auditor', isDisciplinaryOfficer: false })).toBe(false);
+  });
+
+  it('an unauthorized role cannot manipulate disciplinary_decided_by directly, even knowing its column name — same guard as the rest of outcome metadata, no separate weaker path exists for it', () => {
+    expect(outcomeMetadataWriteAllowedByTrigger({ role: 'location_manager', isDisciplinaryOfficer: false })).toBe(false);
+    expect(outcomeMetadataWriteAllowedByTrigger({ role: 'auditor', isDisciplinaryOfficer: false })).toBe(false);
+    expect(outcomeMetadataWriteAllowedByTrigger({ role: 'investigator', isDisciplinaryOfficer: false })).toBe(false);
   });
 });

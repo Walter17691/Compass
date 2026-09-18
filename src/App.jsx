@@ -1264,7 +1264,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // across requests, or rows can be skipped or duplicated between
       // pages.
       const { data, error } = await fetchAllPages((from, to) => supabase.from('cases')
-        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority,appeal_text')
+        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority,appeal_text,disciplinary_decided_by')
         .eq('org_id', org.id)
         .order('created_at', { ascending: false })
         .range(from, to));
@@ -1355,6 +1355,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         // same statement as stage, so an appeal's stage transition and
         // its grounds text always land together or not at all.
         appeal_text: caseObj.appealText || null,
+        // Appeal Independence P1 (2026-09-18) — see supabase/appeal_
+        // independence_decision_maker_2026-09-18.sql. Set by OutcomeModal
+        // alongside outcome/outcomeIssuedAt/etc. in this same call, never
+        // touched by any other write path.
+        disciplinary_decided_by: caseObj.disciplinaryDecidedBy || null,
         updated_at: nowIso,
       };
 
@@ -9565,6 +9570,7 @@ Please produce:
           audit={audit}
           completingOutcomeDetails={completingOutcomeDetails}
           setCompletingOutcomeDetails={setCompletingOutcomeDetails}
+          currentUserId={user?.id || null}
         />
       )}
       </div>

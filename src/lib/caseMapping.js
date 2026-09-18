@@ -53,5 +53,11 @@ export function mapCaseRow(row) {
     // grounds_2026-09-18.sql. Null for cases with no appeal recorded, or
     // recorded before this column existed.
     appealText: row.appeal_text || "",
+    // Appeal Independence P1 (2026-09-18) — see supabase/appeal_
+    // independence_decision_maker_2026-09-18.sql. The authoritative
+    // decision-maker for the meeting/outcome-letter pathway; null for
+    // cases decided before this column existed or decided solely via the
+    // Allegations-tab workflow (allegations.decided_by covers that path).
+    disciplinaryDecidedBy: row.disciplinary_decided_by || null,
   };
 }

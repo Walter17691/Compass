@@ -26,17 +26,37 @@ function normalizedCaseType(cs) {
   return (cs?.caseType||"").trim().toLowerCase();
 }
 
-export function getNextStep(cs) {
+// Appeal Independence P1 (2026-09-18) — ctx is optional and additive
+// (every existing caller that omits it, e.g. App.jsx's generateNextBestAction
+// AI-prompt floor check, keeps its exact prior behaviour: ctx.hasAppealManager
+// is undefined/falsy, same as "no officer" would be, which only ever changes
+// the *label* offered, never blocks anything). ctx.isHR gates the new
+// "Appoint appeal officer" suggestion specifically — a non-HR viewer sees the
+// unchanged "Start appeal hearing" suggestion, matching the existing isHR-only
+// gating on the manual "Appoint appeal officer" button in the same bar
+// (CaseViewScreen.jsx), so this doesn't introduce an inconsistent UX where one
+// entry point is hidden from non-HR users and the other isn't.
+export function getNextStep(cs, ctx = {}) {
   const stage = getCaseStage(cs);
   if(stage==="closed") return null;
   const type = normalizedCaseType(cs);
   if(type==="probation") return probationNextStep(stage);
-  if(type==="flexible working"||type==="flexible_working") return flexibleWorkingNextStep(stage);
+  if(type==="flexible working"||type==="flexible_working") return flexibleWorkingNextStep(stage, ctx);
   if(type==="long-term sickness"||type==="long term sickness"||type==="long_term_sickness") return longTermSicknessNextStep(stage);
-  return isGrievanceCase(cs) ? grievanceNextStep(cs, stage) : disciplinaryNextStep(cs, stage);
+  return isGrievanceCase(cs) ? grievanceNextStep(cs, stage, ctx) : disciplinaryNextStep(cs, stage, ctx);
 }
 
-function disciplinaryNextStep(cs, stage) {
+// Shared by disciplinaryNextStep/grievanceNextStep/flexibleWorkingNextStep's
+// own "appeal" branches — one appointment-sequencing rule, not three
+// independently-maintained copies. Reads only ctx (never a second source of
+// truth for appeal-manager state — callers derive ctx.hasAppealManager from
+// the same case_access array CaseViewScreen already reads for appealManagerName).
+function appointOfficerStepIfNeeded(ctx) {
+  if(ctx.hasAppealManager || !ctx.isHR) return null;
+  return {label:"Appoint appeal officer", action:"appoint_appeal_officer", meetingType:null, primary:true, reason:"An appeal has been raised — ACAS guidance expects an impartial appeal officer to be appointed before the hearing is arranged."};
+}
+
+function disciplinaryNextStep(cs, stage, ctx = {}) {
   const meetings = cs.meetings||[];
   const invMeetings = meetings.filter(m=>isInvestigationMeeting(m.type));
   const discMeetings = meetings.filter(m=>isDisciplinaryMeeting(m.type));
@@ -87,11 +107,14 @@ function disciplinaryNextStep(cs, stage) {
       // missing, only offer to close once it's actually been saved.
       if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", meetingType:"disciplinary", primary:true, reason:"ACAS Code: confirm the decision in writing, normally within 5 working days of the hearing."};
       return {label:"Close case", action:"close_case", meetingType:"disciplinary", primary:true, reason:"Outcome has been issued and no appeal is in progress."};
-    case "appeal":
+    case "appeal": {
+      const appointStep = appointOfficerStepIfNeeded(ctx);
+      if(appointStep) return appointStep;
       if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-disciplinary", primary:true, reason:"An appeal has been raised but not yet heard."};
       if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-disciplinary", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-disciplinary", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
       return {label:"Appeal outcome issued — close case", action:"close_case", meetingType:"appeal-disciplinary", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
+    }
     default:
       return null;
   }
@@ -101,7 +124,7 @@ function disciplinaryNextStep(cs, stage) {
 // disciplinary does — one meeting type ("grievance") covers the hearing
 // itself, so this collapses to a single "hearing" stage instead of
 // disciplinary's investigation -> inv_report -> disciplinary chain.
-function grievanceNextStep(cs, stage) {
+function grievanceNextStep(cs, stage, ctx = {}) {
   const meetings = cs.meetings||[];
   const hearingMeetings = meetings.filter(m=>isGrievanceMeeting(m.type));
   const appealMeetings = meetings.filter(m=>isAppealMeeting(m.type));
@@ -125,11 +148,14 @@ function grievanceNextStep(cs, stage) {
       // letter has been saved).
       if(!hasHearingOutcome) return {label:"Draft grievance outcome letter", action:"outcome_letter", meetingType:"grievance", primary:true, reason:"ACAS Code: confirm the outcome in writing without unreasonable delay."};
       return {label:"Close case", action:"close_case", meetingType:"grievance", primary:true, reason:"Outcome has been issued and no appeal is in progress."};
-    case "appeal":
+    case "appeal": {
+      const appointStep = appointOfficerStepIfNeeded(ctx);
+      if(appointStep) return appointStep;
       if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-grievance", primary:true, reason:"An appeal has been raised but not yet heard."};
       if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-grievance", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-grievance", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
       return {label:"Appeal outcome issued — close case", action:"close_case", meetingType:"appeal-grievance", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
+    }
     default:
       return null;
   }
@@ -159,7 +185,7 @@ function probationNextStep(stage) {
 }
 
 // P2 — statutory flexible working request, regular case flow.
-function flexibleWorkingNextStep(stage) {
+function flexibleWorkingNextStep(stage, ctx = {}) {
   switch(stage) {
     case "request_received":
       return {label:"Assess the request", action:"assessment", meetingType:"formal", primary:true, reason:"A statutory flexible working request must be considered in a reasonable manner."};
@@ -169,8 +195,11 @@ function flexibleWorkingNextStep(stage) {
       return {label:"Confirm the decision in writing", action:"decision", meetingType:"formal", primary:true, reason:"The decision, and any business reason for refusal, should be confirmed in writing within the statutory timeframe."};
     case "decision":
       return {label:"Close case", action:"close_case", meetingType:"formal", primary:true, reason:"Decision has been issued and no appeal is in progress."};
-    case "appeal":
+    case "appeal": {
+      const appointStep = appointOfficerStepIfNeeded(ctx);
+      if(appointStep) return appointStep;
       return {label:"Hear the appeal", action:"start_appeal_meeting", meetingType:"formal", primary:true, reason:"An appeal has been raised against the flexible working decision."};
+    }
     default:
       return null;
   }

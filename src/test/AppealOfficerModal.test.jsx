@@ -84,6 +84,49 @@ describe('AppealOfficerModal — appointment (no current officer)', () => {
     expect(appointAppealManager).toHaveBeenCalledTimes(1);
   });
 
+  // Appeal Independence P1 (2026-09-18) — legacy-case path: no recorded
+  // decision-maker exists anywhere to check the proposed officer against,
+  // distinct from 'conflict' (which asserts a known match). Mirrors the
+  // conflict flow's own test shape exactly, since the UI pattern (mandatory
+  // reason, distinct copy, "Choose someone else" escape hatch) is deliberately
+  // the same.
+  it('shows a legacy "no verified independence" prompt and required-confirmation flow when the RPC reports INDEPENDENCE_UNKNOWN', async () => {
+    const user = userEvent.setup();
+    const appointAppealManager = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: 'INDEPENDENCE_UNKNOWN: This case has no recorded original decision-maker to check Tom Norton against.' });
+    const onClose = vi.fn();
+    render(<AppealOfficerModal {...baseProps} appointAppealManager={appointAppealManager} onClose={onClose} />);
+    await user.selectOptions(screen.getByLabelText('Select appeal officer'), 'u2');
+    await user.click(screen.getByRole('button', { name: 'Appoint' }));
+
+    expect(screen.getByText(/no recorded original decision-maker/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    // Not the conflict copy/button — this is its own distinct mode.
+    expect(screen.queryByRole('button', { name: 'Proceed exceptionally' })).not.toBeInTheDocument();
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirm and proceed' });
+    expect(confirmButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText('Confirmation'), 'Checked the paper file — predates the system, no conflict.');
+    expect(confirmButton).not.toBeDisabled();
+
+    appointAppealManager.mockResolvedValueOnce({ ok: true });
+    await user.click(confirmButton);
+    expect(appointAppealManager).toHaveBeenLastCalledWith('c1', 'u2', 'Checked the paper file — predates the system, no conflict.');
+  });
+
+  it('lets HR back out of the "no verified independence" prompt via "Choose someone else" without appointing anyone', async () => {
+    const user = userEvent.setup();
+    const appointAppealManager = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: 'INDEPENDENCE_UNKNOWN: This case has no recorded original decision-maker to check Tom Norton against.' });
+    render(<AppealOfficerModal {...baseProps} appointAppealManager={appointAppealManager} />);
+    await user.selectOptions(screen.getByLabelText('Select appeal officer'), 'u2');
+    await user.click(screen.getByRole('button', { name: 'Appoint' }));
+    await user.click(screen.getByRole('button', { name: 'Choose someone else' }));
+    expect(screen.getByLabelText('Select appeal officer')).toBeInTheDocument();
+    expect(appointAppealManager).toHaveBeenCalledTimes(1);
+  });
+
   it('shows an error toast, without closing, for any other appointment failure', async () => {
     const user = userEvent.setup();
     const appointAppealManager = vi.fn().mockResolvedValue({ ok: false, error: 'Only an HR Director or HR Manager can appoint, replace, or revoke an appeal officer' });

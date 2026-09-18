@@ -551,6 +551,47 @@ describe('CaseViewScreen — appeal-in-progress banner (Independent appeal offic
   });
 });
 
+// Appeal Independence P1 (2026-09-18) — the suggested-next-step wiring:
+// getNextStep is called with the same case_access-derived appeal_manager
+// state the banner above already reads (no second source of truth), and
+// when it returns the new "appoint_appeal_officer" action, the suggested
+// action itself must actually open AppealOfficerModal — not just relabel
+// a button that still routes to the old meeting-setup flow.
+describe('CaseViewScreen — suggested next step "Appoint appeal officer" (Appeal Independence P1)', () => {
+  const appealCase = { ...cs, meetings: [] };
+
+  it('calls the getNextStep prop with hasAppealManager:false and isHR when no appeal_manager case_access row exists', () => {
+    const getNextStep = vi.fn().mockReturnValue({ label: 'Start appeal hearing', action: 'start_appeal_meeting', meetingType: 'appeal-disciplinary', primary: true });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess: [], getNextStep }} />);
+    expect(getNextStep).toHaveBeenCalledWith(appealCase, { hasAppealManager: false, isHR: true });
+  });
+
+  it('calls the getNextStep prop with hasAppealManager:true when an appeal_manager case_access row exists for this case — the same array the "Officer:" banner already reads, not a second source of truth', () => {
+    const getNextStep = vi.fn().mockReturnValue({ label: 'Start appeal hearing', action: 'start_appeal_meeting', meetingType: 'appeal-disciplinary', primary: true });
+    const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
+    const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah' }];
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep }} />);
+    expect(getNextStep).toHaveBeenCalledWith(appealCase, { hasAppealManager: true, isHR: true });
+  });
+
+  it('when the suggested next step is "appoint_appeal_officer", clicking its primary action button opens AppealOfficerModal', async () => {
+    const user = userEvent.setup();
+    const setShowAppealOfficerModal = vi.fn();
+    // appeal_manager already assigned (so the separate manual banner
+    // button below renders "Reassign officer", not "Appoint appeal
+    // officer") isolates this test to the suggested-next-step button's
+    // own dispatch path specifically, via handleNextStepAction.
+    const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
+    const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah' }];
+    const getNextStep = () => ({ label: 'Appoint appeal officer', action: 'appoint_appeal_officer', meetingType: null, primary: true, reason: 'An appeal has been raised.' });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, setShowAppealOfficerModal }} />);
+    expect(screen.queryByRole('button', { name: 'Reassign officer' })).toBeInTheDocument();
+    const suggestedButton = screen.getByRole('button', { name: 'Appoint appeal officer' });
+    await user.click(suggestedButton);
+    expect(setShowAppealOfficerModal).toHaveBeenCalledWith(true);
+  });
+});
+
 // Independent appeal officer workflow (2026-09-16) — "Employee is
 // appealing" used to write stage:"appeal" directly with no deadline check
 // and no audit trail. It's now routed through recordAppealReceived

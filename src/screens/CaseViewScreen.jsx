@@ -179,7 +179,12 @@ export function CaseViewScreen({
   }
   const meetings = cs.meetings||[];
   const stage = getCaseStage(cs);
-  const nextStep = getNextStep(cs);
+  // Appeal Independence P1 (2026-09-18) — hoisted above currentAppealManager
+  // et al. below so getNextStep's "no officer yet" gate and the existing
+  // appeal-manager display block read the exact same case_access lookup,
+  // never a second source of truth for appeal-manager state.
+  const currentAppealManagerAccess = caseAccess.find(a=>a.caseId===cs.id && a.role==="appeal_manager");
+  const nextStep = getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR});
   const currentRisk = getCurrentRisk(cs);
   const empRecord = getEmployeeRecord(cs.employeeName);
   // Open items from the deterministic NEXT_STEPS_MAP checklist saved onto
@@ -210,7 +215,8 @@ export function CaseViewScreen({
   // appeal_manager relationship for this case, read the same way as
   // currentInvestigator above. Deliberately not derived from
   // cs.disciplinaryOfficer, which names a different person by design.
-  const currentAppealManagerAccess = caseAccess.find(a=>a.caseId===cs.id && a.role==="appeal_manager");
+  // (currentAppealManagerAccess itself is computed earlier, above, and
+  // reused here — see the getNextStep call site.)
   const currentAppealManager = currentAppealManagerAccess ? orgMembers.find(m=>m.user_id===currentAppealManagerAccess.userId) : null;
   const appealManagerName = currentAppealManager?.name || null;
   const isMyAppealManagerAssignment = myAccess?.role==="appeal_manager";
@@ -293,6 +299,11 @@ export function CaseViewScreen({
       const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});
     }
     else if(nextStep.action==="close_case"){requestCloseCase();}
+    // Appeal Independence P1 (2026-09-18) — the suggested next step itself
+    // must execute the correct action, not just relabel the button; opens
+    // the same AppealOfficerModal the existing manual "Appoint appeal
+    // officer" button (below, in the appeal-stage bar) already opens.
+    else if(nextStep.action==="appoint_appeal_officer"){setShowAppealOfficerModal(true);}
   };
 
   // Defect #17 remediation — a durable, always-available way to draft or

@@ -364,6 +364,56 @@ describe('OutcomeModal — warning duration field (Defect #12)', () => {
   });
 });
 
+// Appeal Independence P1 (2026-09-18) — finalizeOutcome now stamps the
+// actually-authenticated user as cases.disciplinary_decided_by in the
+// same saveCases call as outcome/etc., so appoint_appeal_manager()'s
+// independence check has an authoritative decision-maker for this
+// pathway even on cases with no allegations rows at all.
+describe('OutcomeModal — persists the authoritative decision-maker (Appeal Independence P1)', () => {
+  const decidedByProps = {
+    cases: [cs], activeCaseId: 'c1', setOutcomeType: noop,
+    outcomeNotes: 'Documented rationale for this test.', setOutcomeNotes: noop,
+    showToast: noop, handleLetter: noop, requestHrReview: noop, allegations: [], caseSignals: [],
+    requestOverrideReason: noop, createCaseTask: noop, setCaseInfo: noop, setReviewOutput: noop,
+    audit: noop, setCompletingOutcomeDetails: noop, setShowOutcomeModal: noop,
+  };
+
+  it('issuing a fresh outcome persists disciplinaryDecidedBy as the actually-authenticated currentUserId prop', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn().mockResolvedValue({ ok: true });
+    render(<OutcomeModal {...decidedByProps} outcomeType="No further action" saveCases={saveCases} currentUserId="hr-walter" />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(saveCases).toHaveBeenCalled());
+    const [savedCases] = saveCases.mock.calls[0];
+    const saved = savedCases.find(c => c.id === 'c1');
+    expect(saved.disciplinaryDecidedBy).toBe('hr-walter');
+  });
+
+  it('never infers the decision-maker from the case\'s manager/owner — only the currentUserId prop is used', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn().mockResolvedValue({ ok: true });
+    const caseWithManager = { ...cs, manager: 'Someone Else Entirely', ownerId: 'owner-not-decider' };
+    render(<OutcomeModal {...decidedByProps} cases={[caseWithManager]} outcomeType="No further action" saveCases={saveCases} currentUserId="hr-walter" />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(saveCases).toHaveBeenCalled());
+    const [savedCases] = saveCases.mock.calls[0];
+    const saved = savedCases.find(c => c.id === 'c1');
+    expect(saved.disciplinaryDecidedBy).toBe('hr-walter');
+    expect(saved.disciplinaryDecidedBy).not.toBe('owner-not-decider');
+  });
+
+  it('falls back to null (not a crash) when currentUserId is not supplied', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn().mockResolvedValue({ ok: true });
+    render(<OutcomeModal {...decidedByProps} outcomeType="No further action" saveCases={saveCases} />);
+    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await waitFor(() => expect(saveCases).toHaveBeenCalled());
+    const [savedCases] = saveCases.mock.calls[0];
+    const saved = savedCases.find(c => c.id === 'c1');
+    expect(saved.disciplinaryDecidedBy).toBeNull();
+  });
+});
+
 // UAT Golden Path remediation (Defect #12/#14) — the historical-
 // completion path. Fixture matches the CURRENT real Golden Path
 // production shape exactly: outcome already recorded as "First written
@@ -467,5 +517,23 @@ describe('OutcomeModal — historical outcome completion (Defect #12/#14, Golden
     const saved = savedCases.find(c => c.id === 'c1');
     expect(saved.outcomeIssuedAt).toContain('2026-09-08');
     expect(saved.warningExpiresAt).toBe('2027-03-08');
+  });
+
+  // Appeal Independence P1 (2026-09-18) — completeOutcomeDetails is
+  // deliberately NOT one of the write sites for disciplinaryDecidedBy:
+  // it fills in structured facts a decision already made is missing, it
+  // is not itself a new decision, so it must never retroactively assign
+  // a decision-maker to a legacy case (which would misrepresent who
+  // actually decided it back when it happened).
+  it('completing historical metadata does not set disciplinaryDecidedBy, even when currentUserId is supplied', async () => {
+    const user = userEvent.setup();
+    const saveCases = vi.fn().mockResolvedValue({ ok: true });
+    render(<OutcomeModal {...completionProps} saveCases={saveCases} currentUserId="hr-walter" />);
+    await user.type(screen.getByLabelText('Warning duration'), '6');
+    await user.click(screen.getByRole('button', { name: 'Save outcome details' }));
+    await waitFor(() => expect(saveCases).toHaveBeenCalled());
+    const [savedCases] = saveCases.mock.calls[0];
+    const saved = savedCases.find(c => c.id === 'c1');
+    expect(saved.disciplinaryDecidedBy).toBeUndefined();
   });
 });

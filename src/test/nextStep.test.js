@@ -318,6 +318,39 @@ describe('getNextStep', () => {
       });
       expect(step.action).toBe('appeal_letter');
     });
+
+    // Appeal Independence P1 (2026-09-18) — the sequencing fix: an
+    // appeal at this stage with no appeal_manager yet must not suggest
+    // "Start appeal hearing" before an impartial officer exists.
+    describe('appeal officer sequencing (ctx)', () => {
+      it('HR viewer, no appeal_manager yet: suggests appointing an appeal officer instead of starting the hearing', () => {
+        const step = getNextStep({ stage: 'appeal', meetings: [] }, { hasAppealManager: false, isHR: true });
+        expect(step.action).toBe('appoint_appeal_officer');
+        expect(step.label).toBe('Appoint appeal officer');
+      });
+
+      it('HR viewer, appeal_manager already assigned: falls through to the existing "Start appeal hearing" logic unchanged', () => {
+        const step = getNextStep({ stage: 'appeal', meetings: [] }, { hasAppealManager: true, isHR: true });
+        expect(step.action).toBe('start_appeal_meeting');
+      });
+
+      it('non-HR viewer, no appeal_manager yet: does NOT suggest appointing (matches the existing isHR-only gate on the manual button) — falls through to the unchanged default', () => {
+        const step = getNextStep({ stage: 'appeal', meetings: [] }, { hasAppealManager: false, isHR: false });
+        expect(step.action).toBe('start_appeal_meeting');
+      });
+
+      it('omitting ctx entirely (every pre-existing caller) behaves exactly as before — no crash, no new suggestion', () => {
+        const step = getNextStep({ stage: 'appeal', meetings: [] });
+        expect(step.action).toBe('start_appeal_meeting');
+      });
+
+      it('existing downstream appeal next-steps (signature, outcome letter, close) are unaffected once an appeal_manager exists', () => {
+        const signed = getNextStep({ stage: 'appeal', meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed' }] }, { hasAppealManager: true, isHR: true });
+        expect(signed.action).toBe('appeal_letter');
+        const issued = getNextStep({ stage: 'appeal', meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }] }, { hasAppealManager: true, isHR: true });
+        expect(issued.action).toBe('close_case');
+      });
+    });
   });
 
   it('returns null for an unrecognised stage', () => {
@@ -389,6 +422,19 @@ describe('getNextStep — grievance-shaped cases', () => {
       const step = getNextStep(grievanceCase('appeal', [{ type: 'Grievance Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }]));
       expect(step.action).toBe('close_case');
     });
+
+    // Appeal Independence P1 (2026-09-18) — same appointment-sequencing
+    // rule shared with disciplinaryNextStep via appointOfficerStepIfNeeded.
+    it('HR viewer, no appeal_manager yet: suggests appointing an appeal officer instead of starting the hearing', () => {
+      const step = getNextStep(grievanceCase('appeal'), { hasAppealManager: false, isHR: true });
+      expect(step.action).toBe('appoint_appeal_officer');
+    });
+
+    it('appeal_manager already assigned: unchanged grievance-appeal behaviour', () => {
+      const step = getNextStep(grievanceCase('appeal'), { hasAppealManager: true, isHR: true });
+      expect(step.action).toBe('start_appeal_meeting');
+      expect(step.meetingType).toBe('appeal-grievance');
+    });
   });
 
   it('never returns a disciplinary-only action like inv_report or disciplinary_invite', () => {
@@ -435,6 +481,11 @@ describe('getNextStep — flexible working-shaped cases', () => {
   it('recommends hearing the appeal at the appeal stage', () => {
     const step = getNextStep({ caseType: 'flexible working', stage: 'appeal', meetings: [] });
     expect(step.action).toBe('start_appeal_meeting');
+  });
+
+  it('HR viewer, no appeal_manager yet: suggests appointing an appeal officer instead of hearing the appeal', () => {
+    const step = getNextStep({ caseType: 'flexible working', stage: 'appeal', meetings: [] }, { hasAppealManager: false, isHR: true });
+    expect(step.action).toBe('appoint_appeal_officer');
   });
 });
 

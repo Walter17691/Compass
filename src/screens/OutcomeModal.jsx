@@ -61,7 +61,7 @@ function describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt,
 // Intelligence's equivalent) since OutcomeModal is already a
 // self-contained modal, not a full screen orchestrated from App.jsx —
 // nothing else needs to know this check ran.
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, setCaseInfo, setReviewOutput, audit, completingOutcomeDetails, setCompletingOutcomeDetails }) {
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, setCaseInfo, setReviewOutput, audit, completingOutcomeDetails, setCompletingOutcomeDetails, currentUserId }) {
   const cs = cases.find(x=>x.id===activeCaseId);
   const [showQualityCheck, setShowQualityCheck] = useState(false);
   const [qualityGaps, setQualityGaps] = useState([]);
@@ -138,6 +138,12 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
       outcomeNotes:outcomeNotes,
       warningDurationMonths:durationMonths,
       warningExpiresAt:expiresAt,
+      // Appeal Independence P1 (2026-09-18) — the authoritative decision-
+      // maker for appoint_appeal_manager()'s independence check on this
+      // pathway (see supabase/appeal_independence_decision_maker_2026-09-
+      // 18.sql). The actually-authenticated user issuing this outcome,
+      // never inferred from the case's manager/owner/created_by fields.
+      disciplinaryDecidedBy:currentUserId||null,
     }:x), activeCaseId);
     setSaving(false);
     if(!result?.ok) {
