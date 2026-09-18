@@ -257,7 +257,11 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
                   full canIssue (outcomeNotYetDecided/approval are about
                   readiness to issue externally, not about whether the
                   draft is safe to keep as an internal record at all). */}
-              <Btn variant="dark" onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);}} disabled={letterGroundingFailed} title={letterGroundingFailed?cantIssueReason:undefined}>Save to case</Btn>
+              {/* Appeal Hearing P1 reliability pass (2026-09-18) — see
+                  ReviewScreen.jsx's identical "Save to case" fix: only
+                  navigate away once saveMeetingToCase confirms the write
+                  actually landed. */}
+              <Btn variant="dark" onClick={async ()=>{const result=await saveMeetingToCase();if(result?.ok){setScreen(SCREENS.CASES);}}} disabled={letterGroundingFailed} title={letterGroundingFailed?cantIssueReason:undefined}>Save to case</Btn>
             </div>
 
             {letterHistory.length>0&&(

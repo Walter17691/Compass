@@ -329,8 +329,20 @@ describe('getNextStep', () => {
         expect(step.label).toBe('Appoint appeal officer');
       });
 
-      it('HR viewer, appeal_manager already assigned: falls through to the existing "Start appeal hearing" logic unchanged', () => {
+      // Appeal Hearing Control Remediation (2026-09-18) — closes the gap
+      // this file's own header now documents: an officer being appointed
+      // is not the same as an invitation existing.
+      it('HR viewer, appeal_manager assigned but no invitation drafted yet: suggests drafting the appeal hearing invitation, not starting the hearing', () => {
         const step = getNextStep({ stage: 'appeal', meetings: [] }, { hasAppealManager: true, isHR: true });
+        expect(step.action).toBe('appeal_invite');
+        expect(step.label).toBe('Draft appeal hearing invitation');
+      });
+
+      it('HR viewer, appeal_manager assigned AND invitation already drafted: falls through to the existing "Start appeal hearing" logic unchanged', () => {
+        const step = getNextStep({
+          stage: 'appeal',
+          meetings: [{ type: 'Disciplinary Appeal', letterOutput: 'Dear Sam, please attend your appeal hearing...', letterType: 'invite' }],
+        }, { hasAppealManager: true, isHR: true });
         expect(step.action).toBe('start_appeal_meeting');
       });
 
@@ -344,10 +356,11 @@ describe('getNextStep', () => {
         expect(step.action).toBe('start_appeal_meeting');
       });
 
-      it('existing downstream appeal next-steps (signature, outcome letter, close) are unaffected once an appeal_manager exists', () => {
-        const signed = getNextStep({ stage: 'appeal', meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed' }] }, { hasAppealManager: true, isHR: true });
+      it('existing downstream appeal next-steps (signature, outcome letter, close) are unaffected once an appeal_manager exists and an invitation has already been drafted', () => {
+        const invite = { type: 'Disciplinary Appeal', letterOutput: 'invite text', letterType: 'invite' };
+        const signed = getNextStep({ stage: 'appeal', meetings: [invite, { type: 'Appeal', record: 'notes', signStatus: 'signed' }] }, { hasAppealManager: true, isHR: true });
         expect(signed.action).toBe('appeal_letter');
-        const issued = getNextStep({ stage: 'appeal', meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }] }, { hasAppealManager: true, isHR: true });
+        const issued = getNextStep({ stage: 'appeal', meetings: [invite, { type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }] }, { hasAppealManager: true, isHR: true });
         expect(issued.action).toBe('close_case');
       });
     });
@@ -430,8 +443,15 @@ describe('getNextStep — grievance-shaped cases', () => {
       expect(step.action).toBe('appoint_appeal_officer');
     });
 
-    it('appeal_manager already assigned: unchanged grievance-appeal behaviour', () => {
+    // Appeal Hearing Control Remediation (2026-09-18)
+    it('appeal_manager assigned but no invitation drafted yet: suggests drafting the appeal hearing invitation', () => {
       const step = getNextStep(grievanceCase('appeal'), { hasAppealManager: true, isHR: true });
+      expect(step.action).toBe('appeal_invite');
+      expect(step.meetingType).toBe('appeal-grievance');
+    });
+
+    it('appeal_manager assigned AND invitation already drafted: unchanged grievance-appeal behaviour', () => {
+      const step = getNextStep(grievanceCase('appeal', [{ type: 'Grievance Appeal', letterOutput: 'invite text', letterType: 'invite' }]), { hasAppealManager: true, isHR: true });
       expect(step.action).toBe('start_appeal_meeting');
       expect(step.meetingType).toBe('appeal-grievance');
     });

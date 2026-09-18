@@ -1369,7 +1369,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         // overwrite a teammate's concurrent edit with our full local copy,
         // including their changes to meetings/evidence we never saw.
         const { data, error } = await supabase.from('cases').update(payload).eq('id', caseObj.id).eq('updated_at', caseObj.updatedAt).select();
-        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return { ok: false, reason: 'error' }; }
+        // Appeal Hearing P1 reliability pass (2026-09-18) — message is the
+        // raw Postgres/PostgREST error text (e.g. protect_appeal_hearing_
+        // chair_integrity()'s own APPEAL_CHAIR_MISMATCH/etc. exceptions),
+        // additive alongside the existing ok/reason contract every current
+        // caller already relies on. Never shown to the user directly —
+        // callers that care (saveMeetingToCaseImpl) translate it into
+        // human-readable copy; this toast (unchanged) remains the fallback
+        // for callers that don't inspect it at all.
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return { ok: false, reason: 'error', message: error.message }; }
         if(!data || data.length===0) {
           // UAT Product Hierarchy pass, Part 5 — the underlying stale-
           // write protection (conditionalUpdate's conflict detection,
@@ -1397,7 +1405,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         }
       } else {
         const { error } = await supabase.from('cases').upsert(payload).select();
-        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return { ok: false, reason: 'error' }; }
+        if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return { ok: false, reason: 'error', message: error.message }; }
       }
       setCases(prev => prev.map(c => c.id===caseObj.id ? {...c, updatedAt: nowIso} : c));
       // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) —
@@ -1409,7 +1417,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // confirmation before declaring success is OutcomeModal's
       // finalizeOutcome, the highest-stakes single write in the app.
       return { ok: true };
-    } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); return { ok: false, reason: 'error' }; }
+    } catch(e) { console.error("Save case error:", e); showToast("Couldn't save the case — "+e.message, "error"); return { ok: false, reason: 'error', message: e.message }; }
   };
 
   // Destructive & Decision Authorization hardening (2026-09-13) — case
@@ -6684,7 +6692,23 @@ Please produce:
   // say explicitly whether this save is attached to a signature request,
   // and if so, which one — there is no ambient fallback.
   const savingMeetingRef = useRef(false);
-  const saveMeetingToCase = (signatureInfo = {}) => {
+  // Appeal Hearing P1 reliability pass (2026-09-18) — translates the
+  // handful of database rejections a meeting save can now hit into
+  // human-readable copy, without exposing the raw Postgres/PostgREST
+  // message. Deliberately a small local function reusing saveCaseToDB's
+  // existing {ok,reason,message} contract, not a new error-handling
+  // framework — every other failure reason keeps its own generic message.
+  const describeSaveMeetingError = (message) => {
+    const msg = message || "";
+    if(msg.startsWith("APPEAL_CHAIR_MISMATCH") || msg.startsWith("APPEAL_HEARING_CHAIR_MISSING")) {
+      return "This appeal hearing could not be saved because the appointed appeal officer has changed or could not be verified. Return to the case and check the appeal officer.";
+    }
+    if(msg.startsWith("APPEAL_HEARING_CHAIR_IMMUTABLE")) {
+      return "This appeal hearing's record could not be saved because its recorded chair cannot be changed after saving.";
+    }
+    return "Couldn't save this meeting — please try again.";
+  };
+  const saveMeetingToCase = async (signatureInfo = {}) => {
     // Phase 6.5 hardening (closes independent audit finding 3.7) — the
     // button that calls this ("Save and go to case →", ReviewScreen.jsx/
     // LetterScreen.jsx) had no disabled/in-flight guard at all — a
@@ -6693,22 +6717,27 @@ Please produce:
     // navigation), fired this function twice, each appending its own
     // meeting record to the case — two byte-identical disciplinary
     // hearing records, both independently offered for signature and
-    // both appearing in the hearing pack. A plain ref (not state)
-    // guards this synchronously, closing the race regardless of
-    // whether React has re-rendered a disabled button in time — this
-    // function runs fully synchronously end to end, so a ref checked at
-    // entry and cleared in a finally block is both necessary (state
-    // alone could still race) and sufficient (no need to also thread a
-    // disabled prop through both call sites for the same guarantee).
-    if(savingMeetingRef.current) return;
+    // both appearing in the hearing pack. A plain ref (not state) guards
+    // this, closing the race regardless of whether React has re-rendered
+    // a disabled button in time.
+    //
+    // Appeal Hearing P1 reliability pass (2026-09-18) — now genuinely
+    // awaits the full save (previously this guard only spanned the
+    // synchronous portion of a function that fired its real database
+    // write fire-and-forget underneath) and returns the real result, so
+    // callers that need to know whether the write actually landed
+    // (LetterScreen.jsx's/ReviewScreen.jsx's own "Save to case" buttons,
+    // which navigate to the Cases list themselves rather than relying on
+    // this function's own case-view navigation) finally can.
+    if(savingMeetingRef.current) return { ok: false, reason: 'error' };
     savingMeetingRef.current = true;
     try {
-      saveMeetingToCaseImpl(signatureInfo);
+      return await saveMeetingToCaseImpl(signatureInfo);
     } finally {
       savingMeetingRef.current = false;
     }
   };
-  const saveMeetingToCaseImpl = (signatureInfo = {}) => {
+  const saveMeetingToCaseImpl = async (signatureInfo = {}) => {
     const { signId: attachedSignId = null, signStatus: attachedSignStatus = null } = signatureInfo;
     // If this is a witness interview, save to parent case evidence instead
     if(caseInfo._linkedCaseId) {
@@ -6722,8 +6751,28 @@ Please produce:
       };
       const targetCase = cases.find(x=>x.id===caseInfo._linkedCaseId);
       const updatedTargetCase = targetCase ? {...targetCase, evidence:[...(targetCase.evidence||[]), witnessNote]} : null;
-      saveCases(cases.map(x=>x.id===caseInfo._linkedCaseId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x));
       const targetId = caseInfo._linkedCaseId;
+      // Appeal Hearing P1 reliability pass (2026-09-18) — changedId scopes
+      // this to one case (matches every other single-case saveCases
+      // caller's own convention, e.g. removeEvidence above) and, crucially,
+      // makes the returned Promise real (the "sync all" branch this
+      // omission previously fell into returns nothing at all) — so a
+      // rejected write no longer silently proceeds as if it had saved.
+      const casesSnapshot = cases;
+      const result = await saveCases(cases.map(x=>x.id===targetId?{...x,evidence:[...(x.evidence||[]),witnessNote]}:x), targetId);
+      if(!result?.ok) {
+        if(result?.reason !== 'conflict') {
+          // Roll back the optimistic evidence append — saveCases always
+          // updates local state before the database confirms anything;
+          // reverting here is what stops a retry from appending a second
+          // copy of the same witness statement on top of the first,
+          // still-unpersisted one.
+          setCases(casesSnapshot);
+          casesRef.current = casesSnapshot;
+          showToast(describeSaveMeetingError(result?.message), "error");
+        }
+        return { ok: false, reason: result?.reason };
+      }
       setCaseInfo(p=>({...p,_linkedCaseId:null,_linkedCaseName:null}));
       setMeetingSetup(p=>({...p,linkedCaseId:null,linkedCaseName:null}));
       setActiveCaseId(targetId);
@@ -6738,7 +6787,7 @@ Please produce:
         generateEvidenceSuggestions(updatedTargetCase, true);
         generateNextBestAction(updatedTargetCase, true);
       }
-      return;
+      return { ok: true };
     }
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
     const meeting = {
@@ -6756,6 +6805,20 @@ Please produce:
       startedAt: meetingStartTime || null,
       endedAt: meetingEndTime || null,
       manager: caseInfo.manager,
+      // Appeal Hearing Control Remediation (2026-09-18) — the authoritative
+      // historical chair, an attribute of THIS PARTICULAR meeting record,
+      // not of the case (a case-level scalar cannot represent "hearing 1
+      // was chaired by A, hearing 2 by B" once an officer is reassigned —
+      // see the migration's own header for the full rationale). `manager`
+      // above remains the free-text display name for existing presentation
+      // compatibility; this is the separate, UUID-authoritative field
+      // protect_appeal_hearing_chair_integrity() actually verifies.
+      // Null for every meeting except one saved via the structured
+      // appeal-hearing entry point (CaseViewScreen.jsx's start_appeal_
+      // meeting handler -> HomeMeetingScreen's commit() ->
+      // caseInfo.appealManagerId) — harmless on any non-appeal-hearing
+      // meeting, since the trigger's own classifier ignores those entirely.
+      chairUserId: caseInfo.appealManagerId || null,
       participants,
       transcript: transcript.filter(u=>!u.pending),
       record: reviewOutput,
@@ -6826,6 +6889,14 @@ Please produce:
     if(nameMatches.length>1) console.error(`saveMeetingToCase: "${caseInfo.employee}" matches ${nameMatches.length} cases — resolving via activeCaseId where possible, otherwise the first match`);
     const existing = (activeCaseId && nameMatches.find(c=>c.id===activeCaseId)) || nameMatches[0];
     const caseId = existing ? existing.id : crypto.randomUUID();
+    // Independent appeal officer workflow (2026-09-16) — an appeal
+    // hearing used to be indistinguishable in the audit trail from any
+    // other meeting save ("Meeting saved"), even though it's the one
+    // meeting type that directly precedes recording an appeal decision.
+    // Matches the established case-insensitive "appeal" substring
+    // convention every other appeal-stage check in this codebase already
+    // uses (appealMeetingsForCase, isOriginalDecisionMeeting's exclusion).
+    const isAppealMeeting = (meetingType?.label||"").toLowerCase().includes("appeal");
     const updatedCase = existing
       ? {...existing, meetings:[...existing.meetings, meeting]}
       // caseType "informal" only on a brand-new case created from a
@@ -6833,10 +6904,36 @@ Please produce:
       // type it already had; one informal chat about them doesn't
       // relabel it.
       : {id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting], ...(caseInfo._linkedReferralId?{caseType:"informal"}:{})};
-    if(existing) {
-      saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
-    } else {
-      saveCases([...cases,updatedCase]);
+    // Appeal Hearing P1 reliability pass (2026-09-18) — changedId (both
+    // branches) makes the returned Promise real: the "sync all" branch
+    // this previously fell into (changedId omitted) returns nothing at
+    // all, so a database rejection — most notably protect_appeal_hearing_
+    // chair_integrity() now that a stale/incorrect appeal officer can
+    // reject a save — used to proceed straight through to the success
+    // toast and navigation below regardless of whether anything actually
+    // persisted.
+    const casesSnapshot = cases;
+    const result = existing
+      ? await saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c), caseId)
+      : await saveCases([...cases,updatedCase], caseId);
+    if(!result?.ok) {
+      if(result?.reason !== 'conflict') {
+        // Roll back the optimistic append. Without this, a conscious
+        // retry would build its NEW meeting on top of local state that
+        // already (wrongly) contains the first, rejected one — appending
+        // a second, distinct meeting id alongside a phantom that never
+        // actually reached the database, compounding on every retry
+        // rather than replacing cleanly.
+        setCases(casesSnapshot);
+        casesRef.current = casesSnapshot;
+        showToast(describeSaveMeetingError(result?.message), "error");
+      }
+      // Benign, already-recovered conflict (saveCaseToDB's own info toast
+      // and loadCasesFromDB() already fired) or a genuine rejection —
+      // either way, THIS attempt did not persist, so none of the success-
+      // only side effects below (audit, success toast, navigation) run.
+      // reviewOutput/transcript remain exactly as entered for a retry.
+      return { ok: false, reason: result?.reason };
     }
     // Manager Enablement (Phase 4, MP6) — closes the loop back to the
     // referral that started this conversation. Functional update, same
@@ -6864,14 +6961,8 @@ Please produce:
     generateEvidenceSuggestions(updatedCase, true);
     generateNextBestAction(updatedCase, true);
     applyPendingMeetingSuggestions(caseId);
-    // Independent appeal officer workflow (2026-09-16) — an appeal
-    // hearing used to be indistinguishable in the audit trail from any
-    // other meeting save ("Meeting saved"), even though it's the one
-    // meeting type that directly precedes recording an appeal decision.
-    // Matches the established case-insensitive "appeal" substring
-    // convention every other appeal-stage check in this codebase already
-    // uses (appealMeetingsForCase, isOriginalDecisionMeeting's exclusion).
-    const isAppealMeeting = (meetingType?.label||"").toLowerCase().includes("appeal");
+    // isAppealMeeting computed earlier (above the saveCases calls) — reused
+    // here rather than redeclared.
     audit(isAppealMeeting?"Appeal hearing recorded":"Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`, caseId);
     // Human UAT remediation, Batch 1, Issue 4 — distinct from the generic
     // "Meeting saved" above (which fires for every save, signature-bound
@@ -6884,10 +6975,17 @@ Please produce:
     showToast("Meeting saved to case file");
     // The button that triggers this is labelled "Save and go to case →" —
     // it used to only save, never navigate, silently stranding the user on
-    // the Review screen. Callers that want the general Cases list instead
-    // (ReviewScreen's/LetterScreen's plain "Save to case" buttons) already
-    // call setScreen(SCREENS.CASES) right after this returns, which wins
-    // over this since it runs later in the same handler.
+    // the Review screen.
+    //
+    // Appeal Hearing P1 reliability pass (2026-09-18) — this now only runs
+    // once the save has genuinely succeeded (see the early return above),
+    // so it's no longer safe to assume this always executes synchronously
+    // "before" a caller's own subsequent code in the same handler.
+    // ReviewScreen.jsx's/LetterScreen.jsx's own plain "Save to case"
+    // buttons (which want the general Cases list instead of this
+    // function's own case-view navigation) now await this function's
+    // returned result and only navigate themselves once it resolves ok —
+    // see those files' own onClick handlers.
     setActiveCaseId(caseId);
     setActiveCaseStage("investigation");
     setScreen(SCREENS.CASE_VIEW);
@@ -6897,6 +6995,7 @@ Please produce:
         body: JSON.stringify({ orgId: org.id, orgName: org.name, employeeName, documentType: meetingType?.label }),
       }).catch(e=>console.error("Portal notify failed:", e));
     }
+    return { ok: true };
   };
 
   // ── PDF generation ──
@@ -8294,7 +8393,28 @@ Please produce:
                   <button key={cs.id} onClick={async ()=>{
                     const meeting = {
                       id: newId("meeting"),
-                      type: meetingType?.label||"Appeal",
+                      // Appeal Hearing P1 reliability pass (2026-09-18) —
+                      // this flow attaches the transcript of WHATEVER
+                      // meeting was actually happening (informal chat,
+                      // disciplinary hearing, etc.) as evidence that an
+                      // appeal was raised during it — recordAppealReceived
+                      // below is what actually transitions the case to
+                      // "appeal" stage and records it, exactly as it does
+                      // for the ordinary "Save appeal" button (which
+                      // creates no meeting at all). This is never itself
+                      // the appeal HEARING, so it must never be classified
+                      // as one — the previous "Appeal" fallback (only ever
+                      // reached if meetingType was somehow unset) would
+                      // have made isAppealMeeting() mistake it for an
+                      // actual hearing record downstream (nextStep.js's
+                      // lastAppeal check) and, since this construction has
+                      // no chairUserId, the new database invariant would
+                      // correctly reject the save outright. "Meeting"
+                      // matches saveMeetingToCaseImpl's own identical
+                      // generic fallback (line ~6798) for exactly this
+                      // reason — when meetingType IS set (the overwhelming
+                      // majority of real usage), this is unchanged.
+                      type: meetingType?.label||"Meeting",
                       date: caseInfo.date||new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"2-digit",year:"numeric"}),
                       manager: caseInfo.manager,
                       participants,

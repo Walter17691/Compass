@@ -608,6 +608,79 @@ describe('CaseViewScreen — suggested next step "Appoint appeal officer" (Appea
 // invitation remains reachable afterward via the case's own existing
 // "Suggested next step" mechanism (lib/nextStep.js), not tested here —
 // see nextStep.test.js for that coverage.
+// Appeal Hearing Control Remediation (2026-09-18) — the P1 fix: a
+// structured appeal hearing (reached with a current appeal_manager
+// appointed) must source its chair from that authoritative case_access
+// relationship, never from cs.manager/owner/creator/the current logged-in
+// user, and the new "Draft appeal hearing invitation" suggested step must
+// open the existing invitation-letter pipeline (no new one) scoped to the
+// same officer identity.
+describe('CaseViewScreen — structured appeal hearing chair/context (Appeal Hearing Control Remediation)', () => {
+  const appealCase = { ...cs, meetings: [], manager: 'Walter Carta (wrong field)', ownerId: 'owner-not-officer', createdBy: 'creator-not-officer' };
+  const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
+  const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah', job_title: 'Operations Director' }];
+
+  it('start_appeal_meeting sources the chair from the appointed appeal_manager, not cs.manager, owner, creator, or the current logged-in user', async () => {
+    const user = userEvent.setup();
+    const setMeetingSetup = vi.fn();
+    const setCaseInfo = vi.fn();
+    const getNextStep = () => ({ label: 'Start appeal hearing', action: 'start_appeal_meeting', meetingType: 'appeal-disciplinary', primary: true });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, setMeetingSetup, setCaseInfo, currentUser: { user_id: 'u1', name: 'Walter Carta' } }} />);
+    await user.click(screen.getByRole('button', { name: 'Start appeal hearing' }));
+
+    expect(setMeetingSetup).toHaveBeenCalled();
+    const meetingSetupResult = setMeetingSetup.mock.calls[0][0]({});
+    expect(meetingSetupResult.manager).toBe('Priya Shah');
+    expect(meetingSetupResult.manager).not.toBe('Walter Carta (wrong field)');
+    expect(meetingSetupResult.manager).not.toBe('owner-not-officer');
+    expect(meetingSetupResult.manager).not.toBe('creator-not-officer');
+    expect(meetingSetupResult.chairJobTitle).toBe('Operations Director');
+    expect(meetingSetupResult.appealChairLocked).toBe(true);
+    expect(meetingSetupResult.appealManagerId).toBe('u2');
+
+    expect(setCaseInfo).toHaveBeenCalled();
+    const caseInfoResult = setCaseInfo.mock.calls[0][0]({});
+    expect(caseInfoResult.manager).toBe('Priya Shah');
+  });
+
+  it('surfaces the persisted appeal grounds into meetingSetup for the structured appeal-hearing entry', async () => {
+    const user = userEvent.setup();
+    const setMeetingSetup = vi.fn();
+    const getNextStep = () => ({ label: 'Start appeal hearing', action: 'start_appeal_meeting', meetingType: 'appeal-disciplinary', primary: true });
+    const caseWithGrounds = { ...appealCase, appealText: 'I believe the sanction was disproportionate.' };
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [caseWithGrounds], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, setMeetingSetup }} />);
+    await user.click(screen.getByRole('button', { name: 'Start appeal hearing' }));
+    const result = setMeetingSetup.mock.calls[0][0]({});
+    expect(result.appealGrounds).toBe('I believe the sanction was disproportionate.');
+  });
+
+  it('an ordinary (non-appeal) "Start investigation meeting" entry keeps sourcing the chair from cs.manager exactly as before — generic meeting behaviour is unchanged', async () => {
+    const user = userEvent.setup();
+    const setMeetingSetup = vi.fn();
+    const ordinaryCase = { ...cs, meetings: [], manager: 'Alex Manager' };
+    const getNextStep = () => ({ label: 'Start investigation meeting', action: 'start_investigation', meetingType: 'investigation', primary: true });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [ordinaryCase], getCaseStage: () => 'investigation', getNextStep, setMeetingSetup }} />);
+    await user.click(screen.getByRole('button', { name: 'Start investigation meeting' }));
+    const result = setMeetingSetup.mock.calls[0][0]({});
+    expect(result.manager).toBe('Alex Manager');
+    expect(result.appealChairLocked).toBe(false);
+    expect(result.appealManagerId).toBeNull();
+  });
+
+  it('"Draft appeal hearing invitation" opens the existing invitation-letter pipeline (handleLetter, type "invite") scoped to the appeal officer, not a new pipeline', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    const setCaseInfo = vi.fn();
+    const getNextStep = () => ({ label: 'Draft appeal hearing invitation', action: 'appeal_invite', meetingType: 'appeal-disciplinary', primary: true });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter, setCaseInfo }} />);
+    await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
+    expect(handleLetter).toHaveBeenCalledWith('invite', expect.objectContaining({ inline: true, employeeName: appealCase.employeeName, manager: 'Priya Shah' }));
+    const caseInfoResult = setCaseInfo.mock.calls[0][0]({});
+    expect(caseInfoResult.manager).toBe('Priya Shah');
+    expect(caseInfoResult.appealManagerId).toBeNull();
+  });
+});
+
 describe('CaseViewScreen — "Employee is appealing" routes through recordAppealReceived (Save appeal)', () => {
   const closedCase = { ...cs, meetings: [] };
 

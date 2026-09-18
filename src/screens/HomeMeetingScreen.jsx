@@ -62,29 +62,49 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           <h2 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:28,fontWeight:400,color:"#1A1535",margin:"0 0 6px",letterSpacing:"-0.3px"}}>New meeting</h2>
           <p style={{fontSize:14,color:"#9B9098",margin:"0 0 32px"}}>Fill in the details — Compass handles the rest</p>
 
-          <div style={FIELD_WRAP_STYLE}>
-            <label htmlFor="meeting-chair-name" style={FIELD_LABEL_STYLE}>Your name (chair)</label>
-            <input id="meeting-chair-name" placeholder="e.g. Tom Norton"
-              value={meetingSetup.manager||""}
-              onChange={e=>{
-                const val=e.target.value;
-                const rec=(orgMembers||[]).find(m=>m.name===val.trim());
-                setMeetingSetup(p=>({...p,manager:val,chairJobTitle:rec?(rec.job_title||""):p.chairJobTitle}));
-              }}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
-              onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
-              onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
-          </div>
+          {/* Appeal Hearing Control Remediation (2026-09-18) — a structured
+              appeal hearing's chair is the appointed appeal_manager,
+              authoritative and locked: free-text entry here is exactly
+              the P1 control gap this remediation closes (see
+              CaseViewScreen.jsx's start_appeal_meeting handler, which is
+              the only place appealChairLocked is ever set). Every other
+              meeting type keeps the original editable fields unchanged. */}
+          {meetingSetup.appealChairLocked ? (
+            <div style={FIELD_WRAP_STYLE}>
+              <div style={FIELD_LABEL_STYLE}>Appeal officer / Chair</div>
+              <div style={{width:"100%",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",boxSizing:"border-box"}}>
+                {meetingSetup.manager||"No appeal officer appointed"}
+                {meetingSetup.chairJobTitle&&<span style={{color:"#6B6375"}}> — {meetingSetup.chairJobTitle}</span>}
+              </div>
+              <p style={{fontSize:12,color:"#9B9098",margin:"6px 0 0"}}>This is the appointed appeal officer. To hear this appeal with someone else, reassign the appeal officer from the case first.</p>
+            </div>
+          ) : (
+            <>
+              <div style={FIELD_WRAP_STYLE}>
+                <label htmlFor="meeting-chair-name" style={FIELD_LABEL_STYLE}>Your name (chair)</label>
+                <input id="meeting-chair-name" placeholder="e.g. Tom Norton"
+                  value={meetingSetup.manager||""}
+                  onChange={e=>{
+                    const val=e.target.value;
+                    const rec=(orgMembers||[]).find(m=>m.name===val.trim());
+                    setMeetingSetup(p=>({...p,manager:val,chairJobTitle:rec?(rec.job_title||""):p.chairJobTitle}));
+                  }}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+              </div>
 
-          <div style={FIELD_WRAP_STYLE}>
-            <label htmlFor="meeting-chair-job-title" style={FIELD_LABEL_STYLE}>Chair job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
-            <input id="meeting-chair-job-title" placeholder="e.g. HR Manager"
-              value={meetingSetup.chairJobTitle||""}
-              onChange={e=>setMeetingSetup(p=>({...p,chairJobTitle:e.target.value}))}
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
-              onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
-              onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
-          </div>
+              <div style={FIELD_WRAP_STYLE}>
+                <label htmlFor="meeting-chair-job-title" style={FIELD_LABEL_STYLE}>Chair job title <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
+                <input id="meeting-chair-job-title" placeholder="e.g. HR Manager"
+                  value={meetingSetup.chairJobTitle||""}
+                  onChange={e=>setMeetingSetup(p=>({...p,chairJobTitle:e.target.value}))}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+              </div>
+            </>
+          )}
 
           <div style={FIELD_WRAP_STYLE}>
             <label htmlFor="meeting-notetaker" style={FIELD_LABEL_STYLE}>Notetaker <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
@@ -205,6 +225,24 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             </div>
           )}
 
+          {/* Appeal Hearing Control Remediation (2026-09-18) — a structured
+              appeal hearing already knows its own type (set by the
+              triggering "Start appeal hearing" next step); exposing the
+              full generic catalogue here let a user silently re-type the
+              meeting into "Disciplinary"/etc, which breaks appeal-workflow
+              recognition downstream (isAppealMeeting matches on the saved
+              type label) — see the discovery report's meeting-type
+              finding. Every other meeting type keeps the original
+              selectable list unchanged. */}
+          {meetingSetup.appealChairLocked ? (
+            <div style={FIELD_WRAP_STYLE}>
+              <div style={FIELD_LABEL_STYLE}>Meeting type</div>
+              <div style={{width:"100%",background:"#F5F3FF",border:"1px solid #DDD9F5",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",boxSizing:"border-box"}}>
+                {selectedType?.label||"Appeal hearing"}
+                {selectedType?.tag&&<span style={{color:"#6B6375"}}> — {selectedType.tag}</span>}
+              </div>
+            </div>
+          ) : (
           <fieldset style={{border:"none",padding:0,...FIELD_WRAP_STYLE}}>
             <legend style={{...FIELD_LABEL_STYLE,padding:0}}>Meeting type</legend>
             <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",maxHeight:340,overflowY:"auto"}}>
@@ -233,6 +271,21 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               ))}
             </div>
           </fieldset>
+          )}
+
+          {/* Appeal Hearing Control Remediation (2026-09-18) — compact,
+              read-only surfacing of cases.appeal_text on the structured
+              appeal-hearing path only, so the appeal officer doesn't have
+              to leave this screen to find out what's being appealed (see
+              discovery report's appeal-grounds finding). Not editable
+              here — appeal_text has exactly one write path
+              (recordAppealReceived, CaseViewScreen.jsx's "Save appeal"). */}
+          {meetingSetup.appealChairLocked&&meetingSetup.appealGrounds&&(
+            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Appeal grounds</div>
+              <div style={{fontSize:13,color:"#1A1535",lineHeight:1.6}}>{meetingSetup.appealGrounds}</div>
+            </div>
+          )}
 
           {/* ACAS guidance for the selected type */}
           {selectedType&&(
@@ -321,7 +374,16 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             const commit = () => {
               const mt = selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName}));
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName,
+                // Appeal Hearing Control Remediation (2026-09-18) — always
+                // derived fresh from meetingSetup.appealManagerId (never
+                // merged from caseInfo's own prior value), so a stale id
+                // from an earlier, unrelated meeting-setup session can
+                // never leak into this save. null for every meeting type
+                // except a structured appeal hearing (see
+                // CaseViewScreen.jsx's start_appeal_meeting handler).
+                appealManagerId:meetingSetup.appealManagerId||null,
+              }));
               setTranscript([]);setPrepNotes("");setPrepQuestions([]);setMeetingEvidenceSuggestions([]);setMeetingActionSuggestions([]);setReviewOutput("");setReviewOutputOriginal("");setMeetingSummary("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);setDismissedCoachingTipKeys?.([]);
             };
             return (

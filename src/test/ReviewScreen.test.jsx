@@ -144,3 +144,45 @@ describe('ReviewScreen — meeting-record generation failure safety boundary (De
     expect(screen.getByText('Save to case')).not.toBeDisabled();
   });
 });
+
+// Appeal Hearing P1 reliability pass (2026-09-18) — saveMeetingToCase now
+// genuinely awaits the database write and returns its real result
+// (previously this button called setScreen(CASES) unconditionally,
+// immediately, regardless of whether the underlying save — now possibly
+// rejected by protect_appeal_hearing_chair_integrity() — actually
+// succeeded). "Save to case" must only navigate/declare success once
+// saveMeetingToCase resolves ok.
+describe('ReviewScreen — "Save to case" only navigates on a confirmed successful save (Appeal Hearing P1 reliability pass)', () => {
+  it('navigates to Cases and shows the success toast once saveMeetingToCase resolves { ok: true }', async () => {
+    const user = userEvent.setup();
+    const saveMeetingToCase = vi.fn().mockResolvedValue({ ok: true });
+    const setScreen = vi.fn();
+    const showToast = vi.fn();
+    render(<ReviewScreen {...baseProps} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} />);
+    await user.click(screen.getByText('Save to case'));
+    expect(saveMeetingToCase).toHaveBeenCalled();
+    expect(setScreen).toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith('Saved to case file');
+  });
+
+  it('does not navigate or declare success when saveMeetingToCase resolves { ok: false } — the rejected save\'s own error toast (fired inside saveMeetingToCase) is trusted instead of a redundant one here', async () => {
+    const user = userEvent.setup();
+    const saveMeetingToCase = vi.fn().mockResolvedValue({ ok: false, reason: 'error' });
+    const setScreen = vi.fn();
+    const showToast = vi.fn();
+    render(<ReviewScreen {...baseProps} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} />);
+    await user.click(screen.getByText('Save to case'));
+    expect(saveMeetingToCase).toHaveBeenCalled();
+    expect(setScreen).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalledWith('Saved to case file');
+  });
+
+  it('does not navigate on a benign conflict either — a retry should land the user back on this same screen, not the Cases list', async () => {
+    const user = userEvent.setup();
+    const saveMeetingToCase = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
+    const setScreen = vi.fn();
+    render(<ReviewScreen {...baseProps} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} />);
+    await user.click(screen.getByText('Save to case'));
+    expect(setScreen).not.toHaveBeenCalled();
+  });
+});

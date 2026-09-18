@@ -284,11 +284,59 @@ export function CaseViewScreen({
     // generically for "appeal" rather than the id's own hyphenated form.
     const searchTerm = nextStep.meetingType?.startsWith("appeal-") ? "appeal" : nextStep.meetingType;
     const relevantMeeting = () => meetings.filter(m=>(m.type||"").toLowerCase().includes(searchTerm||""))[0]||meetings[meetings.length-1];
-    if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type:nextStep.meetingType||"disciplinary"}));setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));setScreen(SCREENS.HOME+"_meeting");}
+    if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){
+      // Appeal Hearing Control Remediation (2026-09-18) — a structured
+      // appeal hearing (reached via "Start appeal hearing" with a current
+      // appeal_manager already appointed) sources the hearing chair from
+      // that authoritative case_access relationship, never from cs.manager
+      // (a generic, unrelated field — see the Appeal Hearing UX discovery
+      // report for why it was wrong here: it happened to hold the ORIGINAL
+      // decision-maker's name on the discovery case). Every other entry in
+      // this shared branch (investigation/disciplinary/generic hearing,
+      // and an appeal somehow reached with no officer appointed — the
+      // workflow engine no longer offers that as a next step, but this
+      // stays defensive) keeps the exact prior behaviour unchanged.
+      const isStructuredAppealHearing = nextStep.action==="start_appeal_meeting" && !!currentAppealManagerAccess;
+      const chairName = isStructuredAppealHearing ? (appealManagerName||"") : (cs.manager||"");
+      const chairJobTitle = isStructuredAppealHearing ? (currentAppealManager?.job_title||"") : ((orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"");
+      setMeetingSetup(p=>({...p,
+        employee:cs.employeeName,
+        employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",
+        manager:chairName,
+        chairJobTitle,
+        type:nextStep.meetingType||"disciplinary",
+        appealChairLocked:isStructuredAppealHearing,
+        appealManagerId:isStructuredAppealHearing ? currentAppealManagerAccess.userId : null,
+        appealGrounds:isStructuredAppealHearing ? (cs.appealText||"") : "",
+      }));
+      setCaseInfo(p=>({...p,
+        employee:cs.employeeName,
+        employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",
+        manager:chairName,
+        chairJobTitle,
+        _linkedCaseId:null,
+      }));
+      setScreen(SCREENS.HOME+"_meeting");
+    }
     else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
     else if(nextStep.action==="inv_report"){attemptSubmitInvestigation(cs.id);}
-    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[]}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}
-    else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});}
+    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[],appealManagerId:null}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}
+    else if(nextStep.action==="appeal_invite"){
+      // Appeal Hearing Control Remediation (2026-09-18) — the missing
+      // sequencing step identified in discovery: reuses the exact same
+      // inline-draft pipeline as disciplinary_invite (no new letter
+      // pipeline), scoped to the appeal officer's identity rather than
+      // cs.manager, and to the already-known appeal meeting type. No
+      // stage transition — the case is already in "appeal".
+      // appealManagerId:null — this letter's own eventual meeting-save
+      // must never inherit chair-integrity enforcement meant for the
+      // actual hearing record (see saveMeetingToCaseImpl).
+      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:appealManagerName||"",evidence:cs.evidence||[],appealManagerId:null}));
+      setMeetingType(MEETING_TYPES.find(t=>t.id===(nextStep.meetingType||"appeal-disciplinary"))||null);
+      setShowDraft(true);setDraftedType("invite");
+      handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:appealManagerName||""});
+    }
+    else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,appealManagerId:null}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});}
     else if(nextStep.action==="appeal_letter"){
       // Was previously handled identically to outcome_letter — drafted
       // an "outcome" letter and regressed stage from "appeal" back to
@@ -296,7 +344,7 @@ export function CaseViewScreen({
       // that point. The appeal is the final stage (ACAS Code); this
       // only closes on an explicit close_case, never silently un-does
       // progress.
-      const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});
+      const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,appealManagerId:null}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});
     }
     else if(nextStep.action==="close_case"){requestCloseCase();}
     // Appeal Independence P1 (2026-09-18) — the suggested next step itself

@@ -346,3 +346,28 @@ describe('LetterScreen — warning duration grounding gate (Defect #12)', () => 
     expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
   });
 });
+
+// Appeal Hearing P1 reliability pass (2026-09-18) — mirrors ReviewScreen's
+// identical fix: "Save to case" must only navigate to the Cases list once
+// saveMeetingToCase confirms the write actually landed, not unconditionally.
+describe('LetterScreen — "Save to case" only navigates on a confirmed successful save (Appeal Hearing P1 reliability pass)', () => {
+  it('navigates to Cases once saveMeetingToCase resolves { ok: true }', async () => {
+    const user = userEvent.setup();
+    const saveMeetingToCase = vi.fn().mockResolvedValue({ ok: true });
+    const setScreen = vi.fn();
+    render(<LetterScreen {...baseProps} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} />);
+    await user.click(screen.getByRole('button', { name: 'Save to case' }));
+    expect(saveMeetingToCase).toHaveBeenCalled();
+    expect(setScreen).toHaveBeenCalled();
+  });
+
+  it('does not navigate when saveMeetingToCase resolves { ok: false }', async () => {
+    const user = userEvent.setup();
+    const saveMeetingToCase = vi.fn().mockResolvedValue({ ok: false, reason: 'error' });
+    const setScreen = vi.fn();
+    render(<LetterScreen {...baseProps} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} />);
+    await user.click(screen.getByRole('button', { name: 'Save to case' }));
+    expect(saveMeetingToCase).toHaveBeenCalled();
+    expect(setScreen).not.toHaveBeenCalled();
+  });
+});

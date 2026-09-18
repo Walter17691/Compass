@@ -74,6 +74,17 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
   // caseStage.js).
   const hasDiscOutcome = hasLetterType(discMeetings, "outcome");
   const hasAppealOutcome = hasLetterType(appealMeetings, "appeal");
+  // Appeal Hearing Control Remediation (2026-09-18) — mirrors hasDiscOutcome/
+  // hasAppealOutcome's own hasLetterType usage exactly: this only proves an
+  // invitation letter was drafted AND saved onto an appeal-type meeting
+  // record (m.letterOutput + m.letterType==="invite"), never that it was
+  // actually sent to the employee — Compass has no reliable "sent" signal
+  // for this (letterTracking is keyed by letterId, populated only once a
+  // real send happens via /api/send-letter, and isn't consulted by any
+  // other next-step check either). The suggested-step label below is
+  // worded as "Draft appeal hearing invitation" specifically to stay
+  // truthful about what this actually proves.
+  const hasAppealInvitation = hasLetterType(appealMeetings, "invite");
 
   switch(stage) {
     case "intake":
@@ -110,6 +121,15 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
     case "appeal": {
       const appointStep = appointOfficerStepIfNeeded(ctx);
       if(appointStep) return appointStep;
+      // Appeal Hearing Control Remediation (2026-09-18) — an officer being
+      // appointed is not the same as an invitation existing; this closes
+      // the gap the disciplinary pathway already closed for itself
+      // (inv_report's own "Proceed to disciplinary — send invitation"
+      // step) but the appeal pathway never had. Only offered once an
+      // appeal_manager exists (ctx.hasAppealManager) — otherwise appeal_
+      // invite would have no authoritative officer identity to ground the
+      // letter in.
+      if(ctx.hasAppealManager && !hasAppealInvitation) return {label:"Draft appeal hearing invitation", action:"appeal_invite", meetingType:"appeal-disciplinary", primary:true, reason:"An appeal officer has been appointed — ACAS guidance expects the hearing invitation to confirm the grounds and the right to be accompanied before the hearing itself."};
       if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-disciplinary", primary:true, reason:"An appeal has been raised but not yet heard."};
       if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-disciplinary", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-disciplinary", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
@@ -132,6 +152,9 @@ function grievanceNextStep(cs, stage, ctx = {}) {
   const lastAppeal = appealMeetings[appealMeetings.length-1];
   const hasHearingOutcome = hasLetterType(hearingMeetings, "outcome");
   const hasAppealOutcome = hasLetterType(appealMeetings, "appeal");
+  // Appeal Hearing Control Remediation (2026-09-18) — see disciplinaryNextStep's
+  // own identical comment; same truthful "drafted, not provably sent" caveat.
+  const hasAppealInvitation = hasLetterType(appealMeetings, "invite");
 
   switch(stage) {
     case "intake":
@@ -151,6 +174,7 @@ function grievanceNextStep(cs, stage, ctx = {}) {
     case "appeal": {
       const appointStep = appointOfficerStepIfNeeded(ctx);
       if(appointStep) return appointStep;
+      if(ctx.hasAppealManager && !hasAppealInvitation) return {label:"Draft appeal hearing invitation", action:"appeal_invite", meetingType:"appeal-grievance", primary:true, reason:"An appeal officer has been appointed — ACAS guidance expects the hearing invitation to confirm the grounds and the right to be accompanied before the hearing itself."};
       if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-grievance", primary:true, reason:"An appeal has been raised but not yet heard."};
       if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-grievance", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-grievance", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};

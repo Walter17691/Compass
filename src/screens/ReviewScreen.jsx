@@ -74,7 +74,17 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
               error — the user can still save after switching to Edit
               record and writing something manually, since that also
               makes reviewOutput non-empty. */}
-          <Btn onClick={()=>{saveMeetingToCase();setScreen(SCREENS.CASES);showToast("Saved to case file");}} variant="secondary" style={{fontSize:13}} disabled={!reviewOutput?.trim()}>Save to case</Btn>
+          {/* Appeal Hearing P1 reliability pass (2026-09-18) — saveMeetingToCase
+              now genuinely awaits the database write and reports whether it
+              actually landed; navigating to the Cases list (and declaring
+              "Saved to case file") only on a confirmed success stops this
+              button from claiming success — and moving the user past the
+              screen that still has their notes — when a save is rejected
+              (most notably an appeal hearing whose officer changed or
+              couldn't be verified). saveMeetingToCase's own failure path
+              already shows a translated error toast; nothing further needed
+              here on failure. */}
+          <Btn onClick={async ()=>{const result=await saveMeetingToCase();if(result?.ok){setScreen(SCREENS.CASES);showToast("Saved to case file");}}} variant="secondary" style={{fontSize:13}} disabled={!reviewOutput?.trim()}>Save to case</Btn>
 
 <Btn onClick={()=>saveMeetingToCase()} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}} disabled={!reviewOutput?.trim()}>
             {caseInfo._linkedCaseId?"Save witness statement to case →":"Save and go to case →"}
