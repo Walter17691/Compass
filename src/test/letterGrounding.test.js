@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction } from '../lib/letterGrounding.js';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride } from '../lib/letterGrounding.js';
 
 const goldenPathEmployee = 'UAT - Test Employee (Golden Path)';
 
@@ -218,5 +218,59 @@ describe('buildAppealGroundsInstruction (Appeal Invitation UAT P1 remediation)',
   it('explicitly instructs not to fabricate grounds when appealText is null/undefined', () => {
     expect(buildAppealGroundsInstruction(null).toLowerCase()).toContain('not recorded');
     expect(buildAppealGroundsInstruction(undefined).toLowerCase()).toContain('do not invent');
+  });
+});
+
+// Procedural placeholder remediation (2026-09-19) — Compass holds no
+// authoritative employer deadline for an appeal hearing (no organisation,
+// policy, case or letter setting exists; deadlines.js covers only the
+// outcome-letter, appeal-window and grievance-acknowledgement ACAS timings,
+// none of which apply). The shared "invite" instruction's own "use a
+// placeholder such as [X working days]" rule is therefore the wrong answer
+// here, and this override supersedes it for this one letter type.
+describe('buildAppealInvitationInstructionOverride (procedural placeholder P1)', () => {
+  const override = buildAppealInvitationInstructionOverride({ date: '2026-10-01', time: '10:30', locationOrMethod: 'Microsoft Teams' });
+
+  it('returns empty for any letter that is not a structured appeal-hearing invitation', () => {
+    expect(buildAppealInvitationInstructionOverride(null)).toBe('');
+    expect(buildAppealInvitationInstructionOverride(undefined)).toBe('');
+  });
+
+  it('forbids inventing an employer-specific deadline value', () => {
+    expect(override).toMatch(/must not state any specific number of days/i);
+  });
+
+  it('forbids emitting a numeric-deadline placeholder when no authoritative value exists', () => {
+    expect(override).toMatch(/must NOT use a bracketed deadline placeholder/i);
+    expect(override).toContain('[X working days]');
+    expect(override).toContain('[insert number of days]');
+  });
+
+  it('explicitly supersedes the shared instruction\'s own deadline-placeholder rule', () => {
+    expect(override).toMatch(/general instruction above about using a placeholder for deadlines does NOT apply/i);
+  });
+
+  it('directs neutral, still-useful wording rather than a substituted number', () => {
+    expect(override).toMatch(/omit the numeric deadline entirely/i);
+    expect(override).toMatch(/sufficiently in advance of the hearing/i);
+    expect(override).toMatch(/confirm your attendance as soon as possible/i);
+    expect(override).toMatch(/name and role of your companion as soon as possible/i);
+  });
+
+  it('forbids stating a fixed rearrangement/postponement period, or attributing one to the ACAS Code', () => {
+    expect(override).toMatch(/do not state any fixed period within which a rearranged or postponed hearing must fall/i);
+    expect(override).toMatch(/do not attribute such a period to the ACAS Code/i);
+  });
+
+  it('does not substitute a default or statutory day-count of its own', () => {
+    // The only digits permitted here are inside the placeholder examples the
+    // override is telling the model NOT to use.
+    const withoutExamples = override.replace(/\[[^\]]*\]/g, '');
+    expect(withoutExamples).not.toMatch(/\b\d+\s*(working\s*)?days?\b/i);
+  });
+
+  it('still carries the authoritative hearing-logistics rule unchanged', () => {
+    expect(override).toMatch(/AUTHORITATIVE HEARING ARRANGEMENTS/);
+    expect(override).toMatch(/do not use a bracketed placeholder for any of the three/i);
   });
 });

@@ -168,6 +168,37 @@ function normalizeForLooseContains(value) {
   return (value || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// Procedural placeholder remediation (2026-09-19) — a SUBSTANTIVE placeholder
+// is categorically different from a cosmetic one. [Company Address Line 1] is
+// a formatting gap a human fills before printing; [X working days] is an
+// instruction to the employee about when they must act, and an invitation
+// issued with it literally unresolved tells them nothing usable — or invites
+// HR to invent an employer deadline Compass has no basis for. The deliberate
+// "unresolved [placeholder]s are permitted" stance in this module's own
+// header still holds for the cosmetic class; this narrows it for time
+// periods and deadlines only.
+//
+// Matched on the bracket's own words, the same convention the hearing
+// date/time/venue detectors use. A bare time unit (day/week/hour/month) is
+// enough on its own: no legitimate document/contact placeholder contains
+// one, while every substantive-deadline form does ([X working days], [X
+// weeks], [Insert number of days], [Number of working days]). Deadline
+// nouns are matched separately so [Deadline], [Notice period] and [Response
+// deadline] are caught even with no unit word present. Note "date" is
+// deliberately NOT a trigger — [Date] is an ordinary signature-block
+// placeholder, and the hearing date has its own dedicated check.
+const SUBSTANTIVE_PERIOD_UNIT_WORDS = ["day", "days", "week", "weeks", "hour", "hours", "month", "months", "working"];
+const SUBSTANTIVE_DEADLINE_WORDS = ["deadline", "notice", "period", "timeframe", "timescale"];
+
+function hasSubstantiveDeadlinePlaceholder(text) {
+  const brackets = (text || "").match(/\[[^\]]{0,60}\]/g) || [];
+  return brackets.some(b => {
+    const words = b.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
+    return words.some(w => SUBSTANTIVE_PERIOD_UNIT_WORDS.includes(w))
+      || words.some(w => SUBSTANTIVE_DEADLINE_WORDS.includes(w));
+  });
+}
+
 // Human UAT hotfix (2026-09-19) — the first version of this matched any
 // bracket containing the bare word "address", which made it fire on
 // [Company Address Line 1], [Employee Address Line 1] and [HR Contact
@@ -464,6 +495,17 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
       issues.push("The invitation still contains an unresolved hearing location/method placeholder.");
     } else if (!normalizeForLooseContains(text).includes(normalizeForLooseContains(hearingLocationOrMethod))) {
       issues.push("Letter does not appear to state the agreed hearing location or method.");
+    }
+
+    // Procedural placeholder remediation (2026-09-19) — the generation-side
+    // instruction now tells the model to omit a deadline it has no
+    // authoritative value for, rather than placeholdering it. This is the
+    // deterministic fail-safe behind that: the model could still emit one,
+    // and a human editing the letter afterwards could reintroduce it, so the
+    // actual text is re-checked regardless of how it got this way — the same
+    // generation-vs-final-letter separation the hearing-logistics checks use.
+    if (hasSubstantiveDeadlinePlaceholder(text)) {
+      issues.push("The invitation still contains an unresolved response deadline — replace it or remove the deadline wording.");
     }
   }
 

@@ -29,7 +29,7 @@ import {
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, transcriptMentionsAppeal } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter } from './lib/letterValidation';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction } from './lib/letterGrounding';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -7885,7 +7885,7 @@ Please produce:
       // exactly those three fields, without touching the base instruction
       // string other letter types share.
       const instruction = (letterInstructions[t] || letterInstructions["outcome"])
-        + (t==="invite" && hearingLogistics ? " The hearing date, time, and location/method are already agreed and given as AUTHORITATIVE HEARING ARRANGEMENTS in the information below — state those exact facts for this letter's date/time/location, do not use a bracketed placeholder for any of the three, and do not invent or calculate a different value." : "");
+        + (t==="invite" ? buildAppealInvitationInstructionOverride(hearingLogistics) : "");
 
       const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR correspondence that is legally sound and follows ACAS Code of Practice and relevant UK employment legislation. Always produce a complete letter — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets such as [Employee Address], [Date of Hearing], [Appeal Officer Name and Job Title], [Company Name], [X working days]. This includes any specific deadline or number of days you state that isn't a fixed statutory/ACAS figure explicitly given in this instruction or in the case information below — never invent a plausible-sounding day-count and present it as if it were a real requirement. Do not use Markdown tables or pipe-table syntax (e.g. \"| |\" or \"|---|---|\") anywhere in the letter — use plain prose, headings, or bullet points instead. The letter should read naturally and professionally. Output only the letter itself with no preamble, explanation or sign-off instructions."+(policies.length?" Reference company policies by name where relevant — e.g. match sanction lengths, appeal windows or procedural steps to what the uploaded policy actually specifies rather than a generic default.":"");
 

@@ -126,3 +126,31 @@ export function buildAppealGroundsInstruction(appealText) {
   }
   return "GROUNDS OF APPEAL: not recorded in the structured case data. Do not invent, infer, or reconstruct specific grounds from the original allegation, case description, or any other context — state generally that the appeal will be heard, without fabricating detail about what is being appealed.";
 }
+
+// Procedural placeholder remediation (2026-09-19) — the appeal-hearing
+// invitation's own additions to the shared letterInstructions["invite"]
+// string, extracted here (rather than inlined in App.jsx) so the rules can
+// be asserted directly, alongside the other prompt-instruction builders
+// above. Returns "" for every letter that is not a structured appeal-hearing
+// invitation, so disciplinary/grievance invitations keep the shared
+// instruction exactly as it was.
+//
+// Two rules, both narrow:
+//  1. Logistics — the three human-entered facts are authoritative and must be
+//     stated verbatim, never placeholdered (see
+//     buildAppealHearingLogisticsInstruction).
+//  2. Deadlines — Compass holds NO authoritative employer deadline for an
+//     appeal hearing: no organisation/policy/case/letter setting exists, and
+//     deadlines.js covers only the outcome-letter, appeal-window and
+//     grievance-acknowledgement ACAS timings, none of which apply. The shared
+//     instruction's "use a placeholder such as [X working days]" rule is the
+//     wrong answer to a genuinely unknown employer deadline — it either ships
+//     unresolved to the employee or invites HR to invent a policy in the
+//     editor. Omitting the number states nothing false while keeping the
+//     instruction operationally useful. This deliberately does NOT substitute
+//     a default figure, and does not introduce a statutory one.
+export function buildAppealInvitationInstructionOverride(hearingLogistics) {
+  if (!hearingLogistics) return "";
+  return " The hearing date, time, and location/method are already agreed and given as AUTHORITATIVE HEARING ARRANGEMENTS in the information below — state those exact facts for this letter's date/time/location, do not use a bracketed placeholder for any of the three, and do not invent or calculate a different value."
+    + " IMPORTANT — DEADLINES: Compass holds no authoritative employer deadline for this hearing, so this letter must not state any specific number of days anywhere, and must NOT use a bracketed deadline placeholder such as [X working days], [X days], [insert number of days] or [deadline]. The general instruction above about using a placeholder for deadlines does NOT apply to this letter. Omit the numeric deadline entirely and use neutral wording that is still operationally useful — for example 'please do so sufficiently in advance of the hearing for it to be considered', 'please confirm your attendance as soon as possible', or 'if you intend to be accompanied, please let us know the name and role of your companion as soon as possible'. For the same reason, do not state any fixed period within which a rearranged or postponed hearing must fall, and do not attribute such a period to the ACAS Code — if the date or time is unsuitable, simply invite the employee to contact you as soon as possible.";
+}

@@ -859,7 +859,11 @@ describe('validateFormalLetter — hearing venue placeholder discrimination (Hum
     const letter = `[Company Name]\n[Company Address Line 1]\n[Company Address Line 2]\n[Postcode]\n\n`
       + `${goldenPathEmployee}\n[Employee Address Line 1]\n[Postcode]\n\nDear ${goldenPathEmployee},\n\n`
       + `Invitation to Appeal Hearing\n\nDate: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\n`
-      + `Please respond to [HR Contact Name and Job Title] at [HR Contact Email Address] no later than [X working days] before the hearing.\n\n`
+      // Deadline wording is deliberately neutral here: this fixture exists to
+      // prove venue-placeholder discrimination, and a substantive deadline
+      // placeholder is separately (and correctly) blocked by the procedural
+      // deadline check below.
+      + `Please respond to [HR Contact Name and Job Title] at [HR Contact Email Address] as soon as possible.\n\n`
       + `Yours sincerely,\n[Job Title]`;
     const result = validateFormalLetter(letter, args);
     expect(result.valid).toBe(true);
@@ -874,5 +878,113 @@ describe('validateFormalLetter — hearing venue placeholder discrimination (Hum
     expect(validateFormalLetter(noVenue, args).valid).toBe(false);
     const differentMethod = `Dear ${goldenPathEmployee},\n\nThe hearing is on ${hearing.long} at 10:00, by Google Meet.`;
     expect(validateFormalLetter(differentMethod, args).valid).toBe(false);
+  });
+});
+
+// Procedural placeholder remediation (2026-09-19) — a live production
+// invitation validated clean while containing four instances of [X working
+// days] in substantive employee instructions (grounds/evidence submission,
+// companion details, attendance response, alternative hearing timing),
+// because nothing in this module inspected placeholders other than the
+// hearing date/time/venue. That letter was fully issuable: Save to case,
+// Approve, Send, Download, Print and Copy were all available.
+describe('validateFormalLetter — substantive procedural deadline placeholders (P1 remediation)', () => {
+  const hearing = futureHearing();
+  const args = {
+    employeeName: goldenPathEmployee,
+    letterType: 'invite',
+    isAppealHearingInvitation: true,
+    hearingDate: hearing.iso,
+    hearingTime: '10:00',
+    hearingLocationOrMethod: 'Microsoft Teams',
+  };
+  // Everything except the placeholder under test is correct, so any failure
+  // is unambiguously attributable to the deadline check.
+  const blocksAsDeadline = placeholder => validateFormalLetter(
+    `Dear ${goldenPathEmployee},\n\nDate: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\nPlease respond ${placeholder}.`,
+    args,
+  ).issues.some(i => i.includes('unresolved response deadline'));
+
+  it.each([
+    '[X working days]', '[X days]', '[X weeks]', '[5 working days]',
+    '[Insert number of days]', '[Number of working days]', '[Notice period]',
+    '[Response deadline]', '[Deadline]', '[Insert deadline]',
+  ])('blocks the substantive deadline placeholder %s', placeholder => {
+    expect(blocksAsDeadline(placeholder)).toBe(true);
+  });
+
+  it.each([
+    '[ x WORKING DAYS ]', '[insert Number Of Days]', '[X  days]', '[NOTICE PERIOD]',
+  ])('is insensitive to casing and spacing: %s', placeholder => {
+    expect(blocksAsDeadline(placeholder)).toBe(true);
+  });
+
+  it.each(['[X hours]', '[3 months]', '[timeframe]', '[timescale]'])(
+    'also blocks the equivalent period form %s', placeholder => {
+      expect(blocksAsDeadline(placeholder)).toBe(true);
+    });
+
+  // The deliberate "cosmetic placeholders are permitted" stance must survive
+  // — this must never become a blanket "no brackets allowed" validator.
+  it.each([
+    '[Company Name]', '[Company Address Line 1]', '[Company Address Line 2]',
+    '[Company Address Line 3]', '[Employee Address Line 1]', '[Employee Address Line 2]',
+    '[Employee Address Line 3]', '[Postcode]', '[HR Contact Name and Job Title]',
+    '[HR Contact Email / Telephone]', '[Company Email / Telephone]',
+    '[Signatory Name]', '[Job Title]', '[Date]',
+  ])('does not block the ordinary document/contact placeholder %s', placeholder => {
+    expect(blocksAsDeadline(placeholder)).toBe(false);
+  });
+
+  it('[Date] is not confused with a deadline — the hearing date has its own dedicated check', () => {
+    expect(blocksAsDeadline('[Date]')).toBe(false);
+    const missingHearingDate = `Dear ${goldenPathEmployee},\n\nDate: [Date of Hearing]\nTime: 10:00\nMethod: Microsoft Teams`;
+    const issues = validateFormalLetter(missingHearingDate, args).issues;
+    expect(issues.some(i => i.toLowerCase().includes('hearing-date placeholder'))).toBe(true);
+  });
+
+  it('is scoped to appeal-hearing invitations — ordinary invitations and other letter types are unaffected', () => {
+    const text = `Dear ${goldenPathEmployee},\n\nPlease respond no later than [X working days] before the hearing.`;
+    expect(validateFormalLetter(text, { employeeName: goldenPathEmployee, letterType: 'invite' }).valid).toBe(true);
+    expect(validateFormalLetter(text, { employeeName: goldenPathEmployee, letterType: 'outcome' }).valid).toBe(true);
+    expect(validateFormalLetter(text, { employeeName: goldenPathEmployee, letterType: 'appeal' }).valid).toBe(true);
+  });
+
+  // Reproduces the shape of the real production letter end to end.
+  describe('full production-shaped invitation', () => {
+    const letter = deadlineWording => `[Company Name]\n[Company Address Line 1]\n[Company Address Line 2]\n[Postcode]\n[Company Email / Telephone]\n\n`
+      + `${goldenPathEmployee}\n[Employee Address Line 1]\n[Postcode]\n\nPRIVATE AND CONFIDENTIAL\n\nDear ${goldenPathEmployee},\n\n`
+      + `Invitation to Disciplinary Appeal Hearing\n\nYou were issued with a First Written Warning. That warning has a duration of 6 months and is recorded as expiring on 11 March 2027.\n\n`
+      + `Date: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\nThe hearing will be chaired by UAT - HR Manager.\n\n`
+      + `As the grounds of appeal have not been formally recorded, you are invited to set them out at the hearing. `
+      + `Please contact [HR Contact Name and Job Title] at [HR Contact Email / Telephone] ${deadlineWording}\n\n`
+      + `Yours sincerely,\n[Signatory Name]\n[Job Title]\n[Company Name]\n[Date]`;
+
+    const fullArgs = { ...args, outcome: 'First written warning', warningDurationMonths: 6, warningExpiresAt: '2027-03-11' };
+
+    it('fails deterministically while a substantive deadline placeholder remains', () => {
+      const result = validateFormalLetter(letter('no later than [X working days] before the hearing.'), fullArgs);
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual(['The invitation still contains an unresolved response deadline — replace it or remove the deadline wording.']);
+    });
+
+    it('passes once the deadline wording is neutralised, with every ordinary placeholder still present', () => {
+      const neutral = letter('sufficiently in advance of the hearing for it to be considered.');
+      const result = validateFormalLetter(neutral, fullArgs);
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      // The cosmetic placeholders are untouched by this remediation.
+      expect(neutral).toContain('[Company Address Line 1]');
+      expect(neutral).toContain('[HR Contact Email / Telephone]');
+      expect(neutral).toContain('[Signatory Name]');
+      expect(neutral).toContain('[Date]');
+    });
+
+    it('still enforces the hearing logistics alongside the new deadline check', () => {
+      const neutral = letter('as soon as possible.');
+      expect(validateFormalLetter(neutral, { ...fullArgs, hearingTime: '14:00' }).valid).toBe(false);
+      expect(validateFormalLetter(neutral, { ...fullArgs, hearingLocationOrMethod: 'Zoom' }).valid).toBe(false);
+      expect(validateFormalLetter(neutral, { ...fullArgs, hearingDate: '2020-01-01' }).valid).toBe(false);
+    });
   });
 });

@@ -425,3 +425,63 @@ describe('LetterScreen — appeal hearing invitation action gates (Human UAT hot
     expect(screen.getByRole('button', { name: 'Copy text' })).toBeEnabled();
   });
 });
+
+// Procedural placeholder remediation (2026-09-19) — the live production
+// invitation carried four [X working days] instances and was fully issuable.
+// Proves the existing formal-letter gate architecture now blocks it, and
+// that the same letter with neutral deadline wording remains issuable.
+describe('LetterScreen — substantive procedural deadline gates (procedural placeholder P1)', () => {
+  const hearing = (() => {
+    const n = new Date();
+    const d = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 30);
+    const pad = x => String(x).padStart(2, '0');
+    return { iso: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, long: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) };
+  })();
+
+  const inviteProps = {
+    ...baseProps,
+    activeLetter: 'invite',
+    caseInfo: {
+      employee: 'UAT - Test Employee (Golden Path)',
+      manager: 'Priya Shah',
+      isAppealHearingInvitation: true,
+      hearingDate: hearing.iso,
+      hearingTime: '10:00',
+      hearingLocationOrMethod: 'Microsoft Teams',
+    },
+    letterIsApproved: true,
+    letterApproval: { by: 'Jo', at: new Date().toISOString() },
+  };
+
+  const body = deadlineWording => `[Company Name]\n[Company Address Line 1]\n\nDear UAT - Test Employee (Golden Path),\n\n`
+    + `Invitation to Appeal Hearing\n\nDate: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\n`
+    + `Please contact [HR Contact Name and Job Title] at [HR Contact Email / Telephone] ${deadlineWording}\n\n`
+    + `Yours sincerely,\n[Signatory Name]\n[Job Title]\n[Date]`;
+
+  const ALL_ACTIONS = ['Save to case', 'Download PDF', 'Send via Gmail', 'Send via Outlook', 'Send from Compass', 'Send for acknowledgement', 'Print', 'Copy text'];
+
+  it('blocks every formal action while [X working days] remains unresolved', () => {
+    render(<LetterScreen {...inviteProps} letterOutput={body('no later than [X working days] before the hearing.')} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByText(/needs review before it can be used/i)).toBeInTheDocument();
+    expect(screen.getByText(/unresolved response deadline/i)).toBeInTheDocument();
+    ALL_ACTIONS.forEach(name => expect(screen.getByRole('button', { name })).toBeDisabled());
+  });
+
+  it('also blocks Approve itself, so the letter cannot be pushed through the approval gate', () => {
+    render(<LetterScreen {...inviteProps} letterIsApproved={false} letterOutput={body('no later than [X working days] before the hearing.')} />);
+    expect(screen.getByRole('button', { name: 'Approve for sending' })).toBeDisabled();
+  });
+
+  it('permits every formal action once the deadline wording is neutralised', () => {
+    render(<LetterScreen {...inviteProps} letterOutput={body('as soon as possible.')} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.queryByText(/needs review before it can be used/i)).not.toBeInTheDocument();
+    ALL_ACTIONS.forEach(name => expect(screen.getByRole('button', { name })).toBeEnabled());
+  });
+
+  it('re-blocks live when a human edits a neutral deadline back into a placeholder', () => {
+    const { rerender } = render(<LetterScreen {...inviteProps} letterOutput={body('as soon as possible.')} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+    rerender(<LetterScreen {...inviteProps} letterOutput={body('no later than [X days] before the hearing.')} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
+  });
+});
