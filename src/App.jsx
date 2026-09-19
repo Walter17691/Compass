@@ -271,6 +271,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Fully self-contained refs (own label/detail/date), not ids to look
   // up — WhySourcesModal is given the identity function as resolveRef.
   const [letterSources, setLetterSources] = useState([]);
+  // Human UAT hotfix (2026-09-19) — the generation-time validateFormalLetter
+  // issues, kept so the INLINE draft preview (CaseViewScreen) can show the
+  // same human-readable reasons LetterScreen already shows. Before this, an
+  // inline-generated letter that failed validation produced a toast saying
+  // "see the warning below" when no warning existed anywhere on that screen:
+  // the detail block lives only in LetterScreen, which the user hadn't
+  // opened. Deliberately the SAME result object that drove the toast, not a
+  // second validation pass — the inline preview is read-only (MDRenderer,
+  // not a textarea), so a generation-time snapshot is exactly right here;
+  // LetterScreen keeps its own live useMemo for the editable case.
+  const [letterValidationIssues, setLetterValidationIssues] = useState([]);
   const [letterWhySignal, setLetterWhySignal] = useState(null);
   const [letterHistory, setLetterHistory] = useState([]); // previous drafts from this session, most recent first
   const [activeLetter, setActiveLetter] = useState("outcome");
@@ -7703,7 +7714,7 @@ Please produce:
   // CaseViewScreen.jsx's next-step/outcome-tab/appeal actions,
   // OutcomeModal.jsx's finalizeOutcome).
   const handleLetter = async (type, {inline, employeeName, manager, date, hearingLogistics}={}) => {
-    const t = type||"outcome"; setAiError("");
+    const t = type||"outcome"; setAiError(""); setLetterValidationIssues([]);
     // Regenerating overwrites letterOutput — keep the draft being replaced
     // so it's not just silently gone.
     if(letterOutput) setLetterHistory(h => [{type: activeLetter, text: letterOutput, ts: new Date().toISOString()}, ...h].slice(0, 10));
@@ -7901,8 +7912,12 @@ Please produce:
         // announced through the app-level toast, not just by the draft
         // quietly appearing on a screen the user may have left.
         const letterTypeLabels = {outcome:"outcome letter",invite:"invitation letter",appeal:"appeal outcome letter",suspension:"suspension letter",["meeting-confirmation"]:"meeting confirmation letter",["witness-invitation"]:"witness invitation",["evidence-request"]:"evidence request",["oh-consent-request"]:"OH consent request",["no-case-answer"]:"response letter"};
+        setLetterValidationIssues(validation.issues);
         if(!validation.valid) {
-          showToast(`This ${letterTypeLabels[t]||"letter"} needs review before it can be used — see the warning below`, "error");
+          // Wording no longer promises a warning that may not be on the
+          // screen the user is actually looking at — the issues themselves
+          // now render in both the inline draft panel and the Letter editor.
+          showToast(`This ${letterTypeLabels[t]||"letter"} needs review before it can be used.`, "error");
         } else {
           showToast(`Your ${letterTypeLabels[t]||"letter"} is ready for review`, "success");
           // Human UAT remediation, Batch 2, Part 14 — the toast above is
@@ -9226,6 +9241,7 @@ Please produce:
           header={{
             showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
             setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
+            letterValidationIssues,
             setOutcomeType, setCompletingOutcomeDetails,
             aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
             openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,

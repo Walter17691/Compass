@@ -844,3 +844,62 @@ describe('CaseViewScreen — appeal grounds display', () => {
     expect(screen.queryByText(longText)).not.toBeInTheDocument();
   });
 });
+
+// Human UAT hotfix (2026-09-19) — an inline-generated letter that failed
+// validation produced a toast telling the user to "see the warning below"
+// when the detail block existed only in LetterScreen, which they hadn't
+// opened. The inline draft panel now renders the same issue strings, on the
+// screen the draft was actually generated on.
+describe('CaseViewScreen — inline draft validation detail (Human UAT hotfix)', () => {
+  const appealCase = { ...cs, meetings: [], manager: 'Walter Carta (wrong field)' };
+  const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
+  const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah', job_title: 'Operations Director' }];
+  const getNextStep = () => ({ label: 'Draft appeal hearing invitation', action: 'appeal_invite', meetingType: 'appeal-disciplinary', primary: true });
+
+  // Drives the real two-step flow so the inline draft panel is genuinely
+  // mounted the same way production mounts it.
+  const openInlineDraft = async (user, header) => {
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter: vi.fn() }}
+      header={{ ...baseProps.header, ...header }}
+    />);
+    await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
+    fireEvent.change(document.getElementById('appeal-invite-date'), { target: { value: '2099-01-01' } });
+    fireEvent.change(document.getElementById('appeal-invite-time'), { target: { value: '10:00' } });
+    fireEvent.change(document.getElementById('appeal-invite-location'), { target: { value: 'Microsoft Teams' } });
+    await user.click(screen.getByRole('button', { name: 'Continue →' }));
+  };
+
+  it('renders the human-readable validation issues inline, on the same screen the draft was generated on', async () => {
+    const user = userEvent.setup();
+    await openInlineDraft(user, {
+      letterOutput: 'Dear employee, you are invited to an appeal hearing.',
+      letterValidationIssues: ['The invitation still contains an unresolved hearing location/method placeholder.'],
+    });
+    expect(screen.getByText('This draft needs review before it can be used')).toBeInTheDocument();
+    expect(screen.getByText('The invitation still contains an unresolved hearing location/method placeholder.')).toBeInTheDocument();
+    expect(screen.getByText(/Saving, downloading, sending and signing are disabled/)).toBeInTheDocument();
+  });
+
+  it('renders the issue strings verbatim rather than deriving its own — one validation source, shared with LetterScreen', async () => {
+    const user = userEvent.setup();
+    await openInlineDraft(user, {
+      letterOutput: 'Some draft text.',
+      letterValidationIssues: ['Add the hearing time before saving this invitation.', 'The hearing date cannot be in the past.'],
+    });
+    expect(screen.getByText('Add the hearing time before saving this invitation.')).toBeInTheDocument();
+    expect(screen.getByText('The hearing date cannot be in the past.')).toBeInTheDocument();
+  });
+
+  it('shows no warning at all when the inline draft is valid', async () => {
+    const user = userEvent.setup();
+    await openInlineDraft(user, { letterOutput: 'A valid invitation letter.', letterValidationIssues: [] });
+    expect(screen.queryByText('This draft needs review before it can be used')).not.toBeInTheDocument();
+  });
+
+  it('defaults to no warning when the prop is absent entirely (legacy/other inline callers)', async () => {
+    const user = userEvent.setup();
+    await openInlineDraft(user, { letterOutput: 'A valid invitation letter.' });
+    expect(screen.queryByText('This draft needs review before it can be used')).not.toBeInTheDocument();
+  });
+});

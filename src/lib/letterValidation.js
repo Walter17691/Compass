@@ -168,12 +168,46 @@ function normalizeForLooseContains(value) {
   return (value || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// Human UAT hotfix (2026-09-19) — the first version of this matched any
+// bracket containing the bare word "address", which made it fire on
+// [Company Address Line 1], [Employee Address Line 1] and [HR Contact
+// Email Address]: legitimate placeholders the letter system prompt
+// explicitly instructs the model to produce. Every real appeal invitation
+// contains them, so a correct invitation (hearing venue fully resolved to
+// "Microsoft Teams") was blocked from being saved or sent.
+//
+// Now positive matching on the hearing/meeting-logistics CONCEPT rather
+// than on a place-word keyword, mirroring hasHearingDatePlaceholder's own
+// "date" + hearing/appeal qualifier convention. Deliberately not an owner
+// exclusion list ("ignore anything containing 'company'/'employee'"):
+// that would create the opposite false negative on [Employee hearing
+// location] or [Company meeting venue], where the logistics meaning is
+// explicit and must win over the incidental ownership word.
+const HEARING_CONTEXT_WORDS = ["hearing", "meeting", "appeal"];
+const PLACE_WORDS = ["location", "address", "room", "building", "site", "premises"];
+// A remote hearing's joining details are the venue for these purposes: an
+// unresolved [Video Link] leaves the employee unable to attend just as
+// surely as an unresolved [Venue] would.
+const LINK_WORDS = ["link", "url", "joining", "dial"];
+const VIDEO_WORDS = ["video", "teams", "zoom", "meet", "webex", "call", "conference"];
+
 function hasHearingVenuePlaceholder(text) {
   const brackets = (text || "").match(/\[[^\]]{0,60}\]/g) || [];
   return brackets.some(b => {
     const words = b.toLowerCase().replace(/[^a-z]+/g, " ").split(" ").filter(Boolean);
-    return words.includes("venue") || words.includes("location") || words.includes("address")
-      || (words.includes("method") && (words.includes("hearing") || words.includes("meeting")));
+    // "venue" only ever means the place an event is held — it needs no
+    // qualifier, and no legitimate company/employee/contact placeholder
+    // uses it.
+    if (words.includes("venue")) return true;
+    const hasHearingContext = words.some(w => HEARING_CONTEXT_WORDS.includes(w));
+    // A place word counts only when tied to the hearing/meeting itself,
+    // which is exactly what separates [Hearing Address] from [Company
+    // Address Line 1].
+    if (hasHearingContext && words.some(w => PLACE_WORDS.includes(w))) return true;
+    if (hasHearingContext && words.includes("method")) return true;
+    if (words.some(w => LINK_WORDS.includes(w))
+      && (hasHearingContext || words.some(w => VIDEO_WORDS.includes(w)))) return true;
+    return false;
   });
 }
 

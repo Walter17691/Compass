@@ -371,3 +371,57 @@ describe('LetterScreen — "Save to case" only navigates on a confirmed successf
     expect(setScreen).not.toHaveBeenCalled();
   });
 });
+
+// Human UAT hotfix (2026-09-19) — the action gates must keep behaving
+// correctly for appeal-hearing invitations specifically, both before and
+// after the venue-placeholder discrimination fix. A genuine unresolved
+// venue placeholder still blocks every formal action; a correct invitation
+// carrying the ordinary company/employee placeholders is fully issuable.
+describe('LetterScreen — appeal hearing invitation action gates (Human UAT hotfix)', () => {
+  const futureIso = (() => {
+    const n = new Date();
+    const d = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 30);
+    const pad = x => String(x).padStart(2, '0');
+    return { iso: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, long: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) };
+  })();
+
+  const inviteProps = {
+    ...baseProps,
+    activeLetter: 'invite',
+    caseInfo: {
+      employee: 'UAT - Test Employee (Golden Path)',
+      manager: 'Priya Shah',
+      isAppealHearingInvitation: true,
+      hearingDate: futureIso.iso,
+      hearingTime: '10:00',
+      hearingLocationOrMethod: 'Microsoft Teams',
+    },
+    letterIsApproved: true,
+    letterApproval: { by: 'Jo', at: new Date().toISOString() },
+  };
+
+  const body = venue => `[Company Name]\n[Company Address Line 1]\n\nDear UAT - Test Employee (Golden Path),\n\n`
+    + `Invitation to Appeal Hearing\n\nDate: ${futureIso.long}\nTime: 10:00\nMethod: ${venue}\n\n`
+    + `Please reply to [HR Contact Name and Job Title] at [HR Contact Email Address].`;
+
+  it('an invitation with a genuine unresolved venue placeholder stays blocked from every formal action', () => {
+    render(<LetterScreen {...inviteProps} letterOutput={body('[Hearing Venue]')} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByText(/needs review before it can be used/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send via Gmail' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send from Compass' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send for acknowledgement' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Copy text' })).toBeDisabled();
+  });
+
+  it('a correct invitation carrying ordinary company/employee placeholders is fully issuable', () => {
+    render(<LetterScreen {...inviteProps} letterOutput={body('Microsoft Teams')} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.queryByText(/needs review before it can be used/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Print' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Copy text' })).toBeEnabled();
+  });
+});

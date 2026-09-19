@@ -115,6 +115,7 @@ export function CaseViewScreen({
   const {
     showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
     setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
+    letterValidationIssues = [],
     setOutcomeType, setCompletingOutcomeDetails,
     aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
     openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
@@ -793,6 +794,25 @@ export function CaseViewScreen({
                   <div style={{maxHeight:180,overflowY:"auto",fontSize:12,color:"#1A1535",lineHeight:1.6,paddingRight:4}}>
                     <MDRenderer text={letterOutput}/>
                   </div>
+                  {/* Human UAT hotfix (2026-09-19) — the same
+                      validateFormalLetter issues LetterScreen renders, shown
+                      here too so an inline-generated draft explains itself on
+                      the screen the user is actually on. Deliberately placed
+                      immediately above the draft actions, since it explains
+                      why those actions are limited. Not a second validation
+                      source: these come from the one generation-time result
+                      (App.jsx's letterValidationIssues). */}
+                  {letterValidationIssues.length>0&&(
+                    <div style={{background:"#FEF0EB",border:"1px solid #E8A08A",borderRadius:8,padding:"10px 12px",marginTop:10}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"#B8341F",marginBottom:6}}>This draft needs review before it can be used</div>
+                      <ul style={{margin:0,paddingLeft:18,fontSize:12,color:"#8A2A18"}}>
+                        {letterValidationIssues.map((issue,i)=>(<li key={i} style={{marginBottom:2}}>{issue}</li>))}
+                      </ul>
+                      <div style={{fontSize:12,color:"#8A2A18",marginTop:8}}>
+                        Saving, downloading, sending and signing are disabled until this is corrected. Open it in the Letter editor to edit the text, or regenerate.
+                      </div>
+                    </div>
+                  )}
                   <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
                     <button onClick={()=>handleLetter(draftedType,{inline:true})} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>Regenerate</button>
                     <button onClick={()=>setScreen(SCREENS.LETTER)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Open in Letter editor →</button>

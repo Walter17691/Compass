@@ -800,3 +800,79 @@ describe('validateFormalLetter — appeal invitation logistics, equivalent repre
     expect(validateFormalLetter(letter, { employeeName: goldenPathEmployee, letterType: 'invite' }).valid).toBe(true);
   });
 });
+
+// Human UAT hotfix (2026-09-19) — the first venue matcher fired on the bare
+// word "address", so [Company Address Line 1] / [Employee Address Line 1] /
+// [HR Contact Email Address] — placeholders the letter system prompt itself
+// instructs the model to produce, present in essentially every formal
+// letter — were read as unresolved HEARING venue placeholders. A live,
+// factually correct production invitation (venue resolved to "Microsoft
+// Teams") was blocked from being saved or sent as a result.
+describe('validateFormalLetter — hearing venue placeholder discrimination (Human UAT hotfix)', () => {
+  const hearing = futureHearing();
+  const args = {
+    employeeName: goldenPathEmployee,
+    letterType: 'invite',
+    isAppealHearingInvitation: true,
+    hearingDate: hearing.iso,
+    hearingTime: '10:00',
+    hearingLocationOrMethod: 'Microsoft Teams',
+  };
+  // Everything except the placeholder under test is correct, so any failure
+  // is unambiguously attributable to the venue-placeholder check.
+  const flagsVenuePlaceholder = placeholder => validateFormalLetter(
+    `Dear ${goldenPathEmployee},\n\nThe hearing is on ${hearing.long} at 10:00, by Microsoft Teams. Held at ${placeholder}.`,
+    args,
+  ).issues.some(i => i.toLowerCase().includes('location/method placeholder'));
+
+  it.each([
+    '[Venue]', '[Venue Name]', '[Venue Name and Address]', '[Hearing Venue]',
+    '[Hearing Location]', '[Location of Hearing]', '[Hearing Address]',
+    '[Meeting Venue]', '[Meeting Location]', '[Appeal Hearing Venue]',
+    '[Appeal Hearing Location]', '[Microsoft Teams Link]', '[Video Link]', '[Meeting Link]',
+  ])('still detects the genuine hearing-venue placeholder %s', placeholder => {
+    expect(flagsVenuePlaceholder(placeholder)).toBe(true);
+  });
+
+  it.each([
+    '[Company Address Line 1]', '[Company Address Line 2]', '[Company Address Line 3]',
+    '[Employee Address Line 1]', '[Employee Address Line 2]', '[Employee Address Line 3]',
+    '[HR Contact Email Address]', '[Contact Email Address]', '[Company Name]',
+    '[Employee Name]', '[Postcode]', '[HR Contact Name and Job Title]',
+    '[HR Contact Telephone Number]', '[Contact Telephone Number]', '[Job Title]',
+  ])('does not treat the legitimate letter placeholder %s as a hearing venue', placeholder => {
+    expect(flagsVenuePlaceholder(placeholder)).toBe(false);
+  });
+
+  // The fix is positive matching on the logistics concept, NOT an owner
+  // exclusion list — an owner word must never suppress an explicit
+  // hearing/meeting venue reference.
+  it('detects [Employee hearing location] — "hearing location" wins over the ownership word', () => {
+    expect(flagsVenuePlaceholder('[Employee hearing location]')).toBe(true);
+  });
+
+  it('detects [Company meeting venue] — "meeting venue" wins over the ownership word', () => {
+    expect(flagsVenuePlaceholder('[Company meeting venue]')).toBe(true);
+  });
+
+  it('a full formal letter carrying the normal company/employee/HR-contact placeholders now validates clean', () => {
+    const letter = `[Company Name]\n[Company Address Line 1]\n[Company Address Line 2]\n[Postcode]\n\n`
+      + `${goldenPathEmployee}\n[Employee Address Line 1]\n[Postcode]\n\nDear ${goldenPathEmployee},\n\n`
+      + `Invitation to Appeal Hearing\n\nDate: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\n`
+      + `Please respond to [HR Contact Name and Job Title] at [HR Contact Email Address] no later than [X working days] before the hearing.\n\n`
+      + `Yours sincerely,\n[Job Title]`;
+    const result = validateFormalLetter(letter, args);
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
+
+  // Placeholder scanning passing must never be sufficient on its own.
+  it('authoritative containment is still enforced independently of placeholder scanning', () => {
+    const wrongVenue = `Dear ${goldenPathEmployee},\n\nThe hearing is on ${hearing.long} at 10:00, by Zoom.`;
+    expect(validateFormalLetter(wrongVenue, args).valid).toBe(false);
+    const noVenue = `Dear ${goldenPathEmployee},\n\nThe hearing is on ${hearing.long} at 10:00.`;
+    expect(validateFormalLetter(noVenue, args).valid).toBe(false);
+    const differentMethod = `Dear ${goldenPathEmployee},\n\nThe hearing is on ${hearing.long} at 10:00, by Google Meet.`;
+    expect(validateFormalLetter(differentMethod, args).valid).toBe(false);
+  });
+});
