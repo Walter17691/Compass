@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addCalendarMonth, addCalendarMonths, toISODateLocal } from '../lib/dates.js';
+import { addCalendarMonth, addCalendarMonths, toISODateLocal, isPastLocalDate } from '../lib/dates.js';
 
 describe('addCalendarMonth (existing, unmodified behaviour after refactor onto addCalendarMonths)', () => {
   it('31 January + 1 month clamps to the last day of February in a non-leap year', () => {
@@ -58,5 +58,29 @@ describe('addCalendarMonths — explicit month-end semantics (Defect #12)', () =
 
   it('returns null for an unparseable date', () => {
     expect(addCalendarMonths('not a date', 6)).toBeNull();
+  });
+});
+
+describe('isPastLocalDate (Appeal Invitation UAT P1 remediation)', () => {
+  it('returns false for empty/missing input', () => {
+    expect(isPastLocalDate('')).toBe(false);
+    expect(isPastLocalDate(undefined)).toBe(false);
+    expect(isPastLocalDate(null)).toBe(false);
+  });
+
+  it('returns false for an unparseable date', () => {
+    expect(isPastLocalDate('not-a-date')).toBe(false);
+  });
+
+  it('returns false for today\'s local calendar date, regardless of current time of day', () => {
+    expect(isPastLocalDate(toISODateLocal(new Date()))).toBe(false);
+  });
+
+  it('returns false for a future date', () => {
+    expect(isPastLocalDate('2099-01-01')).toBe(false);
+  });
+
+  it('returns true for a past date', () => {
+    expect(isPastLocalDate('2020-01-01')).toBe(true);
   });
 });

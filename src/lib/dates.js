@@ -48,3 +48,20 @@ export function toISODateLocal(date) {
   const pad = n => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
 }
+
+// Appeal Invitation UAT P1 remediation (2026-09-19) — "not earlier than
+// today's LOCAL calendar date". Compares calendar dates only (midnight to
+// midnight), never date+time-of-day, so a hearing dated "today" is valid
+// regardless of what time it currently is — the same local-calendar
+// convention toISODateLocal itself uses, rather than UTC/ISO-instant
+// comparison, which would wrongly reject "today" in any timezone ahead of
+// UTC for part of the day. Accepts a "YYYY-MM-DD" string (the shape both
+// <input type="date"> and toISODateLocal itself produce).
+export function isPastLocalDate(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return false;
+  const now = new Date();
+  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return d.getTime() < todayLocal.getTime();
+}

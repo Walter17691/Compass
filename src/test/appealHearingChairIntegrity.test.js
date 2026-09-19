@@ -271,3 +271,23 @@ describe('textual manager/display-name handling (known, documented limitation)',
     expect(result).toEqual({ ok: true });
   });
 });
+
+describe('hearingDate/hearingTime/hearingLocationOrMethod (Appeal Invitation UAT P1 remediation, §12) are invisible to chair-integrity classification', () => {
+  it('an invitation-only entry carrying the three new hearing-logistics fields is still classified as letter-only, still requiring no chairUserId', () => {
+    const entry = {
+      id: 'm1', type: 'Disciplinary Appeal', letterType: 'invite', record: '', transcript: [],
+      hearingDate: '2026-10-01', hearingTime: '10:30', hearingLocationOrMethod: 'Microsoft Teams',
+    };
+    const { isLetterOnly, requiresChair } = classifyMeetingEntry(entry);
+    expect(isLetterOnly).toBe(true);
+    expect(requiresChair).toBe(false);
+    const result = validateNewMeetingEntry(entry, { currentAppealManagerUserId: null });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('a genuine hearing (real record content) still requires a valid, matching chairUserId regardless of these fields being absent', () => {
+    const entry = { id: 'm2', type: 'Disciplinary Appeal', record: 'Hearing notes here.', transcript: [] };
+    const result = validateNewMeetingEntry(entry, { currentAppealManagerUserId: OFFICER_A });
+    expect(result).toEqual({ ok: false, error: 'APPEAL_HEARING_CHAIR_MISSING' });
+  });
+});

@@ -554,3 +554,249 @@ describe('validateFormalLetter — malformed/empty AI response', () => {
     expect(() => validateFormalLetter(null, {employeeName: goldenPathEmployee, letterType: 'outcome'})).not.toThrow();
   });
 });
+
+// Appeal Invitation UAT P1 remediation (2026-09-19) — the deterministic
+// final-letter safety net, independent of generation-time grounding.
+// Scoped to letterType==="invite" && isAppealHearingInvitation only; an
+// ordinary disciplinary/grievance/witness "invite" (isAppealHearingInvitation
+// false/undefined) must be completely unaffected by these checks.
+// Dates are computed relative to "now", never hardcoded: the validator
+// genuinely rejects a past hearing date, so a literal future date baked
+// into a fixture silently becomes a failing test the day it goes by.
+function futureHearing(daysAhead = 30) {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead);
+  const day = d.getDate();
+  const suffix = (day % 10 === 1 && day !== 11) ? 'st' : (day % 10 === 2 && day !== 12) ? 'nd' : (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+  const pad = n => String(n).padStart(2, '0');
+  return {
+    iso: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(day)}`,
+    long: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+    ordinal: `${day}${suffix} ${d.toLocaleDateString('en-GB', { month: 'long' })} ${d.getFullYear()}`,
+    slash: `${pad(day)}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`,
+  };
+}
+
+function appealInviteLetter(name, { dateText, time = '10:30', location = 'Microsoft Teams' } = {}) {
+  const resolvedDate = dateText === undefined ? futureHearing().long : dateText;
+  return `[Company Name]\n\n19 September 2026\n\nDear ${name},\n\nAppeal Hearing Invitation\n\nYou are invited to an appeal hearing on ${resolvedDate} at ${time}, to be held at ${location}.\n\nYours sincerely,\n[Hearing Manager Name]`;
+}
+
+describe('validateFormalLetter — appeal hearing invitation logistics (Appeal Invitation UAT P1)', () => {
+  const hearing = futureHearing();
+  const validArgs = {
+    employeeName: goldenPathEmployee,
+    letterType: 'invite',
+    isAppealHearingInvitation: true,
+    hearingDate: hearing.iso,
+    hearingTime: '10:30',
+    hearingLocationOrMethod: 'Microsoft Teams',
+  };
+
+  it('a letter stating the exact agreed date, time, and location is valid', () => {
+    const letter = appealInviteLetter(goldenPathEmployee);
+    const result = validateFormalLetter(letter, validArgs);
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('is not applied to an ordinary (non-appeal-hearing) invite letter', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { dateText: '[Date of Hearing]', time: '[Time of Hearing]', location: '[Venue]' });
+    const result = validateFormalLetter(letter, { employeeName: goldenPathEmployee, letterType: 'invite' });
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a missing hearing date', () => {
+    const letter = appealInviteLetter(goldenPathEmployee);
+    const result = validateFormalLetter(letter, { ...validArgs, hearingDate: '' });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('Add the hearing date'))).toBe(true);
+  });
+
+  it('rejects a past hearing date', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { dateText: '1 January 2020' });
+    const result = validateFormalLetter(letter, { ...validArgs, hearingDate: '2020-01-01' });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.toLowerCase().includes('cannot be in the past'))).toBe(true);
+  });
+
+  it('rejects an unresolved hearing-date placeholder still present in the text', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { dateText: '[Date of Hearing]' });
+    const result = validateFormalLetter(letter, validArgs);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.toLowerCase().includes('hearing-date placeholder'))).toBe(true);
+  });
+
+  it('rejects a letter stating a different date to the one agreed', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { dateText: futureHearing(60).long });
+    const result = validateFormalLetter(letter, validArgs);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('does not appear to state the agreed hearing date'))).toBe(true);
+  });
+
+  it('rejects a missing hearing time', () => {
+    const letter = appealInviteLetter(goldenPathEmployee);
+    const result = validateFormalLetter(letter, { ...validArgs, hearingTime: '' });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('Add the hearing time'))).toBe(true);
+  });
+
+  it('rejects an unresolved [Time of Hearing] placeholder', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { time: '[Time of Hearing]' });
+    const result = validateFormalLetter(letter, validArgs);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.toLowerCase().includes('hearing-time placeholder'))).toBe(true);
+  });
+
+  it('rejects a letter stating a different time to the one agreed', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { time: '14:00' });
+    const result = validateFormalLetter(letter, validArgs);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('does not appear to state the agreed hearing time'))).toBe(true);
+  });
+
+  it('rejects a missing hearing location/method', () => {
+    const letter = appealInviteLetter(goldenPathEmployee);
+    const result = validateFormalLetter(letter, { ...validArgs, hearingLocationOrMethod: '' });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('Add the hearing location or method'))).toBe(true);
+  });
+
+  it('rejects an unresolved [Venue Name and Address] placeholder', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { location: '[Venue Name and Address]' });
+    const result = validateFormalLetter(letter, validArgs);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.toLowerCase().includes('location/method placeholder'))).toBe(true);
+  });
+
+  it('rejects a letter using the employee\'s own work location instead of the agreed hearing venue', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { location: 'Manchester' });
+    const result = validateFormalLetter(letter, validArgs);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('does not appear to state the agreed hearing location'))).toBe(true);
+  });
+});
+
+// Appeal Invitation final validation check (2026-09-19) — the validator must
+// protect against factual SUBSTITUTION without demanding character-for-
+// character reproduction of the internal <input type="date">/<input
+// type="time"> formats. These lock in exactly which equivalent formal-letter
+// renderings are accepted and which materially different values are not.
+describe('validateFormalLetter — appeal invitation logistics, equivalent representations', () => {
+  const hearing = futureHearing();
+  const validArgs = {
+    employeeName: goldenPathEmployee,
+    letterType: 'invite',
+    isAppealHearingInvitation: true,
+    hearingDate: hearing.iso,
+    hearingTime: '10:00',
+    hearingLocationOrMethod: 'Microsoft Teams',
+  };
+  const check = over => validateFormalLetter(
+    appealInviteLetter(goldenPathEmployee, { dateText: hearing.long, time: '10:00', location: 'Microsoft Teams', ...(over.text || {}) }),
+    { ...validArgs, ...(over.args || {}) },
+  );
+
+  // --- date ---
+  it('1. an ISO structured date rendered as a human-readable UK date passes', () => {
+    expect(check({ text: { dateText: hearing.long } }).valid).toBe(true);
+  });
+
+  it('2. the ordinal rendering ("22nd September 2026") passes', () => {
+    expect(check({ text: { dateText: hearing.ordinal } }).valid).toBe(true);
+  });
+
+  it('2b. the slash rendering ("22/09/2026") passes', () => {
+    expect(check({ text: { dateText: hearing.slash } }).valid).toBe(true);
+  });
+
+  it('2c. a weekday-prefixed rendering passes', () => {
+    expect(check({ text: { dateText: `Tuesday ${hearing.long}` } }).valid).toBe(true);
+  });
+
+  it('3. a materially different date fails (day before and day after)', () => {
+    expect(check({ text: { dateText: futureHearing(29).long } }).valid).toBe(false);
+    expect(check({ text: { dateText: futureHearing(31).long } }).valid).toBe(false);
+  });
+
+  it('4. an unresolved date placeholder fails', () => {
+    const result = check({ text: { dateText: '[Date of Hearing]' } });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.toLowerCase().includes('hearing-date placeholder'))).toBe(true);
+  });
+
+  it('4b. a structured date that is itself in the past fails, regardless of what the letter says', () => {
+    const result = check({ args: { hearingDate: '2020-01-01' }, text: { dateText: '1 January 2020' } });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.toLowerCase().includes('cannot be in the past'))).toBe(true);
+  });
+
+  // --- time ---
+  it('5. structured 10:00 rendered as "10:00" passes', () => {
+    expect(check({ text: { time: '10:00' } }).valid).toBe(true);
+  });
+
+  it('6. structured 10:00 rendered as "10:00 am" passes', () => {
+    expect(check({ text: { time: '10:00 am' } }).valid).toBe(true);
+  });
+
+  it('7. structured 10:00 rendered as "10:00am" passes', () => {
+    expect(check({ text: { time: '10:00am' } }).valid).toBe(true);
+  });
+
+  it('8. structured 10:00 rendered as "10.00 am" and "10.00" passes', () => {
+    expect(check({ text: { time: '10.00 am' } }).valid).toBe(true);
+    expect(check({ text: { time: '10.00' } }).valid).toBe(true);
+  });
+
+  it('8b. structured 10:00 rendered as "10:00 a.m." passes', () => {
+    expect(check({ text: { time: '10:00 a.m.' } }).valid).toBe(true);
+  });
+
+  it('9. a materially different time ("11:00") fails', () => {
+    expect(check({ text: { time: '11:00' } }).valid).toBe(false);
+  });
+
+  it('9b. "10:00 pm" fails against a structured 10:00 — 22:00 is a different time, not an equivalent rendering', () => {
+    const result = check({ text: { time: '10:00 pm' } });
+    expect(result.valid).toBe(false);
+    expect(result.issues.some(i => i.includes('does not appear to state the agreed hearing time'))).toBe(true);
+  });
+
+  it('9c. an afternoon structured time is matched by its 12-hour rendering ("2:00 pm" for 14:00)', () => {
+    expect(check({ args: { hearingTime: '14:00' }, text: { time: '2:00 pm' } }).valid).toBe(true);
+    expect(check({ args: { hearingTime: '14:00' }, text: { time: '2:00 am' } }).valid).toBe(false);
+  });
+
+  // --- location ---
+  it('10. location comparison tolerates casing and outer/inner whitespace', () => {
+    expect(check({ text: { location: 'microsoft teams' } }).valid).toBe(true);
+    expect(check({ text: { location: 'MICROSOFT TEAMS' } }).valid).toBe(true);
+    expect(check({ args: { hearingLocationOrMethod: '  Microsoft Teams  ' } }).valid).toBe(true);
+    expect(check({ args: { hearingLocationOrMethod: 'Microsoft  Teams' } }).valid).toBe(true);
+  });
+
+  it('11. a materially different location fails — no fuzzy/semantic matching', () => {
+    expect(check({ text: { location: 'Zoom' } }).valid).toBe(false);
+    expect(check({ text: { location: 'Manchester' } }).valid).toBe(false);
+    expect(check({ text: { location: 'Microsoft Outlook' } }).valid).toBe(false);
+    expect(check({ args: { hearingLocationOrMethod: 'Leeds Head Office' }, text: { location: 'Leeds Branch Office' } }).valid).toBe(false);
+  });
+
+  // --- editor safety (re-validation of the CURRENT edited letter) ---
+  it('12. a valid letter edited to a different time is re-blocked', () => {
+    expect(check({ text: { time: '10:00' } }).valid).toBe(true);
+    expect(check({ text: { time: '11:00' } }).valid).toBe(false);
+  });
+
+  it('13. an invalid letter edited back to an authoritative equivalent is permitted again', () => {
+    expect(check({ text: { time: '11:00' } }).valid).toBe(false);
+    expect(check({ text: { time: '10.00 am' } }).valid).toBe(true);
+  });
+
+  // --- scoping ---
+  it('14. a non-appeal invitation is entirely unaffected by every one of these checks', () => {
+    const letter = appealInviteLetter(goldenPathEmployee, { dateText: '[Date of Hearing]', time: '[Time of Hearing]', location: '[Venue]' });
+    expect(validateFormalLetter(letter, { employeeName: goldenPathEmployee, letterType: 'invite' }).valid).toBe(true);
+  });
+});

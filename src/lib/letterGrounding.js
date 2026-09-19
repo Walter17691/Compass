@@ -88,3 +88,41 @@ export function buildAppealOutcomeInstruction(allegation, decidedByName) {
   if (allegation.appealDecidedAt) text += "  Appeal decided on: " + new Date(allegation.appealDecidedAt).toLocaleDateString("en-GB");
   return text;
 }
+
+// Appeal Invitation UAT P1 remediation (2026-09-19) — root cause of the
+// discovered defect: nothing previously told the model the hearing
+// date/time/location were separate, deterministic facts distinct from
+// caseInfo's generic "Meeting date" (which, for an invitation to a
+// hearing that hasn't happened yet, was always the wrong concept — it
+// held whatever stale date caseInfo last carried from an unrelated
+// interaction). These three facts now come ONLY from the logistics form
+// collected before generation (CaseViewScreen.jsx's appeal-invite flow) —
+// never from caseInfo.date, a previous meeting, the outcome date, or the
+// employee's own location — and are stated here as fixed facts the model
+// must use exactly, mirroring buildAppealDeadlineInstruction's own
+// "state this, don't calculate/invent" pattern. Callers must NOT also
+// include the generic "Meeting date"/employee "Location" lines when this
+// instruction is present, to avoid two competing/ambiguous date or
+// location facts reaching the model at once.
+export function buildAppealHearingLogisticsInstruction(hearingLogistics) {
+  if (!hearingLogistics?.date || !hearingLogistics?.time || !hearingLogistics?.locationOrMethod) return "";
+  const formatted = new Date(hearingLogistics.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return `AUTHORITATIVE HEARING ARRANGEMENTS (already agreed by HR — state these exact facts, never calculate, infer, or substitute a different date/time/location, and never use a bracketed placeholder for any of the three): Date: ${formatted}. Time: ${hearingLogistics.time}. Location/method: ${hearingLogistics.locationOrMethod}. This location/method is the HEARING venue or video-call method — do not confuse it with the employee's own normal work location, which may appear elsewhere in this information and describes a different thing entirely.`;
+}
+
+// Appeal Invitation UAT P1 remediation (2026-09-19) — closes the
+// discovered gap where cases.appeal_text (the employee's own persisted
+// appeal grounds) was never read by the invitation prompt at all for any
+// case, populated or not. Deterministic either way: states the exact
+// recorded grounds when present (never substituting the original
+// allegation, case description, or an AI-detected signal instead), or
+// explicitly tells the model grounds are unrecorded so a legacy case
+// with no appeal_text yet reads as a known unknown, not an invitation to
+// infer or fabricate one.
+export function buildAppealGroundsInstruction(appealText) {
+  const trimmed = (appealText || "").trim();
+  if (trimmed) {
+    return `GROUNDS OF APPEAL RAISED BY THE EMPLOYEE (state exactly as given — never substitute the original allegation, case description, or your own inference for this): ${trimmed}`;
+  }
+  return "GROUNDS OF APPEAL: not recorded in the structured case data. Do not invent, infer, or reconstruct specific grounds from the original allegation, case description, or any other context — state generally that the appeal will be heard, without fabricating detail about what is being appealed.";
+}

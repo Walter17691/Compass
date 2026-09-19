@@ -59,9 +59,18 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
   // addressed to the wrong person — so it's a distinct check from the
   // existing outcomeNotYetDecided/approval gates, not a replacement for
   // either.
+  // Appeal Invitation UAT P1 remediation (2026-09-19) — isAppealHearingInvitation/
+  // hearingDate/hearingTime/hearingLocationOrMethod are set onto caseInfo by
+  // CaseViewScreen.jsx's logistics-form flow before handleLetter ever runs,
+  // so they survive here for re-validation on every keystroke in the
+  // editable textarea below (letterOutput is already a dependency) —
+  // generation-time facts and final-letter validation are deliberately
+  // separate checks (see letterValidation.js's own comment): a human
+  // editing a previously-valid invitation back into an invalid one (e.g.
+  // deleting the stated date) must re-block the same actions.
   const letterValidation = useMemo(
-    () => validateFormalLetter(letterOutput, {employeeName: caseInfo.employee, outcome: outcomeValue, letterType: activeLetter, warningDurationMonths, warningExpiresAt}),
-    [letterOutput, caseInfo.employee, outcomeValue, activeLetter, warningDurationMonths, warningExpiresAt]
+    () => validateFormalLetter(letterOutput, {employeeName: caseInfo.employee, outcome: outcomeValue, letterType: activeLetter, warningDurationMonths, warningExpiresAt, isAppealHearingInvitation: caseInfo.isAppealHearingInvitation, hearingDate: caseInfo.hearingDate, hearingTime: caseInfo.hearingTime, hearingLocationOrMethod: caseInfo.hearingLocationOrMethod}),
+    [letterOutput, caseInfo.employee, outcomeValue, activeLetter, warningDurationMonths, warningExpiresAt, caseInfo.isAppealHearingInvitation, caseInfo.hearingDate, caseInfo.hearingTime, caseInfo.hearingLocationOrMethod]
   );
   const letterGroundingFailed = !letterValidation.valid;
   const canIssue = letterIsApproved && !outcomeNotYetDecided && !letterGroundingFailed;

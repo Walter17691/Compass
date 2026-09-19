@@ -17,6 +17,8 @@
 // shares this same generation path (App.jsx's handleLetter), not just
 // the one that was broken.
 
+import { isPastLocalDate } from './dates';
+
 const SALUTATION_RE = /Dear\s+([^,\n]+),/i;
 
 export function extractLetterSalutation(letterText) {
@@ -90,6 +92,91 @@ function hasWarningDurationPlaceholder(text) {
   return countPlaceholderRe.test(t) || splitCountPlaceholderRe.test(t) || semanticPlaceholderRe.test(t);
 }
 
+// Appeal Invitation UAT P1 remediation (2026-09-19) — same bracket-
+// content, wording-agnostic approach as hasWarningDurationPlaceholder
+// above: a bracket counts as an unresolved hearing-date/time/venue
+// placeholder once its own words match, regardless of the model's exact
+// phrasing ("[Date of Hearing]", "[Hearing Date]", "[Insert Time]",
+// "[Venue Name and Address]", "[Location/Method]", etc.), never by
+// hardcoding one fixed phrase.
+function hasHearingDatePlaceholder(text) {
+  const brackets = (text || "").match(/\[[^\]]{0,60}\]/g) || [];
+  return brackets.some(b => {
+    const words = b.toLowerCase().replace(/[^a-z]+/g, " ").split(" ").filter(Boolean);
+    return words.includes("date") && (words.includes("hearing") || words.includes("appeal"));
+  });
+}
+function hasHearingTimePlaceholder(text) {
+  const brackets = (text || "").match(/\[[^\]]{0,60}\]/g) || [];
+  return brackets.some(b => {
+    const words = b.toLowerCase().replace(/[^a-z]+/g, " ").split(" ").filter(Boolean);
+    return words.includes("time");
+  });
+}
+// Appeal Invitation final validation check (2026-09-19) — the structured
+// hearing time is an <input type="time"> value ("HH:MM", 24-hour), but a
+// formal letter legitimately renders the same fact as "10:00", "10:00 am",
+// "10:00am", "10.00 am" or "10.00". The original check was a raw
+// text.includes(hearingTime) substring test, which was wrong in BOTH
+// directions: it rejected the dot-separated forms above (a valid letter
+// blocked), and — the real defect — it ACCEPTED "10:00 pm" for a 10:00
+// hearing, because the substring "10:00" is present. 10:00 pm is 22:00:
+// a materially different time, i.e. exactly the factual substitution this
+// check exists to catch. Comparing normalised minutes-since-midnight
+// fixes both: every time-like token in the letter is parsed, meridiem
+// applied, and compared numerically to the authoritative value.
+function parseStructuredTimeToMinutes(value) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((value || "").trim());
+  if (!m) return null;
+  const hours = Number(m[1]), minutes = Number(m[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function letterStatesHearingTime(text, structuredTime) {
+  const target = parseStructuredTimeToMinutes(structuredTime);
+  if (target === null) return false;
+  // Deliberately a presence check across the whole letter (the same shape
+  // the date and location checks use), not a position-sensitive parse:
+  // this verifies the agreed fact appears, and that no materially
+  // different time is stated in its place.
+  const tokenRe = /\b(\d{1,2})[:.](\d{2})\s*(a\.?m\.?|p\.?m\.?)?/gi;
+  let match;
+  while ((match = tokenRe.exec(text || "")) !== null) {
+    let hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (minutes > 59) continue;
+    const meridiem = (match[3] || "").replace(/[^apm]/gi, "").toLowerCase();
+    if (meridiem === "am") {
+      if (hours === 12) hours = 0;
+      else if (hours > 12) continue;
+    } else if (meridiem === "pm") {
+      if (hours > 12) continue;
+      if (hours !== 12) hours += 12;
+    } else if (hours > 23) continue;
+    if (hours * 60 + minutes === target) return true;
+  }
+  return false;
+}
+
+// Case- and whitespace-insensitive containment, nothing more. Deliberately
+// NOT fuzzy/semantic matching: a different venue must never normalise into
+// a match, so only casing and runs of whitespace (including a line break
+// falling mid-venue-name) are neutralised. The human-entered value stays
+// authoritative.
+function normalizeForLooseContains(value) {
+  return (value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function hasHearingVenuePlaceholder(text) {
+  const brackets = (text || "").match(/\[[^\]]{0,60}\]/g) || [];
+  return brackets.some(b => {
+    const words = b.toLowerCase().replace(/[^a-z]+/g, " ").split(" ").filter(Boolean);
+    return words.includes("venue") || words.includes("location") || words.includes("address")
+      || (words.includes("method") && (words.includes("hearing") || words.includes("meeting")));
+  });
+}
+
 // Letter types genuinely addressed to the case's own employee. Witness
 // invitations and evidence requests go to a different, unrelated
 // recipient by design; an investigation report is an internal document,
@@ -107,7 +194,7 @@ export const EMPLOYEE_DIRECTED_LETTER_TYPES = [
 // compose. Never invents a missing fact to "fix" a check — an unresolved
 // [placeholder] for something Compass genuinely doesn't hold structured
 // data for (e.g. company address) is not flagged here.
-export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt, appealDeadline, appealOutcomeLabel, appealEffectTag } = {}) {
+export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt, appealDeadline, appealOutcomeLabel, appealEffectTag, isAppealHearingInvitation, hearingDate, hearingTime, hearingLocationOrMethod } = {}) {
   const issues = [];
   if (!EMPLOYEE_DIRECTED_LETTER_TYPES.includes(letterType)) {
     return { valid: true, issues };
@@ -287,6 +374,62 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
     }
     if (hasRelativeLetterAnchor) {
       issues.push(`Letter ties the appeal deadline to the date of this letter, which can differ from the authoritative deadline (${formattedCorrect}).`);
+    }
+  }
+
+  // Appeal Invitation UAT P1 remediation (2026-09-19) — a formal appeal
+  // hearing invitation is uniquely load-bearing among letter types: unlike
+  // an outcome/appeal-outcome letter (which reports a decision already
+  // made), it commits the organisation to a specific future date/time/
+  // place, and getting any of the three wrong or left unresolved directly
+  // undermines the fairness of the process. Generation-time grounding
+  // (buildAppealHearingLogisticsInstruction, letterGrounding.js) is not
+  // sufficient on its own — the model could still fail to faithfully
+  // reproduce a given fact, and a human editing the letter afterward could
+  // reintroduce a placeholder or a stale date — so this re-checks the
+  // ACTUAL current letter text against the structured facts every time,
+  // independent of how the text got that way. Scoped narrowly to
+  // letterType==="invite" AND isAppealHearingInvitation (the CaseViewScreen
+  // logistics-form flow explicitly sets this) — an ordinary disciplinary/
+  // grievance/witness invitation, which never had this structured
+  // logistics step, is completely unaffected.
+  if (letterType === "invite" && isAppealHearingInvitation) {
+    const text = letterText || "";
+
+    if (!hearingDate) {
+      issues.push("Add the hearing date before saving this invitation.");
+    } else if (isPastLocalDate(hearingDate)) {
+      issues.push("The hearing date cannot be in the past.");
+    } else {
+      const d = new Date(hearingDate + "T00:00:00");
+      const correctYear = String(d.getFullYear());
+      const correctMonthLong = d.toLocaleDateString("en-GB", { month: "long" });
+      const correctMonthShort = d.toLocaleDateString("en-GB", { month: "short" });
+      const correctDay = d.getDate();
+      const correctSlash = `${String(correctDay).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${correctYear}`;
+      const correctDateRe = new RegExp(`\\b0?${correctDay}(?:st|nd|rd|th)?\\s+(?:${correctMonthLong}|${correctMonthShort})\\.?,?\\s+${correctYear}\\b`, "i");
+      const statesCorrectHearingDate = correctDateRe.test(text) || text.includes(correctSlash);
+      if (hasHearingDatePlaceholder(text)) {
+        issues.push("The invitation still contains an unresolved hearing-date placeholder.");
+      } else if (!statesCorrectHearingDate) {
+        issues.push(`Letter does not appear to state the agreed hearing date (${d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}).`);
+      }
+    }
+
+    if (!hearingTime) {
+      issues.push("Add the hearing time before saving this invitation.");
+    } else if (hasHearingTimePlaceholder(text)) {
+      issues.push("The invitation still contains an unresolved hearing-time placeholder.");
+    } else if (!letterStatesHearingTime(text, hearingTime)) {
+      issues.push("Letter does not appear to state the agreed hearing time.");
+    }
+
+    if (!hearingLocationOrMethod) {
+      issues.push("Add the hearing location or method before saving this invitation.");
+    } else if (hasHearingVenuePlaceholder(text)) {
+      issues.push("The invitation still contains an unresolved hearing location/method placeholder.");
+    } else if (!normalizeForLooseContains(text).includes(normalizeForLooseContains(hearingLocationOrMethod))) {
+      issues.push("Letter does not appear to state the agreed hearing location or method.");
     }
   }
 

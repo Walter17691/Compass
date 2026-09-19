@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
+import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 import { MDRenderer } from '../components/MDRenderer';
 import { LockIcon } from '../components/Icons';
@@ -121,6 +122,18 @@ export function CaseViewScreen({
   } = header;
   const [showDraft, setShowDraft] = useState(false);
   const [draftedType, setDraftedType] = useState(null);
+  // Appeal Invitation UAT P1 remediation (2026-09-19) — the essential
+  // hearing logistics Compass cannot know on its own (date/time/location
+  // or method). Collected here, deterministically, BEFORE any AI call —
+  // never left for the model to invent or backfilled from unrelated state
+  // (caseInfo.date, the employee's own location, etc). Local to this
+  // component: these values are only ever meaningful for the one
+  // structured appeal-invitation flow that sets them, never persisted as
+  // component state beyond this single draft.
+  const [showAppealInviteLogistics, setShowAppealInviteLogistics] = useState(false);
+  const [appealInviteDate, setAppealInviteDate] = useState("");
+  const [appealInviteTime, setAppealInviteTime] = useState("");
+  const [appealInviteLocation, setAppealInviteLocation] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [whySignal, setWhySignal] = useState(null);
@@ -320,23 +333,19 @@ export function CaseViewScreen({
     }
     else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
     else if(nextStep.action==="inv_report"){attemptSubmitInvestigation(cs.id);}
-    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[],appealManagerId:null}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}
+    else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[],appealManagerId:null,isAppealHearingInvitation:false}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}
     else if(nextStep.action==="appeal_invite"){
-      // Appeal Hearing Control Remediation (2026-09-18) — the missing
-      // sequencing step identified in discovery: reuses the exact same
-      // inline-draft pipeline as disciplinary_invite (no new letter
-      // pipeline), scoped to the appeal officer's identity rather than
-      // cs.manager, and to the already-known appeal meeting type. No
-      // stage transition — the case is already in "appeal".
-      // appealManagerId:null — this letter's own eventual meeting-save
-      // must never inherit chair-integrity enforcement meant for the
-      // actual hearing record (see saveMeetingToCaseImpl).
-      setCaseInfo(p=>({...p,employee:cs.employeeName,manager:appealManagerName||"",evidence:cs.evidence||[],appealManagerId:null}));
-      setMeetingType(MEETING_TYPES.find(t=>t.id===(nextStep.meetingType||"appeal-disciplinary"))||null);
-      setShowDraft(true);setDraftedType("invite");
-      handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:appealManagerName||""});
+      // Appeal Invitation UAT P1 remediation (2026-09-19) — generation no
+      // longer fires immediately. The AI cannot know the hearing date/
+      // time/location, and previously wasn't asked to wait for them —
+      // it silently inherited stale caseInfo.date as if it were "the
+      // meeting date" and placeholder'd everything else. The logistics
+      // form (below) collects exactly those three facts deterministically
+      // before any /api/chat call; see attemptGenerateAppealInvitation.
+      setAppealInviteDate("");setAppealInviteTime("");setAppealInviteLocation("");
+      setShowAppealInviteLogistics(true);
     }
-    else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,appealManagerId:null}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});}
+    else if(nextStep.action==="outcome_letter"){const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,appealManagerId:null,isAppealHearingInvitation:false}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"outcome"}:x));setShowDraft(true);setDraftedType("outcome");handleLetter("outcome",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});}
     else if(nextStep.action==="appeal_letter"){
       // Was previously handled identically to outcome_letter — drafted
       // an "outcome" letter and regressed stage from "appeal" back to
@@ -344,7 +353,7 @@ export function CaseViewScreen({
       // that point. The appeal is the final stage (ACAS Code); this
       // only closes on an explicit close_case, never silently un-does
       // progress.
-      const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,appealManagerId:null}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});
+      const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,appealManagerId:null,isAppealHearingInvitation:false}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});
     }
     else if(nextStep.action==="close_case"){requestCloseCase();}
     // Appeal Independence P1 (2026-09-18) — the suggested next step itself
@@ -352,6 +361,45 @@ export function CaseViewScreen({
     // the same AppealOfficerModal the existing manual "Appoint appeal
     // officer" button (below, in the appeal-stage bar) already opens.
     else if(nextStep.action==="appoint_appeal_officer"){setShowAppealOfficerModal(true);}
+  };
+
+  // Appeal Invitation UAT P1 remediation (2026-09-19) — the deterministic
+  // gate between the logistics form and generation. Blocks on exactly the
+  // three facts the AI must never be left to invent/infer: a missing or
+  // past hearing date, a missing time, or a missing location/method.
+  // Mirrors validateFormalLetter's own isPastLocalDate usage so the "not
+  // earlier than today" rule is defined once (lib/dates.js) and applied
+  // identically at collection time here and at final-letter validation
+  // time there.
+  const appealInviteLogisticsErrors = [];
+  if(!appealInviteDate) appealInviteLogisticsErrors.push("Add the hearing date.");
+  else if(isPastLocalDate(appealInviteDate)) appealInviteLogisticsErrors.push("The hearing date cannot be in the past.");
+  if(!appealInviteTime) appealInviteLogisticsErrors.push("Add the hearing time.");
+  if(!appealInviteLocation.trim()) appealInviteLogisticsErrors.push("Add the hearing location or method.");
+
+  const attemptGenerateAppealInvitation = () => {
+    if(appealInviteLogisticsErrors.length>0) return;
+    const hearingLogistics = { date: appealInviteDate, time: appealInviteTime, locationOrMethod: appealInviteLocation.trim() };
+    // appealManagerId:null — this letter's own eventual meeting-save must
+    // never inherit chair-integrity enforcement meant for the actual
+    // hearing record (see saveMeetingToCaseImpl). isAppealHearingInvitation
+    // + the three hearing fields ride on caseInfo (not just the local
+    // hearingLogistics override passed to handleLetter below) so
+    // LetterScreen's own later re-validation can see them too.
+    setCaseInfo(p=>({...p,
+      employee:cs.employeeName,
+      manager:appealManagerName||"",
+      evidence:cs.evidence||[],
+      appealManagerId:null,
+      isAppealHearingInvitation:true,
+      hearingDate:hearingLogistics.date,
+      hearingTime:hearingLogistics.time,
+      hearingLocationOrMethod:hearingLogistics.locationOrMethod,
+    }));
+    setMeetingType(MEETING_TYPES.find(t=>t.id===(nextStep?.meetingType||"appeal-disciplinary"))||null);
+    setShowAppealInviteLogistics(false);
+    setShowDraft(true);setDraftedType("invite");
+    handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:appealManagerName||"",hearingLogistics});
   };
 
   // Defect #17 remediation — a durable, always-available way to draft or
@@ -684,6 +732,44 @@ export function CaseViewScreen({
               <button onClick={handleNextStepAction} disabled={(nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?"not-allowed":"pointer",opacity:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?0.6:1,fontFamily:FONT.sans}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
             </div>
           </div>
+
+          {/* Appeal Invitation UAT P1 remediation (2026-09-19) — the
+              essential hearing logistics Compass cannot know on its own,
+              collected before any AI call. Deliberately compact: exactly
+              three fields, no meeting-type/employee/chair re-entry (the
+              appointed appeal_manager, already shown as "Officer:" in the
+              banner above, is authoritative and reused as-is). */}
+          {showAppealInviteLogistics&&(
+            <div style={{marginTop:12,background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:10,padding:14}}>
+              <div style={{fontSize:13,color:"#1A1535",fontWeight:600,marginBottom:2}}>Hearing arrangements</div>
+              <div style={{fontSize:11,color:"#9B9098",marginBottom:12}}>Compass needs these before it can draft the invitation — it will not guess a date, time, or venue.</div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
+                <div style={{flex:"1 1 140px"}}>
+                  <label htmlFor="appeal-invite-date" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing date</label>
+                  <input id="appeal-invite-date" type="date" value={appealInviteDate} min={toISODateLocal(new Date())}
+                    onChange={e=>setAppealInviteDate(e.target.value)}
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#1A1535",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{flex:"1 1 100px"}}>
+                  <label htmlFor="appeal-invite-time" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing time</label>
+                  <input id="appeal-invite-time" type="time" value={appealInviteTime}
+                    onChange={e=>setAppealInviteTime(e.target.value)}
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#1A1535",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{flex:"2 1 220px"}}>
+                  <label htmlFor="appeal-invite-location" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing method / location</label>
+                  <input id="appeal-invite-location" type="text" placeholder="e.g. Microsoft Teams, or Manchester Head Office" value={appealInviteLocation}
+                    onChange={e=>setAppealInviteLocation(e.target.value)}
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#1A1535",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <button onClick={attemptGenerateAppealInvitation} disabled={appealInviteLogisticsErrors.length>0} style={{fontSize:12,background:appealInviteLogisticsErrors.length>0?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:appealInviteLogisticsErrors.length>0?"#9B9098":"#fff",fontWeight:600,cursor:appealInviteLogisticsErrors.length>0?"not-allowed":"pointer",fontFamily:FONT.sans}}>Continue →</button>
+                <button onClick={()=>setShowAppealInviteLogistics(false)} style={{fontSize:12,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
+                {appealInviteLogisticsErrors.length>0&&<span style={{fontSize:11,color:"#B87520"}}>{appealInviteLogisticsErrors[0]}</span>}
+              </div>
+            </div>
+          )}
 
           {/* Inline draft preview — only for letter-generating actions */}
           {showDraft&&(

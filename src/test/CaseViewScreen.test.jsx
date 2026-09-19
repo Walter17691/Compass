@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CaseViewScreen } from '../screens/CaseViewScreen.jsx';
 
@@ -667,17 +667,86 @@ describe('CaseViewScreen — structured appeal hearing chair/context (Appeal Hea
     expect(result.appealManagerId).toBeNull();
   });
 
-  it('"Draft appeal hearing invitation" opens the existing invitation-letter pipeline (handleLetter, type "invite") scoped to the appeal officer, not a new pipeline', async () => {
+  it('"Draft appeal hearing invitation" opens the hearing-logistics form first, without calling handleLetter or setCaseInfo', async () => {
     const user = userEvent.setup();
     const handleLetter = vi.fn();
     const setCaseInfo = vi.fn();
     const getNextStep = () => ({ label: 'Draft appeal hearing invitation', action: 'appeal_invite', meetingType: 'appeal-disciplinary', primary: true });
     render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter, setCaseInfo }} />);
     await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
-    expect(handleLetter).toHaveBeenCalledWith('invite', expect.objectContaining({ inline: true, employeeName: appealCase.employeeName, manager: 'Priya Shah' }));
+    expect(screen.getByText('Hearing arrangements')).toBeInTheDocument();
+    expect(handleLetter).not.toHaveBeenCalled();
+    expect(setCaseInfo).not.toHaveBeenCalled();
+  });
+
+  it('the logistics form blocks "Continue" until date, time, and location are all filled, and rejects a past date', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    const getNextStep = () => ({ label: 'Draft appeal hearing invitation', action: 'appeal_invite', meetingType: 'appeal-disciplinary', primary: true });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter }} />);
+    await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
+
+    const continueButton = screen.getByRole('button', { name: 'Continue →' });
+    expect(continueButton).toBeDisabled();
+    expect(screen.getByText('Add the hearing date.')).toBeInTheDocument();
+
+    fireEvent.change(document.getElementById('appeal-invite-date'), { target: { value: '2020-01-01' } });
+    expect(screen.getByText('The hearing date cannot be in the past.')).toBeInTheDocument();
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(document.getElementById('appeal-invite-date'), { target: { value: '2099-01-01' } });
+    expect(screen.getByText('Add the hearing time.')).toBeInTheDocument();
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(document.getElementById('appeal-invite-time'), { target: { value: '10:00' } });
+    expect(screen.getByText('Add the hearing location or method.')).toBeInTheDocument();
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(document.getElementById('appeal-invite-location'), { target: { value: 'Microsoft Teams' } });
+    expect(continueButton).not.toBeDisabled();
+    expect(handleLetter).not.toHaveBeenCalled();
+  });
+
+  it('"Continue" with valid logistics calls handleLetter with a hearingLogistics override scoped to the appeal officer, and sets caseInfo with the same facts', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    const setCaseInfo = vi.fn();
+    const getNextStep = () => ({ label: 'Draft appeal hearing invitation', action: 'appeal_invite', meetingType: 'appeal-disciplinary', primary: true });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter, setCaseInfo }} />);
+    await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
+
+    fireEvent.change(document.getElementById('appeal-invite-date'), { target: { value: '2099-01-01' } });
+    fireEvent.change(document.getElementById('appeal-invite-time'), { target: { value: '10:00' } });
+    fireEvent.change(document.getElementById('appeal-invite-location'), { target: { value: 'Microsoft Teams' } });
+    await user.click(screen.getByRole('button', { name: 'Continue →' }));
+
+    expect(handleLetter).toHaveBeenCalledTimes(1);
+    expect(handleLetter).toHaveBeenCalledWith('invite', expect.objectContaining({
+      inline: true,
+      employeeName: appealCase.employeeName,
+      manager: 'Priya Shah',
+      hearingLogistics: { date: '2099-01-01', time: '10:00', locationOrMethod: 'Microsoft Teams' },
+    }));
+
     const caseInfoResult = setCaseInfo.mock.calls[0][0]({});
     expect(caseInfoResult.manager).toBe('Priya Shah');
     expect(caseInfoResult.appealManagerId).toBeNull();
+    expect(caseInfoResult.isAppealHearingInvitation).toBe(true);
+    expect(caseInfoResult.hearingDate).toBe('2099-01-01');
+    expect(caseInfoResult.hearingTime).toBe('10:00');
+    expect(caseInfoResult.hearingLocationOrMethod).toBe('Microsoft Teams');
+  });
+
+  it('"Cancel" on the logistics form closes it without calling handleLetter', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    const getNextStep = () => ({ label: 'Draft appeal hearing invitation', action: 'appeal_invite', meetingType: 'appeal-disciplinary', primary: true });
+    render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter }} />);
+    await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
+    expect(screen.getByText('Hearing arrangements')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Hearing arrangements')).not.toBeInTheDocument();
+    expect(handleLetter).not.toHaveBeenCalled();
   });
 });
 

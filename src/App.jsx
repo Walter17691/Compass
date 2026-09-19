@@ -29,7 +29,7 @@ import {
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, transcriptMentionsAppeal } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter } from './lib/letterValidation';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction } from './lib/letterGrounding';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -6847,6 +6847,24 @@ Please produce:
       // captured at save time too, so every consumer downstream can check
       // the letter's real type instead of guessing from its mere presence.
       letterType: letterOutput ? activeLetter : null,
+      // Appeal Invitation UAT P1 remediation, §12 persistence assessment
+      // (2026-09-19) — additive-only fields on this same jsonb entry, never
+      // a new column/table. Populated only when this save is the structured
+      // appeal-invitation flow (caseInfo.isAppealHearingInvitation, set only
+      // by CaseViewScreen's attemptGenerateAppealInvitation); null on every
+      // other meeting, including an ordinary disciplinary/witness invite.
+      // protect_appeal_hearing_chair_integrity() only ever reads id/type/
+      // letterType/record/transcript/chairUserId off each entry (see its
+      // own migration) — these three keys are invisible to it, so this
+      // cannot affect chair-integrity classification of this or any entry.
+      // This record remains a LETTER (letterType "invite"), not a hearing;
+      // it does not carry chairUserId and is not read by "Start appeal
+      // hearing" (deliberately not wired up — see report, ambiguous which
+      // saved invitation is authoritative once an officer is reassigned or
+      // an appeal is invited more than once).
+      hearingDate: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingDate||null) : null,
+      hearingTime: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingTime||null) : null,
+      hearingLocationOrMethod: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingLocationOrMethod||null) : null,
       letterApprovedBy: letterIsApproved ? letterApproval.by : null,
       letterApprovedAt: letterIsApproved ? letterApproval.at : null,
       riskScore,
@@ -7684,7 +7702,7 @@ Please produce:
   // every affected call site now does (App.jsx's own modal confirm flow,
   // CaseViewScreen.jsx's next-step/outcome-tab/appeal actions,
   // OutcomeModal.jsx's finalizeOutcome).
-  const handleLetter = async (type, {inline, employeeName, manager, date}={}) => {
+  const handleLetter = async (type, {inline, employeeName, manager, date, hearingLogistics}={}) => {
     const t = type||"outcome"; setAiError("");
     // Regenerating overwrites letterOutput — keep the draft being replaced
     // so it's not just silently gone.
@@ -7763,11 +7781,20 @@ Please produce:
         groundedEmployee ? "Employee: "+groundedEmployee+(empRec.jobTitle?" ("+empRec.jobTitle+")":"") : "",
         buildRecipientInstruction(groundedEmployee, t),
         buildAppealDeadlineInstruction(appealDeadlineIso, t),
+        // Appeal Invitation UAT P1 remediation (2026-09-19) — see this
+        // helper's own comment (letterGrounding.js). Only ever non-empty
+        // for the structured appeal-invitation flow (CaseViewScreen.jsx's
+        // logistics form), which is also the reason the generic "Meeting
+        // date"/"Location" lines just below are suppressed/relabelled
+        // whenever it's present — a hearing that hasn't happened yet has
+        // no "meeting date" of its own, and the employee's own recorded
+        // location is not the hearing venue.
+        buildAppealHearingLogisticsInstruction(hearingLogistics),
         groundedManager ? "Chair/Manager: "+groundedManager : "",
         caseInfo.representative ? "Representative/companion: "+caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")" : "",
-        groundedDate ? "Meeting date: "+groundedDate : "",
+        (groundedDate && !hearingLogistics) ? "Meeting date: "+groundedDate : "",
         empRec.startDate ? "Employee start date: "+empRec.startDate : "",
-        empRec.location ? "Location: "+empRec.location : "",
+        empRec.location ? (hearingLogistics ? "Employee's own normal work location (this describes the employee generally — it is NOT the hearing venue; see the authoritative hearing arrangements above for that): "+empRec.location : "Location: "+empRec.location) : "",
         activeCase?.caseType ? "Case type: "+activeCase.caseType : "",
         activeCase?.description ? "Case description: "+activeCase.description : "",
         activeCase?.outcome ? "Outcome decision: "+activeCase.outcome : "",
@@ -7787,6 +7814,14 @@ Please produce:
         // placeholder instruction rather than silently omitting the line,
         // so a gap reads to the model as a known unknown, not an invitation
         // to fill in something plausible-sounding.
+        // Appeal Invitation UAT P1 remediation (2026-09-19) — closes the
+        // discovered gap: cases.appeal_text (the employee's own recorded
+        // grounds) was never read by ANY letter type before this. Scoped
+        // to the structured invitation flow specifically — the existing
+        // t==="appeal" grounds line just below (appealGroundSignals, a
+        // different, older AI-detected-signal mechanism used for the
+        // appeal OUTCOME letter) is deliberately left untouched.
+        t==="invite" && hearingLogistics ? buildAppealGroundsInstruction(activeCase?.appealText) : "",
         t==="appeal" ? "Appeal officer who heard/decided this appeal: "+(appealOfficerName||"not recorded — use a placeholder such as [Appeal Officer Name and Job Title] rather than inventing a name") : "",
         t==="appeal" ? "Grounds of appeal raised by the employee:"+nl+(appealGroundSignals||"not recorded — use a placeholder such as [grounds of appeal] rather than inventing specific grounds") : "",
         t==="appeal" && appealHearingMeeting ? "Appeal hearing record ("+appealHearingMeeting.type+" on "+appealHearingMeeting.date+"):"+nl+appealHearingMeeting.record.slice(0,1200) : "",
@@ -7828,9 +7863,20 @@ Please produce:
         "oh-consent-request": "a letter requesting the employee's informed consent to a referral to Occupational Health (OH). Include: the reason a referral is being considered, framed supportively as part of the organisation's duty to support the employee's health and wellbeing, not as a disciplinary step; what OH involvement means in practice (an independent medical assessment, generally not treatment); that explicit consent is required before the referral proceeds and before any resulting report is obtained, per the Access to Medical Reports Act 1988 and UK GDPR principles; what will happen with the resulting report (who sees it, and that the employee has the right to see it first and request corrections before it's shared); and clear instructions for how to give or withhold consent. Warm, supportive tone throughout — this is a wellbeing-oriented letter, not a warning.",
       };
 
-      const instruction = letterInstructions[t] || letterInstructions["outcome"];
+      // Appeal Invitation UAT P1 remediation (2026-09-19) — the shared
+      // "invite" instruction (letterInstructions.invite, above) still says
+      // "proposed date/time/location placeholders" for every OTHER
+      // invitation (disciplinary, grievance) that never collects logistics
+      // up front — left completely unchanged, so those keep their exact
+      // existing behaviour. Only when hearingLogistics is present (the
+      // structured appeal-invitation flow) does this override instruct
+      // the model to use the given facts instead of placeholders for
+      // exactly those three fields, without touching the base instruction
+      // string other letter types share.
+      const instruction = (letterInstructions[t] || letterInstructions["outcome"])
+        + (t==="invite" && hearingLogistics ? " The hearing date, time, and location/method are already agreed and given as AUTHORITATIVE HEARING ARRANGEMENTS in the information below — state those exact facts for this letter's date/time/location, do not use a bracketed placeholder for any of the three, and do not invent or calculate a different value." : "");
 
-      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR correspondence that is legally sound and follows ACAS Code of Practice and relevant UK employment legislation. Always produce a complete letter — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets such as [Employee Address], [Date of Hearing], [Appeal Officer Name and Job Title], [Company Name], [X working days]. This includes any specific deadline or number of days you state that isn't a fixed statutory/ACAS figure explicitly given in this instruction or in the case information below — never invent a plausible-sounding day-count and present it as if it were a real requirement. The letter should read naturally and professionally. Output only the letter itself with no preamble, explanation or sign-off instructions."+(policies.length?" Reference company policies by name where relevant — e.g. match sanction lengths, appeal windows or procedural steps to what the uploaded policy actually specifies rather than a generic default.":"");
+      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience. Draft complete, professional HR correspondence that is legally sound and follows ACAS Code of Practice and relevant UK employment legislation. Always produce a complete letter — never refuse or ask for more information. Where specific details are unknown, use clear placeholders in square brackets such as [Employee Address], [Date of Hearing], [Appeal Officer Name and Job Title], [Company Name], [X working days]. This includes any specific deadline or number of days you state that isn't a fixed statutory/ACAS figure explicitly given in this instruction or in the case information below — never invent a plausible-sounding day-count and present it as if it were a real requirement. Do not use Markdown tables or pipe-table syntax (e.g. \"| |\" or \"|---|---|\") anywhere in the letter — use plain prose, headings, or bullet points instead. The letter should read naturally and professionally. Output only the letter itself with no preamble, explanation or sign-off instructions."+(policies.length?" Reference company policies by name where relevant — e.g. match sanction lengths, appeal windows or procedural steps to what the uploaded policy actually specifies rather than a generic default.":"");
 
       const userPrompt = "Draft "+instruction+nl+nl+"Available information:"+nl+context+nl+nl+"Important: Use [placeholder] format for any missing details. Today's date for reference: "+new Date().toLocaleDateString("en-GB")+". Always complete the full letter.";
 
@@ -7847,7 +7893,7 @@ Please produce:
         // is this letter actually addressed to this case's employee?)
         // before treating it as a valid, ready-for-review draft. See
         // lib/letterValidation.js for what this does and doesn't check.
-        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt, appealDeadline: appealDeadlineIso, appealOutcomeLabel: appealOutcomeLabelForValidation, appealEffectTag: appealEffectTagForValidation});
+        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt, appealDeadline: appealDeadlineIso, appealOutcomeLabel: appealOutcomeLabelForValidation, appealEffectTag: appealEffectTagForValidation, isAppealHearingInvitation: !!hearingLogistics, hearingDate: hearingLogistics?.date, hearingTime: hearingLogistics?.time, hearingLocationOrMethod: hearingLogistics?.locationOrMethod});
         setLetterOutput(text); setLetterSources(letterSources);
         // UAT Product Hierarchy pass, Part 6 — generation can genuinely
         // outlive the user staying on this screen (this function isn't

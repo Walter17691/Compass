@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction } from '../lib/letterGrounding.js';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction } from '../lib/letterGrounding.js';
 
 const goldenPathEmployee = 'UAT - Test Employee (Golden Path)';
 
@@ -175,5 +175,48 @@ describe('buildAppealOutcomeInstruction (final pre-deployment review)', () => {
   it('returns empty for an allegation with no recorded appeal outcome (never fabricates one)', () => {
     expect(buildAppealOutcomeInstruction({ ...baseAllegation, appealOutcome: null }, null)).toBe('');
     expect(buildAppealOutcomeInstruction(null, null)).toBe('');
+  });
+});
+
+describe('buildAppealHearingLogisticsInstruction (Appeal Invitation UAT P1 remediation)', () => {
+  const logistics = { date: '2026-10-01', time: '10:30', locationOrMethod: 'Microsoft Teams' };
+
+  it('returns empty when hearingLogistics is missing or any of the three fields is absent', () => {
+    expect(buildAppealHearingLogisticsInstruction(null)).toBe('');
+    expect(buildAppealHearingLogisticsInstruction(undefined)).toBe('');
+    expect(buildAppealHearingLogisticsInstruction({ time: '10:30', locationOrMethod: 'Teams' })).toBe('');
+    expect(buildAppealHearingLogisticsInstruction({ date: '2026-10-01', locationOrMethod: 'Teams' })).toBe('');
+    expect(buildAppealHearingLogisticsInstruction({ date: '2026-10-01', time: '10:30' })).toBe('');
+  });
+
+  it('states the exact date (formatted), time, and location/method as authoritative facts', () => {
+    const instruction = buildAppealHearingLogisticsInstruction(logistics);
+    expect(instruction).toContain('1 October 2026');
+    expect(instruction).toContain('10:30');
+    expect(instruction).toContain('Microsoft Teams');
+    expect(instruction.toLowerCase()).toContain('never calculate, infer, or substitute');
+  });
+
+  it('explicitly disambiguates the hearing location from the employee\'s own work location', () => {
+    const instruction = buildAppealHearingLogisticsInstruction(logistics);
+    expect(instruction.toLowerCase()).toContain("employee's own normal work location");
+  });
+});
+
+describe('buildAppealGroundsInstruction (Appeal Invitation UAT P1 remediation)', () => {
+  it('states the exact recorded grounds when appealText is populated', () => {
+    const instruction = buildAppealGroundsInstruction('I believe the sanction was disproportionate.');
+    expect(instruction).toContain('I believe the sanction was disproportionate.');
+    expect(instruction.toLowerCase()).toContain('never substitute the original allegation');
+  });
+
+  it('trims whitespace-only appealText and treats it as unrecorded', () => {
+    const instruction = buildAppealGroundsInstruction('   ');
+    expect(instruction.toLowerCase()).toContain('not recorded');
+  });
+
+  it('explicitly instructs not to fabricate grounds when appealText is null/undefined', () => {
+    expect(buildAppealGroundsInstruction(null).toLowerCase()).toContain('not recorded');
+    expect(buildAppealGroundsInstruction(undefined).toLowerCase()).toContain('do not invent');
   });
 });
