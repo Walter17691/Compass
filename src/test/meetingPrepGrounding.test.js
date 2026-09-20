@@ -631,3 +631,100 @@ describe('appeal-submission deadline logic is separate and untouched (B4)', () =
     expect(buildAppealDeadlineInstruction('2026-09-18', 'appeal')).toBe('');
   });
 });
+
+// Final advisory wording fix (Human UAT, 2026-09-20) — Closing Points told the
+// chair to confirm "that no further submissions will be accepted after this
+// point unless genuinely new evidence comes to light". Compass holds no
+// authoritative policy or case context establishing any such evidential
+// cut-off, and an appeal chair may properly need further clarification,
+// enquiry or investigation before deciding. Same class as the invented
+// timescale: a procedural restriction asserted with nothing behind it.
+describe('post-hearing evidential cut-off is never asserted (1-6)', () => {
+  const appealRules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+  const disciplinaryRules = buildMeetingPrepInstructions({ meetingType: DISCIPLINARY_TYPE, hasCaseContext: true });
+  const closingRule = appealRules.slice(appealRules.indexOf('CLOSING THE HEARING:'), appealRules.indexOf('TIMESCALES:'));
+
+  it('1. prohibits blanket "no further submissions" wording unless authoritatively grounded', () => {
+    expect(appealRules).toMatch(/CLOSING THE HEARING:/);
+    expect(closingRule).toMatch(/do not tell the chair to say that no further submissions will be accepted/i);
+    expect(closingRule).toMatch(/evidence or submissions are closed once the hearing ends/i);
+    expect(closingRule).toMatch(/unless such a restriction is explicitly set out in the authoritative case context or company policy/i);
+  });
+
+  it('1. names the general shape so equivalent phrasings are caught too', () => {
+    expect(closingRule).toMatch(/blanket cut-off on evidence or representations/i);
+  });
+
+  it('2. prohibits "only genuinely new evidence" as a default post-hearing restriction', () => {
+    expect(closingRule).toMatch(/only genuinely new evidence can be considered afterwards/i);
+  });
+
+  it('3. permits further clarification, enquiry, investigation or information before deciding', () => {
+    expect(closingRule).toMatch(/may properly need further clarification, enquiry, investigation or information/i);
+    expect(closingRule).toMatch(/anything reasonably required to decide the appeal can still be obtained or considered/i);
+  });
+
+  it('3. still allows the legitimate closing statements', () => {
+    expect(closingRule).toMatch(/the hearing itself is concluding/i);
+    expect(closingRule).toMatch(/the chair will consider everything heard/i);
+    expect(closingRule).toMatch(/told if any further step materially affects the decision or the timetable/i);
+    expect(closingRule).toMatch(/final outcome will be confirmed in writing/i);
+  });
+
+  it('3. does not hard-code a new procedural entitlement or promise', () => {
+    expect(closingRule).toMatch(/Do not promise the employee any specific procedural entitlement or right beyond this/i);
+  });
+
+  it('4. reintroduces no numeric appeal deadline of any kind', () => {
+    expect(closingRule).not.toMatch(/\b\d+\s*(?:working\s*)?(?:hour|day|week)s?\b/i);
+    expect(closingRule).not.toMatch(/\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:working\s+)?(?:hour|day|week)s?\b/i);
+    // …and the existing timescale rule is still present and still numeric-free.
+    const timescaleRule = appealRules.slice(appealRules.indexOf('TIMESCALES:'));
+    expect(timescaleRule).toMatch(/without unreasonable delay/);
+    expect(timescaleRule).not.toMatch(/\b\d+\s*(?:working\s*)?(?:hour|day|week)s?\b/i);
+  });
+
+  it('6. non-appeal prep is not given the closing-the-hearing rule', () => {
+    expect(disciplinaryRules).not.toMatch(/CLOSING THE HEARING:/);
+    // …while keeping the shared protections it already had.
+    expect(disciplinaryRules).toMatch(/ABSENCE IS NOT A DEFECT/);
+    expect(disciplinaryRules).toMatch(/Do not invent allegations/);
+  });
+
+  // The appeal-type rules (review framing, no predetermined outcome, and now
+  // closing/timescales) have never been gated on hasCaseContext — only the
+  // case-grounding rules are. This records that existing contract rather than
+  // changing it: an ad-hoc NON-appeal meeting still gets nothing at all.
+  it('6. ad-hoc non-appeal prep is still given no instructions at all', () => {
+    expect(buildMeetingPrepInstructions({ meetingType: DISCIPLINARY_TYPE, hasCaseContext: false })).toBe('');
+  });
+
+  it('6. an ungrounded appeal keeps only the appeal-type rules, and gains no case-grounding rules', () => {
+    const ungroundedAppeal = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: false });
+    expect(ungroundedAppeal).toMatch(/CLOSING THE HEARING:/);
+    expect(ungroundedAppeal).toMatch(/TIMESCALES:/);
+    expect(ungroundedAppeal).toMatch(/review of a decision that has already been taken/);
+    // Case-grounding rules stay gated on hasCaseContext, exactly as before.
+    expect(ungroundedAppeal).not.toMatch(/ABSENCE IS NOT A DEFECT/);
+    expect(ungroundedAppeal).not.toMatch(/For Risk Flags and Legal Checklist/);
+    expect(ungroundedAppeal).not.toMatch(/AUTHORITATIVE COMPASS CASE CONTEXT/);
+  });
+
+  it('5. every previously-passed appeal protection is still present alongside it', () => {
+    expect(appealRules).toMatch(/ABSENCE IS NOT A DEFECT/);
+    expect(appealRules).toMatch(/describe the state of the RECORD/);
+    expect(appealRules).toMatch(/For Risk Flags and Legal Checklist, include only matters actually supported/);
+    expect(appealRules).toMatch(/contextual case material/);
+    expect(appealRules).toMatch(/review of a decision that has already been taken/);
+    expect(appealRules).toMatch(/not recommend, predict or predetermine the outcome/);
+    expect(appealRules).toMatch(/TIMESCALES:/);
+  });
+
+  it('5. independence and missing-grounds behaviour is untouched', () => {
+    expect(buildPrepIndependenceLine('unknown', 'X')).toMatch(/NOT VERIFIED/);
+    expect(buildPrepIndependenceLine('conflict', 'X')).toMatch(/RECORDED CONFLICT/);
+    expect(buildPrepIndependenceLine('conflict', 'X')).not.toBe(buildPrepIndependenceLine('unknown', 'X'));
+    expect(buildPrepAppealGroundsLine(null)).toMatch(/NOT RECORDED in Compass/);
+    expect(buildPrepAppealGroundsLine(null)).toMatch(/does NOT prevent the appeal hearing from going ahead/);
+  });
+});

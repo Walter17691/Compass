@@ -207,6 +207,15 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
     // rather than guess one. This concerns ONLY when the appeal OUTCOME is
     // communicated; the employee's own 5-working-day window to LODGE an
     // appeal is a separate, authoritative figure computed elsewhere.
+    // Advisory accuracy follow-up (Human UAT, 2026-09-20) — Closing Points
+    // told the chair to confirm "that no further submissions will be accepted
+    // after this point unless genuinely new evidence comes to light". Compass
+    // holds no authoritative policy or case context establishing any such
+    // evidential cut-off, and an appeal chair may legitimately need further
+    // clarification, enquiry or investigation before deciding. Same class as
+    // the invented timescale below: a procedural restriction asserted without
+    // any grounding for it.
+    rules.push("CLOSING THE HEARING: do not tell the chair to say that no further submissions will be accepted, that evidence or submissions are closed once the hearing ends, that only genuinely new evidence can be considered afterwards, or anything else amounting to a blanket cut-off on evidence or representations — unless such a restriction is explicitly set out in the authoritative case context or company policy above. Compass does not otherwise hold any such rule, and an appeal chair may properly need further clarification, enquiry, investigation or information before reaching a decision. Instead you may say that the hearing itself is concluding, that the chair will consider everything heard, that anything reasonably required to decide the appeal can still be obtained or considered, that the employee will be told if any further step materially affects the decision or the timetable, and that the final outcome will be confirmed in writing. Do not promise the employee any specific procedural entitlement or right beyond this.");
     rules.push("TIMESCALES: do not state or invent any specific number of hours, days, working days or weeks for communicating the appeal outcome, or for any other appeal deadline, unless that exact timeframe is given to you in the authoritative case context or company policy above. Do not present a figure of your own as best practice, as typical, or as what is usually expected. Where no authoritative timeframe has been supplied, say instead that the appeal outcome should be confirmed in writing as soon as possible and without unreasonable delay, and that if further enquiry or investigation is required the chair should explain this and give the employee a realistic updated timeframe.");
   }
 
