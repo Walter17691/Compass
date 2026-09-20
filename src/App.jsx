@@ -12,7 +12,7 @@ import { findEmployeeByName } from './lib/employeeRecords';
 import { computeDueSoon, computeAuthoritativeAppealDeadline } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
-import { getCaseStage, withStageTransitionStamp, hasLetterType } from './lib/caseStage';
+import { getCaseStage, withStageTransitionStamp, hasLetterType, isLetterOnlyRecord, isGenuineMeetingRecord } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
 import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, buildKnownNameTokens, filterUnsafeThemeSuggestions, isUnsafeThemeSuggestion } from './lib/themes';
@@ -30,6 +30,7 @@ import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReaso
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter, EMPLOYEE_DIRECTED_LETTER_TYPES } from './lib/letterValidation';
 import { classifyAppealIndependence } from './lib/appealIndependence';
+import { findLatestAppealInvitation } from './lib/appealInvitation';
 import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction, buildLetterSenderInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
@@ -677,7 +678,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [onboardStep, setOnboardStep] = useState(0);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [meetingSetup, setMeetingSetup] = useState({employee:"", employeeJobTitle:"", manager:"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+  const [meetingSetup, setMeetingSetup] = useState({employee:"", employeeJobTitle:"", manager:"", chairJobTitle:"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   const [liveChatInput, setLiveChatInput] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [shareEmail, setShareEmail] = useState("");
@@ -4031,7 +4032,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // saveMeetingToCase's own _linkedReferralId branch — not here, so
   // nothing changes if the manager backs out without ever starting it.
   const startInformalConversation = (referral) => {
-    setMeetingSetup(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"informal", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]}));
+    setMeetingSetup(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"informal", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]}));
     setCaseInfo(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"",
       context: [referral.aiSummary, referral.description].filter(Boolean).join("\n\n"),
       _linkedCaseId:null, _linkedCaseName:null, _linkedReferralId:referral.id, _linkedReferralName:referral.employeeName}));
@@ -6875,8 +6876,16 @@ Please produce:
       // saved invitation is authoritative once an officer is reassigned or
       // an appeal is invited more than once).
       hearingDate: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingDate||null) : null,
-      hearingTime: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingTime||null) : null,
-      hearingLocationOrMethod: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingLocationOrMethod||null) : null,
+      // Appeal hearing sequencing P1 (2026-09-20) — on an invitation these
+      // are the SCHEDULED logistics; on a genuine hearing they are what
+      // actually happened, taken from the meeting form (which is seeded from
+      // the invitation but may legitimately be changed if the hearing was
+      // rearranged). The genuine hearing's own date already lives in `date`,
+      // so only time/method need a home here. Writing the actual values onto
+      // the hearing record is what keeps a rearrangement from ever needing to
+      // rewrite the invitation, which stays as evidence of what was sent.
+      hearingTime: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingTime||null) : (caseInfo.time||null),
+      hearingLocationOrMethod: caseInfo.isAppealHearingInvitation ? (caseInfo.hearingLocationOrMethod||null) : (caseInfo.locationOrMethod||null),
       letterApprovedBy: letterIsApproved ? letterApproval.by : null,
       letterApprovedAt: letterIsApproved ? letterApproval.at : null,
       riskScore,
@@ -6927,6 +6936,14 @@ Please produce:
     // convention every other appeal-stage check in this codebase already
     // uses (appealMeetingsForCase, isOriginalDecisionMeeting's exclusion).
     const isAppealMeeting = (meetingType?.label||"").toLowerCase().includes("appeal");
+    // Appeal hearing sequencing P1 (2026-09-20) — the audit label below used
+    // to come from the meeting-type text alone, so saving an appeal
+    // INVITATION wrote "Appeal hearing recorded" for a hearing that had not
+    // happened. That row then fed the Case View activity summary, which
+    // truthfully reported the (false) log. Classified structurally now, from
+    // the same record/transcript evidence isLetterOnlyRecord uses, so a
+    // letter-only save can never claim a hearing took place.
+    const isLetterOnlySave = isLetterOnlyRecord(meeting);
     const updatedCase = existing
       ? {...existing, meetings:[...existing.meetings, meeting]}
       // caseType "informal" only on a brand-new case created from a
@@ -6993,7 +7010,9 @@ Please produce:
     applyPendingMeetingSuggestions(caseId);
     // isAppealMeeting computed earlier (above the saveCases calls) — reused
     // here rather than redeclared.
-    audit(isAppealMeeting?"Appeal hearing recorded":"Meeting saved", `${caseInfo.employee} — ${meetingType?.label}`, caseId);
+    audit(isAppealMeeting
+      ? (isLetterOnlySave ? "Appeal hearing invitation saved" : "Appeal hearing recorded")
+      : (isLetterOnlySave ? "Letter saved to case" : "Meeting saved"), `${caseInfo.employee} — ${meetingType?.label}`, caseId);
     // Human UAT remediation, Batch 1, Issue 4 — distinct from the generic
     // "Meeting saved" above (which fires for every save, signature-bound
     // or not): a dedicated Timeline/audit entry specifically for "this
@@ -7729,7 +7748,12 @@ Please produce:
       const activeCase = cases.find(x=>x.id===activeCaseId);
       const { employee: groundedEmployee, manager: groundedManager, date: groundedDate } = resolveLetterGrounding({ caseInfo, overrides: { employeeName, manager, date } });
       const empRec = getEmployeeRecord(groundedEmployee)||{};
-      const prevMeetings = activeCase?(activeCase.meetings||[]).slice(-3).map(m=>m.type+" on "+m.date+(m.record?" — "+m.record.slice(0,100):"")).join("; "):"";
+      // Appeal hearing sequencing P1 (2026-09-20) — this collection is
+      // labelled "Previous meetings:" in the prompt, so a letter-only record
+      // fed into it told the model a hearing had taken place on the letter's
+      // save date. Smallest safe change: exclude letter-shaped records from a
+      // list that explicitly claims to be meetings.
+      const prevMeetings = activeCase?(activeCase.meetings||[]).filter(isGenuineMeetingRecord).slice(-3).map(m=>m.type+" on "+m.date+(m.record?" — "+m.record.slice(0,100):"")).join("; "):"";
       // Outcome Builder (P12) — an outcome letter used to draw only on the
       // generic case/meeting context above, the same as every other letter
       // type; it never actually looked at the allegations, findings, or
@@ -8351,8 +8375,18 @@ Please produce:
     return {label:"In progress", color:"#6B6375", bg:"#F5F1EA"};
   };
 
-  const needsInvitation = (meetingTypeId) => {
-    return ["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"].includes(meetingTypeId);
+  // Appeal hearing sequencing P1 (2026-09-20) — was a pure static type-list
+  // lookup taking only a type id, so it could never return false however
+  // much state existed: a saved appeal invitation still produced "Formal
+  // invitation required" and a "Draft invitation letter" button, telling the
+  // user to redo work they had just completed. getNextStep had the same
+  // question right all along via hasLetterType(appealMeetings, "invite") —
+  // this now reuses that exact predicate rather than inventing a second one.
+  // Every other meeting type keeps the previous behaviour untouched.
+  const needsInvitation = (meetingTypeId, caseObj) => {
+    if(!["disciplinary","grievance","redundancy-atrisk","appeal-disciplinary","pip-review"].includes(meetingTypeId)) return false;
+    if(meetingTypeId === "appeal-disciplinary" && findLatestAppealInvitation(caseObj)) return false;
+    return true;
   };
 
 
@@ -9103,7 +9137,7 @@ Please produce:
           // "New case" from CreateMenu's popover entirely for them.
           onNewCase: member?.case_access_level === 3 ? undefined : () => setShowCasePrompt(true),
           onNewMeeting: () => {
-            setMeetingSetup({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+            setMeetingSetup({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
             setScreen(SCREENS.HOME+"_meeting");
           },
           onRaiseConcern: () => { setConcernFormAutoOpen(true); setScreen(SCREENS.CONCERNS); },
@@ -9116,7 +9150,7 @@ Please produce:
           onStartCaseMeeting: () => {
             const cs = cases.find(c=>c.id===activeCaseId);
             if(!cs) return;
-            setMeetingSetup({employee:cs.employeeName, employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"", manager:cs.manager||"", chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"", type:"", date:new Date().toISOString().split("T")[0], linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+            setMeetingSetup({employee:cs.employeeName, employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"", manager:cs.manager||"", chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
             setScreen(SCREENS.HOME+"_meeting");
           },
         }}

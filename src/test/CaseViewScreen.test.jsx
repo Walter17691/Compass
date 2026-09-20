@@ -969,3 +969,64 @@ describe('CaseViewScreen — appeal hearing date uses the shared DateInput (P2)'
     }));
   });
 });
+
+// Appeal hearing sequencing P1 (Human UAT, 2026-09-20) — Start appeal hearing
+// defaulted the date to today and offered no time/method, so the logistics
+// captured before the invitation was drafted (and persisted on it) were lost.
+describe('CaseViewScreen — Start appeal hearing seeds logistics from the saved invitation (P1)', () => {
+  const APPEAL_INVITATION = {
+    id: 'm4', type: 'Disciplinary Appeal', date: '2026-09-20', letterType: 'invite',
+    record: '', transcript: [], letterOutput: 'letter text', chairUserId: null,
+    hearingDate: '2026-09-22', hearingTime: '10:00', hearingLocationOrMethod: 'Microsoft Teams',
+    savedAt: '2026-09-20T09:11:01.213Z',
+  };
+  const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
+  const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah', job_title: 'Operations Director' }];
+  const getNextStep = () => ({ label: 'Start appeal hearing', action: 'start_appeal_meeting', meetingType: 'appeal-disciplinary', primary: true });
+
+  const start = async (meetings) => {
+    const user = userEvent.setup();
+    const setMeetingSetup = vi.fn();
+    const appealCase = { ...cs, meetings, manager: 'Walter Carta (wrong field)' };
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, setMeetingSetup }} />);
+    await user.click(screen.getByRole('button', { name: 'Start appeal hearing' }));
+    return setMeetingSetup.mock.calls[0][0]({ date: '2026-01-01', time: 'stale', locationOrMethod: 'stale' });
+  };
+
+  it('I/J/K. seeds date, time and method from the invitation rather than today or its save date', async () => {
+    const result = await start([APPEAL_INVITATION]);
+    expect(result.date).toBe('2026-09-22');
+    expect(result.time).toBe('10:00');
+    expect(result.locationOrMethod).toBe('Microsoft Teams');
+    expect(result.date).not.toBe('2026-09-20');
+  });
+
+  it('L. the chair remains the current appeal_manager and stays locked', async () => {
+    const result = await start([APPEAL_INVITATION]);
+    expect(result.manager).toBe('Priya Shah');
+    expect(result.appealChairLocked).toBe(true);
+    expect(result.appealManagerId).toBe('u2');
+    expect(result.type).toBe('appeal-disciplinary');
+  });
+
+  it('Q. seeding does not mutate the invitation record', async () => {
+    const snapshot = JSON.parse(JSON.stringify(APPEAL_INVITATION));
+    await start([APPEAL_INVITATION]);
+    expect(APPEAL_INVITATION).toEqual(snapshot);
+  });
+
+  it('falls back to existing defaults when no invitation logistics exist, rather than inventing values', async () => {
+    const legacy = { ...APPEAL_INVITATION, hearingDate: undefined, hearingTime: undefined, hearingLocationOrMethod: undefined };
+    const result = await start([legacy]);
+    expect(result.date).toBe('2026-01-01'); // previous value preserved
+    expect(result.time).toBe('');
+    expect(result.locationOrMethod).toBe('');
+  });
+
+  it('clears stale time/method when there is no saved invitation at all', async () => {
+    const result = await start([]);
+    expect(result.time).toBe('');
+    expect(result.locationOrMethod).toBe('');
+  });
+});

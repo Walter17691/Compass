@@ -8,6 +8,7 @@
 import { getCaseStage, hasLetterType } from './caseStage.js';
 import { getProcessType, DISCIPLINARY_STAGES, GRIEVANCE_STAGES } from './processStages.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
+import { isGenuineMeetingRecord } from './caseStage.js';
 
 // Per-stage "did this actually happen" evidence checks — only defined for
 // the two process shapes whose stage-inference heuristic in caseStage.js
@@ -40,7 +41,12 @@ const STAGE_EVIDENCE = {
     // outcome step actually happen" evidence check just as well as a real
     // outcome letter.
     outcome: cs => !!cs.outcome || hasLetterType(cs.meetings, "outcome"),
-    appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type)),
+    // Appeal hearing sequencing P1 (2026-09-20) — this is a "did this stage
+    // actually happen" evidence check, so a saved appeal INVITATION must not
+    // satisfy it: the invitation proves the appeal was arranged, not heard.
+    // Same reasoning the sibling `outcome` check above already applies to a
+    // hearing invitation's letterOutput.
+    appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type) && isGenuineMeetingRecord(m)),
   },
   grievance: {
     hearing: cs => (cs.meetings||[]).some(m=>isGrievanceMeeting(m.type)),
@@ -49,7 +55,12 @@ const STAGE_EVIDENCE = {
     // outcome step actually happen" evidence check just as well as a real
     // outcome letter.
     outcome: cs => !!cs.outcome || hasLetterType(cs.meetings, "outcome"),
-    appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type)),
+    // Appeal hearing sequencing P1 (2026-09-20) — this is a "did this stage
+    // actually happen" evidence check, so a saved appeal INVITATION must not
+    // satisfy it: the invitation proves the appeal was arranged, not heard.
+    // Same reasoning the sibling `outcome` check above already applies to a
+    // hearing invitation's letterOutput.
+    appeal: cs => (cs.meetings||[]).some(m=>isAppealMeeting(m.type) && isGenuineMeetingRecord(m)),
   },
 };
 

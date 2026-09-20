@@ -1,3 +1,4 @@
+import { isGenuineMeetingRecord } from '../lib/caseStage.js';
 import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { CheckIcon, WarningIcon } from '../components/Icons';
@@ -51,9 +52,20 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
     setMeetingSetup(p=>({...p, participants:[...(p.participants||[]), {name:newParticipantName.trim(), role:newParticipantRole}]}));
     setNewParticipantName("");
   };
+  // The case this meeting belongs to, so needsInvitation can consult real
+  // persisted state instead of answering from the type id alone.
+  const setupCase = cases.find(cs=>cs.id===(meetingSetup.linkedCaseId||activeCaseId)) || null;
   const selectedType = MEETING_TYPES.find(t=>t.id===meetingSetup.type);
+  // Appeal hearing sequencing P1 (2026-09-20) — was unfiltered, so a saved
+  // appeal INVITATION rendered here as a previous "Disciplinary Appeal" on
+  // its own save date, i.e. a hearing that never took place, shown to HR at
+  // the moment they were about to hold the real one. Deliberately NOT a
+  // "letterType != null" filter: a genuine disciplinary hearing that also
+  // produced an outcome letter carries letterType 'outcome' alongside a real
+  // record and transcript and must stay visible. Legacy meetings predating
+  // letterType have content and are unaffected.
   const prevMeetings = meetingSetup.employee
-    ? cases.filter(cs=>cs.employeeName===meetingSetup.employee.trim()).flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date))
+    ? cases.filter(cs=>cs.employeeName===meetingSetup.employee.trim()).flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseType:cs.caseType}))).filter(isGenuineMeetingRecord).sort((a,b)=>new Date(b.date)-new Date(a.date))
     : [];
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
@@ -163,7 +175,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             </div>
           )}
 
-          {!meetingSetup.linkedCaseId&&meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
+          {!meetingSetup.linkedCaseId&&meetingSetup.type&&needsInvitation(meetingSetup.type, setupCase)&&(
             <div style={FIELD_WRAP_STYLE}>
               <label htmlFor="meeting-representative-name" style={FIELD_LABEL_STYLE}>Representative / companion <span style={OPTIONAL_TAG_STYLE}>(optional — right to be accompanied, ERA 1999 s.10)</span></label>
               <div style={{display:"flex",gap:8}}>
@@ -303,7 +315,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
           )}
 
           {/* Invitation warning */}
-          {meetingSetup.type&&needsInvitation(meetingSetup.type)&&(
+          {meetingSetup.type&&needsInvitation(meetingSetup.type, setupCase)&&(
             <div style={{background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:10,padding:"14px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
               <WarningIcon size={15} color="#B87520" style={{flexShrink:0}} />
               <div>
@@ -363,6 +375,36 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
               onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
           </div>
 
+          {/* Appeal hearing sequencing P1 (2026-09-20) — time and method were
+              collected before the invitation was drafted and persisted on it,
+              but the hearing form had nowhere to show them, so the scheduled
+              10:00 / Microsoft Teams silently vanished on the way to the
+              hearing. Shown for the appeal route only, prefilled from the
+              saved invitation and editable, because a hearing can genuinely
+              be rearranged — changing them records the ACTUAL logistics on
+              the hearing and leaves the invitation untouched. */}
+          {meetingSetup.appealChairLocked&&(
+            <div style={{display:"flex",gap:12,marginBottom:28,flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 130px"}}>
+                <label htmlFor="meeting-time" style={FIELD_LABEL_STYLE}>Time</label>
+                <input id="meeting-time" type="time" value={meetingSetup.time||""}
+                  onChange={e=>setMeetingSetup(p=>({...p,time:e.target.value}))}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)",colorScheme:"light"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
+              </div>
+              <div style={{flex:"2 1 220px"}}>
+                <label htmlFor="meeting-location" style={FIELD_LABEL_STYLE}>Method / location</label>
+                <input id="meeting-location" type="text" value={meetingSetup.locationOrMethod||""}
+                  placeholder="e.g. Microsoft Teams"
+                  onChange={e=>setMeetingSetup(p=>({...p,locationOrMethod:e.target.value}))}
+                  style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                  onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
+                  onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
+              </div>
+            </div>
+          )}
+
           {(() => {
             const disabled = !meetingSetup.employee.trim()||!meetingSetup.type;
             const selected = MEETING_TYPES.find(t=>t.id===meetingSetup.type);
@@ -374,7 +416,7 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             const commit = () => {
               const mt = selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName,
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,time:meetingSetup.time||"",locationOrMethod:meetingSetup.locationOrMethod||"",manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName,
                 // Appeal Hearing Control Remediation (2026-09-18) — always
                 // derived fresh from meetingSetup.appealManagerId (never
                 // merged from caseInfo's own prior value), so a stale id

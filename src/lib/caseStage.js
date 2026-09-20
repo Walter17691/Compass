@@ -42,6 +42,44 @@ import { isAppealMeeting, isDisciplinaryMeeting, isInvestigationMeeting, isGriev
 // identity when it's known, and only falls back to the old any-
 // letterOutput heuristic for meetings saved before this fix existed,
 // whose real letter type was never recorded and can't be recovered.
+// Appeal hearing sequencing P1 (Human UAT, 2026-09-20) — Compass stores
+// some letters as meeting-shaped records in the same cases.meetings array
+// as genuine hearings. Consumers that classified on `type` alone therefore
+// could not tell a saved appeal INVITATION from an appeal HEARING: a live
+// invitation appeared in Previous meetings as "Disciplinary Appeal —
+// 20/09/2026", and its save wrote an audit row reading "Appeal hearing
+// recorded" — for a hearing that never happened.
+//
+// Mirrors the distinction protect_appeal_hearing_chair_integrity() already
+// enforces in the database (is_letter_only := letterType in
+// ('invite','appeal') and record = '' and transcript_len = 0), deliberately
+// generalised from those two letter types to any letterType: the SQL only
+// needs the rule for appeal-chair enforcement, whereas meeting history,
+// stage inference and activity wording need it for every letter-shaped
+// record. The SQL remains authoritative for database enforcement and is
+// unchanged.
+//
+// A record is letter-only when it carries a letterType AND has no
+// substantive hearing content of its own. Crucially this is NOT "has a
+// letterType": a genuine disciplinary hearing that also produced an outcome
+// letter carries letterType 'outcome' alongside a real record and
+// transcript, and must stay a genuine meeting. Defensive about legacy
+// shapes — null/undefined/empty-string record, null/undefined/non-array
+// transcript — all of which predate letterType existing at all.
+export function isLetterOnlyRecord(meeting) {
+  if (!meeting || !meeting.letterType) return false;
+  if (typeof meeting.record === "string" && meeting.record.trim()) return false;
+  if (Array.isArray(meeting.transcript) && meeting.transcript.length > 0) return false;
+  return true;
+}
+
+// Inverse, for the common "did a real meeting happen" read. Named narrowly
+// on purpose: this is a record classifier, not a workflow engine — stage,
+// next-step and chair decisions stay where they already live.
+export function isGenuineMeetingRecord(meeting) {
+  return !!meeting && !isLetterOnlyRecord(meeting);
+}
+
 export function hasLetterType(meetings, type) {
   return (meetings||[]).some(m => m.letterOutput && (m.letterType ? m.letterType === type : true));
 }

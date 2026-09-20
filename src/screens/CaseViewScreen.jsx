@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { toISODateLocal, isPastLocalDate } from '../lib/dates';
+import { appealInvitationLogistics } from '../lib/appealInvitation';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 import { MDRenderer } from '../components/MDRenderer';
 import { DateInput } from '../components/DateInput';
@@ -314,12 +315,25 @@ export function CaseViewScreen({
       const isStructuredAppealHearing = nextStep.action==="start_appeal_meeting" && !!currentAppealManagerAccess;
       const chairName = isStructuredAppealHearing ? (appealManagerName||"") : (cs.manager||"");
       const chairJobTitle = isStructuredAppealHearing ? (currentAppealManager?.job_title||"") : ((orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"");
+      // Appeal hearing sequencing P1 (2026-09-20) — the scheduled logistics
+      // were captured before the invitation was drafted and persisted ON that
+      // invitation, but nothing read them back: the date fell through to
+      // today's default and time/method had nowhere to go, so the user was
+      // asked to recreate what they had already entered. Seeded from the
+      // latest valid saved invitation's STRUCTURED fields only — never its
+      // save date, never the letter prose. Falls back to the existing
+      // defaults when no invitation logistics exist, rather than inventing
+      // values.
+      const scheduled = isStructuredAppealHearing ? appealInvitationLogistics(cs) : null;
       setMeetingSetup(p=>({...p,
         employee:cs.employeeName,
         employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",
         manager:chairName,
         chairJobTitle,
         type:nextStep.meetingType||"disciplinary",
+        date:scheduled?.date||p.date,
+        time:scheduled?.time||"",
+        locationOrMethod:scheduled?.locationOrMethod||"",
         appealChairLocked:isStructuredAppealHearing,
         appealManagerId:isStructuredAppealHearing ? currentAppealManagerAccess.userId : null,
         appealGrounds:isStructuredAppealHearing ? (cs.appealText||"") : "",
