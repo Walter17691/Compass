@@ -400,9 +400,9 @@ describe('LetterScreen — appeal hearing invitation action gates (Human UAT hot
     letterApproval: { by: 'Jo', at: new Date().toISOString() },
   };
 
-  const body = venue => `[Company Name]\n[Company Address Line 1]\n\nDear UAT - Test Employee (Golden Path),\n\n`
+  const body = venue => `Compass LTD\n[Company Address Line 1]\n\nDear UAT - Test Employee (Golden Path),\n\n`
     + `Invitation to Appeal Hearing\n\nDate: ${futureIso.long}\nTime: 10:00\nMethod: ${venue}\n\n`
-    + `Please reply to [HR Contact Name and Job Title] at [HR Contact Email Address].`;
+    + `Please reply to Dana Rees, HR Manager at dana.rees@example.com.`;
 
   it('an invitation with a genuine unresolved venue placeholder stays blocked from every formal action', () => {
     render(<LetterScreen {...inviteProps} letterOutput={body('[Hearing Venue]')} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
@@ -453,10 +453,10 @@ describe('LetterScreen — substantive procedural deadline gates (procedural pla
     letterApproval: { by: 'Jo', at: new Date().toISOString() },
   };
 
-  const body = deadlineWording => `[Company Name]\n[Company Address Line 1]\n\nDear UAT - Test Employee (Golden Path),\n\n`
+  const body = deadlineWording => `Compass LTD\n[Company Address Line 1]\n\nDear UAT - Test Employee (Golden Path),\n\n`
     + `Invitation to Appeal Hearing\n\nDate: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\n`
-    + `Please contact [HR Contact Name and Job Title] at [HR Contact Email / Telephone] ${deadlineWording}\n\n`
-    + `Yours sincerely,\n[Signatory Name]\n[Job Title]\n[Date]`;
+    + `Please contact Dana Rees, HR Manager at dana.rees@example.com ${deadlineWording}\n\n`
+    + `Yours sincerely,\nDana Rees\n[Job Title]\n[Date]`;
 
   const ALL_ACTIONS = ['Save to case', 'Download PDF', 'Send via Gmail', 'Send via Outlook', 'Send from Compass', 'Send for acknowledgement', 'Print', 'Copy text'];
 
@@ -532,5 +532,55 @@ describe('LetterScreen — appeal independence action gates (P1)', () => {
   it('does not block the same wording when the appointment is CLEAR', () => {
     render(<LetterScreen {...appealProps} caseInfo={{ ...appealProps.caseInfo, appealIndependenceStatus: 'clear' }} letterOutput={body(PROD_CHAIR)} />);
     expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+  });
+});
+
+// Formal-letter identity/contact P1 (Human UAT, 2026-09-20) — the shared
+// validation result must gate every issuance route, and resolving the
+// details must re-enable them subject to all existing rules.
+describe('LetterScreen — identity/contact issuance gates (P1)', () => {
+  const EMP = 'UAT - Test Employee (Golden Path)';
+  const letterProps = {
+    ...baseProps,
+    activeLetter: 'invite',
+    caseInfo: { employee: EMP, manager: 'Priya Shah' },
+    letterIsApproved: true,
+    letterApproval: { by: 'Jo', at: new Date().toISOString() },
+  };
+  const ALL_ACTIONS = ['Save to case', 'Download PDF', 'Send via Gmail', 'Send via Outlook', 'Send from Compass', 'Send for acknowledgement', 'Print', 'Copy text'];
+  const body = (company, contact, signatory) => `${company}\n[Company Address Line 1]\n\nDear ${EMP},\n\n`
+    + `Please confirm your attendance by contacting ${contact}.\n\n`
+    + `Yours sincerely,\n${signatory}\n[Job Title]\n[Date]`;
+  const UNRESOLVED = body('[Company Name]', '[HR Contact Name and Job Title] at [HR Contact Email]', "[Sender's Full Name]");
+  const RESOLVED = body('Compass LTD', 'UAT - HR Manager at uat@example.com', 'UAT - HR Manager');
+
+  it('blocks every issuance route while sender/organisation/contact details are unresolved', () => {
+    render(<LetterScreen {...letterProps} letterOutput={UNRESOLVED} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByText(/needs review before it can be used/i)).toBeInTheDocument();
+    expect(screen.getByText(/unresolved sender, organisation or contact details/i)).toBeInTheDocument();
+    ALL_ACTIONS.forEach(name => expect(screen.getByRole('button', { name })).toBeDisabled());
+  });
+
+  it('blocks Approve for sending too', () => {
+    render(<LetterScreen {...letterProps} letterIsApproved={false} letterOutput={UNRESOLVED} />);
+    expect(screen.getByRole('button', { name: 'Approve for sending' })).toBeDisabled();
+  });
+
+  it('re-enables every route once the details are completed, with optional placeholders still present', () => {
+    render(<LetterScreen {...letterProps} letterOutput={RESOLVED} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.queryByText(/needs review before it can be used/i)).not.toBeInTheDocument();
+    ALL_ACTIONS.forEach(name => expect(screen.getByRole('button', { name })).toBeEnabled());
+  });
+
+  it('re-blocks live when a human edits a resolved detail back into a placeholder', () => {
+    const { rerender } = render(<LetterScreen {...letterProps} letterOutput={RESOLVED} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+    rerender(<LetterScreen {...letterProps} letterOutput={RESOLVED.replace('Compass LTD', '[Company Name]')} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
+  });
+
+  it('does not expose detector or debug terminology to the user', () => {
+    render(<LetterScreen {...letterProps} letterOutput={UNRESOLVED} />);
+    expect(screen.queryByText(/regex|detector|placeholder class|bracket|deny-list/i)).not.toBeInTheDocument();
   });
 });

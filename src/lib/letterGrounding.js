@@ -124,7 +124,13 @@ export function buildAppealGroundsInstruction(appealText) {
   if (trimmed) {
     return `GROUNDS OF APPEAL RAISED BY THE EMPLOYEE (state exactly as given — never substitute the original allegation, case description, or your own inference for this): ${trimmed}`;
   }
-  return "GROUNDS OF APPEAL: not recorded in the structured case data. Do not invent, infer, or reconstruct specific grounds from the original allegation, case description, or any other context — state generally that the appeal will be heard, without fabricating detail about what is being appealed.";
+  // Placeholder P1 follow-up (2026-09-20) — the truthful position is
+  // unchanged (an appeal WAS received; stage='appeal' establishes that), but
+  // a letter that never asks for the grounds leaves the employee with no
+  // route to state them. Invites rather than asserts, so nothing here
+  // implies Compass already holds them.
+  return "GROUNDS OF APPEAL: not recorded in the structured case data. Do not invent, infer, or reconstruct specific grounds from the original allegation, case description, or any other context — state generally that the appeal will be heard, without fabricating detail about what is being appealed."
+    + " Because the grounds are not on record, the letter must also make clear that the employee may set out the grounds of their appeal in writing before the hearing and/or present them at the hearing itself. Word this as an invitation, never as though those grounds have already been provided to us.";
 }
 
 // Procedural placeholder remediation (2026-09-19) — the appeal-hearing
@@ -189,4 +195,48 @@ export function buildAppealIndependenceInstruction(status, officerName) {
   }
 
   return "";
+}
+
+// Formal-letter identity/contact P1 (Human UAT, 2026-09-20) — a production
+// appeal invitation reached the HR user apparently finished while containing
+// 22 bracketed placeholders, including [Company Name] three times. Compass
+// holds that name authoritatively (organisations.name, already used by CSV
+// export, PDF export and the invite emails) and simply never told the model.
+// Same for the sender's name and their verified sign-in email.
+//
+// Three rules, matching the product decision:
+//   known authoritative fact  -> supply it, forbid placeholdering it
+//   unknown optional fact     -> omit the line entirely, never placeholder it
+//   (the third rule — block issuance on unresolved essential identity —
+//    lives in letterValidation.js, since generation is not the safety net)
+//
+// Deliberately does NOT invent an "HR contact" distinct from the sender:
+// Compass has no structured source for one, so for Release 1 the signed-in
+// sender IS the contact route. Returns "" when nothing is known, so a caller
+// with no org/user context is unaffected.
+export function buildLetterSenderInstruction({ organisationName, senderName, senderEmail, senderJobTitle } = {}) {
+  const org = (organisationName || "").trim();
+  const name = (senderName || "").trim();
+  const email = (senderEmail || "").trim();
+  const jobTitle = (senderJobTitle || "").trim();
+  if (!org && !name && !email) return "";
+
+  const known = [];
+  if (org) known.push(`Organisation name: ${org}.`);
+  if (name) known.push(`This letter is sent by: ${name}.`);
+  if (jobTitle) known.push(`Their job title: ${jobTitle}.`);
+  if (email) known.push(`Contact email address for this letter: ${email}.`);
+
+  // Enumerated explicitly so the model cannot read the silence as licence to
+  // fall back on the shared system prompt's own "[Employee Address]" /
+  // "[Company Name]" placeholder examples, which this supersedes here.
+  const missing = ["a postal address or postcode for the organisation", "a postal address or postcode for the employee", "a telephone number", "a department"];
+  if (!jobTitle) missing.push("a job title for the sender");
+
+  return "AUTHORITATIVE SENDER AND ORGANISATION DETAILS (state these exact values wherever the letter refers to them — never substitute a bracketed placeholder such as [Company Name], [Sender's Full Name], [Signatory Name] or [Email Address] for any of them, and never invent a different value): "
+    + known.join(" ")
+    + ` Sign the letter off in the sender's name${jobTitle ? " and job title" : ""} as given above. Where the letter tells the employee to make contact, confirm attendance, or ask a question, direct them to the sender named above using the email address above — do NOT invent a separate HR contact person, department or reference.`
+    + ` DETAILS COMPASS DOES NOT HOLD — OMIT THEM ENTIRELY, DO NOT PLACEHOLDER THEM: Compass has no ${missing.join(", no ")}.`
+    + " Leave those out completely — do not print an address block, a postcode line, a telephone number, a department line, or a bracketed placeholder standing in for any of them, and do not write an empty or dangling label for them. The letter must read naturally without them."
+    + " For example, where an email address is known but no telephone number is, write \"please contact <name> at <email>\" — never \"please contact <name> at <email> / [Telephone Number]\". This instruction overrides any general guidance above about using square-bracket placeholders for unknown details.";
 }

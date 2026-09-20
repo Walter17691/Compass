@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction } from '../lib/letterGrounding.js';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction, buildLetterSenderInstruction } from '../lib/letterGrounding.js';
 
 const goldenPathEmployee = 'UAT - Test Employee (Golden Path)';
 
@@ -343,5 +343,110 @@ describe('buildAppealIndependenceInstruction (appeal independence P1)', () => {
     const unknown = buildAppealIndependenceInstruction('unknown', OFFICER);
     const conflict = buildAppealIndependenceInstruction('conflict', OFFICER);
     expect(conflict).toBe(unknown);
+  });
+});
+
+// Formal-letter identity/contact P1 (Human UAT, 2026-09-20) — a production
+// appeal invitation reached the HR user apparently finished while carrying
+// [Company Name] three times, despite organisations.name being populated and
+// already used elsewhere in the app. Known facts are now supplied; unknown
+// optional facts are omitted rather than placeholdered.
+describe('buildLetterSenderInstruction (identity/contact P1)', () => {
+  const full = buildLetterSenderInstruction({
+    organisationName: 'Compass LTD', senderName: 'UAT - HR Manager',
+    senderEmail: 'uat@example.com', senderJobTitle: 'HR Manager',
+  });
+  const noTitle = buildLetterSenderInstruction({
+    organisationName: 'Compass LTD', senderName: 'UAT - HR Manager', senderEmail: 'uat@example.com',
+  });
+
+  it('supplies the authoritative organisation name exactly', () => {
+    expect(full).toContain('Organisation name: Compass LTD.');
+  });
+
+  it('supplies the authoritative sender name exactly', () => {
+    expect(full).toContain('This letter is sent by: UAT - HR Manager.');
+  });
+
+  it('supplies the authoritative sender email exactly', () => {
+    expect(full).toContain('Contact email address for this letter: uat@example.com.');
+  });
+
+  it('supplies the sender job title only when it is non-empty', () => {
+    expect(full).toContain('Their job title: HR Manager.');
+    expect(noTitle).not.toContain('Their job title');
+    expect(buildLetterSenderInstruction({ organisationName: 'X', senderJobTitle: '   ' })).not.toContain('Their job title');
+  });
+
+  it('lists a null job title among the details to omit, rather than leaving it ambiguous', () => {
+    expect(noTitle).toContain('a job title for the sender');
+  });
+
+  it('forbids substituting a bracketed placeholder for any supplied value', () => {
+    expect(full).toMatch(/never substitute a bracketed placeholder/i);
+    expect(full).toContain('[Company Name]');
+    expect(full).toContain('[Email Address]');
+  });
+
+  it('states the omission rule explicitly, with a worked example', () => {
+    expect(full).toMatch(/OMIT THEM ENTIRELY, DO NOT PLACEHOLDER THEM/);
+    expect(full).toMatch(/never "please contact <name> at <email> \/ \[Telephone Number\]"/);
+    expect(full).toMatch(/overrides any general guidance above about using square-bracket placeholders/i);
+  });
+
+  it('names every optional fact Compass does not hold', () => {
+    expect(full).toContain('a postal address or postcode for the organisation');
+    expect(full).toContain('a postal address or postcode for the employee');
+    expect(full).toContain('a telephone number');
+    expect(full).toContain('a department');
+  });
+
+  it('never invents a telephone number or postal address', () => {
+    expect(full).not.toMatch(/\+?\d[\d\s()-]{6,}/);
+    expect(full).not.toMatch(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/); // UK postcode shape
+  });
+
+  it('uses the sender as the contact route rather than inventing a separate HR contact', () => {
+    expect(full).toMatch(/do NOT invent a separate HR contact person, department or reference/i);
+  });
+
+  it('returns empty when no authoritative value is known at all', () => {
+    expect(buildLetterSenderInstruction({})).toBe('');
+    expect(buildLetterSenderInstruction()).toBe('');
+    expect(buildLetterSenderInstruction({ senderJobTitle: 'HR Manager' })).toBe('');
+  });
+
+  it('degrades cleanly when only some values are known', () => {
+    const orgOnly = buildLetterSenderInstruction({ organisationName: 'Compass LTD' });
+    expect(orgOnly).toContain('Organisation name: Compass LTD.');
+    expect(orgOnly).not.toContain('This letter is sent by');
+    expect(orgOnly).not.toContain('Contact email address');
+  });
+});
+
+// Placeholder P1 follow-up — appeal_text null must still never fabricate
+// grounds, but the letter must now invite the employee to supply them.
+describe('buildAppealGroundsInstruction — invitation to provide grounds when none recorded', () => {
+  const nullGrounds = buildAppealGroundsInstruction(null);
+
+  it('still refuses to invent, infer or reconstruct grounds', () => {
+    expect(nullGrounds).toMatch(/Do not invent, infer, or reconstruct/);
+    expect(nullGrounds).toMatch(/not recorded in the structured case data/);
+  });
+
+  it('invites the employee to set out grounds in writing before, and/or at, the hearing', () => {
+    expect(nullGrounds).toMatch(/set out the grounds of their appeal in writing before the hearing/i);
+    expect(nullGrounds).toMatch(/present them at the hearing itself/i);
+  });
+
+  it('frames it as an invitation, never as though Compass already holds the grounds', () => {
+    expect(nullGrounds).toMatch(/never as though those grounds have already been provided/i);
+  });
+
+  it('leaves the recorded-grounds behaviour completely unchanged', () => {
+    const recorded = buildAppealGroundsInstruction('The sanction was disproportionate.');
+    expect(recorded).toContain('The sanction was disproportionate.');
+    expect(recorded).not.toMatch(/not recorded in the structured case data/);
+    expect(recorded).not.toMatch(/set out the grounds of their appeal in writing/);
   });
 });

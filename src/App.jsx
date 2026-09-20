@@ -28,9 +28,9 @@ import {
 } from './lib/prepQuestions';
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, transcriptMentionsAppeal } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
-import { validateFormalLetter } from './lib/letterValidation';
+import { validateFormalLetter, EMPLOYEE_DIRECTED_LETTER_TYPES } from './lib/letterValidation';
 import { classifyAppealIndependence } from './lib/appealIndependence';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction } from './lib/letterGrounding';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction, buildLetterSenderInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -7820,6 +7820,15 @@ Please produce:
         // no "meeting date" of its own, and the employee's own recorded
         // location is not the hearing venue.
         buildAppealHearingLogisticsInstruction(hearingLogistics),
+        // Formal-letter identity/contact P1 (2026-09-20) — scoped to the
+        // same employee-directed set validateFormalLetter itself guards, so
+        // witness correspondence and internal documents are unaffected.
+        EMPLOYEE_DIRECTED_LETTER_TYPES.includes(t) ? buildLetterSenderInstruction({
+          organisationName: org?.name,
+          senderName: currentUser?.name,
+          senderEmail: currentUser?.email,
+          senderJobTitle: currentUser?.job_title,
+        }) : "",
         groundedManager ? "Chair/Manager: "+groundedManager : "",
         appealIndependenceStatus ? buildAppealIndependenceInstruction(appealIndependenceStatus, appealIndependenceOfficerName) : "",
         caseInfo.representative ? "Representative/companion: "+caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")" : "",

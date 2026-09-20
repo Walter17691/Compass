@@ -11,7 +11,7 @@ import { validateFormalLetter, extractLetterSalutation, EMPLOYEE_DIRECTED_LETTER
 const goldenPathEmployee = 'UAT - Test Employee (Golden Path)';
 
 function outcomeLetterAddressedTo(name, { outcome = 'First written warning' } = {}) {
-  return `[Company Name]\n\n8 September 2026\n\nPrivate and Confidential\n\nDear ${name},\n\nOutcome of Disciplinary Hearing\n\nI am writing to confirm the outcome of the disciplinary hearing. The sanction imposed is: ${outcome}. This warning will remain on your file for 6 months. You have the right to appeal within 5 working days.\n\nYours sincerely,\n[Hearing Manager Name]`;
+  return `Compass LTD\n\n8 September 2026\n\nPrivate and Confidential\n\nDear ${name},\n\nOutcome of Disciplinary Hearing\n\nI am writing to confirm the outcome of the disciplinary hearing. The sanction imposed is: ${outcome}. This warning will remain on your file for 6 months. You have the right to appeal within 5 working days.\n\nYours sincerely,\n[Hearing Manager Name]`;
 }
 
 // Defect #12 remediation — a variant with the duration/expiry sentence
@@ -20,7 +20,7 @@ function outcomeLetterAddressedTo(name, { outcome = 'First written warning' } = 
 // isn't useful for testing what happens when the stated duration is
 // wrong, missing, or an unresolved placeholder).
 function outcomeLetterWithDuration(name, { outcome = 'First written warning', durationSentence = '', expirySentence = '' } = {}) {
-  return `[Company Name]\n\n8 September 2026\n\nDear ${name},\n\nThe sanction imposed is: ${outcome}. ${durationSentence} ${expirySentence} You have the right to appeal within 5 working days.\n\nYours sincerely,\n[Hearing Manager Name]`;
+  return `Compass LTD\n\n8 September 2026\n\nDear ${name},\n\nThe sanction imposed is: ${outcome}. ${durationSentence} ${expirySentence} You have the right to appeal within 5 working days.\n\nYours sincerely,\n[Hearing Manager Name]`;
 }
 
 describe('extractLetterSalutation', () => {
@@ -131,7 +131,7 @@ describe('validateFormalLetter — outcome checks, across every outcome type', (
 describe('validateFormalLetter — appeal outcome check', () => {
   const employeeName = 'Sarah Jones';
   function appealLetterAddressedTo(name, { resultText = 'Not upheld' } = {}) {
-    return `[Company Name]\n\nDear ${name},\n\nAppeal Outcome\n\nHaving considered the grounds of appeal, the outcome of your appeal is: ${resultText}. This is the final stage of the internal procedure.\n\nYours sincerely,\n[Appeal Officer Name]`;
+    return `Compass LTD\n\nDear ${name},\n\nAppeal Outcome\n\nHaving considered the grounds of appeal, the outcome of your appeal is: ${resultText}. This is the final stage of the internal procedure.\n\nYours sincerely,\n[Appeal Officer Name]`;
   }
 
   it('accepts a letter that states the recorded appeal outcome', () => {
@@ -396,7 +396,7 @@ describe('validateFormalLetter — Defect #19: employee-identity placeholder var
   });
 
   it('does not flag unrelated brackets that merely contain the word "name" (e.g. Company Name)', () => {
-    const letter = `[Company Name]\n\nDear ${employeeName},\n\nOutcome: First written warning.`;
+    const letter = `Compass LTD\n\nDear ${employeeName},\n\nOutcome: First written warning.`;
     const result = validateFormalLetter(letter, {employeeName, outcome: 'First written warning', letterType: 'outcome'});
     expect(result.issues.some(i => /unresolved employee-name placeholder/i.test(i))).toBe(false);
   });
@@ -438,7 +438,7 @@ describe('validateFormalLetter — combined production-draft fixture (Defects #1
   const warningExpiresAt = '2027-03-07';
 
   function goldenPathProductionLetter(recipient) {
-    return `[Company Name]\n\n9 September 2026\n\nPrivate and Confidential\n\n${recipient}\n[Employee Address]\n\nDear ${recipient},\n\nOutcome of Disciplinary Hearing – First Written Warning\n\nThe allegation considered at the hearing was as follows: that on three separate occasions during [Month] 2026, you arrived late to work without providing prior notice.\n\nSanction: First Written Warning\n\nAs a result of the above finding, you are hereby issued with a First Written Warning.\n\nThis warning will remain active on your personnel file for a period of 6 months from the date of this letter, and will expire on 7 March 2027, after which time it will be disregarded.\n\nYours sincerely,\n[Hearing Manager Name]`;
+    return `Compass LTD\n\n9 September 2026\n\nPrivate and Confidential\n\n${recipient}\n[Employee Address]\n\nDear ${recipient},\n\nOutcome of Disciplinary Hearing – First Written Warning\n\nThe allegation considered at the hearing was as follows: that on three separate occasions during [Month] 2026, you arrived late to work without providing prior notice.\n\nSanction: First Written Warning\n\nAs a result of the above finding, you are hereby issued with a First Written Warning.\n\nThis warning will remain active on your personnel file for a period of 6 months from the date of this letter, and will expire on 7 March 2027, after which time it will be disregarded.\n\nYours sincerely,\n[Hearing Manager Name]`;
   }
 
   it('the exact production draft shape fails on the unresolved recipient, not on the [Month] incident placeholder', () => {
@@ -468,7 +468,7 @@ describe('validateFormalLetter — appeal deadline (NEW-1)', () => {
   const appealDeadline = '2026-09-14';
 
   function outcomeLetterWithAppeal(name, { letterDate = '10 September 2026', appealSentence } = {}) {
-    return `[Company Name]\n\n${letterDate}\n\nDear ${name},\n\nThe sanction imposed is: ${outcome}. This warning will remain on your file for 6 months. ${appealSentence}\n\nYours sincerely,\n[Hearing Manager Name]`;
+    return `Compass LTD\n\n${letterDate}\n\nDear ${name},\n\nThe sanction imposed is: ${outcome}. This warning will remain on your file for 6 months. ${appealSentence}\n\nYours sincerely,\n[Hearing Manager Name]`;
   }
 
   it('A. issue and letter dated the same day, explicit correct deadline -> PASS', () => {
@@ -579,7 +579,7 @@ function futureHearing(daysAhead = 30) {
 
 function appealInviteLetter(name, { dateText, time = '10:30', location = 'Microsoft Teams' } = {}) {
   const resolvedDate = dateText === undefined ? futureHearing().long : dateText;
-  return `[Company Name]\n\n19 September 2026\n\nDear ${name},\n\nAppeal Hearing Invitation\n\nYou are invited to an appeal hearing on ${resolvedDate} at ${time}, to be held at ${location}.\n\nYours sincerely,\n[Hearing Manager Name]`;
+  return `Compass LTD\n\n19 September 2026\n\nDear ${name},\n\nAppeal Hearing Invitation\n\nYou are invited to an appeal hearing on ${resolvedDate} at ${time}, to be held at ${location}.\n\nYours sincerely,\n[Hearing Manager Name]`;
 }
 
 describe('validateFormalLetter — appeal hearing invitation logistics (Appeal Invitation UAT P1)', () => {
@@ -856,14 +856,14 @@ describe('validateFormalLetter — hearing venue placeholder discrimination (Hum
   });
 
   it('a full formal letter carrying the normal company/employee/HR-contact placeholders now validates clean', () => {
-    const letter = `[Company Name]\n[Company Address Line 1]\n[Company Address Line 2]\n[Postcode]\n\n`
+    const letter = `Compass LTD\n[Company Address Line 1]\n[Company Address Line 2]\n[Postcode]\n\n`
       + `${goldenPathEmployee}\n[Employee Address Line 1]\n[Postcode]\n\nDear ${goldenPathEmployee},\n\n`
       + `Invitation to Appeal Hearing\n\nDate: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\n`
       // Deadline wording is deliberately neutral here: this fixture exists to
       // prove venue-placeholder discrimination, and a substantive deadline
       // placeholder is separately (and correctly) blocked by the procedural
       // deadline check below.
-      + `Please respond to [HR Contact Name and Job Title] at [HR Contact Email Address] as soon as possible.\n\n`
+      + `Please respond to Dana Rees, HR Manager at dana.rees@example.com as soon as possible.\n\n`
       + `Yours sincerely,\n[Job Title]`;
     const result = validateFormalLetter(letter, args);
     expect(result.valid).toBe(true);
@@ -952,13 +952,13 @@ describe('validateFormalLetter — substantive procedural deadline placeholders 
 
   // Reproduces the shape of the real production letter end to end.
   describe('full production-shaped invitation', () => {
-    const letter = deadlineWording => `[Company Name]\n[Company Address Line 1]\n[Company Address Line 2]\n[Postcode]\n[Company Email / Telephone]\n\n`
+    const letter = deadlineWording => `Compass LTD\n[Company Address Line 1]\n[Company Address Line 2]\n[Postcode]\nhr@compass.example.com\n\n`
       + `${goldenPathEmployee}\n[Employee Address Line 1]\n[Postcode]\n\nPRIVATE AND CONFIDENTIAL\n\nDear ${goldenPathEmployee},\n\n`
       + `Invitation to Disciplinary Appeal Hearing\n\nYou were issued with a First Written Warning. That warning has a duration of 6 months and is recorded as expiring on 11 March 2027.\n\n`
       + `Date: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\nThe hearing will be chaired by UAT - HR Manager.\n\n`
       + `As the grounds of appeal have not been formally recorded, you are invited to set them out at the hearing. `
-      + `Please contact [HR Contact Name and Job Title] at [HR Contact Email / Telephone] ${deadlineWording}\n\n`
-      + `Yours sincerely,\n[Signatory Name]\n[Job Title]\n[Company Name]\n[Date]`;
+      + `Please contact Dana Rees, HR Manager at dana.rees@example.com ${deadlineWording}\n\n`
+      + `Yours sincerely,\nDana Rees\n[Job Title]\nCompass LTD\n[Date]`;
 
     const fullArgs = { ...args, outcome: 'First written warning', warningDurationMonths: 6, warningExpiresAt: '2027-03-11' };
 
@@ -973,10 +973,13 @@ describe('validateFormalLetter — substantive procedural deadline placeholders 
       const result = validateFormalLetter(neutral, fullArgs);
       expect(result.valid).toBe(true);
       expect(result.issues).toEqual([]);
-      // The cosmetic placeholders are untouched by this remediation.
+      // Placeholders Compass has no data for stay permitted — the identity/
+      // contact P1 that followed deliberately did NOT make these blocking,
+      // since doing so would leave every letter permanently unissuable.
+      // (The sender/organisation/contact placeholders this fixture once
+      // carried are now blocking and were replaced with real values above.)
       expect(neutral).toContain('[Company Address Line 1]');
-      expect(neutral).toContain('[HR Contact Email / Telephone]');
-      expect(neutral).toContain('[Signatory Name]');
+      expect(neutral).toContain('[Job Title]');
       expect(neutral).toContain('[Date]');
     });
 
@@ -1067,7 +1070,7 @@ describe('validateFormalLetter — appeal officer independence assertions (P1)',
       hearingDate: hearing.iso, hearingTime: '10:00', hearingLocationOrMethod: 'Microsoft Teams',
       appealIndependenceStatus: 'unknown',
     };
-    const clean = `Dear ${EMP},\n\n[Company Name]\n[Company Address Line 1]\n[HR Contact Email / Telephone]\n[Signatory Name]\n[Date]\n\n`
+    const clean = `Dear ${EMP},\n\nCompass LTD\n[Company Address Line 1]\ndana.rees@example.com\nDana Rees\n[Date]\n\n`
       + `Date: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\nThe appeal hearing will be chaired by Priya Shah. Please respond as soon as possible.`;
     expect(validateFormalLetter(clean, args).valid).toBe(true);
 
@@ -1076,5 +1079,105 @@ describe('validateFormalLetter — appeal officer independence assertions (P1)',
     expect(validateFormalLetter(withDeadline, args).issues.some(i => i.includes('unresolved response deadline'))).toBe(true);
     // Logistics checks still fire independently.
     expect(validateFormalLetter(clean, { ...args, hearingTime: '14:00' }).valid).toBe(false);
+  });
+});
+
+// Formal-letter identity/contact P1 (Human UAT, 2026-09-20) — a letter
+// signed "[Sender's Full Name]" telling the employee to reply to "[HR
+// Contact Email]" gives them no way to respond at all, on a document
+// carrying a fixed hearing date and statutory accompaniment rights. That is
+// an operative failure, not a cosmetic one, and it was fully issuable.
+describe('validateFormalLetter — unresolved identity/contact placeholders (P1)', () => {
+  const EMP = goldenPathEmployee;
+  const MESSAGE = 'The letter still contains unresolved sender, organisation or contact details. Complete these details before issuing the letter.';
+  const flags = placeholder => validateFormalLetter(
+    `Dear ${EMP},\n\nPlease contact ${placeholder} to confirm.`,
+    { employeeName: EMP, letterType: 'invite' },
+  ).issues.includes(MESSAGE);
+
+  it.each([
+    '[Company Name]', '[Organisation Name]', "[Sender's Full Name]", '[Signatory Name]',
+    '[HR Contact Name]', '[HR Contact Name and Job Title]', '[Contact Name]',
+    '[HR Contact Email]', '[HR Contact Email / Telephone Number]', '[Email Address]',
+    '[Contact Email Address]', '[Company Email / Telephone]',
+  ])('blocks the essential identity/contact placeholder %s', placeholder => {
+    expect(flags(placeholder)).toBe(true);
+  });
+
+  it('retains the existing employee-identity protection', () => {
+    const result = validateFormalLetter('Dear [Employee Name],\n\nSome text.', { employeeName: EMP, letterType: 'invite' });
+    expect(result.valid).toBe(false);
+  });
+
+  // Blocking these would make every letter permanently unissuable, since
+  // Compass stores none of the underlying data.
+  it.each([
+    '[Company Address Line 1]', '[Company Address Line 2]', '[Company Address Line 3]',
+    '[Employee Address Line 1]', '[Employee Address Line 2]', '[Employee Address Line 3]',
+    '[Postcode]', '[Job Title]', '[Department]', '[Telephone Number]', '[Contact Telephone Number]',
+  ])('does not block the optional, uncollected detail %s', placeholder => {
+    expect(flags(placeholder)).toBe(false);
+  });
+
+  // False-positive protection — the live letter contained this exact string.
+  it.each([
+    '[HR / your line manager / the company intranet]',
+    '[insert any local detail here]',
+    '[Name]',
+    '[Hearing Manager Name]',
+    '[Appeal Officer Name and Job Title]',
+  ])('does not treat bracketed prose or an ambiguous name as an identity placeholder: %s', placeholder => {
+    expect(flags(placeholder)).toBe(false);
+  });
+
+  it('is scoped to employee-directed letters — witness and internal content is unaffected', () => {
+    const text = `Dear X,\n\nContact [HR Contact Email] and [Company Name].`;
+    ['witness-invitation', 'investigation-report', 'evidence-request'].forEach(letterType => {
+      expect(validateFormalLetter(text, { employeeName: EMP, letterType }).valid).toBe(true);
+    });
+  });
+
+  describe('full production-shaped invitation', () => {
+    const letter = (company, contact, signatory) => `${company}\n[Company Address Line 1]\n[Postcode]\n\n`
+      + `${EMP}\n[Employee Address Line 1]\n[Postcode]\n\nDear ${EMP},\n\n`
+      + `INVITATION TO APPEAL HEARING\n\nDate: 22 September 2099\nTime: 10:00\nMethod: Microsoft Teams\n\n`
+      + `The appeal hearing will be chaired by UAT - HR Manager.\n\n`
+      + `Please confirm your attendance by contacting ${contact}.\n\n`
+      + `A copy of the policy is available from [HR / your line manager / the company intranet].\n\n`
+      + `Yours sincerely,\n${signatory}\n[Job Title]\n[Date]`;
+    const args = { employeeName: EMP, letterType: 'invite' };
+
+    it('fails while sender, organisation or contact details are unresolved', () => {
+      const result = validateFormalLetter(letter('[Company Name]', '[HR Contact Name and Job Title] at [HR Contact Email]', "[Sender's Full Name]"), args);
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual([MESSAGE]);
+    });
+
+    it('passes once those are populated, with optional absent values still bracketed', () => {
+      const populated = letter('Compass LTD', 'UAT - HR Manager at uat@example.com', 'UAT - HR Manager');
+      const result = validateFormalLetter(populated, args);
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      // Optional, genuinely uncollected details do not block issuance.
+      expect(populated).toContain('[Company Address Line 1]');
+      expect(populated).toContain('[Postcode]');
+      expect(populated).toContain('[Job Title]');
+      expect(populated).toContain('[Date]');
+      expect(populated).toContain('[HR / your line manager / the company intranet]');
+    });
+
+    it('does not disturb the hearing logistics, deadline or independence checks', () => {
+      const populated = letter('Compass LTD', 'UAT - HR Manager at uat@example.com', 'UAT - HR Manager');
+      const hearing = futureHearing();
+      const dated = populated.replace('22 September 2099', hearing.long);
+      const logisticsArgs = {
+        ...args, isAppealHearingInvitation: true, hearingDate: hearing.iso,
+        hearingTime: '10:00', hearingLocationOrMethod: 'Microsoft Teams', appealIndependenceStatus: 'unknown',
+      };
+      expect(validateFormalLetter(dated, logisticsArgs).valid).toBe(true);
+      expect(validateFormalLetter(dated, { ...logisticsArgs, hearingTime: '14:00' }).valid).toBe(false);
+      expect(validateFormalLetter(dated.replace('as soon as possible', 'x') + ' Reply within [X working days].', logisticsArgs).valid).toBe(false);
+      expect(validateFormalLetter(dated + ' The chair was not involved.', logisticsArgs).valid).toBe(false);
+    });
   });
 });

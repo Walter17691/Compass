@@ -168,6 +168,49 @@ function normalizeForLooseContains(value) {
   return (value || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// Formal-letter identity/contact P1 (Human UAT, 2026-09-20) — the issuance
+// guard behind buildLetterSenderInstruction. Generation now supplies the
+// company name, sender name and sender email, so an unresolved placeholder
+// for any of them is a real failure, not a cosmetic gap: a letter signed
+// "[Sender's Full Name]" telling the employee to reply to "[HR Contact
+// Email]" gives them no way to respond at all, on a document carrying a
+// fixed hearing date and statutory accompaniment rights.
+//
+// Deliberately NOT "any bracket is invalid". That rule would reject the
+// live letter's own "[HR / your line manager / the company intranet]",
+// which is bracketed PROSE offering the reader options, and would also make
+// every letter permanently unissuable for address/telephone details Compass
+// genuinely does not store. Concept-based deny-list only, matched on the
+// bracket's own words like the hearing-date/venue and deadline detectors.
+//
+// Conservative boundaries, chosen deliberately:
+//  - a bare [Name] is NOT blocked; only name tied to sender/signatory/
+//    contact/company is.
+//  - [Hearing Manager Name] is NOT blocked — that names the chair, which
+//    other flows legitimately leave to the user, and blocking it would
+//    change established outcome-letter behaviour beyond this remediation.
+//  - a bare [Telephone Number] / [Job Title] / [Department] is NOT blocked;
+//    Compass has no source for them and generation now omits them.
+function hasUnresolvedIdentityContactPlaceholder(text) {
+  const brackets = (text || "").match(/\[[^\]]{0,80}\]/g) || [];
+  return brackets.some(b => {
+    const words = b.toLowerCase().replace(/['\u2019]s\b/g, "").replace(/[^a-z]+/g, " ").split(" ").filter(Boolean);
+    const has = w => words.includes(w);
+    // An unresolved email placeholder always defeats the contact route, and
+    // no non-blocking class contains the word at all.
+    if (has("email")) return true;
+    if (has("signatory")) return true;
+    if (has("name")) {
+      if (has("sender") || has("author")) return true;
+      if (has("company") || has("organisation") || has("organization") || has("employer")) return true;
+      if (has("contact")) return true;
+    }
+    // [HR Contact ...] — the operative contact person for this letter.
+    if (has("hr") && has("contact")) return true;
+    return false;
+  });
+}
+
 // Appeal independence P1 (Human UAT, 2026-09-20) — the BACKSTOP behind
 // buildAppealIndependenceInstruction. Generation grounding is the primary
 // control; this exists because the model could still volunteer the claim
@@ -553,6 +596,14 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
   if ((appealIndependenceStatus === "unknown" || appealIndependenceStatus === "conflict")
     && assertsAppealOfficerNonInvolvement(letterText)) {
     issues.push("The letter states that the appeal officer was not previously involved, but Compass has not verified that. Use neutral wording about who will chair the appeal.");
+  }
+
+  // Formal-letter identity/contact P1 (2026-09-20) — applies to every
+  // employee-directed letter type (the same set this whole function is
+  // already scoped to at the top), so witness correspondence, investigation
+  // reports and other internal content are untouched.
+  if (hasUnresolvedIdentityContactPlaceholder(letterText)) {
+    issues.push("The letter still contains unresolved sender, organisation or contact details. Complete these details before issuing the letter.");
   }
 
   return { valid: issues.length === 0, issues };
