@@ -32,6 +32,7 @@ import { validateFormalLetter, EMPLOYEE_DIRECTED_LETTER_TYPES } from './lib/lett
 import { classifyAppealIndependence } from './lib/appealIndependence';
 import { findLatestAppealInvitation } from './lib/appealInvitation';
 import { buildMeetingPrepGrounding, buildMeetingPrepInstructions } from './lib/meetingPrepGrounding';
+import { isPrepPackComplete } from './lib/prepPackCompletion';
 import { isAppealMeeting } from './lib/meetingTypeMatch';
 import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction, buildLetterSenderInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
@@ -6287,14 +6288,33 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         hasCaseContext: !!carriedContext,
         hasAdditionalContext: !!(caseInfo.context||"").trim(),
       });
-      await Promise.all([
+      // Appeal Prep Pack completion safety (Human UAT — Issue C). The
+      // narrative call previously ignored why generation stopped, so a pack
+      // cut off at max_tokens mid-bullet still rendered under PREP PACK READY
+      // with Start meeting enabled. Capture the provider's own end reason.
+      let prepTruncated = false;
+      const [prepText] = await Promise.all([
         streamClaude(
           `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
-          `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}${caseInfo.time?" at "+caseInfo.time:""}${caseInfo.locationOrMethod?" ("+caseInfo.locationOrMethod+")":""}. Chair: ${prepChair}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}${(caseInfo.context||"").trim()?"\n\nADDITIONAL CONTEXT supplied by the user for this preparation:\n"+caseInfo.context.trim():(carriedContext?"":"\n\nBackground: None")}${prepInstructions?"\n\n"+prepInstructions:""}\n\n## Objectives\n## Agenda\n## Opening Script\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Closing Points\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use any items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the recorded case context clearly supports them, and keep every one of them phrased as something still to be explored rather than something established.":""}\n\nFor Opening Script, write actual words the chair could read aloud to open the meeting professionally (introductions, purpose, right to be accompanied where relevant) — a real script, not a bullet-point agenda restated. For Closing Points, list what the chair should cover before ending: next steps, what happens next and by when, and confirming the employee has nothing further to add.`,
-          t=>setPrepNotes(t)
+          `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}${caseInfo.time?" at "+caseInfo.time:""}${caseInfo.locationOrMethod?" ("+caseInfo.locationOrMethod+")":""}. Chair: ${prepChair}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}${(caseInfo.context||"").trim()?"\n\nADDITIONAL CONTEXT supplied by the user for this preparation:\n"+caseInfo.context.trim():(carriedContext?"":"\n\nBackground: None")}${prepInstructions?"\n\n"+prepInstructions:""}\n\n## Objectives\n## Agenda\n## Opening Script\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Closing Points\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use any items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the recorded case context clearly supports them, and keep every one of them phrased as something still to be explored rather than something established. Where a rule above tells you not to raise a particular matter, that rule takes precedence over this instruction — leave the item out rather than carrying it forward, and do not pad either section to fill it.":""}\n\nFor Opening Script, write actual words the chair could read aloud to open the meeting professionally (introductions, purpose, right to be accompanied where relevant) — a real script, not a bullet-point agenda restated. For Closing Points, list what the chair should cover before ending: next steps, what happens next and by when, and confirming the employee has nothing further to add.`,
+          t=>setPrepNotes(t),
+          // Output budget unchanged (2048) — passed explicitly only so the
+          // completion callback can be supplied as the fifth argument.
+          2048,
+          ({ truncated })=>{ prepTruncated = truncated; }
         ),
         generatePrepQuestions(carriedContext, prepInstructions),
       ]);
+      // Fail closed. An incomplete pack must not be presented as ready:
+      // clearing prepNotes withdraws both the PREP PACK READY label and the
+      // Start meeting button (PrepScreen derives both from its presence).
+      // Nothing is persisted, no case is mutated and no audit event is
+      // written — this function has no write path of its own.
+      if(!isPrepPackComplete({ text: prepText, truncated: prepTruncated })) {
+        setPrepNotes("");
+        setPrepQuestions([]);
+        setAiError("The prep pack didn't finish generating. Please regenerate it.");
+      }
     } catch(e) {
       // Release 1.0 UAT remediation (Defect #4) — streamClaude's thrown
       // Error embeds up to 200 chars of the raw response body in its
@@ -6303,6 +6323,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // show verbatim). PrepScreen now renders aiError, so this needs to
       // read as a real sentence, not embedded JSON.
       console.error("Prep pack generation failed:", e);
+      // Same fail-closed rule as the truncation guard above: if generation
+      // threw part-way through, whatever was streamed so far is a fragment,
+      // not a prep pack, and must not be left on screen as one.
+      setPrepNotes("");
+      setPrepQuestions([]);
       setAiError("Compass AI is temporarily unavailable. You can retry, or skip prep and start the meeting now.");
     }
     setAiProcessing(false);

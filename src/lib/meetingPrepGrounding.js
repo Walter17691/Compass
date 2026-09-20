@@ -206,6 +206,16 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
     // Cosmetic, same prompt layer — the pack produced the awkward "Thank the
     // meeting." Nothing instructed a thanks at all, so this names it properly
     // rather than leaving the model to phrase it.
+    // Issue A (Human UAT) — the rule above already forbids CLAIMING a
+    // notetaker is present. It did not stop the opposite failure: treating a
+    // blank notetaker field as a procedural problem, or inventing a
+    // precondition that one must be arranged before the hearing can go ahead.
+    rules.push("NOTETAKER AND NOTE-TAKING ARRANGEMENTS: Compass holds no requirement that a separate notetaker attends this hearing. Do not state or imply that a notetaker is required, that one must be present or arranged, or that note-taking arrangements must be confirmed or agreed before the hearing can proceed. Do not tell the chair that they must personally take the notes, or that they must ensure someone else takes them. Where a notetaker is blank, empty, null, unknown or shown as \"Not specified\", that records only that no notetaker has been noted: it is NOT evidence that no adequate written record exists, that the record is or will be incomplete or inaccurate, that the process was defective, that there was a procedural failing, or that the hearing cannot properly proceed. Do not raise it on that basis as a risk, a procedural concern, an unanswered issue or a point to confirm. UNKNOWN or NOT RECORDED is not a DEFECT. You may still say that an appropriate written record of the hearing should be kept where that is supported. You must still raise, plainly, any genuine concern the supplied case context affirmatively supports — that notes taken were inaccurate or incomplete, that no adequate record was kept, that the employee disputes the record, or that the handling of the record is itself a ground of appeal.");
+    // Issue B (Human UAT) — the inconsistency framing above forbids "proven
+    // contradiction" and "evidence of dishonesty". It left a third inference
+    // uncovered: reading a shift or change in position out of nothing more
+    // than two people wording the same events differently.
+    rules.push("DIFFERING ACCOUNTS: where people have described the same events in different terms, you may neutrally reproduce or summarise what each of them said, you may note that the wording differs where that is objectively supported by the supplied context, and you may invite clarification where the difference is genuinely relevant to a ground of appeal, to the original decision, or to something the chair needs to understand. You must NOT infer from differing wording alone any of the following: a shift in position; a change in position; a changed story or changed account; inconsistency; a credibility issue; dishonesty; unreliability; a motive; or evasiveness. Do not speculate about why the wording differs, and do not offer explanations merely to populate Potential Inconsistencies — that section may be brief, or record that nothing further is identified. People describe the same events differently for many ordinary reasons. Where the supplied case context affirmatively records an inconsistency, a retraction, an account that actually changed, or a disputed fact, state it plainly: this rule restrains inference, it does not suppress recorded inconsistency evidence.");
     rules.push("For Closing Points, the chair should thank the employee and anyone attending with them, and close the hearing.");
     rules.push("Questions, open issues and flagged signals supplied above are contextual case material — things recorded as worth exploring. Treat them as questions to pursue or matters to verify. Any normative or legal wording inside them is not automatically Compass's own conclusion: do not restate it as settled law, established non-compliance or a proven procedural failing unless the authoritative context independently supports that.");
     if (hasAdditionalContext) {
@@ -243,7 +253,11 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
     // concern to fill the heading — exactly how a blank notetaker field
     // became a procedural risk. The sections stay; the obligation to find
     // something for them does not.
-    rules.push("For Risk Flags and Legal Checklist, include only matters actually supported by the supplied case context. These headings do not have to be filled: if nothing in the record supports a risk or a legal concern, say briefly that none is identified from the information recorded, or keep the section minimal. Never manufacture a procedural or legal risk out of blank, missing or unrecorded detail in order to populate a section.");
+    rules.push("For Risk Flags and Legal Checklist, include only matters actually supported by the supplied case context. These headings do not have to be filled: if nothing in the record supports a risk or a legal concern, say briefly that none is identified from the information recorded, or keep the section minimal. Never manufacture a procedural or legal risk out of blank, missing or unrecorded detail in order to populate a section. Writing exactly \"None identified from the supplied case context.\" under either heading is an acceptable and complete answer.");
+    // Issue C4 (Human UAT) — the pack was running past its output budget and
+    // being cut off mid-bullet. Trimming repetition is the fix; dropping
+    // required sections is not.
+    rules.push("BE CONCISE. Prefer short, specific bullets to long prose. Do not repeat the same point under more than one heading, and do not restate the case background supplied above — the chair already has it. Do not pad a section to make it look substantial. Every required heading must still appear: never drop, merge or omit one to save space.");
   }
 
   return rules.join(" ");

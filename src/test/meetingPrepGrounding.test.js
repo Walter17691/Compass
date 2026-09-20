@@ -871,3 +871,181 @@ describe('all previously deployed prep safeguards remain intact (14)', () => {
     expect(CASE).toEqual(snapshot);
   });
 });
+
+// ── Issue A (Human UAT, regeneration 2026-09-20) — the deployed rule stopped
+// the pack CLAIMING a notetaker was present. It did not stop the inverse
+// failure: the pack told the chair a notetaker had to be arranged and that
+// note-taking arrangements had to be confirmed before the hearing could
+// proceed, purely because the notetaker field was blank. UNKNOWN != DEFECT.
+describe('notetaker arrangements are never invented or required (Issue A)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('A1. forbids requiring a separate notetaker, or saying one must be present', () => {
+    expect(r).toContain('Compass holds no requirement that a separate notetaker attends');
+    expect(r).toMatch(/not state or imply that a notetaker is required, that one must be present or arranged/);
+  });
+
+  it('A2. forbids making note-taking arrangements a precondition of the hearing proceeding', () => {
+    expect(r).toMatch(/note-taking arrangements must be confirmed or agreed before the hearing can proceed/);
+  });
+
+  it('A3. forbids telling the chair they must personally take the notes', () => {
+    expect(r).toMatch(/must not|Do not/);
+    expect(r).toContain('must personally take the notes');
+  });
+
+  it('A4. forbids telling the chair they must ensure someone else takes notes', () => {
+    expect(r).toContain('must ensure someone else takes them');
+  });
+
+  it('A5. a blank / null / "Not specified" notetaker is not evidence of any defect', () => {
+    expect(r).toMatch(/blank, empty, null, unknown or shown as "Not specified"/);
+    expect(r).toContain('NOT evidence that no adequate written record exists');
+    expect(r).toMatch(/incomplete or inaccurate/);
+    expect(r).toMatch(/that the process was defective/);
+    expect(r).toMatch(/that there was a procedural failing/);
+    expect(r).toMatch(/that the hearing cannot properly proceed/);
+    expect(r).toContain('UNKNOWN or NOT RECORDED is not a DEFECT');
+  });
+
+  it('A6. a blank notetaker must not be raised as a risk, concern, unanswered issue or point to confirm', () => {
+    expect(r).toMatch(/Do not raise it on that basis as a risk, a procedural concern, an unanswered issue or a point to confirm/);
+  });
+
+  it('A7. PRESERVES genuine affirmative record concerns — this restrains inference, not reporting', () => {
+    expect(r).toContain('You must still raise, plainly, any genuine concern the supplied case context affirmatively supports');
+    expect(r).toMatch(/notes taken were inaccurate or incomplete/);
+    expect(r).toMatch(/no adequate record was kept/);
+    expect(r).toMatch(/the employee disputes the record/);
+    expect(r).toMatch(/the handling of the record is itself a ground of appeal/);
+    // Keeping an appropriate written record is still legitimate advice.
+    expect(r).toContain('an appropriate written record of the hearing should be kept');
+  });
+
+  it('A8. the existing electronic-recording safeguards are NOT removed or weakened', () => {
+    expect(r).toContain('RECORDING AND NOTE-TAKING ACCURACY');
+    expect(r).toMatch(/Never state or imply that this meeting or hearing is being audio-recorded, video-recorded, transcribed/);
+    expect(r).toMatch(/Do not invent recording consent requirements/);
+    expect(r).toMatch(/transcription arrangements/);
+    expect(r).toMatch(/formally agreed minutes/);
+    expect(r).toMatch(/notetaker attendance/);
+  });
+});
+
+// ── Issue B (Human UAT, regeneration 2026-09-20) — the pack told the chair
+// there had been "a shift in position" between two accounts, and speculated
+// about why, on nothing more than the two witnesses having worded the same
+// events differently. The existing guard only covered "proven contradiction"
+// and "evidence of dishonesty", so this third inference passed straight
+// through.
+describe('differing accounts are not converted into inconsistency (Issue B)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('B1. permits neutrally reproducing or summarising what each person said', () => {
+    expect(r).toContain('DIFFERING ACCOUNTS');
+    expect(r).toMatch(/neutrally reproduce or summarise what each of them said/);
+  });
+
+  it('B2. permits saying the wording differs where objectively supported', () => {
+    expect(r).toMatch(/note that the wording differs where that is objectively supported/);
+  });
+
+  it('B3. permits inviting clarification where it matters to a ground of appeal or the original decision', () => {
+    expect(r).toMatch(/invite clarification where the difference is genuinely relevant to a ground of appeal, to the original decision/);
+    expect(r).toMatch(/something the chair needs to understand/);
+  });
+
+  it('B4. forbids inferring a shift or change in position from differing wording alone', () => {
+    expect(r).toMatch(/must NOT infer from differing wording alone/);
+    expect(r).toContain('a shift in position');
+    expect(r).toContain('a change in position');
+    expect(r).toMatch(/a changed story or changed account/);
+  });
+
+  it('B5. forbids inferring inconsistency, credibility issues, dishonesty or unreliability', () => {
+    for (const term of ['inconsistency', 'a credibility issue', 'dishonesty', 'unreliability']) {
+      expect(r).toContain(term);
+    }
+  });
+
+  it('B6. forbids inferring motive or evasiveness', () => {
+    expect(r).toContain('a motive');
+    expect(r).toContain('evasiveness');
+  });
+
+  it('B7. forbids speculating about WHY the wording differs', () => {
+    expect(r).toMatch(/Do not speculate about why the wording differs/);
+    expect(r).toMatch(/People describe the same events differently for many ordinary reasons/);
+  });
+
+  it('B8. forbids inventing explanations merely to populate Potential Inconsistencies', () => {
+    expect(r).toMatch(/do not offer explanations merely to populate Potential Inconsistencies/);
+    expect(r).toMatch(/that section may be brief, or record that nothing further is identified/);
+  });
+
+  it('B9. PRESERVES genuinely recorded inconsistency evidence', () => {
+    expect(r).toMatch(/affirmatively records an inconsistency, a retraction, an account that actually changed, or a disputed fact, state it plainly/);
+    expect(r).toContain('this rule restrains inference, it does not suppress recorded inconsistency evidence');
+    // And the historical signal source itself is untouched — the flagged
+    // inconsistency signals still reach the model as context to explore.
+    const g = appealGrounding();
+    expect(g).toContain('POTENTIAL INCONSISTENCIES Compass has flagged');
+    expect(g).toContain('NOT proven contradictions and NOT evidence of dishonesty');
+    expect(g).toContain('Potential inconsistency: Investigation vs Disciplinary');
+  });
+});
+
+// ── Issue C4 — concision, so a properly bounded pack fits the unchanged
+// 2048-token budget, without sacrificing any required section.
+describe('prep pack concision instructions (Issue C4)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('C4a. instructs concision and forbids repeating the same point across headings', () => {
+    expect(r).toContain('BE CONCISE');
+    expect(r).toMatch(/Do not repeat the same point under more than one heading/);
+    expect(r).toMatch(/do not restate the case background supplied above/);
+    expect(r).toMatch(/Do not pad a section to make it look substantial/);
+  });
+
+  it('C4b. explicitly allows "None identified from the supplied case context." for the optional sections', () => {
+    expect(r).toContain('None identified from the supplied case context.');
+    expect(r).toMatch(/For Risk Flags and Legal Checklist/);
+  });
+
+  it('C4c. does NOT permit dropping a required section to save tokens', () => {
+    expect(r).toMatch(/Every required heading must still appear: never drop, merge or omit one to save space/);
+  });
+});
+
+// ── Both AI calls share ONE instruction layer (no second rule architecture).
+describe('the interactive prep questions inherit the same rules (A + B)', () => {
+  const app = readFileSync('src/App.jsx', 'utf8');
+
+  it('the narrative call and generatePrepQuestions receive the same prepInstructions', () => {
+    const fn = app.slice(app.indexOf('const prepInstructions = buildMeetingPrepInstructions'), app.indexOf('} catch(e) {', app.indexOf('const prepInstructions = buildMeetingPrepInstructions')));
+    expect(fn).toContain('generatePrepQuestions(carriedContext, prepInstructions)');
+    expect(fn).toContain('${prepInstructions?"\\n\\n"+prepInstructions:""}');
+    // Exactly one instruction builder — no parallel rule set.
+    expect(app.match(/buildMeetingPrepInstructions\(/g).length).toBe(1);
+  });
+
+  it('the narrative prompt defers to the rules rather than force-carrying every signal', () => {
+    expect(app).toContain('Where a rule above tells you not to raise a particular matter, that rule takes precedence');
+  });
+
+  it('the new rules are gated on case context, like the rest of the shared layer', () => {
+    const ungrounded = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: false });
+    expect(ungrounded).not.toContain('NOTETAKER AND NOTE-TAKING ARRANGEMENTS');
+    expect(ungrounded).not.toContain('DIFFERING ACCOUNTS');
+    // The appeal-process anti-invention rules stay ungated, as ratified.
+    expect(ungrounded).toContain('THIS IS AN APPEAL HEARING');
+    expect(ungrounded).toContain('CLOSING THE HEARING');
+    expect(ungrounded).toContain('TIMESCALES');
+  });
+
+  it('the instruction builder remains pure and stable across calls', () => {
+    const a = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+    const b = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+    expect(a).toBe(b);
+  });
+});
