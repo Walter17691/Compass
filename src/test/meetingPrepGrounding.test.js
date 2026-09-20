@@ -728,3 +728,146 @@ describe('post-hearing evidential cut-off is never asserted (1-6)', () => {
     expect(buildPrepAppealGroundsLine(null)).toMatch(/does NOT prevent the appeal hearing from going ahead/);
   });
 });
+
+// Recording accuracy (Human UAT, 2026-09-20) — the Opening Script told the
+// chair to say aloud "This hearing is being recorded for the purposes of
+// producing a formal record". No recording-status field exists anywhere in
+// Compass, and the only capture features are opt-in speech-to-TEXT on the live
+// meeting screen which retain no audio or video. The cause was lexical rather
+// than an absence inference: 19 occurrences of "record" reach the model from
+// the grounding (case record, recorded fact, written record, record the
+// grounds) and it selected the wrong sense for a spoken opening. Shared, not
+// appeal-only — every case-grounded meeting type gets the same Opening Script.
+describe('recording and note-taking accuracy (1-13)', () => {
+  const appealRules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+  const disciplinaryRules = buildMeetingPrepInstructions({ meetingType: DISCIPLINARY_TYPE, hasCaseContext: true });
+  const recordingRule = appealRules.slice(appealRules.indexOf('RECORDING AND NOTE-TAKING ACCURACY:'));
+
+  it('1. prohibits claiming the meeting is being recorded absent authoritative confirmation', () => {
+    expect(appealRules).toMatch(/RECORDING AND NOTE-TAKING ACCURACY:/);
+    expect(recordingRule).toMatch(/Never state or imply that this meeting or hearing is being audio-recorded, video-recorded, transcribed or otherwise electronically recorded/i);
+    expect(recordingRule).toMatch(/unless authoritative supplied context explicitly confirms that mechanism/i);
+  });
+
+  it('2. states that a formal case or meeting record does not imply electronic recording', () => {
+    expect(recordingRule).toMatch(/a formal case or meeting record/i);
+    expect(recordingRule).toMatch(/NOT evidence that electronic recording is happening/i);
+  });
+
+  it('3. states that notes, a transcript field and AI-generated notes do not imply recording', () => {
+    expect(recordingRule).toMatch(/Compass meeting notes, a transcript field, AI-generated notes/i);
+  });
+
+  it('4. prohibits invented recording consent or a right to record', () => {
+    expect(recordingRule).toMatch(/Do not invent recording consent requirements/i);
+    expect(recordingRule).toMatch(/a right to audio or video recording/i);
+  });
+
+  it('5. prohibits invented transcription and electronic recording arrangements', () => {
+    expect(recordingRule).toMatch(/transcription arrangements/i);
+    expect(recordingRule).toMatch(/electronic recording arrangements/i);
+  });
+
+  it('6. prohibits invented notetaker attendance', () => {
+    expect(recordingRule).toMatch(/notetaker attendance/i);
+  });
+
+  it('7. prohibits invented formally agreed minutes', () => {
+    expect(recordingRule).toMatch(/formally agreed minutes/i);
+    expect(recordingRule).toMatch(/or any other note-taking or recording mechanism the supplied context does not establish/i);
+  });
+
+  it('8. still permits legitimate written-record and note-keeping wording', () => {
+    expect(recordingRule).toMatch(/You may say that appropriate notes or a written record should be kept where that is supported/i);
+  });
+
+  it('9. disambiguates the senses of "record" rather than banning the word', () => {
+    expect(recordingRule).toMatch(/refer to the WRITTEN record unless authoritative context explicitly says otherwise/i);
+    // The grounding's own legitimate uses must survive untouched.
+    const g = appealGrounding();
+    expect(g).toMatch(/Original issue as recorded when the case was opened/);
+    expect(g).toMatch(/\(record on file\)/);
+    expect(g).toMatch(/NOT RECORDED in Compass/);
+    expect(buildPrepAppealGroundsLine(null)).toMatch(/establish and record the grounds at the outset/);
+  });
+
+  it('yields to a genuine recording mechanism if authoritative context ever confirms one', () => {
+    // No such field exists today; the rule is written conditionally so a
+    // future authoritative status would be stated truthfully rather than
+    // suppressed. Asserting the conditional, not inventing a fixture.
+    expect(recordingRule).toMatch(/and if it ever does, state it truthfully/i);
+  });
+
+  it('10. reaches appeal case-grounded prep', () => {
+    expect(appealRules).toMatch(/RECORDING AND NOTE-TAKING ACCURACY:/);
+  });
+
+  it('11. reaches non-appeal case-grounded prep too', () => {
+    expect(disciplinaryRules).toMatch(/RECORDING AND NOTE-TAKING ACCURACY:/);
+    expect(disciplinaryRules).toMatch(/Never state or imply that this meeting or hearing is being audio-recorded/i);
+    // …without acquiring appeal-only rules.
+    expect(disciplinaryRules).not.toMatch(/review of a decision that has already been taken/);
+    expect(disciplinaryRules).not.toMatch(/CLOSING THE HEARING:/);
+    expect(disciplinaryRules).not.toMatch(/TIMESCALES:/);
+  });
+
+  it('12. ad-hoc non-case-grounded prep is unchanged', () => {
+    expect(buildMeetingPrepInstructions({ meetingType: DISCIPLINARY_TYPE, hasCaseContext: false })).toBe('');
+    const ungroundedAppeal = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: false });
+    expect(ungroundedAppeal).not.toMatch(/RECORDING AND NOTE-TAKING ACCURACY:/);
+    expect(ungroundedAppeal).not.toMatch(/thank the employee and anyone attending with them/i);
+  });
+
+  it('13. Closing Points now names the thanks and close explicitly', () => {
+    expect(appealRules).toMatch(/the chair should thank the employee and anyone attending with them, and close the hearing/i);
+    expect(disciplinaryRules).toMatch(/thank the employee and anyone attending with them/i);
+  });
+});
+
+// 14 — every previously deployed safeguard must survive this addition.
+describe('all previously deployed prep safeguards remain intact (14)', () => {
+  const appealRules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true, hasAdditionalContext: true });
+
+  it('appeal is a review, not a fresh disciplinary, with no predetermined outcome', () => {
+    expect(appealRules).toMatch(/review of a decision that has already been taken/);
+    expect(appealRules).toMatch(/NOT a fresh disciplinary hearing/);
+    expect(appealRules).toMatch(/not recommend, predict or predetermine the outcome/);
+  });
+
+  it('absence-is-not-defect and UNKNOWN-vs-DEFECT survive', () => {
+    expect(appealRules).toMatch(/ABSENCE IS NOT A DEFECT/);
+    expect(appealRules).toMatch(/from the absence alone/);
+    expect(appealRules).toMatch(/describe the state of the RECORD, and are not themselves problems with the process/);
+    expect(appealRules).toMatch(/is a CONCLUSION, and needs affirmative support/);
+  });
+
+  it('Risk Flags / Legal Checklist restraint and signals-as-context survive', () => {
+    expect(appealRules).toMatch(/For Risk Flags and Legal Checklist, include only matters actually supported/);
+    expect(appealRules).toMatch(/Never manufacture a procedural or legal risk/);
+    expect(appealRules).toMatch(/contextual case material/);
+    expect(appealRules).toMatch(/not automatically Compass's own conclusion/);
+  });
+
+  it('timescale guard and post-hearing evidence guard survive', () => {
+    expect(appealRules).toMatch(/TIMESCALES:/);
+    expect(appealRules).toMatch(/without unreasonable delay/);
+    expect(appealRules).toMatch(/CLOSING THE HEARING:/);
+    expect(appealRules).toMatch(/no further submissions will be accepted/);
+    expect(appealRules).toMatch(/anything reasonably required to decide the appeal can still be obtained or considered/);
+  });
+
+  it('independence UNKNOWN stays distinct from CONFLICT, and missing grounds still do not block the hearing', () => {
+    expect(buildPrepIndependenceLine('unknown', 'X')).toMatch(/NOT VERIFIED/);
+    expect(buildPrepIndependenceLine('conflict', 'X')).toMatch(/RECORDED CONFLICT/);
+    expect(buildPrepIndependenceLine('conflict', 'X')).not.toBe(buildPrepIndependenceLine('unknown', 'X'));
+    expect(buildPrepAppealGroundsLine(null)).toMatch(/NOT RECORDED in Compass/);
+    expect(buildPrepAppealGroundsLine(null)).toMatch(/does NOT prevent the appeal hearing from going ahead/);
+  });
+
+  it('the grounding builder remains pure', () => {
+    const snapshot = JSON.parse(JSON.stringify(CASE));
+    appealGrounding();
+    buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+    expect(CASE).toEqual(snapshot);
+  });
+});

@@ -189,6 +189,24 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
     // failed.
     rules.push("ABSENCE IS NOT A DEFECT: missing or unrecorded information is not evidence that something did not happen, or that the process was defective. If a field, role, event, document, participant or piece of metadata is absent, blank, unknown or not recorded, describe only that fact — that it is not recorded — and, where it genuinely matters, note it as something to confirm. Do NOT infer a procedural defect, legal breach, unfairness, non-compliance, procedural risk or any other adverse conclusion from the absence alone. Describe such a concern only where the supplied case context explicitly supports it.");
     rules.push("Hold the difference clearly: \"unknown\" and \"not recorded\" describe the state of the RECORD, and are not themselves problems with the process. A procedural defect, a breach, unfairness or a risk is a CONCLUSION, and needs affirmative support in the supplied case context before you state it. Never convert the first into the second, and never do so simply to have something to put under a heading.");
+    // Advisory accuracy follow-up (Human UAT, 2026-09-20) — the Opening
+    // Script told the chair to say aloud "This hearing is being recorded for
+    // the purposes of producing a formal record". Nothing establishes that:
+    // there is no recording-status field anywhere in Compass, and the only
+    // capture features are opt-in speech-to-TEXT on the live meeting screen,
+    // which store no audio or video. The cause was lexical, not an absence
+    // inference — 19 occurrences of "record" reach the model from the
+    // grounding above (case record, recorded fact, written record, record the
+    // grounds), and the model selected the wrong sense for a spoken opening.
+    // Shared rather than appeal-only: every case-grounded meeting type gets
+    // the same Opening Script and the same "record"-heavy context. Names the
+    // senses rather than banning the word, since the legitimate uses are the
+    // ones the grounding depends on.
+    rules.push("RECORDING AND NOTE-TAKING ACCURACY: in the context above, \"record\", \"recorded\", \"case record\" and \"meeting record\" refer to the WRITTEN record unless authoritative context explicitly says otherwise. Never state or imply that this meeting or hearing is being audio-recorded, video-recorded, transcribed or otherwise electronically recorded unless authoritative supplied context explicitly confirms that mechanism — and if it ever does, state it truthfully. Compass meeting notes, a transcript field, AI-generated notes, a formal case or meeting record, recorded facts, or a duty to keep a written record are NOT evidence that electronic recording is happening. You may say that appropriate notes or a written record should be kept where that is supported. Do not invent recording consent requirements, a right to audio or video recording, transcription arrangements, electronic recording arrangements, notetaker attendance, formally agreed minutes, or any other note-taking or recording mechanism the supplied context does not establish.");
+    // Cosmetic, same prompt layer — the pack produced the awkward "Thank the
+    // meeting." Nothing instructed a thanks at all, so this names it properly
+    // rather than leaving the model to phrase it.
+    rules.push("For Closing Points, the chair should thank the employee and anyone attending with them, and close the hearing.");
     rules.push("Questions, open issues and flagged signals supplied above are contextual case material — things recorded as worth exploring. Treat them as questions to pursue or matters to verify. Any normative or legal wording inside them is not automatically Compass's own conclusion: do not restate it as settled law, established non-compliance or a proven procedural failing unless the authoritative context independently supports that.");
     if (hasAdditionalContext) {
       rules.push("The ADDITIONAL CONTEXT below was typed by the user for this preparation. Treat it as supplementary. It adds to the recorded case facts and must not silently override them: if it materially conflicts with the authoritative context above, do not pick a side — flag the discrepancy as something the chair should clarify.");
