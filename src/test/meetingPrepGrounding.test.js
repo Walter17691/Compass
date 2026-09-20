@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildMeetingPrepGrounding, buildMeetingPrepInstructions, buildPrepAppealGroundsLine, buildPrepIndependenceLine } from '../lib/meetingPrepGrounding.js';
+import { classifyAppealIndependence } from '../lib/appealIndependence.js';
+import { buildAppealDeadlineInstruction } from '../lib/letterGrounding.js';
+import { readFileSync } from 'node:fs';
 
 // Appeal Prep Pack P1 (Human UAT, 2026-09-20) — the prep pack was generated
 // from six values (type label, employee, date, an editable chair name, the
@@ -151,21 +154,26 @@ describe('open signals stay unresolved (M, N)', () => {
 describe('appeal independence (O)', () => {
   it('O. UNKNOWN is never described as independent', () => {
     const g = appealGrounding({ appealIndependenceStatus: 'unknown' });
-    expect(g).toContain('NOT VERIFIED by Compass');
-    expect(g).toMatch(/do NOT state or imply that they are independent/);
+    expect(g).toContain('NOT VERIFIED');
+    expect(g).toMatch(/Do not describe them as independent/);
     expect(g).not.toMatch(/heard by an independent manager/i);
   });
 
-  it('O. CONFLICT is treated the same as UNKNOWN', () => {
-    expect(buildPrepIndependenceLine('conflict', 'X')).toBe(buildPrepIndependenceLine('unknown', 'X'));
+  // Reversed by the advisory cleanup: treating a proven conflict identically
+  // to an unverified one told the model to stay silent about a conflict the
+  // record actually establishes. See the dedicated suite below.
+  it('O. CONFLICT is NOT treated the same as UNKNOWN', () => {
+    expect(buildPrepIndependenceLine('conflict', 'X')).not.toBe(buildPrepIndependenceLine('unknown', 'X'));
   });
 
-  it('O. it may still truthfully say an officer has been appointed', () => {
-    expect(buildPrepIndependenceLine('unknown', 'UAT - HR Manager')).toMatch(/has been appointed to hear the appeal/);
+  it('O. UNKNOWN still names the officer without asserting anything about their involvement', () => {
+    const line = buildPrepIndependenceLine('unknown', 'UAT - HR Manager');
+    expect(line).toContain('UAT - HR Manager');
+    expect(line).toMatch(/NOT a finding that they were involved/);
   });
 
   it('CLEAR may state the supported fact', () => {
-    expect(buildPrepIndependenceLine('clear', 'X')).toMatch(/did not take the original decision/);
+    expect(buildPrepIndependenceLine('clear', 'X')).toMatch(/does not identify X as having taken the original decision/);
   });
 
   it('emits nothing when there is no classification', () => {
@@ -437,7 +445,189 @@ describe('the invariant does not suppress genuine recorded concerns (8)', () => 
 
   it('7. unknown chair independence is still never converted into a claim of independence', () => {
     const g = appealGrounding({ appealIndependenceStatus: 'unknown' });
-    expect(g).toContain('NOT VERIFIED by Compass');
-    expect(g).toMatch(/do NOT state or imply that they are independent/);
+    expect(g).toContain('NOT VERIFIED');
+    expect(g).toMatch(/Do not describe them as independent/);
+  });
+});
+
+// Final advisory cleanup (Human UAT, 2026-09-20).
+//
+// A — the three independence states had collapsed into two behaviours. UNKNOWN
+// and CONFLICT returned an identical string ending "Say nothing about their
+// prior involvement either way", so the prep pack stayed silent both when
+// Compass could not verify involvement AND when the record affirmatively
+// proved the appointed officer took the original decision. The earlier pack
+// surfaced the UNKNOWN warning only because other prompt pressure overrode
+// that instruction; once the absence-is-not-defect work removed that pressure,
+// the model obeyed the literal instruction and the warning vanished.
+//
+// classifyAppealIndependence remains the only classifier — these tests assert
+// the three states are rendered distinctly, not that a second model exists.
+describe('appeal officer independence — three distinct states (A1-A11)', () => {
+  const OFFICER = 'UAT - HR Manager';
+  const clear = buildPrepIndependenceLine('clear', OFFICER);
+  const conflict = buildPrepIndependenceLine('conflict', OFFICER);
+  const unknown = buildPrepIndependenceLine('unknown', OFFICER);
+
+  it('A1/A9. all three states are semantically distinct', () => {
+    expect(clear).not.toBe(conflict);
+    expect(clear).not.toBe(unknown);
+    expect(conflict).not.toBe(unknown);
+    [clear, conflict, unknown].forEach(line => expect(line.length).toBeGreaterThan(0));
+  });
+
+  describe('CLEAR', () => {
+    it('A2. raises no verify-before-proceeding warning', () => {
+      expect(clear).not.toMatch(/should be confirmed before the hearing/i);
+      expect(clear).toMatch(/nothing here needs confirming/i);
+    });
+
+    it('A2. states only what the classifier supports, not a guarantee of impartiality', () => {
+      expect(clear).toMatch(/does not identify .* as having taken the original decision/);
+      expect(clear).toMatch(/Do not overstate this into a general guarantee of impartiality/);
+    });
+  });
+
+  describe('CONFLICT', () => {
+    it('A3. surfaces the recorded conflict plainly rather than suppressing it', () => {
+      expect(conflict).toMatch(/RECORDED CONFLICT/);
+      expect(conflict).toMatch(/having made or taken part in the original decision/);
+      expect(conflict).toMatch(/Surface it plainly/);
+      expect(conflict).not.toMatch(/Say nothing/i);
+    });
+
+    it('A3. marks it as an affirmative record finding, not an inference from a gap', () => {
+      expect(conflict).toMatch(/affirmative finding in the structured record/);
+      expect(conflict).toMatch(/not an inference drawn from missing information/);
+    });
+
+    it('A3. directs it to be addressed before the hearing proceeds', () => {
+      expect(conflict).toMatch(/addressed before the appeal hearing proceeds/);
+    });
+
+    it('A4. never describes the officer as independent', () => {
+      expect(conflict).toMatch(/Do NOT describe this officer as independent or uninvolved/);
+    });
+
+    it('A4. draws no legal conclusion beyond the recorded conflict', () => {
+      expect(conflict).toMatch(/Do not draw any further legal conclusion/);
+    });
+  });
+
+  describe('UNKNOWN', () => {
+    it('A5. says involvement has not been verified from the structured record', () => {
+      expect(unknown).toMatch(/NOT VERIFIED/);
+      expect(unknown).toMatch(/cannot establish from the structured case record/);
+    });
+
+    it('A6. asserts none of independent / uninvolved / conflicted / involved as fact', () => {
+      expect(unknown).toMatch(/NOT a finding that they were involved/);
+      expect(unknown).toMatch(/NOT confirmation that they were not/);
+      expect(unknown).toMatch(/Do not describe them as independent, impartial by virtue of non-involvement, uninvolved, or conflicted/);
+      expect(unknown).toMatch(/none of those is established/);
+    });
+
+    it('A7. directs the user to confirm before the hearing proceeds', () => {
+      expect(unknown).toMatch(/should be confirmed before the hearing proceeds/);
+    });
+
+    it('A8. stays a verification gap, not a defect — coexisting with absence-is-not-defect', () => {
+      expect(unknown).toMatch(/a gap in the record/);
+      expect(unknown).toMatch(/Do not treat it as evidence of unfairness, procedural defect, breach or non-compliance/);
+      expect(unknown).toMatch(/something to check, not a failing/);
+    });
+
+    it('A9. is not the old shared prohibition', () => {
+      expect(unknown).not.toMatch(/Say nothing about their prior involvement/);
+    });
+  });
+
+  it('A10. classifyAppealIndependence stays the source of truth and drives the grounding', () => {
+    const CASE_UNKNOWN = { id: 'c1', employeeName: 'X', stage: 'appeal', disciplinaryDecidedBy: null, appealText: null, meetings: [] };
+    const status = classifyAppealIndependence({ caseRecord: CASE_UNKNOWN, allegations: [], appealOfficerUserId: 'officer-uuid' });
+    const g = buildMeetingPrepGrounding({ caseObj: CASE_UNKNOWN, meetingType: APPEAL_TYPE, appealOfficerName: OFFICER, appealIndependenceStatus: status });
+    expect(status).toBe('unknown');
+    expect(g).toContain('NOT VERIFIED');
+  });
+
+  it('A11. the live legacy UAT shape still classifies UNKNOWN', () => {
+    // disciplinary_decided_by null, zero allegations — production 3e99e129.
+    expect(classifyAppealIndependence({
+      caseRecord: { disciplinaryDecidedBy: null }, allegations: [], appealOfficerUserId: '522293f3-817a-4226-980a-f32abbaefef9',
+    })).toBe('unknown');
+  });
+
+  it('emits nothing for an unrecognised or absent status', () => {
+    expect(buildPrepIndependenceLine(null, OFFICER)).toBe('');
+    expect(buildPrepIndependenceLine(undefined, OFFICER)).toBe('');
+    expect(buildPrepIndependenceLine('something-else', OFFICER)).toBe('');
+  });
+
+  it('falls back to a neutral descriptor when the officer is unnamed', () => {
+    [buildPrepIndependenceLine('clear'), buildPrepIndependenceLine('conflict'), buildPrepIndependenceLine('unknown')]
+      .forEach(line => expect(line).toContain('the appointed appeal officer'));
+  });
+});
+
+// B — the pack asserted "best practice is to aim to communicate the outcome …
+// within five to ten working days". No prep rule, case field, policy or
+// constant supplied that; it was invented.
+describe('appeal outcome timescales are never invented (B1-B5)', () => {
+  const appealRules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+  const disciplinaryRules = buildMeetingPrepInstructions({ meetingType: DISCIPLINARY_TYPE, hasCaseContext: true });
+
+  it('B1. prohibits inventing any numeric appeal timescale', () => {
+    expect(appealRules).toMatch(/TIMESCALES:/);
+    expect(appealRules).toMatch(/do not state or invent any specific number of hours, days, working days or weeks/i);
+    expect(appealRules).toMatch(/unless that exact timeframe is given to you in the authoritative case context or company policy/i);
+  });
+
+  it('B1. blocks the "typical" / "best practice" framing the model used', () => {
+    expect(appealRules).toMatch(/Do not present a figure of your own as best practice, as typical, or as what is usually expected/);
+  });
+
+  it('B2. gives the safe fallback wording', () => {
+    expect(appealRules).toMatch(/confirmed in writing/);
+    expect(appealRules).toMatch(/as soon as possible/);
+    expect(appealRules).toMatch(/without unreasonable delay/);
+    expect(appealRules).toMatch(/realistic updated timeframe/);
+    expect(appealRules).toMatch(/further enquiry or investigation is required/);
+  });
+
+  it('B3. the rule itself introduces no numeric day/week value', () => {
+    const rule = appealRules.slice(appealRules.indexOf('TIMESCALES:'));
+    expect(rule).not.toMatch(/\b\d+\s*(?:working\s*)?(?:hour|day|week)s?\b/i);
+    expect(rule).not.toMatch(/\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:working\s+)?(?:hour|day|week)s?\b/i);
+  });
+
+  it('B5. non-appeal prep is not given the appeal-outcome timescale rule', () => {
+    expect(disciplinaryRules).not.toMatch(/TIMESCALES:/);
+    // …while keeping the shared protections.
+    expect(disciplinaryRules).toMatch(/ABSENCE IS NOT A DEFECT/);
+  });
+});
+
+// B4 — the employee's 5-working-day window to LODGE an appeal is a separate,
+// authoritative figure owned by deadlines.js and buildAppealDeadlineInstruction
+// (scoped to outcome letters). The timescale rule above concerns only when the
+// appeal OUTCOME is communicated, and must not touch it.
+describe('appeal-submission deadline logic is separate and untouched (B4)', () => {
+  const appealRules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('the prep timescale rule says nothing about the appeal-submission window', () => {
+    const rule = appealRules.slice(appealRules.indexOf('TIMESCALES:'));
+    expect(rule).not.toMatch(/submission|lodge|window to appeal|right to appeal/i);
+  });
+
+  it('deadlines.js still owns the ACAS-recommended appeal window', () => {
+    const deadlines = readFileSync('src/lib/deadlines.js', 'utf8');
+    expect(deadlines).toContain('Employee appeal window (ACAS-recommended: 5 working days)');
+    expect(deadlines).toContain('Disciplinary outcome letter due (ACAS-recommended: 5 working days)');
+  });
+
+  it('buildAppealDeadlineInstruction still grounds the authoritative appeal deadline for outcome letters only', () => {
+    expect(buildAppealDeadlineInstruction('2026-09-18', 'outcome')).toMatch(/AUTHORITATIVE APPEAL DEADLINE/);
+    expect(buildAppealDeadlineInstruction('2026-09-18', 'invite')).toBe('');
+    expect(buildAppealDeadlineInstruction('2026-09-18', 'appeal')).toBe('');
   });
 });

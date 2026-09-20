@@ -137,12 +137,34 @@ export function buildPrepAppealGroundsLine(appealText) {
 // Reuses the deployed independence classification. UNKNOWN and CONFLICT must
 // never be described to the chair as verified independence.
 export function buildPrepIndependenceLine(status, appealOfficerName) {
+  const officer = appealOfficerName || "the appointed appeal officer";
+
   if (status === "clear") {
-    return "Appeal officer independence: Compass holds structured evidence that this officer did not take the original decision.";
+    // A permissive fact, not a warning. Deliberately scoped to what the
+    // classifier actually establishes — no original-decision conflict was
+    // identified in the structured record — rather than a broad guarantee of
+    // impartiality, which Compass has no basis to give.
+    return `Appeal officer independence: the structured case record does not identify ${officer} as having taken the original decision. You may note that the appeal is being heard by someone the record does not connect to that decision. Do not overstate this into a general guarantee of impartiality, and do not raise it as a concern — nothing here needs confirming.`;
   }
-  if (status === "unknown" || status === "conflict") {
-    return `Appeal officer independence: NOT VERIFIED by Compass. You may state that ${appealOfficerName || "an appeal officer"} has been appointed to hear the appeal, but do NOT state or imply that they are independent, impartial by virtue of non-involvement, or that they were not involved in the original decision. Say nothing about their prior involvement either way.`;
+
+  if (status === "conflict") {
+    // The opposite of an absence: the record AFFIRMATIVELY identifies this
+    // person as the original decision-maker. Previously this returned the
+    // same text as "unknown", which told the model to say nothing — so a
+    // conflict Compass can actually prove was suppressed in the chair's own
+    // preparation. HR's exceptional-override architecture at appointment time
+    // is untouched; this only makes the recorded position visible.
+    return `Appeal officer independence — RECORDED CONFLICT: the authoritative Compass record identifies ${officer}, who is appointed to hear this appeal, as having made or taken part in the original decision now under appeal. This is an affirmative finding in the structured record, not an inference drawn from missing information. Surface it plainly as a matter to be addressed before the appeal hearing proceeds. Do NOT describe this officer as independent or uninvolved. Do not draw any further legal conclusion beyond the conflict the record establishes.`;
   }
+
+  if (status === "unknown") {
+    // A verification gap, and nothing more. Must not read as either
+    // reassurance or an allegation, and must sit comfortably alongside the
+    // ABSENCE IS NOT A DEFECT invariant — this is the "note it as something
+    // to confirm" case that invariant explicitly allows for.
+    return `Appeal officer independence — NOT VERIFIED: Compass cannot establish from the structured case record whether ${officer} was involved in the original decision now under appeal. This is a gap in the record, NOT a finding that they were involved, and equally NOT confirmation that they were not. Do not describe them as independent, impartial by virtue of non-involvement, uninvolved, or conflicted — none of those is established. State neutrally that this has not been verified and should be confirmed before the hearing proceeds. Do not treat it as evidence of unfairness, procedural defect, breach or non-compliance: it is something to check, not a failing.`;
+  }
+
   return "";
 }
 
@@ -176,6 +198,16 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
   if (isAppeal) {
     rules.push("THIS IS AN APPEAL HEARING — a review of a decision that has already been taken. It is NOT a fresh disciplinary hearing and must not re-run the original allegation from scratch as though no decision existed. Focus the preparation on: which part of the original decision is challenged; the grounds of appeal and the reasons behind them; evidence relied on; any genuinely new evidence; any procedural concerns; anything needing clarification; and what outcome or remedy the employee is seeking. Questions that revisit the underlying allegation or re-examine existing evidence are legitimate where they are needed to test a stated ground of appeal — reconsidering evidence is part of a fair review — but frame them as reviewing the original decision, not as determining the allegation afresh.");
     rules.push("Do not recommend, predict or predetermine the outcome of the appeal. Do not suggest whether it should be upheld, partially upheld or dismissed. That decision belongs solely to the appeal officer after hearing from the employee.");
+    // Advisory accuracy follow-up (Human UAT, 2026-09-20) — the pack told the
+    // chair that "best practice is to aim to communicate the outcome … within
+    // five to ten working days". Nothing supplied that: no prep rule, no case
+    // field, no company policy (this org has none uploaded), and no constant
+    // anywhere in the codebase. It was invented. Same class as the invitation
+    // letter's invented deadlines, and fixed the same way — omit the number
+    // rather than guess one. This concerns ONLY when the appeal OUTCOME is
+    // communicated; the employee's own 5-working-day window to LODGE an
+    // appeal is a separate, authoritative figure computed elsewhere.
+    rules.push("TIMESCALES: do not state or invent any specific number of hours, days, working days or weeks for communicating the appeal outcome, or for any other appeal deadline, unless that exact timeframe is given to you in the authoritative case context or company policy above. Do not present a figure of your own as best practice, as typical, or as what is usually expected. Where no authoritative timeframe has been supplied, say instead that the appeal outcome should be confirmed in writing as soon as possible and without unreasonable delay, and that if further enquiry or investigation is required the chair should explain this and give the employee a realistic updated timeframe.");
   }
 
   if (hasCaseContext) {
