@@ -282,3 +282,162 @@ describe('prep generation is non-mutating (U)', () => {
     expect(typeof buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true })).toBe('string');
   });
 });
+
+// Advisory accuracy P1 (Human UAT, 2026-09-20) — the generated pack asserted
+// that "the absence of a notetaker is a procedural risk" and that a blank
+// notetaker field was "a procedural gap in the original process", and escalated
+// unrecorded appeal grounds into "the hearing cannot be properly conducted
+// until this is clear". None of those came from Compass: no rule anywhere
+// requires a separate notetaker, the underlying signal was the neutral
+// question "Who is the notetaker … and was one present?", and the grounds
+// instruction never mentioned the hearing being unable to proceed. The earlier
+// rules stopped the model inventing FACTS; they said nothing about inventing
+// CONCLUSIONS from a true absence.
+//
+// These test the deterministic prompt invariants we control, not probabilistic
+// model output.
+describe('absence-is-not-defect invariant (1, 2)', () => {
+  const appealRules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true, hasAdditionalContext: true });
+  const disciplinaryRules = buildMeetingPrepInstructions({ meetingType: DISCIPLINARY_TYPE, hasCaseContext: true });
+
+  it('1. states the invariant explicitly', () => {
+    expect(appealRules).toMatch(/ABSENCE IS NOT A DEFECT/);
+    expect(appealRules).toMatch(/missing or unrecorded information is not evidence that something did not happen/i);
+    expect(appealRules).toMatch(/or that the process was defective/i);
+  });
+
+  it('1. permits describing an absence, and noting it as something to confirm', () => {
+    expect(appealRules).toMatch(/describe only that fact — that it is not recorded/i);
+    expect(appealRules).toMatch(/note it as something to confirm/i);
+  });
+
+  it('2. names every adverse conclusion that must not be inferred from absence alone', () => {
+    ['procedural defect', 'legal breach', 'unfairness', 'non-compliance', 'procedural risk'].forEach(term => {
+      expect(appealRules.toLowerCase()).toContain(term);
+    });
+    expect(appealRules).toMatch(/from the absence alone/i);
+  });
+
+  it('2. separates the epistemic state from the conclusion', () => {
+    expect(appealRules).toMatch(/describe the state of the RECORD, and are not themselves problems with the process/);
+    expect(appealRules).toMatch(/is a CONCLUSION, and needs affirmative support/);
+    expect(appealRules).toMatch(/Never convert the first into the second/);
+  });
+
+  it('2. forbids converting an unknown into a defect just to fill a section', () => {
+    expect(appealRules).toMatch(/never do so simply to have something to put under a heading/i);
+  });
+
+  it('1. preserves the ability to surface genuinely supported concerns', () => {
+    expect(appealRules).toMatch(/only where the supplied case context explicitly supports it/i);
+  });
+
+  it('9. ordinary non-appeal prep receives the same invariant', () => {
+    expect(disciplinaryRules).toMatch(/ABSENCE IS NOT A DEFECT/);
+    expect(disciplinaryRules).toMatch(/from the absence alone/i);
+    // …and keeps its existing behaviour: no appeal review framing.
+    expect(disciplinaryRules).not.toMatch(/review of a decision that has already been taken/);
+    expect(disciplinaryRules).toMatch(/Do not invent allegations/);
+  });
+});
+
+describe('Risk Flags / Legal Checklist are not filled for their own sake (4)', () => {
+  const rules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('constrains both sections to supported matters', () => {
+    expect(rules).toMatch(/For Risk Flags and Legal Checklist, include only matters actually supported by the supplied case context/);
+  });
+
+  it('permits them to be empty or minimal', () => {
+    expect(rules).toMatch(/do not have to be filled/i);
+    expect(rules).toMatch(/none is identified from the information recorded|keep the section minimal/i);
+  });
+
+  it('forbids manufacturing a risk from blank detail', () => {
+    expect(rules).toMatch(/Never manufacture a procedural or legal risk out of blank, missing or unrecorded detail/);
+  });
+});
+
+describe('stored signals are contextual, not legal authority (10)', () => {
+  const rules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('frames supplied signals as material to pursue or verify', () => {
+    expect(rules).toMatch(/contextual case material/i);
+    expect(rules).toMatch(/questions to pursue or matters to verify/i);
+  });
+
+  it('stops their normative wording becoming Compass\'s own conclusion', () => {
+    expect(rules).toMatch(/not automatically Compass's own conclusion/i);
+    expect(rules).toMatch(/do not restate it as settled law, established non-compliance or a proven procedural failing/i);
+    expect(rules).toMatch(/unless the authoritative context independently supports that/i);
+  });
+});
+
+describe('missing appeal grounds do not block the hearing (3, 4, 5, 6)', () => {
+  const line = buildPrepAppealGroundsLine(null);
+
+  it('3. still states the grounds are not recorded', () => {
+    expect(line).toContain('Grounds of appeal: NOT RECORDED in Compass');
+  });
+
+  it('4. still forbids inventing or reconstructing them', () => {
+    expect(line).toMatch(/Do not infer, invent or reconstruct/);
+  });
+
+  it('5. directs the chair to establish and record them at the outset', () => {
+    expect(line).toMatch(/establish and record the grounds at the outset/i);
+    expect(line).toMatch(/before moving into the substantive appeal issues/i);
+    expect(line).toMatch(/fair opportunity to explain their grounds at the hearing/i);
+  });
+
+  it('6. states the absence does not prevent the hearing going ahead', () => {
+    expect(line).toMatch(/does NOT prevent the appeal hearing from going ahead/);
+  });
+
+  it('6. forbids every blocking or blame formulation', () => {
+    expect(line).toMatch(/Do not say or imply that the hearing cannot proceed/);
+    expect(line).toMatch(/cannot properly be conducted/);
+    expect(line).toMatch(/is defective/);
+    expect(line).toMatch(/the employee has failed to follow procedure/);
+    expect(line).toMatch(/merely because the grounds were not recorded beforehand/);
+  });
+
+  it('recorded grounds are unaffected by the new wording', () => {
+    const recorded = buildPrepAppealGroundsLine('The sanction was disproportionate.');
+    expect(recorded).toContain('The sanction was disproportionate.');
+    expect(recorded).not.toMatch(/NOT RECORDED/);
+    expect(recorded).not.toMatch(/does NOT prevent the appeal hearing/);
+  });
+});
+
+describe('the invariant does not suppress genuine recorded concerns (8)', () => {
+  // The real open process_risk on the production case: a deterministic
+  // guardrail finding with explicit ACAS reasoning. It is supported by the
+  // record, so it must still reach the model.
+  const RECORDED_CONCERN = {
+    title: 'Same person chaired the investigation and the disciplinary hearing',
+    reasoning: 'Walter Carta chaired both the investigation and the disciplinary hearing. The ACAS Code of Practice expects the investigating manager and the person deciding the outcome to be different people.',
+  };
+
+  it('8. a genuinely recorded procedural concern is still supplied', () => {
+    const g = appealGrounding({ openInconsistencies: [RECORDED_CONCERN] });
+    expect(g).toContain('Same person chaired the investigation and the disciplinary hearing');
+    expect(g).toContain('ACAS Code of Practice');
+  });
+
+  it('8. the neutral notetaker question is still supplied, as a question', () => {
+    const notetaker = { title: 'Who is the notetaker for the disciplinary hearing, and was one present?', reasoning: "The disciplinary hearing record explicitly states the notetaker as 'Not specified', leaving this role unconfirmed." };
+    const g = appealGrounding({ openQuestions: [notetaker] });
+    expect(g).toContain('Who is the notetaker');
+    expect(g).toMatch(/UNRESOLVED QUESTIONS/);
+    // The supplied material itself must not assert any defect.
+    expect(g).not.toMatch(/procedural gap/i);
+    expect(g).not.toMatch(/procedural risk/i);
+  });
+
+  it('7. unknown chair independence is still never converted into a claim of independence', () => {
+    const g = appealGrounding({ appealIndependenceStatus: 'unknown' });
+    expect(g).toContain('NOT VERIFIED by Compass');
+    expect(g).toMatch(/do NOT state or imply that they are independent/);
+  });
+});

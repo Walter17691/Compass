@@ -125,7 +125,13 @@ export function buildPrepAppealGroundsLine(appealText) {
   if (trimmed) {
     return `Grounds of appeal as recorded by the employee (use these exactly — do not substitute the original allegation or your own interpretation): ${trim(trimmed, MAX_DESCRIPTION_CHARS)}`;
   }
-  return "Grounds of appeal: NOT RECORDED in Compass. No formal grounds have been captured for this appeal. Do not infer, invent or reconstruct what the grounds might be from the original allegation or anything else. Instead, prepare the chair to give the employee a fair opportunity to explain their grounds at the hearing — including establishing which part of the original decision is being challenged and why.";
+  // Advisory accuracy P1 (2026-09-20) — the generated pack escalated this into
+  // "the hearing cannot be properly conducted until this is clear". Nothing
+  // here said that, and Compass has no basis for it: grounds that were not
+  // captured in advance are established at the outset of the hearing, which is
+  // precisely what the hearing is for. The final sentence closes that gap.
+  return "Grounds of appeal: NOT RECORDED in Compass. No formal grounds have been captured for this appeal. Do not infer, invent or reconstruct what the grounds might be from the original allegation or anything else. Instead, prepare the chair to give the employee a fair opportunity to explain their grounds at the hearing — including establishing which part of the original decision is being challenged and why."
+    + " Be clear that this does NOT prevent the appeal hearing from going ahead: the chair should simply establish and record the grounds at the outset, before moving into the substantive appeal issues. Do not say or imply that the hearing cannot proceed, cannot properly be conducted, is defective, or that the employee has failed to follow procedure, merely because the grounds were not recorded beforehand.";
 }
 
 // Reuses the deployed independence classification. UNKNOWN and CONFLICT must
@@ -150,6 +156,18 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
   if (hasCaseContext) {
     rules.push("GROUNDING RULES: Use the AUTHORITATIVE COMPASS CASE CONTEXT above as the factual basis for this preparation. Do not invent allegations, appeal grounds, warnings, sanctions, evidence, prior decisions, procedural events, dates or reasonable adjustments that are not stated there. Where something needed to prepare properly is genuinely missing, say so explicitly as a point to clarify — never fill the gap with an assumption.");
     rules.push("Keep these distinct throughout: an allegation is not a finding; an unresolved question is not an established fact; and a recorded decision is not the same as your own view of the case.");
+    // Advisory accuracy P1 (Human UAT, 2026-09-20) — the prep pack asserted
+    // that "the absence of a notetaker is a procedural risk" and that a blank
+    // notetaker field was "a procedural gap in the original process". Both
+    // were derived purely from an empty field: Compass has no rule anywhere
+    // requiring a separate notetaker, and the underlying signal was only ever
+    // the neutral question "Who is the notetaker … and was one present?".
+    // The existing rules stopped the model inventing FACTS but said nothing
+    // about inventing CONCLUSIONS from a true absence, which is the axis that
+    // failed.
+    rules.push("ABSENCE IS NOT A DEFECT: missing or unrecorded information is not evidence that something did not happen, or that the process was defective. If a field, role, event, document, participant or piece of metadata is absent, blank, unknown or not recorded, describe only that fact — that it is not recorded — and, where it genuinely matters, note it as something to confirm. Do NOT infer a procedural defect, legal breach, unfairness, non-compliance, procedural risk or any other adverse conclusion from the absence alone. Describe such a concern only where the supplied case context explicitly supports it.");
+    rules.push("Hold the difference clearly: \"unknown\" and \"not recorded\" describe the state of the RECORD, and are not themselves problems with the process. A procedural defect, a breach, unfairness or a risk is a CONCLUSION, and needs affirmative support in the supplied case context before you state it. Never convert the first into the second, and never do so simply to have something to put under a heading.");
+    rules.push("Questions, open issues and flagged signals supplied above are contextual case material — things recorded as worth exploring. Treat them as questions to pursue or matters to verify. Any normative or legal wording inside them is not automatically Compass's own conclusion: do not restate it as settled law, established non-compliance or a proven procedural failing unless the authoritative context independently supports that.");
     if (hasAdditionalContext) {
       rules.push("The ADDITIONAL CONTEXT below was typed by the user for this preparation. Treat it as supplementary. It adds to the recorded case facts and must not silently override them: if it materially conflicts with the authoritative context above, do not pick a side — flag the discrepancy as something the chair should clarify.");
     }
@@ -158,6 +176,15 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
   if (isAppeal) {
     rules.push("THIS IS AN APPEAL HEARING — a review of a decision that has already been taken. It is NOT a fresh disciplinary hearing and must not re-run the original allegation from scratch as though no decision existed. Focus the preparation on: which part of the original decision is challenged; the grounds of appeal and the reasons behind them; evidence relied on; any genuinely new evidence; any procedural concerns; anything needing clarification; and what outcome or remedy the employee is seeking. Questions that revisit the underlying allegation or re-examine existing evidence are legitimate where they are needed to test a stated ground of appeal — reconsidering evidence is part of a fair review — but frame them as reviewing the original decision, not as determining the allegation afresh.");
     rules.push("Do not recommend, predict or predetermine the outcome of the appeal. Do not suggest whether it should be upheld, partially upheld or dismissed. That decision belongs solely to the appeal officer after hearing from the employee.");
+  }
+
+  if (hasCaseContext) {
+    // The narrative prompt mandates ## Risk Flags and ## Legal Checklist on
+    // every generation, which is a standing invitation to manufacture a
+    // concern to fill the heading — exactly how a blank notetaker field
+    // became a procedural risk. The sections stay; the obligation to find
+    // something for them does not.
+    rules.push("For Risk Flags and Legal Checklist, include only matters actually supported by the supplied case context. These headings do not have to be filled: if nothing in the record supports a risk or a legal concern, say briefly that none is identified from the information recorded, or keep the section minimal. Never manufacture a procedural or legal risk out of blank, missing or unrecorded detail in order to populate a section.");
   }
 
   return rules.join(" ");
