@@ -337,6 +337,12 @@ export function CaseViewScreen({
         appealChairLocked:isStructuredAppealHearing,
         appealManagerId:isStructuredAppealHearing ? currentAppealManagerAccess.userId : null,
         appealGrounds:isStructuredAppealHearing ? (cs.appealText||"") : "",
+        // Appeal Prep Pack P1 (2026-09-20) — the case this preparation is
+        // grounded in. Deliberately NOT _linkedCaseId: that flag means
+        // "file this record as witness evidence on a parent case" and
+        // drives saveMeetingToCaseImpl's routing, so reusing it here would
+        // misfile the hearing. This one only ever feeds prep grounding.
+        preparedCaseId:cs.id,
       }));
       setCaseInfo(p=>({...p,
         employee:cs.employeeName,
@@ -344,6 +350,7 @@ export function CaseViewScreen({
         manager:chairName,
         chairJobTitle,
         _linkedCaseId:null,
+        preparedCaseId:cs.id,
       }));
       setScreen(SCREENS.HOME+"_meeting");
     }

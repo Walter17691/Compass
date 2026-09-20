@@ -31,6 +31,8 @@ import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter, EMPLOYEE_DIRECTED_LETTER_TYPES } from './lib/letterValidation';
 import { classifyAppealIndependence } from './lib/appealIndependence';
 import { findLatestAppealInvitation } from './lib/appealInvitation';
+import { buildMeetingPrepGrounding, buildMeetingPrepInstructions } from './lib/meetingPrepGrounding';
+import { isAppealMeeting } from './lib/meetingTypeMatch';
 import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction, buildLetterSenderInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
@@ -6190,14 +6192,14 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // while it's still generating, and every other structured-output call in
   // this codebase (extractEmailDetails, generateNextBestAction, etc.)
   // already uses this same plain non-streaming JSON pattern.
-  const generatePrepQuestions = async (carriedContext) => {
+  const generatePrepQuestions = async (carriedContext, prepInstructions) => {
     try {
       const res = await authedFetch("/api/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
         model:"claude-sonnet-4-6",
         max_tokens:2000,
         stream:false,
         system:"You are a senior UK HR advisor preparing structured questions for an upcoming Employee Relations meeting. Respond ONLY with valid JSON, no other text: [{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\"}] — produce 5 to 12 concise, specific questions. Mark essential true only for questions central to the core issue(s) being addressed. reasoning is one short sentence explaining why this particular question matters, grounded in the background given — this is shown to the user as \"Why ask this?\".",
-        messages:[{role:"user", content:`Meeting: ${meetingType.label}. Employee: ${caseInfo.employee}. Background: ${caseInfo.context||"None"}.${carriedContext?"\n\n"+carriedContext:""}`}],
+        messages:[{role:"user", content:`Meeting: ${meetingType.label}. Employee: ${caseInfo.employee}.${carriedContext?"\n\n"+carriedContext:""}${(caseInfo.context||"").trim()?"\n\nADDITIONAL CONTEXT supplied by the user for this preparation:\n"+caseInfo.context.trim():(carriedContext?"":" Background: None.")}${prepInstructions?"\n\n"+prepInstructions:""}`}],
       })});
       // Release 1.0 UAT remediation (Defect #4 sibling) — this is the
       // exact call that threw "SyntaxError: Unexpected end of JSON
@@ -6250,20 +6252,48 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // signals) as prep context — not fresh AI reasoning, just carrying
       // forward what Compass already knows about this case into the
       // sections the meeting is actually being prepared for.
-      const linkedCaseId = caseInfo._linkedCaseId;
-      const openQuestions = linkedCaseId ? openSignalsForCase(caseSignals, linkedCaseId, "unanswered_question") : [];
-      const openInconsistencies = linkedCaseId ? openSignalsForCase(caseSignals, linkedCaseId, "inconsistency") : [];
-      const carriedContext = [
-        openQuestions.length ? "Unanswered questions already identified on this case:\n"+openQuestions.map(q=>"- "+q.title).join("\n") : null,
-        openInconsistencies.length ? "Potential inconsistencies already identified on this case:\n"+openInconsistencies.map(s=>"- "+s.title+(s.reasoning?" — "+s.reasoning:"")).join("\n") : null,
-      ].filter(Boolean).join("\n\n");
+      // Appeal Prep Pack P1 (2026-09-20) — this used to read
+      // caseInfo._linkedCaseId, which only ever holds a value on the WITNESS
+      // interview path (it drives saveMeetingToCaseImpl's evidence routing).
+      // Every structured case meeting launched from Case View —
+      // investigation, disciplinary, grievance, appeal — set it to null, so
+      // no case-grounded meeting received any case context at all and the
+      // free-text Background box was the model's only factual input.
+      // preparedCaseId carries the case for preparation purposes only, with
+      // no effect on persistence routing.
+      const preparedCaseId = caseInfo.preparedCaseId || caseInfo._linkedCaseId;
+      const preparedCase = preparedCaseId ? cases.find(c=>c.id===preparedCaseId) : null;
+      const openQuestions = preparedCaseId ? openSignalsForCase(caseSignals, preparedCaseId, "unanswered_question") : [];
+      const openInconsistencies = preparedCaseId ? openSignalsForCase(caseSignals, preparedCaseId, "inconsistency") : [];
+      const prepAppealAccess = preparedCase ? caseAccess.find(a=>a.caseId===preparedCase.id && a.role==="appeal_manager") : null;
+      const prepAppealOfficerName = prepAppealAccess ? orgMembers.find(m=>m.user_id===prepAppealAccess.userId)?.name : null;
+      const prepIndependenceStatus = preparedCase && isAppealMeeting(meetingType?.label||"")
+        ? classifyAppealIndependence({caseRecord: preparedCase, allegations: allegationsForCase(allegations, preparedCase.id), appealOfficerUserId: prepAppealAccess?.userId || null})
+        : null;
+      const carriedContext = buildMeetingPrepGrounding({
+        caseObj: preparedCase,
+        meetingType,
+        appealOfficerName: prepAppealOfficerName,
+        appealIndependenceStatus: prepIndependenceStatus,
+        allegations: preparedCase ? allegationsForCase(allegations, preparedCase.id) : [],
+        openQuestions,
+        openInconsistencies,
+      });
+      // The chair for a structured appeal comes from the appointment, never
+      // from the editable name field on the prep form.
+      const prepChair = (meetingType && isAppealMeeting(meetingType?.label||"") && prepAppealOfficerName) || caseInfo.manager || "TBC";
+      const prepInstructions = buildMeetingPrepInstructions({
+        meetingType,
+        hasCaseContext: !!carriedContext,
+        hasAdditionalContext: !!(caseInfo.context||"").trim(),
+      });
       await Promise.all([
         streamClaude(
           `Senior UK HR advisor specialising in UK employment law. Use ## for section headers and - for bullet points. Do not use ** for bold, do not use emoji, do not use markdown tables. Write in plain clear English with ## headers and - bullets only.${policies.length?" Reference company policies where relevant.":""}`,
-          `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}. Chair: ${caseInfo.manager||"TBC"}. Background: ${caseInfo.context||"None"}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}\n\n## Objectives\n## Agenda\n## Opening Script\n## Key Questions\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Closing Points\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use the items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the background/context clearly supports them.":""}\n\nFor Opening Script, write actual words the chair could read aloud to open the meeting professionally (introductions, purpose, right to be accompanied where relevant) — a real script, not a bullet-point agenda restated. For Closing Points, list what the chair should cover before ending: next steps, what happens next and by when, and confirming the employee has nothing further to add.`,
+          `Prepare for ${meetingType.label}. Employee: ${caseInfo.employee}. Date: ${caseInfo.date||"TBD"}${caseInfo.time?" at "+caseInfo.time:""}${caseInfo.locationOrMethod?" ("+caseInfo.locationOrMethod+")":""}. Chair: ${prepChair}. Participants: ${participants.map(p=>p.name+" ("+p.role+")").join(", ")||"HR Manager, Employee"}${getPolicyCtx()}${carriedContext?"\n\n"+carriedContext:""}${(caseInfo.context||"").trim()?"\n\nADDITIONAL CONTEXT supplied by the user for this preparation:\n"+caseInfo.context.trim():(carriedContext?"":"\n\nBackground: None")}${prepInstructions?"\n\n"+prepInstructions:""}\n\n## Objectives\n## Agenda\n## Opening Script\n## Key Questions\n## Evidence to Explore\n## Unanswered Issues\n## Potential Inconsistencies\n## Closing Points\n## Legal Checklist\n## Risk Flags${carriedContext?"\n\nFor Unanswered Issues and Potential Inconsistencies, use any items listed above as a starting point (rephrased as prep guidance) rather than re-deriving them from scratch — add any further ones only if the recorded case context clearly supports them, and keep every one of them phrased as something still to be explored rather than something established.":""}\n\nFor Opening Script, write actual words the chair could read aloud to open the meeting professionally (introductions, purpose, right to be accompanied where relevant) — a real script, not a bullet-point agenda restated. For Closing Points, list what the chair should cover before ending: next steps, what happens next and by when, and confirming the employee has nothing further to add.`,
           t=>setPrepNotes(t)
         ),
-        generatePrepQuestions(carriedContext),
+        generatePrepQuestions(carriedContext, prepInstructions),
       ]);
     } catch(e) {
       // Release 1.0 UAT remediation (Defect #4) — streamClaude's thrown

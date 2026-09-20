@@ -3,6 +3,7 @@ import { SCREENS, MEETING_TYPES } from '../constants';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { DateInput } from '../components/DateInput';
+import { LockIcon } from '../components/Icons';
 
 const CATEGORY_LABEL = { agenda:"Agenda", evidence:"Evidence", clarification:"Clarification", unanswered:"Unanswered", general:"General" };
 
@@ -71,14 +72,32 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
   // for mouse users as the keyboard-focus indicator too, same visual
   // language, just a second trigger.
   const [docInputFocused, setDocInputFocused] = useState(false);
+  // Appeal Prep Pack P1 (2026-09-20) — a structured appeal preparation is one
+  // that arrived from the appeal workflow with an appointed officer. Chair and
+  // meeting type are already authoritative at that point (case_access
+  // appeal_manager, and the appeal meeting type), so they are shown read-only
+  // rather than as free text a user could silently change into a different
+  // person or a different kind of hearing. Every other route is untouched.
+  const isStructuredAppealPrep = !!caseInfo.preparedCaseId && !!caseInfo.appealChairLocked;
+  const groundedInCase = !!caseInfo.preparedCaseId;
+  const hearingSummary = [
+    caseInfo.date ? new Date(caseInfo.date+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}) : null,
+    caseInfo.time || null,
+    caseInfo.locationOrMethod || null,
+  ].filter(Boolean).join(" · ");
   return (
     <div style={{maxWidth:560,margin:"0 auto",padding:isMobile?"24px 16px":"60px 20px",textAlign:"center"}}>
       <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"#7C5CFC",marginBottom:12,fontWeight:600}}>Prepare first</div>
       <h1 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:30,color:"#1A1535",margin:"0 0 8px",fontWeight:400}}>Tell Compass about this meeting</h1>
-      <p style={{fontSize:14,color:"#6B6880",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.</p>
+      <p style={{fontSize:14,color:"#6B6880",margin:"0 0 32px",lineHeight:1.7}}>Compass will generate targeted questions and a prep pack.{groundedInCase?" The case history, decision and open questions are drawn from the case record automatically.":""}</p>
 
       <div style={{textAlign:"left",marginBottom:16}}>
         <label htmlFor="prep-meeting-type" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Meeting type <span style={{color:"#C84B2F"}}>*</span></label>
+        {isStructuredAppealPrep ? (
+          <div id="prep-meeting-type" style={{width:"100%",background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:14,color:"#1C1820",boxSizing:"border-box",display:"flex",alignItems:"center",gap:8}}>
+            <LockIcon size={13} color="#6B6375" />{meetingType?.label||"Disciplinary Appeal"}
+          </div>
+        ) : (
         <select id="prep-meeting-type" value={meetingType?.id||""} onChange={e=>{const t=MEETING_TYPES.find(x=>x.id===e.target.value);setMeetingType(t);}}
           style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:14,outline:"none",color:meetingType?"#1C1820":"#9B9098",boxSizing:"border-box"}}>
           <option value="" disabled>Select meeting type...</option>
@@ -91,6 +110,7 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
           <option disabled style={{color:"#6B6880"}}>── Development ──</option>
           {MEETING_TYPES.filter(t=>t.group==="dev").map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
+        )}
       </div>
 
       <div style={{textAlign:"left",marginBottom:16}}>
@@ -105,17 +125,35 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
         <DateInput id="prep-meeting-date" value={caseInfo.date} onChange={e=>setCaseInfo(p=>({...p,date:e.target.value}))} />
       </div>
 
+      {/* Appeal Prep Pack P1 (2026-09-20) — time and method were already
+          carried in caseInfo from the hearing setup but had nowhere to
+          surface, so the chair lost them on the way to preparation. Read-only
+          summary over the values already in state — no duplicate logistics
+          state is introduced. */}
+      {isStructuredAppealPrep&&hearingSummary&&(
+        <div style={{textAlign:"left",marginBottom:16}}>
+          <div style={{fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Hearing</div>
+          <div style={{fontSize:14,color:"#1A1535",background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px"}}>{hearingSummary}</div>
+        </div>
+      )}
+
       <div style={{textAlign:"left",marginBottom:16}}>
-        <label htmlFor="prep-manager-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Your name</label>
+        <label htmlFor="prep-manager-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{isStructuredAppealPrep?"Appeal officer / Chair":"Your name"}</label>
+        {isStructuredAppealPrep ? (
+          <div id="prep-manager-name" style={{width:"100%",background:"#F5F1EA",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,color:"#1A1535",boxSizing:"border-box",display:"flex",alignItems:"center",gap:8}}>
+            <LockIcon size={13} color="#6B6375" />{caseInfo.manager||"Appointed appeal officer"}
+          </div>
+        ) : (
         <input id="prep-manager-name" placeholder="Chair / HR manager name" value={caseInfo.manager}
           onChange={e=>setCaseInfo(p=>({...p,manager:e.target.value}))}
           style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
+        )}
       </div>
 
       <div style={{textAlign:"left",marginBottom:32}}>
-        <label htmlFor="prep-background" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Background <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(recommended)</span></label>
+        <label htmlFor="prep-background" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{groundedInCase?"Additional context":"Background"} <span style={{color:"#6B6880",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional)</span></label>
         <textarea id="prep-background" value={caseInfo.context} onChange={e=>setCaseInfo(p=>({...p,context:e.target.value}))}
-          placeholder="Previous warnings, allegations, relevant history, reasonable adjustments..."
+          placeholder={groundedInCase?"Add anything relevant that isn't already recorded in Compass.":"Previous warnings, allegations, relevant history, reasonable adjustments..."}
           rows={4} style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",resize:"vertical",lineHeight:1.6}}></textarea>
       </div>
 
