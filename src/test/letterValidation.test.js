@@ -988,3 +988,93 @@ describe('validateFormalLetter — substantive procedural deadline placeholders 
     });
   });
 });
+
+// Appeal independence P1 (Human UAT, 2026-09-20) — the BACKSTOP behind the
+// generation grounding. The two sentences below are the verbatim shapes the
+// production invitation produced on a case classified UNKNOWN.
+describe('validateFormalLetter — appeal officer independence assertions (P1)', () => {
+  const EMP = goldenPathEmployee;
+  const PROD_PURPOSE = 'The purpose of this appeal hearing is to provide you with the opportunity to present your grounds of appeal in full and for those grounds to be considered by a manager who was not involved in the original disciplinary process.';
+  const PROD_CHAIR = 'The appeal hearing will be chaired by UAT - HR Manager, [Job Title], who was not involved in the original investigation or disciplinary hearing.';
+  const letter = body => `Dear ${EMP},\n\n${body}`;
+  const check = (body, status, letterType = 'appeal') =>
+    validateFormalLetter(letter(body), { employeeName: EMP, letterType, appealIndependenceStatus: status });
+  const flags = result => result.issues.some(i => i.includes('not previously involved, but Compass has not verified'));
+
+  it('blocks the exact production wording under UNKNOWN', () => {
+    const result = check(`${PROD_PURPOSE}\n\n${PROD_CHAIR}`, 'unknown');
+    expect(result.valid).toBe(false);
+    expect(flags(result)).toBe(true);
+  });
+
+  it('blocks the exact production wording under CONFLICT — an authorised override does not make it true', () => {
+    const result = check(`${PROD_PURPOSE}\n\n${PROD_CHAIR}`, 'conflict');
+    expect(result.valid).toBe(false);
+    expect(flags(result)).toBe(true);
+  });
+
+  it('allows the same wording under CLEAR, where structured attribution supports it', () => {
+    expect(check(`${PROD_PURPOSE}\n\n${PROD_CHAIR}`, 'clear').valid).toBe(true);
+  });
+
+  it('is inert for letters carrying no independence status (every non-appeal letter type)', () => {
+    expect(check(`${PROD_PURPOSE}\n\n${PROD_CHAIR}`, undefined).valid).toBe(true);
+    expect(validateFormalLetter(letter(PROD_CHAIR), { employeeName: EMP, letterType: 'outcome' }).valid).toBe(true);
+  });
+
+  it.each([
+    'The chair was not involved.',
+    "The chair wasn't involved in the earlier process.",
+    'The officer has not been involved in this matter before.',
+    'The chair had no involvement in the original decision.',
+    'The appeal officer took no part in the original hearing.',
+    'The chair did not take part in the disciplinary hearing.',
+    'The officer was not previously involved in the process.',
+    'The chair is independent of the original disciplinary process.',
+    'The officer played no role in the original decision.',
+    'The chair was uninvolved in the earlier proceedings.',
+    'Their independence has been verified by HR.',
+  ])('blocks the materially equivalent claim: %s', body => {
+    expect(flags(check(body, 'unknown'))).toBe(true);
+  });
+
+  // The matcher must stay a targeted claim-about-history check, never a
+  // blanket ban on "independent", "impartial" or "fair".
+  it.each([
+    'The appeal hearing will be chaired by Jane Smith.',
+    'The appeal will be considered fairly and impartially.',
+    'Your appeal will receive a fair and impartial hearing.',
+    'You have the right to an independent appeal process.',
+    'The hearing will be conducted in accordance with the ACAS Code of Practice.',
+    'The appeal officer will consider all of the information presented.',
+    'This is an independent stage of the Company procedure.',
+  ])('allows legitimate process wording: %s', body => {
+    expect(check(body, 'unknown').valid).toBe(true);
+  });
+
+  it('applies to the appeal hearing invitation as well as the appeal outcome letter', () => {
+    const inviteResult = validateFormalLetter(letter(PROD_CHAIR), {
+      employeeName: EMP, letterType: 'invite', appealIndependenceStatus: 'unknown',
+    });
+    expect(inviteResult.valid).toBe(false);
+    expect(flags(inviteResult)).toBe(true);
+  });
+
+  it('leaves cosmetic placeholders and the existing logistics/deadline checks unchanged', () => {
+    const hearing = futureHearing();
+    const args = {
+      employeeName: EMP, letterType: 'invite', isAppealHearingInvitation: true,
+      hearingDate: hearing.iso, hearingTime: '10:00', hearingLocationOrMethod: 'Microsoft Teams',
+      appealIndependenceStatus: 'unknown',
+    };
+    const clean = `Dear ${EMP},\n\n[Company Name]\n[Company Address Line 1]\n[HR Contact Email / Telephone]\n[Signatory Name]\n[Date]\n\n`
+      + `Date: ${hearing.long}\nTime: 10:00\nMethod: Microsoft Teams\n\nThe appeal hearing will be chaired by Priya Shah. Please respond as soon as possible.`;
+    expect(validateFormalLetter(clean, args).valid).toBe(true);
+
+    // Deadline check still fires independently.
+    const withDeadline = clean.replace('as soon as possible', 'no later than [X working days] before the hearing');
+    expect(validateFormalLetter(withDeadline, args).issues.some(i => i.includes('unresolved response deadline'))).toBe(true);
+    // Logistics checks still fire independently.
+    expect(validateFormalLetter(clean, { ...args, hearingTime: '14:00' }).valid).toBe(false);
+  });
+});

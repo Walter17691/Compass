@@ -69,8 +69,8 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
   // editing a previously-valid invitation back into an invalid one (e.g.
   // deleting the stated date) must re-block the same actions.
   const letterValidation = useMemo(
-    () => validateFormalLetter(letterOutput, {employeeName: caseInfo.employee, outcome: outcomeValue, letterType: activeLetter, warningDurationMonths, warningExpiresAt, isAppealHearingInvitation: caseInfo.isAppealHearingInvitation, hearingDate: caseInfo.hearingDate, hearingTime: caseInfo.hearingTime, hearingLocationOrMethod: caseInfo.hearingLocationOrMethod}),
-    [letterOutput, caseInfo.employee, outcomeValue, activeLetter, warningDurationMonths, warningExpiresAt, caseInfo.isAppealHearingInvitation, caseInfo.hearingDate, caseInfo.hearingTime, caseInfo.hearingLocationOrMethod]
+    () => validateFormalLetter(letterOutput, {employeeName: caseInfo.employee, outcome: outcomeValue, letterType: activeLetter, warningDurationMonths, warningExpiresAt, isAppealHearingInvitation: caseInfo.isAppealHearingInvitation, hearingDate: caseInfo.hearingDate, hearingTime: caseInfo.hearingTime, hearingLocationOrMethod: caseInfo.hearingLocationOrMethod, appealIndependenceStatus: caseInfo.appealIndependenceStatus}),
+    [letterOutput, caseInfo.employee, outcomeValue, activeLetter, warningDurationMonths, warningExpiresAt, caseInfo.isAppealHearingInvitation, caseInfo.hearingDate, caseInfo.hearingTime, caseInfo.hearingLocationOrMethod, caseInfo.appealIndependenceStatus]
   );
   const letterGroundingFailed = !letterValidation.valid;
   const canIssue = letterIsApproved && !outcomeNotYetDecided && !letterGroundingFailed;

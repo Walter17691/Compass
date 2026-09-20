@@ -903,3 +903,69 @@ describe('CaseViewScreen — inline draft validation detail (Human UAT hotfix)',
     expect(screen.queryByText('This draft needs review before it can be used')).not.toBeInTheDocument();
   });
 });
+
+// Date control consistency (Human UAT P2, 2026-09-20) — the appeal-hearing
+// date was a raw <input type="date">, which the app-wide indicator-hiding
+// rule left with no visible calendar affordance. It now uses the established
+// DateInput, and the min-date restriction must survive the migration.
+describe('CaseViewScreen — appeal hearing date uses the shared DateInput (P2)', () => {
+  const appealCase = { ...cs, meetings: [] };
+  const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
+  const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah', job_title: 'Operations Director' }];
+  const getNextStep = () => ({ label: 'Draft appeal hearing invitation', action: 'appeal_invite', meetingType: 'appeal-disciplinary', primary: true });
+
+  const openLogistics = async (user) => {
+    const view = render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter: vi.fn() }} />);
+    await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
+    return view;
+  };
+
+  it('renders the date field inside the shared .date-wrap control with its calendar icon', async () => {
+    const user = userEvent.setup();
+    await openLogistics(user);
+    const input = document.getElementById('appeal-invite-date');
+    expect(input).not.toBeNull();
+    const wrap = input.closest('.date-wrap');
+    expect(wrap).not.toBeNull();
+    expect(wrap.querySelector('svg')).not.toBeNull();
+  });
+
+  it('keeps the min-date restriction so a past hearing date cannot be picked', async () => {
+    const user = userEvent.setup();
+    await openLogistics(user);
+    const input = document.getElementById('appeal-invite-date');
+    const today = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    expect(input).toHaveAttribute('min', `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`);
+  });
+
+  it('opens the picker on click, via the shared control', async () => {
+    const user = userEvent.setup();
+    await openLogistics(user);
+    const input = document.getElementById('appeal-invite-date');
+    input.showPicker = vi.fn();
+    await user.click(input);
+    expect(input.showPicker).toHaveBeenCalled();
+  });
+
+  it('still drives the existing logistics validation and generation unchanged', async () => {
+    const user = userEvent.setup();
+    const handleLetter = vi.fn();
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep, handleLetter }} />);
+    await user.click(screen.getByRole('button', { name: 'Draft appeal hearing invitation' }));
+
+    fireEvent.change(document.getElementById('appeal-invite-date'), { target: { value: '2020-01-01' } });
+    expect(screen.getByText('The hearing date cannot be in the past.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue →' })).toBeDisabled();
+
+    fireEvent.change(document.getElementById('appeal-invite-date'), { target: { value: '2099-01-01' } });
+    fireEvent.change(document.getElementById('appeal-invite-time'), { target: { value: '10:00' } });
+    fireEvent.change(document.getElementById('appeal-invite-location'), { target: { value: 'Microsoft Teams' } });
+    await user.click(screen.getByRole('button', { name: 'Continue →' }));
+    expect(handleLetter).toHaveBeenCalledWith('invite', expect.objectContaining({
+      hearingLogistics: { date: '2099-01-01', time: '10:00', locationOrMethod: 'Microsoft Teams' },
+    }));
+  });
+});

@@ -3,6 +3,7 @@ import { SCREENS, MEETING_TYPES } from '../constants';
 import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 import { MDRenderer } from '../components/MDRenderer';
+import { DateInput } from '../components/DateInput';
 import { LockIcon } from '../components/Icons';
 import { AllegationsPanel } from '../components/AllegationsPanel';
 import { TimelinePanel } from '../components/TimelinePanel';
@@ -747,9 +748,16 @@ export function CaseViewScreen({
               <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
                 <div style={{flex:"1 1 140px"}}>
                   <label htmlFor="appeal-invite-date" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing date</label>
-                  <input id="appeal-invite-date" type="date" value={appealInviteDate} min={toISODateLocal(new Date())}
+                  {/* Date control consistency (Human UAT P2, 2026-09-20) —
+                      was a raw <input type="date">, which the app-wide
+                      indicator-hiding rule left with no visible calendar
+                      affordance at all. Uses the established DateInput now
+                      (custom Compass icon + showPicker on click); the
+                      min-date restriction is unchanged and still blocks a
+                      past hearing date at the same point it always did. */}
+                  <DateInput id="appeal-invite-date" value={appealInviteDate} min={toISODateLocal(new Date())}
                     onChange={e=>setAppealInviteDate(e.target.value)}
-                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#1A1535",boxSizing:"border-box"}}/>
+                    style={{background:"#FFFFFF",borderRadius:8}}/>
                 </div>
                 <div style={{flex:"1 1 100px"}}>
                   <label htmlFor="appeal-invite-time" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing time</label>

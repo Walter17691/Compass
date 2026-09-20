@@ -29,7 +29,8 @@ import {
 import { newEvidenceSinceFinding, appealMeetingsForCase, formatAppealGroundReasoning, transcriptMentionsAppeal } from './lib/appealReview';
 import { comparableCaseSummaries } from './lib/outcomeConsistency';
 import { validateFormalLetter } from './lib/letterValidation';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride } from './lib/letterGrounding';
+import { classifyAppealIndependence } from './lib/appealIndependence';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction } from './lib/letterGrounding';
 import { addTask, toggleTaskDone, removeTask, tasksForCase } from './lib/caseTasks';
 import { createSignal, setSignalStatus, supersedeOpenSignalsOfType, openSignalsForCase, updateSignal, signalsForCase, findMatchingQuestionSignal } from './lib/caseSignals';
 import { computeGuardrailChecks } from './lib/guardrails';
@@ -7776,6 +7777,24 @@ Please produce:
       const appealGroundSignals = t==="appeal" && activeCase ? caseSignals.filter(s=>s.caseId===activeCase.id && s.status==="open" && (s.title||"").startsWith("Appeal ground:")).map(s=>"- "+s.reasoning).join(nl) : "";
       const appealOfficerAccess = t==="appeal" && activeCase ? caseAccess.find(a=>a.caseId===activeCase.id && a.role==="appeal_manager") : null;
       const appealOfficerName = appealOfficerAccess ? orgMembers.find(m=>m.user_id===appealOfficerAccess.userId)?.name : null;
+      // Appeal independence P1 (2026-09-20) — both employee-facing appeal
+      // letters carry the same structural exposure: they name a chair and
+      // nothing tells the model whether that person's non-involvement was
+      // ever established. Classified here, from structured attribution only
+      // (see lib/appealIndependence.js, which mirrors the appointment RPC's
+      // own SQL rule). A missing appointment classifies as 'unknown', the
+      // conservative direction, rather than emitting no instruction at all.
+      const isAppealFacingLetter = t==="appeal" || (t==="invite" && !!hearingLogistics);
+      const appealIndependenceAccess = isAppealFacingLetter && activeCase ? caseAccess.find(a=>a.caseId===activeCase.id && a.role==="appeal_manager") : null;
+      const appealIndependenceOfficerName = appealIndependenceAccess ? orgMembers.find(m=>m.user_id===appealIndependenceAccess.userId)?.name : null;
+      const appealIndependenceStatus = isAppealFacingLetter && activeCase
+        ? classifyAppealIndependence({caseRecord: activeCase, allegations: allegationsForCase(allegations, activeCase.id), appealOfficerUserId: appealIndependenceAccess?.userId || null})
+        : null;
+      // Threaded onto caseInfo so LetterScreen's own live re-validation sees
+      // the same status on every keystroke — one validation result shared by
+      // the inline Case View panel and the Letter editor, never a second
+      // classification computed independently in the UI layer.
+      setCaseInfo(p=>({...p, appealIndependenceStatus}));
       const appealHearingMeeting = t==="appeal" && activeCase ? (activeCase.meetings||[]).slice().reverse().find(m=>(m.type||"").toLowerCase().includes("appeal") && m.record) : null;
       const appealAllegationContext = t==="appeal" && activeCase ? allegationsForCase(allegations, activeCase.id).filter(a=>a.appealOutcome).map(a => {
         const decidedByName = a.appealDecidedBy ? orgMembers.find(m=>m.user_id===a.appealDecidedBy)?.name : null;
@@ -7802,6 +7821,7 @@ Please produce:
         // location is not the hearing venue.
         buildAppealHearingLogisticsInstruction(hearingLogistics),
         groundedManager ? "Chair/Manager: "+groundedManager : "",
+        appealIndependenceStatus ? buildAppealIndependenceInstruction(appealIndependenceStatus, appealIndependenceOfficerName) : "",
         caseInfo.representative ? "Representative/companion: "+caseInfo.representative+" ("+(caseInfo.representativeRole||"colleague")+")" : "",
         (groundedDate && !hearingLogistics) ? "Meeting date: "+groundedDate : "",
         empRec.startDate ? "Employee start date: "+empRec.startDate : "",
@@ -7904,7 +7924,7 @@ Please produce:
         // is this letter actually addressed to this case's employee?)
         // before treating it as a valid, ready-for-review draft. See
         // lib/letterValidation.js for what this does and doesn't check.
-        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt, appealDeadline: appealDeadlineIso, appealOutcomeLabel: appealOutcomeLabelForValidation, appealEffectTag: appealEffectTagForValidation, isAppealHearingInvitation: !!hearingLogistics, hearingDate: hearingLogistics?.date, hearingTime: hearingLogistics?.time, hearingLocationOrMethod: hearingLogistics?.locationOrMethod});
+        const validation = validateFormalLetter(text, {employeeName: groundedEmployee, outcome: activeCase?.outcome, letterType: t, warningDurationMonths: activeCase?.warningDurationMonths, warningExpiresAt: activeCase?.warningExpiresAt, appealDeadline: appealDeadlineIso, appealOutcomeLabel: appealOutcomeLabelForValidation, appealEffectTag: appealEffectTagForValidation, isAppealHearingInvitation: !!hearingLogistics, hearingDate: hearingLogistics?.date, hearingTime: hearingLogistics?.time, hearingLocationOrMethod: hearingLogistics?.locationOrMethod, appealIndependenceStatus});
         setLetterOutput(text); setLetterSources(letterSources);
         // UAT Product Hierarchy pass, Part 6 — generation can genuinely
         // outlive the user staying on this screen (this function isn't
@@ -8391,7 +8411,17 @@ Please produce:
         *{box-sizing:border-box;}::selection{background:#7C5CFC33;}
         input,textarea{font-family:DM Sans,system-ui,sans-serif;color:#1A1535;}
         input[type="date"]{color-scheme:light;cursor:pointer;}
-        input[type="date"]::-webkit-calendar-picker-indicator{opacity:0;position:absolute;right:0;width:40px;height:100%;cursor:pointer;}
+        /* Date control consistency (Human UAT P2, 2026-09-20) — this rule
+           was unscoped, so it hid the native calendar icon on EVERY date
+           input in the app while only DateInput (.date-wrap) drew a
+           replacement. Every raw <input type="date"> was therefore left with
+           no visible picker affordance at all — the reported appeal-hearing
+           defect, and the same for ~21 other reachable fields. Scoping it to
+           .date-wrap keeps DateInput's custom Compass icon and lets every
+           unmigrated field fall back to the browser's own visible indicator
+           (index.css sets it to opacity 0.5). Specificity, not source order,
+           decides: .date-wrap input[...] outranks the bare element rule. */
+        .date-wrap input[type="date"]::-webkit-calendar-picker-indicator{opacity:0;position:absolute;right:0;width:40px;height:100%;cursor:pointer;}
         .date-wrap{position:relative;display:block;}
         .date-wrap svg{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;}
         .pu{animation:pu 1.4s infinite;}@keyframes pu{0%,100%{opacity:1}50%{opacity:0.3}}

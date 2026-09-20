@@ -1,7 +1,10 @@
-export function DateInput({ id, value, onChange, style={} }) {
+// `min` added for the appeal-hearing date, which must not accept a past
+// date. Plain passthrough to the native input — no new behaviour, and
+// omitted attributes stay omitted so every existing caller is unaffected.
+export function DateInput({ id, value, onChange, min, style={} }) {
   return (
     <div className="date-wrap">
-      <input id={id} type="date" value={value} onChange={onChange}
+      <input id={id} type="date" value={value} onChange={onChange} min={min}
         onClick={e=>e.currentTarget.showPicker?.()}
         style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 36px 9px 12px",fontSize:13,outline:"none",color:"#1A1535",boxSizing:"border-box",...style,colorScheme:"light",cursor:"pointer"}} />
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C5CFC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -485,3 +485,52 @@ describe('LetterScreen — substantive procedural deadline gates (procedural pla
     expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
   });
 });
+
+// Appeal independence P1 (Human UAT, 2026-09-20) — an unverified
+// non-involvement claim must block every issue/export route, exactly as the
+// logistics and deadline checks already do. One shared validation result
+// drives all of them, so this proves the new check inherits that wiring.
+describe('LetterScreen — appeal independence action gates (P1)', () => {
+  const PROD_CHAIR = 'The appeal hearing will be chaired by UAT - HR Manager, [Job Title], who was not involved in the original investigation or disciplinary hearing.';
+  const NEUTRAL = 'The appeal hearing will be chaired by UAT - HR Manager. The appeal will be considered fairly and impartially.';
+
+  const appealProps = {
+    ...baseProps,
+    activeLetter: 'appeal',
+    caseInfo: { employee: 'UAT - Test Employee (Golden Path)', manager: 'Priya Shah', appealIndependenceStatus: 'unknown' },
+    letterIsApproved: true,
+    letterApproval: { by: 'Jo', at: new Date().toISOString() },
+  };
+  const ALL_ACTIONS = ['Save to case', 'Download PDF', 'Send via Gmail', 'Send via Outlook', 'Send from Compass', 'Send for acknowledgement', 'Print', 'Copy text'];
+  const body = text => `Dear UAT - Test Employee (Golden Path),\n\n${text}`;
+
+  it('blocks every issue/export action when the letter asserts unverified non-involvement', () => {
+    render(<LetterScreen {...appealProps} letterOutput={body(PROD_CHAIR)} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.getByText(/needs review before it can be used/i)).toBeInTheDocument();
+    expect(screen.getByText(/Compass has not verified that/i)).toBeInTheDocument();
+    ALL_ACTIONS.forEach(name => expect(screen.getByRole('button', { name })).toBeDisabled());
+  });
+
+  it('blocks Approve for sending too, so it cannot be pushed through the approval gate', () => {
+    render(<LetterScreen {...appealProps} letterIsApproved={false} letterOutput={body(PROD_CHAIR)} />);
+    expect(screen.getByRole('button', { name: 'Approve for sending' })).toBeDisabled();
+  });
+
+  it('permits every action once the claim is replaced with neutral chair wording', () => {
+    render(<LetterScreen {...appealProps} letterOutput={body(NEUTRAL)} onSendFromCompass={()=>{}} onSendForAcknowledgement={()=>{}} />);
+    expect(screen.queryByText(/needs review before it can be used/i)).not.toBeInTheDocument();
+    ALL_ACTIONS.forEach(name => expect(screen.getByRole('button', { name })).toBeEnabled());
+  });
+
+  it('re-blocks live when a human edits neutral wording back into a non-involvement claim', () => {
+    const { rerender } = render(<LetterScreen {...appealProps} letterOutput={body(NEUTRAL)} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+    rerender(<LetterScreen {...appealProps} letterOutput={body(PROD_CHAIR)} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeDisabled();
+  });
+
+  it('does not block the same wording when the appointment is CLEAR', () => {
+    render(<LetterScreen {...appealProps} caseInfo={{ ...appealProps.caseInfo, appealIndependenceStatus: 'clear' }} letterOutput={body(PROD_CHAIR)} />);
+    expect(screen.getByRole('button', { name: 'Save to case' })).toBeEnabled();
+  });
+});

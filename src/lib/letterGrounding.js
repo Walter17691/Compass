@@ -154,3 +154,39 @@ export function buildAppealInvitationInstructionOverride(hearingLogistics) {
   return " The hearing date, time, and location/method are already agreed and given as AUTHORITATIVE HEARING ARRANGEMENTS in the information below — state those exact facts for this letter's date/time/location, do not use a bracketed placeholder for any of the three, and do not invent or calculate a different value."
     + " IMPORTANT — DEADLINES: Compass holds no authoritative employer deadline for this hearing, so this letter must not state any specific number of days anywhere, and must NOT use a bracketed deadline placeholder such as [X working days], [X days], [insert number of days] or [deadline]. The general instruction above about using a placeholder for deadlines does NOT apply to this letter. Omit the numeric deadline entirely and use neutral wording that is still operationally useful — for example 'please do so sufficiently in advance of the hearing for it to be considered', 'please confirm your attendance as soon as possible', or 'if you intend to be accompanied, please let us know the name and role of your companion as soon as possible'. For the same reason, do not state any fixed period within which a rearranged or postponed hearing must fall, and do not attribute such a period to the ACAS Code — if the date or time is unsuitable, simply invite the employee to contact you as soon as possible.";
 }
+
+// Appeal independence P1 (Human UAT, 2026-09-20) — a live production
+// invitation asserted "...considered by a manager who was not involved in
+// the original disciplinary process" and named the chair as someone "who was
+// not involved in the original investigation or disciplinary hearing", on a
+// legacy case the appointment flow had explicitly classified as UNKNOWN. No
+// prompt asked for those sentences and nothing verified them: the model
+// inferred them from "Follow ACAS Code of Practice" plus a bare chair name.
+//
+// An authorised exceptional appointment does not make a false statement
+// true, so CONFLICT gets the same employee-facing treatment as UNKNOWN: say
+// who is chairing, say nothing about prior involvement. The override reason,
+// the HR confirmation text and the internal classification itself are all
+// deliberately absent from the returned instruction — none of them belong in
+// a letter to the employee.
+//
+// Scoped narrowly: this constrains claims about THE OFFICER'S PRIOR
+// INVOLVEMENT only. Ordinary process wording ("the appeal will be considered
+// fairly and impartially") is legitimate and is explicitly left alone.
+export function buildAppealIndependenceInstruction(status, officerName) {
+  const chair = (officerName || "").trim();
+  const chairPhrase = chair ? `"The appeal hearing will be chaired by ${chair}."` : '"The appeal hearing will be chaired by the appointed appeal officer."';
+
+  if (status === "clear") {
+    return "APPEAL OFFICER INDEPENDENCE: Compass holds structured evidence that the appointed appeal officer did not decide the original outcome. You may state, factually and briefly, that the appeal will be heard by someone who was not involved in the original decision. Do not overstate this beyond what is asked for here.";
+  }
+
+  if (status === "unknown" || status === "conflict") {
+    return "APPEAL OFFICER INDEPENDENCE — NOT VERIFIED: Compass has NOT established that the appeal officer was uninvolved in the original process, so this letter must not say or imply otherwise."
+      + " Do NOT state that the officer was not involved, had no involvement, took no part, was not previously involved, or is independent of the original disciplinary process, and do NOT say that their independence or impartiality has been checked, verified or confirmed."
+      + ` State only who is chairing, in neutral terms such as ${chairPhrase}`
+      + " You may still describe the appeal process itself as being conducted fairly and impartially — that is a statement about how the hearing will be run, not a claim about this person's history, and it remains appropriate.";
+  }
+
+  return "";
+}

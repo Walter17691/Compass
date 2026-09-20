@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride } from '../lib/letterGrounding.js';
+import { resolveLetterGrounding, buildRecipientInstruction, buildAppealDeadlineInstruction, buildAppealOutcomeInstruction, buildAppealHearingLogisticsInstruction, buildAppealGroundsInstruction, buildAppealInvitationInstructionOverride, buildAppealIndependenceInstruction } from '../lib/letterGrounding.js';
 
 const goldenPathEmployee = 'UAT - Test Employee (Golden Path)';
 
@@ -272,5 +272,76 @@ describe('buildAppealInvitationInstructionOverride (procedural placeholder P1)',
   it('still carries the authoritative hearing-logistics rule unchanged', () => {
     expect(override).toMatch(/AUTHORITATIVE HEARING ARRANGEMENTS/);
     expect(override).toMatch(/do not use a bracketed placeholder for any of the three/i);
+  });
+});
+
+// Appeal independence P1 (Human UAT, 2026-09-20) — a production invitation
+// asserted the chair "was not involved in the original investigation or
+// disciplinary hearing" on a case the appointment flow had classified as
+// UNKNOWN. Nothing asked for that sentence and nothing verified it.
+describe('buildAppealIndependenceInstruction (appeal independence P1)', () => {
+  const OFFICER = 'UAT - HR Manager';
+
+  it('returns empty for a letter with no independence classification at all', () => {
+    expect(buildAppealIndependenceInstruction(null, OFFICER)).toBe('');
+    expect(buildAppealIndependenceInstruction(undefined, OFFICER)).toBe('');
+    expect(buildAppealIndependenceInstruction('', OFFICER)).toBe('');
+  });
+
+  describe('CLEAR — structured attribution supports the statement', () => {
+    const instruction = buildAppealIndependenceInstruction('clear', OFFICER);
+
+    it('permits a narrow, factual statement of non-involvement', () => {
+      expect(instruction).toMatch(/may state/i);
+      expect(instruction).toMatch(/not involved in the original decision/i);
+    });
+
+    it('still tells the model not to overstate it', () => {
+      expect(instruction).toMatch(/do not overstate/i);
+    });
+  });
+
+  describe.each(['unknown', 'conflict'])('%s — Compass has not established non-involvement', status => {
+    const instruction = buildAppealIndependenceInstruction(status, OFFICER);
+
+    it('forbids stating or implying the officer was uninvolved', () => {
+      expect(instruction).toMatch(/must not say or imply otherwise/i);
+      expect(instruction).toMatch(/not state that the officer was not involved/i);
+      expect(instruction).toMatch(/took no part/i);
+      expect(instruction).toMatch(/independent of the original disciplinary process/i);
+    });
+
+    it('forbids claiming independence has been verified or checked', () => {
+      expect(instruction).toMatch(/verified, checked or confirmed|checked, verified or confirmed/i);
+    });
+
+    it('directs neutral chair wording naming the officer', () => {
+      expect(instruction).toMatch(/The appeal hearing will be chaired by UAT - HR Manager\./);
+    });
+
+    it('never exposes the override reason, HR confirmation, or the internal classification', () => {
+      expect(instruction).not.toMatch(/override/i);
+      expect(instruction).not.toMatch(/confirmation/i);
+      expect(instruction).not.toMatch(/exceptional/i);
+      expect(instruction).not.toMatch(/audit/i);
+      // The employee letter must never reveal that a conflict was recorded.
+      expect(instruction).not.toMatch(/conflict/i);
+    });
+
+    it('does not suppress ordinary fair/impartial process wording', () => {
+      expect(instruction).toMatch(/fairly and impartially/i);
+      expect(instruction).toMatch(/remains appropriate/i);
+    });
+
+    it('falls back to neutral wording when the officer name is unknown', () => {
+      const anonymous = buildAppealIndependenceInstruction(status, '');
+      expect(anonymous).toMatch(/chaired by the appointed appeal officer/i);
+    });
+  });
+
+  it('an authorised exceptional (conflict) appointment is treated exactly like unknown for the employee letter', () => {
+    const unknown = buildAppealIndependenceInstruction('unknown', OFFICER);
+    const conflict = buildAppealIndependenceInstruction('conflict', OFFICER);
+    expect(conflict).toBe(unknown);
   });
 });

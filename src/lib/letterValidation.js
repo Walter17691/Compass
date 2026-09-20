@@ -168,6 +168,41 @@ function normalizeForLooseContains(value) {
   return (value || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// Appeal independence P1 (Human UAT, 2026-09-20) — the BACKSTOP behind
+// buildAppealIndependenceInstruction. Generation grounding is the primary
+// control; this exists because the model could still volunteer the claim
+// (it did, unprompted, in production) and because a human editing the letter
+// afterwards could reintroduce it.
+//
+// Deliberately conservative and narrowly targeted at assertions about the
+// chair's PRIOR INVOLVEMENT. It is explicitly NOT a ban on "independent",
+// "impartial" or "fair": "The appeal will be considered fairly and
+// impartially" describes how the hearing will be run and must keep passing.
+// Only "independent" fused to the original process is treated as a claim
+// about history, which is why that one phrase is matched as a unit rather
+// than on the adjective alone.
+const APPEAL_NON_INVOLVEMENT_PATTERNS = [
+  /\b(?:was|were|is|are)\s+not\s+(?:previously\s+|otherwise\s+)?involved\b/i,
+  /\b(?:wasn't|weren't|isn't|aren't)\s+(?:previously\s+)?involved\b/i,
+  /\b(?:has|have|had)\s+not\s+(?:previously\s+|been\s+)?(?:been\s+)?involved\b/i,
+  /\b(?:hasn't|haven't|hadn't)\s+(?:previously\s+)?been\s+involved\b/i,
+  /\bhad\s+no\s+(?:prior\s+|previous\s+)?involvement\b/i,
+  /\bwith\s+no\s+(?:prior\s+|previous\s+)?involvement\b/i,
+  /\bno\s+(?:prior|previous)\s+involvement\b/i,
+  /\b(?:took|take|takes|has taken)\s+no\s+part\b/i,
+  /\bdid\s+not\s+take\s+part\b/i,
+  /\bnot\s+(?:take|taken)\s+any\s+part\b/i,
+  /\bplayed\s+no\s+(?:part|role)\b/i,
+  /\buninvolved\s+in\b/i,
+  /\bindependent\s+of\s+the\s+(?:original|previous|earlier|first)\b/i,
+  /\bindependence\s+(?:has\s+been|was|is)\s+(?:verified|confirmed|checked|established)\b/i,
+];
+
+function assertsAppealOfficerNonInvolvement(text) {
+  const t = text || "";
+  return APPEAL_NON_INVOLVEMENT_PATTERNS.some(re => re.test(t));
+}
+
 // Procedural placeholder remediation (2026-09-19) — a SUBSTANTIVE placeholder
 // is categorically different from a cosmetic one. [Company Address Line 1] is
 // a formatting gap a human fills before printing; [X working days] is an
@@ -259,7 +294,7 @@ export const EMPLOYEE_DIRECTED_LETTER_TYPES = [
 // compose. Never invents a missing fact to "fix" a check — an unresolved
 // [placeholder] for something Compass genuinely doesn't hold structured
 // data for (e.g. company address) is not flagged here.
-export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt, appealDeadline, appealOutcomeLabel, appealEffectTag, isAppealHearingInvitation, hearingDate, hearingTime, hearingLocationOrMethod } = {}) {
+export function validateFormalLetter(letterText, { employeeName, outcome, letterType, warningDurationMonths, warningExpiresAt, appealDeadline, appealOutcomeLabel, appealEffectTag, isAppealHearingInvitation, hearingDate, hearingTime, hearingLocationOrMethod, appealIndependenceStatus } = {}) {
   const issues = [];
   if (!EMPLOYEE_DIRECTED_LETTER_TYPES.includes(letterType)) {
     return { valid: true, issues };
@@ -507,6 +542,17 @@ export function validateFormalLetter(letterText, { employeeName, outcome, letter
     if (hasSubstantiveDeadlinePlaceholder(text)) {
       issues.push("The invitation still contains an unresolved response deadline — replace it or remove the deadline wording.");
     }
+  }
+
+  // Appeal independence P1 (2026-09-20) — applies to BOTH employee-facing
+  // appeal letters (the hearing invitation and the appeal outcome letter).
+  // Only fires when Compass has NOT established non-involvement; a 'clear'
+  // classification leaves the letter free to state the supported fact, and
+  // a letter with no independence status at all (every non-appeal type) is
+  // untouched.
+  if ((appealIndependenceStatus === "unknown" || appealIndependenceStatus === "conflict")
+    && assertsAppealOfficerNonInvolvement(letterText)) {
+    issues.push("The letter states that the appeal officer was not previously involved, but Compass has not verified that. Use neutral wording about who will chair the appeal.");
   }
 
   return { valid: issues.length === 0, issues };
