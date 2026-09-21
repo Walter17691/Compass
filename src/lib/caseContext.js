@@ -28,6 +28,55 @@ const MEETINGS_BUDGET_CHARS = 6000;
 const MEETING_FALLBACK_EXCERPT_CHARS = 150;
 const LETTER_EXCERPT_CHARS = 300;
 
+// NEW-24 — grounding boundary. A saved meeting.record is one opaque markdown
+// string holding three sections: Meeting Details, Meeting Dialogue, and HR
+// Advisor Notes. The first two are a factual record of what happened and what
+// was said. The third is AI-generated commentary, and feeding it back in here
+// is what let a generated inference become "case context" for every later AI
+// surface — Ask Compass, the case overview, next-best-action, and the signal
+// generator whose output persists to case_signals and then grounds prep packs.
+//
+// An unsupported conclusion must not acquire the status of a recorded fact
+// merely by having been saved once.
+//
+// READ-TIME ONLY: the stored record is never modified, and what the user sees
+// on a saved meeting is unchanged. This strips the section from the copy used
+// as historical/factual context, nothing else. Deliberately narrow — it is not
+// a provenance system, it removes exactly one known-generated section.
+//
+// Matching is on a real markdown heading at the start of a line, so the same
+// words appearing inside dialogue ("WC: I'll write the HR Advisor Notes up
+// later") never trigger it. Skipping ends at the next heading of the same or
+// higher level, so a lower-level heading inside the advisory body cannot end
+// it early.
+const headingLevel = line => ((line.match(/^[ \t]*(#{1,6})[ \t]+\S/) || [])[1] || "").length;
+const advisorHeadingLevel = line => ((line.match(/^[ \t]*(#{1,6})[ \t]*HR Advisor\b/i) || [])[1] || "").length;
+
+export function stripAdvisorNotes(record) {
+  const text = typeof record === "string" ? record : (record == null ? record : String(record));
+  if (!text) return record;
+  // Split on \n only, so a \r survives at the end of each line and CRLF input
+  // rejoins exactly as it arrived.
+  const lines = text.split("\n");
+  const bare = line => line.replace(/\r$/, "");
+  if (!lines.some(l => advisorHeadingLevel(bare(l)) > 0)) return record; // untouched, byte for byte
+  const kept = [];
+  let skippingFrom = 0;
+  for (const line of lines) {
+    const b = bare(line);
+    const advisorLevel = advisorHeadingLevel(b);
+    if (advisorLevel > 0) { skippingFrom = advisorLevel; continue; }
+    if (skippingFrom) {
+      const level = headingLevel(b);
+      if (level > 0 && level <= skippingFrom) skippingFrom = 0;
+    }
+    if (!skippingFrom) kept.push(line);
+  }
+  // Only reached when an advisor section was actually removed, so trimming the
+  // blank tail it leaves behind cannot affect a record that had none.
+  return kept.join("\n").replace(/[\s\r\n]+$/, "");
+}
+
 export function buildCaseContext(cs, allegations = [], tasks = [], meetingSummaries = {}) {
   const parts = [];
 
@@ -71,12 +120,15 @@ export function buildCaseContext(cs, allegations = [], tasks = [], meetingSummar
     let runningLength = 0;
     const newestFirstLines = [...meetings].reverse().map(m => {
       let line = `- ${m.type || "Meeting"} on ${m.date || "unknown date"}`;
-      if (m.record) {
-        runningLength += m.record.length;
+      // NEW-24 — budget and body are both computed from the factual record
+      // only, so the budget reflects what is actually supplied.
+      const factualRecord = stripAdvisorNotes(m.record);
+      if (factualRecord) {
+        runningLength += factualRecord.length;
         const withinBudget = runningLength <= MEETINGS_BUDGET_CHARS;
         const body = withinBudget
-          ? m.record.slice(0, MEETING_FULL_CHARS)
-          : (meetingSummaries[m.id] || m.record.slice(0, MEETING_FALLBACK_EXCERPT_CHARS) + "…");
+          ? factualRecord.slice(0, MEETING_FULL_CHARS)
+          : (meetingSummaries[m.id] || factualRecord.slice(0, MEETING_FALLBACK_EXCERPT_CHARS) + "…");
         line += ": " + body;
       }
       // Letter history (Phase 21) — previously excluded entirely, even
@@ -113,8 +165,12 @@ export function meetingsNeedingSummary(cs, meetingSummaries = {}) {
   const meetings = cs.meetings || [];
   let runningLength = 0;
   return [...meetings].reverse().filter(m => {
-    if (!m.record) return false;
-    runningLength += m.record.length;
+    // Mirrors buildCaseContext's own budget exactly — both measure the
+    // factual record, so the two can never disagree about which meetings
+    // fall outside the budget and need a cached summary.
+    const factualRecord = stripAdvisorNotes(m.record);
+    if (!factualRecord) return false;
+    runningLength += factualRecord.length;
     const overBudget = runningLength > MEETINGS_BUDGET_CHARS;
     return overBudget && !meetingSummaries[m.id];
   }).reverse();
