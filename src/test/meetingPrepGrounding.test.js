@@ -352,17 +352,23 @@ describe('absence-is-not-defect invariant (1, 2)', () => {
 describe('Risk Flags / Legal Checklist are not filled for their own sake (4)', () => {
   const rules = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
 
-  it('constrains both sections to supported matters', () => {
-    expect(rules).toMatch(/For Risk Flags and Legal Checklist, include only matters actually supported by the supplied case context/);
+  // Platform audit — the single conjoined rule these three tests were written
+  // against has been split, because giving the two headings one shared
+  // restraint and no positive contract is what let Compass's own independence
+  // assessment settle into the Legal Checklist. The protections they asserted
+  // all survive, now stated per section.
+  it('constrains Risk Flags to affirmatively supported matters', () => {
+    expect(rules).toMatch(/RISK FLAGS is different: it carries actual case-specific concerns that the authoritative supplied context affirmatively supports/);
+    expect(rules).toMatch(/A concern must be evidenced, not inferred from what is missing/);
   });
 
-  it('permits them to be empty or minimal', () => {
-    expect(rules).toMatch(/do not have to be filled/i);
-    expect(rules).toMatch(/none is identified from the information recorded|keep the section minimal/i);
+  it('permits either section to be empty', () => {
+    expect(rules).toMatch(/Writing exactly "None identified from the supplied case context\." is an acceptable and complete answer, as it is for the Legal Checklist/);
   });
 
   it('forbids manufacturing a risk from blank detail', () => {
-    expect(rules).toMatch(/Never manufacture a procedural or legal risk out of blank, missing or unrecorded detail/);
+    expect(rules).toMatch(/Never manufacture a procedural or legal risk out of missing detail in order to populate the section/);
+    expect(rules).toMatch(/unknown, unverified, blank, null, not recorded, or lacking structured historical attribution is NEVER a risk flag on its own/);
   });
 });
 
@@ -492,7 +498,10 @@ describe('appeal officer independence — three distinct states (A1-A11)', () =>
     it('A3. surfaces the recorded conflict plainly rather than suppressing it', () => {
       expect(conflict).toMatch(/RECORDED CONFLICT/);
       expect(conflict).toMatch(/having made or taken part in the original decision/);
-      expect(conflict).toMatch(/Surface it plainly/);
+      // De-publishing internal state must not mute a conflict Compass can
+      // actually prove — it is now routed explicitly to Risk Flags.
+      expect(conflict).toMatch(/surface it under Risk Flags/);
+      expect(conflict).toMatch(/describing the recorded involvement itself/);
       expect(conflict).not.toMatch(/Say nothing/i);
     });
 
@@ -501,8 +510,8 @@ describe('appeal officer independence — three distinct states (A1-A11)', () =>
       expect(conflict).toMatch(/not an inference drawn from missing information/);
     });
 
-    it('A3. directs it to be addressed before the hearing proceeds', () => {
-      expect(conflict).toMatch(/addressed before the appeal hearing proceeds/);
+    it('A3. directs it to be addressed before the appeal proceeds', () => {
+      expect(conflict).toMatch(/addressed before the appeal proceeds/);
     });
 
     it('A4. never describes the officer as independent', () => {
@@ -527,14 +536,20 @@ describe('appeal officer independence — three distinct states (A1-A11)', () =>
       expect(unknown).toMatch(/none of those is established/);
     });
 
-    it('A7. directs the user to confirm before the hearing proceeds', () => {
-      expect(unknown).toMatch(/should be confirmed before the hearing proceeds/);
+    // A7 previously asserted the OPPOSITE contract — that the model be told to
+    // state non-verification and ask the chair to confirm it. That directive is
+    // the leak the platform audit found, and it is deliberately gone. The
+    // chair's actual instruction now lives in the Legal Checklist as a neutral
+    // standing safeguard.
+    it('A7. no longer instructs the model to publish the verification gap', () => {
+      expect(unknown).not.toMatch(/should be confirmed before the hearing proceeds/);
+      expect(unknown).not.toMatch(/State neutrally that this has not been verified/);
+      expect(unknown).toMatch(/do not state or imply anywhere in the output what Compass has or has not verified/);
     });
 
     it('A8. stays a verification gap, not a defect — coexisting with absence-is-not-defect', () => {
-      expect(unknown).toMatch(/a gap in the record/);
-      expect(unknown).toMatch(/Do not treat it as evidence of unfairness, procedural defect, breach or non-compliance/);
-      expect(unknown).toMatch(/something to check, not a failing/);
+      expect(unknown).toMatch(/a gap in Compass's records/);
+      expect(unknown).toMatch(/Do not treat this gap as evidence of unfairness, procedural defect, breach or non-compliance/);
     });
 
     it('A9. is not the old shared prohibition', () => {
@@ -713,7 +728,8 @@ describe('post-hearing evidential cut-off is never asserted (1-6)', () => {
   it('5. every previously-passed appeal protection is still present alongside it', () => {
     expect(appealRules).toMatch(/ABSENCE IS NOT A DEFECT/);
     expect(appealRules).toMatch(/describe the state of the RECORD/);
-    expect(appealRules).toMatch(/For Risk Flags and Legal Checklist, include only matters actually supported/);
+    expect(appealRules).toMatch(/LEGAL CHECKLIST is an action checklist/);
+    expect(appealRules).toMatch(/RISK FLAGS is different/);
     expect(appealRules).toMatch(/contextual case material/);
     expect(appealRules).toMatch(/review of a decision that has already been taken/);
     expect(appealRules).toMatch(/not recommend, predict or predetermine the outcome/);
@@ -842,7 +858,8 @@ describe('all previously deployed prep safeguards remain intact (14)', () => {
   });
 
   it('Risk Flags / Legal Checklist restraint and signals-as-context survive', () => {
-    expect(appealRules).toMatch(/For Risk Flags and Legal Checklist, include only matters actually supported/);
+    expect(appealRules).toMatch(/LEGAL CHECKLIST is an action checklist/);
+    expect(appealRules).toMatch(/RISK FLAGS is different/);
     expect(appealRules).toMatch(/Never manufacture a procedural or legal risk/);
     expect(appealRules).toMatch(/contextual case material/);
     expect(appealRules).toMatch(/not automatically Compass's own conclusion/);
@@ -1009,7 +1026,8 @@ describe('prep pack concision instructions (Issue C4)', () => {
 
   it('C4b. explicitly allows "None identified from the supplied case context." for the optional sections', () => {
     expect(r).toContain('None identified from the supplied case context.');
-    expect(r).toMatch(/For Risk Flags and Legal Checklist/);
+    expect(r).toMatch(/RISK FLAGS is different/);
+    expect(r).toMatch(/as it is for the Legal Checklist/);
   });
 
   it('C4c. does NOT permit dropping a required section to save tokens', () => {
@@ -1047,5 +1065,312 @@ describe('the interactive prep questions inherit the same rules (A + B)', () => 
     const a = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
     const b = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
     expect(a).toBe(b);
+  });
+});
+
+// ── Platform principle (audit): internal state controls generation; it is not
+// user-facing content. "Compass should know the process so the user doesn't
+// have to operate the machinery." The known UAT defect was the Legal Checklist
+// reporting "the independence of the appeal officer has not been verified".
+describe('internal state is not user-facing content (platform principle)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('28. the internal-state presentation rule exists in the shared case-grounded layer', () => {
+    expect(r).toContain('INTERNAL ASSESSMENTS ARE NOT CONTENT');
+    expect(r).toMatch(/Compass's own assessment of its records/);
+    expect(r).toMatch(/It is not itself something to write/);
+    // Shared layer, so both AI calls inherit it; absent when ungrounded.
+    expect(buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: false }))
+      .not.toContain('INTERNAL ASSESSMENTS ARE NOT CONTENT');
+  });
+
+  it('28b. names the specific implementation vocabulary that must not be narrated', () => {
+    expect(r).toMatch(/do not narrate that something is unknown or not verified/);
+    expect(r).toMatch(/Compass has or has not verified, established, checked or confirmed something/);
+    expect(r).toMatch(/structured attribution or a field is missing/);
+    expect(r).toMatch(/Do not reproduce internal status labels/);
+  });
+
+  it('29. genuine affirmative concerns explicitly survive the rule', () => {
+    expect(r).toMatch(/does not suppress genuine case facts, affirmative recorded concerns/);
+    expect(r).toMatch(/genuinely unresolved material evidence/);
+  });
+
+  it('30. uncertainty that materially changes a real-world action explicitly survives', () => {
+    expect(r).toMatch(/Where a genuine uncertainty DOES change what they need to do, write the practical action in natural language/);
+    expect(r).toMatch(/appeal grounds that have not been provided, a deadline that cannot be calculated/);
+    expect(r).toMatch(/must still be stated plainly/);
+  });
+
+  it('30b. says nothing at all where the internal state changes no action', () => {
+    expect(r).toMatch(/Where an internal assessment does not change what the reader actually needs to do, leave it out entirely/);
+  });
+});
+
+describe('LEGAL CHECKLIST contract (1-7)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('1. a positive action-oriented contract exists, separate from Risk Flags', () => {
+    expect(r).toContain('LEGAL CHECKLIST is an action checklist, not an analysis section');
+    expect(r).toContain('RISK FLAGS is different');
+    // The old single conjoined rule is gone.
+    expect(r).not.toMatch(/For Risk Flags and Legal Checklist, include only matters actually supported/);
+  });
+
+  it('2. it tells the chair what to check or do, in the expected verb forms', () => {
+    expect(r).toMatch(/tells the chair what good process requires them to check or do/);
+    for (const verb of ['Ensure…', 'Confirm…', 'Check…', 'Consider…', 'Give the employee an opportunity to…', 'Keep…', 'Avoid…']) {
+      expect(r).toContain(verb);
+    }
+  });
+
+  it('3. it must not expose UNKNOWN', () => {
+    expect(r).toMatch(/It must NOT contain Compass's views, what Compass did or did not verify, internal status labels/);
+    expect(r).toMatch(/do not narrate that something is unknown or not verified/);
+  });
+
+  it('4. it must not expose NOT VERIFIED', () => {
+    expect(r).toMatch(/what Compass did or did not verify/);
+    expect(r).toMatch(/state the check itself, never whether Compass believes it has been met/);
+  });
+
+  it('5. it must not say Compass has or has not verified something', () => {
+    expect(r).toMatch(/do not state or imply anywhere in the output what Compass has or has not verified|Compass has or has not verified, established, checked or confirmed something/);
+    expect(r).toMatch(/confidence levels, or anything about how complete Compass's data is/);
+  });
+
+  it('6. the appeal independence procedural safeguard remains permitted', () => {
+    expect(r).toMatch(/the appeal officer has not been involved in the original disciplinary decision wherever reasonably practicable/);
+  });
+
+  it('7. the neutral safeguard is permitted whatever the internal independence state is', () => {
+    expect(r).toMatch(/neutral standing process check and may be included whatever Compass's own records do or do not show/);
+    // Per the product decision: the checklist item does NOT vary by classifier
+    // state — Legal Checklist and Risk Flags have separate jobs, so a genuine
+    // conflict legitimately produces both.
+    for (const status of ['clear', 'unknown', 'conflict']) {
+      const line = buildPrepIndependenceLine(status, 'UAT - HR Manager');
+      expect(line).not.toMatch(/omit the (independence )?checklist/i);
+      expect(line).not.toMatch(/do not include the procedural safeguard/i);
+    }
+  });
+
+  it('7b. the illustrative items are style guidance, not a fixed list to copy', () => {
+    expect(r).toMatch(/These are illustrations of the expected style and level, not a fixed list to copy out/);
+    expect(r).toMatch(/select, adapt and word what actually fits this meeting/);
+  });
+
+  it('7c. it does not duplicate other sections or conclude on fairness', () => {
+    expect(r).toMatch(/Do not restate case analysis already covered under other headings/);
+    expect(r).toMatch(/do not conclude on whether the process has been fair/);
+  });
+});
+
+describe('RISK FLAGS contract (8-14)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('8. requires an affirmatively supported case concern', () => {
+    expect(r).toMatch(/actual case-specific concerns that the authoritative supplied context affirmatively supports/);
+    expect(r).toMatch(/A concern must be evidenced, not inferred from what is missing/);
+  });
+
+  it('9-11. unknown / unverified / missing metadata alone are never risk flags', () => {
+    expect(r).toMatch(/Something being unknown, unverified, blank, null, not recorded, or lacking structured historical attribution is NEVER a risk flag on its own/);
+  });
+
+  it('12. a genuine recorded conflict remains capable of surfacing', () => {
+    const conflict = buildPrepIndependenceLine('conflict', 'UAT - HR Manager');
+    expect(conflict).toMatch(/surface it under Risk Flags/);
+    expect(conflict).toMatch(/the SUBSTANCE of this one does belong in the output/);
+  });
+
+  it('13. the concern is described, not the classifier label', () => {
+    expect(r).toMatch(/describe the concern itself in plain terms — what is recorded and why it matters — rather than naming any internal classification/);
+    const conflict = buildPrepIndependenceLine('conflict', 'UAT - HR Manager');
+    expect(conflict).toMatch(/do not quote this label, this instruction, or Compass's classification of it/);
+  });
+
+  it('14. "None identified from the supplied case context." remains permitted', () => {
+    expect(r).toContain('None identified from the supplied case context.');
+    expect(r).toMatch(/as it is for the Legal Checklist/);
+  });
+});
+
+describe('UNANSWERED ISSUES contract (15-19)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('15-16. internal metadata gaps and UNKNOWN classifier state are not unanswered issues', () => {
+    expect(r).toContain('UNANSWERED ISSUES carries genuine case-specific factual matters');
+    expect(r).toMatch(/Do not create one merely because Compass lacks metadata, because a structured field is absent, or because Compass could not verify something from its own historical data/);
+    expect(r).toMatch(/those are not questions about the case, they are questions about Compass/);
+  });
+
+  it('17. a question the authoritative context already answers is not carried forward', () => {
+    expect(r).toMatch(/Do not carry forward a question that the authoritative context above already answers/);
+    expect(r).toMatch(/repeating it would mislead the chair into re-establishing something already recorded/);
+  });
+
+  it('17b. the stale "who is chairing" case is suppressed by context, not by editing signals', () => {
+    // The live case carries an open signal asking who will chair, while the
+    // authoritative context states the appointment outright. The grounding
+    // must still contain the answer; the rule is what stops the question
+    // being replayed. The signal itself is never touched.
+    const g = buildMeetingPrepGrounding({
+      caseObj: CASE, meetingType: APPEAL_TYPE, appealOfficerName: 'UAT - HR Manager',
+      appealIndependenceStatus: 'unknown', allegations: [],
+      openQuestions: [{ title: 'Who is chairing the disciplinary appeal hearing?', reasoning: 'The record does not identify who will chair the appeal.' }],
+      openInconsistencies: [],
+    });
+    expect(g).toContain('Appointed appeal officer who will chair this hearing: UAT - HR Manager');
+    // The signal is still passed through untouched — suppression is the
+    // model's instruction, not a mutation of the source.
+    expect(g).toContain('Who is chairing the disciplinary appeal hearing?');
+    expect(r).toMatch(/if the answer is stated there, the question is resolved/);
+  });
+
+  it('18-19. genuine unresolved matters and missing appeal grounds remain in scope', () => {
+    expect(r).toMatch(/Genuinely unresolved factual matters — including appeal grounds that have not been provided — remain fully in scope and must still be raised/);
+    expect(buildPrepAppealGroundsLine(null)).toMatch(/NOT RECORDED in Compass/);
+    expect(buildPrepAppealGroundsLine(null)).toMatch(/does NOT prevent the appeal hearing from going ahead/);
+  });
+});
+
+describe('independence state is de-published, not deleted (20-24)', () => {
+  const clear = buildPrepIndependenceLine('clear', 'UAT - HR Manager');
+  const unknown = buildPrepIndependenceLine('unknown', 'UAT - HR Manager');
+  const conflict = buildPrepIndependenceLine('conflict', 'UAT - HR Manager');
+
+  it('20. every anti-hallucination prohibition is retained', () => {
+    expect(unknown).toMatch(/Do not describe them as independent, impartial by virtue of non-involvement, uninvolved, or conflicted/);
+    expect(unknown).toMatch(/none of those is established/);
+    expect(unknown).toMatch(/do not say their independence has been checked, verified or confirmed/);
+    expect(conflict).toMatch(/Do NOT describe this officer as independent or uninvolved/);
+    expect(conflict).toMatch(/Do not draw any further legal conclusion/);
+    expect(clear).toMatch(/Do not overstate this into a general guarantee of impartiality/);
+  });
+
+  it('21. UNKNOWN can never become a claim of independence', () => {
+    expect(unknown).toMatch(/NOT a finding that they were involved/);
+    expect(unknown).toMatch(/NOT confirmation that they were not/);
+    expect(unknown).not.toMatch(/you may state that the officer was not involved/i);
+  });
+
+  it('22. UNKNOWN is no longer instructed to be published', () => {
+    expect(unknown).not.toMatch(/State neutrally that this has not been verified/);
+    expect(unknown).not.toMatch(/should be confirmed before the hearing proceeds/);
+    expect(unknown).toMatch(/do not raise it as a Risk Flag, a procedural concern, an Unanswered Issue, a question to ask, or anything for the chair to announce or investigate/);
+  });
+
+  it('22b. all three states are marked internal and non-reproducible', () => {
+    for (const line of [clear, unknown, conflict]) {
+      expect(line).toMatch(/INTERNAL GROUNDING — appeal officer independence/);
+    }
+    expect(clear).toMatch(/This assessment is internal/);
+    expect(unknown).toMatch(/This assessment is internal/);
+  });
+
+  it('23. CONFLICT remains capable of surfacing, and stays distinct from UNKNOWN', () => {
+    expect(conflict).toMatch(/RECORDED CONFLICT/);
+    expect(conflict).toMatch(/affirmative finding in the structured record/);
+    expect(conflict).toMatch(/not an inference drawn from missing information/);
+    expect(conflict).not.toBe(unknown);
+    expect(conflict).not.toMatch(/Say nothing/i);
+  });
+
+  it('24. CLEAR manufactures no concern and no "no conflict found" claim', () => {
+    expect(clear).toMatch(/do not raise independence as a concern — nothing here needs confirming/);
+    expect(clear).toMatch(/do not state that no conflict was found or identified/);
+    expect(clear).not.toMatch(/You may note that the appeal is being heard by someone the record does not connect/);
+  });
+
+  it('24b. an unrecognised status still yields nothing', () => {
+    expect(buildPrepIndependenceLine(null, 'X')).toBe('');
+    expect(buildPrepIndependenceLine('something-else', 'X')).toBe('');
+  });
+});
+
+describe('Opening Script and interactive questions (25-27)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+  const app = readFileSync('src/App.jsx', 'utf8');
+
+  it('25. the chair never announces Compass verification state', () => {
+    expect(r).toContain('OPENING SCRIPT contains only what the chair genuinely needs to say');
+    expect(r).toMatch(/Never have the chair announce, explain, apologise for or investigate anything about Compass's own records/);
+    expect(r).toMatch(/without reference to Compass or its records/);
+  });
+
+  it('26. interactive questions inherit the same contracts — one rule architecture', () => {
+    expect(app).toContain('generatePrepQuestions(carriedContext, prepInstructions)');
+    expect(app.match(/buildMeetingPrepInstructions\(/g).length).toBe(1);
+    expect(r).toMatch(/they are questions about Compass/);
+  });
+
+  it('27. genuine case questions remain permitted', () => {
+    expect(r).toMatch(/Genuinely unresolved factual matters/);
+    const g = appealGrounding();
+    expect(g).toContain('UNRESOLVED QUESTIONS');
+    expect(g).toContain('vehicle-use policy');
+  });
+});
+
+describe('no regression in previously shipped safeguards (31-36)', () => {
+  const r = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+
+  it('31. notetaker remediation survives', () => {
+    expect(r).toContain('NOTETAKER AND NOTE-TAKING ARRANGEMENTS');
+    expect(r).toContain('UNKNOWN or NOT RECORDED is not a DEFECT');
+    expect(r).toMatch(/the handling of the record is itself a ground of appeal/);
+  });
+
+  it('32. differing-accounts restraint survives', () => {
+    expect(r).toContain('DIFFERING ACCOUNTS');
+    expect(r).toMatch(/must NOT infer from differing wording alone/);
+    expect(r).toContain('a shift in position');
+  });
+
+  it('33. recording accuracy rules survive', () => {
+    expect(r).toContain('RECORDING AND NOTE-TAKING ACCURACY');
+    expect(r).toMatch(/Do not invent recording consent requirements/);
+  });
+
+  it('34. post-hearing evidence rule survives', () => {
+    expect(r).toContain('CLOSING THE HEARING');
+    expect(r).toMatch(/anything reasonably required to decide the appeal can still be obtained or considered/);
+  });
+
+  it('35. appeal framing, no-predetermined-outcome and timescales survive', () => {
+    expect(r).toContain('THIS IS AN APPEAL HEARING');
+    expect(r).toMatch(/Do not recommend, predict or predetermine the outcome of the appeal/);
+    expect(r).toContain('TIMESCALES');
+  });
+
+  it('36. concision and the core grounding invariants survive', () => {
+    expect(r).toContain('BE CONCISE');
+    expect(r).toMatch(/Every required heading must still appear/);
+    expect(r).toContain('ABSENCE IS NOT A DEFECT');
+    expect(r).toMatch(/describe the state of the RECORD/);
+    expect(r).toContain('GROUNDING RULES');
+    expect(r).toMatch(/an allegation is not a finding/);
+    expect(r).toMatch(/contextual case material/);
+    expect(r).toMatch(/the chair should thank the employee/);
+  });
+
+  it('36b. appeal-only rules stay appeal-only; the new contracts stay case-grounded', () => {
+    const disc = buildMeetingPrepInstructions({ meetingType: DISCIPLINARY_TYPE, hasCaseContext: true });
+    expect(disc).not.toContain('THIS IS AN APPEAL HEARING');
+    expect(disc).toContain('LEGAL CHECKLIST is an action checklist');
+    expect(disc).toContain('INTERNAL ASSESSMENTS ARE NOT CONTENT');
+    const ungrounded = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: false });
+    expect(ungrounded).not.toContain('LEGAL CHECKLIST is an action checklist');
+    expect(ungrounded).not.toContain('UNANSWERED ISSUES carries genuine');
+  });
+
+  it('36c. builders stay pure and deterministic', () => {
+    const snapshot = JSON.parse(JSON.stringify(CASE));
+    appealGrounding();
+    const a = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+    const b = buildMeetingPrepInstructions({ meetingType: APPEAL_TYPE, hasCaseContext: true });
+    expect(a).toBe(b);
+    expect(CASE).toEqual(snapshot);
   });
 });

@@ -134,17 +134,29 @@ export function buildPrepAppealGroundsLine(appealText) {
     + " Be clear that this does NOT prevent the appeal hearing from going ahead: the chair should simply establish and record the grounds at the outset, before moving into the substantive appeal issues. Do not say or imply that the hearing cannot proceed, cannot properly be conducted, is defective, or that the employee has failed to follow procedure, merely because the grounds were not recorded beforehand.";
 }
 
+// Platform audit (internal state vs user-facing content) — these lines are
+// Compass's own assessment of its records. They exist to constrain what the
+// model may safely say, not to be repeated to the chair. The letter pipeline
+// (buildAppealIndependenceInstruction) already worked this way; prep had
+// drifted into instructing the model to publish the assessment instead.
+const INTERNAL_PREFIX = "INTERNAL GROUNDING — appeal officer independence (Compass's own assessment of its records, NOT content for the output):";
+const INTERNAL_SUFFIX = "This assessment is internal. Do not reproduce it, do not reproduce this label, and do not state or imply anywhere in the output what Compass has or has not verified, established or checked.";
+
 // Reuses the deployed independence classification. UNKNOWN and CONFLICT must
 // never be described to the chair as verified independence.
 export function buildPrepIndependenceLine(status, appealOfficerName) {
   const officer = appealOfficerName || "the appointed appeal officer";
 
   if (status === "clear") {
-    // A permissive fact, not a warning. Deliberately scoped to what the
-    // classifier actually establishes — no original-decision conflict was
-    // identified in the structured record — rather than a broad guarantee of
-    // impartiality, which Compass has no basis to give.
-    return `Appeal officer independence: the structured case record does not identify ${officer} as having taken the original decision. You may note that the appeal is being heard by someone the record does not connect to that decision. Do not overstate this into a general guarantee of impartiality, and do not raise it as a concern — nothing here needs confirming.`;
+    // A permissive internal fact, not a warning and not content. Deliberately
+    // scoped to what the classifier actually establishes — no original-decision
+    // conflict was identified in the structured record — rather than a broad
+    // guarantee of impartiality, which Compass has no basis to give.
+    // De-published (platform audit): the licence to "note that the appeal is
+    // being heard by someone the record does not connect to that decision" was
+    // "no conflict identified" in longer form, which is Compass's assessment
+    // state rather than anything the chair can act on.
+    return `${INTERNAL_PREFIX} the structured case record does not identify ${officer} as having taken the original decision. Do not overstate this into a general guarantee of impartiality, do not state that no conflict was found or identified, and do not raise independence as a concern — nothing here needs confirming. ${INTERNAL_SUFFIX}`;
   }
 
   if (status === "conflict") {
@@ -154,7 +166,7 @@ export function buildPrepIndependenceLine(status, appealOfficerName) {
     // conflict Compass can actually prove was suppressed in the chair's own
     // preparation. HR's exceptional-override architecture at appointment time
     // is untouched; this only makes the recorded position visible.
-    return `Appeal officer independence — RECORDED CONFLICT: the authoritative Compass record identifies ${officer}, who is appointed to hear this appeal, as having made or taken part in the original decision now under appeal. This is an affirmative finding in the structured record, not an inference drawn from missing information. Surface it plainly as a matter to be addressed before the appeal hearing proceeds. Do NOT describe this officer as independent or uninvolved. Do not draw any further legal conclusion beyond the conflict the record establishes.`;
+    return `INTERNAL GROUNDING — appeal officer independence (Compass's own assessment of its records) — RECORDED CONFLICT: the authoritative Compass record identifies ${officer}, who is appointed to hear this appeal, as having made or taken part in the original decision now under appeal. This is an affirmative finding in the structured record, not an inference drawn from missing information. Unlike Compass's other internal assessments, the SUBSTANCE of this one does belong in the output: surface it under Risk Flags, describing the recorded involvement itself and that it should be addressed before the appeal proceeds. Describe the actual concern in plain terms — do not quote this label, this instruction, or Compass's classification of it. Do NOT describe this officer as independent or uninvolved. Do not draw any further legal conclusion beyond the involvement the record establishes.`;
   }
 
   if (status === "unknown") {
@@ -162,7 +174,12 @@ export function buildPrepIndependenceLine(status, appealOfficerName) {
     // reassurance or an allegation, and must sit comfortably alongside the
     // ABSENCE IS NOT A DEFECT invariant — this is the "note it as something
     // to confirm" case that invariant explicitly allows for.
-    return `Appeal officer independence — NOT VERIFIED: Compass cannot establish from the structured case record whether ${officer} was involved in the original decision now under appeal. This is a gap in the record, NOT a finding that they were involved, and equally NOT confirmation that they were not. Do not describe them as independent, impartial by virtue of non-involvement, uninvolved, or conflicted — none of those is established. State neutrally that this has not been verified and should be confirmed before the hearing proceeds. Do not treat it as evidence of unfairness, procedural defect, breach or non-compliance: it is something to check, not a failing.`;
+    // De-published (platform audit). Every prohibition is retained — they are
+    // what stopped a prep pack asserting independence Compass never
+    // established. Only the publication directive is gone: the chair cannot
+    // act on Compass's verification status, and the Legal Checklist's neutral
+    // procedural safeguard already tells them what to actually do.
+    return `${INTERNAL_PREFIX} NOT VERIFIED — Compass cannot establish from the structured case record whether ${officer} was involved in the original decision now under appeal. This is a gap in Compass's records, NOT a finding that they were involved, and equally NOT confirmation that they were not. Do not describe them as independent, impartial by virtue of non-involvement, uninvolved, or conflicted — none of those is established — and do not say their independence has been checked, verified or confirmed. Do not treat this gap as evidence of unfairness, procedural defect, breach or non-compliance. ${INTERNAL_SUFFIX} In particular, do not raise it as a Risk Flag, a procedural concern, an Unanswered Issue, a question to ask, or anything for the chair to announce or investigate: the neutral procedural safeguard in the Legal Checklist is the whole of what the chair needs here.`;
   }
 
   return "";
@@ -188,6 +205,13 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
     // about inventing CONCLUSIONS from a true absence, which is the axis that
     // failed.
     rules.push("ABSENCE IS NOT A DEFECT: missing or unrecorded information is not evidence that something did not happen, or that the process was defective. If a field, role, event, document, participant or piece of metadata is absent, blank, unknown or not recorded, describe only that fact — that it is not recorded — and, where it genuinely matters, note it as something to confirm. Do NOT infer a procedural defect, legal breach, unfairness, non-compliance, procedural risk or any other adverse conclusion from the absence alone. Describe such a concern only where the supplied case context explicitly supports it.");
+    // Platform principle (audit, internal state vs user-facing content).
+    // ABSENCE IS NOT A DEFECT stops an absence becoming an adverse conclusion.
+    // This stops it becoming CONTENT at all: Compass's own assessment of its
+    // records is an input to safe generation, not something the chair can act
+    // on. "Compass should know the process so the user doesn't have to operate
+    // the machinery."
+    rules.push("INTERNAL ASSESSMENTS ARE NOT CONTENT: some of the material above is Compass's own assessment of its records — how confident it is, what it could or could not establish, whether a structured field or historical attribution exists, how complete its data is. That material exists to tell you what is safe and useful to write. It is not itself something to write. Do not reproduce internal status labels, and do not narrate that something is unknown or not verified, that Compass has or has not verified, established, checked or confirmed something, that structured attribution or a field is missing, or any equivalent description of Compass's own data state. Where an internal assessment does not change what the reader actually needs to do, leave it out entirely. Where a genuine uncertainty DOES change what they need to do, write the practical action in natural language instead of describing Compass's state. This rule does not suppress genuine case facts, affirmative recorded concerns, genuinely unresolved material evidence, appeal grounds that have not been provided, a deadline that cannot be calculated, or anything else the reader genuinely needs to obtain — those remain fully in scope and must still be stated plainly.");
     rules.push("Hold the difference clearly: \"unknown\" and \"not recorded\" describe the state of the RECORD, and are not themselves problems with the process. A procedural defect, a breach, unfairness or a risk is a CONCLUSION, and needs affirmative support in the supplied case context before you state it. Never convert the first into the second, and never do so simply to have something to put under a heading.");
     // Advisory accuracy follow-up (Human UAT, 2026-09-20) — the Opening
     // Script told the chair to say aloud "This hearing is being recorded for
@@ -216,6 +240,9 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
     // uncovered: reading a shift or change in position out of nothing more
     // than two people wording the same events differently.
     rules.push("DIFFERING ACCOUNTS: where people have described the same events in different terms, you may neutrally reproduce or summarise what each of them said, you may note that the wording differs where that is objectively supported by the supplied context, and you may invite clarification where the difference is genuinely relevant to a ground of appeal, to the original decision, or to something the chair needs to understand. You must NOT infer from differing wording alone any of the following: a shift in position; a change in position; a changed story or changed account; inconsistency; a credibility issue; dishonesty; unreliability; a motive; or evasiveness. Do not speculate about why the wording differs, and do not offer explanations merely to populate Potential Inconsistencies — that section may be brief, or record that nothing further is identified. People describe the same events differently for many ordinary reasons. Where the supplied case context affirmatively records an inconsistency, a retraction, an account that actually changed, or a disputed fact, state it plainly: this rule restrains inference, it does not suppress recorded inconsistency evidence.");
+    // The Opening Script is read aloud to the employee, so it is the worst
+    // possible place for Compass's own data state to surface.
+    rules.push("OPENING SCRIPT contains only what the chair genuinely needs to say to open and conduct the hearing. Never have the chair announce, explain, apologise for or investigate anything about Compass's own records — what Compass could not verify, what it does not hold, which fields are unrecorded, or any internal status. If a fact genuinely needs establishing with the employee, have the chair ask for it naturally as part of the hearing, without reference to Compass or its records.");
     rules.push("For Closing Points, the chair should thank the employee and anyone attending with them, and close the hearing.");
     rules.push("Questions, open issues and flagged signals supplied above are contextual case material — things recorded as worth exploring. Treat them as questions to pursue or matters to verify. Any normative or legal wording inside them is not automatically Compass's own conclusion: do not restate it as settled law, established non-compliance or a proven procedural failing unless the authoritative context independently supports that.");
     if (hasAdditionalContext) {
@@ -253,7 +280,16 @@ export function buildMeetingPrepInstructions({ meetingType, hasCaseContext, hasA
     // concern to fill the heading — exactly how a blank notetaker field
     // became a procedural risk. The sections stay; the obligation to find
     // something for them does not.
-    rules.push("For Risk Flags and Legal Checklist, include only matters actually supported by the supplied case context. These headings do not have to be filled: if nothing in the record supports a risk or a legal concern, say briefly that none is identified from the information recorded, or keep the section minimal. Never manufacture a procedural or legal risk out of blank, missing or unrecorded detail in order to populate a section. Writing exactly \"None identified from the supplied case context.\" under either heading is an acceptable and complete answer.");
+    // Platform audit — these two headings had exactly one shared instruction
+    // between them, and it was purely a restraint. With no positive contract,
+    // Legal Checklist behaved as a general analysis section and absorbed
+    // whatever was most legally salient in context, which is how Compass's own
+    // independence assessment ended up in it. They have different jobs and now
+    // get different rules.
+    rules.push("LEGAL CHECKLIST is an action checklist, not an analysis section. It tells the chair what good process requires them to check or do for this meeting: concise, practical, in the second person or imperative, using forms such as \"Ensure…\", \"Confirm…\", \"Check…\", \"Consider…\", \"Give the employee an opportunity to…\", \"Keep…\", \"Avoid…\". Include only safeguards genuinely relevant to this meeting and this case. It must NOT contain Compass's views, what Compass did or did not verify, internal status labels, confidence levels, or anything about how complete Compass's data is. Do not restate case analysis already covered under other headings, and do not conclude on whether the process has been fair.");
+    rules.push("For an appeal, appropriate Legal Checklist items — where genuinely relevant — include making sure the employee understands the purpose of the appeal hearing, that they have the opportunity to explain their grounds of appeal, that they have been reminded of their right to be accompanied, that the appeal officer has not been involved in the original disciplinary decision wherever reasonably practicable, that any new evidence or procedural concerns raised are considered, that an appropriate written record is kept, and that the outcome is not predetermined. These are illustrations of the expected style and level, not a fixed list to copy out: select, adapt and word what actually fits this meeting. The independence safeguard above is a neutral standing process check and may be included whatever Compass's own records do or do not show — state the check itself, never whether Compass believes it has been met.");
+    rules.push("RISK FLAGS is different: it carries actual case-specific concerns that the authoritative supplied context affirmatively supports. A concern must be evidenced, not inferred from what is missing. Something being unknown, unverified, blank, null, not recorded, or lacking structured historical attribution is NEVER a risk flag on its own. Where a real concern does exist, describe the concern itself in plain terms — what is recorded and why it matters — rather than naming any internal classification. Never manufacture a procedural or legal risk out of missing detail in order to populate the section. Writing exactly \"None identified from the supplied case context.\" is an acceptable and complete answer, as it is for the Legal Checklist.");
+    rules.push("UNANSWERED ISSUES carries genuine case-specific factual matters that are still unresolved and that someone may need clarified to understand or decide this case fairly. Do not create one merely because Compass lacks metadata, because a structured field is absent, or because Compass could not verify something from its own historical data — those are not questions about the case, they are questions about Compass. Do not carry forward a question that the authoritative context above already answers: if the answer is stated there, the question is resolved, and repeating it would mislead the chair into re-establishing something already recorded. Genuinely unresolved factual matters — including appeal grounds that have not been provided — remain fully in scope and must still be raised.");
     // Issue C4 (Human UAT) — the pack was running past its output budget and
     // being cut off mid-bullet. Trimming repetition is the fix; dropping
     // required sections is not.
