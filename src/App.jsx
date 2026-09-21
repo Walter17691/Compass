@@ -173,13 +173,28 @@ const NO_INVENTED_AUTHORITIES = "Never cite a specific named tribunal case, deci
 // OUTCOME in writing, and an absent named notetaker — into a statutory duty
 // that exists nowhere.
 //
+// NEW-28 — the first fix granted permission to state a requirement "only
+// where the authoritative information supplied to you establishes it".
+// Review is supplied with no legal source at all — acasData is never
+// populated, ACAS_TEMPLATES is dead, and getPolicyCtx carries company
+// policy, not law — so that condition was unsatisfiable and the model
+// read its own memory as grounding. It complied with every named
+// prohibition and then produced a different invented requirement. The
+// permission is therefore gone: for Release 1 the Review AI does not
+// assert legal authority at all. That is a product boundary, not a
+// wording tweak, and it is why the category distinction went with it —
+// Code-vs-guidance cannot be judged from memory either.
+//
 // MAINTENANCE: the specific ACAS position stated below was verified against
 // the Code in force (2009 revision, amended 2015) on 21 September 2026. A
 // replacement Code was issued for consultation on 30 July 2026 and is NOT in
 // force. If that draft is approved, laid before Parliament and comes into
 // force, this wording must be reviewed and updated. It is a deliberately
 // narrow factual guardrail, not an attempt to embed the Code.
-const LEGAL_ACCURACY_BOUNDARY = "LEGAL ACCURACY — do not invent, embellish or overstate a legal or ACAS requirement. Keep these categories distinct and never present one as another: a statutory or legal requirement; a requirement of the ACAS Code of Practice; ACAS guidance or recommended practice; and ordinary organisational good practice. Say that the law or the Code REQUIRES something only where the authoritative information supplied to you establishes that requirement. Where you do not have authoritative grounding for a specific legal proposition, give cautious general procedural guidance and suggest checking the current authoritative source instead — never manufacture a mandatory rule from memory."
+const LEGAL_ACCURACY_BOUNDARY = "REVIEW LEGAL MODE — you are advisory, and you are NOT supplied with any authoritative legal source. Nothing you have been given establishes what the law or the ACAS Code requires, so you are never in a position to state a mandatory legal proposition here. Do not invent, embellish or overstate a legal or ACAS requirement, and never treat your own recollection as authoritative grounding."
+  + " Do not state or imply any of the following, or anything equivalent: that the law requires something; that UK law requires it; that legislation requires it; that the ACAS Code requires it; that ACAS requires it; that something is required by ACAS; that it is a statutory requirement; that the employer is legally required to do it; or that tribunals require it. Do not invent case law, statutory sections, tribunal tests, compensation exposure, ACAS uplift figures, or definitive conclusions about legal liability."
+  + " You may still be genuinely useful, and should be. Cautious procedural framing is fine where it helps — \"ACAS guidance emphasises...\", \"Good practice is to...\", \"A fair process would normally involve...\", \"This should be checked before a decision is reached...\", \"Consider whether...\", \"The available record does not establish...\", \"The appeal chair should verify...\". Be confident and specific about the facts in the record, what is disputed, what is unresolved, what should be checked, and what procedural step should happen next. The limit is on asserting legal AUTHORITY you cannot support — it is not a reason to be vague."
+  + " Where the legal position is genuinely material to what happens next, say so and suggest checking the current authoritative ACAS guidance or obtaining appropriate HR or legal advice. Use that referral only where a legal interpretation actually matters — do not append a standing disclaimer to every output."
   + " TIMING: consultation documents, proposals and draft Codes are not current law and not current statutory requirements unless the supplied authoritative context establishes that they have come into force. Never present a draft or consultation version as the Code currently in force."
   + " In particular, do NOT say that the ACAS Code requires an appeal hearing to be recorded, requires it to be transcribed, or requires a named notetaker to attend — it requires none of those. ACAS advises employers to keep appropriate written records of disciplinary and grievance cases, and the appeal result should be confirmed to the employee in writing. Neither of those is a requirement that the hearing itself be recorded or that a notetaker attends, and they must not be described as one.";
 

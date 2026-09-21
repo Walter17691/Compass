@@ -420,22 +420,71 @@ describe('B. legal / ACAS accuracy boundary', () => {
     expect((app.match(/LEGAL_ACCURACY_BOUNDARY/g) || []).length).toBe(2); // definition + single use
   });
 
-  it('forbids inventing, embellishing or overstating a requirement', () => {
-    expect(boundary).toMatch(/do not invent, embellish or overstate a legal or ACAS requirement/);
+  // NEW-28 — Review Advisory Mode. The previous architecture granted a
+  // permission conditional on "authoritative information supplied to you",
+  // but Review is supplied with no legal source at all, so the condition was
+  // unsatisfiable and the model read its own memory as grounding. The
+  // permission — and the category distinction, which is equally unjudgeable
+  // from memory — are deliberately gone.
+  it('1. declares itself advisory with no authoritative legal source', () => {
+    expect(boundary).toMatch(/REVIEW LEGAL MODE — you are advisory, and you are NOT supplied with any authoritative legal source/);
+    expect(boundary).toMatch(/you are never in a position to state a mandatory legal proposition here/);
+    expect(boundary).toMatch(/never treat your own recollection as authoritative grounding/);
   });
 
-  it('distinguishes statute / Code requirement / guidance / good practice', () => {
-    expect(boundary).toMatch(/a statutory or legal requirement; a requirement of the ACAS Code of Practice; ACAS guidance or recommended practice; and ordinary organisational good practice/);
-    expect(boundary).toMatch(/never present one as another/);
+  it('1b. the unsatisfiable permission is REMOVED, with no remaining grounding path', () => {
+    expect(boundary).not.toMatch(/only where the authoritative information supplied to you establishes that requirement/);
+    expect(app).not.toMatch(/Say that the law or the Code REQUIRES something only where/);
+    // And the memory-vs-source category judgement went with it.
+    expect(boundary).not.toMatch(/a requirement of the ACAS Code of Practice; ACAS guidance or recommended practice/);
   });
 
-  it('requires authoritative grounding before asserting a requirement', () => {
-    expect(boundary).toMatch(/only where the authoritative information supplied to you establishes that requirement/);
+  it('1c. still forbids inventing, embellishing or overstating a requirement', () => {
+    expect(boundary).toMatch(/Do not invent, embellish or overstate a legal or ACAS requirement/);
   });
 
-  it('falls back to cautious guidance plus checking the source when ungrounded', () => {
-    expect(boundary).toMatch(/give cautious general procedural guidance and suggest checking the current authoritative source instead/);
-    expect(boundary).toMatch(/never manufacture a mandatory rule from memory/);
+  it('2. prohibits every mandatory legal formulation by name', () => {
+    for (const f of [
+      'that the law requires something',
+      'that UK law requires it',
+      'that legislation requires it',
+      'that the ACAS Code requires it',
+      'that ACAS requires it',
+      'that something is required by ACAS',
+      'that it is a statutory requirement',
+      'that the employer is legally required to do it',
+      'that tribunals require it',
+    ]) {
+      expect(boundary).toContain(f);
+    }
+    expect(boundary).toMatch(/Do not state or imply any of the following, or anything equivalent/);
+  });
+
+  it('2b. prohibits invented authorities, tests, exposure and uplift figures', () => {
+    expect(boundary).toMatch(/Do not invent case law, statutory sections, tribunal tests, compensation exposure, ACAS uplift figures, or definitive conclusions about legal liability/);
+  });
+
+  it('3. explicitly permits the cautious advisory register', () => {
+    for (const r of ['ACAS guidance emphasises...', 'Good practice is to...', 'A fair process would normally involve...',
+      'This should be checked before a decision is reached...', 'Consider whether...',
+      'The available record does not establish...', 'The appeal chair should verify...']) {
+      expect(boundary).toContain(r);
+    }
+  });
+
+  it('3b. requires Compass to stay confident and specific about the record itself', () => {
+    expect(boundary).toMatch(/Be confident and specific about the facts in the record, what is disputed, what is unresolved, what should be checked, and what procedural step should happen next/);
+    expect(boundary).toMatch(/it is not a reason to be vague/);
+  });
+
+  it('4. legal materiality triggers a referral to authoritative guidance or advice', () => {
+    expect(boundary).toMatch(/Where the legal position is genuinely material to what happens next/);
+    expect(boundary).toMatch(/suggest checking the current authoritative ACAS guidance or obtaining appropriate HR or legal advice/);
+  });
+
+  it('5. no blanket disclaimer — the referral is materiality-gated', () => {
+    expect(boundary).toMatch(/Use that referral only where a legal interpretation actually matters/);
+    expect(boundary).toMatch(/do not append a standing disclaimer to every output/);
   });
 
   it('draft and consultation material is not current law', () => {
@@ -522,5 +571,80 @@ describe('C. positive risk rubric', () => {
     expect(app.slice(i - 300, i)).toContain('stream:false');
     expect(p).toContain('keep organisation-wide patterns');
     expect(p).toContain('base-rate context, not this person');
+  });
+});
+
+// ── NEW-28 non-regression: everything Review Advisory Mode must NOT disturb ──
+describe('NEW-28 leaves every other protection intact', () => {
+  it('6/7. the notetaker guardrail and the ACAS recording/transcription/notetaker prohibitions remain', () => {
+    const rec = promptBlock('You are a senior UK HR documentation specialist. Generate a meeting record', 7000);
+    expect(rec).toMatch(/NOTETAKER AND THE RECORD/);
+    expect(rec).toMatch(/The meeting record you are producing here is itself a written record of this hearing/);
+    expect(app).toMatch(/do NOT say that the ACAS Code requires an appeal hearing to be recorded, requires it to be transcribed, or requires a named notetaker to attend/);
+    expect(app).toMatch(/Neither of those is a requirement that the hearing itself be recorded or that a notetaker attends/);
+  });
+
+  it('8. the draft / current boundary remains', () => {
+    expect(app).toMatch(/consultation documents, proposals and draft Codes are not current law/);
+    expect(app).toMatch(/Never present a draft or consultation version as the Code currently in force/);
+  });
+
+  it('9. NO_INVENTED_AUTHORITIES remains, defined once and still shared', () => {
+    expect(app).toContain('const NO_INVENTED_AUTHORITIES = "Never cite a specific named tribunal case');
+    expect((app.match(/Never cite a specific named tribunal case/g) || []).length).toBe(1);
+    expect(contract).toContain('+ NO_INVENTED_AUTHORITIES');
+  });
+
+  it('10/11. the risk rubric is unchanged and HIGH is still not seeded', () => {
+    const p = promptBlock('UK employment law risk specialist', 6000);
+    expect(p).toMatch(/RATING SCALE — rate the risk the available record ESTABLISHES, never the worst plausible scenario/);
+    expect(p).toMatch(/HIGH: only where the record actually establishes a serious procedural or legal problem/);
+    expect(p).toMatch(/MEDIUM: where the record establishes a material issue needing HR attention/);
+    expect(p).toMatch(/LOW: where the record does not establish a material procedural or legal problem/);
+    expect(p).toMatch(/A genuinely established serious procedural or legal failure must still be rated HIGH/);
+    expect(app).not.toContain('{"rating":"HIGH"');
+    expect(p).toContain('{"rating":"<HIGH|MEDIUM|LOW>"');
+  });
+
+  it('12. the Meeting Summary evidential contract is unchanged', () => {
+    const p = promptBlock('You are Compass, an Employee Relations copilot writing a short internal triage summary');
+    expect(p).toContain('${REVIEW_EVIDENTIAL_CONTRACT}');
+    expect(p).toMatch(/Key Facts Established carries only what the material actually establishes/);
+    expect(p).toMatch(/Potential Impact stays conditional wherever its premise is unresolved/);
+    for (const h of ['## Key Facts Established', '## Disputed Points', '## Potential Inconsistencies',
+      '## New Witnesses or Evidence Mentioned', '## Outstanding Questions', '## Actions Required',
+      '## Potential Impact on Existing Allegations']) {
+      expect(p).toContain(h);
+    }
+  });
+
+  it('13. the NEW-19 authoritative-parent gate is unchanged', () => {
+    expect(app).toContain('const hasAuthoritativeParentCase = !!(caseInfo.preparedCaseId || caseInfo._linkedCaseId);');
+    expect(app).toContain('if(!hasAuthoritativeParentCase && !appealDetectedRef.current && transcriptMentionsAppeal(tx)){');
+  });
+
+  it('15. runRiskScore parser, max_tokens and input architecture are unchanged', () => {
+    const i = app.indexOf('UK employment law risk specialist');
+    expect(app.slice(i - 300, i)).toContain('max_tokens:300');
+    expect(app.slice(i - 300, i)).toContain('stream:false');
+    expect(app).toContain('setRiskScore({...JSON.parse(text.replace(/```json|```/g,"").trim()), historyContext});');
+    expect(app).toContain('setRiskScore({rating:"UNKNOWN",summary:"Could not assess.",flags:[]})');
+    // Input unchanged: still the generated record, no new grounding channel.
+    expect(app).toContain('runRiskScore(fullRecord || allNotes.slice(-40).map(u=>u.text).join("\\n"));');
+  });
+
+  it('14/17. no legal-retrieval layer was added, and NEW-29 timing code is untouched', () => {
+    // No retrieval, no new endpoint, no new AI call for legal grounding.
+    expect(app).not.toMatch(/fetchAcas|acasSource|legalSource|retrieveLaw|legalGrounding/i);
+    // The dead stubs stay dead — neither removed nor activated.
+    expect(app).toContain('const [acasData, setAcasData] = useState({});');
+    expect(app).toContain('const ACAS_TEMPLATES = {');
+    // NEW-29: date/time sourcing untouched.
+    expect(app).toContain('Date: ${caseInfo.date||"today"}');
+    expect(app).toContain('startedAt: meetingStartTime || null,');
+    expect(app).toContain('endedAt: meetingEndTime || null,');
+    const timing = readFileSync('src/lib/meetingTiming.js', 'utf8');
+    expect(timing).toContain('export function fmtMeetingTime(iso)');
+    expect(timing).toContain('day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"');
   });
 });
