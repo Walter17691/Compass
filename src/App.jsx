@@ -6488,7 +6488,34 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // Appeal detection — see transcriptMentionsAppeal (lib/appealReview.js)
       // for the false-positive fix (2026-09-16) that excludes the standard
       // "you have the right to appeal this decision" end-of-meeting notice.
-      if(!appealDetectedRef.current && transcriptMentionsAppeal(tx)){
+      //
+      // NEW-19 (Human UAT, P1) — that guard covered a meeting that merely
+      // MENTIONS appealing. It did nothing for the opposite case: a meeting
+      // that genuinely IS an appeal hearing, whose transcript naturally
+      // mentions the appeal throughout, so detection fires with certainty on
+      // exactly the meetings that need it least. A structured hearing
+      // launched from the case — chair locked, appeal officer appointed,
+      // invitation issued — reached Review and was asked whether to link
+      // itself to the case it had come from.
+      //
+      // The identity was never lost: CaseViewScreen's start_appeal_meeting
+      // sets preparedCaseId (and deliberately leaves _linkedCaseId null),
+      // and handleReview does not touch caseInfo. It was simply never
+      // consulted. This is a meeting-parentage rule rather than an
+      // appeal-specific exception: where Compass already holds an
+      // authoritative parent case, generic "link to an existing case?"
+      // discovery has nothing to discover.
+      //
+      // Either field is sufficient to mean "a parent case is already known"
+      // FOR THIS PURPOSE ONLY. Their other semantics stay separate —
+      // preparedCaseId grounds preparation, _linkedCaseId drives
+      // saveMeetingToCaseImpl's witness/evidence routing — and neither is an
+      // authorization primitive: this gate decides only whether to ASK. Every
+      // real authorization stays where it is (RLS, requireCaseAccess, and the
+      // appeal_hearing_chair_integrity trigger at save time), so a forged
+      // client-side id can suppress a prompt and nothing else.
+      const hasAuthoritativeParentCase = !!(caseInfo.preparedCaseId || caseInfo._linkedCaseId);
+      if(!hasAuthoritativeParentCase && !appealDetectedRef.current && transcriptMentionsAppeal(tx)){
         appealDetectedRef.current = true;
         setAppealDetected(true);
         setShowLinkCase(true);
