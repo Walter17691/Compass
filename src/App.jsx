@@ -141,6 +141,27 @@ import { OutcomeModal } from './screens/OutcomeModal';
 // state and its post-submit reset, so the two can't silently drift apart.
 const EMPTY_CONCERN_FORM = {employeeName:"",concernType:"other",description:"",witnesses:"",discussedWithEmployee:false,involvesSafetyOrWelfare:false,immediateSafetyConcern:false,mayNeedFormalProcess:false,evidenceDescription:"",evidenceFiles:[]};
 
+// Live meeting question UX (Human UAT) — prep questions are shown to the chair
+// DURING the hearing, next to a status selector, while someone is speaking.
+// Every generated question was arriving as chair-facing guidance ("Ask the
+// employee whether...", "No formal grounds have been recorded. At the outset,
+// ask..."), so the chair had to read a paragraph to recover a one-line
+// question. The question objects already carry a `reasoning` field for exactly
+// that context, shown behind "Why ask this?".
+//
+// Shared by both question generators (the Prepare path and the automatic
+// workspace) so the contract cannot drift between them.
+//
+// The precedence clause matters: the surrounding preparation instructions are
+// written in an advisory register for the narrative prep pack ("Ensure...",
+// "Confirm...", "the chair should..."), and that register was bleeding into
+// the question text. Those instructions govern WHAT is safe and relevant to
+// ask; this contract governs HOW the question itself is worded.
+const LIVE_QUESTION_CONTRACT = "QUESTION WORDING — this governs the \"text\" field of every question you produce. Each one is displayed to the chair during the live meeting, beside a status control, while the other person is talking, so it has to be usable at a glance. Write \"text\" as ONE question the chair could say out loud to the employee, word for word, exactly as written. It must be a single interrogative sentence addressed to the employee and must end with a question mark. Keep it short enough to use live — around 20 words is a good target, though a genuinely necessary question may run a little longer; never pad one out, and never truncate one into something unclear. Ask about one thing at a time: where two answers would each matter on their own, write two questions rather than joining them with \"and\". Do not inflate the overall number of questions to achieve this."
+  + " The \"text\" field must never contain instructions aimed at the chair, and must never contain explanation or case background before the question. Do not begin it with, or include, phrasing such as \"Ask the employee...\", \"Ask whether...\", \"Confirm with the employee...\", \"The chair should...\", \"Explore whether...\", \"Establish whether...\", \"Ensure...\", \"At the outset, ask...\", \"The case record shows...\" or \"No formal grounds have been recorded...\". Never stack context, then an instruction, then a question into one field. Take the underlying objective and write the question itself: \"Ask the employee what outcome they are seeking\" becomes \"What outcome are you seeking from your appeal?\"; \"Ask the employee whether they were made aware of the vehicle policy\" becomes \"Were you aware of the vehicle policy requirement at the time?\"; \"Confirm the employee has been reminded of their right to be accompanied\" becomes \"Are you accompanied today, or are you happy to proceed without a companion?\". Do not mechanically convert every procedural instruction you have been given into a question — produce a question only where actually asking it helps conduct this meeting."
+  + " Put everything else in \"reasoning\": why the question matters, the relevant case context, any evidence or unresolved issue behind it, and why it was selected. The chair sees that on demand behind \"Why ask this?\", so it is the right home for detail and costs the question line nothing."
+  + " PRECEDENCE: any preparation instructions supplied below determine what is relevant, appropriate and safe to ask, and those limits always apply. They do NOT determine the grammatical voice of the \"text\" field. Where they are phrased as guidance to the chair, convert the underlying point into a question the employee can answer, or leave it out if it is not something to ask at all. This wording contract governs \"text\" in every case.";
+
 export default function Compass({ user=null, org=null, member=null, availableOrgs=[], switchOrg=()=>{}, onJoinAnotherOrg=()=>{}, onSignOut=null }) {
   useFonts();
 
@@ -2901,7 +2922,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         model:"claude-sonnet-4-6",
         max_tokens:1200,
         stream:false,
-        system:"You are a senior UK HR advisor preparing an automatic workspace for an upcoming Employee Relations meeting, before it has been held. Read the case background and produce a short agenda (3-6 plain bullet points starting each line with \"- \", no headers) and 4-8 structured prep questions. Respond ONLY with valid JSON, no other text: {\"agenda\":\"- ...\\n- ...\",\"questions\":[{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\",\"allegationId\":\"...\"|null}]} — allegationId only when a question clearly concerns one of the case's own listed allegations (by its exact given id), otherwise null.",
+        system:"You are a senior UK HR advisor preparing an automatic workspace for an upcoming Employee Relations meeting, before it has been held. Read the case background and produce a short agenda (3-6 plain bullet points starting each line with \"- \", no headers) and 4-8 structured prep questions. Respond ONLY with valid JSON, no other text: {\"agenda\":\"- ...\\n- ...\",\"questions\":[{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\",\"allegationId\":\"...\"|null}]} — allegationId only when a question clearly concerns one of the case's own listed allegations (by its exact given id), otherwise null.\n\n"+LIVE_QUESTION_CONTRACT,
         messages:[{role:"user", content:`Meeting: ${meetingLabel}. Employee: ${cs.employeeName}. Case type: ${cs.caseType||"HR matter"}. Description: ${cs.description||"None"}.\n\nAllegations:\n${allegationList}\n\nEvidence on file: ${evidenceList}`}],
       })});
       const data = await res.json();
@@ -6199,7 +6220,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         model:"claude-sonnet-4-6",
         max_tokens:2000,
         stream:false,
-        system:"You are a senior UK HR advisor preparing structured questions for an upcoming Employee Relations meeting. Respond ONLY with valid JSON, no other text: [{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\"}] — produce 5 to 12 concise, specific questions. Mark essential true only for questions central to the core issue(s) being addressed. reasoning is one short sentence explaining why this particular question matters, grounded in the background given — this is shown to the user as \"Why ask this?\".",
+        system:"You are a senior UK HR advisor preparing structured questions for an upcoming Employee Relations meeting. Respond ONLY with valid JSON, no other text: [{\"text\":\"...\",\"category\":\"agenda\"|\"evidence\"|\"clarification\"|\"unanswered\",\"essential\":true|false,\"reasoning\":\"...\"}] — produce 5 to 12 concise, specific questions. Mark essential true only for questions central to the core issue(s) being addressed. reasoning is one short sentence explaining why this particular question matters, grounded in the background given — this is shown to the user as \"Why ask this?\".\n\n"+LIVE_QUESTION_CONTRACT,
         messages:[{role:"user", content:`Meeting: ${meetingType.label}. Employee: ${caseInfo.employee}.${carriedContext?"\n\n"+carriedContext:""}${(caseInfo.context||"").trim()?"\n\nADDITIONAL CONTEXT supplied by the user for this preparation:\n"+caseInfo.context.trim():(carriedContext?"":" Background: None.")}${prepInstructions?"\n\n"+prepInstructions:""}`}],
       })});
       // Release 1.0 UAT remediation (Defect #4 sibling) — this is the

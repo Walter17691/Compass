@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CompassLogo } from '../components/CompassLogo';
 import { COLOR, FONT } from '../styles/tokens';
 import { MDRenderer } from '../components/MDRenderer';
@@ -7,6 +8,44 @@ import { SCREENS } from '../constants';
 import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
 import { computeCoachingTips } from '../lib/managerCoaching';
 import { fmtMeetingTime } from '../lib/meetingTiming';
+
+// Live meeting question row. Mirrors PrepScreen's PrepQuestionRow interaction
+// rather than inventing a second pattern: the question is the visible line,
+// rationale sits behind a "Why ask this?" toggle, collapsed by default. Its
+// own component because each row needs local expand/collapse state, which a
+// .map callback cannot hold. Revealing the reasoning is purely local — it
+// never touches the question's status.
+function LiveQuestionRow({ q, onSetStatus }) {
+  const [showWhy, setShowWhy] = useState(false);
+  const meta = questionStatusMeta(q.status);
+  return (
+    <div style={{marginBottom:5}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
+        <select value={q.status||"not_asked"} onChange={e=>onSetStatus(q.id, e.target.value)}
+          aria-label={"Status for: "+q.text}
+          style={{fontSize:10,border:"1px solid #E8E0D0",borderRadius:4,padding:"1px 2px",color:meta.color,background:"#FFFFFF",flexShrink:0,marginTop:1}}>
+          {QUESTION_STATUSES.map(s=><option key={s.id} value={s.id}>{s.symbol} {s.label}</option>)}
+        </select>
+        <div style={{flex:1,minWidth:0}}>
+          <span style={{fontSize:11,color:"#3D3560",lineHeight:1.5}}>{q.text}</span>
+          {/* User-added questions carry no reasoning — no empty toggle, and
+              nothing is ever invented to fill it. */}
+          {q.reasoning&&(
+            <div>
+              <button onClick={()=>setShowWhy(v=>!v)} aria-expanded={showWhy}
+                style={{fontSize:10,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.body,padding:0,textDecoration:"underline",marginTop:2}}>
+                {showWhy?"Hide why":"Why ask this?"}
+              </button>
+              {showWhy&&(
+                <div style={{fontSize:10,color:"#6B6375",marginTop:3,lineHeight:1.5,fontStyle:"italic"}}>{q.reasoning}</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip, fmtDate }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
@@ -227,19 +266,9 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
               {prepQuestions.length>0&&(
                 <div style={{marginBottom:10}}>
                   <div style={{fontSize:10,fontWeight:700,color:"#1A7A4A",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Questions</div>
-                  {prepQuestions.map(q=>{
-                    const meta = questionStatusMeta(q.status);
-                    return (
-                      <div key={q.id} style={{display:"flex",alignItems:"flex-start",gap:6,marginBottom:5}}>
-                        <select value={q.status||"not_asked"} onChange={e=>onSetPrepQuestionStatus(q.id, e.target.value)}
-                          aria-label={"Status for: "+q.text}
-                          style={{fontSize:10,border:"1px solid #E8E0D0",borderRadius:4,padding:"1px 2px",color:meta.color,background:"#FFFFFF",flexShrink:0,marginTop:1}}>
-                          {QUESTION_STATUSES.map(s=><option key={s.id} value={s.id}>{s.symbol} {s.label}</option>)}
-                        </select>
-                        <span style={{fontSize:11,color:"#3D3560",lineHeight:1.5}}>{q.text}</span>
-                      </div>
-                    );
-                  })}
+                  {prepQuestions.map(q=>(
+                    <LiveQuestionRow key={q.id} q={q} onSetStatus={onSetPrepQuestionStatus}/>
+                  ))}
                 </div>
               )}
               {meetingEvidenceSuggestions.some(s=>s.status==="pending")&&(

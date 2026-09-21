@@ -188,3 +188,93 @@ describe('RecordScreen — Ask Compass cannot crash the meeting workspace (Batch
     expect(screen.queryByText(/couldn't display that response/)).not.toBeInTheDocument();
   });
 });
+
+// ── Live meeting question UX (Human UAT, P2) — the chair reads these during
+// the hearing, beside a status control, while someone is speaking. Every
+// generated question was arriving as chair-facing guidance, and the live card
+// rendered only q.text, so the rationale field the question objects already
+// carry had nowhere to go. Rationale now sits behind "Why ask this?",
+// mirroring PrepScreen rather than inventing a second pattern.
+const QUESTIONS = [
+  { id: 'q1', text: 'What are the grounds of your appeal?', category: 'agenda', essential: true, status: 'not_asked', statusSource: 'ai', source: 'ai',
+    reasoning: 'No formal grounds were recorded in advance. Establishing them defines the scope of the appeal.' },
+  { id: 'q2', text: 'What outcome are you seeking from your appeal?', category: 'clarification', essential: false, status: 'asked', statusSource: 'ai', source: 'ai',
+    reasoning: 'The remedy sought shapes what the chair needs to decide.' },
+  // User-added: no reasoning, by design.
+  { id: 'q3', text: 'Anything else you want to raise?', category: 'general', essential: false, status: 'not_asked', statusSource: 'user', source: 'user' },
+];
+
+describe('RecordScreen — live question rendering (live meeting question UX)', () => {
+  const withQuestions = { ...baseProps, prepQuestions: QUESTIONS };
+
+  it('21. renders q.text as the visible question', () => {
+    render(<RecordScreen {...withQuestions} />);
+    expect(screen.getByText('What are the grounds of your appeal?')).toBeTruthy();
+    expect(screen.getByText('What outcome are you seeking from your appeal?')).toBeTruthy();
+    expect(screen.getByText('Anything else you want to raise?')).toBeTruthy();
+  });
+
+  it('22/23. exposes q.reasoning behind "Why ask this?", collapsed by default', () => {
+    render(<RecordScreen {...withQuestions} />);
+    const toggles = screen.getAllByRole('button', { name: 'Why ask this?' });
+    expect(toggles.length).toBe(2); // only the two AI questions carry reasoning
+    expect(screen.queryByText(/No formal grounds were recorded in advance/)).toBeNull();
+    expect(toggles[0].getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('24. revealing the reasoning does not change the question status', async () => {
+    const user = userEvent.setup();
+    const onSetPrepQuestionStatus = vi.fn();
+    render(<RecordScreen {...withQuestions} onSetPrepQuestionStatus={onSetPrepQuestionStatus} />);
+    await user.click(screen.getAllByRole('button', { name: 'Why ask this?' })[0]);
+    expect(screen.getByText(/No formal grounds were recorded in advance/)).toBeTruthy();
+    expect(onSetPrepQuestionStatus).not.toHaveBeenCalled();
+    // And it collapses again.
+    await user.click(screen.getByRole('button', { name: 'Hide why' }));
+    expect(screen.queryByText(/No formal grounds were recorded in advance/)).toBeNull();
+  });
+
+  it('25/26. no "Why ask this?" for a user-added question with no reasoning', () => {
+    render(<RecordScreen {...baseProps} prepQuestions={[QUESTIONS[2]]} />);
+    expect(screen.getByText('Anything else you want to raise?')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Why ask this?' })).toBeNull();
+    // Nothing is invented to fill the gap.
+    expect(screen.queryByText(/Why/)).toBeNull();
+  });
+
+  it('27/28. the status selector still works and still reports the chosen status', async () => {
+    const user = userEvent.setup();
+    const onSetPrepQuestionStatus = vi.fn();
+    render(<RecordScreen {...withQuestions} onSetPrepQuestionStatus={onSetPrepQuestionStatus} />);
+    const select = screen.getByLabelText('Status for: What are the grounds of your appeal?');
+    await user.selectOptions(select, 'answered');
+    expect(onSetPrepQuestionStatus).toHaveBeenCalledWith('q1', 'answered');
+  });
+
+  it('27b. every status option remains available and reflects the current value', () => {
+    render(<RecordScreen {...withQuestions} />);
+    const select = screen.getByLabelText('Status for: What outcome are you seeking from your appeal?');
+    expect(select.value).toBe('asked');
+    const labels = Array.from(select.querySelectorAll('option')).map(o => o.textContent);
+    for (const l of ['Not asked', 'Asked', 'Answered', 'Partially answered', 'No longer relevant']) {
+      expect(labels.some(x => x.includes(l))).toBe(true);
+    }
+  });
+
+  it('30. question order on screen matches the supplied array order', () => {
+    const { container } = render(<RecordScreen {...withQuestions} />);
+    const selects = Array.from(container.querySelectorAll('select[aria-label^="Status for: "]'));
+    expect(selects.map(s => s.getAttribute('aria-label'))).toEqual([
+      'Status for: What are the grounds of your appeal?',
+      'Status for: What outcome are you seeking from your appeal?',
+      'Status for: Anything else you want to raise?',
+    ]);
+  });
+
+  it('32. each question keeps an accessible status label naming the question', () => {
+    render(<RecordScreen {...withQuestions} />);
+    for (const q of QUESTIONS) {
+      expect(screen.getByLabelText('Status for: ' + q.text)).toBeTruthy();
+    }
+  });
+});
