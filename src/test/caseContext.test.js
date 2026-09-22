@@ -31,7 +31,13 @@ describe('buildCaseContext', () => {
     const cs = { ...baseCase, meetings: [{ type: 'Investigation meeting', date: '2026-08-03', record: 'x'.repeat(600) }] };
     const ctx = buildCaseContext(cs, [], []);
     expect(ctx).toContain('Investigation meeting on 2026-08-03');
-    expect(ctx.match(/x/g).length).toBeLessThanOrEqual(500);
+    // NEW-33 — measure the record body itself. A raw /x/g count is no longer a
+    // valid proxy: the excerpt marker and note contain the letter x
+    // ("excerpt", "context", "text", "exists").
+    const longestRun = Math.max(...(ctx.match(/x+/g) || ['']).map(r => r.length));
+    expect(longestRun).toBeLessThanOrEqual(500);
+    // ...and the shortening is now declared rather than silent.
+    expect(ctx).toContain('[record excerpt — remainder omitted to fit the context budget]');
   });
 
   it('includes the investigation report and outcome when present', () => {

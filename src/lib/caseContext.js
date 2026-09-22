@@ -27,6 +27,51 @@ const MEETING_FULL_CHARS = 500;
 const MEETINGS_BUDGET_CHARS = 6000;
 const MEETING_FALLBACK_EXCERPT_CHARS = 150;
 const LETTER_EXCERPT_CHARS = 300;
+const INVESTIGATION_REPORT_CHARS = 2000;
+
+// NEW-33 — shortened case content must identify itself as shortened.
+//
+// Every truncation here used to be a silent slice(). On the NEW-29 UAT case a
+// 1,472-character meeting record was cut at 500 characters, landing mid-word:
+// the stored transcript said "Can you confirm you are ready to proceed?" and
+// the model received "...ready to pro". It then reported, entirely reasonably,
+// that the dialogue was cut off mid-sentence — and that became a persisted
+// next-action signal and an "incomplete record" question on a case whose
+// record was in fact complete.
+//
+// No prompt rule can fix that, because the model was describing its input
+// accurately. The builder is the only thing that knows whether it truncated,
+// so it has to say so deterministically.
+const EXCERPT_MARKER = "[record excerpt — remainder omitted to fit the context budget]";
+
+// Appended once, only when something was actually shortened, so an excerpt
+// boundary can never be read as evidence about the underlying record.
+const EXCERPT_NOTE = "NOTE ON EXCERPTS: where content above ends with "
+  + EXCERPT_MARKER
+  + ", that marks how much text was passed to you here. It is a limit of this context only and is NOT evidence that the stored record, transcript or letter is incomplete, that a meeting was cut short, that dialogue is missing, or that the record is defective. The complete version exists in the case file. Content without that marker is complete as supplied.";
+
+// Cuts at the latest sentence end, then line break, then word boundary inside
+// the limit, so an excerpt does not end mid-word. The halfway floor stops a
+// single early full stop throwing most of the excerpt away — below it, a word
+// boundary is the better cut.
+function excerpt(text, limit) {
+  const full = typeof text === "string" ? text : (text == null ? "" : String(text));
+  if (full.length <= limit) return { text: full, truncated: false };
+  const window = full.slice(0, limit);
+  const floor = Math.floor(limit / 2);
+  const sentenceEnd = Math.max(
+    window.lastIndexOf(". "), window.lastIndexOf(".\n"),
+    window.lastIndexOf("? "), window.lastIndexOf("?\n"),
+    window.lastIndexOf("! "), window.lastIndexOf("!\n"),
+  );
+  const lineEnd = window.lastIndexOf("\n");
+  const wordEnd = window.lastIndexOf(" ");
+  const cut = sentenceEnd > floor ? sentenceEnd + 1
+    : lineEnd > floor ? lineEnd
+    : wordEnd > 0 ? wordEnd
+    : limit;
+  return { text: full.slice(0, cut).trimEnd(), truncated: true };
+}
 
 // NEW-24 — grounding boundary. A saved meeting.record is one opaque markdown
 // string holding three sections: Meeting Details, Meeting Dialogue, and HR
@@ -79,6 +124,9 @@ export function stripAdvisorNotes(record) {
 
 export function buildCaseContext(cs, allegations = [], tasks = [], meetingSummaries = {}) {
   const parts = [];
+  // NEW-33 — set by any site that shortens content, so EXCERPT_NOTE is added
+  // only when something was actually omitted.
+  let anyExcerpt = false;
 
   parts.push([
     `Employee: ${cs.employeeName || "Unknown"}`,
@@ -126,9 +174,21 @@ export function buildCaseContext(cs, allegations = [], tasks = [], meetingSummar
       if (factualRecord) {
         runningLength += factualRecord.length;
         const withinBudget = runningLength <= MEETINGS_BUDGET_CHARS;
-        const body = withinBudget
-          ? factualRecord.slice(0, MEETING_FULL_CHARS)
-          : (meetingSummaries[m.id] || factualRecord.slice(0, MEETING_FALLBACK_EXCERPT_CHARS) + "…");
+        let body;
+        if (withinBudget) {
+          const e = excerpt(factualRecord, MEETING_FULL_CHARS);
+          body = e.truncated ? e.text + " " + EXCERPT_MARKER : e.text;
+          if (e.truncated) anyExcerpt = true;
+        } else if (meetingSummaries[m.id]) {
+          // A cached AI compression, not the record itself — say so rather than
+          // letting it read as the full text.
+          body = "[summary of this meeting's record, not the record itself] " + meetingSummaries[m.id];
+          anyExcerpt = true;
+        } else {
+          const e = excerpt(factualRecord, MEETING_FALLBACK_EXCERPT_CHARS);
+          body = e.truncated ? e.text + " " + EXCERPT_MARKER : e.text;
+          if (e.truncated) anyExcerpt = true;
+        }
         line += ": " + body;
       }
       // Letter history (Phase 21) — previously excluded entirely, even
@@ -139,18 +199,26 @@ export function buildCaseContext(cs, allegations = [], tasks = [], meetingSummar
       // and too decision-relevant to compress away.
       if (m.letterOutput) {
         const approvedNote = m.letterApprovedAt ? ` (approved ${m.letterApprovedAt})` : "";
-        line += `\n  Letter sent${approvedNote}: ${m.letterOutput.slice(0, LETTER_EXCERPT_CHARS)}`;
+        const le = excerpt(m.letterOutput, LETTER_EXCERPT_CHARS);
+        if (le.truncated) anyExcerpt = true;
+        line += `\n  Letter sent${approvedNote}: ${le.truncated ? le.text + " " + EXCERPT_MARKER : le.text}`;
       }
       return line;
     });
     parts.push("MEETINGS:\n" + newestFirstLines.reverse().join("\n\n"));
   }
 
-  if (cs.investigationReport) parts.push("INVESTIGATION REPORT:\n" + cs.investigationReport.slice(0, 2000));
+  if (cs.investigationReport) {
+    const re = excerpt(cs.investigationReport, INVESTIGATION_REPORT_CHARS);
+    if (re.truncated) anyExcerpt = true;
+    parts.push("INVESTIGATION REPORT:\n" + (re.truncated ? re.text + " " + EXCERPT_MARKER : re.text));
+  }
   if (cs.outcome) parts.push(`OUTCOME ISSUED: ${cs.outcome}${cs.outcomeIssuedAt ? " on " + cs.outcomeIssuedAt : ""}`);
 
   const openTasks = tasks.filter(t => t.status !== "done");
   if (openTasks.length) parts.push("OPEN TASKS:\n" + openTasks.map(t => `- ${t.name}${t.dueDate ? " (due " + t.dueDate + ")" : ""}`).join("\n"));
+
+  if (anyExcerpt) parts.push(EXCERPT_NOTE);
 
   return parts.join("\n\n");
 }
