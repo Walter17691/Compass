@@ -1,0 +1,1783 @@
+{
+ "_comment": "Anonymised shape census of ALL 774 production cases carrying meetings, captured read-only 2026-09-22 (Release 1 Phase 0 audit). 58 distinct shapes. No employee, case or record CONTENT is present: record/letterOutput are reduced to booleans and transcripts to a length. expect[] is the getNextStep action produced by the PRE-Phase-1 engine for ctx = [{}, {hasAppealManager:true,isHR:true}, {hasAppealManager:false,isHR:true}] and is the frozen parity baseline.",
+ "ctxPermutations": [
+  {},
+  {
+   "hasAppealManager": true,
+   "isHR": true
+  },
+  {
+   "hasAppealManager": false,
+   "isHR": true
+  }
+ ],
+ "totalCases": 774,
+ "shapes": [
+  {
+   "n": 131,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 81,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 59,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 49,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 0,
+      "rec": false,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 46,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": "signed",
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 40,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 37,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "inv_report",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": true
+   },
+   "expect": [
+    "disciplinary_invite",
+    "disciplinary_invite",
+    "disciplinary_invite"
+   ]
+  },
+  {
+   "n": 37,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 34,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 24,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": "pending",
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 21,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "capability",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary appeal"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "send_signature",
+    "appeal_invite",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 17,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "capability",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": false,
+      "sign": null,
+      "type": "disciplinary appeal"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "start_appeal_meeting",
+    "appeal_invite",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 16,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "capability",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary appeal"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "send_signature",
+    "appeal_invite",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 14,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "informal",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": false,
+      "sign": null,
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 14,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 14,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 10,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 9,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": false,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 9,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 8,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "capability",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary appeal"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "send_signature",
+    "appeal_invite",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 8,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "inv_report",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": true
+   },
+   "expect": [
+    "disciplinary_invite",
+    "disciplinary_invite",
+    "disciplinary_invite"
+   ]
+  },
+  {
+   "n": 8,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 7,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": "sent",
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 7,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 6,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 12,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 5,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 5,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": "sent",
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 4,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 4,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": "signed",
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 4,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": false,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "capability",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 0,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary appeal"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "send_signature",
+    "appeal_invite",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "inv_report",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": true
+   },
+   "expect": [
+    "disciplinary_invite",
+    "disciplinary_invite",
+    "disciplinary_invite"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": "pending",
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 0,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 3,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 8,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 2,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": false,
+      "sign": null,
+      "type": "informal / 1-1"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 2,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 10,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 17,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 0,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": false,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": false,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 0,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 10,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 7,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     },
+     {
+      "lo": true,
+      "lt": "outcome",
+      "tx": 7,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     },
+     {
+      "lo": true,
+      "lt": "invite",
+      "tx": 0,
+      "rec": false,
+      "sign": null,
+      "type": "disciplinary appeal"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 9,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary appeal"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "send_signature",
+    "send_signature",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "investigation",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 15,
+      "rec": true,
+      "sign": "signed",
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 0,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": "signed",
+      "type": "disciplinary"
+     },
+     {
+      "lo": true,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": true
+   },
+   "expect": [
+    "start_appeal_meeting",
+    "appeal_invite",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 17,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 6,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     },
+     {
+      "lo": true,
+      "lt": "outcome",
+      "tx": 0,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     },
+     {
+      "lo": true,
+      "lt": "outcome",
+      "tx": 0,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "close_case",
+    "close_case",
+    "close_case"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "appeal",
+    "outcome": true,
+    "caseType": "capability",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": false,
+      "sign": null,
+      "type": "disciplinary appeal"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "start_appeal_meeting",
+    "appeal_invite",
+    "appoint_appeal_officer"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 4,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 5,
+      "rec": true,
+      "sign": null,
+      "type": "disciplinary"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 6,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "misconduct",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 3,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 13,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 2,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     },
+     {
+      "lo": false,
+      "lt": null,
+      "tx": 1,
+      "rec": true,
+      "sign": null,
+      "type": "investigation"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  },
+  {
+   "n": 1,
+   "shape": {
+    "fit": false,
+    "oh1": false,
+    "oh2": false,
+    "stage": "open",
+    "outcome": true,
+    "caseType": "",
+    "meetings": [
+     {
+      "lo": true,
+      "lt": null,
+      "tx": 0,
+      "rec": false,
+      "sign": null,
+      "type": "meeting"
+     }
+    ],
+    "invReport": false
+   },
+   "expect": [
+    "outcome_letter",
+    "outcome_letter",
+    "outcome_letter"
+   ]
+  }
+ ]
+}

@@ -1,5 +1,6 @@
 import { getCaseStage, isGrievanceCase, hasLetterType } from './caseStage.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
+import { isMeetingComplete, lastGenuineMeeting } from './meetingLifecycle.js';
 
 // Case Copilot's recommended next action — pure function of a case's
 // current stage, type, and meeting history, no I/O. Drives the "Next
@@ -61,9 +62,17 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
   const invMeetings = meetings.filter(m=>isInvestigationMeeting(m.type));
   const discMeetings = meetings.filter(m=>isDisciplinaryMeeting(m.type));
   const appealMeetings = meetings.filter(m=>isAppealMeeting(m.type));
-  const lastInv = invMeetings[invMeetings.length-1];
-  const lastDisc = discMeetings[discMeetings.length-1];
-  const lastAppeal = appealMeetings[appealMeetings.length-1];
+  // Release 1 Phase 1 — "which genuine meeting happened last?" now excludes
+  // letter-shaped artefacts (lastGenuineMeeting). The type-filtered
+  // collections above are deliberately NOT filtered, because hasLetterType
+  // below asks a different question — "was a letter of type X ever saved?" —
+  // and a saved invitation is a real fact about the case. Filtering letters
+  // out of those collections made Compass offer to draft an appeal
+  // invitation that already existed (proven against production data, Phase 0
+  // parity harness, 2026-09-22).
+  const lastInv = lastGenuineMeeting(invMeetings);
+  const lastDisc = lastGenuineMeeting(discMeetings);
+  const lastAppeal = lastGenuineMeeting(appealMeetings);
   // Human UAT remediation, Batch 2 hardening — these used to check
   // "some meeting of this type has any letterOutput at all", which a
   // disciplinary/appeal hearing INVITATION satisfies just as well as the
@@ -90,13 +99,19 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
     case "intake":
       return {label:"Schedule investigation meeting", action:"start_investigation", meetingType:"investigation", primary:true, reason:"No fact-finding has started yet — ACAS recommends investigating without unreasonable delay."};
     case "investigation":
-      if(!lastInv?.record) return {label:"Start investigation meeting", action:"start_investigation", meetingType:"investigation", primary:true, reason:"No investigation meeting recorded yet."};
+      // Release 1 Phase 1 — workflow completion is a lifecycle question, not
+      // "did an AI record get generated". For a legacy meeting
+      // isMeetingComplete still falls back to record presence, preserving
+      // this branch's exact historical behaviour; for a Phase 2 meeting the
+      // declared status is authoritative. m.record stays meaningful as
+      // CONTENT everywhere else — only its use as workflow state moves here.
+      if(!isMeetingComplete(lastInv)) return {label:"Start investigation meeting", action:"start_investigation", meetingType:"investigation", primary:true, reason:"No investigation meeting recorded yet."};
       if(lastInv?.signStatus!=="signed") return {label:"Send investigation record for signature", action:"send_signature", meetingType:"investigation", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
       return {label:"Generate investigation report", action:"inv_report", meetingType:"investigation", primary:true, reason:"Investigation meetings are complete — summarise findings before deciding next steps."};
     case "inv_report":
       return {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", meetingType:"disciplinary", primary:true, reason:"ACAS Code: give the employee written notice of the allegations and evidence in good time before any hearing.", secondary:{label:"No case to answer — close", action:"close_no_case"}};
     case "disciplinary":
-      if(!lastDisc?.record) return {label:"Start disciplinary hearing", action:"start_disciplinary", meetingType:"disciplinary", primary:true, reason:"Invitation sent — the hearing hasn't been held yet."};
+      if(!isMeetingComplete(lastDisc)) return {label:"Start disciplinary hearing", action:"start_disciplinary", meetingType:"disciplinary", primary:true, reason:"Invitation sent — the hearing hasn't been held yet."};
       if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", meetingType:"disciplinary", primary:true, reason:"The employee should confirm the hearing record is accurate."};
       if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", meetingType:"disciplinary", primary:true, reason:"ACAS Code: confirm the decision in writing, normally within 5 working days of the hearing."};
       return {label:"Outcome issued — close or appeal", action:"post_outcome", meetingType:"disciplinary", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
@@ -130,7 +145,7 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
       // invite would have no authoritative officer identity to ground the
       // letter in.
       if(ctx.hasAppealManager && !hasAppealInvitation) return {label:"Draft appeal hearing invitation", action:"appeal_invite", meetingType:"appeal-disciplinary", primary:true, reason:"An appeal officer has been appointed — ACAS guidance expects the hearing invitation to confirm the grounds and the right to be accompanied before the hearing itself."};
-      if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-disciplinary", primary:true, reason:"An appeal has been raised but not yet heard."};
+      if(!isMeetingComplete(lastAppeal)) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-disciplinary", primary:true, reason:"An appeal has been raised but not yet heard."};
       if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-disciplinary", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-disciplinary", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
       return {label:"Appeal outcome issued — close case", action:"close_case", meetingType:"appeal-disciplinary", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
@@ -148,8 +163,9 @@ function grievanceNextStep(cs, stage, ctx = {}) {
   const meetings = cs.meetings||[];
   const hearingMeetings = meetings.filter(m=>isGrievanceMeeting(m.type));
   const appealMeetings = meetings.filter(m=>isAppealMeeting(m.type));
-  const lastHearing = hearingMeetings[hearingMeetings.length-1];
-  const lastAppeal = appealMeetings[appealMeetings.length-1];
+  // See disciplinaryNextStep's own comment — same distinction, same reason.
+  const lastHearing = lastGenuineMeeting(hearingMeetings);
+  const lastAppeal = lastGenuineMeeting(appealMeetings);
   const hasHearingOutcome = hasLetterType(hearingMeetings, "outcome");
   const hasAppealOutcome = hasLetterType(appealMeetings, "appeal");
   // Appeal Hearing Control Remediation (2026-09-18) — see disciplinaryNextStep's
@@ -160,7 +176,7 @@ function grievanceNextStep(cs, stage, ctx = {}) {
     case "intake":
       return {label:"Schedule grievance meeting", action:"start_hearing", meetingType:"grievance", primary:true, reason:"No grievance meeting has been held yet — ACAS recommends dealing with grievances promptly."};
     case "hearing":
-      if(!lastHearing?.record) return {label:"Start grievance meeting", action:"start_hearing", meetingType:"grievance", primary:true, reason:"No grievance meeting recorded yet."};
+      if(!isMeetingComplete(lastHearing)) return {label:"Start grievance meeting", action:"start_hearing", meetingType:"grievance", primary:true, reason:"No grievance meeting recorded yet."};
       if(lastHearing?.signStatus!=="signed") return {label:"Send grievance record for signature", action:"send_signature", meetingType:"grievance", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
       if(!hasHearingOutcome) return {label:"Draft grievance outcome letter", action:"outcome_letter", meetingType:"grievance", primary:true, reason:"ACAS Code: confirm the outcome in writing without unreasonable delay."};
       return {label:"Outcome issued — close or appeal", action:"post_outcome", meetingType:"grievance", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
@@ -175,7 +191,7 @@ function grievanceNextStep(cs, stage, ctx = {}) {
       const appointStep = appointOfficerStepIfNeeded(ctx);
       if(appointStep) return appointStep;
       if(ctx.hasAppealManager && !hasAppealInvitation) return {label:"Draft appeal hearing invitation", action:"appeal_invite", meetingType:"appeal-grievance", primary:true, reason:"An appeal officer has been appointed — ACAS guidance expects the hearing invitation to confirm the grounds and the right to be accompanied before the hearing itself."};
-      if(!lastAppeal?.record) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-grievance", primary:true, reason:"An appeal has been raised but not yet heard."};
+      if(!isMeetingComplete(lastAppeal)) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-grievance", primary:true, reason:"An appeal has been raised but not yet heard."};
       if(lastAppeal?.signStatus!=="signed") return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-grievance", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-grievance", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
       return {label:"Appeal outcome issued — close case", action:"close_case", meetingType:"appeal-grievance", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
