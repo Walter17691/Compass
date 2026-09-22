@@ -6052,6 +6052,31 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!gdprAccepted) setShowGdpr(true);
   }, []);
 
+  // NEW-29 — the authoritative ACTUAL START of a live meeting: the moment the
+  // user enters the live Record experience, whichever route they took (setup
+  // "Start meeting", PrepScreen "Start meeting", "Skip prep and start meeting
+  // now", or a restored crash-recovery draft).
+  //
+  // It used to be set lazily inside addUtterance, on the first committed
+  // utterance. That made it depend on whether the user pressed Enter — and
+  // RecordScreen's End meeting button calls addUtterance(inputText) and
+  // attemptEndMeeting() in the SAME event, so handleReview read the state
+  // before React had flushed it: the record rendered "Start time: Not
+  // recorded" while startedAt later persisted the End-meeting instant, 1ms
+  // before endedAt. startedAt was recording the end of the meeting.
+  //
+  // Guarded on !meetingStartTime, so it captures once and stays stable across
+  // every re-render, utterance, AI call and Review retry. A restored draft
+  // carries its own meetingStartTime, which this deliberately does not
+  // overwrite. startSession() resets it to null for a genuinely new meeting.
+  useEffect(() => {
+    // The rule guards against cascading renders; the !meetingStartTime guard makes
+    // that impossible here. This fires at most once per meeting and is then inert
+    // until startSession() clears it — exactly the one-shot capture NEW-29 needs.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if(screen === SCREENS.RECORD && !meetingStartTime) setMeetingStartTime(new Date().toISOString());
+  }, [screen, meetingStartTime]);
+
   // Autosave the in-progress meeting to localStorage — transcript/inputText
   // were plain React state with zero persistence, meaning a crashed tab or
   // dead laptop 40 minutes into a real disciplinary hearing lost everything
@@ -6518,7 +6543,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     appealDetectedRef.current = false;
     setAppealDetected(false);
     setShowLinkCase(false);
-    const meetingEndTimeVal = new Date().toISOString();
+    // NEW-29 — one authoritative end instant per meeting. Reused if it has
+    // already been captured, so a Review retry regenerates the record
+    // against the SAME end time rather than silently moving it. Cleared
+    // by startSession() for a genuinely new meeting.
+    const meetingEndTimeVal = meetingEndTime || new Date().toISOString();
     setMeetingEndTime(meetingEndTimeVal);
     const extra = inputText.trim() ? [{id:newId("utt"),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
     const allNotes = [...transcript, ...extra];
