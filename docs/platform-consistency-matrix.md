@@ -200,16 +200,47 @@ These three must not blur.
 | Role / capability | `case_access.role`; role and access level kept separate | CONSISTENT |
 | Confidential cases | `cases.confidential` + RLS | CONSISTENT |
 | Appeal officer | `case_access.role = 'appeal_manager'`; HR-only appointment via `appoint_appeal_manager()` | CONSISTENT — live, replaceable fact |
-| Appeal chair | `meeting.chairUserId`, enforced by `protect_appeal_hearing_chair_integrity()` | CONSISTENT — historical fact, immutable once recorded |
+| Appeal chair | `meeting.chairUserId`, enforced by `protect_appeal_hearing_chair_integrity()` | CONSISTENT — **validated at SCHEDULE, revalidated at START, historical after START** |
 | Audit events | `log_audit_event()` RPC; all ~60 `audit()` callers funnel through one line | CONSISTENT — server-derived, unforgeable |
 
-**Known Phase 2 interaction.** The chair trigger validates on entry *creation*.
-Once Phase 2 creates the meeting at scheduling rather than at completion, that
-check moves earlier and nothing re-validates at completion — so an officer
-replaced between scheduling and the hearing would leave a stale chair
-unchallenged. Phase 2 must add a completion-time re-assertion **and** cancel
-non-completed appeal hearings on officer replacement. Do not relax the
-existing immutability rule.
+### Appeal chair — the one intentional security-specific exception
+
+**Resolved 2026-09-23** (`supabase/appeal_hearing_chair_lifecycle_2026-09-23.sql`).
+This supersedes the earlier note here, which proposed re-asserting at
+*completion* and cancelling non-completed hearings on officer replacement.
+Both were wrong and are not implemented.
+
+| Transition | Chair rule |
+|---|---|
+| **CREATE** (scheduled, or directly `in_progress` via Start-now) | **must equal the current `appeal_manager`** |
+| Prepare | immutability only |
+| **START** (`→ in_progress`) | **must STILL equal the current `appeal_manager`** |
+| End · Review · Regenerate | immutability only |
+| **COMPLETE** | **immutability only — never revalidated against the current officer** |
+| Cancel | no chair requirement |
+
+**Why completion is not revalidated.** A hearing held Monday by the properly
+appointed Officer A, who leaves on Tuesday, must still be saveable on
+Wednesday under B's appointment. Revalidating at completion would block a
+truthful record of a hearing that properly happened; cancelling a
+`review_draft` hearing would assert that a hearing which demonstrably occurred
+did not. After Start, `chairUserId` is historical truth.
+
+**Officer replacement is given no new behaviour.** `appoint_appeal_manager` is
+untouched and has no concept of scheduled meetings. A stale scheduled hearing
+simply cannot Start (`APPEAL_CHAIR_STALE_AT_START`) and remains readable so
+the UI can offer "reschedule required".
+
+**This exception must not leak into the generic meeting lifecycle primitive.**
+`meetingLifecycle.js` and `meetingWrites.js` contain no chair logic and no
+appeal vocabulary, and tests assert that. `chairUserId` remains
+security-authoritative for **appeal hearings only**; every other meeting's
+chair stays descriptive metadata in `manager`. No general meeting
+authorisation primitive exists or is being created.
+
+**Scope now covered:** the trigger fires on `INSERT` as well as `UPDATE`,
+closing a case-creation bypass, and the NULL-`letterType` three-valued-logic
+hole (P1, see defect register) is closed with `coalesce`.
 
 ---
 

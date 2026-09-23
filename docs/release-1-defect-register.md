@@ -168,18 +168,59 @@ none of which persist a structured case meeting:
 - **Decision** OPEN — Phase 2.3 reverses the order so persistence succeeds
   first and calendar failure is visible and retryable.
 
-### Appeal hearings cannot be scheduled — chair integrity rejects the write
-- **Severity** P2 · **Area** Scheduling / appeal security · **Raised** 2026-09-22
-- `buildScheduledMeetingEntry` sets no `chairUserId`. For an appeal-type
-  label the trigger computes `is_appeal_type = true`; `letterType` is absent
-  so `is_letter_only = false`; therefore `requires_chair = true` and the write
-  is rejected with `APPEAL_HEARING_CHAIR_MISSING`. Every `MEETING_TYPES` entry
-  is selectable in the schedule modal, so this is user-reachable.
-- **Evidence** `src/lib/meetingScheduling.js:131-147` against
-  `supabase/appeal_hearing_chair_integrity_2026-09-18.sql:133-168`.
-- **Decision** OPEN — Phase 2.3 sources the chair from
-  `case_access.role='appeal_manager'` at scheduling, or blocks with an
+### Appeal chair validation bypassed by NULL letterType — P1
+- **Severity** **P1** · **Area** Appeal security · **Raised** 2026-09-23
+- **STATUS: CLOSED** (Appeal Meeting Lifecycle Security, 2026-09-23).
+- The 2026-09-18 classifier read
+  `entry_letter_type in ('invite','appeal') and entry_record = '' and entry_transcript_len = 0`.
+  `entry_letter_type` is NULL on every non-letter entry, and in SQL
+  `NULL in (...)` is **NULL, not false**. For an entry with no `letterType`,
+  no `record` and no `transcript`, the conjunction evaluated to NULL,
+  `requires_chair` became `true and not NULL` = NULL, and `if requires_chair
+  and ...` was not true — so **no chair was required and none was checked**.
+- Latent until now because an appeal hearing *with* content evaluates
+  `NULL and false` = false, so every historically persisted hearing was
+  correctly validated, and a contentless appeal meeting could not previously
+  be persisted at all. **A scheduled appeal hearing is exactly that shape**,
+  so the hole would have opened the moment lifecycle writers shipped.
+- **Evidence** Rolled-back disposable verification against the deployed
+  function, 2026-09-23: a scheduled appeal hearing carrying a *fabricated*
+  `chairUserId` was ACCEPTED; so was one created directly as `in_progress`;
+  so was starting a stale hearing after the officer had been replaced.
+  Three-valued-logic probe confirmed `NULL in ('invite','appeal')` → NULL.
+- **This corrects the Phase 2A report**, which stated appeal scheduling would
+  be *rejected* with `APPEAL_HEARING_CHAIR_MISSING`. It would have been
+  silently *accepted* with no chair — the opposite, and worse.
+- **Decision** Fixed with `coalesce(entry_letter_type, '')`. The JS mirror
+  could not have caught it: `['invite','appeal'].includes(undefined)` is
+  `false` in JavaScript, so the mirror was accidentally correct while the SQL
+  was not. Only executing the real trigger found it.
+
+### Appeal hearings could not be scheduled with a verified chair
+- **Severity** P2 · **Area** Scheduling · **Raised** 2026-09-22
+- `buildScheduledMeetingEntry` sets no `chairUserId` at all, so a scheduled
+  appeal hearing carries no verified chair.
+- Prior to 2026-09-23 this was silently accepted (see the P1 above). With the
+  bypass closed it is now correctly **rejected** with
+  `APPEAL_HEARING_CHAIR_MISSING` — the safe direction, and a visible blocker
+  rather than a silent hole.
+- **Evidence** `src/lib/meetingScheduling.js:131-147`; rolled-back test 3
+  (“CREATE scheduled with NO chair at all” → rejected).
+- **Decision** OPEN — Phase 2.3 must source the chair from
+  `case_access.role='appeal_manager'` at scheduling, or block with an
   actionable message. The trigger is behaving correctly and is not at fault.
+
+### Stale scheduled appeal hearing after officer replacement
+- **Severity** P2 · **Area** Appeal security / UX · **Raised** 2026-09-23
+- A hearing scheduled under Officer A cannot Start once A is replaced: the
+  Start check fails closed with `APPEAL_CHAIR_STALE_AT_START`. This is the
+  intended, safe behaviour — nothing is silently rewritten, cancelled, or
+  started under the new officer, and `appoint_appeal_manager` is deliberately
+  not expanded.
+- The row remains fully readable and patchable so it can be surfaced as
+  *"Appeal officer changed — reschedule required"*, but **that UI state does
+  not exist yet**, so today the user only discovers it on attempting to Start.
+- **Decision** OPEN — the affordance belongs to Phase 2.3 (scheduling UI).
 
 ### Workflow transition written through unchecked sync-all
 - **Severity** P3 · **Area** Persistence · **Raised** 2026-09-22

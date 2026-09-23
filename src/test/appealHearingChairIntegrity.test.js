@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 // Appeal Hearing Control Remediation (2026-09-18, REVISED) — regression
 // coverage for the per-meeting design in supabase/appeal_hearing_chair_
@@ -42,22 +43,63 @@ function classifyMeetingEntry(entry) {
   return { isAppealType, isLetterOnly, requiresChair: isAppealType && !isLetterOnly };
 }
 
-// Mirrors the trigger's validation for a NEWLY CREATED meeting entry
-// (no counterpart by id in the prior meetings array).
-function validateNewMeetingEntry(entry, { currentAppealManagerUserId }) {
-  const { requiresChair } = classifyMeetingEntry(entry);
-  if (!requiresChair) return { ok: true };
+// Mirrors the trigger's chair check. Applied at exactly two moments: when an
+// appeal hearing entry is CREATED, and when an existing one transitions INTO
+// status 'in_progress' (Appeal Meeting Lifecycle Security, 2026-09-23). The
+// error code differs so the two are distinguishable in the client and in
+// support: a stale chair at Start means the hearing must be rescheduled, not
+// that the record is wrong.
+function validateChairAgainstCurrentOfficer(entry, { currentAppealManagerUserId }, atStart) {
   const chair = entry.chairUserId;
   if (!chair || !isValidUuid(chair)) return { ok: false, error: 'APPEAL_HEARING_CHAIR_MISSING' };
-  if (currentAppealManagerUserId == null || chair !== currentAppealManagerUserId) return { ok: false, error: 'APPEAL_CHAIR_MISMATCH' };
+  if (currentAppealManagerUserId == null || chair !== currentAppealManagerUserId) {
+    return { ok: false, error: atStart ? 'APPEAL_CHAIR_STALE_AT_START' : 'APPEAL_CHAIR_MISMATCH' };
+  }
   return { ok: true };
 }
 
+// Mirrors the trigger's validation for a NEWLY CREATED meeting entry
+// (no counterpart by id in the prior meetings array). Covers both a
+// 'scheduled' hearing and one created directly as 'in_progress' by Start-now,
+// since both are new entries.
+function validateNewMeetingEntry(entry, ctx) {
+  const { requiresChair } = classifyMeetingEntry(entry);
+  if (!requiresChair) return { ok: true };
+  return validateChairAgainstCurrentOfficer(entry, ctx, false);
+}
+
+// Absent, null or whitespace-only status all mean "no declared lifecycle
+// state" — every row written before Phase 2.2.
+const statusOf = e => {
+  const s = typeof e?.status === 'string' ? e.status.trim() : '';
+  return s || null;
+};
+
 // Mirrors the trigger's validation for an EXISTING meeting entry being
-// patched (matched by id) — chairUserId, once recorded, is immutable. A
-// hearing with no chairUserId at all (legacy data) imposes no new
-// requirement on an unrelated patch to that same entry.
-function validateExistingMeetingEntryPatch(oldEntry, newEntry) {
+// patched (matched by id).
+//
+// Two rules, in the trigger's own order:
+//
+//   1. If this patch is the transition INTO 'in_progress', the chair must
+//      STILL be the currently appointed officer. This is the last moment
+//      before the hearing becomes a real event.
+//   2. chairUserId, once recorded, is immutable — including across that
+//      transition, so a stale scheduled hearing can never be quietly
+//      re-pointed at the new officer instead of rescheduled. A hearing with
+//      no chairUserId at all (legacy data) imposes no new requirement on an
+//      unrelated patch.
+//
+// Deliberately NOT revalidated on in_progress -> review_draft or
+// review_draft -> completed: after Start, chairUserId is historical truth,
+// and a later officer replacement must never block saving a hearing that
+// properly happened.
+function validateExistingMeetingEntryPatch(oldEntry, newEntry, ctx = {}) {
+  const { requiresChair } = classifyMeetingEntry(newEntry);
+  const becomesStarted = statusOf(newEntry) === 'in_progress' && statusOf(oldEntry) !== 'in_progress';
+  if (requiresChair && becomesStarted) {
+    const result = validateChairAgainstCurrentOfficer(newEntry, ctx, true);
+    if (!result.ok) return result;
+  }
   if (oldEntry.chairUserId != null && oldEntry.chairUserId !== newEntry.chairUserId) {
     return { ok: false, error: 'APPEAL_HEARING_CHAIR_IMMUTABLE' };
   }
@@ -65,11 +107,12 @@ function validateExistingMeetingEntryPatch(oldEntry, newEntry) {
 }
 
 // Mirrors the whole trigger: for every entry in the NEW meetings array,
-// find its counterpart by id in the OLD array and dispatch accordingly.
+// find its counterpart by id in the OLD array and dispatch accordingly. On
+// INSERT the old array is empty, so every entry is new.
 function validateMeetingsUpdate(oldMeetings, newMeetings, ctx) {
   for (const entry of newMeetings) {
     const oldEntry = oldMeetings.find(m => m.id === entry.id);
-    const result = oldEntry ? validateExistingMeetingEntryPatch(oldEntry, entry) : validateNewMeetingEntry(entry, ctx);
+    const result = oldEntry ? validateExistingMeetingEntryPatch(oldEntry, entry, ctx) : validateNewMeetingEntry(entry, ctx);
     if (!result.ok) return result;
   }
   return { ok: true };
@@ -289,5 +332,262 @@ describe('hearingDate/hearingTime/hearingLocationOrMethod (Appeal Invitation UAT
     const entry = { id: 'm2', type: 'Disciplinary Appeal', record: 'Hearing notes here.', transcript: [] };
     const result = validateNewMeetingEntry(entry, { currentAppealManagerUserId: OFFICER_A });
     expect(result).toEqual({ ok: false, error: 'APPEAL_HEARING_CHAIR_MISSING' });
+  });
+});
+
+// ── Appeal Meeting Lifecycle Security (2026-09-23) ──────────────────────────
+//
+// supabase/appeal_hearing_chair_lifecycle_2026-09-23.sql. The 2026-09-18 rule
+// validated the chair when a meeting ENTRY WAS CREATED, which was complete
+// only while creation and completion were the same event. Once a meeting can
+// exist days before it happens, "validated at creation" stops meaning
+// "validated when the hearing happened", and a hearing scheduled under
+// Officer A could be held and recorded after A was replaced.
+//
+// The chair is now checked at the two moments the hearing becomes real —
+// CREATE and the transition INTO 'in_progress' — and at no other moment.
+// After Start, chairUserId is historical truth.
+
+const SCHEDULED = { status: 'scheduled' };
+const hearing = (over = {}) => ({ id: 'h1', type: 'Disciplinary Appeal', record: '', transcript: [], ...over });
+
+describe('A-D. creation covers both start paths', () => {
+  it('A. scheduled appeal hearing with the current officer as chair is accepted', () => {
+    const entry = hearing({ ...SCHEDULED, chairUserId: OFFICER_A });
+    expect(validateMeetingsUpdate([], [entry], { currentAppealManagerUserId: OFFICER_A })).toEqual({ ok: true });
+  });
+
+  it('B. scheduled appeal hearing with the wrong chair is rejected', () => {
+    const entry = hearing({ ...SCHEDULED, chairUserId: FABRICATED });
+    expect(validateMeetingsUpdate([], [entry], { currentAppealManagerUserId: OFFICER_A }).error).toBe('APPEAL_CHAIR_MISMATCH');
+  });
+
+  it('B2. scheduled appeal hearing with no chair at all is rejected', () => {
+    const entry = hearing({ ...SCHEDULED, chairUserId: null });
+    expect(validateMeetingsUpdate([], [entry], { currentAppealManagerUserId: OFFICER_A }).error).toBe('APPEAL_HEARING_CHAIR_MISSING');
+  });
+
+  it('C. PATH A — a hearing created directly as in_progress (Start now) with the current officer is accepted', () => {
+    const entry = hearing({ status: 'in_progress', startedAt: '2026-09-23T10:00:00.000Z', chairUserId: OFFICER_A });
+    expect(validateMeetingsUpdate([], [entry], { currentAppealManagerUserId: OFFICER_A })).toEqual({ ok: true });
+  });
+
+  it('D. PATH A — created directly as in_progress with the wrong chair is rejected', () => {
+    const entry = hearing({ status: 'in_progress', chairUserId: FABRICATED });
+    expect(validateMeetingsUpdate([], [entry], { currentAppealManagerUserId: OFFICER_A }).error).toBe('APPEAL_CHAIR_MISMATCH');
+  });
+
+  it('D2. created directly as in_progress with no officer appointed at all is rejected', () => {
+    const entry = hearing({ status: 'in_progress', chairUserId: OFFICER_A });
+    expect(validateMeetingsUpdate([], [entry], { currentAppealManagerUserId: null }).error).toBe('APPEAL_CHAIR_MISMATCH');
+  });
+});
+
+describe('E-G. PATH B — starting a scheduled hearing', () => {
+  const scheduledUnderA = hearing({ ...SCHEDULED, chairUserId: OFFICER_A });
+
+  it('E. scheduled -> in_progress with the same, still-current officer is accepted', () => {
+    const started = hearing({ status: 'in_progress', startedAt: 'T', chairUserId: OFFICER_A });
+    expect(validateMeetingsUpdate([scheduledUnderA], [started], { currentAppealManagerUserId: OFFICER_A })).toEqual({ ok: true });
+  });
+
+  it('F. scheduled under A, officer replaced by B, Start under A is rejected', () => {
+    const started = hearing({ status: 'in_progress', startedAt: 'T', chairUserId: OFFICER_A });
+    expect(validateMeetingsUpdate([scheduledUnderA], [started], { currentAppealManagerUserId: OFFICER_B }).error)
+      .toBe('APPEAL_CHAIR_STALE_AT_START');
+  });
+
+  it('G. the stale hearing cannot be quietly re-pointed at B during Start either', () => {
+    const started = hearing({ status: 'in_progress', startedAt: 'T', chairUserId: OFFICER_B });
+    expect(validateMeetingsUpdate([scheduledUnderA], [started], { currentAppealManagerUserId: OFFICER_B }).error)
+      .toBe('APPEAL_HEARING_CHAIR_IMMUTABLE');
+  });
+
+  it('G2. so the only lawful route is an explicit reschedule under a new meeting id', () => {
+    const rescheduled = hearing({ id: 'h2', ...SCHEDULED, chairUserId: OFFICER_B });
+    expect(validateMeetingsUpdate([scheduledUnderA], [scheduledUnderA, rescheduled], { currentAppealManagerUserId: OFFICER_B })).toEqual({ ok: true });
+  });
+
+  it('G3. the original scheduled row survives untouched as historical scheduling state', () => {
+    // Patching anything else on the stale scheduled row is still allowed.
+    const annotated = hearing({ ...SCHEDULED, chairUserId: OFFICER_A, agenda: 'superseded' });
+    expect(validateMeetingsUpdate([scheduledUnderA], [annotated], { currentAppealManagerUserId: OFFICER_B })).toEqual({ ok: true });
+  });
+});
+
+describe('H-J. after Start the chair is historical truth', () => {
+  const startedUnderA = hearing({ status: 'in_progress', startedAt: 'T', chairUserId: OFFICER_A });
+
+  it('H. an ordinary mid-hearing patch after the officer changed is accepted', () => {
+    const patched = { ...startedUnderA, transcript: [{ seq: 1 }] };
+    expect(validateMeetingsUpdate([startedUnderA], [patched], { currentAppealManagerUserId: OFFICER_B })).toEqual({ ok: true });
+  });
+
+  it('H2. in_progress -> in_progress is not a Start, so it never revalidates', () => {
+    const patched = { ...startedUnderA, transcript: [{ seq: 1 }, { seq: 2 }] };
+    expect(statusOf(patched)).toBe('in_progress');
+    expect(validateMeetingsUpdate([startedUnderA], [patched], { currentAppealManagerUserId: null })).toEqual({ ok: true });
+  });
+
+  it('I. in_progress -> review_draft after the officer became B is accepted', () => {
+    const draft = { ...startedUnderA, status: 'review_draft', endedAt: 'T2' };
+    expect(validateMeetingsUpdate([startedUnderA], [draft], { currentAppealManagerUserId: OFFICER_B })).toEqual({ ok: true });
+  });
+
+  it('J. review_draft -> completed after the officer became B is accepted', () => {
+    const draft = { ...startedUnderA, status: 'review_draft' };
+    const completed = { ...draft, status: 'completed', record: 'Full hearing record.' };
+    expect(validateMeetingsUpdate([draft], [completed], { currentAppealManagerUserId: OFFICER_B })).toEqual({ ok: true });
+  });
+
+  it('J2. completion is never gated on the CURRENT officer, even with none appointed', () => {
+    const draft = { ...startedUnderA, status: 'review_draft' };
+    const completed = { ...draft, status: 'completed', record: 'Full hearing record.' };
+    expect(validateMeetingsUpdate([draft], [completed], { currentAppealManagerUserId: null })).toEqual({ ok: true });
+  });
+});
+
+describe('K-M. the recorded chair is immutable at every lifecycle state', () => {
+  for (const [label, status] of [['scheduled', 'scheduled'], ['in_progress', 'in_progress'], ['review_draft', 'review_draft'], ['completed', 'completed']]) {
+    it(`${label} hearing: chair cannot be rewritten`, () => {
+      const before = hearing({ status, chairUserId: OFFICER_A });
+      const after = hearing({ status, chairUserId: OFFICER_B });
+      expect(validateMeetingsUpdate([before], [after], { currentAppealManagerUserId: OFFICER_B }).error).toBe('APPEAL_HEARING_CHAIR_IMMUTABLE');
+    });
+
+    it(`${label} hearing: chair cannot be removed`, () => {
+      const before = hearing({ status, chairUserId: OFFICER_A });
+      const after = hearing({ status, chairUserId: null });
+      expect(validateMeetingsUpdate([before], [after], { currentAppealManagerUserId: OFFICER_A }).error).toBe('APPEAL_HEARING_CHAIR_IMMUTABLE');
+    });
+  }
+});
+
+describe('N-O. cancellation', () => {
+  const scheduledUnderA = hearing({ ...SCHEDULED, chairUserId: OFFICER_A });
+
+  it('N/O. cancelling a scheduled hearing is accepted and needs no revalidation', () => {
+    const cancelled = hearing({ status: 'cancelled', chairUserId: OFFICER_A, cancelledAt: 'T', cancelledReason: 'appeal officer replaced' });
+    expect(validateMeetingsUpdate([scheduledUnderA], [cancelled], { currentAppealManagerUserId: OFFICER_B })).toEqual({ ok: true });
+  });
+
+  it('a cancelled hearing can never be silently started — it still hits the Start check', () => {
+    const cancelled = hearing({ status: 'cancelled', chairUserId: OFFICER_A });
+    const revived = hearing({ status: 'in_progress', chairUserId: OFFICER_A });
+    expect(validateMeetingsUpdate([cancelled], [revived], { currentAppealManagerUserId: OFFICER_B }).error).toBe('APPEAL_CHAIR_STALE_AT_START');
+  });
+});
+
+describe('P-T. legacy and non-appeal behaviour is unchanged', () => {
+  it('P. a legacy appeal hearing with no status is patchable exactly as before', () => {
+    const legacy = { id: 'h1', type: 'Disciplinary Appeal', record: 'old notes', chairUserId: OFFICER_A };
+    const patched = { ...legacy, signStatus: 'signed' };
+    expect(validateMeetingsUpdate([legacy], [patched], { currentAppealManagerUserId: OFFICER_B })).toEqual({ ok: true });
+  });
+
+  it('P2. a status-less legacy row never satisfies the Start condition', () => {
+    const legacy = { id: 'h1', type: 'Disciplinary Appeal', record: 'old notes', chairUserId: OFFICER_A };
+    expect(statusOf(legacy)).toBeNull();
+    expect(validateMeetingsUpdate([legacy], [{ ...legacy, record: 'amended' }], { currentAppealManagerUserId: null })).toEqual({ ok: true });
+  });
+
+  it('Q. a legacy appeal hearing with NO chair imposes no retroactive requirement', () => {
+    const legacy = { id: 'h1', type: 'Disciplinary Appeal', record: 'old notes' };
+    expect(validateMeetingsUpdate([legacy], [{ ...legacy, signStatus: 'signed' }], { currentAppealManagerUserId: null })).toEqual({ ok: true });
+  });
+
+  it('R. a letter-only appeal artefact is still exempt, at any status', () => {
+    for (const status of [undefined, 'scheduled', 'in_progress', 'completed']) {
+      const letter = { id: 'l1', type: 'Disciplinary Appeal', letterType: 'invite', record: '', transcript: [], status };
+      expect(validateMeetingsUpdate([], [letter], { currentAppealManagerUserId: null })).toEqual({ ok: true });
+    }
+  });
+
+  it('S. a genuine hearing that ALSO carries letterType is still a hearing, not exempt', () => {
+    const entry = hearing({ letterType: 'appeal', record: 'real hearing notes', chairUserId: null, ...SCHEDULED });
+    expect(validateMeetingsUpdate([], [entry], { currentAppealManagerUserId: OFFICER_A }).error).toBe('APPEAL_HEARING_CHAIR_MISSING');
+  });
+
+  it('T. non-appeal meetings are unaffected at every lifecycle state', () => {
+    for (const type of ['Investigation', 'Disciplinary', 'Grievance', 'Return to Work', 'Probation Review']) {
+      for (const status of ['scheduled', 'in_progress', 'review_draft', 'completed', 'cancelled']) {
+        expect(validateMeetingsUpdate([], [{ id: 'm', type, status, record: '', chairUserId: null }], { currentAppealManagerUserId: null })).toEqual({ ok: true });
+        const before = { id: 'm', type, status: 'scheduled', chairUserId: null };
+        const after = { id: 'm', type, status, chairUserId: null };
+        expect(validateMeetingsUpdate([before], [after], { currentAppealManagerUserId: null })).toEqual({ ok: true });
+      }
+    }
+  });
+});
+
+describe('the deployed migration encodes exactly these rules', () => {
+  const sql = readFileSync('supabase/appeal_hearing_chair_lifecycle_2026-09-23.sql', 'utf8');
+  // The header deliberately names the functions it does NOT touch, so
+  // prohibitions are asserted against executable SQL only.
+  const sqlCode = sql.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+
+  it('validates on CREATE and on the transition into in_progress only', () => {
+    expect(sql).toContain("becomes_started := (not is_new_entry)");
+    expect(sql).toContain("and entry_status = 'in_progress'");
+    expect(sql).toContain("and old_status is distinct from 'in_progress';");
+    expect(sql).toContain('if requires_chair and (is_new_entry or becomes_started) then');
+  });
+
+  it('never revalidates completion or review against the current officer', () => {
+    expect(sql).not.toMatch(/entry_status\s*=\s*'completed'/);
+    expect(sql).not.toMatch(/entry_status\s*=\s*'review_draft'/);
+  });
+
+  it('closes the NULL letterType bypass with coalesce', () => {
+    // SQL three-valued logic: `NULL in ('invite','appeal')` is NULL, not
+    // false. For an entry with no letterType, no record and no transcript —
+    // precisely the shape of a SCHEDULED appeal hearing — the deployed
+    // 2026-09-18 conjunction evaluated to NULL, requires_chair became
+    // `true and not NULL` = NULL, and the guarded block was skipped entirely:
+    // no chair required, no chair checked. Confirmed empirically against the
+    // deployed function before this migration (a fabricated chair on a
+    // scheduled hearing was ACCEPTED).
+    expect(sqlCode).toContain("is_letter_only := coalesce(entry_letter_type, '') in ('invite', 'appeal') and entry_record = '' and entry_transcript_len = 0;");
+    expect(sqlCode).not.toMatch(/is_letter_only := entry_letter_type in/);
+  });
+
+  it('keeps the immutability rule byte-identical', () => {
+    expect(sqlCode).toContain("if (old_entry->>'chairUserId') is not null and (old_entry->>'chairUserId') is distinct from entry_chair_text then");
+  });
+
+  it('the JS mirror could not have caught it — JS and SQL disagree on the null case', () => {
+    // ['invite','appeal'].includes(undefined) === false in JS, so the mirror
+    // was accidentally correct while the SQL was not. Pinned so the next
+    // person does not trust the mirror for three-valued-logic questions.
+    expect(['invite', 'appeal'].includes(undefined)).toBe(false);
+    expect(classifyMeetingEntry({ type: 'Disciplinary Appeal', status: 'scheduled', record: '', transcript: [] }).requiresChair).toBe(true);
+  });
+
+  it('fires on INSERT as well as UPDATE, closing the case-creation bypass', () => {
+    expect(sql).toContain('before insert or update on public.cases');
+    expect(sql).toContain("if tg_op = 'UPDATE' and new.meetings is not distinct from old.meetings then");
+    expect(sql).toContain("old_meetings := case when tg_op = 'UPDATE' then coalesce(old.meetings, '[]'::jsonb) else '[]'::jsonb end;");
+  });
+
+  it('treats absent, null and whitespace status identically', () => {
+    expect(sql).toContain("entry_status := nullif(btrim(coalesce(entry->>'status', '')), '');");
+    expect(sql).toContain("old_status := nullif(btrim(coalesce(old_entry->>'status', '')), '');");
+  });
+
+  it('changes no appointment authority and performs no backfill', () => {
+    expect(sqlCode).not.toMatch(/appoint_appeal_manager|revoke_appeal_manager|is_hr_role/);
+    expect(sqlCode).not.toMatch(/\b(update|insert into|delete from|alter table)\b\s+public\./i);
+    // the only statements are the function replacement and its trigger
+    expect(sqlCode).not.toMatch(/create policy|drop policy|grant |revoke |alter role/i);
+  });
+
+  it('never revalidates against the current officer outside CREATE and START', () => {
+    // exactly one place consults case_access, inside the single guarded block
+    expect((sqlCode.match(/from public\.case_access/g) || []).length).toBe(1);
+  });
+
+  it('documents its rollback', () => {
+    expect(sql).toContain('ROLLBACK');
+    expect(sql).toContain('appeal_hearing_chair_integrity_2026-09-18.sql');
   });
 });

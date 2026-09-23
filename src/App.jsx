@@ -6927,6 +6927,13 @@ Please produce:
     if(msg.startsWith("APPEAL_CHAIR_MISMATCH") || msg.startsWith("APPEAL_HEARING_CHAIR_MISSING")) {
       return "This appeal hearing could not be saved because the appointed appeal officer has changed or could not be verified. Return to the case and check the appeal officer.";
     }
+    // Appeal Meeting Lifecycle Security (2026-09-23) — distinct from the two
+    // above: the chair WAS valid when this hearing was arranged and the
+    // appointment has changed since. The hearing has not started, so nothing
+    // historical is at stake and the fix is a reschedule, not a correction.
+    if(msg.startsWith("APPEAL_CHAIR_STALE_AT_START")) {
+      return "This hearing can't start: the appeal officer has changed since it was arranged. Rearrange the hearing under the current appeal officer.";
+    }
     if(msg.startsWith("APPEAL_HEARING_CHAIR_IMMUTABLE")) {
       return "This appeal hearing's record could not be saved because its recorded chair cannot be changed after saving.";
     }
