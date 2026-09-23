@@ -3,7 +3,7 @@ import { SCREENS, MEETING_TYPES } from '../constants';
 import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { appealInvitationLogistics } from '../lib/appealInvitation';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
-import { resumableMeetingFor } from '../lib/meetingLifecycle';
+import { resumableMeetingFor, scheduledMeetingsFor } from '../lib/meetingLifecycle';
 import { fmtMeetingTime } from '../lib/meetingTiming';
 import { MDRenderer } from '../components/MDRenderer';
 import { DateInput } from '../components/DateInput';
@@ -102,7 +102,7 @@ const MORE_GROUPS = TAB_GROUPS
 // (overview/timeline/allegationsTab/meetingsTab/evidenceTab/documentsTab/
 // themesTab/aiTab) are referenced as group.field only at that tab's own
 // single JSX call site, same pattern as OverviewTab/SettingsScreen.
-export function CaseViewScreen({ onResumeMeeting,
+export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPrepareScheduledMeeting, onCancelScheduledMeeting, onRescheduleMeeting,
   shell = {}, header = {}, initialTab, clearInitialTab, deleteCaseTask,
   overview = {}, timeline = {}, allegationsTab = {}, meetingsTab = {},
   evidenceTab = {}, documentsTab = {}, themesTab = {}, aiTab = {},
@@ -167,6 +167,9 @@ export function CaseViewScreen({ onResumeMeeting,
   // Release 1 Phase 2.2 — deterministic live-meeting discovery. Declared
   // status only; never inferred from record/transcript/latest-meeting.
   const liveMeeting = resumableMeetingFor(cs);
+  // Release 1 Phase 2.3 — every meeting arranged on this case, soonest first.
+  // A case may legitimately have several; no one-per-case rule is implied.
+  const scheduledMeetings = scheduledMeetingsFor(cs);
   // CaseViewScreen doesn't remount when switching between cases while
   // staying on this screen (no key={cs.id} at the App.jsx call site), so
   // without this a dismiss on one case would silently carry over and hide
@@ -305,6 +308,13 @@ export function CaseViewScreen({ onResumeMeeting,
     // generically for "appeal" rather than the id's own hyphenated form.
     const searchTerm = nextStep.meetingType?.startsWith("appeal-") ? "appeal" : nextStep.meetingType;
     const relevantMeeting = () => meetings.filter(m=>(m.type||"").toLowerCase().includes(searchTerm||""))[0]||meetings[meetings.length-1];
+    // Release 1 Phase 2.3 — the step already names the scheduled meeting, so
+    // starting it transitions THAT meeting rather than setting up a new one.
+    if(nextStep.action==="start_scheduled_meeting"){
+      const m = (cs.meetings||[]).find(x=>x.id===nextStep.scheduledMeetingId);
+      if(m) onStartScheduledMeeting?.(cs, m);
+      return;
+    }
     if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){
       // Appeal Hearing Control Remediation (2026-09-18) — a structured
       // appeal hearing (reached via "Start appeal hearing" with a current
@@ -771,6 +781,63 @@ export function CaseViewScreen({ onResumeMeeting,
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Release 1 Phase 2.3 — meetings that are arranged but have not
+          happened. A FUTURE event: never described as held. Minimal by
+          design — the Case View redesign is a later phase. */}
+      {scheduledMeetings.length>0&&(
+        <div style={{background:"#F3F7FF",borderBottom:"1px solid #D5E0F5",padding:"12px 28px",flexShrink:0}}>
+          {scheduledMeetings.map(m=>{
+            // Deterministically knowable BEFORE the user tries to start:
+            // this hearing's recorded chair is no longer the appointed
+            // officer. Surfacing it early is a courtesy — the database
+            // remains the control and will refuse the Start regardless.
+            const isAppeal = (m.type||"").toLowerCase().includes("appeal");
+            const chairStale = isAppeal && !!m.chairUserId && !!currentAppealManagerAccess && m.chairUserId !== currentAppealManagerAccess.userId;
+            const when = [m.schedule?.date&&fmtDate(m.schedule.date), m.schedule?.time].filter(Boolean).join(" at ");
+            const where = m.schedule?.location||m.schedule?.method||"";
+            return (
+              <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:6}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,color:"#2E4F86",fontWeight:600}}>
+                    {m.type||"Meeting"} scheduled{when?` — ${when}`:""}
+                  </div>
+                  <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>
+                    {where&&<>{where} · </>}
+                    {m.manager&&<>Chair: {m.manager} · </>}
+                    Not yet held
+                    {m.calendar?.syncedAt&&<> · In your calendar</>}
+                    {m.invitation?.sentAt&&<> · Invitation sent</>}
+                  </div>
+                  {chairStale&&(
+                    <div style={{fontSize:11,color:"#8A5A17",marginTop:4,fontWeight:600}}>
+                      Appeal officer changed — this hearing must be rearranged under the current officer. Cancel it and schedule a replacement.
+                    </div>
+                  )}
+                </div>
+                <div style={{display:"flex",gap:8,flexShrink:0}}>
+                  <button onClick={()=>onPrepareScheduledMeeting?.(cs, m)}
+                    style={{fontSize:12,background:"none",border:"1px solid #2E4F86",borderRadius:6,padding:"6px 12px",color:"#2E4F86",cursor:"pointer",fontFamily:FONT.sans}}>
+                    Prepare
+                  </button>
+                  <button onClick={()=>onStartScheduledMeeting?.(cs, m)} disabled={chairStale}
+                    style={{fontSize:12,background:chairStale?"#C4BAB0":"#2E4F86",border:"none",borderRadius:6,padding:"7px 14px",color:"#fff",cursor:chairStale?"not-allowed":"pointer",fontFamily:FONT.sans,fontWeight:600}}>
+                    Start scheduled meeting
+                  </button>
+                  <button onClick={()=>onRescheduleMeeting?.(cs, m)}
+                    style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 12px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>
+                    Reschedule
+                  </button>
+                  <button onClick={()=>onCancelScheduledMeeting?.(cs, m)}
+                    style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 12px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

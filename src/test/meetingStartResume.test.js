@@ -17,6 +17,11 @@ import { WRITE_FAILURE, transitionMeeting, planMeetingWrite } from '../lib/meeti
 // meeting rather than append a second one. Tests 23-25 pin that.
 
 const app = readFileSync('src/App.jsx', 'utf8');
+// beginMeeting's own body only. Phase 2.3 inserted the scheduling primitives
+// between beginMeeting and resumeMeeting, so slicing to resumeMeeting would
+// wrongly sweep those in.
+const beginBody = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('  // ── Release 1 Phase 2.3 — truthful scheduling'));
+const resumeBody = app.slice(app.indexOf('const resumeMeeting ='), app.indexOf('const reset ='));
 const home = readFileSync('src/screens/HomeMeetingScreen.jsx', 'utf8');
 const prep = readFileSync('src/screens/PrepScreen.jsx', 'utf8');
 const caseView = readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
@@ -69,9 +74,8 @@ describe('1-6. a started meeting is authoritative', () => {
 describe('7/8. start instant and retry', () => {
   it('7. startedAt is never recomputed on Resume', () => {
     expect(app).toContain('setMeetingStartTime(meeting.startedAt || null);');
-    const resume = app.slice(app.indexOf('const resumeMeeting ='), app.indexOf('const reset ='));
-    expect(resume).not.toMatch(/new Date\(\)/);
-    expect(resume).not.toMatch(/newId\(/);
+    expect(resumeBody).not.toMatch(/new Date\(\)/);
+    expect(resumeBody).not.toMatch(/newId\(/);
   });
 
   it('7b. startedAt is never recomputed at End or Save', () => {
@@ -99,11 +103,10 @@ describe('7/8. start instant and retry', () => {
 describe('9-11. Start fails closed', () => {
   it('9. Start without an authoritative caseId does not happen', () => {
     expect(app).toContain('showToast(describeMeetingWriteFailure(WRITE_FAILURE.PARENT_REQUIRED), "error");');
-    const begin = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('const resumeMeeting ='));
-    expect(begin).toContain('if(!caseId) {');
+    expect(beginBody).toContain('if(!caseId) {');
     // no name matching, no case creation anywhere in the Start path
-    expect(begin).not.toContain('employeeName');
-    expect(begin).not.toContain('crypto.randomUUID');
+    expect(beginBody).not.toContain('employeeName');
+    expect(beginBody).not.toContain('crypto.randomUUID');
   });
 
   it('10/11. inaccessible case and parentage mismatch are refused by the primitive', async () => {
@@ -116,10 +119,9 @@ describe('9-11. Start fails closed', () => {
   });
 
   it('Start navigates only after persistence succeeds', () => {
-    const begin = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('const resumeMeeting ='));
-    const failPoint = begin.indexOf('return { ok: false, reason: result?.reason };');
-    const navPoint = begin.indexOf('setScreen(SCREENS.RECORD);');
-    const auditPoint = begin.indexOf('audit("Meeting started"');
+    const failPoint = beginBody.indexOf('return { ok: false, reason: result?.reason };');
+    const navPoint = beginBody.indexOf('setScreen(SCREENS.RECORD);');
+    const auditPoint = beginBody.indexOf('audit("Meeting started"');
     expect(failPoint).toBeGreaterThan(-1);
     expect(navPoint).toBeGreaterThan(failPoint);      // navigation is after the failure return
     expect(auditPoint).toBeGreaterThan(failPoint);    // so is the audit event
@@ -138,9 +140,11 @@ describe('12-18. Resume is deterministic', () => {
   });
 
   it('15. Resume emits no second "Meeting started" audit', () => {
-    const resume = app.slice(app.indexOf('const resumeMeeting ='), app.indexOf('const reset ='));
-    expect(resume).not.toContain('audit(');
-    expect((app.match(/audit\("Meeting started"/g) || []).length).toBe(1);
+    expect(resumeBody).not.toContain('audit(');
+    // Two Start paths emit it — Start-now (beginMeeting) and starting a
+    // scheduled meeting (Phase 2.3) — and Resume emits neither.
+    expect((app.match(/audit\("Meeting started"/g) || []).length).toBe(2);
+    expect(app.slice(app.indexOf('const startScheduledMeeting ='), app.indexOf('const prepareScheduledMeeting ='))).toContain('audit("Meeting started"');
   });
 
   it('16/17. completed and cancelled meetings are not resumable', () => {
@@ -212,14 +216,12 @@ describe('multiple in_progress meetings are deterministic, never array order', (
 describe('19-22. appeal hearings', () => {
   it('19/21. Start carries the appointed officer as chairUserId, or nothing', () => {
     expect(app).toContain('chairUserId: appealManagerId || null,');
-    const begin = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('const resumeMeeting ='));
-    expect(begin).toContain('const appealManagerId = ctx.appealManagerId !== undefined ? ctx.appealManagerId : caseInfo.appealManagerId;');
+    expect(beginBody).toContain('const appealManagerId = ctx.appealManagerId !== undefined ? ctx.appealManagerId : caseInfo.appealManagerId;');
   });
 
   it('20. a stale officer is rejected by the database, not by the client', () => {
     // The client never checks the officer itself; the trigger is authoritative.
-    const begin = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('const resumeMeeting ='));
-    expect(begin).not.toMatch(/case_access|appeal_manager/);
+    expect(beginBody).not.toMatch(/case_access|appeal_manager/);
     // and the client can explain the trigger's verdict
     expect(app).toContain('APPEAL_CHAIR_STALE_AT_START');
   });
@@ -407,9 +409,8 @@ describe('crash-recovery precedence — server beats stale local state', () => {
 
 describe('platform-wide, not misconduct-specific', () => {
   it('the Start path contains no case-type branching whatsoever', () => {
-    const begin = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('const resumeMeeting ='));
     for (const w of ['misconduct', 'grievance', 'disciplinary', 'investigation', 'probation', 'capability', 'redundancy', 'getNextStep']) {
-      expect(begin.toLowerCase()).not.toContain(w.toLowerCase());
+      expect(beginBody.toLowerCase()).not.toContain(w.toLowerCase());
     }
   });
 
@@ -439,7 +440,7 @@ describe('platform-wide, not misconduct-specific', () => {
 
 describe('the Resume affordance is minimal and truthful', () => {
   it('is driven by the deterministic helper, not a local heuristic', () => {
-    expect(caseView).toContain("import { resumableMeetingFor } from '../lib/meetingLifecycle';");
+    expect(caseView).toContain("import { resumableMeetingFor, scheduledMeetingsFor } from '../lib/meetingLifecycle';");
     expect(caseView).toContain('const liveMeeting = resumableMeetingFor(cs);');
   });
 

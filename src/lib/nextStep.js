@@ -1,6 +1,6 @@
 import { getCaseStage, isGrievanceCase, hasLetterType } from './caseStage.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
-import { isMeetingComplete, lastGenuineMeeting } from './meetingLifecycle.js';
+import { isMeetingComplete, lastGenuineMeeting, scheduledMeetingsFor } from './meetingLifecycle.js';
 
 // Case Copilot's recommended next action — pure function of a case's
 // current stage, type, and meeting history, no I/O. Drives the "Next
@@ -38,6 +38,10 @@ function normalizedCaseType(cs) {
 // (CaseViewScreen.jsx), so this doesn't introduce an inconsistent UX where one
 // entry point is hidden from non-HR users and the other isn't.
 export function getNextStep(cs, ctx = {}) {
+  return withScheduledMeeting(cs, baseNextStep(cs, ctx));
+}
+
+function baseNextStep(cs, ctx = {}) {
   const stage = getCaseStage(cs);
   if(stage==="closed") return null;
   const type = normalizedCaseType(cs);
@@ -45,6 +49,54 @@ export function getNextStep(cs, ctx = {}) {
   if(type==="flexible working"||type==="flexible_working") return flexibleWorkingNextStep(stage, ctx);
   if(type==="long-term sickness"||type==="long term sickness"||type==="long_term_sickness") return longTermSicknessNextStep(stage);
   return isGrievanceCase(cs) ? grievanceNextStep(cs, stage, ctx) : disciplinaryNextStep(cs, stage, ctx);
+}
+
+// Release 1 Phase 2.3 — one shared lifecycle rule, applied after the recipe
+// rather than inside it.
+//
+// A recipe asks "has this meeting happened?" and, if not, says hold it. That
+// was complete while a meeting could not exist before it happened. Now that a
+// meeting can be ARRANGED first, a recipe would keep telling the user to
+// schedule a meeting that is already in the diary.
+//
+// Rather than teach five recipes bespoke scheduled logic, the "hold a meeting"
+// steps are rewritten once, here, when a matching meeting is already
+// scheduled. Recipes, labels, ordering and supported case types are untouched,
+// and a case with no scheduled meeting — which is every legacy case, and every
+// case in the production parity fixture — gets its exact prior answer back.
+const SCHEDULABLE_ACTIONS = new Set(["start_investigation", "start_disciplinary", "start_appeal_meeting", "start_hearing"]);
+
+// Maps a step's meetingType id onto the same type matcher the recipes use, so
+// "which scheduled meeting does this step mean" is never re-derived
+// differently. Types with no matcher (formal, return) simply never match,
+// which leaves their steps untouched rather than guessing.
+function matcherForMeetingType(meetingType) {
+  const id = meetingType || "";
+  if(id.startsWith("appeal-")) return isAppealMeeting;
+  if(id==="investigation") return isInvestigationMeeting;
+  if(id==="disciplinary") return isDisciplinaryMeeting;
+  if(id==="grievance") return isGrievanceMeeting;
+  return null;
+}
+
+export function withScheduledMeeting(cs, step) {
+  if(!step || !SCHEDULABLE_ACTIONS.has(step.action)) return step;
+  const matcher = matcherForMeetingType(step.meetingType);
+  if(!matcher) return step;
+  const scheduled = scheduledMeetingsFor(cs).find(m => matcher(m.type));
+  if(!scheduled) return step;
+  const when = [scheduled.schedule?.date, scheduled.schedule?.time].filter(Boolean).join(" at ");
+  return {
+    ...step,
+    label: "Start scheduled meeting",
+    action: "start_scheduled_meeting",
+    // The id is carried so the caller starts THIS meeting rather than
+    // re-deriving which one the step meant.
+    scheduledMeetingId: scheduled.id,
+    reason: when
+      ? `This meeting is already arranged for ${when}. Starting it opens the same meeting that was scheduled.`
+      : "This meeting is already arranged. Starting it opens the same meeting that was scheduled.",
+  };
 }
 
 // Shared by disciplinaryNextStep/grievanceNextStep/flexibleWorkingNextStep's

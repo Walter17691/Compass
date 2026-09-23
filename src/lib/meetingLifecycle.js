@@ -148,6 +148,47 @@ export function isResumableMeeting(m) {
   return isGenuineMeeting(m) && declaredStatus(m) === MEETING_STATUS.IN_PROGRESS;
 }
 
+// Is this meeting arranged but not yet started?
+//
+// Declared-only, exactly like isResumableMeeting. A legacy row has no declared
+// status and is never scheduled, so nothing historical is swept in.
+export function isScheduledMeeting(m) {
+  return isGenuineMeeting(m) && declaredStatus(m) === MEETING_STATUS.SCHEDULED;
+}
+
+// When a scheduled meeting is actually due. Returns NaN when the logistics are
+// absent or unparseable, so callers can sort without inventing a time.
+//
+// schedule.date is authoritative. The top-level `date` field is kept in step
+// with it purely so pre-lifecycle readers (MeetingsTab, caseTimeline,
+// prevMeetings ordering) keep working unchanged.
+export function scheduleInstant(m) {
+  const s = isObject(m) && isObject(m.schedule) ? m.schedule : null;
+  const date = (s && s.date) || (isObject(m) ? m.date : null);
+  if (!date) return NaN;
+  const time = (s && s.time) || "00:00";
+  return Date.parse(`${date}T${/^\d{2}:\d{2}$/.test(time) ? time : "00:00"}:00`);
+}
+
+// Every meeting arranged on a case, soonest first.
+//
+// Deliberately a list, not a single value. A case can legitimately have
+// several meetings arranged at once — an investigation interview, a witness
+// meeting, a disciplinary hearing, a follow-up welfare call — so no
+// case-level "only one scheduled meeting" rule is implied or enforced here.
+// Which one matters next is a question for the process recipe.
+export function scheduledMeetingsFor(caseObj) {
+  return (Array.isArray(caseObj?.meetings) ? caseObj.meetings : [])
+    .filter(isScheduledMeeting)
+    .map((m, index) => ({ m, index, at: scheduleInstant(m) }))
+    .sort((a, b) => {
+      const av = Number.isNaN(a.at) ? Infinity : a.at;   // undated sorts last
+      const bv = Number.isNaN(b.at) ? Infinity : b.at;
+      return av - bv || a.index - b.index;
+    })
+    .map(entry => entry.m);
+}
+
 // The live meeting on a case, if there is one.
 //
 // The UI intends exactly one, but nothing in the database enforces that, so

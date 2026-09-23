@@ -74,8 +74,8 @@ import { buildSentLetterEvidenceItem, findTaskToCompleteForSentLetter, buildLett
 import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/meetingCompletion';
 import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/employeeHistory';
 import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
-import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
-import { persistMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE } from './lib/meetingWrites';
+import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
+import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE } from './lib/meetingWrites';
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
@@ -3013,54 +3013,59 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error("generateMeetingWorkspace", e); return { agenda:"", questions:[] }; }
   };
 
+  // Calendar screen entry point. Release 1 Phase 2.3 — rewritten to be
+  // Compass-first: it now delegates to scheduleCaseMeeting, which persists the
+  // authoritative meeting and only then attempts calendar synchronisation.
+  // Previously this called /api/calendar/create-event first and returned early
+  // on failure, so a disconnected or failing calendar meant no Compass meeting
+  // was created at all — and the entry it did create carried no caseId and no
+  // status, so nothing downstream could tell it apart from a meeting that had
+  // already happened.
   const scheduleMeeting = async ({ caseId, meetingType, date, startTime, durationMinutes, attendees, description }) => {
     const times = buildEventTimes({ date, startTime, durationMinutes });
     if(!times) { showToast("Enter a valid date and time", "error"); return false; }
+    if(!caseId) { showToast("Choose the case this meeting belongs to", "error"); return false; }
     const cs = cases.find(x=>x.id===caseId);
-    const meetingLabel = MEETING_TYPES.find(t=>t.id===meetingType)?.label || "Meeting";
-    const title = `${meetingLabel}${cs?" — "+cs.employeeName:""}`;
+    const type = MEETING_TYPES.find(t=>t.id===meetingType) || null;
+    const title = `${type?.label || "Meeting"}${cs?" — "+cs.employeeName:""}`;
     setMeetingScheduling(true);
     try {
-      const res = await authedFetch("/api/calendar/create-event", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
-        title, description: description||"", startISO: times.startISO, endISO: times.endISO, attendees: parseAttendees(attendees), orgId: org?.id,
-      })});
-      const data = await res.json();
-      if(!res.ok || !data.success) { showToast(data.error||"Couldn't schedule the meeting", "error"); setMeetingScheduling(false); return false; }
-      audit("Meeting scheduled", title, caseId||null);
+      const result = await scheduleCaseMeeting({
+        caseId, type, date, time: startTime, method: null, location: null,
+        participants: parseAttendees(attendees).map(email=>({ name: email, role: "Attendee" })),
+        manager: cs?.manager || "",
+        // The appointed officer, for an appeal hearing. Resolved from the same
+        // authoritative case_access relationship the trigger checks; the
+        // trigger, not this line, is what makes it binding.
+        appealManagerId: appealManagerIdForCase(caseId),
+        calendarRequest: { title, description, startISO: times.startISO, endISO: times.endISO, attendees: parseAttendees(attendees) },
+      });
+      if(!result?.ok) return false;
 
-      // IP17 — only when a real case is linked; a stand-alone meeting has
-      // no case record to attach a workspace to.
+      // IP17's automatic meeting workspace, preserved. It used to be built
+      // into the meeting entry before it was ever persisted; now it enriches
+      // the meeting that already exists, patching the SAME id. A failure here
+      // leaves the meeting scheduled — an agenda is a convenience, not a
+      // precondition, exactly like the calendar.
       if(cs) {
-        const workspace = await generateMeetingWorkspace(cs, meetingLabel);
-        const meetingEntry = buildScheduledMeetingEntry({
-          meetingTypeLabel: meetingLabel, date, startISO: times.startISO, endISO: times.endISO,
-          attendees: parseAttendees(attendees), agenda: workspace.agenda, prepQuestions: workspace.questions,
-          manager: cs.manager, savedBy: currentUser?.name, calendarEvents: data.events,
-        });
-        saveCases(cases.map(x=>x.id===caseId?{...x, meetings:[...(x.meetings||[]), meetingEntry]}:x), caseId);
-        // Pre-meeting tasks — only genuinely actionable prep items
-        // (essential AND about evidence to gather), not every question.
-        workspace.questions.filter(q=>q.essential && q.category==="evidence").forEach(q => {
-          createCaseTask(caseId, { name: "Prepare: "+q.text });
-        });
-        audit("Meeting workspace created", title, caseId);
+        try {
+          const workspace = await generateMeetingWorkspace(cs, type?.label || "Meeting");
+          if(workspace.agenda || workspace.questions.length) {
+            await transitionMeeting({
+              cases: casesRef.current, caseId, meetingId: result.meetingId,
+              allowedFrom: [MEETING_STATUS.SCHEDULED], toStatus: MEETING_STATUS.SCHEDULED,
+              patch: { agenda: workspace.agenda || "", prepQuestions: workspace.questions || [] },
+              saveCases,
+            });
+          }
+          workspace.questions.filter(q=>q.essential && q.category==="evidence").forEach(q => {
+            createCaseTask(caseId, { name: "Prepare: "+q.text });
+          });
+          audit("Meeting workspace created", title, caseId);
+        } catch(e) { console.error("Meeting workspace generation failed:", e); }
       }
-
-      // Phase 6.5 hardening (closes Prompt 11 audit finding 7.11, MEDIUM)
-      // — create-event deliberately creates the event on EVERY calendar
-      // the user has connected (its own header comment), not just one —
-      // real for a user with both Google and Microsoft 365 connected,
-      // but it means attendees get a separate invite from each. Silently
-      // saying "scheduled on your calendar" (singular) when it just went
-      // out from two different systems was misleading; naming both here
-      // makes that an informed fact instead of a surprise.
-      const calendarNote = data.events?.length > 1
-        ? ` on ${data.events.length} connected calendars (${data.events.map(e=>e.provider).join(', ')}) — attendees may receive a separate invite from each`
-        : "";
-      showToast("Meeting scheduled"+(calendarNote||" on your calendar"));
-      setMeetingScheduling(false);
       return true;
-    } catch(e) { showToast("Couldn't schedule the meeting — "+e.message, "error"); setMeetingScheduling(false); return false; }
+    } finally { setMeetingScheduling(false); }
   };
 
   // IP16, §10 — availability checks against the CALLER's own connected
@@ -6408,6 +6413,170 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     return { ok: true, meetingId: attempt.id };
   };
 
+  // ── Release 1 Phase 2.3 — truthful scheduling ─────────────────────────
+  //
+  // "Schedule meeting" now means a real Compass meeting has been scheduled.
+  // The object created here is the SAME lifecycle object that will later be
+  // prepared, started, reviewed and completed — one identity throughout.
+  //
+  // COMPASS FIRST. The previous implementation called the calendar API and
+  // returned early on failure, before any persistence, so no calendar
+  // integration meant no scheduled meeting at all. Compass is the system of
+  // record; the calendar is an integration. Persist, confirm, and only then
+  // attempt synchronisation.
+  // The currently appointed appeal officer for a case, from the same
+  // case_access relationship protect_appeal_hearing_chair_integrity() checks.
+  // A convenience for populating chairUserId at scheduling — it is NOT the
+  // control. The database decides whether the value is acceptable.
+  const appealManagerIdForCase = (caseId) =>
+    caseAccess.find(a => a.caseId === caseId && a.role === "appeal_manager")?.userId || null;
+
+  const scheduleCaseMeeting = async ({ caseId, type, date, time, method, location, participants: attendees = [], appealManagerId = null, manager = "", calendarRequest = null }) => {
+    if(!caseId) {
+      showToast(describeMeetingWriteFailure(WRITE_FAILURE.PARENT_REQUIRED), "error");
+      return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
+    }
+    if(!date) { showToast("Enter the date the meeting is arranged for", "error"); return { ok: false, reason: 'invalid_schedule' }; }
+
+    const now = new Date().toISOString();
+    const meeting = stampNewMeeting({
+      id: newId("meeting"),
+      type: type?.label || "Meeting",
+      status: MEETING_STATUS.SCHEDULED,
+      // schedule.* is authoritative. The flat `date` mirrors it so every
+      // pre-lifecycle reader (MeetingsTab, caseTimeline's "scheduled" wording,
+      // prevMeetings ordering) keeps working with no change at all.
+      schedule: { date, time: time || null, method: method || null, location: location || null },
+      date,
+      participants: attendees,
+      manager: manager || "",
+      // Appeal hearings only. The database trigger validates this at
+      // creation — the client never decides whether the officer is current.
+      chairUserId: appealManagerId || null,
+      startedAt: null, endedAt: null, record: null, transcript: [],
+      // Independent facts, both absent until they actually happen. Neither is
+      // implied by scheduling.
+      invitation: null, calendar: null,
+    }, { caseId, now, by: currentUser?.name || "HR Manager" });
+
+    const result = await persistMeeting({ cases: casesRef.current, caseId, meeting, saveCases });
+    if(!result?.ok) {
+      showToast(describeMeetingWriteFailure(result?.reason) || describeSaveMeetingError(result?.message), "error");
+      return { ok: false, reason: result?.reason };
+    }
+    audit("Meeting scheduled", `${meeting.type} — ${date}${time?" "+time:""}`, caseId);
+
+    // Optional, and only now. A failure here leaves the meeting scheduled.
+    if(calendarRequest) {
+      const sync = await syncMeetingToCalendar({ caseId, meetingId: meeting.id, ...calendarRequest });
+      showToast(sync.ok ? "Meeting scheduled and added to your calendar" : "Meeting scheduled in Compass. Calendar sync failed — you can retry from the case.");
+    } else {
+      showToast("Meeting scheduled");
+    }
+    return { ok: true, meetingId: meeting.id };
+  };
+
+  // Calendar synchronisation, always against an ALREADY scheduled meeting.
+  // Patches that same meeting id; never creates a second one, never touches
+  // identity, parentage, createdAt or the schedule itself.
+  const syncMeetingToCalendar = async ({ caseId, meetingId, title, description, startISO, endISO, attendees }) => {
+    try {
+      const res = await authedFetch("/api/calendar/create-event", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+        title, description: description||"", startISO, endISO, attendees: attendees||[], orgId: org?.id,
+      })});
+      const data = await res.json();
+      if(!res.ok || !data.success) {
+        // The provider's own message is kept for diagnostics, never shown raw.
+        console.error("Calendar sync failed:", data?.error || res.status);
+        audit("Calendar sync failed", `meeting ${meetingId}`, caseId);
+        return { ok: false };
+      }
+      const first = (data.events||[])[0] || null;
+      await transitionMeeting({
+        cases: casesRef.current, caseId, meetingId,
+        allowedFrom: [MEETING_STATUS.SCHEDULED], toStatus: MEETING_STATUS.SCHEDULED,
+        patch: { calendar: { provider: first?.provider || null, eventId: first?.eventId || null, events: data.events||[], syncedAt: new Date().toISOString() } },
+        saveCases,
+      });
+      audit("Calendar sync succeeded", `meeting ${meetingId}`, caseId);
+      return { ok: true, events: data.events||[] };
+    } catch(e) {
+      console.error("Calendar sync failed:", e);
+      audit("Calendar sync failed", `meeting ${meetingId}`, caseId);
+      return { ok: false };
+    }
+  };
+
+  // Starting a SCHEDULED meeting is a transition, never a creation. Same id,
+  // same caseId, same createdAt, same schedule, same chair — only startedAt
+  // and status change.
+  const startScheduledMeeting = async (cs, meeting) => {
+    const result = await transitionMeeting({
+      cases: casesRef.current, caseId: cs.id, meetingId: meeting.id,
+      allowedFrom: [MEETING_STATUS.SCHEDULED], toStatus: MEETING_STATUS.IN_PROGRESS,
+      patch: { startedAt: startInstant() }, saveCases,
+    });
+    if(!result?.ok) {
+      showToast(describeMeetingWriteFailure(result?.reason) || describeSaveMeetingError(result?.message), "error");
+      return { ok: false, reason: result?.reason };
+    }
+    const started = casesRef.current.find(c=>c.id===cs.id)?.meetings?.find(m=>m.id===meeting.id) || meeting;
+    resumeMeeting(cs, started);
+    audit("Meeting started", `${started.type} — meeting ${started.id}`, cs.id);
+    return { ok: true, meetingId: started.id };
+  };
+
+  // Preparation attaches to the scheduled meeting's own identity, so Prepare
+  // -> Start operates on one meeting rather than creating a second.
+  const prepareScheduledMeeting = (cs, meeting) => {
+    setMeetingType(MEETING_TYPES.find(t => t.label === meeting.type) || null);
+    setCaseInfo(p => ({ ...p,
+      employee: cs.employeeName, manager: meeting.manager || cs.manager || "",
+      caseId: cs.id, preparedCaseId: cs.id, _linkedCaseId: null,
+      meetingId: meeting.id, appealManagerId: meeting.chairUserId || null,
+      date: meeting.schedule?.date || meeting.date || "",
+      time: meeting.schedule?.time || "",
+      locationOrMethod: meeting.schedule?.location || meeting.schedule?.method || "",
+    }));
+    setParticipants(meeting.participants || []);
+    setActiveCaseId(cs.id);
+    setScreen(SCREENS.PREP);
+  };
+
+  // Rescheduling amends future logistics on the same meeting. chairUserId is
+  // deliberately NOT patchable: it is security-sensitive and immutable, so an
+  // appeal hearing whose officer has changed must be cancelled and replaced
+  // under the new officer rather than quietly re-pointed.
+  const rescheduleCaseMeeting = async (cs, meeting, { date, time, method, location }) => {
+    if(!date) { showToast("Enter the new date", "error"); return { ok: false, reason: 'invalid_schedule' }; }
+    const result = await transitionMeeting({
+      cases: casesRef.current, caseId: cs.id, meetingId: meeting.id,
+      allowedFrom: [MEETING_STATUS.SCHEDULED], toStatus: MEETING_STATUS.SCHEDULED,
+      patch: { schedule: { ...(meeting.schedule||{}), date, time: time || null, method: method || null, location: location || null }, date },
+      saveCases,
+    });
+    if(!result?.ok) { showToast(describeMeetingWriteFailure(result?.reason) || "Couldn't reschedule the meeting", "error"); return { ok: false, reason: result?.reason }; }
+    audit("Meeting rescheduled", `${meeting.type} — now ${date}${time?" "+time:""}`, cs.id);
+    showToast("Meeting rescheduled");
+    return { ok: true };
+  };
+
+  // Cancellation preserves everything and deletes nothing. A cancelled
+  // meeting is not resumable, is not complete, and never satisfies
+  // "a meeting was held" — but it stays on the record as what was arranged.
+  const cancelScheduledMeeting = async (cs, meeting, reason) => {
+    const result = await transitionMeeting({
+      cases: casesRef.current, caseId: cs.id, meetingId: meeting.id,
+      allowedFrom: [MEETING_STATUS.SCHEDULED], toStatus: MEETING_STATUS.CANCELLED,
+      patch: { cancelledAt: new Date().toISOString(), cancelledBy: currentUser?.name || "HR Manager", cancelledReason: reason || null },
+      saveCases,
+    });
+    if(!result?.ok) { showToast(describeMeetingWriteFailure(result?.reason) || "Couldn't cancel the meeting", "error"); return { ok: false, reason: result?.reason }; }
+    audit("Meeting cancelled", `${meeting.type}${reason?" — "+reason:""}`, cs.id);
+    showToast("Meeting cancelled");
+    return { ok: true };
+  };
+
   // Resume restores the authoritative persisted meeting. It never mints a new
   // id, never restamps startedAt, and never re-emits "Meeting started".
   const resumeMeeting = (cs, meeting) => {
@@ -9656,7 +9825,7 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen beginMeeting={beginMeeting} meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setMeetingActionSuggestions={setMeetingActionSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setMeetingSummary={setMeetingSummary} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} setDismissedCoachingTipKeys={setDismissedCoachingTipKeys} fmtDate={fmtDate} startSession={startSession} />
+        <HomeMeetingScreen beginMeeting={beginMeeting} scheduleCaseMeeting={scheduleCaseMeeting} meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setMeetingActionSuggestions={setMeetingActionSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setMeetingSummary={setMeetingSummary} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} setDismissedCoachingTipKeys={setDismissedCoachingTipKeys} fmtDate={fmtDate} startSession={startSession} />
       )}
 
             {screen===SCREENS.PEOPLE&&(
@@ -9710,6 +9879,37 @@ Please produce:
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(
         <CaseViewScreen
           onResumeMeeting={resumeMeeting}
+          onStartScheduledMeeting={startScheduledMeeting}
+          onPrepareScheduledMeeting={prepareScheduledMeeting}
+          onRescheduleMeeting={async (cs, m) => {
+            const values = await promptDialog({
+              title: "Reschedule this meeting?",
+              message: `${m.type||"Meeting"} is currently arranged for ${m.schedule?.date||m.date||"an unset date"}${m.schedule?.time?" at "+m.schedule.time:""}. The same meeting keeps its identity and history — only the logistics change.`,
+              fields: [
+                { key:"date", label:"New date", placeholder:"YYYY-MM-DD" },
+                { key:"time", label:"New time (optional)", placeholder:"HH:MM" },
+                { key:"method", label:"Method / location (optional)", placeholder:"e.g. Microsoft Teams" },
+              ],
+              confirmLabel: "Reschedule",
+            });
+            if(!values) return;
+            await rescheduleCaseMeeting(cs, m, {
+              date: (values.date||"").trim(),
+              time: (values.time||"").trim() || null,
+              method: (values.method||"").trim() || null,
+              location: (values.method||"").trim() || null,
+            });
+          }}
+          onCancelScheduledMeeting={async (cs, m) => {
+            const values = await promptDialog({
+              title: "Cancel this meeting?",
+              message: `${m.type||"Meeting"} scheduled for ${m.schedule?.date||m.date||"an unset date"}. The meeting stays on the case as cancelled — nothing is deleted.`,
+              fields: [{ key:"reason", label:"Reason (optional)", placeholder:"e.g. appeal officer changed" }],
+              confirmLabel: "Cancel meeting",
+            });
+            if(!values) return;
+            await cancelScheduledMeeting(cs, m, (values.reason||"").trim() || null);
+          }}
           shell={{
             cases, casesLoading, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
             getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,

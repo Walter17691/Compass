@@ -111,11 +111,17 @@ none of which persist a structured case meeting:
 
 ### NEW-32 — "Schedule investigation meeting" does not schedule
 - **Severity** P1 · **Area** Workflow
-- The action label promises scheduling; the handler opens a generic meeting
-  form whose only outcomes are Prepare or Start. Nothing is persisted.
-- **Evidence** `src/lib/nextStep.js` — `action:"start_investigation"` behind
-  the label `"Schedule investigation meeting"`.
-- **Decision** ABSORBED BY REDESIGN — Phase 2.
+- **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED** (Phase 2.3, 2026-09-23).
+- The action label promised scheduling; the handler opened a generic meeting
+  form whose only outcomes were Prepare or Start. Nothing was persisted.
+- Scheduling now creates a real lifecycle meeting — `status: "scheduled"` with
+  `caseId`, `createdAt`, `createdBy` and `schedule.{date,time,method,location}`
+  — which is the same object later prepared, started, reviewed and completed.
+  The case stops recommending a meeting that is already arranged.
+- **Evidence** `src/test/meetingScheduled.test.js` (61 tests); Compass-first
+  write order asserted against source; deploy below.
+- **Decision** NOT CLOSED. The human-facing route has not been exercised in a
+  browser. Close only after the human UAT flow in the Phase 2.3 report passes.
 
 ### NEW-34 — transcript ordering under async resolution
 - **Severity** P2 · **Area** Capture
@@ -165,8 +171,13 @@ none of which persist a structured case meeting:
   stored entries carry `scheduledStartISO`, `calendarEvents`, `agenda`,
   `prepQuestions` or `attendees`; 0 are future-dated. **This path has never
   produced a row in production.**
-- **Decision** OPEN — Phase 2.3 reverses the order so persistence succeeds
-  first and calendar failure is visible and retryable.
+- **STATUS: CLOSED** (Phase 2.3, 2026-09-23). The order is reversed: Compass
+  persists and confirms first, then attempts calendar sync. A calendar failure
+  leaves the meeting scheduled and shows *"Meeting scheduled in Compass.
+  Calendar sync failed"*; the provider's error is logged, never shown. Sync
+  success patches the same meeting id and cannot create a second one.
+- **Evidence** source-order assertions plus `transitionMeeting` patch tests in
+  `src/test/meetingScheduled.test.js`.
 
 ### Appeal chair validation bypassed by NULL letterType — P1
 - **Severity** **P1** · **Area** Appeal security · **Raised** 2026-09-23
@@ -206,9 +217,12 @@ none of which persist a structured case meeting:
   rather than a silent hole.
 - **Evidence** `src/lib/meetingScheduling.js:131-147`; rolled-back test 3
   (“CREATE scheduled with NO chair at all” → rejected).
-- **Decision** OPEN — Phase 2.3 must source the chair from
-  `case_access.role='appeal_manager'` at scheduling, or block with an
-  actionable message. The trigger is behaving correctly and is not at fault.
+- **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED** (Phase 2.3, 2026-09-23).
+  Scheduling now sources `chairUserId` from `case_access.role='appeal_manager'`
+  via `appealManagerIdForCase`, and the deployed trigger validates it at
+  creation. The client supplies the value; the database decides.
+- **Decision** NOT CLOSED. Requires the human appeal UAT flow (R-U) in the
+  Phase 2.3 report.
 
 ### Stale scheduled appeal hearing after officer replacement
 - **Severity** P2 · **Area** Appeal security / UX · **Raised** 2026-09-23
@@ -220,7 +234,13 @@ none of which persist a structured case meeting:
 - The row remains fully readable and patchable so it can be surfaced as
   *"Appeal officer changed — reschedule required"*, but **that UI state does
   not exist yet**, so today the user only discovers it on attempting to Start.
-- **Decision** OPEN — the affordance belongs to Phase 2.3 (scheduling UI).
+- **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED** (Phase 2.3, 2026-09-23).
+  The Case View now detects the mismatch deterministically before any Start
+  attempt, states *"Appeal officer changed — this hearing must be rearranged
+  under the current officer"*, and disables that hearing's Start button. This
+  is an affordance only: the database remains the control and would refuse the
+  transition regardless.
+- **Decision** NOT CLOSED until a human confirms the state is visible.
 
 ### Workflow transition written through unchecked sync-all
 - **Severity** P3 · **Area** Persistence · **Raised** 2026-09-22
@@ -278,6 +298,27 @@ none of which persist a structured case meeting:
     no data loss.
 - **Decision** ACCEPTED and documented. Forward-compatible reading shipped in
   Phase 1, which is why rollback degrades rather than breaks.
+
+### Calendar sync has no retry affordance
+- **Severity** P3 · **Area** Calendar · **Raised** 2026-09-23
+- When sync fails the meeting is scheduled and the user is told so, but there
+  is no button to retry the sync against the same meeting. `syncMeetingToCalendar`
+  is already safe to call again — it patches the existing meeting id and would
+  not create a second Compass meeting — but a retry could create a **duplicate
+  calendar event** at the provider, because nothing checks for an existing
+  `calendar.eventId` first.
+- **Decision** OPEN — deliberately deferred. A safe retry needs
+  eventId-aware update-or-create semantics in the integration, which is a
+  larger change than this phase allows.
+
+### Scheduling from the Calendar screen requires a linked case
+- **Severity** P3 · **Area** Scheduling · **Raised** 2026-09-23
+- The Calendar screen previously allowed scheduling a stand-alone meeting with
+  no case; it created a calendar event and no Compass record. Because a
+  lifecycle meeting requires authoritative parentage (Phase 2.1), that path
+  now asks the user to choose a case.
+- **Intentional behaviour change**, consistent with `parent_required`.
+- **Decision** OPEN — the unlinked link-or-create flow is Phase 2.5.
 
 ### Proposed Updates evidential contract not applied
 - **Severity** P2 · **Area** AI

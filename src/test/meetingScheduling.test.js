@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod, buildScheduledMeetingEntry } from '../lib/meetingScheduling.js';
+import { readFileSync } from 'node:fs';
+import * as scheduling from '../lib/meetingScheduling.js';
+import { buildEventTimes, parseAttendees, suggestAttendees, checkNoticePeriod } from '../lib/meetingScheduling.js';
 
 describe('buildEventTimes (Phase 5, IP15)', () => {
   it('builds start/end ISO strings from a date, time and duration', () => {
@@ -125,45 +127,34 @@ describe('checkNoticePeriod (Phase 5, IP16)', () => {
   });
 });
 
-describe('buildScheduledMeetingEntry (Phase 5, IP17)', () => {
-  it('builds a meeting entry with no record, matching every other meeting shape on the case', () => {
-    const entry = buildScheduledMeetingEntry({
-      meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: '2026-08-20T14:00:00.000Z', endISO: '2026-08-20T15:00:00.000Z',
-      attendees: ['sarah@company.com'], agenda: '- Discuss the allegation', prepQuestions: [{ text: 'Question 1' }], manager: 'Jo Smith', savedBy: 'HR Manager',
-    });
-    expect(entry).toMatchObject({
-      type: 'Investigation', date: '20/08/2026', scheduledStartISO: '2026-08-20T14:00:00.000Z', scheduledEndISO: '2026-08-20T15:00:00.000Z',
-      attendees: ['sarah@company.com'], agenda: '- Discuss the allegation', prepQuestions: [{ text: 'Question 1' }], manager: 'Jo Smith', savedBy: 'HR Manager', record: null,
-    });
-    expect(entry.id).toBeTruthy();
-    expect(entry.savedAt).toBeTruthy();
+describe('buildScheduledMeetingEntry is retired (Release 1 Phase 2.3)', () => {
+  // INTENTIONAL REMOVAL, with replacement coverage.
+  //
+  // The old builder produced a meeting-shaped entry with no caseId and no
+  // lifecycle status, relying on `record: null` to mean "hasn't happened yet"
+  // — the exact proxy Phase 1 replaced. The entry it created could not be
+  // started, prepared or cancelled as itself. Scheduling now creates a real
+  // lifecycle meeting through meetingWrites.persistMeeting, so keeping the
+  // builder would have left a second, diverging way to create a meeting.
+  it('is no longer exported', () => {
+    expect(scheduling.buildScheduledMeetingEntry).toBeUndefined();
   });
 
-  it('defaults optional fields sensibly when omitted', () => {
-    const entry = buildScheduledMeetingEntry({ meetingTypeLabel: 'Grievance', date: '20/08/2026', startISO: 'x', endISO: 'y' });
-    expect(entry.attendees).toEqual([]);
-    expect(entry.agenda).toBe('');
-    expect(entry.prepQuestions).toEqual([]);
-    expect(entry.manager).toBe('');
-    expect(entry.savedBy).toBe('HR Manager');
-    expect(entry.calendarEvents).toEqual([]);
+  it('and nothing in the app still calls it', () => {
+    const app = readFileSync('src/App.jsx', 'utf8');
+    expect(app).not.toContain('buildScheduledMeetingEntry(');
   });
 
-  // Phase 6.5 hardening (closes Prompt 11 audit finding 7.11, MEDIUM) —
-  // create-event's own {provider, eventId} pairs used to be discarded
-  // entirely, so Compass had no record of which real calendar event(s) a
-  // scheduled meeting corresponds to.
-  it('persists the calendar event ids returned by create-event (Prompt 11 audit, 7.11)', () => {
-    const entry = buildScheduledMeetingEntry({
-      meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: 'x', endISO: 'y',
-      calendarEvents: [{ provider: 'google', eventId: 'g-evt-1' }, { provider: 'microsoft365', eventId: 'ms-evt-1' }],
-    });
-    expect(entry.calendarEvents).toEqual([{ provider: 'google', eventId: 'g-evt-1' }, { provider: 'microsoft365', eventId: 'ms-evt-1' }]);
+  it('scheduling now persists a real lifecycle meeting instead', () => {
+    const app = readFileSync('src/App.jsx', 'utf8');
+    expect(app).toContain('status: MEETING_STATUS.SCHEDULED,');
+    expect(app).toContain('const result = await persistMeeting({ cases: casesRef.current, caseId, meeting, saveCases });');
   });
 
-  it('gives each entry a unique id', () => {
-    const a = buildScheduledMeetingEntry({ meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: 'x', endISO: 'y' });
-    const b = buildScheduledMeetingEntry({ meetingTypeLabel: 'Investigation', date: '20/08/2026', startISO: 'x', endISO: 'y' });
-    expect(a.id).not.toBe(b.id);
+  it('the surviving helpers are untouched', () => {
+    expect(typeof buildEventTimes).toBe('function');
+    expect(typeof parseAttendees).toBe('function');
+    expect(typeof suggestAttendees).toBe('function');
+    expect(typeof checkNoticePeriod).toBe('function');
   });
 });

@@ -129,6 +129,52 @@ call and always supplies `changedId`, so the sync-all branch is structurally
 unreachable from the meeting write primitive. No new meeting mutation may use
 sync-all.
 
+### Scheduling (Phase 2.3)
+
+- **Canonical primitives** `scheduleCaseMeeting` · `syncMeetingToCalendar` ·
+  `startScheduledMeeting` · `prepareScheduledMeeting` · `rescheduleCaseMeeting` ·
+  `cancelScheduledMeeting` (App.jsx) · `isScheduledMeeting`,
+  `scheduledMeetingsFor`, `scheduleInstant` (`meetingLifecycle.js`) ·
+  `withScheduledMeeting` (`nextStep.js`)
+- **Status** LIVE — `scheduled` is a real, startable lifecycle state
+
+| Consumer | Class | Note |
+|---|---|---|
+| `HomeMeetingScreen` "Schedule meeting" | **MIGRATED** | New, distinct from Start |
+| `CalendarScreen` → `scheduleMeeting` | **MIGRATED** | Rewritten Compass-first |
+| Case View scheduled banner | **MIGRATED** | Prepare · Start · Reschedule · Cancel |
+| `getNextStep` | **MIGRATED** | One shared `withScheduledMeeting` wrapper; recipes untouched |
+| `buildScheduledMeetingEntry` | **RETIRED** | Removed — the pre-lifecycle forked builder |
+| `caseTimeline` "held vs scheduled" | **UNCHANGED INTENTIONALLY** | Already keys on record presence, so a scheduled meeting reads "scheduled" |
+| `MeetingsTab` scheduled details | **UNCHANGED INTENTIONALLY** | Still renders agenda/questions/attendees |
+| Invitation flow | **UNCHANGED INTENTIONALLY** | Letters remain independent facts |
+| Dev meetings | **DEFERRED** | Phase 2.5 |
+
+**Compass first.** Persist → confirm → then attempt calendar sync. A calendar
+failure leaves the meeting scheduled and surfaces a recoverable message; the
+provider's own error is logged, never shown. Calendar success patches the
+**same** meeting id via `transitionMeeting` and can never create a second one.
+
+**Schedule and Start are different intents.** Neither routes through the other.
+Schedule creates `scheduled` and returns to the case; Start creates
+`in_progress` and enters the live screen. They share identity and lifecycle
+infrastructure only.
+
+**Rescheduling** amends logistics on the same id and never touches
+`chairUserId`. **Cancellation** preserves the id, schedule and chair, sets
+`cancelledAt`/`cancelledBy`/`cancelledReason`, deletes nothing, and does not
+block a replacement. `completed → cancelled` is refused by allowed-from.
+
+**Multiple scheduled meetings per case are supported and expected** —
+investigation interview, witness meeting, hearing, follow-up. No case-level
+uniqueness rule exists or is implied; ordering is soonest-first with undated
+last.
+
+**Appeal chair.** Scheduling stamps the appointed officer and the deployed
+trigger validates it at creation; Start revalidates. The Case View surfaces a
+stale-officer hearing early and disables its Start button — an affordance, not
+the control. Nothing client-side rewrites the chair.
+
 ### Meeting lifecycle — Start / Resume (Phase 2.2)
 
 - **Canonical primitives** `beginMeeting` / `resumeMeeting` (App.jsx) ·

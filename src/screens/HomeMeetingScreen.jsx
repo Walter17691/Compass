@@ -41,7 +41,7 @@ const FIELD_WRAP_STYLE = {marginBottom:20};
 const FIELD_LABEL_STYLE = {display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7};
 const OPTIONAL_TAG_STYLE = {fontWeight:400,color:"#9B9098"};
 
-export function HomeMeetingScreen({ beginMeeting, meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setMeetingActionSuggestions, setReviewOutput, setReviewOutputOriginal, setMeetingSummary, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, setDismissedCoachingTipKeys, fmtDate, startSession }) {
+export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setMeetingActionSuggestions, setReviewOutput, setReviewOutputOriginal, setMeetingSummary, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, setDismissedCoachingTipKeys, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
@@ -443,7 +443,38 @@ export function HomeMeetingScreen({ beginMeeting, meetingSetup, setMeetingSetup,
               setTranscript([]);setPrepNotes("");setPrepQuestions([]);setMeetingEvidenceSuggestions([]);setMeetingActionSuggestions([]);setReviewOutput("");setReviewOutputOriginal("");setMeetingSummary("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);setDismissedCoachingTipKeys?.([]);
             };
             return (
-              <div style={{display:"flex",gap:8}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {/* Release 1 Phase 2.3 — Schedule and Start are different user
+                    intents, not synonyms, and neither routes through the
+                    other. Schedule creates status "scheduled"; Start creates
+                    status "in_progress" via the Phase 2.2 path. They share
+                    identity and lifecycle infrastructure only. */}
+                {!isDev&&(
+                  <button
+                    disabled={disabled||starting||!meetingSetup.date}
+                    title={!meetingSetup.date?"Add the date the meeting is arranged for":undefined}
+                    onClick={async ()=>{
+                      commit();
+                      setStarting(true);
+                      try {
+                        const r = await scheduleCaseMeeting?.({
+                          caseId: meetingSetup.preparedCaseId||activeCaseId||null,
+                          type: selected||{id:meetingSetup.type,label:meetingSetup.type},
+                          date: meetingSetup.date,
+                          time: meetingSetup.time||null,
+                          method: meetingSetup.locationOrMethod||null,
+                          location: meetingSetup.locationOrMethod||null,
+                          participants: meetingSetup.participants||[],
+                          manager: meetingSetup.manager||"",
+                          appealManagerId: meetingSetup.appealManagerId||null,
+                        });
+                        if(r?.ok) setScreen(SCREENS.CASE_VIEW);
+                      } finally { setStarting(false); }
+                    }}
+                    style={{flex:1,background:"#FFFFFF",border:"1px solid "+((disabled||!meetingSetup.date)?"#E8E0D0":"#7C5CFC"),borderRadius:10,padding:"14px",fontSize:15,color:(disabled||!meetingSetup.date)?"#9B9098":"#7C5CFC",fontWeight:600,cursor:(disabled||!meetingSetup.date)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    Schedule meeting
+                  </button>
+                )}
                 {!isDev&&(
                   <button
                     disabled={disabled}

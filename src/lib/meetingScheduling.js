@@ -108,40 +108,13 @@ export function checkNoticePeriod(policyClauseTexts, { meetingISO, now = new Dat
   return null;
 }
 
-// Integrations & Workflow Automation (Phase 5, IP17, §11) — automatic
-// meeting workspace. Deliberately reuses the exact meeting-record shape
-// every meeting on a case already has (id/type/date/manager/savedBy —
-// see App.jsx's own saveMeetingToCase) rather than a parallel
-// "scheduled meeting" entity: nextStep.js's own stage logic already
-// treats a meeting with no `record` yet as "hasn't happened, offer Start
-// meeting" (e.g. disciplinaryNextStep's `if(!lastInv?.record)` branch),
-// so a scheduled-not-yet-held meeting already behaves correctly
-// everywhere else in the app for free — MeetingsTab, buildCaseTimeline,
-// nextStep — with no changes needed to any of them beyond
-// buildCaseTimeline's own "held" vs "scheduled" wording (see its own
-// comment). record stays null/undefined until the meeting is actually
-// run through the live session.
-// calendarEvents (Phase 6.5 hardening, closes Prompt 11 audit finding
-// 7.11, MEDIUM): api/calendar/_create-event.js returns a {provider,
-// eventId} pair for every calendar it created the event on — this used
-// to be discarded entirely by scheduleMeeting, so Compass had no record
-// of which real calendar event(s) this meeting corresponds to once
-// scheduled, and no way to later update or cancel them if the meeting is
-// rescheduled or the case is closed.
-export function buildScheduledMeetingEntry({ meetingTypeLabel, date, startISO, endISO, attendees, agenda, prepQuestions, manager, savedBy, calendarEvents }) {
-  return {
-    id: crypto.randomUUID(),
-    type: meetingTypeLabel,
-    date,
-    scheduledStartISO: startISO,
-    scheduledEndISO: endISO,
-    attendees: attendees || [],
-    agenda: agenda || "",
-    prepQuestions: prepQuestions || [],
-    manager: manager || "",
-    savedBy: savedBy || "HR Manager",
-    savedAt: new Date().toISOString(),
-    record: null,
-    calendarEvents: calendarEvents || [],
-  };
-}
+// Release 1 Phase 2.3 — buildScheduledMeetingEntry was removed here.
+//
+// It built a meeting-shaped entry with no caseId and no lifecycle status,
+// relying on `record: null` to mean "hasn't happened yet" (its own comment
+// said so explicitly). That proxy is exactly what Phase 1 replaced, and the
+// entry it produced could not be started, prepared or cancelled as itself.
+// Scheduling now creates a real lifecycle meeting through
+// meetingWrites.persistMeeting — one identity from scheduled through
+// completed. Leaving the old builder in place would have been a second,
+// diverging way to create a meeting.
