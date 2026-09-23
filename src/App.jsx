@@ -76,6 +76,7 @@ import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/empl
 import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
 import { persistMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE } from './lib/meetingWrites';
+import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -6114,6 +6115,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   useEffect(() => {
     const draft = orgLs("compass_meeting_draft", null);
     if(!draft) return;
+    // Release 1 Phase 2.2 — precedence: the server's authoritative
+    // in_progress meeting always beats stale local recovery state.
+    //
+    // A draft that names a meeting id which is no longer live on its case
+    // (saved, cancelled, or never persisted at all) must not be resumed here,
+    // because restoring it would put the user back into a meeting the case no
+    // longer says is happening — and, at Save, could patch a completed
+    // meeting. The case's own Resume affordance is the correct route for
+    // anything the server still considers live. Drafts with no meeting id at
+    // all are pre-2.2 and already fail closed at Save (Phase 2.1,
+    // parent_required), so they are left exactly as they were.
+    if(draft.caseInfo?.meetingId) {
+      const draftCase = casesRef.current.find(c => c.id === draft.caseInfo.caseId);
+      const stillLive = draftCase && (draftCase.meetings||[]).some(
+        m => m && m.id === draft.caseInfo.meetingId && declaredStatus(m) === MEETING_STATUS.IN_PROGRESS);
+      if(!stillLive) { orgLsSet("compass_meeting_draft", null); return; }
+    }
     (async () => {
       const ok = await confirmDialog({
         title: "Resume unsaved meeting?",
@@ -6302,6 +6320,111 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     } else {
       setScreen(SCREENS.PREP);
     }
+  };
+
+  // ── Release 1 Phase 2.2 — authoritative Start ──────────────────────────
+  //
+  // A structured case meeting must exist on the server BEFORE the live
+  // RecordScreen is considered started. After this succeeds, a refresh,
+  // browser restart, navigation or device change no longer requires Compass
+  // to reconstruct the meeting from employee name or React state: the case
+  // carries caseId + meetingId + status "in_progress" and can offer Resume.
+  //
+  // Platform-wide. Nothing here branches on case type — an investigation, a
+  // welfare call, a probation review and an appeal hearing all take this one
+  // path. Only the appeal chair (validated by the database trigger) differs,
+  // and that difference is a field, not a branch.
+  //
+  // The id is minted once per Start ATTEMPT and held in a ref, so retrying a
+  // failed Start reuses it: planMeetingWrite then sees an existing id and
+  // patches instead of appending. That is what makes a retry idempotent
+  // without any server-side uniqueness constraint.
+  const pendingStartRef = useRef(null);
+  // Named rather than inlined so NEW-29's guard against deriving a start
+  // instant anywhere near Review/Save stays strict. This is the ONE
+  // authoritative capture: taken when Start is attempted, promoted only if
+  // that attempt persists, and never recomputed on Resume, End or Save.
+  const startInstant = () => new Date().toISOString();
+  // ctx lets a caller that has JUST set caseInfo (HomeMeetingScreen's commit)
+  // pass the values explicitly rather than racing React's state update. A
+  // caller whose state has already settled (PrepScreen) passes nothing and
+  // the current caseInfo is used.
+  const beginMeeting = async (ctx = {}) => {
+    const caseId = ctx.caseId || caseInfo.caseId || null;
+    const type = ctx.type || meetingType;
+    const manager = ctx.manager !== undefined ? ctx.manager : caseInfo.manager;
+    const appealManagerId = ctx.appealManagerId !== undefined ? ctx.appealManagerId : caseInfo.appealManagerId;
+    const meetingDate = ctx.date || caseInfo.date;
+    const attendees = ctx.participants || participants;
+    if(!caseId) {
+      // Phase 2.1's rule, unchanged: an unlinked meeting is never guessed
+      // onto a case and never mints one. Start simply does not happen.
+      showToast(describeMeetingWriteFailure(WRITE_FAILURE.PARENT_REQUIRED), "error");
+      return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
+    }
+    const attempt = pendingStartRef.current && pendingStartRef.current.caseId === caseId
+      ? pendingStartRef.current
+      // startedAt is captured for THIS attempt and, per the approved
+      // semantic, only ever becomes authoritative if the attempt succeeds —
+      // a Start that failed never happened, so a later retry that reuses the
+      // id also reuses the instant it was actually attempted from. It is
+      // never recomputed afterwards: not on Resume, not at End, not at Save.
+      : { id: newId("meeting"), caseId, startedAt: startInstant() };
+    pendingStartRef.current = attempt;
+
+    const meeting = stampNewMeeting({
+      id: attempt.id,
+      type: type?.label || "Meeting",
+      date: meetingDate || new Date().toLocaleDateString("en-GB"),
+      status: MEETING_STATUS.IN_PROGRESS,
+      startedAt: attempt.startedAt,
+      endedAt: null,
+      manager: manager || "",
+      // Appeal hearings only. Never written for any other meeting type, and
+      // deliberately not generalised into an authorisation field — the
+      // database trigger is what makes it authoritative, for appeals alone.
+      chairUserId: appealManagerId || null,
+      participants: attendees,
+      transcript: [],
+      record: null,
+    }, { caseId, now: attempt.startedAt, by: currentUser?.name || "HR Manager" });
+
+    const result = await persistMeeting({ cases: casesRef.current, caseId, meeting, saveCases });
+    if(!result?.ok) {
+      // Do not enter RecordScreen, do not fire AI, do not audit a success,
+      // do not navigate. The setup state is untouched so the user can fix
+      // the problem and press Start again.
+      showToast(describeMeetingWriteFailure(result?.reason) || describeSaveMeetingError(result?.message), "error");
+      return { ok: false, reason: result?.reason };
+    }
+    pendingStartRef.current = null;
+    setCaseInfo(p => ({ ...p, meetingId: attempt.id }));
+    setMeetingStartTime(attempt.startedAt);
+    setMeetingEndTime(null);
+    meetingEndedRef.current = false;
+    setActiveCaseId(caseId);
+    audit("Meeting started", `${meeting.type} — meeting ${attempt.id}`, caseId);
+    setScreen(SCREENS.RECORD);
+    return { ok: true, meetingId: attempt.id };
+  };
+
+  // Resume restores the authoritative persisted meeting. It never mints a new
+  // id, never restamps startedAt, and never re-emits "Meeting started".
+  const resumeMeeting = (cs, meeting) => {
+    pendingStartRef.current = null;
+    setMeetingType(MEETING_TYPES.find(t => t.label === meeting.type) || null);
+    setCaseInfo(p => ({ ...p,
+      employee: cs.employeeName, manager: meeting.manager || cs.manager || "",
+      caseId: cs.id, preparedCaseId: cs.id, _linkedCaseId: null,
+      meetingId: meeting.id, appealManagerId: meeting.chairUserId || null,
+    }));
+    setParticipants(meeting.participants || []);
+    setMeetingStartTime(meeting.startedAt || null);
+    setMeetingEndTime(null);
+    meetingEndedRef.current = false;
+    setTranscript(Array.isArray(meeting.transcript) ? meeting.transcript : []);
+    setActiveCaseId(cs.id);
+    setScreen(SCREENS.RECORD);
   };
 
   const reset = () => {
@@ -7021,8 +7144,31 @@ Please produce:
       return { ok: true };
     }
     const employeeName = caseInfo.employee.trim()||"Unknown Employee";
+    // Release 1 Phase 2.2 — one meeting, one identity.
+    //
+    // When this save is the completion of a meeting that was authoritatively
+    // STARTED, it must patch that same meeting id rather than mint a new one.
+    // Without this, Start would persist meeting X and Save would append
+    // meeting Y: two rows for one real-world meeting, which is exactly the
+    // reconciliation the lifecycle exists to avoid.
+    //
+    // Guarded so nothing else in this function changes. caseInfo.meetingId is
+    // set only by a successful beginMeeting or resumeMeeting, and a
+    // letter-shaped save is excluded on the same three inputs
+    // isLetterOnlyRecord uses — a drafted letter must never patch a live
+    // hearing just because one happens to be open in this session.
+    const savedRecordText = typeof reviewOutput === "string" ? reviewOutput.trim() : "";
+    const savedTranscriptLen = transcript.filter(u=>!u.pending).length;
+    const isLetterShapedSave = !!letterOutput && !savedRecordText && savedTranscriptLen === 0;
+    const lifecycleMeetingId = (!isLetterShapedSave && caseInfo.meetingId) ? caseInfo.meetingId : null;
     const meeting = {
-      id: newId("meeting"),
+      id: lifecycleMeetingId || newId("meeting"),
+      // Saving the record is what completes the meeting. Nothing else in
+      // Release 1 writes a terminal status, and End deliberately does not —
+      // see the End/Review compatibility note in the defect register: the
+      // review_draft state arrives with Phase 3, and inventing a stand-in now
+      // would strand anyone mid-Review.
+      ...(lifecycleMeetingId ? { status: MEETING_STATUS.COMPLETED } : {}),
       type: meetingType?.label||"Meeting",
       date: caseInfo.date||new Date().toLocaleDateString("en-GB"),
       // Human UAT remediation, Batch 2, Part 4 — until now the actual
@@ -7292,6 +7438,10 @@ Please produce:
     // function's own case-view navigation) now await this function's
     // returned result and only navigate themselves once it resolves ok —
     // see those files' own onClick handlers.
+    // Phase 2.2 — this meeting's lifecycle is finished, so the id must not
+    // survive into whatever the user does next. Leaving it set would let a
+    // subsequent save patch a meeting that is already completed.
+    if(lifecycleMeetingId) setCaseInfo(p=>({...p, meetingId:null}));
     setActiveCaseId(caseId);
     setActiveCaseStage("investigation");
     setScreen(SCREENS.CASE_VIEW);
@@ -9506,7 +9656,7 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setMeetingActionSuggestions={setMeetingActionSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setMeetingSummary={setMeetingSummary} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} setDismissedCoachingTipKeys={setDismissedCoachingTipKeys} fmtDate={fmtDate} startSession={startSession} />
+        <HomeMeetingScreen beginMeeting={beginMeeting} meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setMeetingActionSuggestions={setMeetingActionSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setMeetingSummary={setMeetingSummary} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} setDismissedCoachingTipKeys={setDismissedCoachingTipKeys} fmtDate={fmtDate} startSession={startSession} />
       )}
 
             {screen===SCREENS.PEOPLE&&(
@@ -9559,6 +9709,7 @@ Please produce:
 {/* ══ CASE VIEW ══ */}
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(
         <CaseViewScreen
+          onResumeMeeting={resumeMeeting}
           shell={{
             cases, casesLoading, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
             getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
@@ -9619,7 +9770,7 @@ Please produce:
 
 {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <PrepScreen isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} handlePrepare={handlePrepare} aiProcessing={aiProcessing} aiError={aiError} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes}
+        <PrepScreen beginMeeting={beginMeeting} isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} handlePrepare={handlePrepare} aiProcessing={aiProcessing} aiError={aiError} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes}
           prepQuestions={prepQuestions}
           linkedCaseAllegations={caseInfo._linkedCaseId ? allegationsForCase(allegations, caseInfo._linkedCaseId) : []}
           linkedCaseEvidence={caseInfo._linkedCaseId ? (cases.find(c=>c.id===caseInfo._linkedCaseId)?.evidence||[]) : []}

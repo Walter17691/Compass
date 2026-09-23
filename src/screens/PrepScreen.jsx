@@ -62,10 +62,12 @@ function PrepQuestionRow({ q, index, total, linkedCaseAllegations, linkedCaseEvi
   );
 }
 
-export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, handlePrepare, aiProcessing, aiError, setScreen, bgDoc, setBgDoc, prepNotes,
+export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, handlePrepare, aiProcessing, aiError, setScreen, bgDoc, setBgDoc, prepNotes,
   prepQuestions=[], linkedCaseAllegations=[], linkedCaseEvidence=[],
   onAddPrepQuestion, onUpdatePrepQuestionText, onRemovePrepQuestion, onMovePrepQuestion, onTogglePrepQuestionEssential, onLinkPrepQuestionToAllegation, onLinkPrepQuestionToEvidence,
 }) {
+  const [starting, setStarting] = useState(false);
+  const startMeeting = async () => { setStarting(true); try { await beginMeeting(); } finally { setStarting(false); } };
   // Phase 6.5 hardening (accessibility pass) — the upload input inside is
   // visually hidden but still keyboard-focusable (see its own comment
   // below); this reuses the exact hover-border-highlight already built
@@ -224,8 +226,10 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
         )}
       </div>
 
-      <button onClick={()=>setScreen(SCREENS.RECORD)}
-        style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>
+      {/* Release 1 Phase 2.2 — both Start routes persist the meeting before
+          entering the live screen. beginMeeting navigates only on success. */}
+      <button onClick={startMeeting} disabled={starting}
+        style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:starting?"wait":"pointer",textDecoration:"underline"}}>
         Skip prep and start meeting now
       </button>
 
@@ -255,7 +259,7 @@ export function PrepScreen({ isMobile, meetingType, setMeetingType, caseInfo, se
             </button>
           </div>
 
-          <Btn onClick={()=>setScreen(SCREENS.RECORD)} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
+          <Btn onClick={startMeeting} disabled={starting} style={{marginTop:16,width:"100%"}}>Start meeting</Btn>
         </div>
       )}
     </div>

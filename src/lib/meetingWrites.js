@@ -1,3 +1,5 @@
+import { declaredStatus } from './meetingLifecycle.js';
+
 // ─────────────────────────────────────────────────────────────────────────
 // COMPASS PLATFORM PRIMITIVE — the canonical meeting write path.
 //
@@ -37,6 +39,11 @@ export const WRITE_FAILURE = Object.freeze({
   PARENTAGE_MISMATCH: "parentage_mismatch",
   // The meeting object carries no usable id.
   INVALID_MEETING: "invalid_meeting",
+  // The meeting is not in a state this transition is allowed to start from —
+  // a completed hearing cannot be re-started, a legacy row cannot be swept
+  // into the lifecycle, and a stale client cannot force a status it has not
+  // actually observed.
+  STALE_STATUS: "stale_status",
 });
 
 const isNonEmptyString = v => typeof v === "string" && v.trim().length > 0;
@@ -107,6 +114,44 @@ export async function persistMeeting({ cases, caseId, meeting, saveCases }) {
   return { ok: true, mode: plan.mode, caseId, meetingId: meeting.id, meeting: plan.meeting };
 }
 
+// A declared lifecycle transition on an existing, already-persisted meeting.
+//
+// Deliberately NOT a generic setStatus. Every transition names the states it
+// is allowed to start from, so the database of record — not the client's idea
+// of what it last saw — decides whether the move is legal. A completed
+// hearing cannot be re-started, and a legacy row (declaredStatus null) can
+// never satisfy an allowed-from set that does not explicitly name null, which
+// is what keeps historical meetings out of the new lifecycle.
+//
+// Shares planMeetingWrite's guarantees: resolves by id, never appends, never
+// moves a meeting between cases, single-case persistence only, awaited,
+// inspected, fails closed, and never replays after a conflict.
+export async function transitionMeeting({ cases, caseId, meetingId, allowedFrom, toStatus, patch = {}, saveCases }) {
+  if (!isNonEmptyString(caseId)) return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
+  if (!isNonEmptyString(meetingId)) return { ok: false, reason: WRITE_FAILURE.INVALID_MEETING };
+
+  const target = (Array.isArray(cases) ? cases : []).find(c => c && c.id === caseId);
+  if (!target) return { ok: false, reason: WRITE_FAILURE.NOT_FOUND };
+
+  const meetings = Array.isArray(target.meetings) ? target.meetings : [];
+  const current = meetings.find(m => m && m.id === meetingId);
+  if (!current) return { ok: false, reason: WRITE_FAILURE.NOT_FOUND };
+  if (isNonEmptyString(current.caseId) && current.caseId !== caseId) {
+    return { ok: false, reason: WRITE_FAILURE.PARENTAGE_MISMATCH };
+  }
+
+  const from = declaredStatus(current);
+  const permitted = Array.isArray(allowedFrom) ? allowedFrom : [allowedFrom];
+  if (!permitted.includes(from)) {
+    return { ok: false, reason: WRITE_FAILURE.STALE_STATUS, from, toStatus };
+  }
+
+  // id, caseId and the target status are restated last so no patch payload
+  // can quietly change identity, parentage or the declared destination.
+  const next = { ...current, ...patch, id: current.id, caseId, status: toStatus };
+  return persistMeeting({ cases, caseId, meeting: next, saveCases });
+}
+
 // Identity and provenance stamped once, at creation. Separate from
 // planMeetingWrite so that a patch can never re-stamp them.
 export function stampNewMeeting(meeting, { caseId, now = new Date().toISOString(), by }) {
@@ -126,6 +171,8 @@ export function describeMeetingWriteFailure(reason) {
       return "This meeting is already recorded against a different case, so it wasn't saved. Your notes have been kept.";
     case WRITE_FAILURE.INVALID_MEETING:
       return "This meeting couldn't be saved because its record is incomplete. Your notes have been kept.";
+    case WRITE_FAILURE.STALE_STATUS:
+      return "This meeting has moved on since this screen was opened — it may already have been saved or cancelled elsewhere. Reopen the case to see where it is now. Your notes have been kept.";
     default:
       return null;
   }

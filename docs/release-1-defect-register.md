@@ -230,6 +230,55 @@ none of which persist a structured case meeting:
 - **Decision** OPEN — Phase 2.5. No new meeting write may use sync-all
   (enforced structurally in `meetingWrites.js`).
 
+### Live meeting notes are not yet persisted server-side
+- **Severity** P2 · **Area** Capture / Resume · **Raised** 2026-09-23
+- Phase 2.2 solves **A: meeting existence survives refresh.** It deliberately
+  does **not** solve **B: live notes/transcript survive refresh.** The
+  transcript is still written only at Save.
+- Consequence: resuming on the device the meeting was started on restores the
+  notes from the existing localStorage draft; resuming on a *different* device
+  restores the meeting's identity and `startedAt` but no notes. The Case View
+  affordance states this explicitly rather than implying the notes travel.
+- **Decision** OPEN — Phase 5 (capture hardening) owns transcript persistence.
+  No autosave architecture was invented here.
+
+### Two tabs can start two separate meetings
+- **Severity** P3 · **Area** Concurrency · **Raised** 2026-09-23
+- **Currently possible.** Retrying the *same* Start is safe — the id is held
+  in `pendingStartRef` and reused, so a retry patches rather than appends. But
+  two independent Start-now actions in two tabs mint two ids and create two
+  `in_progress` meetings; no database invariant prevents it.
+- `resumableMeetingFor` handles the result deterministically (most recently
+  started wins, `ambiguous` reported, never array order) and the Case View
+  says so, so the condition is visible rather than silent.
+- **Decision** OPEN. A uniqueness constraint was deliberately **not** added —
+  that is a schema change requiring its own review.
+
+### End does not transition the meeting lifecycle
+- **Severity** P3 · **Area** Lifecycle · **Raised** 2026-09-23
+- Clicking End does not change `status`; the meeting stays `in_progress`
+  until Review Save completes it. `review_draft` does not exist until Phase 3,
+  and inventing a stand-in status now would strand anyone mid-Review.
+- A meeting ended but never saved therefore remains live and resumable. That
+  is truthful — the record was never saved — but it means Resume can offer a
+  meeting the user considers finished.
+- **Decision** OPEN — Phase 3 inserts `in_progress → review_draft → completed`.
+  Deliberately deferred, not overlooked.
+
+### Rollback exposure — Phase 2.2
+- **Severity** P3 · **Area** Deployment · **Raised** 2026-09-23
+- Reverting Phase 2.2 application code while `in_progress` meetings exist is
+  **safe but not free**:
+  - Phase 1's reader is still deployed, so `isMeetingComplete` returns false
+    and the engine keeps recommending the meeting — no crash, no disappearance.
+  - `MeetingsTab` and `caseTimeline` still render the row (as not-yet-held).
+  - **Risk:** the reverted Save path mints a fresh id, so a meeting started
+    under 2.2 and saved under reverted code would append a **duplicate** row.
+    Bounded to meetings in flight across the rollback; visible, non-destructive,
+    no data loss.
+- **Decision** ACCEPTED and documented. Forward-compatible reading shipped in
+  Phase 1, which is why rollback degrades rather than breaks.
+
 ### Proposed Updates evidential contract not applied
 - **Severity** P2 · **Area** AI
 - **Decision** BACKLOG.

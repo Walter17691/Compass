@@ -3,6 +3,8 @@ import { SCREENS, MEETING_TYPES } from '../constants';
 import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { appealInvitationLogistics } from '../lib/appealInvitation';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
+import { resumableMeetingFor } from '../lib/meetingLifecycle';
+import { fmtMeetingTime } from '../lib/meetingTiming';
 import { MDRenderer } from '../components/MDRenderer';
 import { DateInput } from '../components/DateInput';
 import { LockIcon } from '../components/Icons';
@@ -100,7 +102,7 @@ const MORE_GROUPS = TAB_GROUPS
 // (overview/timeline/allegationsTab/meetingsTab/evidenceTab/documentsTab/
 // themesTab/aiTab) are referenced as group.field only at that tab's own
 // single JSX call site, same pattern as OverviewTab/SettingsScreen.
-export function CaseViewScreen({
+export function CaseViewScreen({ onResumeMeeting,
   shell = {}, header = {}, initialTab, clearInitialTab, deleteCaseTask,
   overview = {}, timeline = {}, allegationsTab = {}, meetingsTab = {},
   evidenceTab = {}, documentsTab = {}, themesTab = {}, aiTab = {},
@@ -162,6 +164,9 @@ export function CaseViewScreen({
     return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
   }, [showMoreTabs]);
   const cs = cases.find(x=>x.id===activeCaseId);
+  // Release 1 Phase 2.2 — deterministic live-meeting discovery. Declared
+  // status only; never inferred from record/transcript/latest-meeting.
+  const liveMeeting = resumableMeetingFor(cs);
   // CaseViewScreen doesn't remount when switching between cases while
   // staying on this screen (no key={cs.id} at the App.jsx call site), so
   // without this a dismiss on one case would silently carry over and hide
@@ -735,6 +740,37 @@ export function CaseViewScreen({
             {changesSummaryLoading ? "Compass is summarising what's changed…" : (changesSummary || `${changesSinceView.length} update${changesSinceView.length!==1?"s":""} since you last viewed this case.`)}
           </div>
           <button onClick={()=>setChangesBannerDismissed(true)} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,flexShrink:0}}>Dismiss</button>
+        </div>
+      )}
+
+      {/* Release 1 Phase 2.2 — a live meeting is authoritative server state,
+          so it is stated before any recommendation. Deliberately the smallest
+          possible affordance: the Case View redesign is a later phase, and
+          this must not pre-empt it. Resume is deterministic (declared
+          status "in_progress"), never inferred from record absence,
+          transcript presence or "the latest meeting". */}
+      {liveMeeting.meeting&&(
+        <div style={{background:"#FFF6E8",borderBottom:"1px solid #F0D9B5",padding:"12px 28px",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:13,color:"#8A5A17",fontWeight:600}}>
+                {liveMeeting.meeting.type||"Meeting"} in progress{liveMeeting.meeting.startedAt?` — started ${fmtMeetingTime(liveMeeting.meeting.startedAt)}`:""}
+              </div>
+              <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>
+                {/* Truthful about the Phase 2.2 boundary: the meeting itself
+                    is saved, live notes are not yet. See the defect register
+                    entry for the A/B split. */}
+                This meeting is saved to the case. Notes typed during it are held on the device it was started on until the record is saved.
+                {liveMeeting.ambiguous&&` ${liveMeeting.count} meetings on this case are marked in progress — showing the most recently started.`}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,flexShrink:0}}>
+              <button onClick={()=>onResumeMeeting?.(cs, liveMeeting.meeting)}
+                style={{fontSize:12,background:"#8A5A17",border:"none",borderRadius:6,padding:"7px 14px",color:"#fff",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>
+                Resume meeting
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -41,11 +41,12 @@ const FIELD_WRAP_STYLE = {marginBottom:20};
 const FIELD_LABEL_STYLE = {display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7};
 const OPTIONAL_TAG_STYLE = {fontWeight:400,color:"#9B9098"};
 
-export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setMeetingActionSuggestions, setReviewOutput, setReviewOutputOriginal, setMeetingSummary, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, setDismissedCoachingTipKeys, fmtDate, startSession }) {
+export function HomeMeetingScreen({ beginMeeting, meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setMeetingActionSuggestions, setReviewOutput, setReviewOutputOriginal, setMeetingSummary, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, setDismissedCoachingTipKeys, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
   const [showAttendees, setShowAttendees] = useState(false);
+  const [starting, setStarting] = useState(false);
   const attendeesExpanded = isGroupMeeting || (meetingSetup.participants||[]).length>0 || showAttendees;
   const addParticipant = () => {
     if(!newParticipantName.trim()) return;
@@ -425,6 +426,10 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
                 // null and the save fails closed rather than guessing or
                 // inventing a case.
                 caseId:meetingSetup.preparedCaseId||activeCaseId||null,
+                // Release 1 Phase 2.2 — always cleared here. A meeting id
+                // left over from a previous session must never survive into
+                // a new one, or Save would patch the wrong meeting.
+                meetingId:null,
                 appealChairLocked:!!meetingSetup.appealChairLocked,
                 // Appeal Hearing Control Remediation (2026-09-18) — always
                 // derived fresh from meetingSetup.appealManagerId (never
@@ -448,11 +453,28 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
                   </button>
                 )}
                 <button
-                  disabled={disabled}
-                  onClick={()=>{
+                  disabled={disabled||starting}
+                  onClick={async ()=>{
                     if(isDev){ startSession(selected); return; }
                     commit();
-                    setScreen(SCREENS.RECORD);
+                    // Release 1 Phase 2.2 — the meeting must exist on the
+                    // server before the live UI is entered. beginMeeting
+                    // navigates only on success; on failure the setup state
+                    // is left exactly as it is so Start can be pressed again.
+                    // caseId is passed explicitly because commit() has only
+                    // just queued its setCaseInfo — reading it back here
+                    // would race React's update.
+                    setStarting(true);
+                    try {
+                      await beginMeeting({
+                        type: selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"},
+                        caseId: meetingSetup.preparedCaseId||activeCaseId||null,
+                        manager: meetingSetup.manager||"",
+                        appealManagerId: meetingSetup.appealManagerId||null,
+                        date: meetingSetup.date,
+                        participants: meetingSetup.participants||[],
+                      });
+                    } finally { setStarting(false); }
                   }}
                   style={{flex:1,background:disabled?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:disabled?"#9B9098":"#FFFFFF",fontWeight:600,cursor:disabled?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:disabled?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
                   Start meeting

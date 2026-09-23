@@ -51,6 +51,21 @@ function hasMeaningfulRecord(m) {
   return typeof m?.record === "string" && m.record.trim().length > 0;
 }
 
+// The status a meeting actually DECLARES, with no inference of any kind.
+// null means "no declared lifecycle state" — every row written before Phase
+// 2.2, and the reason legacy meetings can never satisfy a lifecycle
+// transition's allowed-from set by accident.
+//
+// Distinct from meetingStatus below, which answers the interpretive question
+// and reports a legacy meeting as "completed". Lifecycle transitions must use
+// this one: a historical row must not be swept into the new lifecycle merely
+// because somebody opened it.
+export function declaredStatus(m) {
+  if (!isObject(m)) return null;
+  const raw = typeof m.status === "string" ? m.status.trim() : "";
+  return raw || null;
+}
+
 // "letter" | "meeting". A non-object cannot be shown to be a letter
 // artefact, so it reads as "meeting" here; use isGenuineMeeting for the
 // existence-safe predicate, which is false for null/undefined/garbage.
@@ -86,7 +101,7 @@ export function isGenuineMeeting(m) {
 // silently change the recommended next step on live cases.
 export function meetingStatus(m) {
   if (!isObject(m)) return null;
-  const explicit = typeof m.status === "string" ? m.status.trim() : "";
+  const explicit = declaredStatus(m);
   if (explicit) return explicit;
   if (isLetterOnlyRecord(m)) return LETTER_STATUS;
   return MEETING_STATUS.COMPLETED;
@@ -117,9 +132,41 @@ export function meetingStatus(m) {
 // └───────────────────────────────────────────────────────────────────────┘
 export function isMeetingComplete(m) {
   if (!isObject(m)) return false;
-  const explicit = typeof m.status === "string" ? m.status.trim() : "";
+  const explicit = declaredStatus(m);
   if (explicit) return explicit === MEETING_STATUS.COMPLETED;
   return isGenuineMeeting(m) && hasMeaningfulRecord(m);
+}
+
+// Is this meeting currently live?
+//
+// Deterministic and declared-only. Resume must never be inferred from record
+// absence, transcript presence, note presence, employee name or "the latest
+// meeting" — every one of those was a source of the defects this redesign
+// exists to remove. A legacy row (no declared status) is never resumable,
+// which is what keeps historical meetings out of the new lifecycle.
+export function isResumableMeeting(m) {
+  return isGenuineMeeting(m) && declaredStatus(m) === MEETING_STATUS.IN_PROGRESS;
+}
+
+// The live meeting on a case, if there is one.
+//
+// The UI intends exactly one, but nothing in the database enforces that, so
+// this must not silently depend on array order. Where several are live the
+// most recently started wins — a justified rule rather than an accident of
+// position — and `ambiguous` is returned so the caller can say so out loud
+// instead of quietly picking. Entries with no startedAt sort last, since an
+// unstamped row cannot outrank one that recorded a real instant.
+export function resumableMeetingFor(caseObj) {
+  const live = (Array.isArray(caseObj?.meetings) ? caseObj.meetings : []).filter(isResumableMeeting);
+  if (live.length === 0) return { meeting: null, count: 0, ambiguous: false };
+  const ranked = live
+    .map((m, index) => ({ m, index, at: Date.parse(m.startedAt || "") }))
+    .sort((a, b) => {
+      const av = Number.isNaN(a.at) ? -Infinity : a.at;
+      const bv = Number.isNaN(b.at) ? -Infinity : b.at;
+      return bv - av || b.index - a.index;
+    });
+  return { meeting: ranked[0].m, count: live.length, ambiguous: live.length > 1 };
 }
 
 // "Which genuine meeting happened last?" — letter artefacts excluded.

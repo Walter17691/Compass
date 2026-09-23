@@ -304,7 +304,9 @@ describe('PLATFORM PRIMITIVE — no case-type forks, no I/O', () => {
 
   it('has no I/O, AI, Supabase or router dependency and imports nothing', () => {
     expect(lib).not.toMatch(/authedFetch|\/api\/|supabase|streamClaude|localStorage|fetch\(/);
-    expect(lib.match(/^import .*$/gm)).toBeNull();
+    // One delegation import only — declaredStatus, so the raw-status rule
+    // has a single implementation shared with the lifecycle primitive.
+    expect(lib.match(/^import .*$/gm)).toEqual(["import { declaredStatus } from './meetingLifecycle.js';"]);
   });
 
   it('works identically for every meeting type', () => {

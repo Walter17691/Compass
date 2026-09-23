@@ -47,13 +47,23 @@ describe('1. start is captured on entry to the live meeting', () => {
   });
 
   it('every live-entry route goes through the Record screen, so all are covered', () => {
-    // setup "Start meeting", PrepScreen "Start meeting", "Skip prep and start
-    // meeting now", and the crash-recovery restore all setScreen(RECORD).
+    // Release 1 Phase 2.2 — the structured Start routes no longer navigate
+    // for themselves. HomeMeetingScreen's "Start meeting" and both PrepScreen
+    // routes now call beginMeeting, which persists the meeting FIRST and only
+    // then enters the Record screen. The invariant this test protects is
+    // unchanged — every live entry still arrives via SCREENS.RECORD, so the
+    // NEW-29 capture effect still covers all of them — but the navigation now
+    // happens in one audited place instead of three.
     const home = readFileSync('src/screens/HomeMeetingScreen.jsx', 'utf8');
     const prep = readFileSync('src/screens/PrepScreen.jsx', 'utf8');
-    expect(home).toContain('setScreen(SCREENS.RECORD);');
-    expect((prep.match(/setScreen\(SCREENS\.RECORD\)/g) || []).length).toBe(2);
-    expect(app).toContain('setScreen(SCREENS.RECORD);'); // draft restore
+    expect(home).not.toContain('setScreen(SCREENS.RECORD);');
+    expect(home).toContain('await beginMeeting({');
+    expect((prep.match(/setScreen\(SCREENS\.RECORD\)/g) || []).length).toBe(0);
+    expect((prep.match(/onClick=\{startMeeting\}/g) || []).length).toBe(2);
+    expect(prep).toContain('await beginMeeting();');
+    // beginMeeting navigates only after persistence succeeds, and the
+    // crash-recovery restore still enters the same way.
+    expect((app.match(/setScreen\(SCREENS\.RECORD\);/g) || []).length).toBe(3); // beginMeeting + resumeMeeting + draft restore
   });
 });
 

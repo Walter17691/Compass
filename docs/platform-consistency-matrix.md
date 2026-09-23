@@ -129,6 +129,46 @@ call and always supplies `changedId`, so the sync-all branch is structurally
 unreachable from the meeting write primitive. No new meeting mutation may use
 sync-all.
 
+### Meeting lifecycle — Start / Resume (Phase 2.2)
+
+- **Canonical primitives** `beginMeeting` / `resumeMeeting` (App.jsx) ·
+  `transitionMeeting` (`meetingWrites.js`) · `isResumableMeeting`,
+  `resumableMeetingFor`, `declaredStatus` (`meetingLifecycle.js`)
+- **Status** LIVE — `in_progress` is the first lifecycle status ever written
+
+| Consumer | Class | Note |
+|---|---|---|
+| `HomeMeetingScreen` "Start meeting" | **MIGRATED** | Persists, then enters RecordScreen |
+| `PrepScreen` "Start meeting" | **MIGRATED** | Same |
+| `PrepScreen` "Skip prep and start meeting now" | **MIGRATED** | Same |
+| `CaseViewScreen` live-meeting banner | **MIGRATED** | Deterministic Resume affordance |
+| Review Save | **MIGRATED** | Patches the started meeting id; completes it |
+| Crash-recovery restore | **MIGRATED (precedence only)** | A draft naming a meeting the case no longer calls live is discarded |
+| `scheduleMeeting` | **DEFERRED** | Phase 2.3 |
+| Dev meetings (`DevelopScreen`) | **DEFERRED** | Phase 2.5 — separate flow, no lifecycle |
+| Witness / evidence route | **INTENTIONAL EXCEPTION** | Writes `evidence[]`, not a meeting |
+| Unlinked / ad-hoc meetings | **BLOCKED SAFELY** | Phase 2.1's `parent_required` is unchanged |
+| End meeting | **DEFERRED — documented** | No lifecycle transition; `review_draft` arrives in Phase 3 |
+
+**Start / Resume invariants.** The meeting exists on the server before the live
+UI is entered; Start navigates, audits and fires AI only after persistence
+succeeds. `startedAt` is captured once per Start attempt, promoted only on
+success, and never recomputed on Resume, End or Save. Resume is deterministic
+(`declaredStatus === "in_progress"`) and never inferred from record absence,
+transcript presence, notes or "the latest meeting". A legacy row has no
+declared status, so it can never satisfy a transition's allowed-from set and is
+never swept into the lifecycle.
+
+**Multiple live meetings.** Possible but abnormal — no database invariant
+enforces one. `resumableMeetingFor` selects the most recently started (a
+justified rule, never array position), reports `count` and `ambiguous`, and the
+Case View says so out loud. No uniqueness constraint was added.
+
+**Concurrency.** Retrying the *same* Start reuses the id held in
+`pendingStartRef`, so a retry patches instead of appending. Two tabs pressing
+Start-now independently would still mint two ids — recorded in the defect
+register, not hidden.
+
 ### Meeting parentage — "which case does this meeting belong to?"
 
 - **Canonical primitive** `meeting.caseId`, supplied via `caseInfo.caseId`
