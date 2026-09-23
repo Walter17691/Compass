@@ -30,12 +30,55 @@ headers, SQL migration headers) and the Release 1 Phase 0 production audit.
 
 ### NEW-20 — meeting filed by employee-name match
 - **Severity** P1 · **Area** Save path
-- `saveMeetingToCaseImpl` resolves the target case by matching
-  `employeeName`, takes `nameMatches[0]` on collision, and creates a brand
-  new case when no match is found. `activeCaseId` mitigates but does not fix.
-- **Evidence** `src/App.jsx` — `const existing = (activeCaseId && nameMatches.find(...)) || nameMatches[0];`
-- **Decision** ABSORBED BY REDESIGN — Phase 2 (authoritative `caseId` written
-  at meeting creation). Remains OPEN until Phase 2 ships.
+- `saveMeetingToCaseImpl` resolved the target case by matching
+  `employeeName`, took `nameMatches[0]` on collision, and created a brand new
+  case when no match was found. `activeCaseId` mitigated but did not fix it.
+
+**NEW-20 CORE = CLOSED** (Phase 2.1, 2026-09-23). The canonical structured
+meeting save resolves the case by `caseInfo.caseId` alone. Name matching and
+`nameMatches[0]` are gone from that path; an unlinked meeting fails closed
+with `parent_required` instead of guessing a case or minting one. Newly saved
+meetings carry `caseId`, `createdAt` and `createdBy`, and an existing meeting
+id is patched rather than appended.
+
+**NEW-20 FULL = OPEN.** Employee-name parentage still exists on these paths,
+none of which persist a structured case meeting:
+
+| Path | What it parents by name | Target phase |
+|---|---|---|
+| `App.jsx:6880` `saveDevMeetingToCase` | a **dev meeting** (probation/appraisal/PDP) — still name-matches, still auto-creates, still sync-all | **2.5** |
+| `App.jsx:1234` `acceptMeetingEvidenceSuggestion` | case **evidence** | 2.5 |
+| `App.jsx:1258` `acceptMeetingActionSuggestion` | case **task** | 2.5 |
+| `App.jsx:6533` `createQualityCheckFollowUp` | case **task** | 2.5 |
+| `App.jsx:6527` `proceedPastQualityCheck` | **audit** attribution | 2.5 |
+| `App.jsx:1160`, `6499` | AI **context** lookups (read-only) | 2.5 |
+
+- **Evidence** Phase 2.1 implementation and `src/test/meetingWrites.test.js`.
+- **Decision** CORE closed; FULL remains open until Phase 2.5 entry-path
+  adoption. Do not record NEW-20 as closed outright.
+
+### Implicit case creation — one remaining narrow exception
+- **Severity** P3 · **Area** Save path · **Raised** 2026-09-23
+- The structured save can still mint a case in exactly one case: a manager's
+  concern referral handled via "Deal with informally"
+  (`caseInfo._linkedReferralId`). `startInformalConversation` deliberately
+  defers case creation until the conversation is saved, so that backing out
+  leaves nothing behind — a real product requirement, not legacy convenience.
+- This is creation by **explicit intent on a specific named referral**, and it
+  never consults `cases.employeeName`, so it cannot misfile onto a wrong case.
+- **Decision** Retained deliberately and documented. Revisit in Phase 2.5 when
+  the explicit link/create UX exists.
+
+### Unlinked meetings have no link-or-create flow
+- **Severity** P2 · **Area** Save path / UX · **Raised** 2026-09-23
+- Phase 2.1 makes an unlinked meeting fail closed at save with an actionable
+  message; the user's notes are preserved. The explicit "link to existing
+  case / create new case" chooser does not exist yet, so the only route
+  forward is to start the meeting from inside a case or use "Link to case" on
+  the New meeting form.
+- **Intentional behaviour change:** previously such a meeting silently created
+  a new case.
+- **Decision** OPEN — Phase 2.5 owns the chooser UX.
 
 ### NEW-26 — Review draft destroyed by refresh or navigation
 - **Severity** P1 · **Area** Review persistence
@@ -111,6 +154,40 @@ headers, SQL migration headers) and the Release 1 Phase 0 production audit.
   the configured type list — a second, separate inconsistency.
 - **Decision** OPEN — future process-recipe phase (Phase 6). Explicitly **not**
   fixed in Phase 1.
+
+### Calendar scheduling is gated on calendar success
+- **Severity** P2 · **Area** Scheduling · **Raised** 2026-09-22 (Phase 2A)
+- `scheduleMeeting` calls `/api/calendar/create-event` and returns early on
+  failure, **before** any persistence. No calendar integration, expired token
+  or provider outage means no scheduled meeting at all — the meeting is lost,
+  not degraded.
+- **Evidence** `src/App.jsx:3022-3026`. Production census 2026-09-22: 0 of 884
+  stored entries carry `scheduledStartISO`, `calendarEvents`, `agenda`,
+  `prepQuestions` or `attendees`; 0 are future-dated. **This path has never
+  produced a row in production.**
+- **Decision** OPEN — Phase 2.3 reverses the order so persistence succeeds
+  first and calendar failure is visible and retryable.
+
+### Appeal hearings cannot be scheduled — chair integrity rejects the write
+- **Severity** P2 · **Area** Scheduling / appeal security · **Raised** 2026-09-22
+- `buildScheduledMeetingEntry` sets no `chairUserId`. For an appeal-type
+  label the trigger computes `is_appeal_type = true`; `letterType` is absent
+  so `is_letter_only = false`; therefore `requires_chair = true` and the write
+  is rejected with `APPEAL_HEARING_CHAIR_MISSING`. Every `MEETING_TYPES` entry
+  is selectable in the schedule modal, so this is user-reachable.
+- **Evidence** `src/lib/meetingScheduling.js:131-147` against
+  `supabase/appeal_hearing_chair_integrity_2026-09-18.sql:133-168`.
+- **Decision** OPEN — Phase 2.3 sources the chair from
+  `case_access.role='appeal_manager'` at scheduling, or blocks with an
+  actionable message. The trigger is behaving correctly and is not at fault.
+
+### Workflow transition written through unchecked sync-all
+- **Severity** P3 · **Area** Persistence · **Raised** 2026-09-22
+- `CaseViewScreen.jsx:359` (`disciplinary_invite`) sets `stage:"disciplinary"`
+  via `saveCases(cases.map(...))` with no `changedId`, not awaited and with no
+  result check — so a rejected or conflicted write proceeds silently.
+- **Decision** OPEN — Phase 2.5. No new meeting write may use sync-all
+  (enforced structurally in `meetingWrites.js`).
 
 ### Proposed Updates evidential contract not applied
 - **Severity** P2 · **Area** AI

@@ -75,6 +75,7 @@ import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/me
 import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/employeeHistory';
 import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees, buildScheduledMeetingEntry } from './lib/meetingScheduling';
+import { persistMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE } from './lib/meetingWrites';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -7120,23 +7121,48 @@ Please produce:
       // (or a future real HRIS sync) later changes.
       employeeSnapshot: buildEmployeeSnapshot(getEmployeeRecord(caseInfo.employee)),
     };
-    // Phase 6.5 hardening (closes independent audit finding 5.7) — was a
-    // bare cases.find(nameMatch), first-array-hit-wins: an employee with
-    // more than one case (an ordinary combination — a closed prior
-    // misconduct case and a separately-raised open grievance, or two
-    // employees who simply share a name) had this meeting filed onto
-    // whichever case happened to sort first, silently. activeCaseId is
-    // the app's own general "which case is the user currently in"
-    // tracker (set whenever a meeting is started from within a specific
-    // case's own view, e.g. "Start investigation meeting") — used here
-    // only to disambiguate AMONG the name matches, never to override the
-    // name check itself, so a stale activeCaseId from an unrelated,
-    // previously-viewed case can never misfile a meeting onto the wrong
-    // employee's record; it can only correctly pick among that one
-    // employee's own several cases.
-    const nameMatches = cases.filter(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());
-    if(nameMatches.length>1) console.error(`saveMeetingToCase: "${caseInfo.employee}" matches ${nameMatches.length} cases — resolving via activeCaseId where possible, otherwise the first match`);
-    const existing = (activeCaseId && nameMatches.find(c=>c.id===activeCaseId)) || nameMatches[0];
+    // Release 1 Phase 2.1 — authoritative parentage (NEW-20).
+    //
+    // This resolved the target case by matching cases.employeeName against
+    // the typed employee name, took nameMatches[0] on collision, and minted a
+    // brand-new case when nothing matched. Two employees sharing a name, or
+    // one employee with a closed prior case alongside a live one, could have
+    // a meeting filed onto the wrong record silently. activeCaseId narrowed
+    // that window but could not close it, because the name check remained the
+    // gate.
+    //
+    // Parentage is now an input. caseInfo.caseId is set by the entry points
+    // that genuinely know it — the Case View's own "Start ... meeting"
+    // handlers, and the New meeting form's "Link to case" selection, which is
+    // the case the user can actually see selected. Nothing is inferred from
+    // the employee name any more, in any branch.
+    //
+    // preparedCaseId is deliberately NOT reused for this: it means "the case
+    // this preparation was grounded in" and is read by prep grounding and by
+    // NEW-19's discovery gate. Parentage needs its own field so neither can
+    // drift into the other's meaning.
+    const structuredCaseId = caseInfo.caseId || null;
+    // One explicit, narrow exception. "Deal with informally" on a manager's
+    // concern referral is a deliberate user action on a specific, named
+    // referral whose whole purpose is to open an informal record — see
+    // startInformalConversation, which intentionally defers creating the case
+    // until the conversation is actually saved so that backing out leaves
+    // nothing behind. That is case creation by explicit intent, not by name
+    // inference, and it never consults cases.employeeName. Every other
+    // unlinked meeting fails closed below.
+    const referralCaseIntent = !structuredCaseId && !!caseInfo._linkedReferralId;
+    if(!structuredCaseId && !referralCaseIntent) {
+      // Fail closed. No name match, no invented case, no silently chosen
+      // case. reviewOutput/transcript are untouched, so the user keeps every
+      // word and can link the meeting and save again.
+      showToast(describeMeetingWriteFailure(WRITE_FAILURE.PARENT_REQUIRED), "error");
+      return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
+    }
+    const existing = structuredCaseId ? cases.find(c=>c.id===structuredCaseId) : null;
+    if(structuredCaseId && !existing) {
+      showToast(describeMeetingWriteFailure(WRITE_FAILURE.NOT_FOUND), "error");
+      return { ok: false, reason: WRITE_FAILURE.NOT_FOUND };
+    }
     const caseId = existing ? existing.id : crypto.randomUUID();
     // Independent appeal officer workflow (2026-09-16) — an appeal
     // hearing used to be indistinguishable in the audit trail from any
@@ -7154,13 +7180,17 @@ Please produce:
     // the same record/transcript evidence isLetterOnlyRecord uses, so a
     // letter-only save can never claim a hearing took place.
     const isLetterOnlySave = isLetterOnlyRecord(meeting);
-    const updatedCase = existing
-      ? {...existing, meetings:[...existing.meetings, meeting]}
+    // Release 1 Phase 2.1 — identity and provenance stamped once, at
+    // creation. caseId makes the meeting's parent an intrinsic property of
+    // the record rather than something later readers have to re-derive.
+    const stampedMeeting = stampNewMeeting(meeting, { caseId, by: currentUser?.name || "HR Manager" });
+    const newCase = existing
+      ? null
       // caseType "informal" only on a brand-new case created from a
       // referral (MP6) — an existing employee's own case keeps whatever
       // type it already had; one informal chat about them doesn't
       // relabel it.
-      : {id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[meeting], ...(caseInfo._linkedReferralId?{caseType:"informal"}:{})};
+      : {id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[stampedMeeting], ...(caseInfo._linkedReferralId?{caseType:"informal"}:{})};
     // Appeal Hearing P1 reliability pass (2026-09-18) — changedId (both
     // branches) makes the returned Promise real: the "sync all" branch
     // this previously fell into (changedId omitted) returns nothing at
@@ -7170,9 +7200,14 @@ Please produce:
     // toast and navigation below regardless of whether anything actually
     // persisted.
     const casesSnapshot = cases;
+    // Release 1 Phase 2.1 — the canonical write goes through persistMeeting,
+    // which resolves the case by id, patches an existing meeting id rather
+    // than appending a second row, refuses a parentage change, and can only
+    // ever call the single-case save path. The brand-new-case branch cannot
+    // use it (there is no case to write into yet) and stays as it was.
     const result = existing
-      ? await saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c), caseId)
-      : await saveCases([...cases,updatedCase], caseId);
+      ? await persistMeeting({ cases, caseId, meeting: stampedMeeting, saveCases })
+      : await saveCases([...cases,newCase], caseId);
     if(!result?.ok) {
       if(result?.reason !== 'conflict') {
         // Roll back the optimistic append. Without this, a conscious
@@ -7192,6 +7227,11 @@ Please produce:
       // reviewOutput/transcript remain exactly as entered for a retry.
       return { ok: false, reason: result?.reason };
     }
+    // Release 1 Phase 2.1 — read the post-write case back from casesRef
+    // (saveCases sets it synchronously) rather than assuming this save
+    // appended. Identical to the old value while every write is a create;
+    // correct in advance of patches becoming reachable in a later phase.
+    const updatedCase = (existing ? casesRef.current.find(c=>c.id===caseId) : newCase) || newCase;
     // Manager Enablement (Phase 4, MP6) — closes the loop back to the
     // referral that started this conversation. Functional update, same
     // reasoning as generateConcernTriageSummary (MP5): concernReferrals

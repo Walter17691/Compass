@@ -107,21 +107,56 @@ Phase 2, every read resolves through the legacy compatibility branch.
 | `src/App.jsx:1926` (`lastMeeting`) | D | Raw last-element; Phase 4 |
 | `src/App.jsx:8824` ("Latest: {type}") | D | Raw last-element; Phase 4 |
 
+### Meeting write path — "how does a meeting reach the database?"
+
+- **Canonical primitive** `planMeetingWrite` / `persistMeeting` / `stampNewMeeting` — `src/lib/meetingWrites.js`
+- **Target phase** Phase 2.1 (shipped 2026-09-23)
+- **Status** CANONICAL, PARTIALLY ADOPTED
+
+| Consumer | Class | Note |
+|---|---|---|
+| `saveMeetingToCaseImpl` structured branch | **MIGRATED** | Resolves by `caseId`, patches by id, single-case path |
+| `saveMeetingToCaseImpl` witness branch | **UNCHANGED INTENTIONALLY** | Writes `evidence[]`, not `meetings[]`; already resolves by `_linkedCaseId` |
+| `saveMeetingToCaseImpl` referral branch | **INTENTIONAL EXCEPTION** | Creates a case by explicit referral intent; never name-matched |
+| Unlinked meeting (no `caseId`) | **BLOCKED SAFELY** | Fails closed with `parent_required`; notes preserved. Chooser UX = Phase 2.5 |
+| `scheduleMeeting` (`App.jsx:3038`) | **DEFERRED** | Calendar-gated, no `caseId`/`status`; Phase 2.3 |
+| `saveDevMeetingToCase` (`App.jsx:6885`) | **DEFERRED** | Name matches, auto-creates, sync-all; Phase 2.5 |
+| `recordAppealReceived` (`App.jsx:8815`) | **DEFERRED** | Appends by id; already correctly parented; Phase 2.5 |
+| Meeting patches #6-#11 (reminder, suggestions, signature poll, next-step, sign, notetaker) | **DEFERRED** | Already patch by id; three use sync-all; Phase 2.5 |
+
+**Guarantee by construction:** `persistMeeting` makes exactly one `saveCases`
+call and always supplies `changedId`, so the sync-all branch is structurally
+unreachable from the meeting write primitive. No new meeting mutation may use
+sync-all.
+
 ### Meeting parentage — "which case does this meeting belong to?"
 
-- **Canonical primitive** *none yet* — `meeting.caseId`, Phase 2
-- **Legacy** `preparedCaseId`, `_linkedCaseId`, employee-name matching (NEW-20)
-- **Status** FORKED — three mechanisms answer one question
+- **Canonical primitive** `meeting.caseId`, supplied via `caseInfo.caseId`
+- **Target phase** Phase 2.1 (structured meetings) · Phase 2.5 (everything else)
+- **Status** CANONICAL FOR STRUCTURED MEETINGS; legacy paths remain
 
-`_linkedCaseId` additionally encodes "the person in the room is not the case
-subject" (witness interview). It retires only once meeting `type` carries that
-distinction — not in the same change that introduces `caseId`.
+| Consumer | Class | Note |
+|---|---|---|
+| `CaseViewScreen` start handlers | **MIGRATED** | `caseId: cs.id` |
+| `HomeMeetingScreen` commit | **MIGRATED** | `caseId` from the visible "Link to case" selection (`activeCaseId`); recomputed every time, never carried over |
+| `saveMeetingToCaseImpl` structured | **MIGRATED** | Name matching removed |
+| `_linkedCaseId` (witness) | **INTENTIONAL EXCEPTION** | Also encodes "the person in the room is not the case subject". Retires only once meeting `type` carries that distinction — Phase 2.5 |
+| `preparedCaseId` | **INTENTIONAL EXCEPTION** | Means "the case this preparation was grounded in". Read by prep grounding and NEW-19's gate. Kept distinct so neither meaning drifts into the other |
+| `saveDevMeetingToCase`, `acceptMeetingEvidenceSuggestion`, `acceptMeetingActionSuggestion`, `createQualityCheckFollowUp`, `proceedPastQualityCheck` | **DEFERRED** | Still name-based; none persists a structured case meeting. NEW-20 FULL stays open — Phase 2.5 |
+
+### Meeting identity — "is this the same meeting?"
+
+- **Canonical primitive** `meeting.id`, create-vs-patch decided by id presence in `planMeetingWrite`
+- **Status** CANONICAL FOR THE STRUCTURED SAVE
+
+Two independent id generators remain: `newId("meeting")` in the save path and
+`crypto.randomUUID()` in `buildScheduledMeetingEntry`. They converge in Phase 2.3.
 
 ### Meeting scheduling · Meeting transcript · Review draft · Invitation state · Calendar state
 
 | Concept | Canonical | Legacy / duplicate | Target | Status |
 |---|---|---|---|---|
-| Meeting scheduling | *none* | `meetingScheduling.buildEventTimes` exists but no meeting is ever persisted before it happens | Phase 2 | NOT REPRESENTED (NEW-32) |
+| Meeting scheduling | *none yet* | `scheduleMeeting` **exists and persists a scheduled row**, but is gated on calendar success, writes no `caseId`/`status`, and is rejected by the chair trigger for appeal types. Production census: **0 of 884 rows** — it has never succeeded | Phase 2.3 | BROKEN, NOT MISSING (NEW-32) |
 | Meeting timing | `startedAt` / `endedAt` (NEW-29) | — | shipped | CONSISTENT — immutable once set |
 | Meeting transcript | `meeting.transcript` | ordering not guaranteed (NEW-34); speaker prefix leak (NEW-35) | Phase 5 | OPEN |
 | Review draft | *none* — browser-only | `localStorage` `compass_meeting_draft`, deleted on entry to Review (NEW-26) | Phase 3 | NOT REPRESENTED |
@@ -140,6 +175,15 @@ distinction — not in the same change that introduces `caseId`.
 | Attention / warnings | *none* | ~11 Overview panels each decide their own visibility; 13 relevance-gating expressions already exist in `OverviewTab.jsx` | Phase 4 | PARTIALLY IMPLEMENTED |
 | AI advisory content | `REVIEW_EVIDENTIAL_CONTRACT`, `LIVE_QUESTION_CONTRACT`, `NO_INVENTED_AUTHORITIES`, `LEGAL_ACCURACY_BOUNDARY`, Review Advisory Mode (NEW-28) | Proposed Updates does not yet apply the evidential contract | backlog | MOSTLY CONSISTENT |
 | Process recipes | `getNextStep` branch functions | 5 recipes exist; `capability`/`absence`/`redundancy`/`informal`/empty fall through to **disciplinary** | Phase 6 | FORKED — see defect register |
+| Concurrency / write path | `saveCaseToDB` conditional update on `updated_at` | **31 `saveCases` sites omit `changedId`**, including a workflow transition (`CaseViewScreen:359`) | Phase 2.5 | PRIMITIVE CORRECT, ADOPTION PARTIAL |
+
+**Phase ordering correction (Phase 2A).** Phase 6 (process recipes) must
+precede Phase 4 (Case View). Phase 4 collapses the UI to one obvious primary
+action and removes the competing surfaces that currently give a user a second
+opinion; at that point a wrong recommendation becomes the path of least
+resistance on 771 of 774 case-carrying cases. Phase 2's guard — meeting type
+must be explicitly confirmed before first persistence, never defaulted from a
+recipe — makes Phase 2 safe. It does not make Phase 4 safe.
 
 **Process recipe boundary.** Meeting lifecycle answers *"what state is this
 meeting in?"*. The process recipe answers *"what should this case do next?"*.
@@ -219,3 +263,10 @@ currently owns them.
    uses `attendance`. Neither has a recipe.
 5. **566 production cases have no case type at all** and are silently given
    disciplinary process recommendations.
+6. **Two independent meeting-append implementations** — `saveMeetingToCaseImpl`
+   and `scheduleMeeting` — sharing no code, no id strategy and no parentage
+   rule. Partially closed in Phase 2.1; converges in Phase 2.3.
+7. **Two independent id generators** for the same entity (`newId("meeting")`
+   and `crypto.randomUUID()`).
+8. **Scheduling is reachable from the Calendar screen only** and is invisible
+   to the case it belongs to.

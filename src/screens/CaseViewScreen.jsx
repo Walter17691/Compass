@@ -351,6 +351,13 @@ export function CaseViewScreen({
         chairJobTitle,
         _linkedCaseId:null,
         preparedCaseId:cs.id,
+        // Release 1 Phase 2.1 — authoritative parentage (NEW-20). The meeting
+        // is being started from inside this case, so its parent is known here
+        // and is carried through to the save rather than re-derived from the
+        // employee's name. Deliberately separate from preparedCaseId, which
+        // means "the case this preparation was grounded in" and is read by
+        // prep grounding and NEW-19's discovery gate.
+        caseId:cs.id,
       }));
       setScreen(SCREENS.HOME+"_meeting");
     }

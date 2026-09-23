@@ -216,8 +216,19 @@ describe('10. no regression to adjacent architecture', () => {
     expect(app).toContain('if(!hasAuthoritativeParentCase && !appealDetectedRef.current && transcriptMentionsAppeal(tx)){');
   });
 
-  it('NEW-20 save-target resolution is untouched in this patch', () => {
-    expect(app).toContain('const nameMatches = cases.filter(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());');
+  // INTENTIONAL BEHAVIOUR CHANGE, Release 1 Phase 2.1.
+  //
+  // This originally asserted that NEW-29's timing patch left NEW-20's
+  // employee-name save-target resolution in place — a scope guard for that
+  // phase, never a statement that name matching was wanted. Name matching IS
+  // NEW-20, an open P1: it could file a meeting onto the wrong case when two
+  // employees share a name, or when one employee has both a closed and a live
+  // case. Phase 2.1 removes it, so the guard is inverted rather than deleted:
+  // it now pins the absence of the unsafe resolution, and NEW-29's own timing
+  // assertions above are unaffected either way.
+  it('NEW-20 save-target resolution is now authoritative, not name-based', () => {
+    expect(app).not.toContain('const nameMatches = cases.filter(c=>c.employeeName.toLowerCase()===caseInfo.employee.toLowerCase());');
+    expect(app).toContain('const structuredCaseId = caseInfo.caseId || null;');
     expect(app).toContain('if(caseInfo._linkedCaseId) {');
   });
 

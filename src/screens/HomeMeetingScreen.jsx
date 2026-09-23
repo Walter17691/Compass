@@ -416,7 +416,16 @@ export function HomeMeetingScreen({ meetingSetup, setMeetingSetup, orgMembers, g
             const commit = () => {
               const mt = selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,time:meetingSetup.time||"",locationOrMethod:meetingSetup.locationOrMethod||"",manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName,preparedCaseId:meetingSetup.preparedCaseId||meetingSetup.linkedCaseId||p.preparedCaseId||null,appealChairLocked:!!meetingSetup.appealChairLocked,
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,time:meetingSetup.time||"",locationOrMethod:meetingSetup.locationOrMethod||"",manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName,preparedCaseId:meetingSetup.preparedCaseId||meetingSetup.linkedCaseId||p.preparedCaseId||null,
+                // Release 1 Phase 2.1 — authoritative parentage (NEW-20).
+                // The "Link to case" select above writes activeCaseId and
+                // renders it as the chosen case, so this is the parent the
+                // user can actually see selected, never an inference from the
+                // typed employee name. Empty ("No case linked") leaves this
+                // null and the save fails closed rather than guessing or
+                // inventing a case.
+                caseId:meetingSetup.preparedCaseId||activeCaseId||null,
+                appealChairLocked:!!meetingSetup.appealChairLocked,
                 // Appeal Hearing Control Remediation (2026-09-18) — always
                 // derived fresh from meetingSetup.appealManagerId (never
                 // merged from caseInfo's own prior value), so a stale id
