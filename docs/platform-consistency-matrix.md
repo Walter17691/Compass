@@ -148,6 +148,17 @@ sync-all.
 | `caseTimeline` "held vs scheduled" | **UNCHANGED INTENTIONALLY** | Already keys on record presence, so a scheduled meeting reads "scheduled" |
 | `MeetingsTab` scheduled details | **UNCHANGED INTENTIONALLY** | Still renders agenda/questions/attendees |
 | Time / Method controls (`HomeMeetingScreen`) | **MIGRATED 2026-09-24** | Visibility un-coupled from the appeal chair security flag; render for every structured type |
+| **Record navigation identity** | **MIGRATED 2026-09-24** | `?screen=record&case=<caseId>&meeting=<meetingId>` — the URL identifies the workflow object |
+| Start / Resume navigation | **MIGRATED 2026-09-24** | Both write the authoritative pair; scheduled Start reuses the same meeting id |
+| Cold-load recovery | **MIGRATED 2026-09-24** | Waits for the case set, resolves by `caseId`+`meetingId`, verifies parentage and `in_progress`, else redirects |
+| `startedAt` authority | **MIGRATED 2026-09-24** | NEW-29 capture narrowed by `!recordRecovery`; recovery restores the persisted instant and never restamps |
+| Crash-recovery precedence | **MIGRATED 2026-09-24** | A draft may supplement content for the same `caseId`+`meetingId` only; it can never own identity or null `startedAt` |
+| Failure redirects | **MIGRATED 2026-09-24** | No case ⇒ Cases · no meeting ⇒ Case View · unknown/non-live/cross-parented ⇒ Case View. Never guesses |
+
+**Principle established.** THE URL IDENTIFIES THE WORKFLOW OBJECT. THE SERVER
+PROVIDES ITS TRUTH. THE CLIENT DOES NOT RECONSTRUCT IT BY GUESSING. Recovery may
+not use employee name, array order, meeting type, recency, "the first
+in_progress one", the clock, or local-only state.
 | `schedule.location` | **RETIRED FOR NEW WRITES** | Never written; reads tolerate it on pre-existing objects. No location concept exists yet |
 | `scheduleInstant` | **MIGRATED 2026-09-24** | A missing/malformed time is unsortable, not midnight |
 | Invitation flow | **UNCHANGED INTENTIONALLY** | Letters remain independent facts |

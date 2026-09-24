@@ -289,10 +289,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // push again, or Back would immediately re-push Forward).
   const readNavFromUrl = () => {
     const params = new URLSearchParams(window.location.search);
-    return { screen: params.get('screen') || SCREENS.HOME, caseId: params.get('case') || null };
+    return { screen: params.get('screen') || SCREENS.HOME, caseId: params.get('case') || null, meetingId: params.get('meeting') || null };
   };
   const [screen, setScreen] = useState(() => readNavFromUrl().screen);
   const navSyncSourceRef = useRef('init');
+  // P1 remediation (2026-09-24) — the record route carried only screen=record,
+  // so a browser refresh during a live meeting arrived with no case and no
+  // meeting identity. meetingType, caseInfo and meetingStartTime all fell back
+  // to defaults and the NEW-29 capture effect stamped a fresh start instant,
+  // producing "MEETING / Unknown / Started <now>" over a database record that
+  // was perfectly intact. The URL now identifies the workflow object; the
+  // server provides its truth; the client never reconstructs it by guessing.
+  //
+  // Captured once, at mount, so later in-app navigation cannot be mistaken for
+  // a cold load. Non-null only while a record-route bootstrap is unresolved —
+  // which is what suppresses the NEW-29 fallback during recovery.
+  const bootNavRef = useRef(readNavFromUrl());
+  const [recordRecovery, setRecordRecovery] = useState(() => {
+    const nav = readNavFromUrl();
+    return nav.screen === SCREENS.RECORD ? { caseId: nav.caseId, meetingId: nav.meetingId } : null;
+  });
 
   // ── Session ──
   const [meetingType, setMeetingType] = useState(null);
@@ -808,6 +824,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const params = new URLSearchParams();
     params.set('screen', screen);
     if (screen === SCREENS.CASE_VIEW && activeCaseId) params.set('case', activeCaseId);
+    // P1 remediation — the live meeting screen carries its authoritative
+    // identity, so a refresh can recover the exact meeting rather than
+    // guessing. caseId + meetingId is the only recovery key; nothing is
+    // inferred from employee name, array order or the clock.
+    if (screen === SCREENS.RECORD && caseInfo.caseId && caseInfo.meetingId) {
+      params.set('case', caseInfo.caseId);
+      params.set('meeting', caseInfo.meetingId);
+    }
     const nextSearch = `?${params.toString()}`;
     // activeCaseId can change without the screen changing (e.g. linking a
     // meeting to a case from a dropdown) — only push when the URL this
@@ -815,7 +839,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // entry that just makes Back need an extra press for no visible change.
     if (nextSearch === window.location.search) return;
     window.history.pushState(null, '', `${window.location.pathname}${nextSearch}`);
-  }, [screen, activeCaseId]);
+  }, [screen, activeCaseId, caseInfo.caseId, caseInfo.meetingId]);
 
   // Human UAT remediation, Batch 1 hardening round 2 — the signature-sync
   // effect that used to live here (checks pending meeting signatures
@@ -6081,8 +6105,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // that impossible here. This fires at most once per meeting and is then inert
     // until startSession() clears it — exactly the one-shot capture NEW-29 needs.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if(screen === SCREENS.RECORD && !meetingStartTime) setMeetingStartTime(new Date().toISOString());
-  }, [screen, meetingStartTime]);
+    if(screen === SCREENS.RECORD && !meetingStartTime && !recordRecovery) setMeetingStartTime(new Date().toISOString());
+  }, [screen, meetingStartTime, recordRecovery]);
 
   // Autosave the in-progress meeting to localStorage — transcript/inputText
   // were plain React state with zero persistence, meaning a crashed tab or
@@ -6131,6 +6155,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // anything the server still considers live. Drafts with no meeting id at
     // all are pre-2.2 and already fail closed at Save (Phase 2.1,
     // parent_required), so they are left exactly as they were.
+    // P1 remediation — when the URL identifies an authoritative live meeting,
+    // that identity wins. A draft belonging to a different meeting (or to none)
+    // must never replace it; it is left untouched rather than applied.
+    const bootNav = bootNavRef.current;
+    if(bootNav.screen === SCREENS.RECORD && bootNav.meetingId && draft.caseInfo?.meetingId !== bootNav.meetingId) return;
     if(draft.caseInfo?.meetingId) {
       const draftCase = casesRef.current.find(c => c.id === draft.caseInfo.caseId);
       const stillLive = draftCase && (draftCase.meetings||[]).some(
@@ -6149,7 +6178,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         setInputText(draft.inputText || "");
         if(draft.meetingType) setMeetingType(draft.meetingType);
         if(draft.caseInfo) setCaseInfo(draft.caseInfo);
-        setMeetingStartTime(draft.meetingStartTime || null);
+        // P1 remediation — never null an already-recovered authoritative
+        // instant. A draft with no startedAt (pre-2.2) still falls through to
+        // the NEW-29 capture, which is the one path that legitimately needs it.
+        if(draft.meetingStartTime) setMeetingStartTime(draft.meetingStartTime);
         setMeetingEndTime(draft.meetingEndTime || null);
         setAdjournments(draft.adjournments || []);
         setParticipants(draft.participants || []);
@@ -6609,6 +6641,58 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setActiveCaseId(cs.id);
     setScreen(SCREENS.RECORD);
   };
+
+  // ── P1 remediation — cold-load recovery of a live meeting ──────────────
+  //
+  // Loading directly at ?screen=record&case=X&meeting=Y must restore the exact
+  // persisted meeting. Resolution is deterministic and fails closed: it never
+  // picks a meeting by employee name, array order, type, recency or "the first
+  // in_progress one". Either the URL names the meeting or we redirect.
+  //
+  // The setState calls live in this helper rather than inline in the effect
+  // below so the effect body stays declarative — and so this logic is a plain
+  // function that tests can drive directly, which is the coverage gap that let
+  // the defect ship.
+  const resolveRecordRecovery = (nav) => {
+    const { caseId, meetingId } = nav;
+    // No identity at all — nothing to recover, and guessing is forbidden.
+    if(!caseId) { setRecordRecovery(null); setScreen(SCREENS.CASES); return { outcome: 'redirect_cases' }; }
+    const cs = casesRef.current.find(c => c.id === caseId);
+    // Case gone, or no longer visible to this user.
+    if(!cs) { setRecordRecovery(null); setScreen(SCREENS.CASES); return { outcome: 'redirect_cases' }; }
+    // A case but no meeting named: show the case, never choose a meeting.
+    if(!meetingId) { setActiveCaseId(cs.id); setRecordRecovery(null); setScreen(SCREENS.CASE_VIEW); return { outcome: 'redirect_case_view' }; }
+    const m = (cs.meetings||[]).find(x => x && x.id === meetingId);
+    // Unknown meeting, contradicted parentage, or not live (completed,
+    // cancelled, review_draft, or a legacy row with no declared status) —
+    // none of these may be reopened as a live meeting.
+    if(!m || (m.caseId && m.caseId !== cs.id) || declaredStatus(m) !== MEETING_STATUS.IN_PROGRESS) {
+      setActiveCaseId(cs.id); setRecordRecovery(null); setScreen(SCREENS.CASE_VIEW); return { outcome: 'redirect_case_view' };
+    }
+    // Authoritative. resumeMeeting restores identity, parentage, type, chair,
+    // participants and the PERSISTED startedAt — and writes nothing, mints no
+    // id and emits no audit event.
+    setRecordRecovery(null);
+    resumeMeeting(cs, m);
+    return { outcome: 'recovered', caseId: cs.id, meetingId: m.id };
+  };
+
+  useEffect(() => {
+    if(!recordRecovery) return;
+    // Wait for the authorised case set. Resolving against an empty list would
+    // redirect a perfectly valid meeting away.
+    if(casesLoading) return;
+    // The rule guards against cascading renders. resolveRecordRecovery clears
+    // recordRecovery on every branch it can take, and the guard above makes
+    // re-entry impossible — so this resolves at most once per cold load and is
+    // then inert. Same one-shot shape as the NEW-29 capture effect above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    resolveRecordRecovery(recordRecovery);
+    // resolveRecordRecovery is redefined every render and reads casesRef, so
+    // listing it would re-run this on every render; the recordRecovery guard is
+    // what makes this one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordRecovery, casesLoading]);
 
   const reset = () => {
     startSession(null); setMeetingType(null); setCaseInfo({employee:"",date:"",manager:"",context:"",email:""});
@@ -9999,7 +10083,7 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>orgLsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} fmtDate={fmtDate} />
+        <RecordScreen recovering={!!recordRecovery} meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>orgLsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} fmtDate={fmtDate} />
       )}
 
       {/* ══ REVIEW ══ */}

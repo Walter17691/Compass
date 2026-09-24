@@ -30,9 +30,29 @@ const captureStartOnEntry = (state, RECORD = 'record') => (
 );
 
 describe('1. start is captured on entry to the live meeting', () => {
-  it('the capture effect exists and is keyed on screen + meetingStartTime', () => {
-    expect(app).toContain('if(screen === SCREENS.RECORD && !meetingStartTime) setMeetingStartTime(new Date().toISOString());');
-    expect(app).toContain('}, [screen, meetingStartTime]);');
+  it('the capture effect exists and is keyed on screen + meetingStartTime + recovery', () => {
+    // P1 remediation (2026-09-24) — NARROWED, not weakened. The effect's job is
+    // unchanged: capture the start instant once, on entry to the live meeting,
+    // before any utterance exists. It now also stands down while a cold-load
+    // recovery is unresolved, because reaching RecordScreen no longer always
+    // means "a meeting is beginning" — since Phase 2.2 it can also mean "a
+    // persisted in_progress meeting is being restored", and stamping `now`
+    // there overwrote an authoritative startedAt (21:15 became 21:18 in human
+    // UAT). recordRecovery is non-null only during that window.
+    expect(app).toContain('if(screen === SCREENS.RECORD && !meetingStartTime && !recordRecovery) setMeetingStartTime(new Date().toISOString());');
+    expect(app).toContain('}, [screen, meetingStartTime, recordRecovery]);');
+  });
+
+  it('the narrowing cannot suppress capture for a genuinely new meeting', () => {
+    // recordRecovery is set only from the URL at mount, and only when the boot
+    // URL was the record screen. A new meeting started from within the app has
+    // it null, so the capture fires exactly as before.
+    expect(app).toContain("return nav.screen === SCREENS.RECORD ? { caseId: nav.caseId, meetingId: nav.meetingId } : null;");
+    const capture = (screen, meetingStartTime, recordRecovery, now) =>
+      (screen === 'record' && !meetingStartTime && !recordRecovery) ? now : meetingStartTime;
+    expect(capture('record', null, null, 'T0')).toBe('T0');                       // new meeting
+    expect(capture('record', null, { meetingId: 'm' }, 'T0')).toBeNull();          // recovering
+    expect(capture('record', 'T_PERSISTED', null, 'T0')).toBe('T_PERSISTED');      // already set
   });
 
   it('captures before any utterance exists', () => {
@@ -249,7 +269,12 @@ describe('10. no regression to adjacent architecture', () => {
 
   it('crash-recovery draft already carries timing, so it was not changed', () => {
     expect(app).toContain('transcript, inputText, meetingType, caseInfo, meetingStartTime, meetingEndTime, adjournments, participants, prepNotes, prepQuestions,');
-    expect(app).toContain('setMeetingStartTime(draft.meetingStartTime || null);');
+    // P1 remediation — the draft no longer nulls an already-recovered
+    // authoritative instant. A draft that carries one still restores it; one
+    // that does not (pre-2.2) falls through to the capture effect, which is the
+    // single path that legitimately needs the fallback.
+    expect(app).toContain('if(draft.meetingStartTime) setMeetingStartTime(draft.meetingStartTime);');
+    expect(app).not.toContain('setMeetingStartTime(draft.meetingStartTime || null);');
     expect(app).toContain('setMeetingEndTime(draft.meetingEndTime || null);');
   });
 

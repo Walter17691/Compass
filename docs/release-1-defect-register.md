@@ -299,6 +299,50 @@ none of which persist a structured case meeting:
 - **Decision** ACCEPTED and documented. Forward-compatible reading shipped in
   Phase 1, which is why rollback degrades rather than breaks.
 
+### RecordScreen refresh lost the meeting and regenerated startedAt — P1
+- **Severity** **P1** · **Area** App bootstrap / navigation · **Raised** 2026-09-24 (human UAT)
+- **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**
+- Before refresh: *Investigation · AT - Scheduling Phase 2.3 · Started 21:15*.
+  After a plain ⌘R at `?screen=record`: *Meeting · Unknown · Started 21:18*.
+- **No data was harmed.** Read-only inspection proved one meeting, `status
+  in_progress`, `startedAt 2026-09-24T20:15:11.833Z`, no duplicate, and
+  `cases.updated_at` unchanged since the Start write — the refresh performed no
+  database write at all. The 21:18 value existed only in client state.
+- **Cause.** The record route persisted only `screen=record`; `case` was written
+  for the Case View alone. On a cold load `activeCaseId`, `meetingType`,
+  `caseInfo` and `meetingStartTime` all fell back to defaults, so the header
+  rendered `meetingType?.label||"Meeting"` and `caseInfo.employee||"Unknown"`,
+  and the NEW-29 capture effect — correct by its own contract — stamped `now`
+  because reaching RecordScreen no longer only means "a meeting is beginning".
+- **Phase 2.2 implemented Case View resume navigation, not RecordScreen refresh
+  recovery.** `resumableMeetingFor` had exactly one consumer, the Case View
+  banner. Nothing on the bootstrap path consulted lifecycle state.
+- **Remediation (2026-09-24):** the record URL now carries
+  `case=<caseId>&meeting=<meetingId>`; cold load waits for the authorised case
+  set, resolves both, verifies parentage and `in_progress`, then restores via
+  `resumeMeeting`; RecordScreen shows "Restoring your meeting…" instead of its
+  own defaults; the NEW-29 capture is narrowed by `!recordRecovery`; a local
+  draft for a different meeting can no longer own identity or null a recovered
+  `startedAt`. Recovery fails closed — no case ⇒ Cases, no meeting ⇒ Case View,
+  unknown/non-live/cross-parented ⇒ Case View. It never guesses.
+- **Evidence** 36 tests in `src/test/recordBootstrapRecovery.test.js`, driving
+  the real URL reader, URL writer and resolver against the exact production
+  meeting state.
+- **Decision** NOT CLOSED until Walter's retest.
+
+### Missing app-bootstrap / cold-load test coverage — P2
+- **Severity** P2 · **Area** Process · **Raised** 2026-09-24
+- **STATUS: CLOSED** — the category now exists.
+- Phase 2.2 had lifecycle helper unit tests, Case View wiring assertions and
+  source-invariant checks, and all passed. **Nothing mounted the app fresh with
+  no prior navigation state.** Every test either called a pure helper directly
+  or grepped source, so the entry point a user actually arrives through was
+  never exercised. This is the same shape as the bundle-marker gap the day
+  before: the parts were verified, the door was not.
+- **Closed by** `src/test/recordBootstrapRecovery.test.js`, which drives cold-load
+  resolution, fail-closed redirects, ambiguity handling and `startedAt`
+  authority without any pre-existing React state.
+
 ### Scheduling logistics were unreachable for non-appeal meetings — P1
 - **Severity** **P1** · **Area** Scheduling UX · **Raised** 2026-09-24 (human UAT)
 - **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**

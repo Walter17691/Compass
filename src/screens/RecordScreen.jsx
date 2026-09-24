@@ -47,7 +47,7 @@ function LiveQuestionRow({ q, onSetStatus }) {
   );
 }
 
-export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip, fmtDate }) {
+export function RecordScreen({ recovering=false, meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip, fmtDate }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const followUpKey = meetingIntelligence?.suggestedFollowUp ? meetingIntelligence.suggestedFollowUp.text : null;
@@ -69,6 +69,20 @@ export function RecordScreen({ meetingType, caseInfo, isListening, meetingStartT
     clearMeetingDraft?.();
     setScreen(SCREENS.HOME);
   };
+  // P1 remediation (2026-09-24) — a cold load at ?screen=record resolves the
+  // authoritative meeting from caseId + meetingId before anything is shown.
+  // Until it does, this screen must not render its own defaults: the previous
+  // behaviour showed "MEETING · Unknown · Started <now>" over a database record
+  // that was entirely intact, which read as data loss to the user.
+  if(recovering) {
+    return (
+      <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,zIndex:2000,fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <CompassLogo size={40}/>
+        <div style={{fontSize:14,color:"#6B6375"}}>Restoring your meeting…</div>
+        <div style={{fontSize:12,color:"#9B9098"}}>Nothing has been lost — Compass is loading the saved meeting.</div>
+      </div>
+    );
+  }
   return (
     <div style={{position:"fixed",inset:0,background:"#FDFAF5",display:"flex",flexDirection:"column",zIndex:2000,fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
