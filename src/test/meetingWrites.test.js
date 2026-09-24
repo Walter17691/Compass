@@ -216,7 +216,13 @@ describe('15-16. concurrency fails closed', () => {
     const save = vi.fn(async () => ({ ok: false, reason: 'conflict' }));
     await persistMeeting({ cases: CASES, caseId: 'case-a', meeting: meeting(), saveCases: save });
     expect(save).toHaveBeenCalledTimes(1);
-    expect(libCode).not.toMatch(/retry|replay|while\s*\(|for\s*\(/);
+    expect(libCode).not.toMatch(/retry|replay/);
+    // Scoped to persistMeeting's own body, where a replay loop would have to
+    // live. A blanket ban on `for (` was a crude proxy and wrongly caught the
+    // two-key loop that enforces creation-metadata immutability on a patch.
+    const persistBody = libCode.slice(libCode.indexOf('export async function persistMeeting'), libCode.indexOf('export async function transitionMeeting'));
+    expect(persistBody).not.toMatch(/while\s*\(|for\s*\(/);
+    expect((persistBody.match(/await saveCases\(/g) || []).length).toBe(1);
   });
 
   it('a database rejection surfaces its message for translation', async () => {

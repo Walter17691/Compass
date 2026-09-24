@@ -299,6 +299,79 @@ none of which persist a structured case meeting:
 - **Decision** ACCEPTED and documented. Forward-compatible reading shipped in
   Phase 1, which is why rollback degrades rather than breaks.
 
+### Creation metadata overwritten by a later meeting save — P2
+- **Severity** P2 · **Area** Lifecycle integrity · **Raised** 2026-09-24 (human UAT)
+- **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**
+- `meeting_cad06fdb-24d5-4066-adad-e46aac10483c` was created when scheduled at
+  `2026-09-24T20:11:55.819Z`. After "Save and go to case" its `createdAt` read
+  `2026-09-24T20:50:23.987Z` — exactly its `savedAt` — and `createdBy` had been
+  re-stamped with the saving user.
+- **Root cause.** `saveMeetingToCaseImpl` applies `stampNewMeeting`
+  unconditionally, including when the write turns out to be a PATCH, and
+  `planMeetingWrite`'s patch spread (`{...m, ...meeting}`) let the fresh values
+  win. Effect: the scheduling moment is destroyed and the deliberate `createdAt`
+  (first persisted) vs `startedAt` (meeting began) distinction — the thing
+  scheduling made meaningful — collapses at Save.
+- **Remediation.** Enforced centrally in `planMeetingWrite`, which both
+  `persistMeeting` and `transitionMeeting` route through, so every write path
+  present and future inherits it. On a patch: a stored value is preserved and
+  the incoming one ignored; an absent one **stays absent**, so no patch can
+  fabricate creation metadata for the 884 pre-lifecycle rows that carry none.
+  The caller may keep stamping — on a patch the stamp cannot land.
+- **Why the earlier test missed it.** `meetingStartResume.test.js` asserted
+  `out.createdAt === started.createdAt` but hand-built its input as
+  `{ ...started, record, status }` — already carrying the correct value. It
+  tested `planMeetingWrite` alone, never the production composition
+  `stampNewMeeting → persistMeeting → planMeetingWrite`. The new suite drives
+  that composition: **12 of its 23 tests fail against the pre-fix code.**
+- **No production data was repaired.** The already-affected UAT meeting is
+  retained as regression evidence; no customer backfill.
+
+### Context budget starves the meeting dialogue — P2
+- **Severity** P2 · **Area** AI grounding · **Raised** 2026-09-24 · **NOT IMPLEMENTED**
+- Case Readiness asked *"What account or response did the employee give?"*
+  explaining *"The meeting record excerpt is cut off before the employee's
+  account"* — on a meeting whose record contains it.
+- **Not a NEW-33 regression.** Verified by running the real `buildCaseContext`
+  on the real record: excerpt marker present, NOTE ON EXCERPTS present, and the
+  employee's account genuinely absent from the context. The model described its
+  input accurately, which is exactly what NEW-33 was built to achieve.
+- **The budget is the problem.** Factual record 794 chars vs
+  `MEETING_FULL_CHARS` 500; `## Meeting Dialogue` begins at ~char 455 and
+  `"public transport"` sits at char 663. Roughly 455 of the 500 characters are
+  spent on Meeting Details boilerplate (Type, Date, times, Chair, Notetaker,
+  Employee, Representative, Participants, Purpose), so the dialogue is cut
+  within its first question. **NEW-33 solved truthfulness, not sufficiency.**
+- **Decision** OPEN. Per the NEW-33 instruction not to raise 500 to an
+  arbitrary larger number, the likely fix is to prioritise the dialogue section
+  over metadata the AI can obtain from structured fields. Not implemented.
+
+### NEW-31 reproduced — the unanswered-question generator is unguarded
+- **Severity** P2 · **Area** Signals / AI · **Raised** 2026-09-24 · **NOT IMPLEMENTED**
+- Case Readiness asked *"Has a notetaker been identified and are meeting notes
+  available…?"* on a record reading `Notetaker: Not specified`.
+- The **Review record generator** carries an extensive guard (*"a named
+  notetaker is optional… never raise the absence of a named notetaker as a
+  concern, a risk or something to verify"*). `generateUnansweredQuestions`
+  carries **none of it**: measured on its prompt — `notetaker` 0,
+  `NO_INVENTED_AUTHORITIES` 0, `REVIEW_EVIDENTIAL_CONTRACT` 0,
+  `LEGAL_ACCURACY_BOUNDARY` 0. It does use `buildHardenedCaseContext`, so it
+  receives the NEW-33 excerpt, but none of the four evidential contracts.
+- **This is NEW-31's open half**, and the generator is an unguarded surface for
+  the whole NEW-22/23/25/28 class, not only notetaker.
+- **Decision** OPEN. Not implemented.
+
+### Signature next step is an unconditional recipe default
+- **Severity** P3 · **Area** Process recipe · **Raised** 2026-09-24 · **NOT IMPLEMENTED**
+- `nextStep.js:161` returns *"Send investigation record for signature"* with the
+  reason *"The employee should confirm the record is accurate before it's relied
+  on"* whenever `lastInv?.signStatus !== "signed"`. It is not gated on
+  organisation configuration, policy, case type or any authority, and is
+  presented as the single primary action — which reads as stronger than
+  recommended good practice. Recorded as what the code does; no legal conclusion
+  is drawn here.
+- **Decision** OPEN — belongs to the later process-recipe / UX phase.
+
 ### RecordScreen refresh lost the meeting and regenerated startedAt — P1
 - **Severity** **P1** · **Area** App bootstrap / navigation · **Raised** 2026-09-24 (human UAT)
 - **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**

@@ -48,6 +48,41 @@ export const WRITE_FAILURE = Object.freeze({
 
 const isNonEmptyString = v => typeof v === "string" && v.trim().length > 0;
 
+// Creation metadata describes the creation of a meeting's IDENTITY, so it is
+// immutable for the life of that identity.
+//
+// Found in production human UAT (2026-09-24): a scheduled meeting created at
+// 20:11:55.819Z read 20:50:23.987Z after Save — exactly its savedAt — and
+// createdBy had been re-stamped too. saveMeetingToCaseImpl applies
+// stampNewMeeting unconditionally, including when the write turns out to be a
+// patch, and the spread below let the fresh values win. The effect was to
+// destroy the scheduling moment and collapse the deliberate createdAt (when the
+// object was first persisted) vs startedAt (when the meeting began)
+// distinction, which is precisely what scheduling made meaningful.
+//
+// Enforced here rather than in each caller: persistMeeting and
+// transitionMeeting both route through planMeetingWrite, so one rule covers
+// every write path that exists today and every one added later. A caller may
+// stamp freely — on a patch the stamp simply cannot land.
+//
+// Three cases, all fail-safe:
+//   stored value present  -> preserved, incoming ignored
+//   incoming tries to set -> rejected
+//   stored value absent   -> stays absent. A patch must not invent creation
+//                            metadata for a legacy row that never had any; the
+//                            884 pre-lifecycle production rows carry none, and
+//                            an unrelated patch is no place to fabricate one.
+const IMMUTABLE_ON_PATCH = ["createdAt", "createdBy"];
+
+function patchMeeting(stored, incoming, caseId) {
+  const next = { ...stored, ...incoming, id: stored.id, caseId };
+  for (const key of IMMUTABLE_ON_PATCH) {
+    if (key in stored) next[key] = stored[key];
+    else delete next[key];
+  }
+  return next;
+}
+
 // Pure. Produces the next cases array without touching anything, so the
 // decision can be asserted in tests independently of persistence.
 //
@@ -80,7 +115,7 @@ export function planMeetingWrite({ cases, caseId, meeting }) {
   // id and caseId are restated from the authoritative side on every write, so
   // no patch can move a meeting between cases or change its identity.
   const nextMeetings = index >= 0
-    ? meetings.map((m, i) => (i === index ? { ...m, ...meeting, id: m.id, caseId } : m))
+    ? meetings.map((m, i) => (i === index ? patchMeeting(m, meeting, caseId) : m))
     : [...meetings, { ...meeting, caseId }];
 
   return {

@@ -152,6 +152,7 @@ sync-all.
 | Start / Resume navigation | **MIGRATED 2026-09-24** | Both write the authoritative pair; scheduled Start reuses the same meeting id |
 | Cold-load recovery | **MIGRATED 2026-09-24** | Waits for the case set, resolves by `caseId`+`meetingId`, verifies parentage and `in_progress`, else redirects |
 | `startedAt` authority | **MIGRATED 2026-09-24** | NEW-29 capture narrowed by `!recordRecovery`; recovery restores the persisted instant and never restamps |
+| **Creation metadata** (`createdAt`/`createdBy`) | **MIGRATED 2026-09-24** | Immutable. Enforced in `planMeetingWrite`, so `persistMeeting` and `transitionMeeting` both inherit it. A patch preserves a stored value, ignores an incoming one, and never invents one for a legacy row |
 | Crash-recovery precedence | **MIGRATED 2026-09-24** | A draft may supplement content for the same `caseId`+`meetingId` only; it can never own identity or null `startedAt` |
 | Failure redirects | **MIGRATED 2026-09-24** | No case ⇒ Cases · no meeting ⇒ Case View · unknown/non-live/cross-parented ⇒ Case View. Never guesses |
 
