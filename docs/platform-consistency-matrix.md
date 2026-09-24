@@ -147,6 +147,9 @@ sync-all.
 | `buildScheduledMeetingEntry` | **RETIRED** | Removed — the pre-lifecycle forked builder |
 | `caseTimeline` "held vs scheduled" | **UNCHANGED INTENTIONALLY** | Already keys on record presence, so a scheduled meeting reads "scheduled" |
 | `MeetingsTab` scheduled details | **UNCHANGED INTENTIONALLY** | Still renders agenda/questions/attendees |
+| Time / Method controls (`HomeMeetingScreen`) | **MIGRATED 2026-09-24** | Visibility un-coupled from the appeal chair security flag; render for every structured type |
+| `schedule.location` | **RETIRED FOR NEW WRITES** | Never written; reads tolerate it on pre-existing objects. No location concept exists yet |
+| `scheduleInstant` | **MIGRATED 2026-09-24** | A missing/malformed time is unsortable, not midnight |
 | Invitation flow | **UNCHANGED INTENTIONALLY** | Letters remain independent facts |
 | Dev meetings | **DEFERRED** | Phase 2.5 |
 

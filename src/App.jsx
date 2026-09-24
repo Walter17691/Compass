@@ -3031,7 +3031,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     setMeetingScheduling(true);
     try {
       const result = await scheduleCaseMeeting({
-        caseId, type, date, time: startTime, method: null, location: null,
+        caseId, type, date, time: startTime, method: null,
         participants: parseAttendees(attendees).map(email=>({ name: email, role: "Attendee" })),
         manager: cs?.manager || "",
         // The appointed officer, for an appeal hearing. Resolved from the same
@@ -6431,12 +6431,18 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const appealManagerIdForCase = (caseId) =>
     caseAccess.find(a => a.caseId === caseId && a.role === "appeal_manager")?.userId || null;
 
-  const scheduleCaseMeeting = async ({ caseId, type, date, time, method, location, participants: attendees = [], appealManagerId = null, manager = "", calendarRequest = null }) => {
+  const scheduleCaseMeeting = async ({ caseId, type, date, time, method, participants: attendees = [], appealManagerId = null, manager = "", calendarRequest = null }) => {
     if(!caseId) {
       showToast(describeMeetingWriteFailure(WRITE_FAILURE.PARENT_REQUIRED), "error");
       return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
     }
+    if(!type) { showToast("Choose the meeting type", "error"); return { ok: false, reason: 'invalid_schedule' }; }
+    // Release 1 Phase 2.3 remediation — a scheduled meeting without a time is
+    // not a scheduled meeting. Both are required here as well as in the form,
+    // so no caller can persist a timeless arrangement: nothing is written,
+    // nothing navigates, no calendar call is attempted, no success is shown.
     if(!date) { showToast("Enter the date the meeting is arranged for", "error"); return { ok: false, reason: 'invalid_schedule' }; }
+    if(!time) { showToast("Enter the time the meeting is arranged for", "error"); return { ok: false, reason: 'invalid_schedule' }; }
 
     const now = new Date().toISOString();
     const meeting = stampNewMeeting({
@@ -6446,7 +6452,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // schedule.* is authoritative. The flat `date` mirrors it so every
       // pre-lifecycle reader (MeetingsTab, caseTimeline's "scheduled" wording,
       // prevMeetings ordering) keeps working with no change at all.
-      schedule: { date, time: time || null, method: method || null, location: location || null },
+      // One free-text logistics value, stored once. It was previously written
+      // into BOTH method and location, which duplicated the same string under
+      // two keys and implied a location concept Compass does not have. No
+      // location is written for a new meeting; readers still tolerate one on
+      // any existing object (see CaseViewScreen's `where`).
+      schedule: { date, time, method: method || null },
       date,
       participants: attendees,
       manager: manager || "",
@@ -6547,12 +6558,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // deliberately NOT patchable: it is security-sensitive and immutable, so an
   // appeal hearing whose officer has changed must be cancelled and replaced
   // under the new officer rather than quietly re-pointed.
-  const rescheduleCaseMeeting = async (cs, meeting, { date, time, method, location }) => {
+  const rescheduleCaseMeeting = async (cs, meeting, { date, time, method }) => {
     if(!date) { showToast("Enter the new date", "error"); return { ok: false, reason: 'invalid_schedule' }; }
+    if(!time) { showToast("Enter the new time", "error"); return { ok: false, reason: 'invalid_schedule' }; }
     const result = await transitionMeeting({
       cases: casesRef.current, caseId: cs.id, meetingId: meeting.id,
       allowedFrom: [MEETING_STATUS.SCHEDULED], toStatus: MEETING_STATUS.SCHEDULED,
-      patch: { schedule: { ...(meeting.schedule||{}), date, time: time || null, method: method || null, location: location || null }, date },
+      // Spread first so any pre-existing schedule.location on an older object
+      // survives untouched; nothing new ever writes one.
+      patch: { schedule: { ...(meeting.schedule||{}), date, time, method: method || null }, date },
       saveCases,
     });
     if(!result?.ok) { showToast(describeMeetingWriteFailure(result?.reason) || "Couldn't reschedule the meeting", "error"); return { ok: false, reason: result?.reason }; }
@@ -9887,7 +9901,7 @@ Please produce:
               message: `${m.type||"Meeting"} is currently arranged for ${m.schedule?.date||m.date||"an unset date"}${m.schedule?.time?" at "+m.schedule.time:""}. The same meeting keeps its identity and history — only the logistics change.`,
               fields: [
                 { key:"date", label:"New date", placeholder:"YYYY-MM-DD" },
-                { key:"time", label:"New time (optional)", placeholder:"HH:MM" },
+                { key:"time", label:"New time", placeholder:"HH:MM" },
                 { key:"method", label:"Method / location (optional)", placeholder:"e.g. Microsoft Teams" },
               ],
               confirmLabel: "Reschedule",
@@ -9895,9 +9909,8 @@ Please produce:
             if(!values) return;
             await rescheduleCaseMeeting(cs, m, {
               date: (values.date||"").trim(),
-              time: (values.time||"").trim() || null,
+              time: (values.time||"").trim(),
               method: (values.method||"").trim() || null,
-              location: (values.method||"").trim() || null,
             });
           }}
           onCancelScheduledMeeting={async (cs, m) => {

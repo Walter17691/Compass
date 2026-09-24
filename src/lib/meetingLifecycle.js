@@ -165,9 +165,13 @@ export function isScheduledMeeting(m) {
 export function scheduleInstant(m) {
   const s = isObject(m) && isObject(m.schedule) ? m.schedule : null;
   const date = (s && s.date) || (isObject(m) ? m.date : null);
-  if (!date) return NaN;
-  const time = (s && s.time) || "00:00";
-  return Date.parse(`${date}T${/^\d{2}:\d{2}$/.test(time) ? time : "00:00"}:00`);
+  const time = s && s.time;
+  // A missing or malformed time is UNKNOWN, never midnight. Defaulting to
+  // "00:00" made a timeless meeting sort as the earliest of its day — an
+  // invented fact, and exactly the kind of silent inference this redesign
+  // exists to remove. Unsortable values are placed last by callers instead.
+  if (!date || !/^\d{2}:\d{2}$/.test(time || "")) return NaN;
+  return Date.parse(`${date}T${time}:00`);
 }
 
 // Every meeting arranged on a case, soonest first.

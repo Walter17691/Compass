@@ -335,7 +335,14 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                       employeeJobTitle:meetingSetup.employeeJobTitle||p.employeeJobTitle,
                       manager:meetingSetup.manager||p.manager,
                       chairJobTitle:meetingSetup.chairJobTitle||p.chairJobTitle,
-                      date:meetingSetup.date
+                      date:meetingSetup.date,
+                      // Phase 2.3 remediation — time and method are enterable
+                      // for every meeting type now, so the invitation path
+                      // must receive them rather than silently dropping the
+                      // logistics the user just supplied. Pre-existing gap,
+                      // newly reachable; no invitation redesign.
+                      time:meetingSetup.time||p.time||"",
+                      locationOrMethod:meetingSetup.locationOrMethod||p.locationOrMethod||""
                     }));
                     setMeetingType(mt);
                     setPendingLetterType("invite");
@@ -384,8 +391,16 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
               saved invitation and editable, because a hearing can genuinely
               be rearranged — changing them records the ACTUAL logistics on
               the hearing and leaves the invitation untouched. */}
-          {meetingSetup.appealChairLocked&&(
-            <div style={{display:"flex",gap:12,marginBottom:28,flexWrap:"wrap"}}>
+          {/* Release 1 Phase 2.3 remediation — these were gated on
+              appealChairLocked, which is the APPEAL CHAIR SECURITY flag
+              (CaseViewScreen's start_appeal_meeting handler is the only place
+              it is ever set). Using it to control the visibility of ordinary
+              scheduling logistics was an accidental coupling: it meant an
+              Investigation or Disciplinary meeting could not be given a time
+              or a method at all, while Phase 2.3's Schedule action claimed to
+              persist both. Human UAT found it. The chair locking above is
+              untouched — only the visibility coupling is removed. */}
+          <div style={{display:"flex",gap:12,marginBottom:28,flexWrap:"wrap"}}>
               <div style={{flex:"1 1 130px"}}>
                 <label htmlFor="meeting-time" style={FIELD_LABEL_STYLE}>Time</label>
                 <input id="meeting-time" type="time" value={meetingSetup.time||""}
@@ -395,16 +410,15 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
               </div>
               <div style={{flex:"2 1 220px"}}>
-                <label htmlFor="meeting-location" style={FIELD_LABEL_STYLE}>Method / location</label>
+                <label htmlFor="meeting-location" style={FIELD_LABEL_STYLE}>Meeting method / location <span style={OPTIONAL_TAG_STYLE}>(optional)</span></label>
                 <input id="meeting-location" type="text" value={meetingSetup.locationOrMethod||""}
-                  placeholder="e.g. Microsoft Teams"
+                  placeholder="e.g. Microsoft Teams, Office, Phone"
                   onChange={e=>setMeetingSetup(p=>({...p,locationOrMethod:e.target.value}))}
                   style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
                   onFocus={e=>{e.target.style.borderColor="#7C5CFC";}}
                   onBlur={e=>{e.target.style.borderColor="#E8E0D0";}}/>
               </div>
-            </div>
-          )}
+          </div>
 
           {(() => {
             const disabled = !meetingSetup.employee.trim()||!meetingSetup.type;
@@ -451,8 +465,8 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                     identity and lifecycle infrastructure only. */}
                 {!isDev&&(
                   <button
-                    disabled={disabled||starting||!meetingSetup.date}
-                    title={!meetingSetup.date?"Add the date the meeting is arranged for":undefined}
+                    disabled={disabled||starting||!meetingSetup.date||!meetingSetup.time}
+                    title={!meetingSetup.date?"Add the date the meeting is arranged for":(!meetingSetup.time?"Add the time the meeting is arranged for":undefined)}
                     onClick={async ()=>{
                       commit();
                       setStarting(true);
@@ -463,7 +477,6 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                           date: meetingSetup.date,
                           time: meetingSetup.time||null,
                           method: meetingSetup.locationOrMethod||null,
-                          location: meetingSetup.locationOrMethod||null,
                           participants: meetingSetup.participants||[],
                           manager: meetingSetup.manager||"",
                           appealManagerId: meetingSetup.appealManagerId||null,
@@ -471,7 +484,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                         if(r?.ok) setScreen(SCREENS.CASE_VIEW);
                       } finally { setStarting(false); }
                     }}
-                    style={{flex:1,background:"#FFFFFF",border:"1px solid "+((disabled||!meetingSetup.date)?"#E8E0D0":"#7C5CFC"),borderRadius:10,padding:"14px",fontSize:15,color:(disabled||!meetingSetup.date)?"#9B9098":"#7C5CFC",fontWeight:600,cursor:(disabled||!meetingSetup.date)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    style={{flex:1,background:"#FFFFFF",border:"1px solid "+((disabled||!meetingSetup.date||!meetingSetup.time)?"#E8E0D0":"#7C5CFC"),borderRadius:10,padding:"14px",fontSize:15,color:(disabled||!meetingSetup.date||!meetingSetup.time)?"#9B9098":"#7C5CFC",fontWeight:600,cursor:(disabled||!meetingSetup.date||!meetingSetup.time)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                     Schedule meeting
                   </button>
                 )}

@@ -299,6 +299,50 @@ none of which persist a structured case meeting:
 - **Decision** ACCEPTED and documented. Forward-compatible reading shipped in
   Phase 1, which is why rollback degrades rather than breaks.
 
+### Scheduling logistics were unreachable for non-appeal meetings — P1
+- **Severity** **P1** · **Area** Scheduling UX · **Raised** 2026-09-24 (human UAT)
+- **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**
+- Time and Method/location were rendered only when
+  `meetingSetup.appealChairLocked` was true — the **appeal chair security**
+  flag, set solely by `CaseViewScreen`'s `start_appeal_meeting` handler. An
+  Investigation, Disciplinary, Grievance or any other type therefore had **no
+  way to enter a time or a method at all**, while Phase 2.3's Schedule action
+  claimed to persist `schedule.{date,time,method,location}`.
+- The coupling was accidental: those fields were added on 2026-09-20 to show an
+  appeal hearing's *actual* logistics prefilled from a saved invitation, not as
+  scheduling inputs. Phase 2.3 added a Schedule intent to a form built for the
+  older Prepare/Start model, where `date` meant "the date this meeting is being
+  held" and no time was ever needed.
+- **Compounded by my own report**, which instructed the tester to "enter a
+  future date, a time, and a method" — describing controls that did not exist
+  on that route. My tests asserted the source string `'Schedule meeting'` and
+  the persisted shape, never that a user could supply the values that shape
+  claims to hold.
+- **Remediation (2026-09-24):** visibility coupling removed so both controls
+  render for every structured type; appeal chair locking and prefill untouched;
+  **Time required for Schedule only** — never for Prepare or Start;
+  `schedule.method` written once, `schedule.location` no longer written (reads
+  of any pre-existing one still tolerated); `scheduleInstant` returns NaN for a
+  missing or malformed time instead of inventing midnight, so timeless
+  scheduled meetings sort last; invitation drafting now receives the time and
+  method it can be given.
+- **Evidence** 80 tests in `src/test/meetingScheduled.test.js`; served-bundle
+  assertions now include the user-facing control labels and both input ids.
+- **Decision** NOT CLOSED. Requires Walter's retest.
+
+### Verification gap — bundle checks used downstream strings only
+- **Severity** P2 · **Area** Process · **Raised** 2026-09-24
+- The Phase 2.3 serving-bundle check grepped `Meeting scheduled`,
+  `Start scheduled meeting`, `Meeting rescheduled`, `Meeting cancelled` and
+  `Appeal officer changed` — **every one of which lives in `App.jsx` or
+  `CaseViewScreen.jsx`.** All five could have been present while the actual new
+  control was missing from the screen the user operates, which is exactly what
+  happened.
+- **Remediation** Bundle verification must assert the **user-facing control
+  labels and input ids**, not only downstream toast/banner strings. Applied
+  from this remediation onward, pre-build and post-deploy.
+- **Decision** CLOSED as a process change; recorded so it is not repeated.
+
 ### Calendar sync has no retry affordance
 - **Severity** P3 · **Area** Calendar · **Raised** 2026-09-23
 - When sync fails the meeting is scheduled and the user is told so, but there

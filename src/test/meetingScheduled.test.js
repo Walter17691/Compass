@@ -76,7 +76,7 @@ describe('1-9. a scheduled meeting is a real, authoritative object', () => {
   it('the flat date mirrors schedule.date so pre-lifecycle readers still work', () => {
     const m = sched();
     expect(m.date).toBe(m.schedule.date);
-    expect(app).toContain('schedule: { date, time: time || null, method: method || null, location: location || null },');
+    expect(app).toContain('schedule: { date, time, method: method || null },');
   });
 
   it('legacy rows are never mistaken for scheduled', () => {
@@ -352,7 +352,10 @@ describe('38. multiple scheduled meetings are supported', () => {
     expect(Number.isNaN(scheduleInstant(null))).toBe(true);
     expect(Number.isNaN(scheduleInstant({}))).toBe(true);
     expect(Number.isNaN(scheduleInstant(sched({ schedule: { date: null }, date: null })))).toBe(true);
-    expect(Number.isNaN(scheduleInstant(sched({ schedule: { date: '2026-10-06', time: 'nonsense' } })))).toBe(false);
+    // a malformed time is UNKNOWN, not midnight
+    expect(Number.isNaN(scheduleInstant(sched({ schedule: { date: '2026-10-06', time: 'nonsense' } })))).toBe(true);
+    expect(Number.isNaN(scheduleInstant(sched({ schedule: { date: '2026-10-06', time: null } })))).toBe(true);
+    expect(Number.isNaN(scheduleInstant(sched({ schedule: { date: '2026-10-06', time: '10:00' } })))).toBe(false);
   });
 });
 
@@ -449,8 +452,11 @@ describe('Schedule and Start are distinct intents', () => {
     expect(home).toContain('await scheduleCaseMeeting?.({');
   });
 
-  it('Schedule requires a date; Start does not', () => {
-    expect(home).toContain('disabled={disabled||starting||!meetingSetup.date}');
+  it('Schedule requires a date AND a time; Start requires neither', () => {
+    expect(home).toContain('disabled={disabled||starting||!meetingSetup.date||!meetingSetup.time}');
+    // Start and Prepare are untouched by the scheduling requirement
+    expect(home).toContain('disabled={disabled||starting}');
+    expect(home).toContain('onClick={()=>{ commit(); setScreen(SCREENS.PREP); }}');
   });
 
   it('Schedule returns to the case rather than entering the live screen', () => {
@@ -524,5 +530,163 @@ describe('audit events are user-meaningful and not duplicated', () => {
     const fn = app.slice(app.indexOf('const scheduleCaseMeeting ='), app.indexOf('const startScheduledMeeting ='));
     expect(fn).not.toMatch(/audit\([^)]*record/);
     expect(fn).not.toMatch(/audit\([^)]*transcript/);
+  });
+});
+
+
+// ── Phase 2.3 HUMAN-UAT REMEDIATION ────────────────────────────────────────
+//
+// Human UAT found that Time and Meeting method / location were rendered only
+// when meetingSetup.appealChairLocked was true — the APPEAL CHAIR SECURITY
+// flag, set solely by CaseViewScreen's start_appeal_meeting handler. An
+// Investigation could therefore never be given a time or a method, while
+// Phase 2.3's Schedule action claimed to persist both. The coupling was
+// accidental; only the visibility half is removed here.
+
+describe('1-6. logistics controls render for every structured meeting type', () => {
+  const timeBlock = home.slice(home.indexOf('htmlFor="meeting-time"') - 700, home.indexOf('htmlFor="meeting-location"') + 900);
+
+  it('1/3/4. the Time control is no longer gated on appeal chair security', () => {
+    // the block is rendered unconditionally — no appealChairLocked guard
+    expect(home).not.toContain('{meetingSetup.appealChairLocked&&(\n            <div style={{display:"flex",gap:12');
+    expect(timeBlock).toContain('<label htmlFor="meeting-time"');
+    expect(timeBlock).not.toContain('appealChairLocked');
+  });
+
+  it('2. the Meeting method / location control renders too, relabelled', () => {
+    expect(home).toContain('Meeting method / location');
+    expect(home).toContain('placeholder="e.g. Microsoft Teams, Office, Phone"');
+  });
+
+  it('5/6. appeal chair locking and prefill are untouched', () => {
+    // the chair field still locks for a structured appeal hearing
+    expect(home).toContain('{meetingSetup.appealChairLocked ? (');
+    expect(home).toContain('This is the appointed appeal officer.');
+    // and the appeal route still prefills time/method from the invitation
+    expect(caseView).toContain('const scheduled = isStructuredAppealHearing ? appealInvitationLogistics(cs) : null;');
+    expect(caseView).toContain('time:scheduled?.time||"",');
+    expect(caseView).toContain('locationOrMethod:scheduled?.locationOrMethod||"",');
+  });
+
+  it('the appeal chair security flag is still only ever set in one place', () => {
+    expect(caseView).toContain('appealChairLocked:isStructuredAppealHearing,');
+  });
+});
+
+describe('7-10. validation belongs to Schedule alone', () => {
+  it('7/8. Schedule is refused without a time, at the primitive as well as the form', () => {
+    expect(app).toContain('if(!time) { showToast("Enter the time the meeting is arranged for", "error"); return { ok: false, reason: \'invalid_schedule\' }; }');
+    const fn = app.slice(app.indexOf('const scheduleCaseMeeting ='), app.indexOf('const syncMeetingToCalendar ='));
+    // every guard returns BEFORE the write, so nothing persists, navigates or syncs
+    const firstGuard = fn.indexOf("reason: 'invalid_schedule'");
+    expect(firstGuard).toBeGreaterThan(-1);
+    expect(firstGuard).toBeLessThan(fn.indexOf('await persistMeeting('));
+  });
+
+  it('a meeting type is required too', () => {
+    expect(app).toContain('if(!type) { showToast("Choose the meeting type", "error"); return { ok: false, reason: \'invalid_schedule\' }; }');
+  });
+
+  it('9/10. Prepare and Start never require a time', () => {
+    const prepBtn = home.slice(home.indexOf('onClick={()=>{ commit(); setScreen(SCREENS.PREP); }}') - 200, home.indexOf('Prepare meeting'));
+    expect(prepBtn).not.toContain('meetingSetup.time');
+    const startBtn = home.slice(home.indexOf('await beginMeeting({') - 900, home.indexOf('Start meeting'));
+    expect(startBtn).not.toContain('!meetingSetup.time');
+    // and beginMeeting itself has no time concept at all
+    const begin = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('  // ── Release 1 Phase 2.3 — truthful scheduling'));
+    expect(begin).not.toContain('schedule');
+  });
+});
+
+describe('11-15. the persisted shape carries one logistics value', () => {
+  it('11/12/13. date, time and method are persisted as supplied', () => {
+    const m = sched({ schedule: { date: '2026-10-06', time: '10:00', method: 'Microsoft Teams' } });
+    const plan = planMeetingWrite({ cases: [caseWith()], caseId: 'case-a', meeting: m });
+    const w = plan.nextCases[0].meetings[0];
+    expect(w.schedule.date).toBe('2026-10-06');
+    expect(w.schedule.time).toBe('10:00');
+    expect(w.schedule.method).toBe('Microsoft Teams');
+  });
+
+  it('14. a new meeting never duplicates method into schedule.location', () => {
+    expect(app).toContain('schedule: { date, time, method: method || null },');
+    expect(app).not.toMatch(/location:\s*location\s*\|\|\s*null/);
+    expect(app).not.toMatch(/location:\s*meetingSetup\.locationOrMethod/);
+    expect(home).not.toMatch(/location:\s*meetingSetup\.locationOrMethod/);
+    // and reschedule spreads rather than rewriting, so it cannot introduce one
+    expect(app).toContain('patch: { schedule: { ...(meeting.schedule||{}), date, time, method: method || null }, date },');
+  });
+
+  it('15. reading a legacy object that already has schedule.location still works', () => {
+    const legacyShaped = sched({ schedule: { date: '2026-10-06', time: '10:00', method: null, location: 'Room 2' } });
+    // the Case View falls back to location when method is absent
+    expect(caseView).toContain('const where = m.schedule?.location||m.schedule?.method||"";');
+    // and Prepare seeds the form from either
+    expect(app).toContain('locationOrMethod: meeting.schedule?.location || meeting.schedule?.method || "",');
+    expect(legacyShaped.schedule.location).toBe('Room 2');
+    expect(isScheduledMeeting(legacyShaped)).toBe(true);
+  });
+});
+
+describe('16-18. ordering never invents a time', () => {
+  it('16. a valid date and time gives a real sortable instant', () => {
+    const at = scheduleInstant(sched({ schedule: { date: '2026-10-06', time: '10:00' } }));
+    expect(Number.isNaN(at)).toBe(false);
+    expect(at).toBe(Date.parse('2026-10-06T10:00:00'));
+  });
+
+  it('17. a missing or malformed time is unsortable, not midnight', () => {
+    for (const time of [null, undefined, '', '   ', 'nonsense', '1000', '25:00:00']) {
+      expect(Number.isNaN(scheduleInstant(sched({ schedule: { date: '2026-10-06', time } })))).toBe(true);
+    }
+    // and specifically NOT equal to midnight
+    expect(scheduleInstant(sched({ schedule: { date: '2026-10-06', time: null } }))).not.toBe(Date.parse('2026-10-06T00:00:00'));
+  });
+
+  it('18. timeless scheduled meetings sort last, never first', () => {
+    const timeless = sched({ id: 'timeless', schedule: { date: '2026-10-06', time: null } });
+    const timed = sched({ id: 'timed', schedule: { date: '2026-10-06', time: '09:00' } });
+    const later = sched({ id: 'later', schedule: { date: '2026-11-01', time: '09:00' } });
+    expect(scheduledMeetingsFor(caseWith(timeless, timed, later)).map(m => m.id)).toEqual(['timed', 'later', 'timeless']);
+    expect(scheduledMeetingsFor(caseWith(timed, timeless)).map(m => m.id)).toEqual(['timed', 'timeless']);
+  });
+});
+
+describe('19-22. display and calendar are unchanged in substance', () => {
+  it('19. the banner shows date and time together', () => {
+    expect(caseView).toContain('const when = [m.schedule?.date&&fmtDate(m.schedule.date), m.schedule?.time].filter(Boolean).join(" at ");');
+  });
+
+  it('20. method/location is shown once, from a single value', () => {
+    expect((caseView.match(/const where = /g) || []).length).toBe(1);
+    expect(caseView).toContain('{where&&<>{where} · </>}');
+  });
+
+  it('21. the calendar path still refuses a missing time before any write', () => {
+    const lib = readFileSync('src/lib/meetingScheduling.js', 'utf8');
+    expect(lib).toContain('if (!date || !startTime) return null;');
+    expect(app).toContain('if(!times) { showToast("Enter a valid date and time", "error"); return false; }');
+    const calFn = app.slice(app.indexOf('const scheduleMeeting = async ({ caseId, meetingType'), app.indexOf('const appealManagerIdForCase'));
+    expect(calFn.indexOf('if(!times)')).toBeLessThan(calFn.indexOf('scheduleCaseMeeting('));
+  });
+
+  it('22. scheduling from the case route implies no calendar event', () => {
+    const block = home.slice(home.indexOf('await scheduleCaseMeeting?.({'), home.indexOf('await scheduleCaseMeeting?.({') + 900);
+    expect(block).not.toContain('calendarRequest');
+    // and with no calendarRequest the toast makes no calendar claim
+    expect(app).toContain('showToast("Meeting scheduled");');
+  });
+});
+
+describe('invitation drafting receives the logistics it can now be given', () => {
+  it('the Draft invitation button carries time and method, not just the date', () => {
+    const block = home.slice(home.indexOf('setPendingLetterType("invite")') - 1400, home.indexOf('setPendingLetterType("invite")'));
+    expect(block).toContain('date:meetingSetup.date,');
+    expect(block).toContain('time:meetingSetup.time||p.time||""');
+    expect(block).toContain('locationOrMethod:meetingSetup.locationOrMethod||p.locationOrMethod||""');
+  });
+
+  it('and commit() still carries them into caseInfo for the save path', () => {
+    expect(home).toContain('time:meetingSetup.time||"",locationOrMethod:meetingSetup.locationOrMethod||"",');
   });
 });
