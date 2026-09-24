@@ -1420,7 +1420,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // evidence item that predates this fix, here so a legacy case's
       // evidence has real ids from the moment it's loaded, not only
       // after its next save.
-      setCases(data.map(mapCaseRow).map(ensureEvidenceIds));
+      // P1 remediation (2026-09-25) — casesRef is seeded once, at mount, from
+      // the localStorage cache (`useRef(cases)`), and was previously only ever
+      // reassigned inside saveCases. Neither this load nor saveCaseToDB's own
+      // success write-back touched it, so the ref could hold an updated_at
+      // older than the database while `cases` held the correct one. Every
+      // meeting write reads the ref (it has to — chained writes in one
+      // synchronous run depend on it), so the ref going stale sent a stale
+      // optimistic-concurrency key and produced a spurious conflict.
+      const loadedCases = data.map(mapCaseRow).map(ensureEvidenceIds);
+      setCases(loadedCases);
+      casesRef.current = loadedCases;
     } catch(e) { console.error("Load cases error:", e); markLoadIssue('cases'); }
     // finally, not just the success path — an error still means the
     // FIRST load attempt has resolved (however it went), so the "still
@@ -1545,6 +1555,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         if(error) { console.error("Save case error:", error); showToast("Couldn't save the case — "+error.message, "error"); return { ok: false, reason: 'error', message: error.message }; }
       }
       setCases(prev => prev.map(c => c.id===caseObj.id ? {...c, updatedAt: nowIso} : c));
+      // P1 remediation (2026-09-25) — and the ref, which every meeting write
+      // reads. Without this the NEXT write sent the PREVIOUS updated_at and
+      // matched zero rows: HTTP 200, empty result, no Postgres error, and a
+      // generic "Couldn't save this meeting" toast for a write that was simply
+      // conditioned on a stale key. It also closes a quieter hazard — a ref
+      // entry whose updatedAt is undefined makes this function take the
+      // unconditional upsert branch below, bypassing optimistic concurrency
+      // altogether.
+      casesRef.current = casesRef.current.map(c => c.id===caseObj.id ? {...c, updatedAt: nowIso} : c);
       // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) —
       // a real, awaitable success signal, not just "the promise settled"
       // (every path above already resolved normally even on a handled
@@ -6376,6 +6395,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // failed Start reuses it: planMeetingWrite then sees an existing id and
   // patches instead of appending. That is what makes a retry idempotent
   // without any server-side uniqueness constraint.
+  // P1 remediation (2026-09-25) — a conflict is not a failure to report.
+  //
+  // saveCaseToDB already shows an accurate, auto-dismissing info toast for a
+  // stale-write conflict ("This case was updated … we've refreshed it with the
+  // latest version") and reloads, so the write can simply be repeated. The new
+  // Phase 2.2/2.3 handlers were additionally showing the generic red
+  // "Couldn't save this meeting — please try again", which is what Walter saw
+  // when scheduling a second meeting: alarming, and wrong about the cause.
+  // saveMeetingToCaseImpl already had this right (`if(result?.reason !==
+  // 'conflict')`); these handlers now match it.
+  const reportMeetingWriteFailure = (result, fallback) => {
+    if(result?.reason === 'conflict') return;
+    showToast(describeMeetingWriteFailure(result?.reason) || fallback || describeSaveMeetingError(result?.message), "error");
+  };
+
   const pendingStartRef = useRef(null);
   // Named rather than inlined so NEW-29's guard against deriving a start
   // instant anywhere near Review/Save stays strict. This is the ONE
@@ -6431,7 +6465,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // Do not enter RecordScreen, do not fire AI, do not audit a success,
       // do not navigate. The setup state is untouched so the user can fix
       // the problem and press Start again.
-      showToast(describeMeetingWriteFailure(result?.reason) || describeSaveMeetingError(result?.message), "error");
+      reportMeetingWriteFailure(result);
       return { ok: false, reason: result?.reason };
     }
     pendingStartRef.current = null;
@@ -6504,7 +6538,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
     const result = await persistMeeting({ cases: casesRef.current, caseId, meeting, saveCases });
     if(!result?.ok) {
-      showToast(describeMeetingWriteFailure(result?.reason) || describeSaveMeetingError(result?.message), "error");
+      reportMeetingWriteFailure(result);
       return { ok: false, reason: result?.reason };
     }
     audit("Meeting scheduled", `${meeting.type} — ${date}${time?" "+time:""}`, caseId);
@@ -6560,7 +6594,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       patch: { startedAt: startInstant() }, saveCases,
     });
     if(!result?.ok) {
-      showToast(describeMeetingWriteFailure(result?.reason) || describeSaveMeetingError(result?.message), "error");
+      reportMeetingWriteFailure(result);
       return { ok: false, reason: result?.reason };
     }
     const started = casesRef.current.find(c=>c.id===cs.id)?.meetings?.find(m=>m.id===meeting.id) || meeting;
@@ -6601,7 +6635,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       patch: { schedule: { ...(meeting.schedule||{}), date, time, method: method || null }, date },
       saveCases,
     });
-    if(!result?.ok) { showToast(describeMeetingWriteFailure(result?.reason) || "Couldn't reschedule the meeting", "error"); return { ok: false, reason: result?.reason }; }
+    if(!result?.ok) { reportMeetingWriteFailure(result, "Couldn't reschedule the meeting"); return { ok: false, reason: result?.reason }; }
     audit("Meeting rescheduled", `${meeting.type} — now ${date}${time?" "+time:""}`, cs.id);
     showToast("Meeting rescheduled");
     return { ok: true };
@@ -6617,7 +6651,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       patch: { cancelledAt: new Date().toISOString(), cancelledBy: currentUser?.name || "HR Manager", cancelledReason: reason || null },
       saveCases,
     });
-    if(!result?.ok) { showToast(describeMeetingWriteFailure(result?.reason) || "Couldn't cancel the meeting", "error"); return { ok: false, reason: result?.reason }; }
+    if(!result?.ok) { reportMeetingWriteFailure(result, "Couldn't cancel the meeting"); return { ok: false, reason: result?.reason }; }
     audit("Meeting cancelled", `${meeting.type}${reason?" — "+reason:""}`, cs.id);
     showToast("Meeting cancelled");
     return { ok: true };

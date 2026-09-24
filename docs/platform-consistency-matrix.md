@@ -277,6 +277,12 @@ Two independent id generators remain: `newId("meeting")` in the save path and
 | AI advisory content | `REVIEW_EVIDENTIAL_CONTRACT`, `LIVE_QUESTION_CONTRACT`, `NO_INVENTED_AUTHORITIES`, `LEGAL_ACCURACY_BOUNDARY`, Review Advisory Mode (NEW-28) | Proposed Updates does not yet apply the evidential contract | backlog | MOSTLY CONSISTENT |
 | Process recipes | `getNextStep` branch functions | 5 recipes exist; `capability`/`absence`/`redundancy`/`informal`/empty fall through to **disciplinary** | Phase 6 | FORKED — see defect register |
 | Concurrency / write path | `saveCaseToDB` conditional update on `updated_at` | **31 `saveCases` sites omit `changedId`**, including a workflow transition (`CaseViewScreen:359`) | Phase 2.5 | PRIMITIVE CORRECT, ADOPTION PARTIAL |
+| **`casesRef` currency** | `casesRef.current`, advanced on database load and on successful case write | Was seeded once at mount and only reassigned in `saveCases`, so it lagged the database by one write and sent a stale concurrency key | fixed 2026-09-25 | CONSISTENT |
+
+**Rule.** Meeting writes read `casesRef.current` deliberately — chained writes
+in one synchronous run depend on it. The ref must therefore never be staler
+than the `updated_at` contract it is used for, and is synchronised wherever the
+database value changes.
 
 **Phase ordering correction (Phase 2A).** Phase 6 (process recipes) must
 precede Phase 4 (Case View). Phase 4 collapses the UI to one obvious primary

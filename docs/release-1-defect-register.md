@@ -299,6 +299,52 @@ none of which persist a structured case meeting:
 - **Decision** ACCEPTED and documented. Forward-compatible reading shipped in
   Phase 1, which is why rollback degrades rather than breaks.
 
+### Disciplinary scheduling save failure — stale concurrency key — P1
+- **Severity** **P1** · **Area** Persistence / concurrency · **Raised** 2026-09-24 (human UAT)
+- **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**
+- **Reproduction.** On case `e2d474da-…`, already holding one completed
+  Investigation meeting, scheduling a Disciplinary meeting (02/10/2026, 10:00,
+  Microsoft Teams) produced *"Couldn't save this meeting — please try again."*
+- **Nothing persisted.** Read-only inspection: still 1 entry,
+  `case.updated_at` unchanged at `20:50:23.992`. No partial or malformed write.
+- **Root cause, proven from the request logs:**
+
+  | Time | Conditional `updated_at` sent | DB value | Result |
+  |---|---|---|---|
+  | 20:50:24 | `20:15:11.834` | `20:15:11.834` | matched → saved, DB → `20:50:23.992` |
+  | 21:11:59 | `20:15:11.834` | `20:50:23.992` | **0 rows → conflict** |
+
+  `casesRef` is seeded once at mount (`useRef(cases)`) and was only ever
+  reassigned inside `saveCases`. Neither `loadCasesFromDB` nor
+  `saveCaseToDB`'s success write-back touched it (`saveCaseToDB` contained zero
+  `casesRef` references), so the ref lagged the database by exactly one write.
+  All seven meeting writes read the ref — they must, because chained writes in
+  one synchronous run (schedule → calendar patch) depend on it — so the lag
+  became a stale optimistic-concurrency key. A conditional UPDATE matching
+  nothing returns **HTTP 200 with an empty array**: no Postgres error, no
+  non-2xx status, which is why neither log surfaced anything.
+- **Nothing to do with the meeting type.** "Disciplinary" does not match the
+  appeal trigger's `%appeal%` test, and no type-specific guard exists.
+- **Not caused by the creation-metadata remediation** (`1b9175a`). That rule
+  applies only on PATCH inside `planMeetingWrite`, which this write never
+  reached — it failed at the case-write layer. Verified independently: the
+  CREATE path still produces valid `createdAt`/`createdBy`.
+- **A quieter hazard it was masking.** When a ref entry's `updatedAt` is
+  `undefined`, `saveCaseToDB` takes the unconditional `upsert` branch —
+  bypassing optimistic concurrency entirely. Earlier writes in this UAT took
+  that path. Synchronising the ref closes it.
+- **Remediation.** `casesRef.current` is now advanced in the two places that
+  previously updated only `setCases`: a database load, and a successful case
+  write. The ref keeps its purpose (synchronous freshness for chained writes)
+  and can no longer be staler than the contract it is used for. Additionally,
+  the Phase 2.2/2.3 handlers no longer show a red error for `reason:'conflict'`
+  — `saveCaseToDB` already shows an accurate info toast and reloads, and
+  `saveMeetingToCaseImpl` already had this right.
+- **Evidence** `src/test/casesRefConcurrency.test.js` — 12 tests modelling the
+  real conditional-update contract, including one that **reproduces the defect**
+  with the sync disabled and asserts the exact stale key from the logs.
+- **Decision** NOT CLOSED until Walter's retest.
+
 ### Creation metadata overwritten by a later meeting save — P2
 - **Severity** P2 · **Area** Lifecycle integrity · **Raised** 2026-09-24 (human UAT)
 - **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**
