@@ -323,8 +323,29 @@ above. No Phase 3A path uses them.
     full agreed matrix 1–38, **17 failing against the pre-slice source**.
   - **No backfill.** The 884 legacy rows are untouched; an existing `review_draft`
     without a draft generates once on next entry and persists forward only.
-- **Decision** IMPLEMENTED / TECHNICALLY VERIFIED — **NOT** human verified.
-  Awaiting Walter's refresh / re-entry / edit test.
+- **CLOSED / HUMAN VERIFIED 2026-09-25.** Fixture `AT - Draft Persistence UAT`
+  (`701cde51-5bb3-4142-b308-3729b2603c17`), meeting
+  `meeting_ec619f0b-9c40-4200-803e-9b4a04f448bf`. Walter generated a draft, waited
+  for *Draft saved*, inserted `EDITED BY WALTER — THIS MUST SURVIVE REFRESH.`,
+  waited again, hard-refreshed and re-entered Review: the edited text returned and
+  did not revert to the AI original.
+
+  | Proof | Evidence |
+  |---|---|
+  | one genuine meeting | `meetings` length **1** |
+  | same stable id | `meeting_ec619f0b-…`, `caseId` matches |
+  | status | **`review_draft`** |
+  | timing | `startedAt 14:19:56.836Z`, `endedAt 14:21:41.025Z` |
+  | transcript persisted | **6** utterances |
+  | draft persisted server-side | `reviewDraft` present |
+  | **exact marker present** | **`EDITED BY WALTER — THIS MUST SURVIVE REFRESH.` found in `reviewDraft.record`** |
+  | edit provenance | `editedByUser: true`, `editedBy: UAT - HR Manager` |
+  | fingerprint | `t1:ba20a316` |
+  | draft vs original | 3,467 vs 3,421 chars — the 46-char edit, and the AI original preserved alongside it |
+  | **not completed by autosave** | `record` absent, `savedAt` null |
+  | **signature not advanced** | `signId` null, `signStatus` null |
+  | no second meeting | 1 entry after refresh and re-entry |
+- **Decision** **CLOSED / HUMAN VERIFIED.**
 
 ### NEW-27 — no Regenerate after a successful Review
 - **Severity** P2 · **Area** Review UX
@@ -531,6 +552,103 @@ above. No Phase 3A path uses them.
   agreed matrix 1–20, **8 failing against the pre-refinement source**, with the
   external send mocked. No real emails, no real signing requests.
 - **NOT human verified.** No duplicate of NEW-26/27/32.
+
+### NEW-39 — internal HR advisory content sat inside the editable/signable record — P1
+- **Severity** **P1** · **Area** Review / data boundary · **Raised** 2026-09-25 (human UAT)
+- **STATUS: FIXED / DEPLOYED — HUMAN UAT REQUIRED.**
+- **Observed.** Clicking *Edit record* exposed a textarea containing not only
+  Meeting Details and Meeting Dialogue but the `## HR Advisor Notes` section and
+  its internal advisory narrative.
+- **Root cause.** The generated `record` is **one markdown string with three
+  sections**, and internal analysis was the third. Confirmed in production on the
+  UAT fixture: `reviewDraft.record` headings were
+  `## Meeting Details | ## Meeting Dialogue | ## HR Advisor Notes`, with the
+  advisory heading at char 1082. So it was a **data-contract** problem, not an
+  editor-composition one — the mixed string was what got edited, what was
+  confirmed as the authoritative record, and what the signature path had to
+  defensively cut.
+- **Could internal advice have reached an employee? Latent yes; realised no.**
+  The signature path cut the record at a bare
+  `full.indexOf("## HR Advisor")` — exact, case-sensitive, two-hashes-plus-one-space.
+  Any of `### HR Advisor Notes`, `# HR Advisor Notes`, the British
+  `## HR Adviser Notes`, `##HR Advisor Notes`, or a lower-case heading would have
+  defeated it, and internal advice would then have been emailed to the employee.
+  All are AI-generated headings, so all were reachable. **Empirically it never
+  happened:** of the **104** `signing_requests` in production, **0** contain
+  "HR Advisor" and **0** contain risk text. Meanwhile `caseContext.js` already had
+  a robust heading-level-aware matcher that the signature path was not using.
+- **Fix — split the payloads, do not hide them.** New canonical primitive
+  `src/lib/meetingRecordSections.js` with **one** matcher (tolerant of any heading
+  level, either spelling, missing space, any case; line-start only so
+  *"I'll write the HR Advisor Notes up later"* in dialogue cannot trigger it;
+  CRLF-safe; a lower-level heading inside the advisory body cannot end it early).
+  `caseContext.js`'s `stripAdvisorNotes` now **delegates** to it, so the duplicate
+  matcher is gone.
+  The boundary is enforced at **every** surface:
+  | Surface | Behaviour |
+  |---|---|
+  | generation | split **once** when the stream completes; `reviewOutput` holds only the employee-facing half thereafter |
+  | draft persistence | `reviewDraft.advisorNotes` is its **own field** |
+  | Edit record | the textarea binds to the employee-facing half; the internal block is separate and is not an input |
+  | Save to case | `record: splitMeetingRecord(...).employeeFacing` + `advisorNotes` stored separately |
+  | signature payload | `splitMeetingRecord(signMeeting.record).employeeFacing`, with the legacy cut retained as a second line of defence |
+  | legacy restore | a mixed legacy draft or record is split **on read**, so it cannot reappear in the editor |
+- **Internal analysis is still shown to HR**, in its own labelled block —
+  *"Internal Compass analysis · not part of the employee record"* — so no
+  intelligence was lost. **No backfill**: the 884 legacy meetings keep their mixed
+  `record` and are protected by splitting at the point of use.
+- **Evidence** `src/test/reviewBoundaryCleanup.test.jsx` — 32 tests, **14 failing
+  against the pre-fix source**, including every heading variant listed above.
+- **Decision** FIXED. Not human verified yet.
+
+### NEW-40 — End-meeting Meeting Quality Check removed as a blocking step — resolves NEW-37's blocking half
+- **Severity** P2 (UX) · **Raised** 2026-09-25 · **STATUS: DONE / DEPLOYED.**
+- **Product decision.** The blocking *Meeting Quality Check* modal and its
+  secondary *"Proceed anyway?"* confirmation are **removed** from End. The meeting
+  has already happened; ending it now ends it.
+- **The intelligence is kept.** `computeMeetingQualityGaps()` still runs — it is
+  computed at End and surfaced in **Review** as a non-blocking advisory block,
+  *"Worth checking before an outcome is decided"*. That is where the user is
+  actually deciding what remains unresolved, which was NEW-37's substantive point:
+  both gaps it fired on were legitimate **post-meeting** steps.
+- **Removed:** `showQualityCheck`, `qualityCheckGaps`, `proceedPastQualityCheck`,
+  `createQualityCheckFollowUp`, the `MeetingQualityCheckModal` usage and its
+  RecordScreen props. Two **employee-name lookups** disappeared with them, a small
+  reduction in NEW-20 FULL.
+- **Preserved:** transcript persistence, `endedAt` integrity, the `review_draft`
+  transition, AI grounding, risk/advisory safeguards, and audit integrity (the
+  `Meeting ended` audit row is unchanged; only the override row, which existed
+  solely for the removed modal, no longer occurs).
+- **NEW-37 remains OPEN** for its non-blocking half: semantic deduplication of
+  AI-identified actions, and persisting accept/dismiss so a decision is not
+  re-surfaced after refresh.
+
+### NEW-41 — the same proposed update shown twice — P2
+- **Severity** P2 · **Area** Meeting Intelligence · **Raised** 2026-09-25 (human UAT)
+- **STATUS: FIXED / DEPLOYED.**
+- **Observed.** *"Evidence: Evidence previously submitted by the employee
+  (nature/format unspecified)"* appeared twice.
+- **Root cause — duplicates WITHIN one AI response were never checked.** The merge
+  guard seeded its seen-set from the existing list and then never updated it while
+  building the batch:
+  ```js
+  const known = new Set(existing.map(s => s.description.trim().toLowerCase()));
+  const fresh = parsed.evidenceMentioned.filter(m => !known.has(...))
+  ```
+  So duplicates *across* calls were caught and duplicates *within* a call were not.
+  The comparison was also bare exact-string, so a re-extraction differing only in
+  spacing, a trailing full stop, or an `Evidence: ` label read as new.
+- **Fix.** New `src/lib/suggestionIdentity.js` — `suggestionKey()` normalises
+  presentation only (lower-case, leading category label removed, whitespace runs
+  collapsed, surrounding quotes and trailing sentence punctuation stripped) and
+  `mergeSuggestions()` **grows its seen-set as it consumes the batch**. Used by both
+  merge sites and by the Review gap list.
+- **Deliberately conservative:** no stemming, no fuzzy distance, no synonyms.
+  Asserted that *"the employee's payslip"* vs *"a payslip"*, *"CCTV from 3 March"*
+  vs *"4 March"*, and *"Jo Smith"* vs *"Jo Smyth"* all stay distinct — a missed
+  duplicate is cosmetic, a wrongly-merged pair is lost information. Existing items
+  always win, so a prior accept/dismiss is never re-surfaced.
+- **Evidence** in `src/test/reviewBoundaryCleanup.test.jsx`.
 
 ### NEW-38 — risk rating disproportionate for a minimal record — P3 (AI quality)
 - **Severity** **P3** · **Area** Review risk assessment · **Raised** 2026-09-25

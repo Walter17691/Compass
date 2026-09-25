@@ -220,7 +220,10 @@ describe('5-12. restore-first, and zero AI calls when a draft exists', () => {
     expect(restore).toBeGreaterThan(-1);
     expect(generate).toBeGreaterThan(restore);            // generation is the ELSE branch
     expect(body).toContain('} else if(notes.length) {');
-    expect(body).toContain('setReviewOutput(existingDraft.record)');
+    // Since the 2026-09-25 boundary fix the restore splits first, so the
+    // editable surface receives the employee-facing half only.
+    expect(body).toContain('setReviewOutput(restored.employeeFacing)');
+    expect(body).toContain('const restored = splitMeetingRecord(existingDraft.record)');
   });
 
   it('9/10. an edited draft is what comes back, not a fresh generation', () => {

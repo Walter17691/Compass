@@ -1,3 +1,4 @@
+import { splitMeetingRecord } from './meetingRecordSections.js';
 // Assembles a case's own record into one context block for AI features
 // scoped to it — the case-wide "Ask Compass" and the AI Case Overview
 // (both Phase 8 of the gap-analysis build-out). Same shape as
@@ -94,32 +95,17 @@ function excerpt(text, limit) {
 // later") never trigger it. Skipping ends at the next heading of the same or
 // higher level, so a lower-level heading inside the advisory body cannot end
 // it early.
-const headingLevel = line => ((line.match(/^[ \t]*(#{1,6})[ \t]+\S/) || [])[1] || "").length;
-const advisorHeadingLevel = line => ((line.match(/^[ \t]*(#{1,6})[ \t]*HR Advisor\b/i) || [])[1] || "").length;
-
+// ONE MATCHER, now in lib/meetingRecordSections.js — the signature path used a
+// bare indexOf("## HR Advisor") that a heading variant would have defeated, so
+// the robust matcher this function always had is shared rather than duplicated.
+// Behaviour here is unchanged: READ-TIME ONLY, the stored record is never
+// modified, and what the user sees on a saved meeting is untouched.
 export function stripAdvisorNotes(record) {
-  const text = typeof record === "string" ? record : (record == null ? record : String(record));
-  if (!text) return record;
-  // Split on \n only, so a \r survives at the end of each line and CRLF input
-  // rejoins exactly as it arrived.
-  const lines = text.split("\n");
-  const bare = line => line.replace(/\r$/, "");
-  if (!lines.some(l => advisorHeadingLevel(bare(l)) > 0)) return record; // untouched, byte for byte
-  const kept = [];
-  let skippingFrom = 0;
-  for (const line of lines) {
-    const b = bare(line);
-    const advisorLevel = advisorHeadingLevel(b);
-    if (advisorLevel > 0) { skippingFrom = advisorLevel; continue; }
-    if (skippingFrom) {
-      const level = headingLevel(b);
-      if (level > 0 && level <= skippingFrom) skippingFrom = 0;
-    }
-    if (!skippingFrom) kept.push(line);
-  }
-  // Only reached when an advisor section was actually removed, so trimming the
-  // blank tail it leaves behind cannot affect a record that had none.
-  return kept.join("\n").replace(/[\s\r\n]+$/, "");
+  if (typeof record !== "string") return record;
+  if (!record) return record;
+  const { employeeFacing, internal } = splitMeetingRecord(record);
+  // Byte-for-byte identical when there was no advisory section at all.
+  return internal ? employeeFacing : record;
 }
 
 export function buildCaseContext(cs, allegations = [], tasks = [], meetingSummaries = {}) {

@@ -78,6 +78,8 @@ import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
 import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE, planIdentifiedStart, START_DECISION, planMeetingEnd, END_DECISION } from './lib/meetingWrites';
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
 import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraft } from './lib/reviewDraft';
+import { splitMeetingRecord } from './lib/meetingRecordSections';
+import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -351,6 +353,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [prepQuestions, setPrepQuestions] = useState([]);
   const [reviewOutput, setReviewOutput] = useState("");
   const [reviewOutputOriginal, setReviewOutputOriginal] = useState(""); // the AI's un-edited draft, kept so hand-edits can be reverted
+  // The internal Compass analysis half of a generated record (HR Advisor Notes).
+  // Held SEPARATELY from reviewOutput so it can never be edited, confirmed as
+  // the authoritative record, or sent to an employee — the boundary found in
+  // human UAT on 2026-09-25.
+  const [advisorNotes, setAdvisorNotes] = useState("");
   // Release 1.0 UAT remediation (Defect #5) — explicit success/failure
   // state for meeting-record generation, checked independently of
   // reviewOutput's truthiness so a caught exception can never be
@@ -1063,7 +1070,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // The AUTHORITATIVE persisted record, never the local generated text —
       // otherwise an edit made after the save could be emailed while the case
       // file said something different.
-      const full = signMeeting.record;
+      //
+      // And employee-facing only. The saved record has held just that half since
+      // the boundary fix, but legacy records (the 884 that predate it) still
+      // carry both mixed, so this splits rather than trusting the shape.
+      const full = splitMeetingRecord(signMeeting.record).employeeFacing;
       const start = full.indexOf("## Meeting Details");
       const advisorCut = full.indexOf("## HR Advisor");
       const keyCut = full.indexOf("\n## Key Points");
@@ -1196,8 +1207,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [meetingActionSuggestions, setMeetingActionSuggestions] = useState([]);
   // M9 — Meeting Quality Check. Advisory only, never blocking — see
   // attemptEndMeeting below.
-  const [showQualityCheck, setShowQualityCheck] = useState(false);
-  const [qualityCheckGaps, setQualityCheckGaps] = useState([]);
+  // Non-blocking Review intelligence — what the removed End-meeting quality
+  // check used to interrupt for. Computed at End, shown in Review.
+  const [reviewGaps, setReviewGaps] = useState([]);
   // Manager Enablement (Phase 4, MP10, §16) — Investigation Quality
   // Check. Same advisory-only shape, but a separate gap set
   // (computeInvestigationQualityGaps) and its own modal, since it's
@@ -1296,23 +1308,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // again for a while) must not duplicate or reset a suggestion the
       // user already accepted or dismissed.
       if(Array.isArray(parsed.evidenceMentioned) && parsed.evidenceMentioned.length) {
-        setMeetingEvidenceSuggestions(existing => {
-          const known = new Set(existing.map(s=>s.description.trim().toLowerCase()));
-          const fresh = parsed.evidenceMentioned
-            .filter(m=>m?.description && !known.has(m.description.trim().toLowerCase()))
-            .map((m,i)=>({ id:newId("mes"), description:m.description, kind:m.kind==="witness"?"witness":"evidence", status:"pending" }));
-          return fresh.length ? [...existing, ...fresh] : existing;
-        });
+        // mergeSuggestions grows its seen-set as it consumes the batch, so a
+        // model response containing the same item twice now yields one entry —
+        // the duplicate found in human UAT. Existing items always win, so a
+        // prior accept/dismiss is never re-surfaced.
+        setMeetingEvidenceSuggestions(existing => mergeSuggestions(existing, parsed.evidenceMentioned,
+          m => ({ id:newId("mes"), description:m.description, kind:m.kind==="witness"?"witness":"evidence", status:"pending" })));
       }
       // M4 — same merge discipline for detected actions/commitments.
       if(Array.isArray(parsed.actionsIdentified) && parsed.actionsIdentified.length) {
-        setMeetingActionSuggestions(existing => {
-          const known = new Set(existing.map(s=>s.description.trim().toLowerCase()));
-          const fresh = parsed.actionsIdentified
-            .filter(a=>a?.description && !known.has(a.description.trim().toLowerCase()))
-            .map((a,i)=>({ id:newId("mas"), description:a.description, suggestedOwner:a.suggestedOwner||"", suggestedDueDate:a.suggestedDueDate||"", status:"pending" }));
-          return fresh.length ? [...existing, ...fresh] : existing;
-        });
+        setMeetingActionSuggestions(existing => mergeSuggestions(existing, parsed.actionsIdentified,
+          a => ({ id:newId("mas"), description:a.description, suggestedOwner:a.suggestedOwner||"", suggestedDueDate:a.suggestedDueDate||"", status:"pending" })));
       }
     } catch(e) { console.error("updateMeetingIntelligence", e); }
   };
@@ -6797,6 +6803,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary("");
     setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
     // Phase 3B slice 2 — a fresh draft session for this meeting.
+    setAdvisorNotes("");
     draftEditedRef.current = false;
     draftSuspendedRef.current = false;
     draftMetaRef.current = null;
@@ -6818,8 +6825,13 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // ZERO AI calls.
     const existingDraft = restorableDraft(meeting);
     if(existingDraft) {
-      setReviewOutput(existingDraft.record);
-      setReviewOutputOriginal(existingDraft.recordOriginal || existingDraft.record);
+      // Split on read as well: a draft persisted before the boundary existed —
+      // or a hand-written record — may still have both halves mixed, and it must
+      // not reappear inside the editable surface.
+      const restored = splitMeetingRecord(existingDraft.record);
+      setReviewOutput(restored.employeeFacing);
+      setReviewOutputOriginal(splitMeetingRecord(existingDraft.recordOriginal || existingDraft.record).employeeFacing);
+      setAdvisorNotes(existingDraft.advisorNotes || restored.internal);
       setMeetingSummary(existingDraft.summary || "");
       setRiskScore(existingDraft.risk ?? null);
       setAiError("");
@@ -7117,35 +7129,29 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         if(matched.length < Math.ceil(words.length/2)) gaps.push(`Allegation not discussed in this meeting: "${a.title}"`);
       });
     }
-    return gaps;
+    // Same duplicate class as the suggestion merge: two differently-worded
+    // extractions of one concern read as two gaps. Collapsed on the normalised
+    // key so Review does not list the same concern twice.
+    const seen = new Set();
+    return gaps.filter(g => { const k = suggestionKey(g); if(!k || seen.has(k)) return false; seen.add(k); return true; });
   };
 
   // Never blocking — RecordScreen's "End meeting" always calls this
   // instead of handleReview directly; if there's nothing to flag it goes
   // straight through with no extra step, same as before this phase.
+  // The meeting has already happened, so ending it ends it.
+  //
+  // Until 2026-09-25 this opened a blocking Meeting Quality Check modal, and
+  // proceeding past it required a SECOND "Proceed anyway?" confirmation. Human
+  // UAT hit it repeatedly, and on inspection it was warning against ending a
+  // meeting because the user intended to review the record before deciding an
+  // outcome — which is precisely what review_draft now exists to represent.
+  //
+  // The detection itself is kept and is genuinely useful; it is now surfaced in
+  // REVIEW as non-blocking advisory intelligence, which is where the user is
+  // actually deciding what remains unresolved before an outcome.
   const attemptEndMeeting = () => {
-    const gaps = computeMeetingQualityGaps();
-    if(gaps.length) { setQualityCheckGaps(gaps); setShowQualityCheck(true); }
-    else handleReview();
-  };
-  // P1 — proceeding past an unresolved gap is exactly the kind of
-  // significant override requestOverrideReason exists for: the modal
-  // closes immediately (no stacked modals), then an optional-reason
-  // prompt takes its place. Cancelling that prompt cancels the whole
-  // "proceed" action — the user's left back on the meeting, same end
-  // state as clicking "Return to meeting" would have given them.
-  const proceedPastQualityCheck = async () => {
-    setShowQualityCheck(false);
-    const linkedCase = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
-    const ok = await requestOverrideReason(qualityCheckGaps.join("; "), { caseId: linkedCase?.id, actionLabel: "Ended meeting despite quality check gaps" });
-    if(!ok) return;
-    handleReview();
-  };
-  const createQualityCheckFollowUp = () => {
-    const linkedCase = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
-    if(linkedCase) createCaseTask(linkedCase.id, { name:"Follow up on: "+qualityCheckGaps.join("; ") });
-    else showToast("Noted — save this meeting to a case to turn it into a task");
-    setShowQualityCheck(false);
+    setReviewGaps(computeMeetingQualityGaps());
     handleReview();
   };
 
@@ -7216,7 +7222,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     }
 
     if(extra.length) { setTranscript(allNotes); setInputText(""); }
-    setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
+    setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setAdvisorNotes(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
     setAiProcessing(true);
     // Generate next steps deadlines
     orgLsSet("compass_meeting_draft", null); // transcript is now captured in the AI call in flight — the crash-recovery window has passed
@@ -7299,7 +7305,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // error is — treating only exceptions as failure would let a
       // truncated or empty record through as if it were complete.
       if(!fullRecord.trim()) throw new Error("Compass AI returned an empty response.");
-      setReviewOutputOriginal(fullRecord);
+      // Split ONCE, here, the moment the stream is complete. From this point on
+      // reviewOutput holds the employee-facing record only, and the internal
+      // advisory narrative lives in its own state — so the editable textarea,
+      // the authoritative record and the signature payload are all
+      // employee-facing by construction rather than by later filtering.
+      // Splitting after the stream rather than during it keeps the streaming
+      // view from jumping as the advisory heading arrives.
+      {
+        const split = splitMeetingRecord(fullRecord);
+        setReviewOutput(split.employeeFacing);
+        setReviewOutputOriginal(split.employeeFacing);
+        setAdvisorNotes(split.internal);
+      }
       await summaryPromise;
     } catch(e) {
       console.error("Meeting record generation failed:", e);
@@ -7308,7 +7326,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // onChunk before this catch runs (see comment above). The user's
       // own meeting notes are untouched by any of this: they live in
       // `transcript`, a separate state this function only ever reads.
-      setReviewOutput(""); setReviewOutputOriginal("");
+      setReviewOutput(""); setReviewOutputOriginal(""); setAdvisorNotes("");
       setReviewGenerationFailed(true);
       setAiError("Compass AI could not generate the meeting record. Your meeting notes have been kept — retry, or write the record manually.");
     }
@@ -7366,7 +7384,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!caseId || !meetingId) return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
     const draft = buildReviewDraft({
       record: reviewOutput, recordOriginal: reviewOutputOriginal || reviewOutput,
-      summary: meetingSummary, risk: riskScore, transcript,
+      summary: meetingSummary, risk: riskScore, advisorNotes, transcript,
       previous: draftMetaRef.current,
     });
     setDraftStatus("saving");
@@ -7865,7 +7883,14 @@ Please produce:
       chairUserId: caseInfo.appealManagerId || null,
       participants,
       transcript: transcript.filter(u=>!u.pending),
-      record: reviewOutput,
+      // Employee-facing ONLY. reviewOutput has held just this half since
+      // generation split it, so the authoritative record cannot contain internal
+      // advisory content. Defensively re-split anyway: a hand-written or pasted
+      // record could still arrive mixed.
+      record: splitMeetingRecord(reviewOutput).employeeFacing,
+      // The internal analysis, kept on the meeting for the HR user but never
+      // part of the employee-facing record or the signature payload.
+      advisorNotes: advisorNotes || splitMeetingRecord(reviewOutput).internal,
       summary: meetingSummary,
       // Phase 3B slice 2 — at completion the authoritative record owns the
       // truth, so the draft's TEXT is dropped and only its provenance is kept:
@@ -7874,7 +7899,12 @@ Please produce:
       // already carries record, summary, transcript and signDocument.
       ...(lifecycleMeetingId ? { reviewDraft: supersedeReviewDraft(draftMetaRef.current) } : {}),
       signDocument: (()=>{
-        const full = reviewOutput;
+        // employeeFacing, not reviewOutput: the old code relied on an exact
+        // indexOf("## HR Advisor") further down, which a heading variant would
+        // have defeated — and internal advice would then have reached the
+        // employee. The split is now the boundary; the cut below stays as a
+        // second line of defence for legacy records.
+        const full = splitMeetingRecord(reviewOutput).employeeFacing;
         const start = full.indexOf("## Meeting Details");
         const advisorCut = full.indexOf("## HR Advisor");
         const keyCut = full.indexOf("\n## Key Points");
@@ -10551,12 +10581,12 @@ Please produce:
 
             {/* ══ RECORD ══ */}
       {screen===SCREENS.RECORD&&(
-        <RecordScreen recovering={!!recordRecovery} meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>orgLsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} showQualityCheck={showQualityCheck} qualityCheckGaps={qualityCheckGaps} proceedPastQualityCheck={proceedPastQualityCheck} createQualityCheckFollowUp={createQualityCheckFollowUp} onReturnToMeeting={()=>setShowQualityCheck(false)} fmtDate={fmtDate} />
+        <RecordScreen recovering={!!recordRecovery} meetingType={meetingType} caseInfo={caseInfo} isListening={isListening} meetingStartTime={meetingStartTime} currentAdjournment={currentAdjournment} setAdjournments={setAdjournments} setCurrentAdjournment={setCurrentAdjournment} setTranscript={setTranscript} inputText={inputText} aiProcessing={aiProcessing} transcript={transcript} addUtterance={addUtterance} inputRef={inputRef} setInputText={setInputText} updateLiveContext={updateLiveContext} stopSpeech={stopSpeech} startSpeech={startSpeech} isScreenCapturing={isScreenCapturing} stopScreenCapture={stopScreenCapture} startScreenCapture={startScreenCapture} importFileRef={importFileRef} handleImportFile={handleImportFile} liveContextLoading={liveContextLoading} liveContext={liveContext} liveChatHistory={liveChatHistory} liveChatProcessing={liveChatProcessing} liveChatInput={liveChatInput} setLiveChatInput={setLiveChatInput} sendLiveChat={sendLiveChat} setScreen={setScreen} confirmDialog={confirmDialog} clearMeetingDraft={()=>orgLsSet("compass_meeting_draft", null)} promptDialog={promptDialog} updateMeetingIntelligence={updateMeetingIntelligence} meetingIntelligence={meetingIntelligence} dismissedNudgeKey={dismissedNudgeKey} setDismissedNudgeKey={setDismissedNudgeKey} prepQuestions={prepQuestions} onSetPrepQuestionStatus={setPrepQuestionStatus} meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion} meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion} dismissedFollowUpKey={dismissedFollowUpKey} setDismissedFollowUpKey={setDismissedFollowUpKey} dismissedCoachingTipKeys={dismissedCoachingTipKeys} onDismissCoachingTip={key=>setDismissedCoachingTipKeys(ks=>[...ks,key])} attemptEndMeeting={attemptEndMeeting} fmtDate={fmtDate} />
       )}
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />

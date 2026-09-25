@@ -5,7 +5,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, riskScore, reviewGenerationFailed, onRetryGeneration,
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -213,6 +213,33 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 signature" here would conceal that it also confirms and completes
                 the record. Save remains the only thing that completes; this just
                 continues to signature once it has. */}
+            {/* Non-blocking intelligence, moved here from the removed
+                End-meeting quality check. The meeting has happened; these are
+                things worth resolving before an OUTCOME is decided, which is a
+                Review question, not a reason to refuse to end a meeting. */}
+            {reviewGaps.length>0&&!editingRecord&&(
+              <div style={{margin:"0 28px 16px",padding:"14px 16px",background:"#FEF9F0",border:"1px solid #F0E4CC",borderRadius:8}}>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:0.4,color:"#B87520",textTransform:"uppercase",marginBottom:8}}>
+                  Worth checking before an outcome is decided
+                </div>
+                <ul style={{margin:0,paddingLeft:18,fontSize:13,color:"#3A3440",lineHeight:1.7}}>
+                  {reviewGaps.map((g,i)=><li key={i}>{g}</li>)}
+                </ul>
+              </div>
+            )}
+            {/* Internal Compass analysis — separated from the employee-facing
+                record on 2026-09-25. It is NOT part of the editable record, NOT
+                part of what is confirmed as the authoritative record, and NOT
+                part of anything sent to the employee. Kept visible because it is
+                genuinely useful to the HR user. */}
+            {advisorNotes&&!editingRecord&&(
+              <div style={{margin:"0 28px 16px",padding:"14px 16px",background:"#FAF7F2",border:"1px solid #EDE5D8",borderRadius:8}}>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:0.4,color:"#6B6375",textTransform:"uppercase",marginBottom:8}}>
+                  Internal Compass analysis · not part of the employee record
+                </div>
+                <div style={{fontSize:13,color:"#3A3440"}}><MDRenderer text={advisorNotes} /></div>
+              </div>
+            )}
             {!signatureEligible&&reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <button onClick={()=>onSaveAndSendForSignature?.()}

@@ -164,7 +164,9 @@ describe('3/4/11-15. the two legitimate choices', () => {
     // and the source asserts it reads the persisted record, not reviewOutput
     const i = appCode.indexOf('const sendForSignature = async (employeeEmail)');
     const body = appCode.slice(i, appCode.indexOf('\n  };', i));
-    expect(body).toContain('const full = signMeeting.record;');
+    // The persisted record, AND employee-facing only since the 2026-09-25
+    // boundary fix — legacy records still carry both halves mixed.
+    expect(body).toContain('splitMeetingRecord(signMeeting.record).employeeFacing');
     expect(body).not.toContain('const full = reviewOutput;');
   });
 });

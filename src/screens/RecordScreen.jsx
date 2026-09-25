@@ -3,7 +3,6 @@ import { CompassLogo } from '../components/CompassLogo';
 import { COLOR, FONT } from '../styles/tokens';
 import { MDRenderer } from '../components/MDRenderer';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
-import { MeetingQualityCheckModal } from '../components/MeetingQualityCheckModal';
 import { SCREENS } from '../constants';
 import { questionStatusMeta, QUESTION_STATUSES } from '../lib/prepQuestions';
 import { computeCoachingTips } from '../lib/managerCoaching';
@@ -47,7 +46,7 @@ function LiveQuestionRow({ q, onSetStatus }) {
   );
 }
 
-export function RecordScreen({ recovering=false, meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, showQualityCheck, qualityCheckGaps=[], proceedPastQualityCheck, createQualityCheckFollowUp, onReturnToMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip, fmtDate }) {
+export function RecordScreen({ recovering=false, meetingType, caseInfo, isListening, meetingStartTime, currentAdjournment, setAdjournments, setCurrentAdjournment, setTranscript, inputText, aiProcessing, transcript, addUtterance, inputRef, setInputText, updateLiveContext, stopSpeech, startSpeech, isScreenCapturing, stopScreenCapture, startScreenCapture, importFileRef, handleImportFile, liveContextLoading, liveContext, liveChatHistory, liveChatProcessing, liveChatInput, setLiveChatInput, sendLiveChat, setScreen, confirmDialog, clearMeetingDraft, promptDialog, updateMeetingIntelligence, meetingIntelligence, dismissedNudgeKey, setDismissedNudgeKey, prepQuestions=[], onSetPrepQuestionStatus, meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion, meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion, dismissedFollowUpKey, setDismissedFollowUpKey, attemptEndMeeting, dismissedCoachingTipKeys=[], onDismissCoachingTip, fmtDate }) {
   const nudgeKey = meetingIntelligence?.possibleInconsistency ? meetingIntelligence.possibleInconsistency.later : null;
   const showNudge = nudgeKey && nudgeKey !== dismissedNudgeKey;
   const followUpKey = meetingIntelligence?.suggestedFollowUp ? meetingIntelligence.suggestedFollowUp.text : null;
@@ -372,14 +371,6 @@ export function RecordScreen({ recovering=false, meetingType, caseInfo, isListen
         </div>
       </div>
 
-      {showQualityCheck&&(
-        <MeetingQualityCheckModal
-          gaps={qualityCheckGaps}
-          onReturnToMeeting={onReturnToMeeting}
-          onCreateFollowUp={createQualityCheckFollowUp}
-          onProceed={proceedPastQualityCheck}
-        />
-      )}
     </div>
   );
 }
