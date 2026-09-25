@@ -5,7 +5,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, riskScore, reviewGenerationFailed, onRetryGeneration,
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -184,7 +184,14 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
               )}
               {aiError&&!reviewGenerationFailed&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}
             </div>
-            {reviewOutput&&!editingRecord&&(
+            {/* Phase 3B slice 1 (NEW-36) — signature is gated on the PERSISTED
+                meeting being authoritatively completed with a saved record, not
+                on generated text existing in this tab. Previously the condition
+                was `reviewOutput && !editingRecord`, so the button appeared the
+                moment AI generation returned and could complete the meeting as a
+                side effect of sending. signatureEligible is computed from the
+                same isSignatureEligible() the action gate uses. */}
+            {signatureEligible&&reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5"}}>
                 <button onClick={()=>setShowSignModal(true)}
                   style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"11px 24px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(124,92,252,0.2)",fontFamily:"DM Sans,system-ui,sans-serif"}}>

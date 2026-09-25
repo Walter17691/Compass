@@ -897,6 +897,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Returns {success, signId} rather than driving UI itself, so each
   // caller decides what "success" means for its own document (save a
   // meeting, advance an OH step, or just show a toast).
+  // Phase 3B slice 1 (NEW-36) — signature eligibility, defined ONCE.
+  //
+  // Eligible only if the PERSISTED meeting is authoritatively completed and
+  // carries a saved record — never merely because generated text exists in this
+  // tab. Resolved by authoritative caseId + meetingId; never by employee name,
+  // never "latest meeting".
+  //
+  // The cases list is a parameter rather than captured, because the two callers
+  // legitimately need different sources: render must read STATE (a ref read
+  // during render is neither correct nor allowed), while the action gate reads
+  // casesRef.current for the same synchronous freshness every other meeting
+  // write uses. Same rule, right source for each context.
+  const signatureEligibleIn = (list) => {
+    if(!caseInfo.caseId || !caseInfo.meetingId) return false;
+    const cs = (Array.isArray(list) ? list : []).find(c => c && c.id === caseInfo.caseId);
+    const m = (cs?.meetings || []).find(x => x && x.id === caseInfo.meetingId);
+    return !!m && declaredStatus(m) === MEETING_STATUS.COMPLETED
+      && typeof m.record === "string" && m.record.trim().length > 0;
+  };
+
   const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true, caseId, letterType }) => {
     if(!employeeEmail||!document) return { success:false };
 
@@ -1003,6 +1023,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const sendForSignature = async (employeeEmail) => {
     if(!employeeEmail||!reviewOutput) return;
+    // Phase 3B slice 1 — defence in depth for NEW-36. Hiding the button is not
+    // enough: this checks the persisted meeting itself BEFORE any signing row is
+    // created and before any email leaves. Signature may attach signId to an
+    // already-completed meeting; it may never be what completes one.
+    if(!signatureEligibleIn(casesRef.current)) {
+      showToast("Save and confirm the meeting record first — only a confirmed record can be sent for signature", "error");
+      return;
+    }
     const document = (()=>{
       const full = reviewOutput;
       const start = full.indexOf("## Meeting Details");
@@ -7623,6 +7651,8 @@ Please produce:
     const savedTranscriptLen = transcript.filter(u=>!u.pending).length;
     const isLetterShapedSave = !!letterOutput && !savedRecordText && savedTranscriptLen === 0;
     const lifecycleMeetingId = (!isLetterShapedSave && caseInfo.meetingId) ? caseInfo.meetingId : null;
+
+
     const meeting = {
       id: lifecycleMeetingId || newId("meeting"),
       // Saving the record is what completes the meeting. Nothing else in
@@ -7630,7 +7660,8 @@ Please produce:
       // see the End/Review compatibility note in the defect register: the
       // review_draft state arrives with Phase 3, and inventing a stand-in now
       // would strand anyone mid-Review.
-      ...(lifecycleMeetingId ? { status: MEETING_STATUS.COMPLETED } : {}),
+      // status is NOT set here any more — see the completion boundary below.
+      // transitionMeeting owns it, so this object can never assert completion.
       type: meetingType?.label||"Meeting",
       date: caseInfo.date||new Date().toLocaleDateString("en-GB"),
       // Human UAT remediation, Batch 2, Part 4 — until now the actual
@@ -7820,8 +7851,30 @@ Please produce:
     // than appending a second row, refuses a parentage change, and can only
     // ever call the single-case save path. The brand-new-case branch cannot
     // use it (there is no case to write into yet) and stays as it was.
+    // ── Release 1 Phase 3B slice 1 — the authoritative completion boundary ──
+    // NEW-36 (P1). This used to set `status: COMPLETED` inline, with no
+    // allowed-from guard, which is why every UI action reaching it defined
+    // "completed" for itself: Save, Save and go to case, and Send for signature —
+    // the last as a side effect, after already emailing the record.
+    //
+    // Completion is now the canonical transitionMeeting, not a hand-rolled
+    // write, so the database of record decides whether the move is legal:
+    //   review_draft -> completed   confirmed
+    //   completed    -> completed   idempotent (double click; or signature
+    //                               attaching signId moments later), so
+    //                               signature can never BE the completion
+    //   scheduled / in_progress / cancelled / legacy-null -> STALE_STATUS
+    // A hearing that has not been held, or has not been ENDED, cannot be
+    // confirmed. Everything not in the patch survives, because transitionMeeting
+    // patches rather than rebuilds.
     const result = existing
-      ? await persistMeeting({ cases, caseId, meeting: stampedMeeting, saveCases })
+      ? (lifecycleMeetingId
+          ? await transitionMeeting({
+              cases, caseId, meetingId: lifecycleMeetingId,
+              allowedFrom: [MEETING_STATUS.REVIEW_DRAFT, MEETING_STATUS.COMPLETED],
+              toStatus: MEETING_STATUS.COMPLETED, patch: stampedMeeting, saveCases,
+            })
+          : await persistMeeting({ cases, caseId, meeting: stampedMeeting, saveCases }))
       : await saveCases([...cases,newCase], caseId);
     if(!result?.ok) {
       if(result?.reason !== 'conflict') {
@@ -10316,7 +10369,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases)} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />

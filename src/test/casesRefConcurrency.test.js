@@ -251,6 +251,10 @@ describe('the shipped synchronisation', () => {
   });
 
   it('and the canonical save still reads state, which was never stale', () => {
-    expect(app).toContain('? await persistMeeting({ cases, caseId, meeting: stampedMeeting, saveCases })');
+    // Both branches read `cases` state, not the ref. Since Phase 3B slice 1 the
+    // lifecycle branch completes through transitionMeeting rather than writing
+    // status inline, so there are two call sites to hold to the same rule.
+    expect(app).toContain('await persistMeeting({ cases, caseId, meeting: stampedMeeting, saveCases })');
+    expect(app).toContain('await transitionMeeting({\n              cases, caseId, meetingId: lifecycleMeetingId,');
   });
 });

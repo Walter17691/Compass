@@ -259,11 +259,25 @@ describe('23-25. THE HARD GATE — Review Save patches the started meeting', () 
   });
 
   it('saving completes the meeting, so it is not left falsely in progress', () => {
-    expect(app).toContain('...(lifecycleMeetingId ? { status: MEETING_STATUS.COMPLETED } : {}),');
+    // Phase 3B slice 1 superseded the MECHANISM, not this invariant. Completion
+    // used to be an inline `status: COMPLETED` on the save object, which is
+    // precisely why every UI action reaching it could define completion for
+    // itself (NEW-36). It is now the canonical transition, so the save object no
+    // longer asserts its own completion:
+    expect(app).not.toContain('...(lifecycleMeetingId ? { status: MEETING_STATUS.COMPLETED } : {}),');
+    expect(app).toContain('allowedFrom: [MEETING_STATUS.REVIEW_DRAFT, MEETING_STATUS.COMPLETED],');
+    expect(app).toContain('toStatus: MEETING_STATUS.COMPLETED, patch: stampedMeeting, saveCases,');
+
+    // And the invariant itself, now proven along the real two-step lifecycle
+    // rather than by jumping straight from in_progress:
     const started = live();
-    const saved = { ...started, record: 'Full record.', status: MEETING_STATUS.COMPLETED };
+    expect(isResumableMeeting(started)).toBe(true);
+    const ended = { ...started, status: MEETING_STATUS.REVIEW_DRAFT, endedAt: '2026-09-25T10:30:00.000Z' };
+    expect(isMeetingComplete(ended)).toBe(false);        // review_draft is not complete
+    expect(isResumableMeeting(ended)).toBe(false);       // nor is it still running
+    const saved = { ...ended, record: 'Full record.', status: MEETING_STATUS.COMPLETED };
     expect(isMeetingComplete(saved)).toBe(true);
-    expect(isResumableMeeting(saved)).toBe(false);
+    expect(isResumableMeeting(saved)).toBe(false);       // never left falsely in progress
   });
 
   it('a saved meeting keeps its original identity, parentage and startedAt', () => {

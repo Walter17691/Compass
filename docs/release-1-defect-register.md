@@ -292,7 +292,7 @@ above. No Phase 3A path uses them.
 
 ### NEW-36 — premature signature action exposed during review_draft — P1
 - **Severity** **P1** · **Area** Review screen / lifecycle boundary · **Raised** 2026-09-25 (human UAT)
-- **STATUS: OPEN — audited, deliberately NOT fixed. Must be fixed BEFORE broader 3B work.**
+- **STATUS: DEPLOYED / TECHNICALLY VERIFIED — HUMAN UAT REQUIRED.** Fixed as Phase 3B slice 1.
 - **Observed.** On Review, while the meeting was still `review_draft`, the UI
   presented **"Send for signature →"** with *"Send the meeting record to the
   employee for signature"* — both immediately after End and again after a hard
@@ -335,12 +335,55 @@ above. No Phase 3A path uses them.
   screenshot is correct and the previous claim was too narrow — it should have
   read "the Case View next-step never offers signature", not "review_draft does
   not unlock signature".
-- **Recommended sequencing: fix BEFORE Phase 3B.** It is a P1 with an
-  irreversible external effect, and the default preference in the brief applies.
-  The minimal fix is the allowed-from guard on completion plus a status-aware
-  render condition — which is 3B's own completion boundary, so it can be the
-  *first* bounded slice of 3B rather than a separate phase.
-- **Not fixed in this turn**, per instruction. No duplicate of NEW-26/27/32.
+- **FIXED — Phase 3B slice 1: ONE authoritative completion boundary.**
+  The root issue was not the button. `saveMeetingToCaseImpl` set
+  `status: completed` **inline with no allowed-from guard**, so every UI action
+  reaching it defined completion for itself. Completion is now the canonical
+  `transitionMeeting`:
+  ```js
+  allowedFrom: [MEETING_STATUS.REVIEW_DRAFT, MEETING_STATUS.COMPLETED],
+  toStatus: MEETING_STATUS.COMPLETED, patch: stampedMeeting,
+  ```
+  - `review_draft → completed` — the confirmation, performed by **Save**
+  - `completed → completed` — **idempotent**, so a double click, or signature
+    attaching `signId` moments later, is neither an error nor a second
+    completion. This is what makes it impossible for signature to *be* the
+    completion.
+  - `scheduled` · `in_progress` · `cancelled` · legacy-null · letter artefact →
+    `STALE_STATUS`. A hearing not held, or not **ended**, cannot be confirmed.
+  The save object no longer asserts its own status at all, so no caller can.
+- **Signature gated twice (defence in depth).**
+  - **UI:** `ReviewScreen`'s condition became
+    `{signatureEligible && reviewOutput && !editingRecord && (` — eligibility is
+    computed from the **persisted** meeting, not the volatile local text.
+  - **Action:** `sendForSignature` independently rejects an ineligible meeting
+    **before** the signing row is created and before any email leaves.
+  - One rule, `signatureEligibleIn(list)` — `completed` **and** a non-empty saved
+    `record`, resolved by authoritative `caseId` + `meetingId`, never by name.
+    The list is a parameter because render must read **state** while the action
+    reads `casesRef.current`; same rule, correct source for each context.
+- **An incidental but important finding.** A first attempt added a new
+  `planMeetingCompletion` primitive and called it from `App.jsx`. That silently
+  stopped **`react-hooks/immutability` (22) and `react-hooks/set-state-in-effect`
+  (7)** from reporting anywhere in `App.jsx` — lint appeared to *improve* to 137
+  errors while actually losing analysis. Bisected: not file size (20 inert lines
+  changed nothing) and not the import (import alone was fine) — adding a new
+  **callee** to that 10,700-line component tipped the React Compiler into
+  bailing. Routing completion through the already-imported `transitionMeeting`
+  both removed the extra callee and is the better architecture. Recorded because
+  it means `App.jsx`'s compiler-rule coverage is fragile and lint totals there
+  must be read by rule, not by count.
+- **Evidence** `src/test/completionBoundary.test.jsx` — 26 tests covering the
+  agreed matrix 1–20, **6 failing against the pre-fix source**. It **renders the
+  real `ReviewScreen` and clicks the real button**, because the original escape
+  happened when only `getNextStep` was tested.
+- **Two superseded assertions updated, not weakened.** Phase 2.2's hard gate
+  ("saving completes the meeting, so it is not left falsely in progress") was
+  pinned to the very inline `status: COMPLETED` line that was the defect; its
+  invariant is now proven along the real two-step lifecycle
+  (`in_progress → review_draft → completed`, resumable at no point after End).
+  The `casesRef` assertion now covers both save branches.
+- **NOT human verified.** No duplicate of NEW-26/27/32.
 
 ### NEW-37 — Meeting Quality Check: duplicate suggestions and double confirmation — P3 (product/UX)
 - **Severity** **P3** · **Area** End flow / Meeting Intelligence · **Raised** 2026-09-25 (human UAT)
