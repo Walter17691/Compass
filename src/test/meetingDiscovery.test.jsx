@@ -428,6 +428,27 @@ describe('the discovery surface', () => {
     expect(document.body.textContent).toContain('Dana Keys');
   });
 
+  it('shows no stale frame when the organisation changes', async () => {
+    // The loaded result carries the org it was loaded FOR, so a switch reads as
+    // loading rather than briefly showing the previous organisation's meetings.
+    // This is the behaviour the set-state-in-effect fix was built to preserve, so
+    // it gets an assertion rather than a claim.
+    const clientFor = orgId => ({
+      from: () => ({ select: () => ({ eq: () => ({ order: () => Promise.resolve({
+        data: [{ id: `m_${orgId}`, org_id: orgId, case_id: null, meeting_type_id: 'informal',
+                 status: 'completed', employee_name: `Employee of ${orgId}`, created_by: 'u' }],
+        error: null }) }) }) }),
+    });
+    const { rerender } = render(<MeetingsScreen orgId="org-a" client={clientFor('org-a')} />);
+    await waitFor(() => expect(screen.getByText(/Employee of org-a/)).toBeTruthy());
+    rerender(<MeetingsScreen orgId="org-b" client={clientFor('org-b')} />);
+    // Immediately after the switch, org A's row is gone — not still on screen.
+    expect(screen.queryByText(/Employee of org-a/)).toBeNull();
+    expect(document.body.textContent).toContain('Loading');
+    await waitFor(() => expect(screen.getByText(/Employee of org-b/)).toBeTruthy());
+    expect(screen.queryByText(/Employee of org-a/)).toBeNull();
+  });
+
   it('uses Archivo only, adds no serif, and no emoji', () => {
     const src = readFileSync('src/screens/MeetingsScreen.jsx', 'utf8');
     expect(src).not.toMatch(/serif/);
