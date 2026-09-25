@@ -386,9 +386,15 @@ describe('W–Y. review_draft unlocks no downstream workflow', () => {
   });
 
   it('3A does not add a review_draft → completed transition', () => {
-    // The allowed-from guard on completion is explicitly a 3B task. Assert that
-    // 3A has NOT quietly introduced one, so the deferral is visible.
-    expect(appCode).not.toContain('allowedFrom: [MEETING_STATUS.REVIEW_DRAFT]');
+    // The allowed-from guard on completion was explicitly a 3B task, and 3A did
+    // not introduce one. Phase 3B slice 1 then added it, and slice 2 uses
+    // `allowedFrom: [REVIEW_DRAFT]` for the review_draft → review_draft DRAFT
+    // write — so the meaningful assertion is about what may reach COMPLETED, not
+    // about that string. No transition may complete a meeting from review_draft
+    // alone; completion's allowed-from set always also names COMPLETED, which is
+    // what makes it idempotent rather than a second completion event.
+    expect(appCode).not.toContain('allowedFrom: [MEETING_STATUS.REVIEW_DRAFT], toStatus: MEETING_STATUS.COMPLETED');
+    expect(appCode).toContain('allowedFrom: [MEETING_STATUS.REVIEW_DRAFT, MEETING_STATUS.COMPLETED]');
     // and End only ever targets in_progress
     const i = appCode.indexOf('toStatus: MEETING_STATUS.REVIEW_DRAFT');
     expect(i).toBeGreaterThan(-1);
@@ -548,9 +554,16 @@ describe('write safety and the 3A scope boundary', () => {
     await h.endMeeting({ caseId: CASE_ID, meetingId: MID });
     const m = h.meeting(MID);
     expect(m.reviewDraft).toBeUndefined();
-    expect(m.record).toBeNull();          // unchanged — content is still volatile
+    expect(m.record).toBeNull();          // unchanged — End writes no record
     expect(m.summary).toBeUndefined();
-    expect(appCode).not.toContain('reviewDraft:');
+    // End's own patch carries only endedAt and the transcript. Phase 3B slice 2
+    // added a SEPARATE review_draft → review_draft write for the draft, so the
+    // boundary to assert is that END does not write draft content, not that the
+    // codebase never mentions it.
+    const endPatch = appCode.slice(appCode.indexOf('const plan = planMeetingEnd('),
+                                   appCode.indexOf('audit("Meeting ended"'));
+    expect(endPatch).toContain('patch: { endedAt: meetingEndTimeVal, transcript: allNotes }');
+    expect(endPatch).not.toContain('reviewDraft');
   });
 
   it('planMeetingWrite is untouched by 3A — create/patch semantics unchanged', () => {

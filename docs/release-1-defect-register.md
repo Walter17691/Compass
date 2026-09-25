@@ -273,7 +273,58 @@ above. No Phase 3A path uses them.
   `src/test/endToReviewDraft.test.js` (47 tests) asserts the lifecycle half and
   asserts the content boundary explicitly so the split cannot be mistaken for
   completion.
-- **Decision** PARTIALLY REMEDIATED — open until 3B.
+- **PHASE 3B SLICE 2 — IMPLEMENTED / TECHNICALLY VERIFIED / HUMAN UAT REQUIRED
+  (2026-09-25).** The Review draft is now persisted on the same canonical meeting.
+  - **Shape** (`src/lib/reviewDraft.js`): `record`, `recordOriginal`, `summary`,
+    `risk`, `generatedAt`, `updatedAt`, `editedByUser`, `editedAt`, `editedBy`,
+    `transcriptFingerprint`, `generationVersion`. Deliberately **not** duplicated:
+    `nextSteps` (deterministic), `prediction` (never rendered on Review),
+    `proposedUpdates` (own accept/dismiss lifecycle), `signDocument` (derived at
+    completion), and `advisorNotes` — which is a **section inside `record`**, not a
+    field. `recordOriginal` is persisted for the first time, so revert-to-original
+    now survives a refresh.
+  - **Transcript provenance is a content fingerprint, not a count** (architecture
+    correction 1). FNV-1a 32-bit over a documented canonicalisation: array order
+    preserved, pending entries excluded (matching what End persists), each entry
+    reduced to trimmed `speaker` + `text` only — `id`, `ts` and `aiAttributed`
+    excluded — joined with U+0001 between fields and U+0000 between entries so
+    `"a"+"b"` cannot collide with `"ab"`, emitted as `t1:xxxxxxxx`. Deterministic,
+    synchronous, dependency-free, no external service, no new table. It is
+    **advisory only**: a mismatch never blocks restoration, because silently
+    regenerating over a user's edits is the behaviour NEW-26 exists to end.
+  - **RESTORE FIRST.** `openReviewForMeeting` restores a valid persisted draft
+    verbatim with **zero AI calls**; generation is the `else if` branch, reached
+    only when no draft exists and a transcript does; the truthful "no notes"
+    message is reachable only when the transcript is genuinely empty.
+  - **Debounced autosave**, ~1,500 ms idle, one mechanism covering both the
+    initial persist after generation and every later edit. No second "Save draft"
+    button — "Save to case" keeps its Slice 1 meaning. Skips when unchanged and
+    while the AI stream is still running.
+  - **A conflict SUSPENDS autosave and never auto-retries** (architecture
+    correction 2). The local draft is kept, `draftSuspendedRef` stops the effect,
+    and the user sees *"This case changed elsewhere. Your draft is still here.
+    Review the latest case before trying again."* with an explicit **Try saving
+    again**. There is no reload-and-replay and no idle retry.
+  - **Completed elsewhere is a hard stop.** `allowedFrom: [review_draft]` refuses
+    the write with `STALE_STATUS`; the confirmed authoritative record wins and the
+    stale draft can never overwrite it.
+  - **The draft cannot complete anything.** Both `allowedFrom` and `toStatus` are
+    `review_draft`, and the patch carries no `savedAt`, `savedBy` or
+    `signDocument` — which is precisely why it can never satisfy
+    `signatureEligibleIn`.
+  - **Provenance stub at completion:** the draft's text is dropped and only
+    `{generatedAt, editedByUser, editedAt, editedBy, generationVersion,
+    supersededAt}` is kept — so the case file still records whether the final
+    record was AI-only or human-edited, at ~150 bytes instead of ~2.5 KB.
+  - **Invisible to every process reader**, asserted: `nextStep.js`,
+    `meetingLifecycle.js` and `caseStage.js` contain no reference to `reviewDraft`
+    at all, and `review_draft → Review meeting record` is unchanged.
+  - **Evidence** `src/test/reviewDraftPersistence.test.jsx` — 44 tests covering the
+    full agreed matrix 1–38, **17 failing against the pre-slice source**.
+  - **No backfill.** The 884 legacy rows are untouched; an existing `review_draft`
+    without a draft generates once on next entry and persists forward only.
+- **Decision** IMPLEMENTED / TECHNICALLY VERIFIED — **NOT** human verified.
+  Awaiting Walter's refresh / re-entry / edit test.
 
 ### NEW-27 — no Regenerate after a successful Review
 - **Severity** P2 · **Area** Review UX

@@ -5,7 +5,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, onSaveAndSendForSignature, riskScore, reviewGenerationFailed, onRetryGeneration,
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -160,7 +160,7 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                   but nothing rendered. Editing no longer requires
                   pre-existing AI content. */}
               {editingRecord&&(
-                <textarea aria-label="Meeting record" value={reviewOutput} onChange={e=>setReviewOutput(e.target.value)}
+                <textarea aria-label="Meeting record" value={reviewOutput} onChange={e=>(onEditReviewRecord||setReviewOutput)(e.target.value)}
                   placeholder="Write the meeting record..."
                   style={{width:"100%",minHeight:400,background:"none",border:"none",outline:"none",fontSize:14,lineHeight:1.9,color:"#1A1535",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",boxSizing:"border-box"}}/>
               )}
@@ -183,6 +183,22 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 </div>
               )}
               {aiError&&!reviewGenerationFailed&&<div style={{color:"#C84B2F",fontSize:13}}>{aiError}</div>}
+              {/* Phase 3B slice 2 — draft persistence state. Deliberately
+                  lightweight: no extra panel, no second save button. A conflict
+                  is the only state offering an action, because a conflict is the
+                  only one the user must resolve. */}
+              {draftStatus&&(
+                <div style={{fontSize:12,marginTop:8,color:draftStatus==="conflict"||draftStatus==="error"||draftStatus==="superseded"?"#B87520":"#9B9098"}}>
+                  {draftStatus==="saving"&&"Saving draft…"}
+                  {draftStatus==="saved"&&"Draft saved"}
+                  {draftStatus==="error"&&"Couldn't save this draft — your changes are still here, and Compass will try again."}
+                  {draftStatus==="superseded"&&"This record was confirmed elsewhere. The confirmed version is now the one on the case file — reopen the case to see it."}
+                  {draftStatus==="conflict"&&(<>
+                    This case changed elsewhere. Your draft is still here. Review the latest case before trying again.
+                    {onRetryReviewDraft&&<button onClick={()=>onRetryReviewDraft()} style={{marginLeft:8,fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"3px 10px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>Try saving again</button>}
+                  </>)}
+                </div>
+              )}
             </div>
             {/* Phase 3B slice 1 (NEW-36) — signature is gated on the PERSISTED
                 meeting being authoritatively completed with a saved record, not

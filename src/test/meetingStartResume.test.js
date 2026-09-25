@@ -295,7 +295,11 @@ describe('23-25. THE HARD GATE — Review Save patches the started meeting', () 
   });
 
   it('the meeting id is cleared after a successful save', () => {
-    expect(app).toContain('if(lifecycleMeetingId) setCaseInfo(p=>({...p, meetingId:null}));');
+    // Phase 3B slice 2 expanded this into a block that also closes the draft
+    // session; the invariant — a finished lifecycle id must not survive — is
+    // unchanged.
+    expect(app).toContain('setCaseInfo(p=>({...p, meetingId:null}));');
+    expect(app).toContain('draftSuspendedRef.current = true;');
   });
 
   it('and cleared whenever a new meeting is set up', () => {

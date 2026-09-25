@@ -244,11 +244,11 @@ describe('the shipped synchronisation', () => {
     // meeting write already reads. A new meeting write MUST appear here — if
     // this count rises with a site reading stale `cases` state instead, that is
     // the defect this suite exists to catch.
-    // 11 since Phase 3B slice 1: End contributes two (planMeetingEnd resolving
-    // the meeting, and the transitionMeeting that executes it) and the signature
-    // stage one more (attaching signId to the already-completed meeting) — all
-    // from the same fresh ref every other meeting write reads.
-    expect((app.match(/cases: casesRef\.current/g) || []).length).toBe(11);
+    // 12 since Phase 3B slice 2, which adds the Review-draft write. Every one
+    // of these reads the same fresh ref that every other meeting write reads;
+    // a new site appearing here that reads stale `cases` state instead is the
+    // defect this suite exists to catch.
+    expect((app.match(/cases: casesRef\.current/g) || []).length).toBe(12);
   });
 
   it('and the canonical save still reads state, which was never stale', () => {

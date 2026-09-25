@@ -77,6 +77,7 @@ import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
 import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE, planIdentifiedStart, START_DECISION, planMeetingEnd, END_DECISION } from './lib/meetingWrites';
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
+import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraft } from './lib/reviewDraft';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
@@ -360,6 +361,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Phase 3A — set by openReviewForMeeting, consumed once the identity it needs
   // has actually committed. Never set by the ordinary End path.
   const [reviewReopenFor, setReviewReopenFor] = useState(null);
+  // Phase 3B slice 2 — persisted Review draft.
+  // draftStatus: null | "saving" | "saved" | "error" | "conflict" | "superseded"
+  const [draftStatus, setDraftStatus] = useState(null);
+  // The draft as last persisted/restored, so edit provenance survives a write.
+  const draftMetaRef = useRef(null);
+  // Set the moment a human changes the record. Restoration never sets it.
+  const draftEditedRef = useRef(false);
+  // A conflict SUSPENDS autosave until the user explicitly retries — Compass
+  // must not reload the changed case and silently replay a stale draft over it.
+  const draftSuspendedRef = useRef(false);
+  const draftTimerRef = useRef(null);
+  const draftLastWrittenRef = useRef("");
   // M10 — a second, short AI generation alongside the full record: what
   // actually matters for someone triaging the case, not the full formatted
   // dialogue. Session-local like reviewOutput; only persisted as
@@ -6783,6 +6796,12 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setActiveCaseId(cs.id);
     setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary("");
     setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
+    // Phase 3B slice 2 — a fresh draft session for this meeting.
+    draftEditedRef.current = false;
+    draftSuspendedRef.current = false;
+    draftMetaRef.current = null;
+    draftLastWrittenRef.current = "";
+    setDraftStatus(null);
 
     // NAVIGATE UNCONDITIONALLY.
     //
@@ -6794,7 +6813,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // depend on whether content can be generated for it.
     setScreen(SCREENS.REVIEW);
 
-    if(notes.length) {
+    // RESTORE FIRST (NEW-26). A persisted draft is the user's work; regenerating
+    // over it is exactly the data loss this slice exists to end. Restoring makes
+    // ZERO AI calls.
+    const existingDraft = restorableDraft(meeting);
+    if(existingDraft) {
+      setReviewOutput(existingDraft.record);
+      setReviewOutputOriginal(existingDraft.recordOriginal || existingDraft.record);
+      setMeetingSummary(existingDraft.summary || "");
+      setRiskScore(existingDraft.risk ?? null);
+      setAiError("");
+      // Carried forward so a later write preserves generatedAt and the edit
+      // provenance rather than restamping them.
+      draftMetaRef.current = existingDraft;
+      draftEditedRef.current = !!existingDraft.editedByUser;
+      draftLastWrittenRef.current = existingDraft.record;
+      setDraftStatus("saved");
+    } else if(notes.length) {
       setAiError("");
       // Generation is deferred to the effect below rather than called here:
       // caseInfo/transcript/meetingEndTime have only just been QUEUED, and
@@ -7320,6 +7355,88 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewReopenFor, caseInfo.meetingId]);
 
+  // Phase 3B slice 2 — persist the Review draft against the SAME canonical
+  // meeting. One write, single-case, on the existing optimistic-concurrency
+  // contract. It CANNOT complete anything: allowedFrom/toStatus are both
+  // review_draft, so status is unchanged and the patch carries no savedAt,
+  // savedBy or signDocument, which is why a draft can never satisfy
+  // signatureEligibleIn.
+  const persistReviewDraft = async () => {
+    const caseId = caseInfo.caseId, meetingId = caseInfo.meetingId;
+    if(!caseId || !meetingId) return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
+    const draft = buildReviewDraft({
+      record: reviewOutput, recordOriginal: reviewOutputOriginal || reviewOutput,
+      summary: meetingSummary, risk: riskScore, transcript,
+      previous: draftMetaRef.current,
+    });
+    setDraftStatus("saving");
+    const result = await transitionMeeting({
+      cases: casesRef.current, caseId, meetingId,
+      allowedFrom: [MEETING_STATUS.REVIEW_DRAFT], toStatus: MEETING_STATUS.REVIEW_DRAFT,
+      patch: { reviewDraft: draft }, saveCases,
+    });
+    if(result?.ok) {
+      draftMetaRef.current = draft;
+      draftLastWrittenRef.current = draft.record;
+      setDraftStatus("saved");
+      return result;
+    }
+    // A stale draft must never overwrite a record confirmed elsewhere. The
+    // transition refuses it, and this is a hard stop rather than a retry.
+    if(result?.reason === WRITE_FAILURE.STALE_STATUS) {
+      draftSuspendedRef.current = true;
+      setDraftStatus("superseded");
+      return result;
+    }
+    // Conflict: keep the local draft, stop autosaving, and wait for the user.
+    // No reload-and-replay, no idle retry — that is how newer case state gets
+    // silently overwritten.
+    if(result?.reason === "conflict") {
+      draftSuspendedRef.current = true;
+      setDraftStatus("conflict");
+      return result;
+    }
+    setDraftStatus("error");
+    return result;
+  };
+
+  // Debounced autosave — ~1.5s idle. Covers BOTH the initial persist after
+  // generation and every later edit, so there is one mechanism rather than two.
+  // Deliberately no "Save draft" button: "Save to case" already means confirm
+  // and complete, and a second save concept beside it is what Slice 1 removed.
+  useEffect(() => {
+    if(screen !== SCREENS.REVIEW) return;
+    if(!caseInfo.caseId || !caseInfo.meetingId) return;   // unlinked paths unchanged
+    if(draftSuspendedRef.current) return;                 // conflict/superseded
+    if(!reviewOutput || !reviewOutput.trim()) return;      // nothing to persist yet
+    if(reviewOutput === draftLastWrittenRef.current) return;
+    if(aiProcessing) return;                               // wait for the stream to settle
+    if(draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => { persistReviewDraft(); }, 1500);
+    return () => { if(draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+    // persistReviewDraft is recreated every render and is deliberately not a dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, caseInfo.caseId, caseInfo.meetingId, reviewOutput, meetingSummary, riskScore, aiProcessing]);
+
+  // A human edit, from the textarea or from the AI-assisted edit instruction.
+  // Separate from persistence so that restoring or re-rendering a draft can
+  // never be mistaken for an edit — which is what NEW-27 will gate on.
+  const onEditReviewRecord = (next) => {
+    setReviewOutput(next);
+    if(!draftEditedRef.current) {
+      draftEditedRef.current = true;
+      draftMetaRef.current = markDraftEdited(draftMetaRef.current, { by: currentUser?.name || "HR Manager" });
+    }
+  };
+
+  // Explicit reconciliation after a conflict. The user asked for this, so it is
+  // safe to resume; nothing here replays automatically.
+  const retryReviewDraft = async () => {
+    draftSuspendedRef.current = false;
+    setDraftStatus(null);
+    return await persistReviewDraft();
+  };
+
 
   // Deterministic, not AI-generated — this is the organisation's own track
   // record (same case type's past outcomes, this employee's case count),
@@ -7750,6 +7867,12 @@ Please produce:
       transcript: transcript.filter(u=>!u.pending),
       record: reviewOutput,
       summary: meetingSummary,
+      // Phase 3B slice 2 — at completion the authoritative record owns the
+      // truth, so the draft's TEXT is dropped and only its provenance is kept:
+      // was this record AI-only or human-edited, by whom, and when. Retaining
+      // the whole draft would duplicate the record inside a JSONB column that
+      // already carries record, summary, transcript and signDocument.
+      ...(lifecycleMeetingId ? { reviewDraft: supersedeReviewDraft(draftMetaRef.current) } : {}),
       signDocument: (()=>{
         const full = reviewOutput;
         const start = full.indexOf("## Meeting Details");
@@ -8013,7 +8136,14 @@ Please produce:
     // Phase 2.2 — this meeting's lifecycle is finished, so the id must not
     // survive into whatever the user does next. Leaving it set would let a
     // subsequent save patch a meeting that is already completed.
-    if(lifecycleMeetingId) setCaseInfo(p=>({...p, meetingId:null}));
+    if(lifecycleMeetingId) {
+      setCaseInfo(p=>({...p, meetingId:null}));
+      // The draft session is over; nothing further may autosave against it.
+      draftSuspendedRef.current = true;
+      draftMetaRef.current = null;
+      draftEditedRef.current = false;
+      setDraftStatus(null);
+    }
     setActiveCaseId(caseId);
     setActiveCaseStage("investigation");
     setScreen(SCREENS.CASE_VIEW);
@@ -10426,7 +10556,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} onSaveAndSendForSignature={saveAndSendForSignature} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />
