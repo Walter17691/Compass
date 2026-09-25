@@ -292,7 +292,61 @@ above. No Phase 3A path uses them.
 
 ### NEW-36 — premature signature action exposed during review_draft — P1
 - **Severity** **P1** · **Area** Review screen / lifecycle boundary · **Raised** 2026-09-25 (human UAT)
-- **STATUS: DEPLOYED / TECHNICALLY VERIFIED — HUMAN UAT REQUIRED.** Fixed as Phase 3B slice 1.
+- **STATUS: CLOSED / HUMAN VERIFIED 2026-09-25.** Fixed as Phase 3B slice 1,
+  including its UX refinement, and confirmed by human UAT plus read-only database
+  verification.
+- **HUMAN UAT PASSED — fresh fixture `AT - Save And Send UAT`**
+  (`20992a73-c0e2-4c4a-ab81-f30e97ae56ba`), created and driven entirely through
+  the production UI via the direct-Start path.
+
+  | Proof | Evidence |
+  |---|---|
+  | one Disciplinary meeting | `meetings` length **1** |
+  | same canonical identity | `meeting_e215a877-d8c1-4aed-87f7-2d003241c065`, named by **both** the `Meeting started` and `Meeting ended` audit rows |
+  | `review_draft → completed` | `status: completed`, `savedAt 13:35:21.893` |
+  | authoritative record | `record` **2,388 chars**, `summary` **429 chars** |
+  | transcript retained | 1 utterance, the note entered |
+  | `startedAt` / `endedAt` retained | `13:33:34.057Z` / `13:33:45.924Z` |
+  | no duplicate, no orphan | 1 entry; meeting id appears in exactly 1 case row |
+  | no `reviewDraft` | absent — correct, slice 2 not built |
+  | no `schedule` key | absent — correct for direct Start |
+
+- **Save-before-send proven from the write chain.** Exactly **three** conditional
+  PATCHes, each keyed on the value the previous write produced:
+  ```
+  13:32:58.303  POST  /rest/v1/cases                                 201  case created
+  13:33:34.182  PATCH ?…&updated_at=eq.2026-09-25T13:32:58.143+00:00  200  Start
+  13:33:46.045  PATCH ?…&updated_at=eq.2026-09-25T13:33:34.06+00:00   200  End → review_draft
+  13:35:22.020  PATCH ?…&updated_at=eq.2026-09-25T13:33:45.931+00:00  200  Save → completed
+  ```
+  The completion PATCH landed at **13:35:22**, *before* the signature modal could
+  do anything, and there is **no fourth PATCH** — so no `signId` attachment
+  occurred. `b54ef95`'s concurrency held across a four-write chain.
+- **Opening the modal produced no side effect whatsoever.**
+  - `signing_requests`: **0** rows from this UAT — by employee name, by the time
+    window, by anything created today, and by the meeting id. The table's 104
+    existing rows all predate today.
+  - No `POST /rest/v1/signing_requests` in the request window.
+  - No `… notes sent for signature` audit row (written only after a successful send).
+  - Meeting has `signId` null, `signStatus` null, `signedAt` null, **no
+    `signature` key**.
+  - `integration_events` 0, `employee_portal_invites` 0 for the window.
+  - **Limitation stated honestly:** Vercel function invocations are not in
+    Supabase logs, so `/api/send-for-signature` cannot be observed directly. It
+    could not have been reached: `sendDocumentForSignature` calls `/api/signing`
+    **first** and only proceeds on success, and `/api/signing` demonstrably
+    created no row. Additionally no email was entered, so `sendForSignature`
+    returned at its very first guard (`if(!employeeEmail||!reviewOutput) return;`)
+    before reaching the eligibility gate at all.
+  - `signDocument` **is** present on the meeting, and is **not** a signing
+    artefact: `saveMeetingToCaseImpl` derives it from the record on every save
+    (all 884 legacy rows carry it). It is saved-record metadata, not evidence of
+    a send.
+- **Cancel left the meeting legitimately completed** — `status: completed`,
+  record intact, `signStatus` null — so no rollback occurred and Case View can
+  offer *Send hearing record for signature* later **without repeating the
+  confirmation**, because the signature path now requires only that the meeting
+  already be completed with a saved record.
 - **Observed.** On Review, while the meeting was still `review_draft`, the UI
   presented **"Send for signature →"** with *"Send the meeting record to the
   employee for signature"* — both immediately after End and again after a hard
@@ -427,9 +481,48 @@ above. No Phase 3A path uses them.
   external send mocked. No real emails, no real signing requests.
 - **NOT human verified.** No duplicate of NEW-26/27/32.
 
+### NEW-38 — risk rating disproportionate for a minimal record — P3 (AI quality)
+- **Severity** **P3** · **Area** Review risk assessment · **Raised** 2026-09-25
+- **STATUS: OPEN — observation only, recorded without fixing. Did not affect lifecycle behaviour.**
+- On the deliberately minimal `AT - Save And Send UAT` hearing (one note, an
+  11-second meeting), Review rated tribunal risk **HIGH** with strong language
+  about a "serious procedural" concern.
+- **Not a grounding or hallucination failure.** Every factual claim it made is
+  **true** of the record: start and end really are the same clock minute
+  (`13:33:34Z` → `13:33:45Z`), the transcript really is a single sentence, and no
+  allegations or evidence really were recorded. The Review advisory contract is
+  working — it is reasoning only from what the record contains.
+- **The issue is calibration/context, not accuracy.** The engine has no way to
+  know it is looking at a stub rather than a real but badly-run hearing, so a
+  near-empty record reads as maximum procedural risk. For real use that may even
+  be desirable; the open question is whether a record this thin should produce a
+  HIGH *rating* rather than a "not enough recorded to assess" state. The AI
+  summary already says exactly that — *"There is not enough information in the
+  transcript to generate a meaningful triage summary"* — so the two outputs
+  disagree with each other, which is the sharper finding.
+- **Explicitly did not affect** the Save & Send lifecycle test: no lifecycle
+  state, write, or signature behaviour depends on the rating.
+- **Decision** OPEN for later AI-quality review. Not a blocker.
+
 ### NEW-37 — Meeting Quality Check: duplicate suggestions and double confirmation — P3 (product/UX)
 - **Severity** **P3** · **Area** End flow / Meeting Intelligence · **Raised** 2026-09-25 (human UAT)
-- **STATUS: OPEN — informational audit only. Nothing changed.**
+- **STATUS: OPEN — informational audit only. Nothing changed. NOT removed or disabled.**
+- **Correction to record, 2026-09-25.** The Save & Send UAT did not trigger the
+  Quality Check, and that has been read as evidence of "the previous bounded
+  removal/disablement". **No removal or disablement was ever implemented.** The
+  feature is fully present and wired exactly as audited: `attemptEndMeeting` still
+  calls `computeMeetingQualityGaps()` and still shows the modal when it returns
+  gaps, and `git log -S` shows the only commit ever touching it is the original
+  `744fac0` that introduced it.
+- **Why it stayed silent instead:** it fires only on *pending* items, and this
+  fixture had none to find — a direct Start means no prep questions, the case had
+  no allegations, and only ~11 seconds elapsed between Start and End, so
+  `updateMeetingIntelligence` (which needs ≥10 words) had produced no
+  `actionsIdentified` before End. The audit trail confirms it: no
+  `Ended meeting despite quality check gaps` row on this case.
+- So the quiet flow is **not** evidence the behaviour is fixed. It remains exactly
+  as recorded below, and will reappear on any meeting long enough for the model to
+  identify an action.
 - **Observed.** End produced *"MEETING QUALITY CHECK — A few things worth a look
   before you close this out"* listing two unresolved actions, then a **second**
   *"Proceed anyway?"* confirmation with an optional reason.
