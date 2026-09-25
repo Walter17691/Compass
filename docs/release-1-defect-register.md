@@ -104,7 +104,41 @@ above. No Phase 3A path uses them.
 
 ### Phase 3A — End is a real lifecycle transition
 - **Area** Meeting lifecycle · **Delivered** 2026-09-25
-- **STATUS: DEPLOYED / FINAL HUMAN GOLDEN PATH REQUIRED.** Overall Phase 3A is **not** closed.
+- **STATUS: CLOSED / HUMAN VERIFIED 2026-09-25.**
+- **FINAL GOLDEN PATH PASSED — human UI + database evidence.** Fresh case
+  `AT - Phase 3A Final UAT` (`640ba406-b75b-4571-8f00-198daece55a9`), created and
+  driven entirely through the production UI via the **direct Start** path (no
+  Schedule, no Prepare):
+
+  | Proof | Evidence |
+  |---|---|
+  | one Disciplinary meeting | `meetings` length **1** |
+  | same canonical identity | `meeting_ecb851cd-e769-4bca-9eeb-534c298c4244` named by **both** the `Meeting started` and `Meeting ended` audit rows |
+  | `status` | **`review_draft`** |
+  | `caseId` | `640ba406-b75b-4571-8f00-198daece55a9` |
+  | `startedAt` retained | `2026-09-25T12:17:25.903Z` (= `createdAt`, correct for direct Start) |
+  | `endedAt` persisted | `2026-09-25T12:20:40.926Z` |
+  | **transcript persisted** | **3 utterances**, all three test notes in canonical captured form |
+  | no duplicate / orphan | 1 entry; no second `review_draft` |
+  | not completed | `record` empty, no `summary`, no `savedAt`, `signStatus` null |
+  | no `reviewDraft` field | absent — correct, 3B not built |
+  | no `schedule` key | absent — correct for direct Start |
+
+  **One canonical patch, not an append.** Exactly one `PATCH` executed End, at
+  `12:20:41.114`, keyed `updated_at=eq.2026-09-25T12:17:25.906+00:00` — the value
+  Start produced — so `status`, `endedAt` **and** the transcript were written in a
+  single operation, and `b54ef95`'s concurrency held across a three-write chain
+  (`POST` case → `PATCH` Start → `PATCH` End).
+- **Browser-boundary continuity confirmed by human evidence:** after a hard
+  refresh, Case View showed *Disciplinary record in review* and
+  *Review meeting record* with no Start, Resume, outcome or closure action, and
+  reopening Review presented the persisted dialogue for all three notes rather
+  than the "no notes were saved" message.
+- **This closes:** persisted `review_draft` lifecycle · End → `review_draft` ·
+  transcript persistence at End · Review re-entry · browser-boundary transcript
+  continuity · the direct-Start End path (the scheduled path was covered earlier).
+- **Limitation stated honestly:** the generated Review **draft** is still
+  volatile. Nothing here claims otherwise — see NEW-26.
 - **RE-ENTRY DEFECT: CLOSED / HUMAN VERIFIED 2026-09-25.** Walter retested
   `AT - Continuity Retest` against `01e689d`: the case still reads
   *Disciplinary record in review*, Case View shows *Review meeting record*,
@@ -213,8 +247,9 @@ above. No Phase 3A path uses them.
   perform them through the product; fabricating the rows directly would both
   bypass the very `beginMeeting` path under test and risk a fixture shaped
   unlike a real one. Walter creates it via the UI — see the handoff.
-- **Phase 3A will be marked CLOSED / HUMAN VERIFIED only when BOTH the human UI
-  evidence and the read-only database verification are in.**
+- **Both required evidence streams are in** (human UI + read-only database), so
+  Phase 3A is closed. **Two separate issues were surfaced by this UAT and are
+  registered below, not fixed here: NEW-36 and NEW-37.**
 
 ### NEW-26 — Review draft destroyed by refresh or navigation
 - **Severity** P1 · **Area** Review persistence
@@ -254,6 +289,121 @@ above. No Phase 3A path uses them.
   new infrastructure.
 - **Deferred to Phase 3C.** No Regenerate button was added in 3A.
 - **Decision** OPEN — Phase 3C design work.
+
+### NEW-36 — premature signature action exposed during review_draft — P1
+- **Severity** **P1** · **Area** Review screen / lifecycle boundary · **Raised** 2026-09-25 (human UAT)
+- **STATUS: OPEN — audited, deliberately NOT fixed. Must be fixed BEFORE broader 3B work.**
+- **Observed.** On Review, while the meeting was still `review_draft`, the UI
+  presented **"Send for signature →"** with *"Send the meeting record to the
+  employee for signature"* — both immediately after End and again after a hard
+  refresh and re-entry. Walter did not click it.
+- **Render condition (`ReviewScreen.jsx:187`):**
+  ```jsx
+  {reviewOutput && !editingRecord && ( <button onClick={()=>setShowSignModal(true)}> Send for signature → )}
+  ```
+  It consults **only the volatile local generated text**. It does not check
+  meeting `status`, `isMeetingComplete`, the persisted `record`, or anything
+  lifecycle-related. So the button appears the moment AI generation returns text.
+- **It is NOT cosmetic. Clicking it would, in order:**
+  1. `setShowSignModal(true)` → the email modal;
+  2. on confirm, `sendForSignature(email)` → `sendDocumentForSignature(…)` →
+     **`POST /api/signing`** (creates a `signing_requests` row and mints `signId`
+     server-side) then **`POST /api/send-for-signature`** — an **outward-facing,
+     irreversible email of the meeting record to the employee**;
+  3. then `saveMeetingToCase({ signId, signStatus:"sent" })` →
+     `saveMeetingToCaseImpl`, which sets
+     `...(lifecycleMeetingId ? { status: MEETING_STATUS.COMPLETED } : {})`
+     **with no allowed-from guard** — so it **completes the meeting**, jumping
+     `review_draft → completed` and bypassing the intended explicit completion.
+  So `review_draft` can genuinely cross the signature boundary, send externally,
+  and self-complete. **P1 on actual consequence, not appearance.**
+- **Scope: all meeting types.** The condition has no type branching and
+  `ReviewScreen` is the shared Review for Disciplinary, Investigation, Appeal and
+  Grievance alike.
+- **Other exposure on the same screen:** *Save to case* / *Save and go to case*
+  (`ReviewScreen.jsx:87,89`) also complete a `review_draft` meeting, for the same
+  missing-guard reason. That was **known and accepted** for 3A ("the existing Save
+  path may still technically complete meetings today"); the signature path is the
+  new finding because it also sends externally and completes as a *side effect* of
+  an action whose label does not say "complete".
+- **Why the Phase 3A tests missed it.** They asserted that **`getNextStep`** does
+  not return `send_signature` for `review_draft` — true, and still true: Case View
+  offers no signature action. But `ReviewScreen` has its own independent button
+  whose condition never consults lifecycle status, and those tests never rendered
+  `ReviewScreen`. The same gap as the CTA defect one turn earlier: the layer that
+  was changed was tested; the layer the user touches was not. The human
+  screenshot is correct and the previous claim was too narrow — it should have
+  read "the Case View next-step never offers signature", not "review_draft does
+  not unlock signature".
+- **Recommended sequencing: fix BEFORE Phase 3B.** It is a P1 with an
+  irreversible external effect, and the default preference in the brief applies.
+  The minimal fix is the allowed-from guard on completion plus a status-aware
+  render condition — which is 3B's own completion boundary, so it can be the
+  *first* bounded slice of 3B rather than a separate phase.
+- **Not fixed in this turn**, per instruction. No duplicate of NEW-26/27/32.
+
+### NEW-37 — Meeting Quality Check: duplicate suggestions and double confirmation — P3 (product/UX)
+- **Severity** **P3** · **Area** End flow / Meeting Intelligence · **Raised** 2026-09-25 (human UAT)
+- **STATUS: OPEN — informational audit only. Nothing changed.**
+- **Observed.** End produced *"MEETING QUALITY CHECK — A few things worth a look
+  before you close this out"* listing two unresolved actions, then a **second**
+  *"Proceed anyway?"* confirmation with an optional reason.
+- **Controlled by** `computeMeetingQualityGaps()` (deterministic) →
+  `attemptEndMeeting()` → `setShowQualityCheck(true)`, else `handleReview()`.
+- **Deterministic check over AI-generated inputs.** The gap computation is a plain
+  filter; three of its four sources are model output from
+  `updateMeetingIntelligence` (`parsed.actionsIdentified`,
+  `parsed.evidenceMentioned`), and the fourth is a keyword heuristic.
+- **Four trigger categories, `status === "pending"` only** (so accept/dismiss
+  suppresses them): essential prep questions not asked · evidence/witness
+  mentions pending · **action suggestions pending** · allegations whose title
+  words appear in under half the transcript text.
+- **The two entries were semantically duplicate and deduplication cannot catch
+  them.** The merge guard is exact-string, case-insensitive:
+  `known.has(a.description.trim().toLowerCase())`. *"Chair to review the meeting
+  record before confirmation"* and *"Review the meeting record before issuing
+  confirmation of outcome"* are different strings, so both persisted. There is no
+  semantic dedup.
+- **No pre- vs post-meeting distinction exists.** Every pending action is treated
+  as a reason to pause before ending. Both entries here are *legitimate
+  post-meeting workflow steps* — reviewing the record before confirming an
+  outcome is literally what `review_draft` now exists to represent, so Compass
+  warned the user against ending a meeting for intending to do the very next
+  thing the lifecycle prescribes. This is the substantive finding.
+- **"Create follow-up action"** (`createQualityCheckFollowUp`) creates one case
+  task named `"Follow up on: " + gaps.join("; ")`, then proceeds to Review. It
+  does not accept the individual suggestions, change meeting state, or emit its
+  own audit event. It resolves the case by **employee name** (a NEW-20 FULL site).
+- **Accept/Dismiss persistence is split.** Accept creates a **persisted case
+  task**; the suggestion's own `accepted`/`dismissed` status is **React state
+  only** and is lost on refresh. Accept also name-matches the case.
+- **The two confirmation layers do serve different purposes**, though the second
+  is thin: the modal is *informational with three routes* (Return / Create
+  follow-up / Proceed), while `requestOverride` exists to create the **audit
+  record** that a gap was knowingly left. Verified in production: the override
+  wrote `Ended meeting despite quality check gaps` with detail
+  `"…Chair to review… ; …Review the meeting record… — no reason given"`. The
+  unconditional audit is deliberate (Phase 6.5 closed a hole where a blank reason
+  left no record at all). So it is **not pure duplicated friction** — but the
+  prompt could be merged into the first modal without losing the audit.
+- **Reason persistence:** `audit_log` only, against the case. It does **not**
+  enter the meeting record or transcript. Appears in audit; timeline presentation
+  not separately verified.
+- **Scope: all meeting types** — no type branching in the gap computation or the
+  single End path.
+- **Assessment against "the intelligence should be in the system, not all over
+  the screen":**
+  | Classification | Item |
+  |---|---|
+  | **KEEP** | the override audit record; essential-question-not-asked; allegation-not-discussed |
+  | **SIMPLIFY** | two confirmation layers → one modal that captures the optional reason inline |
+  | **MOVE TO POST-MEETING** | *"review the record before confirming the outcome"*-class actions — these belong as Review/Case View next steps, not as End-time warnings |
+  | **REMOVE / DEDUPLICATE** | semantically duplicate AI actions; persist accept/dismiss so a decision is not re-surfaced after refresh |
+- **Recommended future treatment:** classify each AI-identified action as
+  pre-meeting or post-meeting and only gate End on the former; dedupe
+  semantically; fold the reason prompt into the single modal. Belongs with the
+  later workflow-simplification phase, **not** 3B.
+- **Not a duplicate** of NEW-26, NEW-27 or NEW-32.
 
 ### NEW-30 — signal generator compares a meeting against itself
 - **Severity** P2 · **Area** Signals / AI

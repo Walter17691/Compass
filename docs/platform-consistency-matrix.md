@@ -281,6 +281,9 @@ Two independent id generators remain: `newId("meeting")` in the save path and
 | **Meeting End** | `planMeetingEnd` + `transitionMeeting`, `allowedFrom: [in_progress]` → `review_draft`, patching `endedAt` only | End previously persisted NOTHING — no status, no `endedAt` — and cleared the local crash-recovery draft on the way out | Phase 3A (2026-09-25) | CONSISTENT |
 | **Review re-entry** | `review_meeting_record` → `openReviewForMeeting`, identity + `endedAt` read back from the meeting | Was a placeholder that opened the signature modal | Phase 3A | CONSISTENT (lifecycle only — content persistence is 3B) |
 | **Review draft content** | none yet — React state | `reviewOutput`/`summary`/`riskScore`/`nextSteps` are volatile | **Phase 3B** | KNOWN GAP |
+| **Meeting transcript at End** | persisted by the End transition (`patch: { endedAt, transcript }`) | End patched `endedAt` only, so notes were lost at the browser boundary | Phase 3A (human verified) | CONSISTENT |
+| **Completion boundary** | `saveMeetingToCaseImpl` writes `completed` with **no allowed-from guard** | reachable from `review_draft` via Save **and** via Send for signature (NEW-36, P1) | **Phase 3B, first slice** | KNOWN DEFECT |
+| **Review screen action gating** | `reviewOutput && !editingRecord` — volatile local text only | no reader consults meeting status; Case View readers are lifecycle-aware, Review is not | NEW-36 | INCONSISTENT |
 
 **Rule.** Meeting writes read `casesRef.current` deliberately — chained writes
 in one synchronous run depend on it. The ref must therefore never be staler
