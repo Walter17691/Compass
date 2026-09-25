@@ -453,7 +453,7 @@ describe('the Resume affordance is minimal and truthful', () => {
   });
 
   it('both PrepScreen routes persist before entering the live screen', () => {
-    expect(prep).toContain('await beginMeeting();');
+    expect(prep).toContain('await beginMeeting({ meetingId: caseInfo.meetingId || null });');
     expect((prep.match(/onClick=\{startMeeting\}/g) || []).length).toBe(2);
     expect(prep).not.toContain('setScreen(SCREENS.RECORD)');
   });

@@ -80,7 +80,7 @@ describe('1. start is captured on entry to the live meeting', () => {
     expect(home).toContain('await beginMeeting({');
     expect((prep.match(/setScreen\(SCREENS\.RECORD\)/g) || []).length).toBe(0);
     expect((prep.match(/onClick=\{startMeeting\}/g) || []).length).toBe(2);
-    expect(prep).toContain('await beginMeeting();');
+    expect(prep).toContain('await beginMeeting({ meetingId: caseInfo.meetingId || null });');
     // beginMeeting navigates only after persistence succeeds, and the
     // crash-recovery restore still enters the same way.
     expect((app.match(/setScreen\(SCREENS\.RECORD\);/g) || []).length).toBe(3); // beginMeeting + resumeMeeting + draft restore

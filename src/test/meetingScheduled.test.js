@@ -592,9 +592,20 @@ describe('7-10. validation belongs to Schedule alone', () => {
     expect(prepBtn).not.toContain('meetingSetup.time');
     const startBtn = home.slice(home.indexOf('await beginMeeting({') - 900, home.indexOf('Start meeting'));
     expect(startBtn).not.toContain('!meetingSetup.time');
-    // and beginMeeting itself has no time concept at all
-    const begin = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('  // ── Release 1 Phase 2.3 — truthful scheduling'));
-    expect(begin).not.toContain('schedule');
+    // and beginMeeting itself has no time concept at all.
+    //
+    // Asserted as "reads no schedule data and validates no time" rather than as
+    // a ban on the substring: since the Phase 2.3 continuity fix beginMeeting
+    // DELEGATES to startScheduledMeeting for an already-persisted meeting, so
+    // the word appears as an identifier. Comments are stripped for the same
+    // reason they are elsewhere — prose names what the code must not do.
+    const beginRaw = app.slice(app.indexOf('const beginMeeting ='), app.indexOf('  // ── Release 1 Phase 2.3 — truthful scheduling'));
+    const begin = beginRaw.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    expect(begin).not.toContain('.schedule');        // never reads the plan
+    expect(begin).not.toContain('schedule?.');
+    expect(begin).not.toContain('!time');            // never requires a time
+    expect(begin).not.toContain('meetingSetup.time');
+    expect(begin).not.toContain('Enter the time');
   });
 });
 

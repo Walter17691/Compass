@@ -75,7 +75,7 @@ import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/me
 import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/employeeHistory';
 import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
-import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE } from './lib/meetingWrites';
+import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE, planIdentifiedStart, START_DECISION } from './lib/meetingWrites';
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
@@ -6433,6 +6433,37 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       showToast(describeMeetingWriteFailure(WRITE_FAILURE.PARENT_REQUIRED), "error");
       return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
     }
+    // Release 1 Phase 2.3 continuity — an already-persisted meeting that the
+    // caller can NAME is authoritative, so Start transitions it rather than
+    // minting a second object. Prepare→Start used to fork the lifecycle here:
+    // prepareScheduledMeeting put the scheduled meeting's id in
+    // caseInfo.meetingId, and this function then ignored it entirely.
+    //
+    // Read from ctx ONLY, never from caseInfo. HomeMeetingScreen's Start calls
+    // commit() (which queues meetingId:null) and then this, in the same
+    // handler — exactly the React update race its own comment warns about for
+    // caseId. Falling back to caseInfo here would read the PRE-commit value and
+    // could transition a meeting left over from an earlier session. The caller
+    // that knows the id has already committed is the one that passes it.
+    const identifiedMeetingId = ctx.meetingId || null;
+    if(identifiedMeetingId) {
+      const plan = planIdentifiedStart({ cases: casesRef.current, caseId, meetingId: identifiedMeetingId });
+      const cs = casesRef.current.find(c => c && c.id === caseId);
+      if(plan.decision === START_DECISION.TRANSITION) {
+        // The canonical scheduled→in_progress path, unchanged and shared with
+        // the Case View banner — not a second implementation of it.
+        return startScheduledMeeting(cs, plan.meeting);
+      }
+      if(plan.decision === START_DECISION.RESUME) {
+        // Idempotent: already live, so reopen it and write nothing.
+        resumeMeeting(cs, plan.meeting);
+        return { ok: true, meetingId: plan.meeting.id };
+      }
+      // Never fall through to create — that is the duplicate being fixed.
+      reportMeetingWriteFailure(plan, "Couldn't start this meeting");
+      return { ok: false, reason: plan.reason };
+    }
+
     const attempt = pendingStartRef.current && pendingStartRef.current.caseId === caseId
       ? pendingStartRef.current
       // startedAt is captured for THIS attempt and, per the approved

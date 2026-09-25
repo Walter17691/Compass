@@ -239,7 +239,12 @@ describe('the shipped synchronisation', () => {
   });
 
   it('meeting writes still read the ref — the fix does not change who reads what', () => {
-    expect((app.match(/cases: casesRef\.current/g) || []).length).toBe(7);
+    // 8 since the Phase 2.3 continuity fix: beginMeeting's identified-start
+    // branch resolves the named meeting from the same fresh ref every other
+    // meeting write already reads. A new meeting write MUST appear here — if
+    // this count rises with a site reading stale `cases` state instead, that is
+    // the defect this suite exists to catch.
+    expect((app.match(/cases: casesRef\.current/g) || []).length).toBe(8);
   });
 
   it('and the canonical save still reads state, which was never stale', () => {

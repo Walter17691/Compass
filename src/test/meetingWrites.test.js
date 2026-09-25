@@ -310,9 +310,14 @@ describe('PLATFORM PRIMITIVE — no case-type forks, no I/O', () => {
 
   it('has no I/O, AI, Supabase or router dependency and imports nothing', () => {
     expect(lib).not.toMatch(/authedFetch|\/api\/|supabase|streamClaude|localStorage|fetch\(/);
-    // One delegation import only — declaredStatus, so the raw-status rule
-    // has a single implementation shared with the lifecycle primitive.
-    expect(lib.match(/^import .*$/gm)).toEqual(["import { declaredStatus } from './meetingLifecycle.js';"]);
+    // Exactly ONE import statement, and it delegates to the lifecycle
+    // primitive — so status/genuineness rules have a single implementation
+    // shared with it rather than a second copy here. The imported NAMES may
+    // grow (declaredStatus, isGenuineMeeting, MEETING_STATUS); a second import
+    // statement, or an import from anywhere else, is the real violation.
+    const imports = lib.match(/^import .*$/gm);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toMatch(/^import \{[^}]+\} from '\.\/meetingLifecycle\.js';$/);
   });
 
   it('works identically for every meeting type', () => {

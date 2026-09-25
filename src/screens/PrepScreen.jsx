@@ -67,7 +67,12 @@ export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType
   onAddPrepQuestion, onUpdatePrepQuestionText, onRemovePrepQuestion, onMovePrepQuestion, onTogglePrepQuestionEssential, onLinkPrepQuestionToAllegation, onLinkPrepQuestionToEvidence,
 }) {
   const [starting, setStarting] = useState(false);
-  const startMeeting = async () => { setStarting(true); try { await beginMeeting(); } finally { setStarting(false); } };
+  // Release 1 Phase 2.3 continuity — pass the meeting Prep was opened FOR, so
+  // Start transitions that exact scheduled meeting instead of creating a second
+  // one. Safe to read caseInfo here: prepareScheduledMeeting's setCaseInfo
+  // committed before this screen rendered. null for a cold prep, which keeps
+  // the Phase 2.2 create path exactly as it was.
+  const startMeeting = async () => { setStarting(true); try { await beginMeeting({ meetingId: caseInfo.meetingId || null }); } finally { setStarting(false); } };
   // Phase 6.5 hardening (accessibility pass) — the upload input inside is
   // visually hidden but still keyboard-focusable (see its own comment
   // below); this reuses the exact hover-border-highlight already built

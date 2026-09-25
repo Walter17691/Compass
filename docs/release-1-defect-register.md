@@ -299,6 +299,201 @@ none of which persist a structured case meeting:
 - **Decision** ACCEPTED and documented. Forward-compatible reading shipped in
   Phase 1, which is why rollback degrades rather than breaks.
 
+### Prepare → Start created a duplicate meeting — P1
+- **Severity** **P1** · **Area** Meeting lifecycle continuity · **Raised** 2026-09-25 (human UAT)
+- **STATUS: FIXED / DEPLOYED — HUMAN RETEST REQUIRED.**
+- **Reproduction.** On case `e2d474da-…`: Schedule a Disciplinary meeting, click
+  **Prepare**, then **Start meeting** from the prep pack.
+
+  | Time | Action | Result |
+  |---|---|---|
+  | 08:17:02 | Schedule | `meeting_6a8bdb7c` — `scheduled`, 2026-10-02 10:00, Teams |
+  | 08:51:16 | Prepare | no write at all; `caseInfo.meetingId = meeting_6a8bdb7c` |
+  | 08:53:41 | Start | **`meeting_352722cc`** — `in_progress`, **`schedule: null`** |
+
+  One hearing became two objects. The scheduled one was stranded (`startedAt`
+  still null) and the live one lost the planned time and method entirely.
+- **Root cause.** `PrepScreen` called `beginMeeting()` with no arguments, and
+  `beginMeeting` minted `newId("meeting")` unconditionally:
+  ```js
+  const attempt = pendingStartRef.current && pendingStartRef.current.caseId === caseId
+    ? pendingStartRef.current
+    : { id: newId("meeting"), caseId, startedAt: startInstant() };
+  ```
+  It never consulted the authoritative id that `prepareScheduledMeeting` had
+  already written to `caseInfo.meetingId`. `startScheduledMeeting` — the correct
+  `transitionMeeting` path — was wired to exactly one place, the Case View
+  banner. The prep pack had no route to it. Not a regression: Phase 2.2 built
+  Start-from-scratch correctly and Phase 2.3 never connected the Prepare → Start
+  hop to the transition it had introduced.
+- **Why the Investigation did not fork** on 24 Sept: it was started from the
+  Case View banner, so it took `startScheduledMeeting`. Same case, two doors.
+- **Fix.** `beginMeeting` now branches on an explicitly supplied meeting id:
+  a named, already-persisted meeting is authoritative and is **transitioned**
+  via the existing shared `startScheduledMeeting`; only an absent id creates.
+  The decision itself is a new pure primitive, `planIdentifiedStart`
+  (`meetingWrites.js`), which classifies and writes nothing.
+  - `scheduled` → TRANSITION (same id, `scheduled → in_progress`)
+  - `in_progress` → RESUME (idempotent; writes nothing, never restamps `startedAt`)
+  - missing / foreign / cancelled / completed / `review_draft` / legacy-null /
+    letter artefact → **REJECT**. Create is never a fallback.
+- **Read from `ctx` only, never from `caseInfo`.** `HomeMeetingScreen`'s Start
+  calls `commit()` (which queues `meetingId: null`) and then `beginMeeting` in
+  the same handler — the documented React update race its own comment already
+  warns about for `caseId`. Falling back to `caseInfo` would read the
+  **pre-commit** value and could transition a meeting left over from an earlier
+  session. `PrepScreen` passes the id (safe: committed before it rendered) and
+  `HomeMeetingScreen` passes `meetingId: null` to state the cold intent.
+- **Preserved.** `schedule` (date/time/method), `createdAt`, `createdBy`,
+  `caseId`, `chairUserId`, `invitation`, `calendar`. Added: `status`,
+  `startedAt`. Planned time and actual start remain independent facts — starting
+  early does not rewrite the plan.
+- **Appeal security untouched.** The transition patches `startedAt` only and
+  never writes `chairUserId`; the deployed trigger still revalidates the chair
+  on the `scheduled → in_progress` move, and the database remains the control.
+- **Regression coverage** `src/test/prepStartContinuity.test.js` — 34 tests.
+  **24 of them fail against the pre-fix source** (proven by reverting the four
+  changed files). Includes a harness whose `honourIdentified:false` mode
+  reproduces the exact production duplicate, and coverage that the corrected
+  path cannot leave a scheduled meeting advertised while one is live.
+- **Five existing invariant tests were updated**, not weakened: they asserted
+  the old *wording* of code deliberately changed. The `beginMeeting` time ban
+  became "reads no schedule data and validates no time" (stronger, and immune
+  to the delegation identifier); the `meetingWrites` import rule became "exactly
+  one import statement, to the lifecycle primitive" (names may grow, a second
+  dependency may not).
+- **Human verification still required** after deployment.
+- **Decision** Phase 2.3 cannot close until the human retest passes.
+
+### Prep-pack content is not persisted to the meeting — P3 design gap
+- **Severity** **P3** · **Area** Prep / Phase 3 · **Raised** 2026-09-25
+- **STATUS: OPEN — recorded, deliberately out of scope. NOT a Phase 2.3 closure blocker.**
+- Generated prep content (`prepNotes`, `prepQuestions`) is React state plus a
+  `compass_meeting_draft` localStorage entry. No `preparation` or `preparedAt`
+  key is written anywhere, and none exists on any production meeting.
+- Consequence: a prep pack belongs to a browser session, not to the meeting. The
+  continuity fix above makes Prepare and Start share one meeting **id**; it does
+  not make prep content survive.
+- Phase 2.3's claim is lifecycle identity continuity, which does not depend on
+  prep persistence, so this does not block closure. Belongs with the Phase 3 /
+  NEW-26 / NEW-27 prep-and-review work.
+
+### Case status badge is lifecycle-blind — "Disciplinary in progress" — P2
+- **Severity** **P2** · **Area** Case View status badge · **Raised** 2026-09-25
+- **STATUS: OPEN — diagnosed and classified, not fixed. No implementation authorised.**
+- **Observed.** With the Disciplinary meeting `scheduled` for 2026-10-02 and the
+  card correctly reading *Not yet held*, the case badge read
+  **"Disciplinary in progress"**.
+- **Not the live-meeting banner.** `resumableMeetingFor` returns nothing for
+  this case (verified by running it against the real persisted objects) — no
+  meeting is `in_progress`. The string comes from `getCaseStatus` in
+  `App.jsx:~9040`.
+- **Root cause.** `getCaseStatus` maps meeting **type existence** to a badge
+  with **no lifecycle filter at all**:
+  ```js
+  const types = meetings.map(m => (m.type || "").toLowerCase());
+  if(types.some(t=>t.includes("disciplinary"))) return {label:"Disciplinary in progress", …};
+  if(types.some(t=>t.includes("investigation"))) return {label:"Under investigation", …};
+  ```
+  The mere presence of a Disciplinary entry flips the badge, and the
+  disciplinary test precedes the investigation test, so it wins. This is a
+  pre-lifecycle reader that was never migrated to `meetingLifecycle.js`.
+- **Why it is a correctness problem, not only wording.** `cancelScheduledMeeting`
+  transitions the entry to `cancelled` and **keeps it in the array**. So a case
+  whose only Disciplinary meeting was cancelled still reads
+  "Disciplinary in progress". The reader cannot distinguish scheduled /
+  in progress / completed / cancelled, so relabelling it would not fix it.
+- **Process vs lifecycle.** The disciplinary *process* is legitimately underway
+  once a hearing is arranged, so a badge change at schedule time is right in
+  principle; "in progress" is the wrong word for it, and the mechanism is the
+  wrong basis for it. `getCaseStatus` is case-progression metadata, not meeting
+  lifecycle, and the two must not be derived from the same unfiltered list.
+- **Smallest correct fix (not applied).** Make `getCaseStatus` lifecycle-aware
+  and distinguish "Disciplinary scheduled" from "Disciplinary in progress".
+- **Decision** OPEN. Not covered by any test yet.
+
+### Case Readiness question is a stale persisted AI snapshot — P3
+- **Severity** **P3** · **Area** Case Readiness / AI signals · **Raised** 2026-09-25
+- **STATUS: OPEN — diagnosed, not fixed. UX staleness, not a data defect.**
+- **Observed.** After the Disciplinary meeting was scheduled, Case Readiness
+  still asked *"Has any outcome, next step, or further meeting been scheduled
+  following the investigation meeting?"* with the rationale *"The case record
+  shows only one meeting and no subsequent actions, decisions, or letters are
+  documented."*
+- **Cause: cached/persisted AI analysis.** It is a stored row, not a live
+  computation — `case_signals.sig_47802822-6aa7-40ac-ba55-d80f4bc300c8`,
+  `type=unanswered_question`, `status=open`, `source=ai`,
+  **`created_at 2026-09-24 20:50:32.567+00`**. That is **19 hours before** the
+  Disciplinary meeting was scheduled (`2026-09-25 08:17:02`). When written, the
+  statement was **true**.
+- **Ruled out:** stale `caseContext` (`buildCaseContext` reads
+  `cs.meetings` unfiltered, so the scheduled meeting IS in the grounding
+  context, rendered as `- Disciplinary on 2026-10-02`); stale React state (the
+  row itself is stale in the database); scheduled meetings excluded from
+  grounding (they are not excluded).
+- **Why it did not refresh.** `generateUnansweredQuestions` is only invoked
+  after a meeting is **saved** (two silent call sites), never after a meeting is
+  **scheduled**. And nothing auto-resolves AI-sourced signals — the
+  auto-resolve path is keyed on `rule_id`, which is `null` for these.
+- **Would Refresh fix it? Yes, structurally.** The panel exposes
+  `generateUnansweredQuestions`; it rebuilds context from the current case,
+  `supersedeOpenSignalsOfType` supersedes the stale open question before
+  recreating, `saveSignalToDB` persists the result, and
+  `findMatchingQuestionSignal` preserves any prior human decision.
+- **Residual gap (same class as the badge).** The context line for a scheduled
+  meeting carries no lifecycle status, so a regeneration can see that a meeting
+  exists but cannot tell scheduled from held-with-an-empty-record.
+- **Also corroborated here:** `sig_fde64568` — *"The meeting record excerpt is
+  cut off before the employee's account"* — is independent confirmation of the
+  known context-budget starvation (P2, separately tracked, out of scope).
+- **Decision** OPEN. Persistence is intentional (human decisions must stick);
+  the defect is presenting a present-tense factual claim with no as-at stamp and
+  no invalidation when the fact changes.
+
+### Retest 2026-09-25 — scheduled Disciplinary meeting "not visible" — NOT A DEFECT
+- **Severity** none (no defect) · **Area** Human UAT observation · **Raised** 2026-09-25
+- **STATUS: CLOSED — no code change. Scheduling step never performed.**
+- **Report.** After the `b54ef95` retest, Case View showed status *Under
+  investigation*, the CTA *Send investigation record for signature*, and no
+  scheduled Disciplinary meeting or Prepare/Start/Reschedule/Cancel controls.
+- **Authoritative state.** Unchanged from before the retest: 1 meeting-shaped
+  entry, `case.updated_at` still `2026-09-24 20:50:23.992`. No Disciplinary
+  meeting exists anywhere in the org — a scan for any meeting scheduled
+  `2026-10-02`, or created after the first failure, returns zero rows.
+- **Root cause: the write was never attempted.** Full request log for the
+  retest session (08:01:02 → 08:02:16) contains **no PATCH or POST to
+  `/rest/v1/cases` at all**. The only writes in the entire window were
+  `rpc/log_audit_event` (Session started, 08:01:06) and
+  `case_views` (Case View opened on this very case, 08:01:23.37). The
+  `audit_log` agrees: since 21:00 the previous day it holds exactly two rows,
+  both `Session started`. So the session hard-refreshed, went straight to Case
+  View and observed it; the schedule click was not performed.
+- **Case View was telling the truth.** There was no scheduled meeting to show.
+  This was not a rendering, selection or masking fault.
+- **`b54ef95` is live and intact** in the bundle that session loaded
+  (`App-C0cex4kO.js`): both `casesRef` currency sites present, the
+  conflict-aware reporter at all five sites, and the `Start scheduled meeting`
+  control in the shipped chunk. The stale-concurrency fix is therefore still
+  unexercised by a human — it has had no second scheduling attempt to prove it.
+- **What this exposed instead.** No test covered the state the retest was
+  trying to reach: a completed meeting, an outstanding signature task and a
+  future scheduled meeting all at once. The masking risk the brief asked about
+  was real as a *risk* and simply unguarded. Now proven absent and locked in —
+  the Case View banner is gated on `scheduledMeetings.length>0` alone, with no
+  coupling to `nextStep`, `signStatus` or `isMeetingComplete`, and
+  `send_signature` is deliberately not a `SCHEDULABLE_ACTION` so it cannot
+  consume or rewrite the scheduled meeting.
+- **Evidence** `src/test/scheduledMeetingCoexistence.test.js` — 18 tests.
+  Mutation-proven: simulating the masking defect (a completed meeting
+  suppressing scheduled ones) fails **7** of them.
+- **Decision** No production change. **Superseded 2026-09-25 08:17:02** — the
+  schedule was then performed successfully, persisting
+  `meeting_6a8bdb7c-8a6c-4d4c-881b-a6b071b9769f` and moving the case to
+  `updated_at 2026-09-25 08:17:02.787`. The single PATCH carried
+  `updated_at=eq.2026-09-24T20:50:23.992+00:00` — the authoritative value, not
+  the stale `20:15:11.834` that failed before — so `b54ef95` is now
+  **HUMAN VERIFIED**.
+
 ### Disciplinary scheduling save failure — stale concurrency key — P1
 - **Severity** **P1** · **Area** Persistence / concurrency · **Raised** 2026-09-24 (human UAT)
 - **STATUS: DEPLOYED / HUMAN VERIFICATION REQUIRED.**

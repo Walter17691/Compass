@@ -513,6 +513,11 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                       await beginMeeting({
                         type: selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"},
                         caseId: meetingSetup.preparedCaseId||activeCaseId||null,
+                        // Release 1 Phase 2.3 continuity — explicitly a COLD
+                        // start. Passed rather than left undefined for the same
+                        // reason caseId is: commit() has only just queued
+                        // meetingId:null, so beginMeeting must not read it back.
+                        meetingId: null,
                         manager: meetingSetup.manager||"",
                         appealManagerId: meetingSetup.appealManagerId||null,
                         date: meetingSetup.date,

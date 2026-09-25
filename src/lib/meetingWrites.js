@@ -1,4 +1,4 @@
-import { declaredStatus } from './meetingLifecycle.js';
+import { declaredStatus, isGenuineMeeting, MEETING_STATUS } from './meetingLifecycle.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // COMPASS PLATFORM PRIMITIVE — the canonical meeting write path.
@@ -185,6 +185,70 @@ export async function transitionMeeting({ cases, caseId, meetingId, allowedFrom,
   // can quietly change identity, parentage or the declared destination.
   const next = { ...current, ...patch, id: current.id, caseId, status: toStatus };
   return persistMeeting({ cases, caseId, meeting: next, saveCases });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Which Start is this?
+//
+// Release 1 Phase 2.3 continuity fix. Found by human UAT on 2026-09-25:
+// Schedule persisted meeting_6a8bdb7c (scheduled, 2026-10-02 10:00, Teams),
+// Prepare correctly carried that id into caseInfo.meetingId, and then Start
+// from the prep pack called beginMeeting(), which minted meeting_352722cc and
+// appended it. One hearing became two objects — a live one with no schedule and
+// a stranded scheduled one that could still be "started" a second time.
+//
+// This decides, and only decides, WHICH existing machinery should run. It
+// performs no write and duplicates no transition logic: a TRANSITION is then
+// executed by transitionMeeting exactly as the Case View banner already does.
+//
+// Deliberately pure so the fail-closed rule is provable without a browser.
+//
+// CREATE IS NOT A FALLBACK. If a caller names a meeting and that meeting turns
+// out to be missing, foreign, cancelled, completed or a letter artefact, this
+// REJECTS. Falling back to "create a fresh one" is precisely the duplicate this
+// fix exists to remove.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const START_DECISION = Object.freeze({
+  // scheduled → in_progress, via transitionMeeting on the SAME id.
+  TRANSITION: "transition",
+  // Already in_progress — a retry, a double click, or a navigation race.
+  // Reopen the live meeting; write nothing and mint nothing.
+  RESUME: "resume",
+  REJECT: "reject",
+});
+
+export function planIdentifiedStart({ cases, caseId, meetingId }) {
+  if (!isNonEmptyString(caseId)) {
+    return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.PARENT_REQUIRED };
+  }
+  if (!isNonEmptyString(meetingId)) {
+    return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.INVALID_MEETING };
+  }
+
+  const target = (Array.isArray(cases) ? cases : []).find(c => c && c.id === caseId);
+  if (!target) return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.NOT_FOUND };
+
+  const meetings = Array.isArray(target.meetings) ? target.meetings : [];
+  const meeting = meetings.find(m => m && m.id === meetingId);
+  // Covers the wrong-case id too: a meeting belonging to another case is simply
+  // not on this one, and is never searched for elsewhere.
+  if (!meeting) return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.NOT_FOUND };
+
+  if (isNonEmptyString(meeting.caseId) && meeting.caseId !== caseId) {
+    return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.PARENTAGE_MISMATCH };
+  }
+  // A letter artefact is not a meeting and can never be started as one.
+  if (!isGenuineMeeting(meeting)) {
+    return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.INVALID_MEETING };
+  }
+
+  const from = declaredStatus(meeting);
+  if (from === MEETING_STATUS.SCHEDULED) return { decision: START_DECISION.TRANSITION, meeting, from };
+  if (from === MEETING_STATUS.IN_PROGRESS) return { decision: START_DECISION.RESUME, meeting, from };
+  // completed, cancelled, review_draft, and legacy rows (declaredStatus null,
+  // which no allowed-from set names) all land here.
+  return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.STALE_STATUS, meeting, from };
 }
 
 // Identity and provenance stamped once, at creation. Separate from
