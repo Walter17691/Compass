@@ -1,6 +1,8 @@
 import { isGenuineMeetingRecord } from '../lib/caseStage.js';
 import { useState } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
+import { invitationGuidance } from '../lib/invitationGuidance';
+import { caseRequirementNotice, CASE_REQUIREMENT } from '../lib/meetingCaseRequirement';
 import { CheckIcon, WarningIcon } from '../components/Icons';
 
 // The one meeting-setup form — reached both from contextual entry points
@@ -320,14 +322,21 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
             <div style={{background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:10,padding:"14px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
               <WarningIcon size={15} color="#B87520" style={{flexShrink:0}} />
               <div>
-                <div style={{fontSize:13,fontWeight:600,color:"#B87520",marginBottom:3}}>Formal invitation required</div>
-                <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
-                  {meetingSetup.type==="disciplinary"&&"The employee must receive a written invitation at least 48 hours before the hearing, including the allegations, evidence, and right to be accompanied (ERA 1999 s.10)."}
-                  {meetingSetup.type==="grievance"&&"Send a written invitation confirming the date, time, location and the employee's right to be accompanied."}
-                  {meetingSetup.type==="redundancy-atrisk"&&"Employees must receive written notice of the at-risk meeting and have the opportunity to discuss alternatives (ERA 1996)."}
-                  {meetingSetup.type==="appeal-disciplinary"&&"The appeal invitation must confirm the grounds being considered and the employee's right to be accompanied."}
-                  {meetingSetup.type==="pip-review"&&"Send a written invitation with the agenda and any supporting documents in advance."}
-                </div>
+                {/* Phase 4A — the previous copy asserted a fixed written-notice
+                    period as a requirement and cited ERA 1999 s.10 for it. That
+                    section is the right to be accompanied and imposes no notice
+                    period, and no statute, Code, configured policy or retrieval
+                    in Compass supplied the figure — it was a hard-coded string.
+                    Guidance now comes from lib/invitationGuidance.js, which
+                    states a period only when an organisation's own configured
+                    policy provides one. The literal figure is deliberately not
+                    repeated here, so the regression test can assert on plain
+                    file content. */}
+                {(()=>{ const g = invitationGuidance(meetingSetup.type); return g && (<>
+                  <div style={{fontSize:13,fontWeight:600,color:"#B87520",marginBottom:3}}>{g.heading}</div>
+                  <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>{g.body}</div>
+                  {g.policyNotice&&<div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6,marginTop:6,fontWeight:600}}>{g.policyNotice}</div>}
+                </>); })()}
                 <button onClick={()=>{
                     const mt = MEETING_TYPES.find(t=>t.id===meetingSetup.type)||{id:meetingSetup.type,label:meetingSetup.type};
                     setCaseInfo(p=>({...p,
@@ -421,9 +430,14 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
           </div>
 
           {(() => {
-            const disabled = !meetingSetup.employee.trim()||!meetingSetup.type;
             const selected = MEETING_TYPES.find(t=>t.id===meetingSetup.type);
             const isDev = selected?.group==="dev";
+            // Phase 4B — explain BEFORE the user does work, rather than failing
+            // at persistence. Parentage is an explicit, id-based fact: the
+            // "Link to case" select, or an already-active case. Never a name.
+            const linkedCaseIdForGuard = meetingSetup.preparedCaseId||meetingSetup.linkedCaseId||activeCaseId||null;
+            const caseNotice = caseRequirementNotice(meetingSetup.type, !!linkedCaseIdForGuard, { isDevGroup: isDev });
+            const disabled = !meetingSetup.employee.trim()||!meetingSetup.type||!!caseNotice;
             // Shared by both buttons below — sets meeting type/caseInfo/
             // participants identically, only the final destination screen
             // differs. Kept as a closure over meetingSetup rather than a
@@ -457,6 +471,25 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
               setTranscript([]);setPrepNotes("");setPrepQuestions([]);setMeetingEvidenceSuggestions([]);setMeetingActionSuggestions([]);setReviewOutput("");setReviewOutputOriginal("");setMeetingSummary("");setLetterOutput("");setRiskScore(null);setLiveChatHistory([]);setParticipants(meetingSetup.participants||[]);setDismissedCoachingTipKeys?.([]);
             };
             return (
+              <>
+              {caseNotice&&(
+                <div style={{background:caseNotice.requirement===CASE_REQUIREMENT.REQUIRED?"#FEF5E7":"#F5F3FF",
+                             border:"1px solid "+(caseNotice.requirement===CASE_REQUIREMENT.REQUIRED?"#F5E6C4":"#DDD9F5"),
+                             borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+                  <div style={{fontSize:13,fontWeight:600,color:caseNotice.requirement===CASE_REQUIREMENT.REQUIRED?"#B87520":"#5B3FD4",marginBottom:3}}>{caseNotice.title}</div>
+                  <div style={{fontSize:12,color:caseNotice.requirement===CASE_REQUIREMENT.REQUIRED?"#7A5C1A":"#6B6375",lineHeight:1.6,marginBottom:8}}>{caseNotice.body}</div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <button onClick={()=>document.getElementById("meeting-link-to-case")?.focus()}
+                      style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                      Link to an existing case
+                    </button>
+                    <button onClick={()=>setScreen(SCREENS.CASES)}
+                      style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"5px 12px",color:"#6B6375",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                      Create a case
+                    </button>
+                  </div>
+                </div>
+              )}
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {/* Release 1 Phase 2.3 — Schedule and Start are different user
                     intents, not synonyms, and neither routes through the
@@ -466,7 +499,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                 {!isDev&&(
                   <button
                     disabled={disabled||starting||!meetingSetup.date||!meetingSetup.time}
-                    title={!meetingSetup.date?"Add the date the meeting is arranged for":(!meetingSetup.time?"Add the time the meeting is arranged for":undefined)}
+                    title={caseNotice?caseNotice.blockedReason:(!meetingSetup.date?"Add the date the meeting is arranged for":(!meetingSetup.time?"Add the time the meeting is arranged for":undefined))}
                     onClick={async ()=>{
                       commit();
                       setStarting(true);
@@ -491,6 +524,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                 {!isDev&&(
                   <button
                     disabled={disabled}
+                    title={caseNotice?caseNotice.blockedReason:undefined}
                     onClick={()=>{ commit(); setScreen(SCREENS.PREP); }}
                     style={{flex:1,background:"#FFFFFF",border:"1px solid "+(disabled?"#E8E0D0":"#7C5CFC"),borderRadius:10,padding:"14px",fontSize:15,color:disabled?"#9B9098":"#7C5CFC",fontWeight:600,cursor:disabled?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
                     Prepare meeting
@@ -498,6 +532,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                 )}
                 <button
                   disabled={disabled||starting}
+                  title={caseNotice?caseNotice.blockedReason:undefined}
                   onClick={async ()=>{
                     if(isDev){ startSession(selected); return; }
                     commit();
@@ -529,6 +564,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                   Start meeting
                 </button>
               </div>
+              </>
             );
           })()}
         </div>

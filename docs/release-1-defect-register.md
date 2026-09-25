@@ -553,6 +553,105 @@ above. No Phase 3A path uses them.
   external send mocked. No real emails, no real signing requests.
 - **NOT human verified.** No duplicate of NEW-26/27/32.
 
+### NEW-42 — unsupported 48-hour statutory notice assertion — P1 (product safety) — FIXED
+- **Severity** **P1** · **Area** New Meeting UI / legal copy · **Raised** 2026-09-25 (audit)
+- **STATUS: FIXED / DEPLOYED (Phase 4A).**
+- **Before**, hard-coded at `HomeMeetingScreen.jsx:325` under a heading reading
+  **"Formal invitation required"**:
+  > "The employee **must** receive a written invitation **at least 48 hours**
+  > before the hearing, including the allegations, evidence, and right to be
+  > accompanied **(ERA 1999 s.10)**."
+- **Why this was unsafe.** ERA 1999 s.10 is the **right to be accompanied**; it
+  imposes no written-notice period, so the citation did not support the
+  proposition attached to it. The ACAS Code asks for notification in writing with
+  enough information and **reasonable** time to prepare, and sets no universal
+  figure. The number came from **nowhere** in the system: no statute, no Code, no
+  configured policy, no retrieval. It was a string, presented with "must" under a
+  "required" heading and a statutory citation.
+- **Compass already held the correct doctrine and contradicted itself.**
+  `lib/meetingScheduling.js` reads a notice period from the organisation's **own
+  policy** and *"A clause that doesn't match this pattern is silently skipped —
+  never a guessed number"*; the invite-letter prompt tells the model *"ACAS does
+  not mandate a fixed notice period for this letter type, so any specific
+  day-count you're not given below would be invented, not real guidance."* Only
+  the UI banner asserted a figure.
+- **After** — new `src/lib/invitationGuidance.js`, heading **"Formal
+  invitation"**:
+  > "Give the employee reasonable notice of the hearing and enough information to
+  > prepare — the matters to be considered, the evidence you intend to rely on,
+  > and their right to be accompanied (ERA 1999 s.10)."
+  - **No universal figure** for any type, asserted by test against
+    `/\b\d+\s*(hour|day|working day)s?\b/i`.
+  - **No "must"** in any guidance body.
+  - ERA 1999 s.10 retained **only** for accompaniment, and asserted never to
+    appear alongside a notice period.
+  - No citation invented for types that have none (`redundancy-atrisk`,
+    `pip-review`).
+  - **A period is stated only when the organisation configured one**, and then
+    with attribution — *"Your organisation's policy states: …"* — so it is
+    visibly the policy speaking. `policyNotice` is not yet threaded from the
+    policy store into this screen (deliberately, under the Phase 4 freeze); the
+    parameter exists so wiring it later is one line.
+- **Occurrences found and fixed: one.** The only other `48` in the codebase is
+  `meetingScheduling.js`'s comment describing the policy-reading pattern, which is
+  correct. ERA 1999 s.10 appears in four places; the other three were already
+  correct.
+- **Systemic lesson recorded:** any user-facing legal assertion needs a source. A
+  string with no source must not use "must" or carry a citation.
+- **Evidence** `src/test/meetingSetupGuard.test.jsx` — 22 tests, **6 failing
+  against the pre-fix source**.
+
+### NEW-43 — formal-meeting case requirement explained only after the work — P2 — FIXED
+- **Severity** P2 (UX) · **Raised** 2026-09-25 (human UAT) · **STATUS: FIXED / DEPLOYED (Phase 4B).**
+- **Before.** A user could complete the New Meeting form, press Start or Prepare,
+  do real work, and only then meet *"This meeting isn't linked to a case yet, so
+  it can't be saved."* The message was correct; it arrived far too late.
+- **After.** `src/lib/meetingCaseRequirement.js` classifies the type and the
+  explanation appears **before** Start, Schedule or Prepare, all three of which
+  disable with the reason in their `title` — never a silently greyed control,
+  which was the exact failure of an earlier scheduling UAT. Two routes forward are
+  offered inline: *Link to an existing case* (focuses the existing id-based
+  selector) and *Create a case*.
+- **Two reasons, deliberately different copy** — conflating them would teach the
+  user something false about their own process:
+
+  | Class | Types | Message |
+  |---|---|---|
+  | **REQUIRED** (inherent, permanent) | `disciplinary`, `appeal-disciplinary`, `appeal-grievance`, `appeal-dismissal`, the four `redundancy-*` | *"This meeting is part of a formal case — a hearing or appeal belongs to the case it arises from."* |
+  | **PENDING_ARCHITECTURE** (Compass limitation, temporary) | `informal`, `return`, `investigation` (approved standalone-intended), plus deferred `formal`, `grievance` | *"This kind of meeting does not have to be part of a formal case, but Compass can't save one on its own yet."* |
+  | **NOT_APPLICABLE** | the dev group — `probation`, `appraisal`, `pip-review`, `pdp` | unchanged; must not move before `saveDevMeetingToCase` is migrated (NEW-20 FULL) |
+
+- **Phase 2.1 is NOT weakened.** `PARENT_REQUIRED` still fires in
+  `planMeetingWrite`, `planIdentifiedStart` and `planMeetingEnd` on a missing
+  `caseId` — asserted. The guard is pure UX: the library contains no
+  `saveCases`, `supabase`, `persistMeeting`, `transitionMeeting` or `await`.
+- **No name matching, no implicit creation.** Parentage is read as an explicit id
+  (`preparedCaseId || linkedCaseId || activeCaseId`); the libraries contain no
+  `employeeName`, `toLowerCase()`, `crypto.randomUUID`, `createCase` or `newId(`.
+- **Standalone persistence is NOT enabled.** Standalone-intended types are still
+  blocked, because an unpersistable meeting lifecycle is worse than a clear
+  refusal. Phases 4C–4F remain unstarted.
+
+### Standalone meetings — approved classification (architecture decision, 2026-09-25)
+- **Approved direction:** managers must eventually be able to hold legitimate
+  standalone meetings without first creating a case.
+- **STANDALONE PERMITTED (future):** Informal / 1-1, Return to Work,
+  **Investigation** — the last deliberately, so fact-finding can happen before the
+  organisation knows what formal process, if any, will follow.
+- **CASE REQUIRED:** disciplinary hearing, disciplinary/grievance/dismissal
+  appeals, redundancy process meetings.
+- **DEFERRED, needs a later product decision:** Formal Meeting, Grievance,
+  Probation, Appraisal, PIP Review, PDP — the dev group specifically because it
+  must not collide with NEW-20 FULL / `saveDevMeetingToCase`.
+- **Not implemented into persistence.** Phase 4B encodes the classification for
+  **explanation only**.
+- Audit findings retained: the `meetings` table exists with **0 rows** and is
+  unusable as-is (no `org_id`; its single RLS policy would make any
+  `case_id IS NULL` row invisible to everyone, and references pre-org
+  `cases.user_id`). All **890** meetings are embedded in `cases.meetings`; **no
+  standalone object exists**, so 4C needs **new schema and write paths, not a
+  migration**.
+
 ### NEW-39 — internal HR advisory content sat inside the editable/signable record — P1
 - **Severity** **P1** · **Area** Review / data boundary · **Raised** 2026-09-25 (human UAT)
 - **STATUS: FIXED / DEPLOYED — HUMAN UAT REQUIRED.**
