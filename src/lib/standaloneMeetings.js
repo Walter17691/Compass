@@ -184,7 +184,11 @@ const PATCHABLE = Object.freeze({
   calendar: "calendar",
   preparation: "preparation",
   nextSteps: "next_steps",
-  startedAt: "started_at",
+  // startedAt is DELIBERATELY ABSENT (NEW-29, Phase 4C.3). The authoritative
+  // start instant is written once, at insert, and no patch may reach it — so no
+  // End, Resume, retry or refresh can restamp it, structurally rather than by
+  // convention. When 4C.4 starts a SCHEDULED meeting it must set started_at
+  // through its own transition, explicitly, for the one legitimate first write.
   endedAt: "ended_at",
   cancelledAt: "cancelled_at",
   cancelledBy: "cancelled_by",

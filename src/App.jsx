@@ -77,6 +77,9 @@ import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
 import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE, planIdentifiedStart, START_DECISION, planMeetingEnd, END_DECISION } from './lib/meetingWrites';
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
+import { caseForPersistence, isTableResident } from './lib/meetingStore';
+import { isStandaloneEligible, TABLE_HOME } from './lib/standaloneMeetings';
+import { startStandaloneMeeting, endStandaloneMeeting, persistStandaloneReviewDraft, fetchStandaloneMeeting, describeStandaloneFailure, STANDALONE_FAILURE } from './lib/standaloneMeetingWrites';
 import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraft } from './lib/reviewDraft';
 import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
@@ -1536,12 +1539,31 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return { ok: false, reason: 'error' };
     const nowIso = new Date().toISOString();
     try {
+      // ── THE STORAGE-HOME BOUNDARY (Phase 4C.3 hard activation gate) ──
+      // This is the ONLY place any meeting reaches cases.meetings, so the
+      // invariant is enforced here rather than on the standalone path: a meeting
+      // whose authoritative home is public.meetings must be structurally
+      // incapable of being serialised into the JSONB column.
+      //
+      // It STRIPS rather than throws. Throwing would fail the whole case write
+      // and could lose unrelated legitimate work on a case that merely happened
+      // to be holding a contaminated array; stripping guarantees the duplicate
+      // is never written while the case still saves. Not silent either — a
+      // contaminated array is a bug, so it is logged loudly for an operator.
+      const safeCase = caseForPersistence(caseObj);
+      if (safeCase !== caseObj) {
+        console.error(
+          'Blocked table-resident meeting(s) from cases.meetings on case', caseObj.id,
+          (caseObj.meetings || []).filter(isTableResident).map(m => m?.id)
+        );
+      }
       const payload = {
         id: caseObj.id,
         org_id: org.id,
         employee_name: caseObj.employeeName,
         employee_email: caseObj.email || "",
-        meetings: caseObj.meetings || [],
+        // The ONLY source of this column anywhere in the app, and it is guarded.
+        meetings: safeCase.meetings || [],
         evidence: caseObj.evidence || [],
         stage: caseObj.stage || "open",
         case_type: caseObj.caseType || "",
@@ -6506,6 +6528,65 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // authoritative capture: taken when Start is attempted, promoted only if
   // that attempt persists, and never recomputed on Resume, End or Save.
   const startInstant = () => new Date().toISOString();
+  // Phase 4C.3 — the standalone Start path.
+  //
+  // Mirrors the embedded cold start exactly in shape: mint an id once, capture
+  // ONE start instant, persist BEFORE entering the live UI, and navigate only on
+  // success. The only difference is the substrate.
+  //
+  // Idempotent across double-click and retry by the same mechanism as the
+  // embedded path — the id is held in a ref, so a retry reuses it and the primary
+  // key turns a duplicate insert into "this already exists", which
+  // startStandaloneMeeting reports as success with the STORED row. That is what
+  // stops a second attempt from restamping started_at.
+  const pendingStandaloneRef = useRef(null);
+  const beginStandaloneMeeting = async ({ type, manager, attendees, employee, email }) => {
+    if(!org?.id || !user?.id) {
+      showToast(describeStandaloneFailure(STANDALONE_FAILURE.ORG_REQUIRED), "error");
+      return { ok: false, reason: STANDALONE_FAILURE.ORG_REQUIRED };
+    }
+    const attempt = pendingStandaloneRef.current
+      ? pendingStandaloneRef.current
+      : { id: newId("meeting"), startedAt: startInstant() };
+    pendingStandaloneRef.current = attempt;
+
+    const result = await startStandaloneMeeting(supabase, {
+      id: attempt.id,
+      orgId: org.id,
+      createdBy: user.id,
+      // The stable registry id, never the display label.
+      meetingTypeId: type?.id,
+      employeeName: employee || "",
+      employeeEmail: email || "",
+      manager: manager || "",
+      participants: attendees || [],
+      startedAt: attempt.startedAt,
+    });
+    if(!result.ok) {
+      // Do not enter RecordScreen, do not fire AI, do not audit a success, do
+      // not navigate, and never fall back to embedded persistence. The setup
+      // state is untouched so Start can be pressed again with the same id.
+      showToast(describeStandaloneFailure(result.reason), "error");
+      return { ok: false, reason: result.reason };
+    }
+    pendingStandaloneRef.current = null;
+    // startedAt comes back from the STORED row, so a retry that found an
+    // existing meeting adopts its real start instant rather than this attempt's.
+    const stored = result.meeting;
+    setCaseInfo(p => ({ ...p, caseId: null, meetingId: stored.id, meetingHome: TABLE_HOME,
+      employee: stored.employeeName || employee || "", email: stored.employeeEmail || email || "",
+      manager: stored.manager || manager || "" }));
+    setMeetingStartTime(stored.startedAt);
+    setMeetingEndTime(null);
+    meetingEndedRef.current = false;
+    // No case is active — leaving a stale activeCaseId set would make unrelated
+    // case surfaces look like the context for this meeting.
+    setActiveCaseId(null);
+    audit("Meeting started", `${type?.label || "Meeting"} — standalone meeting ${stored.id}`, null);
+    setScreen(SCREENS.RECORD);
+    return { ok: true, meetingId: stored.id, standalone: true };
+  };
+
   // ctx lets a caller that has JUST set caseInfo (HomeMeetingScreen's commit)
   // pass the values explicitly rather than racing React's state update. A
   // caller whose state has already settled (PrepScreen) passes nothing and
@@ -6518,8 +6599,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const meetingDate = ctx.date || caseInfo.date;
     const attendees = ctx.participants || participants;
     if(!caseId) {
-      // Phase 2.1's rule, unchanged: an unlinked meeting is never guessed
-      // onto a case and never mints one. Start simply does not happen.
+      // Phase 4C.3 — a standalone-capable type with no case is now a legitimate
+      // meeting, persisted as a row in public.meetings.
+      //
+      // Phase 2.1 is NOT weakened. It said an unlinked meeting must never be
+      // guessed onto a case and never mint one, and that still holds exactly:
+      // nothing below creates a case, infers a parent, or touches
+      // cases.meetings. What changed is that there is now somewhere else for the
+      // meeting to live, so refusing is no longer the only safe answer.
+      if(isStandaloneEligible(type?.id)) {
+        return beginStandaloneMeeting({ type, manager, attendees,
+          employee: ctx.employee !== undefined ? ctx.employee : caseInfo.employee,
+          email: ctx.email !== undefined ? ctx.email : caseInfo.email });
+      }
+      // Every other type: unchanged. A hearing or an appeal still has no
+      // business existing without the process it belongs to.
       showToast(describeMeetingWriteFailure(WRITE_FAILURE.PARENT_REQUIRED), "error");
       return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
     }
@@ -6881,6 +6975,105 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setScreen(SCREENS.RECORD);
   };
 
+  // ── Phase 4C.3 — reopening a table-resident meeting ────────────────────
+  //
+  // Resolution is by STABLE MEETING ID ONLY. Never by employee name, meeting
+  // type, date, or by searching cases — the discovery surface hands over an id
+  // and this fetches the authoritative row. If RLS hides it, the fetch returns
+  // the same not-found answer as a nonexistent id, so nothing here can be used
+  // to discover that another organisation's meeting exists.
+  //
+  // Discovery deliberately loads metadata only, so the content (transcript,
+  // draft) is fetched here, at the point it is actually needed.
+  const loadStandaloneMeeting = async (meetingId) => {
+    const result = await fetchStandaloneMeeting(supabase, meetingId);
+    if(!result.ok) {
+      showToast(describeStandaloneFailure(result.reason), "error");
+      return null;
+    }
+    return result.meeting;
+  };
+
+  // Restores the authoritative persisted meeting. Never mints an id, never
+  // restamps startedAt (it is read from the row, and the write layer has no
+  // patch path to it at all), never re-emits "Meeting started".
+  const resumeStandaloneMeeting = async (meetingId) => {
+    const meeting = await loadStandaloneMeeting(meetingId);
+    if(!meeting) return { ok: false };
+    pendingStandaloneRef.current = null;
+    setMeetingType(MEETING_TYPES.find(t => t.id === meeting.meetingTypeId) || null);
+    setCaseInfo(p => ({ ...p,
+      employee: meeting.employeeName || "", email: meeting.employeeEmail || "",
+      manager: meeting.manager || "",
+      caseId: null, preparedCaseId: null, _linkedCaseId: null,
+      meetingId: meeting.id, meetingHome: TABLE_HOME, appealManagerId: null,
+    }));
+    setParticipants(meeting.participants || []);
+    setMeetingStartTime(meeting.startedAt || null);
+    setMeetingEndTime(null);
+    meetingEndedRef.current = false;
+    setTranscript(Array.isArray(meeting.transcript) ? meeting.transcript : []);
+    setActiveCaseId(null);
+    setScreen(SCREENS.RECORD);
+    return { ok: true, meetingId: meeting.id };
+  };
+
+  // Continue review — the review_draft equivalent, mirroring
+  // openReviewForMeeting's restore-first rule so a persisted draft is never
+  // regenerated over (NEW-26).
+  const continueStandaloneReview = async (meetingId) => {
+    const meeting = await loadStandaloneMeeting(meetingId);
+    if(!meeting) return { ok: false };
+    const notes = Array.isArray(meeting.transcript) ? meeting.transcript : [];
+    setMeetingType(MEETING_TYPES.find(t => t.id === meeting.meetingTypeId) || null);
+    setCaseInfo(p => ({ ...p,
+      employee: meeting.employeeName || "", email: meeting.employeeEmail || "",
+      manager: meeting.manager || "",
+      caseId: null, preparedCaseId: null, _linkedCaseId: null,
+      meetingId: meeting.id, meetingHome: TABLE_HOME, appealManagerId: null,
+    }));
+    setParticipants(meeting.participants || []);
+    setMeetingStartTime(meeting.startedAt || null);
+    setMeetingEndTime(meeting.endedAt || null);
+    meetingEndedRef.current = true;
+    setTranscript(notes);
+    setActiveCaseId(null);
+    setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary("");
+    setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
+    setAdvisorNotes("");
+    draftEditedRef.current = false;
+    draftSuspendedRef.current = false;
+    draftMetaRef.current = null;
+    draftLastWrittenRef.current = "";
+    setDraftStatus(null);
+    // Navigate unconditionally — the Phase 3A defect was making this depend on
+    // whether content could be generated.
+    setScreen(SCREENS.REVIEW);
+
+    const existingDraft = restorableDraft(meeting);
+    if(existingDraft) {
+      // Split on read too: the employee-facing record must never carry internal
+      // advisory content back into the editable surface (NEW-39).
+      const restored = splitMeetingRecord(existingDraft.record);
+      setReviewOutput(restored.employeeFacing);
+      setReviewOutputOriginal(splitMeetingRecord(existingDraft.recordOriginal || existingDraft.record).employeeFacing);
+      setAdvisorNotes(existingDraft.advisorNotes || restored.internal);
+      setMeetingSummary(existingDraft.summary || "");
+      setRiskScore(existingDraft.risk ?? null);
+      setAiError("");
+      draftMetaRef.current = existingDraft;
+      draftEditedRef.current = !!existingDraft.editedByUser;
+      draftLastWrittenRef.current = existingDraft.record;
+      setDraftStatus("saved");
+    } else if(notes.length) {
+      setAiError("");
+      setReviewReopenFor(meeting.id);
+    } else {
+      setAiError("No meeting notes were saved with this meeting, so there is no record to generate from. The notes were only held in the browser while the meeting was open.");
+    }
+    return { ok: true, meetingId: meeting.id };
+  };
+
   // ── P1 remediation — cold-load recovery of a live meeting ──────────────
   //
   // Loading directly at ?screen=record&case=X&meeting=Y must restore the exact
@@ -7190,7 +7383,28 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     //
     // Content is deliberately NOT persisted here. 3A establishes lifecycle
     // continuity; the Review draft itself remains volatile until 3B.
-    if(caseInfo.caseId && caseInfo.meetingId) {
+    // Phase 4C.3 — route by authoritative storage home. A table-resident meeting
+    // has no caseId, so it would otherwise fall straight past this block and
+    // reach Review having persisted nothing at all — exactly the Phase 3A defect,
+    // reintroduced in a new store. It must never be handed to a cases.meetings
+    // writer, so its End is a separate, explicit branch.
+    if(caseInfo.meetingHome === TABLE_HOME && caseInfo.meetingId) {
+      const ended = await endStandaloneMeeting(supabase, {
+        id: caseInfo.meetingId,
+        endedAt: meetingEndTimeVal,
+        transcript: allNotes,
+      });
+      if(!ended.ok) {
+        // Same rule as the embedded path: the meeting is still in_progress on the
+        // server and the notes are still in state and in the crash-recovery
+        // draft, so End can simply be pressed again. Never fall through.
+        showToast(describeStandaloneFailure(ended.reason), "error");
+        return { ok: false, reason: ended.reason };
+      }
+      // ALREADY_IN_STATE is a replay (double click, re-entry) — it wrote nothing,
+      // did not restamp endedAt, and continues into Review for the same meeting.
+      audit("Meeting ended", `${meetingType?.label || "Meeting"} — standalone meeting ${caseInfo.meetingId}`, null);
+    } else if(caseInfo.caseId && caseInfo.meetingId) {
       const plan = planMeetingEnd({ cases: casesRef.current, caseId: caseInfo.caseId, meetingId: caseInfo.meetingId });
       if(plan.decision === END_DECISION.TRANSITION) {
         const ended = await transitionMeeting({
@@ -7387,18 +7601,27 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // signatureEligibleIn.
   const persistReviewDraft = async () => {
     const caseId = caseInfo.caseId, meetingId = caseInfo.meetingId;
-    if(!caseId || !meetingId) return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
+    const standalone = caseInfo.meetingHome === TABLE_HOME;
+    // Phase 4C.3 — a standalone meeting has no caseId, so the original guard
+    // would have refused every autosave and the draft would have stayed in the
+    // tab. It needs a meeting id, not a parent.
+    if(!meetingId || (!standalone && !caseId)) return { ok: false, reason: WRITE_FAILURE.PARENT_REQUIRED };
     const draft = buildReviewDraft({
       record: reviewOutput, recordOriginal: reviewOutputOriginal || reviewOutput,
       summary: meetingSummary, risk: riskScore, advisorNotes, transcript,
       previous: draftMetaRef.current,
     });
     setDraftStatus("saving");
-    const result = await transitionMeeting({
-      cases: casesRef.current, caseId, meetingId,
-      allowedFrom: [MEETING_STATUS.REVIEW_DRAFT], toStatus: MEETING_STATUS.REVIEW_DRAFT,
-      patch: { reviewDraft: draft }, saveCases,
-    });
+    // Same self-transition in both homes — review_draft -> review_draft — so
+    // autosave can never complete a meeting as a side effect, and a draft can
+    // never land on a meeting that has already left review.
+    const result = standalone
+      ? await persistStandaloneReviewDraft(supabase, { id: meetingId, reviewDraft: draft })
+      : await transitionMeeting({
+          cases: casesRef.current, caseId, meetingId,
+          allowedFrom: [MEETING_STATUS.REVIEW_DRAFT], toStatus: MEETING_STATUS.REVIEW_DRAFT,
+          patch: { reviewDraft: draft }, saveCases,
+        });
     if(result?.ok) {
       draftMetaRef.current = draft;
       draftLastWrittenRef.current = draft.record;
@@ -7430,7 +7653,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // and complete, and a second save concept beside it is what Slice 1 removed.
   useEffect(() => {
     if(screen !== SCREENS.REVIEW) return;
-    if(!caseInfo.caseId || !caseInfo.meetingId) return;   // unlinked paths unchanged
+    // Phase 4C.3 — a standalone meeting is identified by its meeting id alone.
+    // Genuinely unlinked, home-less paths (no meeting id at all) stay unchanged.
+    if(!caseInfo.meetingId) return;
+    if(!caseInfo.caseId && caseInfo.meetingHome !== TABLE_HOME) return;
     if(draftSuspendedRef.current) return;                 // conflict/superseded
     if(!reviewOutput || !reviewOutput.trim()) return;      // nothing to persist yet
     if(reviewOutput === draftLastWrittenRef.current) return;
@@ -10592,7 +10818,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />
@@ -10862,7 +11088,9 @@ Please produce:
         />
       )}
       {screen===SCREENS.MEETINGS&&(
-        <MeetingsScreen orgId={org?.id||null} />
+        <MeetingsScreen orgId={org?.id||null}
+          onResume={resumeStandaloneMeeting}
+          onContinueReview={continueStandaloneReview} />
       )}
       {screen===SCREENS.CALENDAR&&(
         <CalendarScreen

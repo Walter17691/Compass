@@ -557,6 +557,14 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                         appealManagerId: meetingSetup.appealManagerId||null,
                         date: meetingSetup.date,
                         participants: meetingSetup.participants||[],
+                        // Phase 4C.3 — a standalone meeting has no case to
+                        // inherit the employee from, so it travels in ctx for
+                        // exactly the same reason caseId does: commit() has only
+                        // just queued setCaseInfo and reading it back would race
+                        // React. Never used to FIND a parent — only recorded on
+                        // the meeting itself.
+                        employee: meetingSetup.employee||"",
+                        email: meetingSetup.email||"",
                       });
                     } finally { setStarting(false); }
                   }}

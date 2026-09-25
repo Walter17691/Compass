@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   DISCOVERY_GROUP, DISCOVERY_GROUP_LABEL, discoveryGroupFor, displayTypeFor,
   potentialActionFor, toDiscoveryEntry, groupForDiscovery, resolveMeetingRef,
-  meetingRouteFor,
+  meetingRouteFor, ACTIVATED_ACTIONS,
 } from '../lib/meetingDiscovery.js';
 import {
   DISCOVERY_COLUMNS, GATEWAY_FAILURE, fetchDiscoverableMeetings, describeGatewayFailure,
@@ -306,14 +306,21 @@ describe('the potential-action model (write paths still off)', () => {
     expect(potentialActionFor({ status: MEETING_STATUS.COMPLETED }).action).toBe('view_record');
   });
 
-  it('leaves every write action DISABLED while 4C.3 has not shipped', () => {
-    [MEETING_STATUS.SCHEDULED, MEETING_STATUS.IN_PROGRESS, MEETING_STATUS.REVIEW_DRAFT]
-      .forEach(status => expect(potentialActionFor({ status }).enabled, status).toBe(false));
+  it('4C.3 — enables exactly Resume and Continue review, and nothing else', () => {
+    expect(potentialActionFor({ status: MEETING_STATUS.IN_PROGRESS }).enabled).toBe(true);
+    expect(potentialActionFor({ status: MEETING_STATUS.REVIEW_DRAFT }).enabled).toBe(true);
+    // Start belongs to 4C.4 (scheduling); there is still no standalone record
+    // viewer, so view_record stays off even though it is only a read.
+    expect(potentialActionFor({ status: MEETING_STATUS.SCHEDULED }).enabled).toBe(false);
+    expect(potentialActionFor({ status: MEETING_STATUS.COMPLETED }).enabled).toBe(false);
+    expect(potentialActionFor({ status: MEETING_STATUS.CANCELLED }).enabled).toBe(false);
+    expect(ACTIVATED_ACTIONS).toEqual(['resume', 'continue_review']);
   });
 
-  it('enables them under an explicit flag, so activation is one parameter', () => {
-    [MEETING_STATUS.SCHEDULED, MEETING_STATUS.IN_PROGRESS, MEETING_STATUS.REVIEW_DRAFT]
-      .forEach(status => expect(potentialActionFor({ status }, { writesEnabled: true }).enabled, status).toBe(true));
+  it('activation is an explicit allow-list, so each action turns on when its screen exists', () => {
+    expect(potentialActionFor({ status: MEETING_STATUS.SCHEDULED }, { enabledActions: ['start'] }).enabled).toBe(true);
+    expect(potentialActionFor({ status: MEETING_STATUS.IN_PROGRESS }, { enabledActions: [] }).enabled).toBe(false);
+    expect(potentialActionFor({ status: MEETING_STATUS.COMPLETED }, { enabledActions: ['view_record'] }).enabled).toBe(true);
   });
 });
 
@@ -402,15 +409,45 @@ describe('the discovery surface', () => {
     expect(screen.queryByText('Recent')).toBeNull();
   });
 
-  it('offers no action control that could imply a write path exists', async () => {
+  it('4C.3 — offers Resume on a live meeting, routed by stable id', async () => {
+    const seen = [];
+    render(<MeetingsScreen orgId="org-a" onResume={id => seen.push(['resume', id])}
+      client={fakeClient({ data: [
+        { id: 'm_live', org_id: 'org-a', case_id: null, meeting_type_id: 'informal', status: 'in_progress', employee_name: 'A', created_by: 'u' },
+      ], error: null })} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resume' })).toBeTruthy());
+    screen.getByRole('button', { name: 'Resume' }).click();
+    expect(seen).toEqual([['resume', 'm_live']]);
+  });
+
+  it('4C.3 — offers Continue review on a review_draft, routed by stable id', async () => {
+    const seen = [];
+    render(<MeetingsScreen orgId="org-a" onContinueReview={id => seen.push(['review', id])}
+      client={fakeClient({ data: [
+        { id: 'm_draft', org_id: 'org-a', case_id: null, meeting_type_id: 'return', status: 'review_draft', employee_name: 'B', created_by: 'u' },
+      ], error: null })} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue review' })).toBeTruthy());
+    screen.getByRole('button', { name: 'Continue review' }).click();
+    expect(seen).toEqual([['review', 'm_draft']]);
+  });
+
+  it('still offers NO control for a state whose destination has not shipped', async () => {
     render(<MeetingsScreen orgId="org-a" client={fakeClient({ data: [
-      { id: 'm1', org_id: 'org-a', case_id: null, meeting_type_id: 'informal', status: 'in_progress', employee_name: 'A', created_by: 'u' },
+      { id: 'm_done', org_id: 'org-a', case_id: null, meeting_type_id: 'informal', status: 'completed', employee_name: 'A', created_by: 'u' },
+      { id: 'm_sched', org_id: 'org-a', case_id: null, meeting_type_id: 'informal', status: 'scheduled', employee_name: 'A', created_by: 'u', schedule: { date: '2026-10-01', time: '09:00' } },
     ], error: null })} />);
-    await waitFor(() => expect(screen.getByText('Needs your attention')).toBeTruthy());
-    // Not a single button on the surface during 4C.2.
+    await waitFor(() => expect(screen.getByText('Recent')).toBeTruthy());
+    // No greyed control to guess about, and no button that goes nowhere.
     expect(screen.queryAllByRole('button')).toHaveLength(0);
-    // And it says so, rather than leaving the user wondering.
     expect(document.body.textContent).toMatch(/arrives with the next update/i);
+  });
+
+  it('says nothing about future updates when every row on screen has its action', async () => {
+    render(<MeetingsScreen orgId="org-a" client={fakeClient({ data: [
+      { id: 'm_live', org_id: 'org-a', case_id: null, meeting_type_id: 'informal', status: 'in_progress', employee_name: 'A', created_by: 'u' },
+    ], error: null })} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resume' })).toBeTruthy());
+    expect(document.body.textContent).not.toMatch(/arrives with the next update/i);
   });
 
   it('tells the user plainly when the load failed, without leaking why', async () => {
@@ -472,8 +509,10 @@ describe('navigation and the activation gate', () => {
   it('the screen is self-contained, so App.jsx gains no new function callee', () => {
     const app = readFileSync('src/App.jsx', 'utf8');
     expect(app).toContain('const MeetingsScreen = lazy(');
-    expect(app).toContain('<MeetingsScreen orgId={org?.id||null} />');
-    // No discovery library is called from App.jsx.
+    expect(app).toContain('<MeetingsScreen orgId={org?.id||null}');
+    // The guarantee: the screen still loads its OWN rows. No discovery library
+    // is called from App.jsx, so the 10,700-line component gains no callee from
+    // this surface — only the two action handlers it owns anyway.
     ['fetchDiscoverableMeetings', 'groupForDiscovery', 'toDiscoveryEntry', 'resolveMeetingRef']
       .forEach(f => expect(app, f).not.toContain(f));
   });

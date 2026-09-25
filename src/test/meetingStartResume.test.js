@@ -141,9 +141,17 @@ describe('12-18. Resume is deterministic', () => {
 
   it('15. Resume emits no second "Meeting started" audit', () => {
     expect(resumeBody).not.toContain('audit(');
-    // Two Start paths emit it — Start-now (beginMeeting) and starting a
-    // scheduled meeting (Phase 2.3) — and Resume emits neither.
-    expect((app.match(/audit\("Meeting started"/g) || []).length).toBe(2);
+    // THREE Start paths emit it since Phase 4C.3 — Start-now (beginMeeting),
+    // starting a scheduled meeting (Phase 2.3), and the standalone cold start —
+    // and no Resume path emits any of them. The count is pinned so a new Start
+    // route has to be examined rather than quietly added.
+    expect((app.match(/audit\("Meeting started"/g) || []).length).toBe(3);
+    // Phase 4C.3 — the standalone Resume is held to the same rule as the
+    // embedded one: it restores, it does not re-announce a start.
+    const standaloneResume = app.slice(app.indexOf('const resumeStandaloneMeeting ='),
+                                       app.indexOf('const continueStandaloneReview ='));
+    expect(standaloneResume).not.toContain('audit(');
+    expect(standaloneResume).toContain('setMeetingStartTime(meeting.startedAt || null);');
     expect(app.slice(app.indexOf('const startScheduledMeeting ='), app.indexOf('const prepareScheduledMeeting ='))).toContain('audit("Meeting started"');
   });
 

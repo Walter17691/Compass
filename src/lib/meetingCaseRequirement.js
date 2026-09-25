@@ -38,8 +38,13 @@
 export const CASE_REQUIREMENT = Object.freeze({
   // A case is inherent to the meeting's meaning. Permanent.
   REQUIRED: "case_required",
+  // Phase 4C.3 — this type may now be held with no case at all, persisted as a
+  // row in public.meetings. Nothing blocks it.
+  STANDALONE_ALLOWED: "standalone_allowed",
   // Standalone is the intended future behaviour; a case is needed for now
-  // because Compass cannot yet persist a meeting without one.
+  // because Compass cannot yet persist a meeting without one. Since 4C.3 this
+  // covers only the DEFERRED types (formal, grievance) — the three
+  // standalone-intended types have moved to STANDALONE_ALLOWED.
   PENDING_ARCHITECTURE: "case_pending_architecture",
   // No parent needed from this screen at all (the dev/1-2-1 group saves through
   // its own legacy path — see NEW-20 FULL — and is deliberately untouched).
@@ -80,6 +85,11 @@ export function caseRequirement(meetingTypeId, { isDevGroup = false } = {}) {
   // The dev group keeps its existing behaviour untouched in this phase.
   if (isDevGroup || DEV_GROUP_TYPES.has(meetingTypeId)) return CASE_REQUIREMENT.NOT_APPLICABLE;
   if (CASE_REQUIRED_TYPES.has(meetingTypeId)) return CASE_REQUIREMENT.REQUIRED;
+  // Phase 4C.3 — the three approved types can now genuinely be held standalone.
+  if (STANDALONE_INTENDED_TYPES.has(meetingTypeId)) return CASE_REQUIREMENT.STANDALONE_ALLOWED;
+  // Everything left is DEFERRED (formal, grievance) — still blocked, and still
+  // told the honest reason: Compass has not decided, not that the meeting
+  // inherently needs a case.
   return CASE_REQUIREMENT.PENDING_ARCHITECTURE;
 }
 
@@ -96,6 +106,10 @@ export function caseRequirementNotice(meetingTypeId, hasLinkedCase, { isDevGroup
   if (hasLinkedCase) return null;
   const requirement = caseRequirement(meetingTypeId, { isDevGroup });
   if (requirement === CASE_REQUIREMENT.NOT_APPLICABLE) return null;
+  // Phase 4C.3 — nothing to explain and nothing to block. The user chose a
+  // meeting type and chose not to link a case; Compass understands the
+  // machinery and does not ask them to confirm it, or name the architecture.
+  if (requirement === CASE_REQUIREMENT.STANDALONE_ALLOWED) return null;
 
   if (requirement === CASE_REQUIREMENT.REQUIRED) {
     return {

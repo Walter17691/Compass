@@ -70,32 +70,37 @@ export function displayTypeFor(meetingTypeId, fallbackLabel = null) {
   return entry?.label || fallbackLabel || "Meeting";
 }
 
-// What a user could eventually do with this meeting, by status.
+// What a user could do with this meeting, by status.
 //
-// `enabled` is separate from `action` on purpose. During 4C.2 the write paths do
-// not exist, so every entry reports its potential action while only `open`
-// (read-only) is enabled. A button that looks live and does nothing was the
-// exact failure of the Phase 3A "Review meeting record" CTA, and a greyed
-// control with no reason was the failure of the Phase 2.3 scheduling UAT. So the
-// UI renders what is real and names the state plainly instead.
-export function potentialActionFor(meeting, { writesEnabled = false } = {}) {
+// `enabled` is separate from `action` on purpose: every entry reports its
+// eventual action, and only the ones whose destination exists are offered. A
+// button that looks live and does nothing was the exact failure of the Phase 3A
+// "Review meeting record" CTA, and a greyed control with no reason was the
+// failure of the Phase 2.3 scheduling UAT — so the surface renders only what is
+// real and names the state plainly for the rest.
+//
+// Which actions actually exist today. An explicit allow-list rather than a
+// boolean, because "is this a write?" was never the right question: `view_record`
+// is read-only but there is still no standalone record viewer (4C.4), so treating
+// read-only as available would have rendered a button that goes nowhere. Each
+// action is enabled the moment its destination exists, one entry at a time.
+export const ACTIVATED_ACTIONS = Object.freeze(["resume", "continue_review"]);
+
+export function potentialActionFor(meeting, { enabledActions = ACTIVATED_ACTIONS } = {}) {
   const status = declaredStatus(meeting);
   const plan = {
-    [MEETING_STATUS.SCHEDULED]:    { action: "start",          label: "Start" },
-    [MEETING_STATUS.IN_PROGRESS]:  { action: "resume",         label: "Resume" },
+    [MEETING_STATUS.SCHEDULED]:    { action: "start",           label: "Start" },
+    [MEETING_STATUS.IN_PROGRESS]:  { action: "resume",          label: "Resume" },
     [MEETING_STATUS.REVIEW_DRAFT]: { action: "continue_review", label: "Continue review" },
-    [MEETING_STATUS.COMPLETED]:    { action: "view_record",    label: "View record" },
-    [MEETING_STATUS.CANCELLED]:    { action: "view_record",    label: "View record" },
+    [MEETING_STATUS.COMPLETED]:    { action: "view_record",     label: "View record" },
+    [MEETING_STATUS.CANCELLED]:    { action: "view_record",     label: "View record" },
   }[status] || { action: "open", label: "Open" };
-  // A completed record only needs reading, so its action is genuinely available
-  // now; everything else needs a 4C.3+ write path.
-  const readOnly = plan.action === "view_record" || plan.action === "open";
-  return { ...plan, enabled: readOnly || writesEnabled };
+  return { ...plan, enabled: (Array.isArray(enabledActions) ? enabledActions : []).includes(plan.action) };
 }
 
 // One normalised entry. Every field the discovery contract requires, and the
 // provenance that lets an action find the right store.
-export function toDiscoveryEntry(meeting, { writesEnabled = false } = {}) {
+export function toDiscoveryEntry(meeting, { enabledActions = ACTIVATED_ACTIONS } = {}) {
   if (!meeting || typeof meeting !== "object" || Array.isArray(meeting)) return null;
   const home = meetingHome(meeting);
   const status = declaredStatus(meeting);
@@ -122,7 +127,7 @@ export function toDiscoveryEntry(meeting, { writesEnabled = false } = {}) {
     createdAt: meeting.createdAt ?? null,
     updatedAt: meeting.updatedAt ?? null,
     linkedAt: meeting.linkedAt ?? null,
-    primaryAction: potentialActionFor(meeting, { writesEnabled }),
+    primaryAction: potentialActionFor(meeting, { enabledActions }),
   };
 }
 
@@ -139,9 +144,9 @@ function sortInstant(entry) {
 // Group and order for display. Returns every group, always, so a surface can
 // render a truthful empty state per section rather than hiding a heading and
 // leaving the user unsure whether it was checked.
-export function groupForDiscovery(meetings, { writesEnabled = false } = {}) {
+export function groupForDiscovery(meetings, { enabledActions = ACTIVATED_ACTIONS } = {}) {
   const entries = (Array.isArray(meetings) ? meetings : [])
-    .map(m => toDiscoveryEntry(m, { writesEnabled }))
+    .map(m => toDiscoveryEntry(m, { enabledActions }))
     .filter(e => e && e.id && e.group);
 
   const bucket = group => entries

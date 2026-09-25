@@ -225,12 +225,16 @@ describe('1/16. the rendered signature button respects the boundary', () => {
   });
 
   it('the render gate is signatureEligible, not merely generated text', () => {
-    expect(reviewCode).toContain('{signatureEligible&&reviewOutput&&!editingRecord&&(');
+    // Phase 4C.3 added a !standalone conjunct: a standalone record has no case
+    // to confirm against, so neither send block may render for one. The
+    // guarantee asserted here is unchanged — the gate is signatureEligible, not
+    // merely the presence of generated text.
+    expect(reviewCode).toContain('{!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(');
     // and never ungated: every occurrence of that condition must carry the
     // eligibility prefix (a bare `not.toContain` would false-positive, because
     // the gated form contains the ungated string).
     const occurrences = reviewCode.split('{reviewOutput&&!editingRecord&&(').length - 1;
-    const gated = reviewCode.split('{signatureEligible&&reviewOutput&&!editingRecord&&(').length - 1;
+    const gated = reviewCode.split('{!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(').length - 1;
     expect(occurrences).toBe(gated);
   });
 });

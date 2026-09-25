@@ -33,10 +33,11 @@ const STATUS_LABEL = {
 const statusTone = status =>
   status === "in_progress" || status === "review_draft" ? COLOR.amber : COLOR.inkSoft;
 
-function MeetingRow({ entry }) {
+function MeetingRow({ entry, onAction }) {
   const when = entry.scheduledDate
     ? `${entry.scheduledDate}${entry.scheduledTime ? ` · ${entry.scheduledTime}` : ""}${entry.scheduledMethod ? ` · ${entry.scheduledMethod}` : ""}`
     : null;
+  const action = entry.primaryAction;
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: SPACE.md,
                   padding: `${SPACE.md}px 0`, borderBottom: `1px solid ${COLOR.borderFaint}` }}>
@@ -54,24 +55,38 @@ function MeetingRow({ entry }) {
           {entry.isStandalone ? " · Not linked to a case" : " · Part of a case"}
         </div>
       </div>
-      <div style={{ ...TYPE.metadata, color: statusTone(entry.status), flexShrink: 0, whiteSpace: "nowrap" }}>
-        {STATUS_LABEL[entry.status] || entry.status}
+      <div style={{ display: "flex", alignItems: "center", gap: SPACE.md, flexShrink: 0 }}>
+        <div style={{ ...TYPE.metadata, color: statusTone(entry.status), whiteSpace: "nowrap" }}>
+          {STATUS_LABEL[entry.status] || entry.status}
+        </div>
+        {/* One action, only when its destination actually exists. An action whose
+            screen has not shipped renders nothing at all rather than a disabled
+            control the user has to guess about. */}
+        {action.enabled && (
+          <button
+            onClick={() => onAction?.(entry)}
+            style={{ ...TYPE.metadata, fontWeight: 700, background: COLOR.purple, color: COLOR.paper,
+                     border: "none", borderRadius: RADIUS.button, padding: "7px 14px", cursor: "pointer",
+                     whiteSpace: "nowrap" }}>
+            {action.label}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function Section({ label, entries }) {
+function Section({ label, entries, onAction }) {
   if (entries.length === 0) return null;
   return (
     <div style={{ marginBottom: SPACE.xl }}>
       <div style={{ ...TYPE.sectionHeading, color: COLOR.ink, marginBottom: SPACE.xs }}>{label}</div>
-      {entries.map(e => <MeetingRow key={`${e.storageHome}:${e.id}`} entry={e} />)}
+      {entries.map(e => <MeetingRow key={`${e.storageHome}:${e.id}`} entry={e} onAction={onAction} />)}
     </div>
   );
 }
 
-export function MeetingsScreen({ orgId, client = supabase }) {
+export function MeetingsScreen({ orgId, client = supabase, onResume, onContinueReview }) {
   // The loaded result carries the org it was loaded FOR, so "loading" can be
   // derived rather than set. An earlier version reset state synchronously at the
   // top of the effect to clear stale rows on an org switch, which is exactly the
@@ -98,6 +113,16 @@ export function MeetingsScreen({ orgId, client = supabase }) {
 
   const grouped = groupForDiscovery(state.meetings);
   const total = state.meetings.length;
+
+  // Routed by the entry's own primaryAction, and by its stable id — never by
+  // employee name, type or date, and never by position in the list.
+  const handleAction = entry => {
+    if (entry.primaryAction.action === "resume") onResume?.(entry.id);
+    if (entry.primaryAction.action === "continue_review") onContinueReview?.(entry.id);
+  };
+  // Only shown while something on screen genuinely has no action yet.
+  const someRowHasNoAction = state.meetings.length > 0
+    && Object.values(grouped).flat().some(e => !e.primaryAction.enabled);
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: `${SPACE.xl}px ${SPACE.lg}px` }}>
@@ -133,15 +158,17 @@ export function MeetingsScreen({ orgId, client = supabase }) {
 
       {state.status === "ready" && total > 0 && (
         <>
-          <div style={{ ...TYPE.metadata, color: COLOR.inkFaint, marginBottom: SPACE.lg }}>
-            Opening and resuming meetings from here arrives with the next update.
-          </div>
+          {someRowHasNoAction && (
+            <div style={{ ...TYPE.metadata, color: COLOR.inkFaint, marginBottom: SPACE.lg }}>
+              Opening a completed record from here arrives with the next update.
+            </div>
+          )}
           {/* Order follows the approved information hierarchy: Upcoming, then
               Needs your attention, then Recent. */}
-          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.UPCOMING]} entries={grouped[DISCOVERY_GROUP.UPCOMING]} />
-          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.ATTENTION]} entries={grouped[DISCOVERY_GROUP.ATTENTION]} />
-          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.RECENT]} entries={grouped[DISCOVERY_GROUP.RECENT]} />
-          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.CANCELLED]} entries={grouped[DISCOVERY_GROUP.CANCELLED]} />
+          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.UPCOMING]} entries={grouped[DISCOVERY_GROUP.UPCOMING]} onAction={handleAction} />
+          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.ATTENTION]} entries={grouped[DISCOVERY_GROUP.ATTENTION]} onAction={handleAction} />
+          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.RECENT]} entries={grouped[DISCOVERY_GROUP.RECENT]} onAction={handleAction} />
+          <Section label={DISCOVERY_GROUP_LABEL[DISCOVERY_GROUP.CANCELLED]} entries={grouped[DISCOVERY_GROUP.CANCELLED]} onAction={handleAction} />
         </>
       )}
     </div>

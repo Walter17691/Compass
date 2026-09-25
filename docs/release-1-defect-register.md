@@ -770,6 +770,69 @@ analysis for the whole file — read lint **per rule**, never by total.
   15 mutations caught**; plus **18 database-level proofs** run as rolled-back
   transactions against production (12 trigger/constraint, 6 RLS with real JWT
   impersonation). Full suite **5,044 / 301 files**, 0 failed.
+### Phase 4C.3 — standalone Start / Resume / End (2026-09-25)
+- **STATUS: DEPLOYED / READY FOR HUMAN UAT.** A manager can now hold an Informal /
+  1-1, Return to Work or Investigation meeting with **no case at all**.
+- **The hard activation gate was closed FIRST**, before any creation path was
+  enabled. `saveCaseToDB`'s payload — the single place any meeting reaches
+  `cases.meetings` — now writes `safeCase.meetings`, where
+  `safeCase = caseForPersistence(caseObj)`. A table-resident meeting is stripped
+  and the event is logged loudly. It **strips rather than throws** deliberately:
+  throwing would fail an entire case write and could lose unrelated legitimate
+  work on a case that merely happened to hold a contaminated array.
+- **All 13 direct `cases.meetings` mutation sites share one disposition, and it is
+  structural:** every one rebuilds a *case's* own array and hands it to
+  `saveCases` → `saveCaseToDB`. There is no second route to the column (asserted:
+  `MeetingsTab.jsx` and `NotetakerView.jsx` contain no `from('cases')` at all), so
+  guarding the boundary guards all of them at once rather than thirteen times.
+- **Phase 2.1 is not weakened.** `PARENT_REQUIRED` still fires for every type that
+  is not standalone-eligible; the only change is that there is now somewhere else
+  for an eligible meeting to live, so refusing is no longer the only safe answer.
+- **Idempotency is structural, not hopeful.** The id is minted once into
+  `pendingStandaloneRef` and the primary key turns a duplicate insert into "this
+  already exists" — reported as success **with the stored row**, so a double-click
+  cannot move `started_at`. Every transition filters on the statuses it may move
+  *from*, so a second End matches zero rows and reports `ALREADY_IN_STATE` instead
+  of restamping `ended_at`.
+- **NEW-29 is now structural too:** `startedAt` was **removed from the patch
+  allow-list entirely**, so no End, Resume, retry or refresh has a path to it.
+  (4C.4 must set it explicitly for the one legitimate first write when a
+  *scheduled* meeting starts.)
+- **Review handoff.** `persistReviewDraft` routes by `caseInfo.meetingHome`; the
+  standalone branch writes `public.meetings.review_draft` via the same
+  `review_draft → review_draft` self-transition, so autosave can never complete a
+  meeting and a stale draft can never land on a meeting that has left review.
+  NEW-39's split-on-read is applied identically.
+- **What 4C.3 deliberately does NOT offer.** A standalone record cannot yet be
+  confirmed or sent for signature — `saveMeetingToCase` is case-shaped throughout.
+  Rather than a button that cannot work, `ReviewScreen` takes a `standalone` prop
+  and says so: *"This record isn't part of a case, so it can't be confirmed or sent
+  for signature yet. Your draft is saved automatically and will be here when you
+  come back."* Nothing is lost, because the draft is already server-persisted.
+- **New Meeting UX:** the 4C.2 blocker is gone for the three eligible types, with
+  **no** "are you sure this is standalone?" confirmation and no architecture
+  terminology (asserted against `/standalone/i`, `/table/i`, `/storage/i`,
+  `/are you sure/i`). `formal` and `grievance` keep the honest PENDING message;
+  CASE_REQUIRED types keep the Phase 4B guard; the dev group is untouched.
+- **A new requirement state** was added rather than overloading an existing one:
+  `CASE_REQUIREMENT.STANDALONE_ALLOWED`. The three eligible types moved out of
+  `PENDING_ARCHITECTURE`, which now means only "Compass has not decided".
+- **Discovery actions activated:** `ACTIVATED_ACTIONS = ["resume",
+  "continue_review"]` — an explicit allow-list, not a boolean, because
+  `view_record` is read-only yet still has no destination (4C.4). A state whose
+  screen has not shipped renders **no control at all**.
+- **Evidence** `src/test/standaloneMeetingLifecycle.test.jsx` — 42 tests, **11 of
+  11 mutations caught** (reverting the boundary, un-stripping, restoring
+  `startedAt` to the allow-list, removing the eligibility gate, widening End's
+  `allowedFrom`, autosave completing the meeting, patch overriding target status,
+  re-blocking the eligible types, fresh id per attempt, navigating on failure,
+  routing End to the case writer). Plus **11 lifecycle RLS proofs** on the real
+  table with real JWT impersonation.
+- **Six pre-existing source-text assertions** needed updating because this phase
+  changed the lines they pinned (route counts 3→5, `audit("Meeting started")`
+  2→3, the End-block slice anchor, and three ReviewScreen render gates). Each was
+  updated to protect the same **guarantee** against the new truth, never loosened.
+
 ### Phase 4C.2 — standalone meeting discovery foundation (2026-09-25)
 - **STATUS: DEPLOYED / READY FOR HUMAN UAT.** Creates no standalone production
   rows; `public.meetings` remains at **0 rows**.

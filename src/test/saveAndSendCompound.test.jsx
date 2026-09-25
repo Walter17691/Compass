@@ -310,8 +310,13 @@ describe('1/2/18. the rendered Review offers the right two choices', () => {
   });
 
   it('the two blocks are mutually exclusive in source', () => {
-    expect(reviewCode).toContain('{!signatureEligible&&reviewOutput&&!editingRecord&&(');
-    expect(reviewCode).toContain('{signatureEligible&&reviewOutput&&!editingRecord&&(');
+    // Still mutually exclusive on signatureEligible; both additionally gated on
+    // !standalone since Phase 4C.3, because a standalone record cannot be
+    // confirmed onto a case or sent for signature at all.
+    expect(reviewCode).toContain('{!standalone&&!signatureEligible&&reviewOutput&&!editingRecord&&(');
+    expect(reviewCode).toContain('{!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(');
+    // And the standalone block is the third, mutually exclusive with both.
+    expect(reviewCode).toContain('{standalone&&reviewOutput&&!editingRecord&&(');
   });
 });
 

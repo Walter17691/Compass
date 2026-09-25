@@ -99,13 +99,18 @@ describe('the case requirement is classified, not guessed', () => {
     }
   });
 
-  it('standalone-intended types are PENDING, never REQUIRED', () => {
+  it('standalone-intended types are STANDALONE_ALLOWED since 4C.3, and never REQUIRED', () => {
+    // Phase 4B classified these as PENDING_ARCHITECTURE because Compass could not
+    // yet persist a meeting without a case. Phase 4C.3 built that store, so they
+    // are now genuinely permitted. The invariant this test has always protected
+    // is the second line: they must never become REQUIRED.
     for (const t of ['informal', 'return', 'investigation']) {
-      expect(caseRequirement(t), t).toBe(CASE_REQUIREMENT.PENDING_ARCHITECTURE);
+      expect(caseRequirement(t), t).toBe(CASE_REQUIREMENT.STANDALONE_ALLOWED);
+      expect(caseRequirement(t), t).not.toBe(CASE_REQUIREMENT.REQUIRED);
       expect(isStandaloneIntended(t), t).toBe(true);
+      // And nothing blocks them any more.
+      expect(caseRequirementNotice(t, false), t).toBeNull();
     }
-    // Investigation in particular: fact-finding before a process is known
-    expect(caseRequirement('investigation')).not.toBe(CASE_REQUIREMENT.REQUIRED);
   });
 
   it('deferred types behave as PENDING, not REQUIRED — Compass asserts nothing', () => {
@@ -123,7 +128,9 @@ describe('the case requirement is classified, not guessed', () => {
 
   it('the two reasons carry DIFFERENT copy — a welfare meeting is not a formal case', () => {
     const required = caseRequirementNotice('disciplinary', false);
-    const pending = caseRequirementNotice('informal', false);
+    // Since 4C.3 the PENDING message belongs to the DEFERRED types only —
+    // `informal` is now permitted and shows no notice at all.
+    const pending = caseRequirementNotice('formal', false);
     expect(required.title).toBe('This meeting is part of a formal case');
     expect(required.body).toContain('belongs to the case it arises from');
     expect(pending.title).toBe('Link this meeting to a case to continue');
@@ -214,9 +221,22 @@ describe('4/5/6/7. the reason is visible BEFORE any work', () => {
     expect(setScreen).toHaveBeenCalled();
   });
 
-  it('a standalone-intended type is blocked too, but told the truth about why', () => {
+  it('4C.3 — a standalone-eligible type with no case can now simply be started', () => {
     renderHome({ type: 'informal' });
-    expect(btn('Start meeting')).toBeDisabled();            // persistence does not exist yet
+    expect(btn('Start meeting')).toBeEnabled();
+    // No notice, and — importantly — no "are you sure this is standalone?"
+    // confirmation and no architecture terminology. The user chose a type and
+    // chose no case; Compass understands the machinery.
+    expect(screen.queryByText('Link this meeting to a case to continue')).toBeNull();
+    expect(screen.queryByText('This meeting is part of a formal case')).toBeNull();
+    const body = document.body.textContent;
+    [/standalone/i, /table/i, /storage/i, /are you sure/i, /confirm/i]
+      .forEach(p => expect(body, String(p)).not.toMatch(p));
+  });
+
+  it('4C.3 — a DEFERRED type is still blocked, and still told the honest reason', () => {
+    renderHome({ type: 'formal' });
+    expect(btn('Start meeting')).toBeDisabled();
     expect(screen.getByText('Link this meeting to a case to continue')).toBeInTheDocument();
     expect(screen.getByText(/does not have to be part of a formal case/)).toBeInTheDocument();
     expect(screen.queryByText('This meeting is part of a formal case')).toBeNull();

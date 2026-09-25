@@ -560,8 +560,12 @@ describe('write safety and the 3A scope boundary', () => {
     // added a SEPARATE review_draft → review_draft write for the draft, so the
     // boundary to assert is that END does not write draft content, not that the
     // codebase never mentions it.
-    const endPatch = appCode.slice(appCode.indexOf('const plan = planMeetingEnd('),
-                                   appCode.indexOf('audit("Meeting ended"'));
+    // Anchored to the EMBEDDED End block specifically. Phase 4C.3 added a
+    // standalone End branch earlier in the same function (with its own
+    // audit("Meeting ended")), so the closing anchor must be searched for AFTER
+    // the plan, not from the start of the file.
+    const endStart = appCode.indexOf('const plan = planMeetingEnd(');
+    const endPatch = appCode.slice(endStart, appCode.indexOf('audit("Meeting ended"', endStart));
     expect(endPatch).toContain('patch: { endedAt: meetingEndTimeVal, transcript: allNotes }');
     expect(endPatch).not.toContain('reviewDraft');
   });

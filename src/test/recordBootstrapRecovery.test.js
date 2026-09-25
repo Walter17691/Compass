@@ -310,11 +310,19 @@ describe('30-32. NEW-29 startedAt authority', () => {
   });
 
   it('every route into RecordScreen supplies or restores startedAt', () => {
-    // three routes: beginMeeting, resumeMeeting, crash-recovery draft restore
-    expect((app.match(/setScreen\(SCREENS\.RECORD\);/g) || []).length).toBe(3);
+    // FIVE routes since Phase 4C.3: beginMeeting, resumeMeeting, crash-recovery
+    // draft restore, and the two standalone routes (beginStandaloneMeeting,
+    // resumeStandaloneMeeting). The count is asserted so that ADDING a sixth
+    // route fails this test until it is shown to supply startedAt too — that is
+    // the actual NEW-29 guarantee, not the number itself.
+    expect((app.match(/setScreen\(SCREENS\.RECORD\);/g) || []).length).toBe(5);
     expect(app).toContain('setMeetingStartTime(attempt.startedAt);');          // beginMeeting
-    expect(app).toContain('setMeetingStartTime(meeting.startedAt || null);');  // resumeMeeting
+    expect(app).toContain('setMeetingStartTime(meeting.startedAt || null);');  // resumeMeeting + resumeStandaloneMeeting
     expect(app).toContain('if(draft.meetingStartTime) setMeetingStartTime(draft.meetingStartTime);'); // draft
+    // Phase 4C.3 — the standalone cold start reads the instant back from the
+    // STORED row, so a retry that found an existing meeting adopts its real
+    // start rather than recomputing one.
+    expect(app).toContain('setMeetingStartTime(stored.startedAt);');           // beginStandaloneMeeting
   });
 });
 

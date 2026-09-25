@@ -83,7 +83,13 @@ describe('1. start is captured on entry to the live meeting', () => {
     expect(prep).toContain('await beginMeeting({ meetingId: caseInfo.meetingId || null });');
     // beginMeeting navigates only after persistence succeeds, and the
     // crash-recovery restore still enters the same way.
-    expect((app.match(/setScreen\(SCREENS\.RECORD\);/g) || []).length).toBe(3); // beginMeeting + resumeMeeting + draft restore
+    // 5 since Phase 4C.3: beginMeeting + resumeMeeting + draft restore, plus the
+    // two standalone routes. Every one still enters via SCREENS.RECORD, so the
+    // NEW-29 capture effect still covers all of them.
+    expect((app.match(/setScreen\(SCREENS\.RECORD\);/g) || []).length).toBe(5);
+    // The standalone routes obey the same rule: the start instant is read from
+    // the stored row, never recomputed on entry.
+    expect(app).toContain('setMeetingStartTime(stored.startedAt);');
   });
 });
 

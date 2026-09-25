@@ -5,7 +5,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, standalone=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -84,11 +84,19 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
               couldn't be verified). saveMeetingToCase's own failure path
               already shows a translated error toast; nothing further needed
               here on failure. */}
+          {/* Phase 4C.3 — a standalone meeting has no case to save to, and
+              saveMeetingToCase is case-shaped throughout. Rather than offer a
+              button that cannot work, the record simply is not confirmable yet;
+              the draft is already persisted server-side on every edit, so
+              nothing is lost by waiting. Confirming a standalone record arrives
+              with the completion path. */}
+          {!standalone && (<>
           <Btn onClick={async ()=>{const result=await saveMeetingToCase();if(result?.ok){setScreen(SCREENS.CASES);showToast("Saved to case file");}}} variant="secondary" style={{fontSize:13}} disabled={!reviewOutput?.trim()}>Save to case</Btn>
 
 <Btn onClick={()=>saveMeetingToCase()} style={{fontSize:13,background:"#7C5CFC",borderColor:"#7C5CFC",boxShadow:"0 2px 8px rgba(124,92,252,0.25)"}} disabled={!reviewOutput?.trim()}>
             {caseInfo._linkedCaseId?"Save witness statement to case →":"Save and go to case →"}
           </Btn>
+          </>)}
         </div>
       </div>
 
@@ -240,7 +248,12 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 <div style={{fontSize:13,color:"#3A3440"}}><MDRenderer text={advisorNotes} /></div>
               </div>
             )}
-            {!signatureEligible&&reviewOutput&&!editingRecord&&(
+            {standalone&&reviewOutput&&!editingRecord&&(
+              <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5"}}>
+                <span style={{fontSize:12,color:"#9B9098"}}>This record isn't part of a case, so it can't be confirmed or sent for signature yet. Your draft is saved automatically and will be here when you come back.</span>
+              </div>
+            )}
+            {!standalone&&!signatureEligible&&reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <button onClick={()=>onSaveAndSendForSignature?.()}
                   style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"11px 24px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(124,92,252,0.2)",fontFamily:"DM Sans,system-ui,sans-serif"}}>
@@ -249,7 +262,7 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 <span style={{fontSize:12,color:"#9B9098"}}>Confirms this record on the case file, then sends it to the employee for signature</span>
               </div>
             )}
-            {signatureEligible&&reviewOutput&&!editingRecord&&(
+            {!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5"}}>
                 <button onClick={()=>setShowSignModal(true)}
                   style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"11px 24px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(124,92,252,0.2)",fontFamily:"DM Sans,system-ui,sans-serif"}}>
