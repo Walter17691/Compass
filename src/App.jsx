@@ -75,7 +75,7 @@ import { snapshotUnresolvedSuggestions, taskFieldsForSuggestion } from './lib/me
 import { buildEmployeeSnapshot, mergeHrisEmployeesIntoRecords } from './lib/employeeHistory';
 import { parseEmployeeDeepLink } from './lib/hrisDeepLink';
 import { buildEventTimes, parseAttendees } from './lib/meetingScheduling';
-import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE, planIdentifiedStart, START_DECISION } from './lib/meetingWrites';
+import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWriteFailure, WRITE_FAILURE, planIdentifiedStart, START_DECISION, planMeetingEnd, END_DECISION } from './lib/meetingWrites';
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
 import { appealLinkCandidates } from './lib/appealLink';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
@@ -357,6 +357,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // content (e.g. checking for the word "error") — set only by
   // handleReview's own try/catch.
   const [reviewGenerationFailed, setReviewGenerationFailed] = useState(false);
+  // Phase 3A — set by openReviewForMeeting, consumed once the identity it needs
+  // has actually committed. Never set by the ordinary End path.
+  const [reviewReopenFor, setReviewReopenFor] = useState(null);
   // M10 — a second, short AI generation alongside the full record: what
   // actually matters for someone triaging the case, not the full formatted
   // dialogue. Session-local like reviewOutput; only persisted as
@@ -6688,6 +6691,40 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     return { ok: true };
   };
 
+  // Release 1 Phase 3A — reopen Review for a meeting the case says is already
+  // review_draft. Writes NOTHING: the lifecycle transition happened at End, and
+  // handleReview's replay branch resolves to ALREADY_ENDED, so no second
+  // endedAt is ever written.
+  //
+  // The transcript is read back from the persisted meeting, which is the honest
+  // source — it was saved with the meeting. Generated Review CONTENT is still
+  // volatile in 3A, so the record is regenerated from that transcript rather
+  // than restored; nothing here claims earlier unsaved edits were kept. 3B
+  // persists the draft itself.
+  const openReviewForMeeting = (cs, meeting) => {
+    pendingStartRef.current = null;
+    setMeetingType(MEETING_TYPES.find(t => t.label === meeting.type) || null);
+    setCaseInfo(p => ({ ...p,
+      employee: cs.employeeName, manager: meeting.manager || cs.manager || "",
+      caseId: cs.id, preparedCaseId: cs.id, _linkedCaseId: null,
+      meetingId: meeting.id, appealManagerId: meeting.chairUserId || null,
+      date: meeting.schedule?.date || meeting.date || "",
+    }));
+    setParticipants(meeting.participants || []);
+    setMeetingStartTime(meeting.startedAt || null);
+    // NEW-29 — the persisted end instant is authoritative and is reused, never
+    // recomputed, so reopening Review cannot move when the meeting ended.
+    setMeetingEndTime(meeting.endedAt || null);
+    meetingEndedRef.current = false;
+    setTranscript(Array.isArray(meeting.transcript) ? meeting.transcript : []);
+    setActiveCaseId(cs.id);
+    // Generation is deferred to the effect below rather than called here:
+    // caseInfo/transcript/meetingEndTime have only just been QUEUED, and
+    // handleReview reads them from state. This is the same React update race
+    // that HomeMeetingScreen's Start comment warns about.
+    setReviewReopenFor(meeting.id);
+  };
+
   // Resume restores the authoritative persisted meeting. It never mints a new
   // id, never restamps startedAt, and never re-emits "Meeting started".
   const resumeMeeting = (cs, meeting) => {
@@ -7008,6 +7045,51 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const extra = inputText.trim() ? [{id:newId("utt"),speaker:"Note",text:inputText.trim(),ts:"",pending:false}] : [];
     const allNotes = [...transcript, ...extra];
     if(!allNotes.length) return;
+
+    // ── Release 1 Phase 3A — End is a real lifecycle transition ──
+    // Until now End persisted nothing at all: no status, no endedAt, and it
+    // cleared the crash-recovery draft on the way out, so between End and Save
+    // the meeting existed only in this tab. review_draft was a declared state
+    // with no writer.
+    //
+    // Only lifecycle-bearing meetings transition. A meeting with no
+    // caseId/meetingId (the unlinked entry paths) keeps its exact previous
+    // behaviour — this does not create a case, mint a meeting, or guess a
+    // parent, so Phase 2.1's PARENT_REQUIRED rule is untouched.
+    //
+    // Content is deliberately NOT persisted here. 3A establishes lifecycle
+    // continuity; the Review draft itself remains volatile until 3B.
+    if(caseInfo.caseId && caseInfo.meetingId) {
+      const plan = planMeetingEnd({ cases: casesRef.current, caseId: caseInfo.caseId, meetingId: caseInfo.meetingId });
+      if(plan.decision === END_DECISION.TRANSITION) {
+        const ended = await transitionMeeting({
+          cases: casesRef.current, caseId: caseInfo.caseId, meetingId: caseInfo.meetingId,
+          allowedFrom: [MEETING_STATUS.IN_PROGRESS], toStatus: MEETING_STATUS.REVIEW_DRAFT,
+          // endedAt only. startedAt, schedule, createdAt/createdBy, chairUserId,
+          // manager, participants, invitation, calendar and the transcript all
+          // survive because transitionMeeting patches and never rebuilds.
+          patch: { endedAt: meetingEndTimeVal }, saveCases,
+        });
+        if(!ended?.ok) {
+          // Do not enter Review on a failed transition: the meeting is still
+          // in_progress on the server, and the notes are still in state and
+          // still in the crash-recovery draft, so End can simply be pressed
+          // again. Never fall through to a second object.
+          reportMeetingWriteFailure(ended, "Couldn't end this meeting — please try again");
+          return { ok: false, reason: ended?.reason };
+        }
+        audit("Meeting ended", `${meetingType?.label || "Meeting"} — meeting ${caseInfo.meetingId}`, caseInfo.caseId);
+      } else if(plan.decision !== END_DECISION.ALREADY_ENDED) {
+        // Never silently continue into Review for a meeting the case does not
+        // agree is live — that is how a Save would later patch the wrong one.
+        reportMeetingWriteFailure(plan, "Couldn't end this meeting");
+        return { ok: false, reason: plan.reason };
+      }
+      // ALREADY_ENDED falls through untouched: a replay (double click, or
+      // re-entry from Case View) routes to Review for the same meeting and
+      // writes no second endedAt.
+    }
+
     if(extra.length) { setTranscript(allNotes); setInputText(""); }
     setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
     setAiProcessing(true);
@@ -7128,6 +7210,26 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       return r;
     });
   };
+
+  // Phase 3A — fires generation for a reopened review_draft meeting once the
+  // identity openReviewForMeeting queued has actually committed, so handleReview
+  // reads the right caseId/meetingId/transcript/endedAt rather than the previous
+  // screen's. Its transition planner then answers ALREADY_ENDED and writes
+  // nothing. Guarded on the committed meetingId so it can never fire against a
+  // different meeting.
+  useEffect(() => {
+    if(!reviewReopenFor) return;
+    if(caseInfo.meetingId !== reviewReopenFor) return;
+    // One-shot trigger consumed before generation starts, so a re-render mid
+    // flight cannot fire it twice. Same convention as the NEW-29 capture above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReviewReopenFor(null);
+    handleReview();
+    // handleReview is recreated every render and is deliberately not a dep —
+    // the committed meetingId is what makes this fire exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewReopenFor, caseInfo.meetingId]);
+
 
   // Deterministic, not AI-generated — this is the organisation's own track
   // record (same case type's past outcomes, this employee's case count),
@@ -9122,15 +9224,24 @@ Please produce:
       const ms = activeOfType(t);
       return ms.length > 0 && ms.every(m => declaredStatus(m) === MEETING_STATUS.SCHEDULED);
     };
-    if(presentOfType("appeal")) return onlyScheduledOfType("appeal")
-      ? {label:"Appeal hearing scheduled", color:"#B87520", bg:"#FEF5E7"}
-      : {label:"Appeal in progress", color:"#B87520", bg:"#FEF5E7"};
-    if(presentOfType("disciplinary")) return onlyScheduledOfType("disciplinary")
-      ? {label:"Disciplinary scheduled", color:"#B87520", bg:"#FEF5E7"}
-      : {label:"Disciplinary in progress", color:"#B87520", bg:"#FEF5E7"};
-    if(presentOfType("grievance")) return onlyScheduledOfType("grievance")
-      ? {label:"Grievance meeting scheduled", color:"#B87520", bg:"#FEF5E7"}
-      : {label:"Grievance in progress", color:"#B87520", bg:"#FEF5E7"};
+    // Phase 3A — a hearing that has been HELD and is awaiting its record is not
+    // "in progress". Same narrow rule as above: only declared statuses are
+    // reinterpreted, so legacy rows are unaffected.
+    const awaitingRecordOfType = t => {
+      const ms = activeOfType(t);
+      return ms.length > 0 && ms.every(m => declaredStatus(m) === MEETING_STATUS.REVIEW_DRAFT);
+    };
+    const phaseLabel = (t, scheduled, awaiting, active) =>
+      onlyScheduledOfType(t) ? scheduled : awaitingRecordOfType(t) ? awaiting : active;
+    if(presentOfType("appeal")) return {
+      label: phaseLabel("appeal", "Appeal hearing scheduled", "Appeal record in review", "Appeal in progress"),
+      color:"#B87520", bg:"#FEF5E7" };
+    if(presentOfType("disciplinary")) return {
+      label: phaseLabel("disciplinary", "Disciplinary scheduled", "Disciplinary record in review", "Disciplinary in progress"),
+      color:"#B87520", bg:"#FEF5E7" };
+    if(presentOfType("grievance")) return {
+      label: phaseLabel("grievance", "Grievance meeting scheduled", "Grievance record in review", "Grievance in progress"),
+      color:"#B87520", bg:"#FEF5E7" };
     if(presentOfType("redundancy")) return {label:"Redundancy consultation", color:"#B87520", bg:"#FEF5E7"};
     if(presentOfType("investigation")) return {label:"Under investigation", color:"#6B6375", bg:"#F5F1EA"};
     if(types.some(t=>t.includes("informal")||t.includes("return")||t.includes("performance")||t.includes("pip"))) return {label:"Informal stage", color:"#6B6375", bg:"#F5F1EA"};
@@ -10066,7 +10177,7 @@ Please produce:
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(
         <CaseViewScreen
           onResumeMeeting={resumeMeeting}
-          onStartScheduledMeeting={startScheduledMeeting}
+          onStartScheduledMeeting={startScheduledMeeting} onOpenReviewForMeeting={openReviewForMeeting}
           onPrepareScheduledMeeting={prepareScheduledMeeting}
           onRescheduleMeeting={async (cs, m) => {
             const values = await promptDialog({

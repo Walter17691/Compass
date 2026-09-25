@@ -46,12 +46,34 @@ none of which persist a structured case meeting:
 
 | Path | What it parents by name | Target phase |
 |---|---|---|
-| `App.jsx:6880` `saveDevMeetingToCase` | a **dev meeting** (probation/appraisal/PDP) — still name-matches, still auto-creates, still sync-all | **2.5** |
+| `saveDevMeetingToCase` | a **dev meeting** (probation/appraisal/PDP) — see the explicit breakdown below | **2.5** |
 | `App.jsx:1234` `acceptMeetingEvidenceSuggestion` | case **evidence** | 2.5 |
 | `App.jsx:1258` `acceptMeetingActionSuggestion` | case **task** | 2.5 |
 | `App.jsx:6533` `createQualityCheckFollowUp` | case **task** | 2.5 |
 | `App.jsx:6527` `proceedPastQualityCheck` | **audit** attribution | 2.5 |
 | `App.jsx:1160`, `6499` | AI **context** lookups (read-only) | 2.5 |
+
+**`saveDevMeetingToCase` — re-confirmed by the Phase 3 audit, 2026-09-25.**
+The development / 1:1 save path is a complete unmigrated instance of everything
+Phase 2.1 fixed for `saveMeetingToCaseImpl`, and Phase 2.1 migrated the sibling
+but not this one. Explicitly, it:
+- resolves the case by **employee-name matching**
+  (`cases.filter(c => c.employeeName.toLowerCase() === employeeName.toLowerCase())`),
+  using `activeCaseId` only as a tie-breaker among same-named matches;
+- **may create a case** when no name matches, via `crypto.randomUUID()`;
+- **mints a new meeting** with `newId("meeting")` rather than patching an
+  existing identity;
+- **appends through the legacy sync-all path** —
+  `saveCases(cases.map(c => c.id === existing.id ? {...c, meetings:[...c.meetings, meeting]} : c))`
+  with no `changedId`, so it takes the branch that returns nothing and whose
+  conflict semantics silently swallow a rejection;
+- never routes through `persistMeeting`/`planMeetingWrite`.
+**Deferred. Not fixed in Phase 3A** (different entry path, out of scope). Recorded
+here under NEW-20 FULL rather than as a new defect.
+
+**Sync-all inventory, 2026-09-25:** 20 `saveCases` calls still omit `changedId`
+(17 `App.jsx`, 3 `CaseViewScreen.jsx`), one of which is the dev-meeting append
+above. No Phase 3A path uses them.
 
 - **Evidence** Phase 2.1 implementation and `src/test/meetingWrites.test.js`.
 - **Decision** CORE closed; FULL remains open until Phase 2.5 entry-path
@@ -80,17 +102,97 @@ none of which persist a structured case meeting:
   a new case.
 - **Decision** OPEN — Phase 2.5 owns the chooser UX.
 
+### Phase 3A — End is a real lifecycle transition
+- **Area** Meeting lifecycle · **Delivered** 2026-09-25
+- **STATUS: DEPLOYED / TECHNICALLY VERIFIED — HUMAN UAT REQUIRED.**
+- **Before.** `review_draft` was a declared state with **no writer** and zero
+  production rows. End persisted nothing (see NEW-26).
+- **Now.** End transitions the existing meeting:
+  ```
+  in_progress  --End-->  review_draft     (endedAt written once)
+  ```
+  via the canonical `transitionMeeting` with `allowedFrom: [in_progress]`,
+  patching `endedAt` only — so `id`, `caseId`, `type`, `startedAt`, `schedule`,
+  `createdAt`, `createdBy`, `chairUserId`, `manager`, `participants`,
+  `invitation`, `calendar` and the transcript all survive. One single-case write
+  with `changedId`; never sync-all, never an append.
+- **Replay is idempotent, not rejected.** A new pure primitive
+  `planMeetingEnd` answers TRANSITION / **ALREADY_ENDED** / REJECT. A double
+  click, or re-entry into Review from Case View, resolves to the same
+  `review_draft` meeting and writes **no second `endedAt`** — NEW-29's
+  authoritative-instant rule is preserved by not writing, not by recomputing.
+  REJECT covers missing, foreign, cancelled, completed, `scheduled`
+  (End cannot skip Start), legacy-null and letter artefacts.
+- **Identity is authoritative.** Resolved by `caseId` + `meetingId` from
+  `caseInfo`; no employee-name matching, no latest-meeting guessing. A meeting
+  with no lifecycle identity keeps its exact previous behaviour, so Phase 2.1
+  `PARENT_REQUIRED` is untouched and no case is created to enable an End.
+- **Failed transition does not enter Review.** The meeting is still
+  `in_progress` on the server and the notes are still in state and in the
+  crash-recovery draft, so End can simply be pressed again.
+- **Re-entry.** `review_meeting_record` stopped being a placeholder that opened
+  the signature modal; it now calls `openReviewForMeeting`, which restores
+  identity, `startedAt` and the **persisted `endedAt`** from the meeting,
+  reads the transcript back from it, and writes nothing. Generation is deferred
+  to an effect so it runs after the queued identity has committed — the same
+  React update race `HomeMeetingScreen`'s Start comment warns about.
+- **Downstream boundary proven.** `isMeetingComplete(review_draft) === false`,
+  so `review_draft` unlocks no signature, no outcome letter, no appeal outcome
+  and no closure. The `review_draft → completed` allowed-from guard is
+  **deliberately still absent — that is Phase 3B**, and a test asserts 3A did
+  not quietly add it.
+- **Badge.** A held-but-unconfirmed hearing no longer reads "in progress"; it
+  reads "… record in review". Same narrow rule as before: only meetings that
+  **declare** a status are reinterpreted, so all 884 legacy rows are unaffected.
+- **Appeal unchanged.** The chair is validated at Start; `in_progress →
+  review_draft` never writes `chairUserId` and never consults the currently
+  appointed officer, so replacing the appeal manager after the hearing started
+  does not block End. The deployed trigger was **not** modified — testing showed
+  it does not apply to this transition.
+- **Evidence** `src/test/endToReviewDraft.test.js` — 47 tests covering A–AI of
+  the agreed matrix; **30 fail against the pre-3A source**.
+- **Scope held.** No persisted `reviewDraft` content, no autosave, no Regenerate,
+  no prep persistence, no completion guard change, no Case View redesign, no
+  recipe change, no migration, no new API function.
+
 ### NEW-26 — Review draft destroyed by refresh or navigation
 - **Severity** P1 · **Area** Review persistence
 - `handleReview` deletes the local draft on entry to Review, which is the
   point at which the most unsaved work exists.
-- **Evidence** traced 2026-09-21.
-- **Decision** ABSORBED BY REDESIGN — Phase 3 (server-side `reviewDraft`).
+- **Root cause CONFIRMED by the Phase 3 audit, 2026-09-25.** Worse than
+  recorded: `handleReview` performed **no persistence of any kind** — a scan of
+  its whole body found `saveCases` 0, `persistMeeting` 0, `transitionMeeting` 0,
+  `saveCaseToDB` 0, `supabase` 0, `endedAt` 0, `status` 0 — *and* it cleared the
+  localStorage crash-recovery draft on the way out
+  (`orgLsSet("compass_meeting_draft", null)`). So between End and Save the
+  meeting existed only in that browser tab, on the server and locally.
+- **PARTIALLY REMEDIATED by Phase 3A.** The lifecycle now survives: End
+  transitions the existing meeting `in_progress → review_draft` and writes
+  `endedAt`, so a refresh or navigation returns to Review for that same meeting
+  instead of offering to Start or Resume it. **Review CONTENT is still volatile**
+  — the generated record, summary, risk and next steps remain React state.
+- **Remaining work: Phase 3B** (persisted `reviewDraft`, autosave/explicit save,
+  concurrency, and the `review_draft → completed` guard).
+- **Evidence** traced 2026-09-21; re-audited 2026-09-25;
+  `src/test/endToReviewDraft.test.js` (47 tests) asserts the lifecycle half and
+  asserts the content boundary explicitly so the split cannot be mistaken for
+  completion.
+- **Decision** PARTIALLY REMEDIATED — open until 3B.
 
 ### NEW-27 — no Regenerate after a successful Review
 - **Severity** P2 · **Area** Review UX
-- `handleReview` is already idempotent; the control is simply not exposed.
-- **Decision** ABSORBED BY REDESIGN — Phase 3.
+- **AUDIT CORRECTION, 2026-09-25.** The earlier framing ("no *safe* Regenerate
+  behaviour") overstated what exists. There is **no Regenerate control at all**.
+  `ReviewScreen` exposes only `onRetryGeneration`, rendered *solely* when
+  `reviewGenerationFailed` is true, plus `editRecord` for AI-assisted editing of
+  the record text. So this is new-feature design, not making an existing control
+  safe — and "the smallest coherent pattern supported by the existing UI" has no
+  existing affordance to build on.
+- Helpfully, ``reviewOutputOriginal`` already retains the un-edited AI draft
+  alongside the edited one, so "has the user edited this?" is answerable without
+  new infrastructure.
+- **Deferred to Phase 3C.** No Regenerate button was added in 3A.
+- **Decision** OPEN — Phase 3C design work.
 
 ### NEW-30 — signal generator compares a meeting against itself
 - **Severity** P2 · **Area** Signals / AI
@@ -442,6 +544,26 @@ none of which persist a structured case meeting:
     case was written, and **no application source file changed**.
 - **Decision** **CLOSED.** Code defect fixed and human verified; contaminated
   fixture cleaned and verified. Not reopened.
+
+### Cold / case-less Prepare is deliberately volatile — deferred
+- **Severity** P3 · **Area** Prep entry path / UX · **Raised** 2026-09-25 (Phase 3 audit)
+- **STATUS: DEFERRED BY DECISION. Not a defect to fix in Phase 3.**
+- The Home → **Prepare meeting** button is gated only on employee + type.
+  `commit()` sets `caseId: meetingSetup.preparedCaseId || activeCaseId || null`,
+  so a user can generate a full prep pack with **`caseId === null`** — no
+  meeting, and possibly no case.
+- Preparation therefore **cannot** be persisted on that path without either
+  violating Phase 2.1 `PARENT_REQUIRED` (an unlinked meeting must never mint a
+  case), narrowing the entry point to require a case, or inventing a sixth
+  pre-`scheduled` lifecycle state.
+- **Decision (Option 4, approved 2026-09-25):** preparation may only ever be
+  persisted against a canonical meeting that already exists — a `scheduled` or
+  otherwise existing meeting. The case-less Prepare path stays **volatile for
+  now**. No case is created to hold prep, no case is inferred by name, no
+  anonymous pre-meeting object is created, and **no sixth lifecycle state is
+  introduced**.
+- Belongs to the later meeting/workflow simplification phase, which owns the
+  entry-path UX. Not a Phase 3 blocker.
 
 ### Prep-pack content is not persisted to the meeting — P3 design gap
 - **Severity** **P3** · **Area** Prep / Phase 3 · **Raised** 2026-09-25

@@ -373,9 +373,12 @@ describe('12. no write behaviour is introduced by a reader', () => {
 
 describe('13. the status badge reads the same semantics', () => {
   it('13.1 the badge distinguishes scheduled from in progress', () => {
-    expect(appCode).toContain('label:"Disciplinary scheduled"');
-    expect(appCode).toContain('label:"Disciplinary in progress"');
-    expect(appCode).toContain('onlyScheduledOfType("disciplinary")');
+    // Phase 3A folded the two-way ternary into phaseLabel() so a third truthful
+    // state (review_draft) could be added without a third nested ternary.
+    expect(appCode).toContain('"Disciplinary scheduled"');
+    expect(appCode).toContain('"Disciplinary in progress"');
+    expect(appCode).toContain('const onlyScheduledOfType =');
+    expect(appCode).toContain('phaseLabel("disciplinary"');
   });
 
   it('13.2 the badge no longer reads the raw type list', () => {

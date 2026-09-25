@@ -309,7 +309,13 @@ describe('PLATFORM PRIMITIVE — no case-type forks, no I/O', () => {
   });
 
   it('has no I/O, AI, Supabase or router dependency and imports nothing', () => {
-    expect(lib).not.toMatch(/authedFetch|\/api\/|supabase|streamClaude|localStorage|fetch\(/);
+    // Comment-stripped, like the case-type assertion above: prose legitimately
+    // names what this module does NOT do (e.g. explaining that End used to clear
+    // a localStorage draft), and matching that proves nothing about dependencies.
+    const libCode = lib.split('\n')
+      .filter(l => { const t = l.trim(); return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*'); })
+      .join('\n');
+    expect(libCode).not.toMatch(/authedFetch|\/api\/|supabase|streamClaude|localStorage|fetch\(/);
     // Exactly ONE import statement, and it delegates to the lifecycle
     // primitive — so status/genuineness rules have a single implementation
     // shared with it rather than a second copy here. The imported NAMES may

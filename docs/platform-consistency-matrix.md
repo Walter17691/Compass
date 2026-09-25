@@ -278,6 +278,9 @@ Two independent id generators remain: `newId("meeting")` in the save path and
 | Process recipes | `getNextStep` branch functions | 5 recipes exist; `capability`/`absence`/`redundancy`/`informal`/empty fall through to **disciplinary** | Phase 6 | FORKED — see defect register |
 | Concurrency / write path | `saveCaseToDB` conditional update on `updated_at` | **31 `saveCases` sites omit `changedId`**, including a workflow transition (`CaseViewScreen:359`) | Phase 2.5 | PRIMITIVE CORRECT, ADOPTION PARTIAL |
 | **`casesRef` currency** | `casesRef.current`, advanced on database load and on successful case write | Was seeded once at mount and only reassigned in `saveCases`, so it lagged the database by one write and sent a stale concurrency key | fixed 2026-09-25 | CONSISTENT |
+| **Meeting End** | `planMeetingEnd` + `transitionMeeting`, `allowedFrom: [in_progress]` → `review_draft`, patching `endedAt` only | End previously persisted NOTHING — no status, no `endedAt` — and cleared the local crash-recovery draft on the way out | Phase 3A (2026-09-25) | CONSISTENT |
+| **Review re-entry** | `review_meeting_record` → `openReviewForMeeting`, identity + `endedAt` read back from the meeting | Was a placeholder that opened the signature modal | Phase 3A | CONSISTENT (lifecycle only — content persistence is 3B) |
+| **Review draft content** | none yet — React state | `reviewOutput`/`summary`/`riskScore`/`nextSteps` are volatile | **Phase 3B** | KNOWN GAP |
 
 **Rule.** Meeting writes read `casesRef.current` deliberately — chained writes
 in one synchronous run depend on it. The ref must therefore never be staler

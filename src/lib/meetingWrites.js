@@ -251,6 +251,69 @@ export function planIdentifiedStart({ cases, caseId, meetingId }) {
   return { decision: START_DECISION.REJECT, reason: WRITE_FAILURE.STALE_STATUS, meeting, from };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Which End is this?
+//
+// Release 1 Phase 3A. Before this, End (handleReview) persisted NOTHING — no
+// status, no endedAt — and cleared the localStorage crash-recovery draft on the
+// way out, so between End and Save nothing existed anywhere. review_draft was a
+// declared state with no writer and zero production rows.
+//
+// Same shape and the same reasoning as planIdentifiedStart: this decides WHICH
+// existing machinery runs and writes nothing itself. A TRANSITION is executed by
+// transitionMeeting with allowedFrom [in_progress], so the database of record —
+// not the client's idea of what it last saw — decides whether the move is legal.
+//
+// ALREADY_ENDED is the replay answer, and it is deliberately NOT a rejection.
+// End is reachable twice by ordinary means: a double click, a re-entry into
+// Review from Case View, or a retry after a failed generation. Each must resolve
+// to the SAME review_draft meeting and must never write a second endedAt. So
+// this reports "already there" and the caller routes to Review without touching
+// timing. NEW-29's authoritative-instant rule is preserved by not writing, not
+// by recomputing.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const END_DECISION = Object.freeze({
+  // in_progress → review_draft, via transitionMeeting on the SAME id.
+  TRANSITION: "transition",
+  // Already review_draft. Idempotent: write nothing, keep endedAt as it stands.
+  ALREADY_ENDED: "already_ended",
+  REJECT: "reject",
+});
+
+export function planMeetingEnd({ cases, caseId, meetingId }) {
+  if (!isNonEmptyString(caseId)) {
+    return { decision: END_DECISION.REJECT, reason: WRITE_FAILURE.PARENT_REQUIRED };
+  }
+  if (!isNonEmptyString(meetingId)) {
+    return { decision: END_DECISION.REJECT, reason: WRITE_FAILURE.INVALID_MEETING };
+  }
+
+  const target = (Array.isArray(cases) ? cases : []).find(c => c && c.id === caseId);
+  if (!target) return { decision: END_DECISION.REJECT, reason: WRITE_FAILURE.NOT_FOUND };
+
+  const meetings = Array.isArray(target.meetings) ? target.meetings : [];
+  const meeting = meetings.find(m => m && m.id === meetingId);
+  // A meeting belonging to another case is simply not on this one, and is never
+  // searched for elsewhere — no name matching, no latest-meeting guessing.
+  if (!meeting) return { decision: END_DECISION.REJECT, reason: WRITE_FAILURE.NOT_FOUND };
+
+  if (isNonEmptyString(meeting.caseId) && meeting.caseId !== caseId) {
+    return { decision: END_DECISION.REJECT, reason: WRITE_FAILURE.PARENTAGE_MISMATCH };
+  }
+  if (!isGenuineMeeting(meeting)) {
+    return { decision: END_DECISION.REJECT, reason: WRITE_FAILURE.INVALID_MEETING };
+  }
+
+  const from = declaredStatus(meeting);
+  if (from === MEETING_STATUS.IN_PROGRESS) return { decision: END_DECISION.TRANSITION, meeting, from };
+  if (from === MEETING_STATUS.REVIEW_DRAFT) return { decision: END_DECISION.ALREADY_ENDED, meeting, from };
+  // scheduled (never started), completed, cancelled, and legacy rows
+  // (declaredStatus null) all land here. A legacy meeting is never swept into
+  // the lifecycle by ending it.
+  return { decision: END_DECISION.REJECT, reason: WRITE_FAILURE.STALE_STATUS, meeting, from };
+}
+
 // Identity and provenance stamped once, at creation. Separate from
 // planMeetingWrite so that a patch can never re-stamp them.
 export function stampNewMeeting(meeting, { caseId, now = new Date().toISOString(), by }) {

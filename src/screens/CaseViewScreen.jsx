@@ -102,7 +102,7 @@ const MORE_GROUPS = TAB_GROUPS
 // (overview/timeline/allegationsTab/meetingsTab/evidenceTab/documentsTab/
 // themesTab/aiTab) are referenced as group.field only at that tab's own
 // single JSX call site, same pattern as OverviewTab/SettingsScreen.
-export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPrepareScheduledMeeting, onCancelScheduledMeeting, onRescheduleMeeting,
+export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPrepareScheduledMeeting, onOpenReviewForMeeting, onCancelScheduledMeeting, onRescheduleMeeting,
   shell = {}, header = {}, initialTab, clearInitialTab, deleteCaseTask,
   overview = {}, timeline = {}, allegationsTab = {}, meetingsTab = {},
   evidenceTab = {}, documentsTab = {}, themesTab = {}, aiTab = {},
@@ -323,17 +323,13 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       if(m) onResumeMeeting?.(cs, m);
       return;
     }
-    // Held, record still being finalised. Opens that record for confirmation
-    // rather than offering to start or resume anything. Phase 3 will own the
-    // full review lifecycle; nothing writes review_draft yet.
+    // Release 1 Phase 3A — review_draft is now a real persisted state, so this
+    // reopens Review for that exact meeting instead of the placeholder that
+    // opened the signature modal. It writes nothing and cannot complete the
+    // meeting; confirming the record is Phase 3B.
     if(nextStep.action==="review_meeting_record"){
       const m = (cs.meetings||[]).find(x=>x.id===nextStep.reviewMeetingId);
-      if(m?.record){
-        setReviewOutput(m.record);
-        setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));
-        setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);
-        setShowSignModal(true);
-      }
+      if(m) onOpenReviewForMeeting?.(cs, m);
       return;
     }
     if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){

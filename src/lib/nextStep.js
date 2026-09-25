@@ -131,10 +131,10 @@ export function withExistingMeeting(cs, step) {
     const m = inReview[inReview.length - 1];
     return {
       ...step,
-      label: "Review and confirm the record",
+      label: "Review meeting record",
       action: "review_meeting_record",
       reviewMeetingId: m.id,
-      reason: "This meeting has been held and its record is still being finalised — it does not need starting again.",
+      reason: "This meeting has been held and its record has not been confirmed yet. It does not need starting or resuming again.",
     };
   }
 
