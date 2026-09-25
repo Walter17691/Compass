@@ -362,8 +362,39 @@ none of which persist a structured case meeting:
   to the delegation identifier); the `meetingWrites` import rule became "exactly
   one import statement, to the lifecycle primitive" (names may grow, a second
   dependency may not).
-- **Human verification still required** after deployment.
-- **Decision** Phase 2.3 cannot close until the human retest passes.
+- **HUMAN VERIFIED 2026-09-25 09:55** on a fresh case,
+  `b3400735-f884-4f50-89dc-1012e3546d4b` ("AT - Continuity Retest"), deliberately
+  not the forked pair, so the defect evidence stayed intact.
+
+  | Criterion | Evidence |
+  |---|---|
+  | one meeting | `entry_count = 1` |
+  | same id | `meeting_df599cb1-66be-4203-b956-7725721bf318`, matching the Record URL |
+  | `in_progress` | `status = in_progress` |
+  | schedule preserved | `{2026-10-04, 10:00, Microsoft Teams}` |
+  | `startedAt` added | `2026-09-25T09:55:30.265Z` |
+  | no duplicate / orphan | `scheduledMeetingsFor` → `[]`; org-wide scan of the window returns this one meeting |
+  | no parentage drift | `caseId` unchanged; `createdBy` unchanged; `chairUserId` null |
+
+  **Proof it was a patch, not a create:** `createdAt 09:55:02.484` ≠
+  `startedAt 09:55:30.265` — 27.8s apart — so the object predates the Start
+  write, and `createdAt` coincides with the Schedule PATCH. The object also
+  carries **17 keys**, the scheduled shape, where the pre-fix duplicate carried
+  14. The write chain shows each conditional key being the value the previous
+  write produced:
+
+  ```
+  09:54:21.543  POST  /rest/v1/cases                                        201
+  09:55:02.631  PATCH ?…&updated_at=eq.2026-09-25T09:54:21.409+00:00        200   schedule
+  09:55:30.426  PATCH ?…&updated_at=eq.2026-09-25T09:55:02.487+00:00        200   start
+  ```
+
+  Prepare wrote nothing between them. The audit trail now names the SAME id at
+  Start — `Meeting started — meeting meeting_df599cb1-…` — where the defective
+  flow named `meeting_352722cc` against a scheduled `meeting_6a8bdb7c`.
+- **Decision** **CLOSED.** The two forked objects on
+  `AT - Scheduling Phase 2.3` are deliberately retained as evidence and are a
+  separate cleanup decision.
 
 ### Prep-pack content is not persisted to the meeting — P3 design gap
 - **Severity** **P3** · **Area** Prep / Phase 3 · **Raised** 2026-09-25
@@ -410,6 +441,14 @@ none of which persist a structured case meeting:
   lifecycle, and the two must not be derived from the same unfiltered list.
 - **Smallest correct fix (not applied).** Make `getCaseStatus` lifecycle-aware
   and distinguish "Disciplinary scheduled" from "Disciplinary in progress".
+- **Same class, second sighting (2026-09-25).** On the verified retest case, with
+  one Disciplinary `in_progress` and nothing scheduled, `getNextStep` returns
+  *"Start disciplinary hearing"* — because the recipe asks `isMeetingComplete`
+  and an `in_progress` meeting is not complete, so it reads as "not started".
+  The amber Resume banner is showing at the same time, so the surfaces disagree.
+  Not caused by the continuity fix and not part of its pass criteria; recorded
+  here because it is the same lifecycle-blind-reader problem and should be fixed
+  with it.
 - **Decision** OPEN. Not covered by any test yet.
 
 ### Case Readiness question is a stale persisted AI snapshot — P3
