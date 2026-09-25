@@ -417,19 +417,30 @@ describe('transition primitive — allowed-from, not generic setStatus', () => {
 
 describe('crash-recovery precedence — server beats stale local state', () => {
   it('a local draft naming a meeting the case no longer calls live is discarded', () => {
-    expect(app).toContain('if(draft.caseInfo?.meetingId) {');
+    // Phase 4C.3 made this check storage-aware: the embedded branch is now
+    // conditional on the draft NOT being table-resident, because a table-resident
+    // meeting is not in cases.meetings and this check would otherwise conclude it
+    // was dead and delete the notes. The guarantee is unchanged — a draft for a
+    // meeting the authoritative store no longer calls live is discarded.
+    expect(app).toContain('if(draft.caseInfo?.meetingId && !draftIsTableResident) {');
     expect(app).toContain("declaredStatus(m) === MEETING_STATUS.IN_PROGRESS);");
     expect(app).toContain('if(!stillLive) { orgLsSet("compass_meeting_draft", null); return; }');
+    // And the standalone branch asks public.meetings the same question.
+    expect(app).toContain('const live = await fetchStandaloneMeeting(supabase, draft.caseInfo.meetingId);');
+    expect(app).toContain("if(!live.ok || live.meeting.status !== MEETING_STATUS.IN_PROGRESS) {");
   });
 
   it('pre-2.2 drafts with no meeting id keep their existing behaviour', () => {
     // They already fail closed at Save via Phase 2.1's parent_required, so
-    // the new guard is conditional on a meeting id being present at all.
-    const i = app.indexOf('if(draft.caseInfo?.meetingId) {');
+    // the guard is conditional on a meeting id being present at all — in both
+    // storage branches.
+    const i = app.indexOf('if(draft.caseInfo?.meetingId && !draftIsTableResident) {');
     expect(i).toBeGreaterThan(-1);
     const guard = app.slice(i, i + 700);
     expect(guard).toContain('const stillLive = draftCase &&');
     expect(guard).toContain('orgLsSet("compass_meeting_draft", null); return;');
+    const j = app.indexOf('if(draft.caseInfo?.meetingId && draftIsTableResident) {');
+    expect(j).toBeGreaterThan(-1);
   });
 });
 

@@ -6291,13 +6291,32 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // must never replace it; it is left untouched rather than applied.
     const bootNav = bootNavRef.current;
     if(bootNav.screen === SCREENS.RECORD && bootNav.meetingId && draft.caseInfo?.meetingId !== bootNav.meetingId) return;
-    if(draft.caseInfo?.meetingId) {
+    // Phase 4C.3 — the liveness check has to look in the store that actually
+    // owns the meeting. A table-resident meeting is NOT in cases.meetings, so the
+    // embedded check below would find nothing, conclude the meeting was no longer
+    // live, and DELETE the draft — losing every note taken since Start, because
+    // the transcript is only persisted at End. That is a data-loss bug, so the
+    // standalone case is checked against public.meetings instead, inside the async
+    // block below (the table cannot be read synchronously).
+    const draftIsTableResident = draft.caseInfo?.meetingHome === TABLE_HOME;
+    if(draft.caseInfo?.meetingId && !draftIsTableResident) {
       const draftCase = casesRef.current.find(c => c.id === draft.caseInfo.caseId);
       const stillLive = draftCase && (draftCase.meetings||[]).some(
         m => m && m.id === draft.caseInfo.meetingId && declaredStatus(m) === MEETING_STATUS.IN_PROGRESS);
       if(!stillLive) { orgLsSet("compass_meeting_draft", null); return; }
     }
     (async () => {
+      // The same guarantee as the embedded branch, asked of the right store: a
+      // draft for a meeting that is no longer live is discarded rather than
+      // offered. RLS applies, so a meeting the user may not read is also treated
+      // as not live.
+      if(draft.caseInfo?.meetingId && draftIsTableResident) {
+        const live = await fetchStandaloneMeeting(supabase, draft.caseInfo.meetingId);
+        if(!live.ok || live.meeting.status !== MEETING_STATUS.IN_PROGRESS) {
+          orgLsSet("compass_meeting_draft", null);
+          return;
+        }
+      }
       const ok = await confirmDialog({
         title: "Resume unsaved meeting?",
         message: `Compass found meeting notes for ${draft.caseInfo?.employee || "an employee"} that never got saved (from ${draft.savedAt ? new Date(draft.savedAt).toLocaleString("en-GB") : "earlier"}). Resume where you left off, or discard them?`,

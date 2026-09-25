@@ -299,6 +299,40 @@ describe('C. resume', () => {
     expect(meetingPatchToRow({ startedAt: 'X', endedAt: 'Y' })).toEqual({ ended_at: 'Y' });
   });
 
+  it('16. a refresh mid-meeting keeps the notes — the draft liveness check asks the RIGHT store', async () => {
+    // The defect this protects against: the embedded liveness check looks the
+    // meeting up in cases.meetings, so for a table-resident meeting it found
+    // nothing, concluded the meeting was no longer live, and DELETED the draft —
+    // losing every note since Start, because the transcript is only persisted at
+    // End. The check must be routed by storage home.
+    // Anchored AFTER the start index: confirmDialog is called in several places
+    // and an unanchored search finds an earlier one, collapsing the slice.
+    const recStart = appCode.indexOf('const draftIsTableResident =');
+    const recovery = appCode.slice(recStart, appCode.indexOf('const ok = await confirmDialog({', recStart));
+    expect(recovery).toContain("draft.caseInfo?.meetingHome === TABLE_HOME");
+    // The embedded check is now skipped for a table-resident draft...
+    expect(recovery).toContain('if(draft.caseInfo?.meetingId && !draftIsTableResident)');
+    // ...and the standalone one asks public.meetings for the same guarantee.
+    expect(recovery).toContain('await fetchStandaloneMeeting(supabase, draft.caseInfo.meetingId)');
+    expect(recovery).toContain("live.meeting.status !== MEETING_STATUS.IN_PROGRESS");
+    expect(recovery).toContain('orgLsSet("compass_meeting_draft", null)');
+    // The draft carries the storage home in the first place.
+    expect(appCode).toContain('transcript, inputText, meetingType, caseInfo, meetingStartTime');
+    expect(appCode).toContain('meetingHome: TABLE_HOME');
+  });
+
+  it('16. a draft for a meeting that is no longer live is still discarded, in both stores', async () => {
+    // Both branches must reach the same discard, or a stale draft could be
+    // offered for a meeting that has already been ended elsewhere.
+    // Anchored AFTER the start index: confirmDialog is called in several places
+    // and an unanchored search finds an earlier one, collapsing the slice.
+    const recStart = appCode.indexOf('const draftIsTableResident =');
+    const recovery = appCode.slice(recStart, appCode.indexOf('const ok = await confirmDialog({', recStart));
+    expect((recovery.match(/orgLsSet\("compass_meeting_draft", null\)/g) || []).length).toBe(2);
+    // And an unreadable meeting counts as not live, so RLS closes it too.
+    expect(recovery).toContain('if(!live.ok ||');
+  });
+
   it('19/20. an inaccessible meeting is indistinguishable from one that does not exist', async () => {
     const db = fakeDb([live()]);
     const hidden = await fetchStandaloneMeeting(db, 'meeting_in_org_b');   // RLS filtered it out
