@@ -495,7 +495,10 @@ describe('AG–AI. appeal: chair is historical truth once started', () => {
   it('AH.2 the End path never writes chairUserId, so it cannot revalidate it', () => {
     const i = appCode.indexOf('toStatus: MEETING_STATUS.REVIEW_DRAFT');
     const region = appCode.slice(i - 400, i + 400);
-    expect(region).toContain('patch: { endedAt: meetingEndTimeVal }');
+    // The patch carries endedAt and the notes Review needs — and nothing else.
+    // chairUserId in particular is never written, so End cannot revalidate or
+    // rewrite the historical chair.
+    expect(region).toContain('patch: { endedAt: meetingEndTimeVal, transcript: allNotes }');
     expect(region).not.toContain('chairUserId');
     expect(region).not.toContain('appealManagerId');
     const j = writesCode.indexOf('export function planMeetingEnd');

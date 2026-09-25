@@ -6716,13 +6716,35 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // recomputed, so reopening Review cannot move when the meeting ended.
     setMeetingEndTime(meeting.endedAt || null);
     meetingEndedRef.current = false;
-    setTranscript(Array.isArray(meeting.transcript) ? meeting.transcript : []);
+    const notes = Array.isArray(meeting.transcript) ? meeting.transcript : [];
+    setTranscript(notes);
     setActiveCaseId(cs.id);
-    // Generation is deferred to the effect below rather than called here:
-    // caseInfo/transcript/meetingEndTime have only just been QUEUED, and
-    // handleReview reads them from state. This is the same React update race
-    // that HomeMeetingScreen's Start comment warns about.
-    setReviewReopenFor(meeting.id);
+    setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary("");
+    setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
+
+    // NAVIGATE UNCONDITIONALLY.
+    //
+    // The 3A human UAT failure was exactly this line's absence: navigation was
+    // left to handleReview, which returns early when there are no notes
+    // (`if(!allNotes.length) return;`) — before it reaches setScreen. With a
+    // review_draft meeting whose transcript had not been persisted, the CTA
+    // therefore did nothing at all, silently. Opening a screen must never
+    // depend on whether content can be generated for it.
+    setScreen(SCREENS.REVIEW);
+
+    if(notes.length) {
+      setAiError("");
+      // Generation is deferred to the effect below rather than called here:
+      // caseInfo/transcript/meetingEndTime have only just been QUEUED, and
+      // handleReview reads them from state. This is the same React update race
+      // that HomeMeetingScreen's Start comment warns about.
+      setReviewReopenFor(meeting.id);
+    } else {
+      // Truthful, and deliberately not fabricated. A meeting ended before the
+      // notes began being persisted has none to recover; saying so is the only
+      // honest option. Review still opens, and the lifecycle state is intact.
+      setAiError("No meeting notes were saved with this meeting, so there is no record to generate from. The notes were only held in the browser while the meeting was open.");
+    }
   };
 
   // Resume restores the authoritative persisted meeting. It never mints a new
@@ -7068,7 +7090,13 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
           // endedAt only. startedAt, schedule, createdAt/createdBy, chairUserId,
           // manager, participants, invitation, calendar and the transcript all
           // survive because transitionMeeting patches and never rebuilds.
-          patch: { endedAt: meetingEndTimeVal }, saveCases,
+          // Phase 3A re-entry fix — the notes are persisted WITH the transition.
+          // The first cut patched endedAt only, so the transcript stayed in the
+          // browser tab and the crash-recovery draft was then cleared: the
+          // meeting reached review_draft with an empty transcript and there was
+          // nothing left to generate a record from. allNotes is the
+          // authoritative set at End, including the uncommitted input line.
+          patch: { endedAt: meetingEndTimeVal, transcript: allNotes }, saveCases,
         });
         if(!ended?.ok) {
           // Do not enter Review on a failed transition: the meeting is still

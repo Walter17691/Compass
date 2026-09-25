@@ -104,7 +104,45 @@ above. No Phase 3A path uses them.
 
 ### Phase 3A — End is a real lifecycle transition
 - **Area** Meeting lifecycle · **Delivered** 2026-09-25
-- **STATUS: DEPLOYED / TECHNICALLY VERIFIED — HUMAN UAT REQUIRED.**
+- **STATUS: DEPLOYED. HUMAN UAT: FAILED then re-fixed — AWAITING RETEST.**
+- **HUMAN UAT 2026-09-25: FAILED — "Review meeting record" CTA inert after
+  persisted `review_draft` re-entry.** The End transition itself worked: after
+  Resume → note → End → Review → hard refresh → Case View, the badge read
+  *Disciplinary record in review* and both CTAs read *Review meeting record*.
+  **Clicking either did nothing** and the user stayed on Case View.
+  - **Affected CTAs: both** — the top-right primary and the Suggested next step.
+    They share one dispatcher (`handleNextStepAction`), so one cause covered both.
+  - **Not a prop mismatch.** `onOpenReviewForMeeting` was passed
+    (`App.jsx`), declared and invoked (`CaseViewScreen`) correctly. The whole
+    dispatch chain completed.
+  - **Root cause, two linked defects of mine:**
+    1. **End patched `endedAt` only**, so the transcript was never persisted. The
+       meeting reached `review_draft` with `transcript: []` — confirmed in
+       production (`transcript_len = 0`). The notes only ever existed in that
+       browser tab, and End then cleared the crash-recovery draft. My Phase 3A
+       report claimed the transcript "was saved with the meeting"; that was wrong.
+    2. **`openReviewForMeeting` never navigated.** It delegated navigation to
+       `handleReview`, which returns at `if(!allNotes.length) return;` — *before*
+       `setScreen(SCREENS.REVIEW)`. With no notes, the chain completed and then
+       silently went nowhere. Opening a screen must never depend on whether
+       content can be generated for it.
+  - **Fix.** End now patches `{ endedAt, transcript: allNotes }`, and
+    `openReviewForMeeting` calls `setScreen(SCREENS.REVIEW)` itself,
+    unconditionally. When a meeting genuinely has no persisted notes (this
+    fixture, and only meetings ended in the ~1h window before the fix) Review
+    still opens and says so truthfully rather than fabricating content.
+  - **Why the Phase 3A tests missed it.** They asserted the *source text* of the
+    dispatch (`expect(branch).toContain('onOpenReviewForMeeting?.(cs, m)')`) and
+    exercised the helpers in isolation. They never rendered the screen, never
+    clicked a button, and never executed `handleReview`'s guard — so they proved
+    the wiring, not the outcome. The same lesson as *"a unit test on a primitive
+    proves nothing about the caller"*, one layer up.
+  - **Regression coverage** `src/test/reviewDraftCtaIntegration.test.jsx` — 21
+    tests that **render `CaseViewScreen` and click the real buttons**, plus
+    behavioural and source proofs of the navigation-independence rule. **3 fail
+    against the pre-fix source.** The 12 dispatch-level tests deliberately pass
+    against the broken build too, and say so in the file, because that is the
+    coverage gap being recorded.
 - **Before.** `review_draft` was a declared state with **no writer** and zero
   production rows. End persisted nothing (see NEW-26).
 - **Now.** End transitions the existing meeting:
@@ -153,7 +191,11 @@ above. No Phase 3A path uses them.
   the agreed matrix; **30 fail against the pre-3A source**.
 - **Scope held.** No persisted `reviewDraft` content, no autosave, no Regenerate,
   no prep persistence, no completion guard change, no Case View redesign, no
-  recipe change, no migration, no new API function.
+  recipe change, no migration, no new API function. Persisting the **transcript**
+  at End is 3A, not 3B: the transcript is the meeting's own long-standing field
+  (all 884 legacy rows carry it) and is the input Review generates *from*, which
+  the 3A brief required; the Review **draft** remains volatile.
+- **NOT human verified.** Awaiting Walter's retest of the re-entry fix.
 
 ### NEW-26 — Review draft destroyed by refresh or navigation
 - **Severity** P1 · **Area** Review persistence
