@@ -770,6 +770,62 @@ analysis for the whole file — read lint **per rule**, never by total.
   15 mutations caught**; plus **18 database-level proofs** run as rolled-back
   transactions against production (12 trigger/constraint, 6 RLS with real JWT
   impersonation). Full suite **5,044 / 301 files**, 0 failed.
+### Phase 4C.2 — standalone meeting discovery foundation (2026-09-25)
+- **STATUS: DEPLOYED / READY FOR HUMAN UAT.** Creates no standalone production
+  rows; `public.meetings` remains at **0 rows**.
+- **Why discovery came before creation.** Compass had **no Meetings destination at
+  all** — every meeting was reachable only through its case. A standalone meeting
+  with nowhere to be found again would be worse than no standalone meeting, so the
+  retrieval path is built first.
+- **Architecture.** A pure read model (`lib/meetingDiscovery.js`) plus a single
+  gateway (`lib/meetingTableGateway.js`), behind one modest screen
+  (`screens/MeetingsScreen.jsx`) reachable from a new **Meetings** item in the
+  existing sidebar *Work* group. No new navigation tier, no dashboard.
+- **Access is RLS, and only RLS.** The read model contains **no** creator, chair,
+  HR or org access predicate — asserted by test against `createdBy ===`,
+  `auth.uid`, `isHR`, `canAccess`, `my_org_ids` and friends. A client-side filter
+  could drift from the policy in either direction, and worse, could become the
+  thing people trust instead of it.
+- **Metadata only.** `DISCOVERY_COLUMNS` deliberately excludes `record`,
+  `transcript`, `summary`, `risk`, `review_draft` and `advisor_notes`. Discovery
+  needs to say a meeting exists and what state it is in, not carry the verbatim
+  transcript of a welfare conversation. Not fetching content is a smaller exposure
+  than fetching it and choosing not to render it.
+- **Compatibility decision: TABLE-ONLY (option A).** The surface shows
+  table-resident meetings only; embedded case meetings keep their existing
+  surfaces untouched. Option B (a unified list) was rejected for this slice: with
+  0 table rows it would have immediately surfaced all 890 embedded meetings as a
+  large new production surface, which is far beyond "minimum", and it would have
+  meant an eighth cross-case aggregation. The read model is nonetheless
+  **dual-capable** (`meetingStore.allKnownMeetings` unions both homes with
+  provenance intact), so convergence is later wiring, not a rewrite.
+- **Reopen contract.** Resolution is by **stable meeting id + storage provenance**
+  and nothing else — never employee name, meeting label, current case or array
+  position. Ambiguity is **refused**, not resolved by position, because 854 legacy
+  ids are bare millisecond timestamps and two homes make a collision conceivable.
+  An inaccessible meeting returns the identical `null` as a nonexistent one, so a
+  failed lookup cannot probe another tenant.
+- **No action buttons in this phase**, deliberately: the surface renders **zero**
+  `role="button"` elements (asserted). Write paths arrive in 4C.3+, and a
+  live-looking control that does nothing was the Phase 3A CTA defect while a greyed
+  one with no reason was the Phase 2.3 scheduling defect. One quiet line says when
+  actions arrive. `potentialActionFor` already computes each row's eventual action
+  behind a `writesEnabled` flag, so activation is one parameter.
+- **Truthful empty state:** *"No standalone meetings yet"* — and it does **not**
+  invite the user to create one, asserted against `/create a standalone meeting/i`,
+  `/start a meeting/i` and `/schedule one/i`.
+- **Evidence** `src/test/meetingDiscovery.test.jsx` — 48 tests, **12 of 12
+  mutations caught**; plus **8 discovery-level RLS proofs** run against the real
+  `public.meetings` with real JWT impersonation, using the exact gateway query.
+  The decisive one: a user named in `participants` as a notetaker, with no grant,
+  **does not discover the meeting**. Full suite **5,092 / 302**, lint **164/9**
+  unchanged rule-by-rule.
+- **One lint defect found and fixed in-phase.** The first version reset state
+  synchronously at the top of the load effect, tripping
+  `react-hooks/set-state-in-effect` (9 → 10) — and it would also have shown the
+  previous organisation's meetings for one frame after an org switch. Replaced by
+  deriving "loading" from a result that carries its own `orgId`. Back to 9.
+
 ### NEW-44 — two org-scoped tables are unclassified for erasure — P2 (GDPR) — OPEN
 - **Severity** P2 · **Area** GDPR erasure / data inventory · **Raised** 2026-09-25
   (found while verifying 4C.1's own erasure registration against the live schema)
@@ -792,8 +848,20 @@ analysis for the whole file — read lint **per rule**, never by total.
   metadata, so both are plausibly `INTENTIONALLY_EXCLUDED` alongside `org_members`
   and `locations` — but "Delete all data" currently spares them **by omission
   rather than by decision**, which is the actual defect.
-- **Recommended fix:** classify both explicitly, refresh the snapshot with its
-  date, and schedule the live-schema CI check that removes this whole failure mode.
+- **Remediation constraints (set 2026-09-25, when 4C.1 was closed):**
+  - **NOT to be fixed inside Phase 4C.** It needs its own bounded slice.
+  - **Must NOT be "fixed" by updating the snapshot test.** Adding the two names to
+    `LIVE_ORG_ID_TABLES_*` would turn the test green while "Delete all data" still
+    spared the rows — converting a real erasure gap into a false assurance, which
+    is strictly worse than the current honest failure to classify.
+  - The remediation must start from the **intended retention/deletion semantics of
+    those two tables** — what Compass means to keep, for how long, and why — and
+    only then classify them. `customer_contracts` and `team_invites` plausibly
+    belong in `INTENTIONALLY_EXCLUDED_TABLES` alongside `org_members` and
+    `locations`, but that is a **decision to be made and recorded**, not a guess to
+    be encoded.
+  - Schedule the live-schema CI check separately; it removes this whole failure
+    mode rather than this instance of it.
 
 - Audit findings retained: the `meetings` table exists with **0 rows** and is
   unusable as-is (no `org_id`; its single RLS policy would make any

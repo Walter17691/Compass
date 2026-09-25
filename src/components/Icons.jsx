@@ -118,6 +118,20 @@ export function PeopleIcon({ size = 16, color = "currentColor", style }) {
   );
 }
 
+// Phase 4C.2 — the Meetings destination. Two overlapping speech shapes: a
+// meeting is a conversation, and the sidebar already spends PeopleIcon on the
+// People directory, so reusing it here would make two different destinations
+// look like the same thing. Same 24-box, 1.6 stroke and round joins as every
+// other icon in this file.
+export function MeetingsIcon({ size = 16, color = "currentColor", style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden="true">
+      <path d="M3.5 5.5h11a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5h-6l-3.5 3v-3H3.5A1.5 1.5 0 0 1 2 12V7a1.5 1.5 0 0 1 1.5-1.5Z" />
+      <path d="M18.5 9.5H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v2.5l-3-2.5h-3.5" />
+    </svg>
+  );
+}
+
 export function CalendarIcon({ size = 16, color = "currentColor", style }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={style} aria-hidden="true">

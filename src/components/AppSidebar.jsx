@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { CompassLogo } from './CompassLogo';
 import { ActivityBell } from './ActivityBell';
-import { MenuIcon, CheckIcon, HomeIcon, CasesIcon, TasksIcon, PeopleIcon, CalendarIcon, ClipboardIcon, FlagIcon, BarChartIcon, UsersMinusIcon, HeartIcon, ShieldIcon, GearIcon } from './Icons';
+import { MenuIcon, CheckIcon, HomeIcon, CasesIcon, TasksIcon, PeopleIcon, CalendarIcon, MeetingsIcon, ClipboardIcon, FlagIcon, BarChartIcon, UsersMinusIcon, HeartIcon, ShieldIcon, GearIcon } from './Icons';
 import { CreateMenu } from './CreateMenu';
 import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { FONT, COLOR, SPACE, RADIUS } from '../styles/tokens';
@@ -374,6 +374,11 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   const sidebarGroups = [
     { label:"Work", items: [
       {s:SCREENS.CALENDAR, l:"Calendar", icon:CalendarIcon},
+      // Phase 4C.2 — one new destination, placed next to Calendar in the
+      // existing "Work" group rather than given a group or a tier of its own.
+      // Visible to everyone: a standalone meeting belongs to the manager who
+      // held it as much as to HR, and RLS decides what each of them can see.
+      {s:SCREENS.MEETINGS, l:"Meetings", icon:MeetingsIcon},
       isHR ? {s:SCREENS.HR_DELEGATED_WORK, l:"Delegated Work", icon:ClipboardIcon} : {s:SCREENS.MANAGER_PORTAL, l:"My People Actions", icon:ClipboardIcon},
       {s:SCREENS.CONCERNS, l:isHR?"Concerns":"Raise a concern", icon:FlagIcon},
     ]},

@@ -51,6 +51,11 @@ export const SCREENS = {
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing", DSAR:"dsar", TASKS:"tasks",
   CONCERNS:"concerns", ASK_COMPASS:"ask_compass", SAVE_EMAIL:"save_email",
   CALENDAR:"calendar", MANAGER_PORTAL:"manager_portal", HR_DELEGATED_WORK:"hr_delegated_work",
+  // Phase 4C.2 — discovery for meetings that are not part of a formal case.
+  // Compass had no Meetings destination at all; every meeting was reachable only
+  // through its case, which is exactly why a standalone meeting needed a home
+  // before 4C.3 is allowed to create one.
+  MEETINGS:"meetings",
   MANAGER_INSIGHTS:"manager_insights", OPEN_EMPLOYEE:"open_employee",
   // Organisational ER Intelligence (Phase 6, OP1) — the "Insights"
   // workspace replacing the two flat Performance Insights/Reports rows;

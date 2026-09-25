@@ -133,6 +133,12 @@ const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => (
 const DsarScreen = lazy(() => import('./screens/DsarScreen').then(m => ({default: m.DsarScreen})));
 const TasksScreen = lazy(() => import('./screens/TasksScreen').then(m => ({default: m.TasksScreen})));
 const CalendarScreen = lazy(() => import('./screens/CalendarScreen').then(m => ({default: m.CalendarScreen})));
+// Phase 4C.2. Lazy like its neighbours, and deliberately self-contained: it
+// loads its own rows from public.meetings rather than being handed a prop, so
+// App.jsx gains no new function call. Adding a new callee inside this component
+// has twice silently switched off the React Compiler's immutability (22) and
+// set-state-in-effect (9) analysis for the whole 10,700-line file.
+const MeetingsScreen = lazy(() => import('./screens/MeetingsScreen').then(m => ({default: m.MeetingsScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { CommandBarModal } from './screens/CommandBarModal';
 import { HandoffModal } from './screens/HandoffModal';
@@ -10854,6 +10860,9 @@ Please produce:
           autoOpenForm={taskFormAutoOpen}
           clearAutoOpenForm={()=>setTaskFormAutoOpen(false)}
         />
+      )}
+      {screen===SCREENS.MEETINGS&&(
+        <MeetingsScreen orgId={org?.id||null} />
       )}
       {screen===SCREENS.CALENDAR&&(
         <CalendarScreen
