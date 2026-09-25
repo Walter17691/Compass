@@ -409,9 +409,9 @@ none of which persist a structured case meeting:
   prep persistence, so this does not block closure. Belongs with the Phase 3 /
   NEW-26 / NEW-27 prep-and-review work.
 
-### Case status badge is lifecycle-blind — "Disciplinary in progress" — P2
+### Lifecycle-blind readers — status badge and getNextStep — P2
 - **Severity** **P2** · **Area** Case View status badge · **Raised** 2026-09-25
-- **STATUS: OPEN — diagnosed and classified, not fixed. No implementation authorised.**
+- **STATUS: FIXED / DEPLOYED — covers BOTH the status badge and getNextStep.**
 - **Observed.** With the Disciplinary meeting `scheduled` for 2026-10-02 and the
   card correctly reading *Not yet held*, the case badge read
   **"Disciplinary in progress"**.
@@ -439,17 +439,57 @@ none of which persist a structured case meeting:
   principle; "in progress" is the wrong word for it, and the mechanism is the
   wrong basis for it. `getCaseStatus` is case-progression metadata, not meeting
   lifecycle, and the two must not be derived from the same unfiltered list.
-- **Smallest correct fix (not applied).** Make `getCaseStatus` lifecycle-aware
-  and distinguish "Disciplinary scheduled" from "Disciplinary in progress".
-- **Same class, second sighting (2026-09-25).** On the verified retest case, with
-  one Disciplinary `in_progress` and nothing scheduled, `getNextStep` returns
-  *"Start disciplinary hearing"* — because the recipe asks `isMeetingComplete`
-  and an `in_progress` meeting is not complete, so it reads as "not started".
-  The amber Resume banner is showing at the same time, so the surfaces disagree.
-  Not caused by the continuity fix and not part of its pass criteria; recorded
-  here because it is the same lifecycle-blind-reader problem and should be fixed
-  with it.
-- **Decision** OPEN. Not covered by any test yet.
+- **Second reader, same cause (found in the Phase 2.3 retest).** With one
+  Disciplinary `in_progress` and nothing scheduled, `getNextStep` returned
+  *"Start disciplinary hearing"* while the amber banner offered **Resume**.
+  Compass stated both at once, and following the suggestion would have started a
+  second hearing. Cause: the recipes ask `isMeetingComplete`, which is
+  deliberately the WORKFLOW question ("may the process move on?"). `in_progress`
+  and `review_draft` are both correctly "not complete", so every recipe read them
+  as "no hearing yet". Only `scheduled` had been routed through the shared
+  post-processor.
+- **Fix — one shared post-processor, not five recipe branches or UI special
+  cases.** `withScheduledMeeting` became **`withExistingMeeting`** and now
+  establishes what already exists before the recipe's Start recommendation is
+  allowed to stand. The recipe still decides WHAT comes next; the lifecycle layer
+  establishes WHAT has happened. `resumableMeetingFor` is reused rather than
+  re-derived, so the step and the amber banner can never disagree about which
+  meeting is live.
+
+  | State | Behaviour |
+  |---|---|
+  | `in_progress` | **Resume**, naming that meeting (`resumeMeetingId`). Outranks everything. |
+  | `review_draft` | Neither Start nor Resume — surfaces the record for confirmation |
+  | `scheduled` | Unchanged: resolves to the existing meeting |
+  | `cancelled` | NOT held and NOT existing — a replacement IS still recommended |
+  | `completed` | Falls through to the recipe's downstream branches, untouched |
+  | legacy (`null`) | Falls through — Phase 1 compatibility preserved exactly |
+
+  Type-scoped: a live Investigation cannot hijack a Disciplinary step.
+- **Badge fixed from the same semantics.** `getCaseStatus` no longer reads the
+  raw type list. It excludes `cancelled` meetings and distinguishes
+  "Disciplinary scheduled" from "Disciplinary in progress".
+  **Deliberately narrow: only meetings that DECLARE a status are reinterpreted.**
+  A legacy row's `declaredStatus` is `null`, which is never `cancelled` and never
+  `scheduled`, so all **884** pre-lifecycle production meetings keep their badge
+  byte for byte, and letter artefacts still count exactly as before. Measured
+  production impact today: **zero cases change badge** — the only `scheduled`
+  meeting sits on a case that also has one `in_progress`, so that case correctly
+  still reads "in progress". The fix is forward-looking.
+- **New CTA handlers.** `resume_meeting` reuses the same `onResumeMeeting` the
+  amber banner calls; `review_meeting_record` opens the existing record
+  confirmation flow. Neither can start or create a meeting. No CTA is emitted
+  without a handler.
+- **Evidence** `src/test/lifecycleReaderConsistency.test.js` — 43 tests,
+  **17 fail against the pre-fix source**. Includes the exact production shape
+  from the verified retest (`meeting_df599cb1-…`, `in_progress`, schedule
+  present, `startedAt` present, empty record, `endedAt` null) asserting Resume is
+  available and no Start is recommended, plus the forked case resolving to its
+  live meeting rather than promoting the stranded one.
+- **Not yet addressed (unchanged scope).** `review_draft` is written by nothing
+  and appears in zero production rows; Phase 3 owns the full review lifecycle.
+  The `review_meeting_record` step is a safe placeholder, not that design.
+- **Decision** FIXED. Human confirmation of the corrected Case View wording is a UI observation, not a data risk.
 
 ### Case Readiness question is a stale persisted AI snapshot — P3
 - **Severity** **P3** · **Area** Case Readiness / AI signals · **Raised** 2026-09-25

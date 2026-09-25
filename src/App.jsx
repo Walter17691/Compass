@@ -9104,11 +9104,35 @@ Please produce:
     }
     if(hasOutcomeLetter && hasPending) return {label:"Outcome — awaiting signature", color:"#B87520", bg:"#FEF5E7"};
     if(hasOutcomeLetter) return {label:"Outcome issued", color:"#1A7A4A", bg:"#E8F5EE"};
-    if(types.some(t=>t.includes("appeal"))) return {label:"Appeal in progress", color:"#B87520", bg:"#FEF5E7"};
-    if(types.some(t=>t.includes("disciplinary"))) return {label:"Disciplinary in progress", color:"#B87520", bg:"#FEF5E7"};
-    if(types.some(t=>t.includes("grievance"))) return {label:"Grievance in progress", color:"#B87520", bg:"#FEF5E7"};
-    if(types.some(t=>t.includes("redundancy"))) return {label:"Redundancy consultation", color:"#B87520", bg:"#FEF5E7"};
-    if(types.some(t=>t.includes("investigation"))) return {label:"Under investigation", color:"#6B6375", bg:"#F5F1EA"};
+    // Lifecycle reader consistency (2026-09-25) — this badge used to read the
+    // raw type list, so it said "in progress" for a meeting that was merely
+    // SCHEDULED (the human-UAT contradiction: "Disciplinary in progress" beside
+    // a card reading "Not yet held"), and would have said it for a CANCELLED
+    // one too, since cancelScheduledMeeting keeps the entry.
+    //
+    // Deliberately narrow: only meetings that DECLARE a status are reinterpreted.
+    // A legacy row's declaredStatus is null, never "cancelled", so all 884
+    // pre-lifecycle production meetings keep their existing badge byte for byte,
+    // and letter artefacts still count exactly as they did.
+    const activeOfType = t => meetings
+      .filter(m => (m.type || "").toLowerCase().includes(t))
+      .filter(m => declaredStatus(m) !== MEETING_STATUS.CANCELLED);
+    const presentOfType = t => activeOfType(t).length > 0;
+    const onlyScheduledOfType = t => {
+      const ms = activeOfType(t);
+      return ms.length > 0 && ms.every(m => declaredStatus(m) === MEETING_STATUS.SCHEDULED);
+    };
+    if(presentOfType("appeal")) return onlyScheduledOfType("appeal")
+      ? {label:"Appeal hearing scheduled", color:"#B87520", bg:"#FEF5E7"}
+      : {label:"Appeal in progress", color:"#B87520", bg:"#FEF5E7"};
+    if(presentOfType("disciplinary")) return onlyScheduledOfType("disciplinary")
+      ? {label:"Disciplinary scheduled", color:"#B87520", bg:"#FEF5E7"}
+      : {label:"Disciplinary in progress", color:"#B87520", bg:"#FEF5E7"};
+    if(presentOfType("grievance")) return onlyScheduledOfType("grievance")
+      ? {label:"Grievance meeting scheduled", color:"#B87520", bg:"#FEF5E7"}
+      : {label:"Grievance in progress", color:"#B87520", bg:"#FEF5E7"};
+    if(presentOfType("redundancy")) return {label:"Redundancy consultation", color:"#B87520", bg:"#FEF5E7"};
+    if(presentOfType("investigation")) return {label:"Under investigation", color:"#6B6375", bg:"#F5F1EA"};
     if(types.some(t=>t.includes("informal")||t.includes("return")||t.includes("performance")||t.includes("pip"))) return {label:"Informal stage", color:"#6B6375", bg:"#F5F1EA"};
     if(meetings.length === 0) return {label:"Open — no meetings yet", color:"#6B6375", bg:"#F5F1EA"};
     return {label:"In progress", color:"#6B6375", bg:"#F5F1EA"};

@@ -315,6 +315,27 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       if(m) onStartScheduledMeeting?.(cs, m);
       return;
     }
+    // Lifecycle reader consistency (2026-09-25) — the step can now name a
+    // meeting that is already under way. Reuses the same onResumeMeeting the
+    // amber banner calls, so both surfaces act on one meeting, never two.
+    if(nextStep.action==="resume_meeting"){
+      const m = (cs.meetings||[]).find(x=>x.id===nextStep.resumeMeetingId);
+      if(m) onResumeMeeting?.(cs, m);
+      return;
+    }
+    // Held, record still being finalised. Opens that record for confirmation
+    // rather than offering to start or resume anything. Phase 3 will own the
+    // full review lifecycle; nothing writes review_draft yet.
+    if(nextStep.action==="review_meeting_record"){
+      const m = (cs.meetings||[]).find(x=>x.id===nextStep.reviewMeetingId);
+      if(m?.record){
+        setReviewOutput(m.record);
+        setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));
+        setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);
+        setShowSignModal(true);
+      }
+      return;
+    }
     if(nextStep.action==="start_investigation"||nextStep.action==="start_disciplinary"||nextStep.action==="start_appeal_meeting"||nextStep.action==="start_hearing"){
       // Appeal Hearing Control Remediation (2026-09-18) — a structured
       // appeal hearing (reached via "Start appeal hearing" with a current

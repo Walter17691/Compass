@@ -5,7 +5,9 @@ import {
   isResumableMeeting, isMeetingComplete, declaredStatus,
 } from '../lib/meetingLifecycle.js';
 import { WRITE_FAILURE, transitionMeeting, planMeetingWrite } from '../lib/meetingWrites.js';
-import { getNextStep, withScheduledMeeting } from '../lib/nextStep.js';
+// withScheduledMeeting became withExistingMeeting when the lifecycle reader
+// consistency fix extended it to in_progress and review_draft as well.
+import { getNextStep, withExistingMeeting } from '../lib/nextStep.js';
 
 // Release 1 Phase 2.3 — truthful scheduling.
 //
@@ -381,8 +383,8 @@ describe('next-step engine — one shared rule, no recipe changes', () => {
   });
 
   it('only rewrites hold-a-meeting steps, never anything else', () => {
-    expect(withScheduledMeeting(investigationCase(sched()), { action: 'outcome_letter', label: 'Draft outcome letter', meetingType: 'investigation' }).action).toBe('outcome_letter');
-    expect(withScheduledMeeting(investigationCase(sched()), null)).toBeNull();
+    expect(withExistingMeeting(investigationCase(sched()), { action: 'outcome_letter', label: 'Draft outcome letter', meetingType: 'investigation' }).action).toBe('outcome_letter');
+    expect(withExistingMeeting(investigationCase(sched()), null)).toBeNull();
   });
 
   it('a cancelled or completed meeting does not suppress the recommendation', () => {
@@ -392,15 +394,16 @@ describe('next-step engine — one shared rule, no recipe changes', () => {
   });
 
   it('recipes themselves are untouched — the rule is applied once, afterwards', () => {
-    expect(nextStepSrc).toContain('return withScheduledMeeting(cs, baseNextStep(cs, ctx));');
+    expect(nextStepSrc).toContain('return withExistingMeeting(cs, baseNextStep(cs, ctx));');
     const recipes = nextStepSrc.slice(nextStepSrc.indexOf('function disciplinaryNextStep'));
     expect(recipes).not.toContain('scheduledMeetingsFor');
-    expect(recipes).not.toContain('withScheduledMeeting');
+    expect(recipes).not.toContain('withExistingMeeting');
+    expect(recipes).not.toContain('resumableMeetingFor');
   });
 
   it('a case with no scheduled meeting gets its exact prior answer', () => {
     const cs = investigationCase({ id: 'L', type: 'Investigation', record: 'held' });
-    expect(getNextStep(cs, {})).toEqual(withScheduledMeeting(cs, getNextStep(cs, {})));
+    expect(getNextStep(cs, {})).toEqual(withExistingMeeting(cs, getNextStep(cs, {})));
   });
 });
 

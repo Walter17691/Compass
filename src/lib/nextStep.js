@@ -1,6 +1,7 @@
 import { getCaseStage, isGrievanceCase, hasLetterType } from './caseStage.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
-import { isMeetingComplete, lastGenuineMeeting, scheduledMeetingsFor } from './meetingLifecycle.js';
+import { isMeetingComplete, lastGenuineMeeting, scheduledMeetingsFor,
+         resumableMeetingFor, isGenuineMeeting, declaredStatus, MEETING_STATUS } from './meetingLifecycle.js';
 
 // Case Copilot's recommended next action — pure function of a case's
 // current stage, type, and meeting history, no I/O. Drives the "Next
@@ -38,7 +39,7 @@ function normalizedCaseType(cs) {
 // (CaseViewScreen.jsx), so this doesn't introduce an inconsistent UX where one
 // entry point is hidden from non-HR users and the other isn't.
 export function getNextStep(cs, ctx = {}) {
-  return withScheduledMeeting(cs, baseNextStep(cs, ctx));
+  return withExistingMeeting(cs, baseNextStep(cs, ctx));
 }
 
 function baseNextStep(cs, ctx = {}) {
@@ -79,10 +80,64 @@ function matcherForMeetingType(meetingType) {
   return null;
 }
 
-export function withScheduledMeeting(cs, step) {
+// Lifecycle reader consistency (2026-09-25). Human UAT reached a state where
+// Compass said both things at once: the amber banner offered to RESUME a live
+// Disciplinary hearing, while the suggested next step said "Start disciplinary
+// hearing". Contradictory, and action-unsafe — following the suggestion would
+// have started a second hearing.
+//
+// Cause: the recipes ask isMeetingComplete, which is deliberately a WORKFLOW
+// question ("may the process move on?"). in_progress and review_draft are both
+// correctly "not complete", so every recipe read them as "no hearing yet".
+// The scheduled case was already handled here; the other live states were
+// simply never routed through it.
+//
+// Fixed in this one shared post-processor rather than in five recipe branches
+// or in Case View: the recipe still decides WHAT comes next, and the lifecycle
+// layer establishes WHAT already exists. Precedence is deliberate —
+//
+//   in_progress    outranks everything: resume it, never start another
+//   review_draft   the hearing happened; neither Start nor Resume is truthful
+//   scheduled      the existing behaviour, unchanged
+//   cancelled      NOT a held hearing and NOT an existing one — a replacement
+//                  may legitimately be recommended, so it falls through
+//   completed      falls through to the recipe's own downstream branches
+//   legacy (null)  falls through, preserving Phase 1 compatibility exactly
+//
+// resumableMeetingFor is reused rather than re-derived so this step and the
+// amber Resume banner can never disagree about which meeting is live.
+export function withExistingMeeting(cs, step) {
   if(!step || !SCHEDULABLE_ACTIONS.has(step.action)) return step;
   const matcher = matcherForMeetingType(step.meetingType);
   if(!matcher) return step;
+
+  const live = resumableMeetingFor(cs);
+  if(live.meeting && matcher(live.meeting.type)) {
+    return {
+      ...step,
+      label: "Resume meeting",
+      action: "resume_meeting",
+      // Named, so the caller resumes THIS meeting rather than re-deriving it.
+      resumeMeetingId: live.meeting.id,
+      reason: live.ambiguous
+        ? `This meeting is already under way. ${live.count} meetings on this case are marked in progress — resuming opens the most recently started.`
+        : "This meeting is already under way. Resuming opens the same meeting rather than starting another.",
+    };
+  }
+
+  const inReview = (Array.isArray(cs?.meetings) ? cs.meetings : [])
+    .filter(m => isGenuineMeeting(m) && matcher(m.type) && declaredStatus(m) === MEETING_STATUS.REVIEW_DRAFT);
+  if(inReview.length) {
+    const m = inReview[inReview.length - 1];
+    return {
+      ...step,
+      label: "Review and confirm the record",
+      action: "review_meeting_record",
+      reviewMeetingId: m.id,
+      reason: "This meeting has been held and its record is still being finalised — it does not need starting again.",
+    };
+  }
+
   const scheduled = scheduledMeetingsFor(cs).find(m => matcher(m.type));
   if(!scheduled) return step;
   const when = [scheduled.schedule?.date, scheduled.schedule?.time].filter(Boolean).join(" at ");
