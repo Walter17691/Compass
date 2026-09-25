@@ -104,9 +104,15 @@ above. No Phase 3A path uses them.
 
 ### Phase 3A — End is a real lifecycle transition
 - **Area** Meeting lifecycle · **Delivered** 2026-09-25
-- **STATUS: DEPLOYED. HUMAN UAT: FAILED then re-fixed — AWAITING RETEST.**
-- **HUMAN UAT 2026-09-25: FAILED — "Review meeting record" CTA inert after
-  persisted `review_draft` re-entry.** The End transition itself worked: after
+- **STATUS: DEPLOYED / FINAL HUMAN GOLDEN PATH REQUIRED.** Overall Phase 3A is **not** closed.
+- **RE-ENTRY DEFECT: CLOSED / HUMAN VERIFIED 2026-09-25.** Walter retested
+  `AT - Continuity Retest` against `01e689d`: the case still reads
+  *Disciplinary record in review*, Case View shows *Review meeting record*,
+  clicking it **opens Review**, Review truthfully reports that no notes were
+  saved for that historically damaged fixture, and returning to Case View
+  preserves `review_draft`. Fixture left untouched.
+- **HUMAN UAT 2026-09-25: FAILED (now fixed and verified) — "Review meeting
+  record" CTA inert after persisted `review_draft` re-entry.** The End transition itself worked: after
   Resume → note → End → Review → hard refresh → Case View, the badge read
   *Disciplinary record in review* and both CTAs read *Review meeting record*.
   **Clicking either did nothing** and the user stayed on Case View.
@@ -195,7 +201,20 @@ above. No Phase 3A path uses them.
   at End is 3A, not 3B: the transcript is the meeting's own long-standing field
   (all 884 legacy rows carry it) and is the input Review generates *from*, which
   the 3A brief required; the Review **draft** remains volatile.
-- **NOT human verified.** Awaiting Walter's retest of the re-entry fix.
+- **REMAINING PHASE 3A VERIFICATION GAP.** The repaired End path now persists
+  `{ endedAt, transcript: allNotes }`, but **no production meeting proves it**:
+  `AT - Continuity Retest` was ended before the fix, so its transcript is
+  irrecoverably empty, and it must not be ended again. One fresh human Golden
+  Path is required — notes entered → End → same meeting `review_draft` →
+  transcript persisted → Review generates from it → refresh → Case View shows
+  *Review meeting record* → reopening uses the same persisted meeting.
+- **Fixture NOT pre-created by Compass.** Creating it needs two user-facing
+  actions (create case, Start meeting) and there is no authenticated session to
+  perform them through the product; fabricating the rows directly would both
+  bypass the very `beginMeeting` path under test and risk a fixture shaped
+  unlike a real one. Walter creates it via the UI — see the handoff.
+- **Phase 3A will be marked CLOSED / HUMAN VERIFIED only when BOTH the human UI
+  evidence and the read-only database verification are in.**
 
 ### NEW-26 — Review draft destroyed by refresh or navigation
 - **Severity** P1 · **Area** Review persistence
