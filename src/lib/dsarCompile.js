@@ -61,11 +61,26 @@
 //    regardless of whose case it was on) is folded into the existing
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [] } = {}) {
+export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [] } = {}) {
   const matchingEmployeeRecords = employeeRecords.filter(r => r.name === employeeName);
   const employeeRecord = matchingEmployeeRecords[0] || null;
   const subjectCases = cases.filter(c => c.employeeName === employeeName);
   const subjectCaseIds = new Set(subjectCases.map(c => c.id));
+  // Phase 4C.1 — meetings that live in public.meetings rather than inside a
+  // case (see lib/meetingStore.js). A standalone meeting's transcript and record
+  // are unambiguously the named employee's personal data, so omitting them would
+  // make every DSAR response incomplete the moment standalone meetings can be
+  // saved. This is wired in the SAME slice that creates the table, deliberately:
+  // there must be no window in which Compass can store this content but not
+  // disclose it.
+  //
+  // Matched on employeeName, the same boundary wellbeingNotes and
+  // concernReferrals already use — a standalone meeting has no case to inherit
+  // the subject from, so the meeting's own employee_name IS the link. Note this
+  // is the DSAR compiler's established pattern, not a new inference: it is not
+  // being used to grant access (RLS does that, and never reads a name), only to
+  // decide what to disclose to a subject who has asked.
+  const subjectStandaloneMeetings = standaloneMeetings.filter(m => m?.employeeName === employeeName);
   const onboarding = starterInstances.filter(s => s.name === employeeName);
   const offboarding = leaverInstances.filter(s => s.name === employeeName);
   const subjectWellbeingNotes = wellbeingNotes.filter(n => n.employeeName === employeeName);
@@ -173,6 +188,16 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     });
   });
 
+  // Standalone meetings get the identical third-party treatment — flagged for
+  // human review, never auto-redacted. caseId is null here by definition, so the
+  // location carries standalone:true rather than a case that does not exist;
+  // a reviewer must be able to find the source of a flagged line.
+  subjectStandaloneMeetings.forEach(m => {
+    scanText(m.record, { standalone: true, meetingId: m.id, field: 'record', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
+    scanText(m.summary, { standalone: true, meetingId: m.id, field: 'summary', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
+    (m.transcript || []).forEach((u, i) => scanText(u.text, { standalone: true, meetingId: m.id, field: `transcript[${i}]`, meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt }));
+  });
+
   subjectWellbeingNotes.forEach(n => scanText(n.content, { field: 'wellbeingNote.content', wellbeingNoteId: n.id, date: n.date }));
   subjectConcernReferrals.forEach(r => {
     scanText(r.description, { field: 'concernReferral.description', concernReferralId: r.id });
@@ -251,6 +276,15 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
       (m.transcript || []).forEach((u, i) => scanForSubjectAsThirdParty(u.text, { caseId: c.id, meetingId: m.id, field: `transcript[${i}]`, meetingType: m.type, date: m.date }));
     });
   });
+  // Phase 4C.1 — the mirror case: the subject named inside SOMEONE ELSE's
+  // standalone meeting. Same rule as another person's case record: it is a
+  // third-party disclosure decision for a human, not an automatic inclusion.
+  standaloneMeetings.filter(m => m?.employeeName !== employeeName).forEach(m => {
+    scanForSubjectAsThirdParty(m.record, { standalone: true, meetingId: m.id, field: 'record', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
+    scanForSubjectAsThirdParty(m.summary, { standalone: true, meetingId: m.id, field: 'summary', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
+    (m.transcript || []).forEach((u, i) => scanForSubjectAsThirdParty(u.text, { standalone: true, meetingId: m.id, field: `transcript[${i}]`, meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt }));
+  });
+
   const otherCaseIds = new Set(otherCases.map(c => c.id));
   allegations.filter(a => otherCaseIds.has(a.caseId)).forEach(a => {
     ['description', 'peopleInvolved', 'employeeResponse', 'witnessEvidence', 'investigatorFinding', 'outstandingUncertainty', 'decisionReasoning', 'appealReasoning'].forEach(field => {
@@ -282,6 +316,10 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     employeeRecord,
     possibleNameCollision,
     cases: casesForExport,
+    // Phase 4C.1 — a top-level category, not folded into `cases`, because these
+    // meetings genuinely have no case and presenting them under one would
+    // misrepresent the record to both the subject and the reviewer.
+    standaloneMeetings: subjectStandaloneMeetings,
     onboarding,
     offboarding,
     wellbeingNotes: subjectWellbeingNotes,

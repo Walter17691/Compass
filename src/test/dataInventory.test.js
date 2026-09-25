@@ -30,6 +30,16 @@ const LIVE_ORG_ID_TABLES_2026_08_25 = [
   // redundancy_cases added 2026-08-27 (closes Prompt 16 audit finding H1)
   // — see supabase/redundancy_cases_2026-08-27.sql.
   'redundancy_cases',
+  // meetings added 2026-09-25 (Phase 4C.1) — see
+  // supabase/standalone_meetings_2026-09-25.sql. Listed here in the SAME commit
+  // that adds it to dataInventory.js, which is what this file's own header asks
+  // for ("update both this file and dataInventory.js together"). Note the live
+  // schema does not have this org_id column YET: the migration is held for
+  // pre-deploy review. Listing it early cannot produce a false failure (the test
+  // asserts live ⊆ known, and it is in ORG_SCOPED_TABLES), and it means the two
+  // files cannot drift in the window between review and apply. Re-verify against
+  // information_schema once the migration is applied.
+  'meetings',
 ];
 
 describe('dataInventory — GDPR erasure completeness', () => {

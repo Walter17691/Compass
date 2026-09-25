@@ -32,6 +32,12 @@ export const ORG_SCOPED_TABLES = [
   // org_id column, no case_id/FK to cases at all, so nothing else's
   // cascade would ever reach it (see supabase/redundancy_cases_2026-08-27.sql).
   'redundancy_cases',
+  // meetings (Phase 4C.1, supabase/standalone_meetings_2026-09-25.sql) — the
+  // standalone meeting store. Its own org_id column, and its case_id is NULLABLE
+  // by design, so the cases cascade reaches only the linked ones and would leave
+  // every genuinely standalone meeting behind. It must be deleted directly or
+  // "Delete all data" would silently spare meeting transcripts forever.
+  'meetings',
 ];
 
 // Tables with an org_id column that are NOT deleted directly, because a

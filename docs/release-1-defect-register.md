@@ -46,7 +46,7 @@ none of which persist a structured case meeting:
 
 | Path | What it parents by name | Target phase |
 |---|---|---|
-| `saveDevMeetingToCase` | a **dev meeting** (probation/appraisal/PDP) — see the explicit breakdown below | **2.5** |
+| `saveDevMeetingToCase` | a **dev meeting** (probation/appraisal/PDP) — see the explicit breakdown below | **4C.6** |
 | `App.jsx:1234` `acceptMeetingEvidenceSuggestion` | case **evidence** | 2.5 |
 | `App.jsx:1258` `acceptMeetingActionSuggestion` | case **task** | 2.5 |
 | `App.jsx:6533` `createQualityCheckFollowUp` | case **task** | 2.5 |
@@ -70,6 +70,29 @@ but not this one. Explicitly, it:
 - never routes through `persistMeeting`/`planMeetingWrite`.
 **Deferred. Not fixed in Phase 3A** (different entry path, out of scope). Recorded
 here under NEW-20 FULL rather than as a new defect.
+
+**Re-confirmed again by the Phase 4C audit, 2026-09-25 — and now the sharpest
+statement of the problem.** The two behaviours the Phase 4C brief explicitly
+prohibits for standalone meetings — *"Do NOT use employee-name matching"* and
+*"Do NOT create fake cases behind the scenes"* — are **already live in production
+today on this path**. `saveDevMeetingToCase` does both: it matches on
+`employeeName.toLowerCase()`, takes `devNameMatches[0]` on a collision with only
+a `console.warn`, and mints a case with `crypto.randomUUID()` when nothing
+matches (`App.jsx:7663-7670`). Two same-named employees can therefore have a
+development review filed against the wrong person's case, or a duplicate case
+created, with no user-visible signal either way.
+
+**Standalone persistence is the correct replacement for it.** A dev 1:1 does not
+need a case at all; it needed one only because Compass could not save a meeting
+without one. Once the Phase 4C store exists, this path should create a standalone
+meeting rather than hunt for a parent by name. That is why the dev group is
+classified **SPECIAL / NOT_APPLICABLE** rather than folded into the standalone
+set: swapping the persistence substrate underneath a live save path is its own
+slice with its own human UAT, not a side effect of building the store.
+
+**Retargeted from Phase 2.5 to Phase 4C.6** (adoption / boundary work). **Not
+touched in 4C.1**, per the explicit instruction: 4C.1 adds the table, the RLS and
+the store abstraction and changes no existing write path.
 
 **Sync-all inventory, 2026-09-25:** 20 `saveCases` calls still omit `changedId`
 (17 `App.jsx`, 3 `CaseViewScreen.jsx`), one of which is the dev-meeting append
@@ -555,7 +578,9 @@ above. No Phase 3A path uses them.
 
 ### NEW-42 — unsupported 48-hour statutory notice assertion — P1 (product safety) — FIXED
 - **Severity** **P1** · **Area** New Meeting UI / legal copy · **Raised** 2026-09-25 (audit)
-- **STATUS: FIXED / DEPLOYED (Phase 4A).**
+- **STATUS: CLOSED / HUMAN VERIFIED 2026-09-25 (Phase 4A).** Walter confirmed in
+  production: New Meeting → Disciplinary shows **"Formal invitation"**, the
+  guidance says **reasonable notice**, and **no 48-hour assertion is shown**.
 - **Before**, hard-coded at `HomeMeetingScreen.jsx:325` under a heading reading
   **"Formal invitation required"**:
   > "The employee **must** receive a written invitation **at least 48 hours**
@@ -602,7 +627,14 @@ above. No Phase 3A path uses them.
   against the pre-fix source**.
 
 ### NEW-43 — formal-meeting case requirement explained only after the work — P2 — FIXED
-- **Severity** P2 (UX) · **Raised** 2026-09-25 (human UAT) · **STATUS: FIXED / DEPLOYED (Phase 4B).**
+- **Severity** P2 (UX) · **Raised** 2026-09-25 (human UAT) · **STATUS: CLOSED /
+  HUMAN VERIFIED 2026-09-25 (Phase 4B).** Walter confirmed in production, both
+  branches: **Disciplinary** with no case linked explains that the hearing is part
+  of a formal case, offers Link/Create, and blocks Schedule/Prepare/Start until
+  parentage exists; **Informal / 1-1** shows the different, honest *"does not have
+  to be part of a formal case, but Compass can't save one on its own yet"* and does
+  **not** falsely describe the meeting as part of a formal case. Both remain
+  blocked, as intended, because standalone persistence does not exist yet.
 - **Before.** A user could complete the New Meeting form, press Start or Prepare,
   do real work, and only then meet *"This meeting isn't linked to a case yet, so
   it can't be saved."* The message was correct; it arrived far too late.
@@ -645,6 +677,57 @@ above. No Phase 3A path uses them.
   must not collide with NEW-20 FULL / `saveDevMeetingToCase`.
 - **Not implemented into persistence.** Phase 4B encodes the classification for
   **explanation only**.
+### Phase 4C.1 — standalone meeting persistence + security foundation (2026-09-25)
+- **STATUS: IMPLEMENTED / MIGRATION HELD FOR PRE-DEPLOY REVIEW.** Not applied, not
+  deployed. No production row created.
+- **Approach C**, approved after the 4C architecture review: a new
+  `public.meetings` table is the home for meetings **born standalone**, and they
+  stay there for life — including after linking. The 884 legacy embedded meetings
+  are **not migrated**, and existing case-linked behaviour is unchanged.
+- **The decision the whole design turns on:** parentage is a **nullable column**,
+  not containment. *If parentage is a column, linking is an `UPDATE`; if parentage
+  is containment, linking is a `MOVE`* — and a move is a copy and a recreate
+  however carefully written, which the approved contract forbids.
+- **Phase 2.1 is supplied, not weakened.** `stampNewMeeting` already wrote
+  `caseId: caseId || null` and all five `PARENTAGE_MISMATCH` guards were already
+  null-tolerant, so the object model already permitted NULL → value and forbade
+  value → value′. `PARENT_REQUIRED` still fires unchanged on the embedded path.
+- **Corrected schema facts** that came out of the audit and changed the design:
+  | Fact | Consequence |
+  |---|---|
+  | **854 of 890** legacy meeting ids are bare millisecond timestamps; only 36 are `meeting_<uuid4>` | primary key is **`id text`**, not `uuid`, so a future migration never has to reassign an id — matching `case_tasks.id` |
+  | embedded `m.type` stores the **human label** (`"Disciplinary"`), reverse-mapped by readers | the table persists **`meeting_type_id`** (the registry id), so the appeal-type `CHECK` has something stable to bite on |
+  | embedded `invitation` is initialised null and **never written**; real invitation truth is a separate `letterType:'invite'` entry | **no `invitation` column** was invented; 4C.4 owns how invitation truth attaches |
+- **Appeal security.** The appeal-chair guarantee is a trigger on `public.cases`
+  that diffs `new.meetings` against `old.meetings`, so a meeting in a separate
+  table is invisible to it. The standalone set (`informal`, `return`,
+  `investigation`) is disjoint from the appeal set, making the design safe by
+  construction — and a `CHECK` allow-list makes it safe by **enforcement**, so no
+  future code path can create an appeal meeting there.
+- **Access model** (product decision, 2026-09-25): HR Director and HR Manager see
+  standalone meetings and their content **org-wide**; creator and chair see their
+  own; **nobody else gets org-wide reach**, and being named as employee,
+  participant, notetaker or manager grants nothing — `participants` is never read
+  by any policy. The broad caseless `case_tasks` branch (`org_id IN my_org_ids()`)
+  was deliberately **not** copied. Platform admins get nothing: every branch
+  requires an `org_members` row, and platform-admin status is independent of it.
+- **`ON DELETE CASCADE`**, matching what deleting a case already does to embedded
+  meetings. `ON DELETE SET NULL` was rejected — it would silently convert a
+  case-linked meeting back to standalone, the prohibited direction.
+- **DSAR completed in the same slice**, deliberately: a standalone transcript is
+  the named employee's personal data, so there must be no window in which Compass
+  can store it but not disclose it. `standaloneMeetings` is a top-level DSAR
+  category (not folded into `cases`, which would misreport a meeting that has no
+  case), with the same flag-for-human-review treatment for third-party mentions.
+- **Erasure:** registered in `ORG_SCOPED_TABLES`. `case_id` is nullable, so the
+  cases cascade reaches only linked meetings — without direct deletion a genuinely
+  standalone meeting would survive "Delete all data" forever. Removing the
+  registration fails **both** the new test and the pre-existing independently-
+  authored schema snapshot.
+- **Evidence** `src/test/standaloneMeetingFoundation.test.js` — 66 tests, **15 of
+  15 mutations caught**; plus **18 database-level proofs** run as rolled-back
+  transactions against production (12 trigger/constraint, 6 RLS with real JWT
+  impersonation). Full suite **5,044 / 301 files**, 0 failed.
 - Audit findings retained: the `meetings` table exists with **0 rows** and is
   unusable as-is (no `org_id`; its single RLS policy would make any
   `case_id IS NULL` row invisible to everyone, and references pre-org
