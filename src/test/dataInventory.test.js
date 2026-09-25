@@ -33,13 +33,19 @@ const LIVE_ORG_ID_TABLES_2026_08_25 = [
   // meetings added 2026-09-25 (Phase 4C.1) — see
   // supabase/standalone_meetings_2026-09-25.sql. Listed here in the SAME commit
   // that adds it to dataInventory.js, which is what this file's own header asks
-  // for ("update both this file and dataInventory.js together"). Note the live
-  // schema does not have this org_id column YET: the migration is held for
-  // pre-deploy review. Listing it early cannot produce a false failure (the test
-  // asserts live ⊆ known, and it is in ORG_SCOPED_TABLES), and it means the two
-  // files cannot drift in the window between review and apply. Re-verify against
-  // information_schema once the migration is applied.
+  // for ("update both this file and dataInventory.js together").
+  //
+  // RE-VERIFIED against information_schema after the migration was applied
+  // (2026-09-25): public.meetings now genuinely carries org_id NOT NULL and
+  // appears in the live sweep, so this entry is confirmed rather than anticipated.
   'meetings',
+  // KNOWN STALENESS, recorded as NEW-44 (P2, open). The same post-migration sweep
+  // found TWO further live org_id tables that this snapshot predates and that
+  // dataInventory.js classifies nowhere: customer_contracts and team_invites.
+  // They are deliberately NOT added here — adding them to the snapshot without
+  // classifying them in dataInventory.js would make this test pass while "Delete
+  // all data" still spared them, converting a real erasure gap into a green tick.
+  // Fix by classifying them first (see NEW-44), then refreshing this snapshot.
 ];
 
 describe('dataInventory — GDPR erasure completeness', () => {

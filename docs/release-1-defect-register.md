@@ -678,8 +678,50 @@ above. No Phase 3A path uses them.
 - **Not implemented into persistence.** Phase 4B encodes the classification for
   **explanation only**.
 ### Phase 4C.1 — standalone meeting persistence + security foundation (2026-09-25)
-- **STATUS: IMPLEMENTED / MIGRATION HELD FOR PRE-DEPLOY REVIEW.** Not applied, not
-  deployed. No production row created.
+- **STATUS: DEPLOYED / TECHNICALLY VERIFIED 2026-09-25.** Commit `0dbab38` pushed;
+  migration `standalone_meetings_2026_09_25` applied to production
+  (`npeegfsoijhdnnvuqjin`). `public.meetings` exists with 30 columns, TEXT primary
+  key, nullable `case_id`, 3 CHECK constraints, 2 FKs, 4 custom indexes, RLS
+  enabled, **6 explicit per-command policies**, and the parentage trigger.
+  `public.meetings_legacy_unused` retains 0 rows and its legacy policy under the
+  renamed name. **`public.meetings` holds 0 rows** — every verification probe ran
+  in a rolled-back transaction.
+- **Post-apply security proof on the REAL table: all 26 required invariants (A–Z)
+  passed**, plus 2 extra (born-linked rejection, org-move rejection). Run with
+  real JWT impersonation of production users. Highlights: an ordinary manager sees
+  only meetings they created or chaired and **not** another manager's; Org B sees
+  no Org A row; the production platform admin gets **no** Org B content; the link
+  preserved `id`, `created_by`, `created_at`, record text and transcript length
+  while stamping `linked_at`/`linked_by`; `case → NULL`, `case A → case B`,
+  cross-org link, and every immutable-field rewrite were all refused by the
+  trigger; linking to a case the linker cannot access was refused by the RLS
+  `WITH CHECK`.
+
+#### PRODUCT DECISION — post-link visibility (approved 2026-09-25)
+- **Once a standalone meeting is explicitly linked to a case, CASE ACCESS BECOMES
+  AUTHORITATIVE.** A creator or chair who could previously read the meeting **may
+  lose access** if they cannot access the target case. This is **intentional**:
+  creator access must not become a side door around case permissions.
+- **Recorded for 4C.5 UX (do NOT implement yet):** before linking, Compass must
+  clearly warn that the meeting will follow the target case's access permissions
+  and that **some existing viewers may lose access**. Verified as real behaviour:
+  a level-3 manager sees `<none>` for a case-linked meeting whose case they cannot
+  access.
+
+#### HARD ACTIVATION GATE — 4C.3 must not ship without this
+> **PHASE 4C.3 MUST NOT ENABLE STANDALONE MEETING CREATION UNTIL THE LIVE CASE
+> PERSISTENCE BOUNDARY CANNOT WRITE A TABLE-RESIDENT MEETING INTO
+> `cases.meetings`.** This must be **technically proven** before standalone
+> creation reaches production.
+
+`caseForPersistence` / `assertNoTableResident` exist and are mutation-proved in
+`lib/meetingStore.js`, but are **not yet wired into `saveCaseToDB`**. That is
+acceptable only while no production path can create a table-resident meeting —
+which is true today, since 4C.1 ships no creation path and `public.meetings` has
+0 rows. This is **not ordinary backlog**: it is a release gate on 4C.3. When
+wiring it, note that adding a **new callee inside `App.jsx`** has twice silently
+disabled the React Compiler's `immutability` (22) and `set-state-in-effect` (9)
+analysis for the whole file — read lint **per rule**, never by total.
 - **Approach C**, approved after the 4C architecture review: a new
   `public.meetings` table is the home for meetings **born standalone**, and they
   stay there for life — including after linking. The 884 legacy embedded meetings
@@ -728,6 +770,31 @@ above. No Phase 3A path uses them.
   15 mutations caught**; plus **18 database-level proofs** run as rolled-back
   transactions against production (12 trigger/constraint, 6 RLS with real JWT
   impersonation). Full suite **5,044 / 301 files**, 0 failed.
+### NEW-44 — two org-scoped tables are unclassified for erasure — P2 (GDPR) — OPEN
+- **Severity** P2 · **Area** GDPR erasure / data inventory · **Raised** 2026-09-25
+  (found while verifying 4C.1's own erasure registration against the live schema)
+- **Not caused by Phase 4C and deliberately NOT fixed in 4C.1** — out of the
+  approved slice. Recorded rather than silently carried.
+- **Observed.** A live `information_schema` sweep for `org_id`-bearing base tables
+  returns **34** tables. Two of them — **`customer_contracts`** and
+  **`team_invites`** — appear in **none** of `dataInventory.js`'s four categories
+  (`ORG_SCOPED_TABLES`, `CASCADE_COVERED_TABLES`, `INTENTIONALLY_EXCLUDED_TABLES`,
+  `SEPARATELY_HANDLED_TABLES`), so `api/delete-org-data.js` never deletes them and
+  nothing documents them as deliberately spared.
+- **Why the test did not catch it.** `dataInventory.test.js` compares against a
+  hand-authored snapshot **dated 2026-08-25**, and both tables postdate it. The
+  test asserts `live_snapshot ⊆ known` using the *snapshot*, not a live query, so a
+  table added after the snapshot is invisible to it. This is exactly the staleness
+  the test's own header predicted: *"This snapshot can go stale the same way the
+  old hand-maintained list did — the durable fix is a live-schema CI check."*
+- **Likely correct classification** (needs confirming, not assuming):
+  `customer_contracts` is platform/contract metadata and `team_invites` is invite
+  metadata, so both are plausibly `INTENTIONALLY_EXCLUDED` alongside `org_members`
+  and `locations` — but "Delete all data" currently spares them **by omission
+  rather than by decision**, which is the actual defect.
+- **Recommended fix:** classify both explicitly, refresh the snapshot with its
+  date, and schedule the live-schema CI check that removes this whole failure mode.
+
 - Audit findings retained: the `meetings` table exists with **0 rows** and is
   unusable as-is (no `org_id`; its single RLS policy would make any
   `case_id IS NULL` row invisible to everyone, and references pre-org
