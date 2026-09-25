@@ -392,9 +392,56 @@ none of which persist a structured case meeting:
   Prepare wrote nothing between them. The audit trail now names the SAME id at
   Start — `Meeting started — meeting meeting_df599cb1-…` — where the defective
   flow named `meeting_352722cc` against a scheduled `meeting_6a8bdb7c`.
-- **Decision** **CLOSED.** The two forked objects on
-  `AT - Scheduling Phase 2.3` are deliberately retained as evidence and are a
-  separate cleanup decision.
+- **CONTAMINATED UAT FIXTURE CLEANED — 2026-09-25 ~11:05 UTC.** Forensic
+  correction of `AT - Scheduling Phase 2.3`
+  (`e2d474da-4b90-47a7-8e82-cfcaf17d92ef`) after the code fix was verified.
+  - **Retained** `meeting_6a8bdb7c-8a6c-4d4c-881b-a6b071b9769f` — the scheduled
+    parent, proven authoritative three ways: its `createdAt 08:17:02.782` matches
+    the `Meeting scheduled` audit row and the schedule PATCH; it is the only
+    object holding the `schedule`; and it has the 17-key scheduled shape.
+  - **Removed** `meeting_352722cc-80b3-4c43-b4c5-deba318f24c7` — the defective
+    duplicate, proven so by `createdAt === startedAt === 08:53:41.718` (minted at
+    the Start click), a 13-key `beginMeeting` shape, and **no `schedule` key at
+    all**.
+  - **Merged in, nothing else:** `status: in_progress` and
+    `startedAt: 2026-09-25T08:53:41.718Z`. That start genuinely happened, and it
+    is exactly what the fixed code would have patched onto the scheduled object.
+    No record, transcript, preparation, invitation or calendar fact was
+    manufactured; nothing was marked completed; the Investigation entry was not
+    touched (byte-identical, 36 keys).
+  - **Method:** one guarded `UPDATE` — single statement, therefore a single
+    transaction — asserting the pre-image `updated_at`, the array length, and all
+    three ids by position, so it was a no-op unless the state was exactly as
+    audited. No admin bypass, RPC or migration was created. There is no
+    application path that deletes a meeting, and adding one would have been the
+    reusable bypass the brief forbids.
+  - **Rollback** `docs/uat-fixture-rollback-2026-09-25.md` — both Disciplinary
+    objects verbatim, pre-image `updated_at 2026-09-25 08:53:41.724+00`, pre-image
+    `md5(meetings::text) = 5b8c187fb3e7ddf376922f4233c2a34a`, and a guarded
+    restore statement.
+  - **Safety, verified before mutating:** UAT data (empty `employee_email`, no
+    portal account, `confidential = false`, no real person). An exhaustive scan of
+    **all 39 public tables** found the two ids referenced nowhere except `cases`
+    and one `audit_log` row — `signing_requests` 0, `calendar_synced_events` 0,
+    `case_signals` 0, `case_tasks` 0, no other case. All seven `cases` triggers
+    still fired; the appeal-chair trigger ran and correctly skipped
+    (`'disciplinary' not like '%appeal%'` ⇒ `requires_chair` false).
+  - **`audit_log` deliberately untouched.** It keeps its row naming the removed
+    id (*"Meeting started — meeting meeting_352722cc-…"*, `08:53:42.101`). That
+    row truthfully records what happened; rewriting it would falsify history,
+    which is worse than a dangling reference in an append-only log. The id
+    relationship is recorded here so the history stays understandable.
+  - **Post-cleanup verification:** 2 entries; one Disciplinary lifecycle object;
+    `status in_progress`; `schedule {2026-10-02, 10:00, Microsoft Teams}` intact;
+    `startedAt` preserved; `endedAt` null; `createdAt`/`createdBy`/`caseId`
+    truthful; `scheduledMeetingsFor → []`; `resumableMeetingFor` unambiguous
+    (count 1); derived stage `disciplinary`; next step **`resume_meeting`**
+    naming the retained id — no false "completed", no orphan, no duplicate. The
+    clean retest case `b3400735` is byte-identical
+    (`md5 0aeccbf9c8f7200dae424d29b59a84e7`, `updated_at 09:55:30.268`), no other
+    case was written, and **no application source file changed**.
+- **Decision** **CLOSED.** Code defect fixed and human verified; contaminated
+  fixture cleaned and verified. Not reopened.
 
 ### Prep-pack content is not persisted to the meeting — P3 design gap
 - **Severity** **P3** · **Area** Prep / Phase 3 · **Raised** 2026-09-25
