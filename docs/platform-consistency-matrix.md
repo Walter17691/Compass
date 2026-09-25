@@ -283,7 +283,9 @@ Two independent id generators remain: `newId("meeting")` in the save path and
 | **Review draft content** | none yet — React state | `reviewOutput`/`summary`/`riskScore`/`nextSteps` are volatile | **Phase 3B** | KNOWN GAP |
 | **Meeting transcript at End** | persisted by the End transition (`patch: { endedAt, transcript }`) | End patched `endedAt` only, so notes were lost at the browser boundary | Phase 3A (human verified) | CONSISTENT |
 | **Completion boundary** | canonical `transitionMeeting`, `allowedFrom: [review_draft, completed]` → `completed` | was an inline `status: completed` with no guard, so Save **and** Send for signature each defined completion for themselves (NEW-36, P1) | Phase 3B slice 1 | CONSISTENT |
-| **Signature eligibility** | `signatureEligibleIn(list)` — persisted `completed` + non-empty saved `record`; enforced in the UI **and** independently in the action | render gate was `reviewOutput && !editingRecord` — volatile local text, no lifecycle check | Phase 3B slice 1 | CONSISTENT |
+| **Signature eligibility** | `signatureEligibleIn(list, ids)` — persisted `completed` + non-empty saved `record`; enforced in the UI **and** independently in the action, which re-reads persisted state | render gate was `reviewOutput && !editingRecord` — volatile local text, no lifecycle check | Phase 3B slice 1 | CONSISTENT |
+| **Save & send (compound)** | one orchestration: `saveMeetingToCase()` → on success only → signature; `signId` attached via `transitionMeeting` `allowedFrom: [completed]` | signature used to run first and complete as a side effect | Phase 3B slice 1 UX | CONSISTENT |
+| **Signed document source** | the **persisted** `meeting.record` | was the local `reviewOutput` | Phase 3B slice 1 UX | CONSISTENT |
 | **Review screen action gating** | signature reads persisted status; **Save remains available in `review_draft`, because Save IS the confirmation** | signature previously gated on generated text alone | Phase 3B slice 1 | CONSISTENT |
 
 **Rule.** Meeting writes read `casesRef.current` deliberately — chained writes

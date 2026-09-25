@@ -383,6 +383,48 @@ above. No Phase 3A path uses them.
   invariant is now proven along the real two-step lifecycle
   (`in_progress → review_draft → completed`, resumable at no point after End).
   The `casesRef` assertion now covers both save branches.
+- **UX REFINEMENT (same turn, before closure).** Slice 1 as first deployed was
+  architecturally right but forced *Review → Save → Case View → Send for
+  signature*. Review now offers **both** legitimate choices while the record is a
+  `review_draft`:
+  - **Save to case** — confirms the record, `review_draft → completed`, no
+    signature; signature can be sent later from Case View.
+  - **Save & send for signature →** — a **compound action**, not a bypass: it
+    performs the *same* `saveMeetingToCase()` first and only continues to
+    signature once that succeeds.
+  A bare *"Send for signature"* remains forbidden during `review_draft`, because
+  that wording conceals the confirmation side effect. It is still shown for an
+  already-completed record, where the record is already authoritative.
+- **Ordering is CONFIRM FIRST, THEN SIGNATURE, enforced in code:**
+  ```js
+  const ids = { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId };  // captured FIRST
+  const saved = await saveMeetingToCase();
+  if(!saved?.ok) return saved;            // nothing is sent
+  setPendingSignature(ids); setShowSignModal(true);
+  ```
+  The ids must be captured beforehand because a successful save deliberately
+  clears `caseInfo.meetingId` (Phase 2.2 — a finished lifecycle id must not
+  survive). Without that capture, Stage 2 would have failed eligibility, and the
+  old `saveMeetingToCase({signId,…})` tail would have taken its **create** branch
+  and appended a duplicate meeting. Signature now attaches `signId` via
+  `transitionMeeting` with `allowedFrom: [COMPLETED]` instead — explicit, and
+  incapable of completing anything.
+- **Failure semantics, all tested:**
+  | Case | Behaviour |
+  |---|---|
+  | Save fails (stale `updated_at`, conflict, invalid state, missing/foreign meeting, server, validation) | **no signing request, no email**; meeting stays `review_draft` |
+  | Save succeeds, send fails | meeting **stays completed** — no rollback to draft; nothing falsely recorded as sent; Case View can offer signature later |
+  | Save to case only | `completed`, no signing request, signature available later |
+  | Save & send | completed **first**, then signature |
+- **The document sent is the PERSISTED record** (`signMeeting.record`), no longer
+  the local `reviewOutput`, so an edit made after the save can never be emailed
+  while the case file says something different.
+- **One authoritative save.** Both buttons call `saveMeetingToCase()`; there is no
+  `…ForSignature` / `…ForNormalSave` divergence, and exactly **one** occurrence of
+  the completion `allowedFrom` set exists in the codebase (asserted).
+- **Evidence** `src/test/saveAndSendCompound.test.jsx` — 24 tests covering the
+  agreed matrix 1–20, **8 failing against the pre-refinement source**, with the
+  external send mocked. No real emails, no real signing requests.
 - **NOT human verified.** No duplicate of NEW-26/27/32.
 
 ### NEW-37 — Meeting Quality Check: duplicate suggestions and double confirmation — P3 (product/UX)

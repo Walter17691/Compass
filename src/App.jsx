@@ -909,10 +909,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // during render is neither correct nor allowed), while the action gate reads
   // casesRef.current for the same synchronous freshness every other meeting
   // write uses. Same rule, right source for each context.
-  const signatureEligibleIn = (list) => {
-    if(!caseInfo.caseId || !caseInfo.meetingId) return false;
-    const cs = (Array.isArray(list) ? list : []).find(c => c && c.id === caseInfo.caseId);
-    const m = (cs?.meetings || []).find(x => x && x.id === caseInfo.meetingId);
+  // The ids a signature is about. Normally the meeting currently open, but after
+  // an authoritative save caseInfo.meetingId is deliberately cleared (Phase 2.2 —
+  // a finished lifecycle id must not survive), so the compound Save & send action
+  // captures them beforehand and hands them over via pendingSignature.
+  const signatureIds = () => pendingSignature || { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId };
+  const signatureMeetingIn = (list, ids) => {
+    if(!ids?.caseId || !ids?.meetingId) return null;
+    const cs = (Array.isArray(list) ? list : []).find(c => c && c.id === ids.caseId);
+    return (cs?.meetings || []).find(x => x && x.id === ids.meetingId) || null;
+  };
+  const signatureEligibleIn = (list, ids) => {
+    const m = signatureMeetingIn(list, ids);
     return !!m && declaredStatus(m) === MEETING_STATUS.COMPLETED
       && typeof m.record === "string" && m.record.trim().length > 0;
   };
@@ -1027,12 +1035,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // enough: this checks the persisted meeting itself BEFORE any signing row is
     // created and before any email leaves. Signature may attach signId to an
     // already-completed meeting; it may never be what completes one.
-    if(!signatureEligibleIn(casesRef.current)) {
+    // Stage 2 of the compound action, and the standalone path, share this one
+    // gate. It re-reads the PERSISTED meeting rather than trusting whatever
+    // Stage 1 left in React state, so a save that silently failed, or a
+    // concurrent change, cannot let anything leave.
+    const ids = signatureIds();
+    const signMeeting = signatureMeetingIn(casesRef.current, ids);
+    if(!signatureEligibleIn(casesRef.current, ids)) {
       showToast("Save and confirm the meeting record first — only a confirmed record can be sent for signature", "error");
+      setPendingSignature(null);
       return;
     }
     const document = (()=>{
-      const full = reviewOutput;
+      // The AUTHORITATIVE persisted record, never the local generated text —
+      // otherwise an edit made after the save could be emailed while the case
+      // file said something different.
+      const full = signMeeting.record;
       const start = full.indexOf("## Meeting Details");
       const advisorCut = full.indexOf("## HR Advisor");
       const keyCut = full.indexOf("\n## Key Points");
@@ -1057,11 +1075,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     });
     if(!success) return;
     setShowSignModal(false);
-    // saveMeetingToCase() navigates to the saved case itself now (both
-    // branches — witness interviews to the linked case, regular meetings
-    // to the found-or-just-created one), so this no longer needs its own
-    // duplicate lookup-and-navigate logic.
-    saveMeetingToCase({ signId, signStatus: "sent" });
+    setPendingSignature(null);
+    // The meeting is ALREADY completed, so this only attaches the signing state.
+    // allowedFrom [completed] makes that explicit and idempotent: signature can
+    // never be what completes a meeting. Routing back through saveMeetingToCase
+    // would be wrong here — caseInfo.meetingId has been cleared by the save, so
+    // that path would take its create branch and append a duplicate.
+    const attached = await transitionMeeting({
+      cases: casesRef.current, caseId: ids.caseId, meetingId: ids.meetingId,
+      allowedFrom: [MEETING_STATUS.COMPLETED], toStatus: MEETING_STATUS.COMPLETED,
+      patch: { signId, signStatus: "sent" }, saveCases,
+    });
+    if(!attached?.ok) {
+      // The email has already gone; the record is already authoritative. Say so
+      // truthfully rather than implying nothing happened.
+      reportMeetingWriteFailure(attached, "The record was sent, but Compass couldn't record that on the case — please refresh");
+      return;
+    }
+    audit(`${meetingType?.label||"Meeting"} notes sent for signature`, caseInfo.employee, ids.caseId);
   };
 
   const sendLiveChat = async () => {
@@ -1376,6 +1407,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [editingRecord, setEditingRecord] = useState(false);
   const [reviewAttachment, setReviewAttachment] = useState(null);
   const [showSignModal, setShowSignModal] = useState(false);
+  // Phase 3B slice 1 UX — identity captured by "Save & send for signature"
+  // before the authoritative save clears caseInfo.meetingId.
+  const [pendingSignature, setPendingSignature] = useState(null);
   // Integrations & Workflow Automation (Phase 5, IP27, §21) — a separate
   // modal from showSignModal/signEmail above rather than overloading it:
   // that one always drives sendForSignature (a meeting record, drawn
@@ -7581,6 +7615,29 @@ Please produce:
       savingMeetingRef.current = false;
     }
   };
+  // Phase 3B slice 1 UX refinement — one compound action, two existing
+  // authoritative operations, in the only safe order.
+  //
+  // CONFIRM FIRST, THEN SIGNATURE. Stage 1 is the SAME saveMeetingToCase that
+  // "Save to case" uses — there is no second completion implementation — and if
+  // it fails for any reason (stale updated_at, conflict, invalid lifecycle state,
+  // missing or foreign meeting, server or validation failure) this returns before
+  // Stage 2, so no signing request is created and no email leaves.
+  //
+  // If Stage 1 succeeds and Stage 2 later fails, the meeting stays legitimately
+  // completed. There is deliberately no rollback to review_draft: an
+  // authoritative record does not become a draft again because an email did not
+  // send, and Case View can offer "Send hearing record for signature" later.
+  const saveAndSendForSignature = async () => {
+    // Captured BEFORE the save, which clears caseInfo.meetingId on success.
+    const ids = { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId };
+    const saved = await saveMeetingToCase();
+    if(!saved?.ok) return saved;            // Stage 1 failed — nothing is sent
+    setPendingSignature(ids);
+    setShowSignModal(true);                 // Stage 2 collects the address
+    return saved;
+  };
+
   const saveMeetingToCaseImpl = async (signatureInfo = {}) => {
     const { signId: attachedSignId = null, signStatus: attachedSignStatus = null } = signatureInfo;
     // If this is a witness interview, save to parent case evidence instead
@@ -10369,7 +10426,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases)} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} onSaveAndSendForSignature={saveAndSendForSignature} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />

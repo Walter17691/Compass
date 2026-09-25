@@ -239,7 +239,7 @@ describe('2/8/14. the action boundary, independent of the button', () => {
   it('2. signature initiation checks the persisted meeting before anything leaves', () => {
     const i = appCode.indexOf('const sendForSignature = async (employeeEmail)');
     const body = appCode.slice(i, appCode.indexOf('\n  };', i));
-    const guard = body.indexOf('if(!signatureEligibleIn(casesRef.current))');
+    const guard = body.indexOf('if(!signatureEligibleIn(casesRef.current, ids))');
     expect(guard).toBeGreaterThan(-1);
     // the guard precedes BOTH the signing-row creation and the email
     expect(guard).toBeLessThan(body.indexOf('sendDocumentForSignature('));
@@ -247,25 +247,31 @@ describe('2/8/14. the action boundary, independent of the button', () => {
   });
 
   it('eligibility requires completed status AND a saved record', () => {
-    const i = appCode.indexOf('const signatureEligibleIn = (list)');
+    const i = appCode.indexOf('const signatureEligibleIn = (list, ids)');
     const body = appCode.slice(i, appCode.indexOf('\n  };', i));
     expect(body).toContain('declaredStatus(m) === MEETING_STATUS.COMPLETED');
     expect(body).toContain('m.record.trim().length > 0');
-    expect(body).toContain('caseInfo.caseId');
-    expect(body).toContain('caseInfo.meetingId');
     expect(body).not.toContain('employeeName');
     expect(body).not.toContain('reviewOutput');   // never the volatile local text
+    // the ids it judges come from the authoritative pair, never a name lookup
+    const idsFn = appCode.slice(appCode.indexOf('const signatureIds = ()'), appCode.indexOf('const signatureMeetingIn'));
+    expect(idsFn).toContain('caseInfo.caseId');
+    expect(idsFn).toContain('caseInfo.meetingId');
   });
 
   it('14. signature can never itself create completion', () => {
-    // It is reached only when the meeting is ALREADY completed, and the write it
-    // triggers routes through the same transition whose allowed-from set makes
-    // completed → completed idempotent.
+    // Completion's own allowed-from set stays as it is,
     expect(appCode).toContain('allowedFrom: [MEETING_STATUS.REVIEW_DRAFT, MEETING_STATUS.COMPLETED]');
+    // and the signature write is explicitly allowed only FROM completed, so it
+    // can attach signId but can never be what completes a meeting.
     const i = appCode.indexOf('const sendForSignature = async (employeeEmail)');
     const body = appCode.slice(i, appCode.indexOf('\n  };', i));
-    expect(body).not.toContain('MEETING_STATUS.COMPLETED');
-    expect(body).not.toContain('status:');
+    expect(body).toContain('allowedFrom: [MEETING_STATUS.COMPLETED], toStatus: MEETING_STATUS.COMPLETED,');
+    expect(body).toContain("patch: { signId, signStatus: \"sent\" }");
+    expect(body).not.toContain('MEETING_STATUS.REVIEW_DRAFT');
+    // and it never re-enters the save, which would append a duplicate now that
+    // caseInfo.meetingId has been cleared
+    expect(body).not.toContain('saveMeetingToCase(');
   });
 
   it('signature attaches signId to an already-completed meeting without re-completing', async () => {

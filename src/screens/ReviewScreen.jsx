@@ -5,7 +5,7 @@ import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, riskScore, reviewGenerationFailed, onRetryGeneration,
+export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, onSaveAndSendForSignature, riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -191,6 +191,21 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
                 moment AI generation returned and could complete the meeting as a
                 side effect of sending. signatureEligible is computed from the
                 same isSignatureEligible() the action gate uses. */}
+            {/* Phase 3B slice 1 UX refinement — while the record is still a
+                review_draft the user gets BOTH legitimate choices. The compound
+                label states the confirmation plainly: a bare "Send for
+                signature" here would conceal that it also confirms and completes
+                the record. Save remains the only thing that completes; this just
+                continues to signature once it has. */}
+            {!signatureEligible&&reviewOutput&&!editingRecord&&(
+              <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <button onClick={()=>onSaveAndSendForSignature?.()}
+                  style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"11px 24px",fontSize:13,color:"#FFFFFF",fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(124,92,252,0.2)",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                  Save &amp; send for signature →
+                </button>
+                <span style={{fontSize:12,color:"#9B9098"}}>Confirms this record on the case file, then sends it to the employee for signature</span>
+              </div>
+            )}
             {signatureEligible&&reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:"1px solid #EDE5D8",background:"#FDFAF5"}}>
                 <button onClick={()=>setShowSignModal(true)}
