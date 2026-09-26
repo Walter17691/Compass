@@ -28,6 +28,42 @@ headers, SQL migration headers) and the Release 1 Phase 0 production audit.
 
 ## Open
 
+### NEW-46 — employee portal authorisation depends on name comparison
+- **Severity P1 · PRE-PORTAL ACTIVATION BLOCKER · Area** Employee portal
+- **THE EMPLOYEE PORTAL MUST NOT BE ACTIVATED FOR CUSTOMERS UNTIL THIS IS
+  CLOSED.** Found during the Phase E0.7 read audit; recorded in E1.
+- **`api/portal/_case-list.js:17`** resolves the portal account by `user_id`, then
+  gathers that person's cases with
+  `cases?org_id=eq.<org>&employee_name=eq.<account.employee_name>`. **The case set
+  is selected by NAME.** Email is only a JS post-filter afterwards (`:33-36`),
+  which does fail closed today — but the authorisation boundary is a string
+  comparison on a display name, and two employees in one organisation will be
+  able to share one.
+- **`api/portal/_case-detail.js:26,44`** fetches a **caller-supplied `caseId`**
+  with no ownership predicate, then admits it on
+  `cs.employee_name === account.employee_name && accountEmail === caseEmail`
+  plus the org check. That line **is** the entire access boundary for an
+  arbitrary case id.
+- **`api/portal/_notify-document.js:34`** resolves a `user_id` to email a document
+  to, from a **request-body name**, with no email disambiguator.
+- **`api/portal/_accept-invite.js` has NO TEST.** It is the code that decides an
+  auth user is a given employee: possession of a token, plus
+  `auth.users.email === invite.email` checked via the admin API, plus a name HR
+  typed by hand. A mistyped address yields a fully "verified" account bound to
+  the wrong person. Nothing exercises it.
+- **Scope to close:** canonical portal account ↔ employee identity (an explicit
+  `employee_id` FK captured when HR issues the invite and propagated at
+  acceptance — **not** an email join, **not** a silent backfill of existing
+  accounts); UUID-based portal case access; same-name employee isolation;
+  caller-supplied case-id isolation; and test coverage for invite acceptance,
+  case-list and case-detail.
+- **Exposure today:** 0 portal accounts, 1 invite in production. Nothing is at
+  risk while it waits — but the routes exist and would be live the moment the
+  portal is switched on.
+- **Not fixed in E0.7 or E1 deliberately:** neither phase activates these routes,
+  and the Employee File does not touch them. Fixing the portal identity bridge
+  needs its own security proof and UAT.
+
 ### NEW-20 — meeting filed by employee-name match
 - **Severity** P1 · **Area** Save path
 - `saveMeetingToCaseImpl` resolved the target case by matching
@@ -941,6 +977,85 @@ analysis for the whole file — read lint **per rule**, never by total.
   `react-hooks/set-state-in-effect` (9 → 10) — and it would also have shown the
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
+
+### Phase E1 — Employee File shell + Overview (2026-09-26)
+- **STATUS: DEPLOYED / READY FOR HUMAN VISUAL UAT.** **No migration, no policy,
+  no data write.** Production untouched.
+- **ONE employee surface.** Person View was **deleted**, not kept alongside:
+  `SCREENS.PERSON_VIEW` is gone, `PersonViewScreen.jsx` is gone, and all four
+  callers (People, Search, ER report, Insights) point at the Employee File. Two
+  employee-detail surfaces would have diverged within a phase, and the old one
+  was built on name identity.
+- **Identity is the uuid, end to end.** Route `?employee=<uuid>&tab=<tab>`, state
+  initialised from the URL so a cold load resolves both, and two same-named
+  fixture employees open entirely distinct files.
+- **A case is not the file.** An employee may hold several open processes; they
+  are counted and listed, never merged. One open process becomes "What is
+  happening"; several become "N open processes" with each keeping its own id,
+  type, stage, owner and next step.
+- **Derivation, not a second workflow engine.** `getNextStep` — the same function
+  the case view, Home and Cases already use — supplies every next step. Attention
+  items come from that plus deadlines the engine already computed, matched on
+  `caseId` and **never** on the display name each deadline carries. Nothing to do
+  renders **nothing**.
+- **Composition, not authorisation.** The screen fetches nothing: every
+  collection is a prop, already RLS-filtered. No service-role employee endpoint
+  exists. Categories the viewer cannot access are **omitted, not disabled** — a
+  greyed "Wellbeing (no access)" panel is itself a disclosure — and the gate is
+  an explicit capability, not "the array happened to be empty".
+- **Deferred tabs are honest.** Timeline and Documents are shells that say what
+  they will hold; Meetings shows only meetings reached **through a case**
+  (authoritative parentage) and states out loud that meetings held outside a case
+  are not shown because Compass cannot confirm whose they are. Documents points
+  at case evidence and letters and **stores nothing** — E3 owns employee documents.
+- **No "Start meeting" action at all.** Meeting creation cannot receive a
+  canonical `employee_id` until E2; a button here could only produce a name-only
+  or wrongly-parented meeting.
+- **The AI employment profile was REMOVED, not migrated.** E0.7 stopped it
+  reading a colleague's cases; a prominent "Pattern Analysis / Risk Assessment"
+  on an employee's file is the profiling the brief refuses regardless of whose
+  data it reads. Four dead state declarations went with it. E6 owns bounded,
+  provenance-aware intelligence.
+- **Legacy history** is never shown as this person's. The notice is
+  organisation-level — *"Some older organisation records have not yet been
+  linked"* — never "this person has older records", and it is HR-only.
+
+#### Two defects introduced and fixed inside the phase
+- **Deleting Person View removed the only per-employee edit flow in the
+  product.** Restored as a **focused mode** rather than a form on Overview, still
+  writing by canonical id (`employeeId: employee.id`,
+  `deleteEmployeeRecord(employee.id)`).
+- **The tablist carried the arrow-key handler without being focusable** —
+  `jsx-a11y/interactive-supports-focus`. The handler belongs on the tabs, which is
+  the APG pattern anyway.
+
+#### Visual verification — and the defect only it could find
+Rendered in a real browser through a temporary harness at **1440 / 834 / 390**
+across **with activity, empty, multiple open processes**, plus the Meetings tab.
+Screenshots in `docs/DESIGN/e1/`.
+- **Attention panels were visually indistinguishable from ordinary content.** An
+  amber *tint* used as a 1px border is invisible, so "Needs your attention"
+  carried no weight at all. Unit tests could not have caught this. Fixed with a
+  left accent bar plus a faint tint — and never colour-alone, since the heading
+  states the meaning in words. Regression-guarded.
+- Measured, not eyeballed: **no page horizontal overflow at 390px**, and the tabs
+  scroll inside their own container (428px of tabs in a 342px rail).
+- A long name and a long job title wrap rather than clip; both header actions
+  remain visible on mobile.
+
+#### Evidence
+`src/test/employeeFile.test.jsx` — **46 tests, 20 of 20 mutations caught**, each
+asserted applied. Full suite **5,494 / 311 files**. Build clean. **12 API routes,
+none added.**
+- Two mutations exposed real gaps: nothing covered the Meetings/Documents tab
+  **contents**, and nothing asserted blank employment fields were omitted. Both
+  now behavioural tests.
+- **The comment-stripper needed to handle `{/* … */}` blocks**, not just `//`
+  lines: a JSX rationale comment failed the very assertion it was explaining.
+- **Lint 158 errors / 9 warnings — BELOW the 161/9 baseline.** The a11y rule is
+  gone and the removed AI feature took four dead declarations with it.
+  `immutability` 22, `set-state-in-effect` 8 — no compiler bailout. No rule
+  disabled.
 
 ### Phase E0.7 — UUID employee read model (2026-09-26)
 - **STATUS: DEPLOYED / VERIFIED. NO MIGRATION.** Entirely application-side.

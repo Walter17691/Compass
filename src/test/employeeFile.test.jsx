@@ -452,6 +452,16 @@ describe('design, responsiveness and accessibility', () => {
     });
   });
 
+  it('attention items are visually distinct, and not by colour alone', () => {
+    // Regression guard for a defect visual verification caught: the amber tint
+    // was used as a 1px border and was invisible, so attention looked identical
+    // to ordinary content.
+    expect(overviewCode).toContain('borderLeft: attention ?');
+    expect(overviewCode).toContain('background: attention ? COLOR.amberTint');
+    // The meaning is carried in words as well as colour.
+    expect(overviewCode).toContain('Needs your attention');
+  });
+
   it('nothing encodes status by colour alone', () => {
     // Employment status is words; tab selection is weight + underline.
     expect(header).toContain('Left the organisation');

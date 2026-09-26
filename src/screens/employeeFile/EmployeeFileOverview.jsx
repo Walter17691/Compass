@@ -30,10 +30,22 @@ export function Section({ title, children, action }) {
 }
 
 function Panel({ children, tone = "plain" }) {
-  const border = tone === "attention" ? COLOR.amberTint : COLOR.border;
+  // Found in visual verification, not by a unit test: an amber TINT used as a
+  // border is invisible at 1px, so attention items rendered identically to
+  // ordinary content and the section carried no weight at all.
+  //
+  // A left accent bar reads immediately without shouting. Colour is never the
+  // only signal — the section heading already says "Needs your attention" — so
+  // this stays legible to a colour-blind reader and in greyscale.
+  const attention = tone === "attention";
   return (
-    <div style={{ background: COLOR.surface, border: `1px solid ${border}`, borderRadius: RADIUS.card,
-                  padding: `${SPACE.lg}px ${SPACE.lg}px` }}>
+    <div style={{
+      background: attention ? COLOR.amberTint : COLOR.surface,
+      border: `1px solid ${attention ? "#EADFC4" : COLOR.border}`,
+      borderLeft: attention ? `3px solid ${COLOR.amber}` : `1px solid ${COLOR.border}`,
+      borderRadius: RADIUS.card,
+      padding: `${SPACE.lg}px ${SPACE.lg}px`,
+    }}>
       {children}
     </div>
   );
