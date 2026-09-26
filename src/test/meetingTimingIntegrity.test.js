@@ -47,7 +47,7 @@ describe('1. start is captured on entry to the live meeting', () => {
     // recordRecovery is set only from the URL at mount, and only when the boot
     // URL was the record screen. A new meeting started from within the app has
     // it null, so the capture fires exactly as before.
-    expect(app).toContain("return nav.screen === SCREENS.RECORD ? { caseId: nav.caseId, meetingId: nav.meetingId } : null;");
+    expect(app).toContain("return nav.screen === SCREENS.RECORD ? { caseId: nav.caseId, meetingId: nav.meetingId, meetingHome: nav.meetingHome } : null;");
     const capture = (screen, meetingStartTime, recordRecovery, now) =>
       (screen === 'record' && !meetingStartTime && !recordRecovery) ? now : meetingStartTime;
     expect(capture('record', null, null, 'T0')).toBe('T0');                       // new meeting

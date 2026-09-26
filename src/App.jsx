@@ -79,7 +79,7 @@ import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWrit
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
 import { caseForPersistence, isTableResident } from './lib/meetingStore';
 import { isStandaloneEligible, TABLE_HOME } from './lib/standaloneMeetings';
-import { startStandaloneMeeting, endStandaloneMeeting, persistStandaloneReviewDraft, fetchStandaloneMeeting, describeStandaloneFailure, STANDALONE_FAILURE } from './lib/standaloneMeetingWrites';
+import { startStandaloneMeeting, endStandaloneMeeting, persistStandaloneReviewDraft, persistStandaloneTranscript, fetchStandaloneMeeting, describeStandaloneFailure, STANDALONE_FAILURE } from './lib/standaloneMeetingWrites';
 import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraft } from './lib/reviewDraft';
 import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
@@ -301,7 +301,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // push again, or Back would immediately re-push Forward).
   const readNavFromUrl = () => {
     const params = new URLSearchParams(window.location.search);
-    return { screen: params.get('screen') || SCREENS.HOME, caseId: params.get('case') || null, meetingId: params.get('meeting') || null };
+    return {
+      screen: params.get('screen') || SCREENS.HOME,
+      caseId: params.get('case') || null,
+      meetingId: params.get('meeting') || null,
+      // Phase 4C.3 refresh fix — which store owns the meeting the URL names.
+      // Explicit, so recovery never has to guess from a missing case.
+      meetingHome: params.get('home') === 'table' ? TABLE_HOME : null,
+    };
   };
   const [screen, setScreen] = useState(() => readNavFromUrl().screen);
   const navSyncSourceRef = useRef('init');
@@ -319,7 +326,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const bootNavRef = useRef(readNavFromUrl());
   const [recordRecovery, setRecordRecovery] = useState(() => {
     const nav = readNavFromUrl();
-    return nav.screen === SCREENS.RECORD ? { caseId: nav.caseId, meetingId: nav.meetingId } : null;
+    return nav.screen === SCREENS.RECORD ? { caseId: nav.caseId, meetingId: nav.meetingId, meetingHome: nav.meetingHome } : null;
   });
 
   // ── Session ──
@@ -329,6 +336,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // ── Transcript ──
   const [transcript, setTranscript] = useState([]);
+  // The transcript as last CONFIRMED persisted to public.meetings, serialised.
+  // Two jobs: it stops the autosave rewriting an unchanged transcript, and it
+  // lets beforeunload tell the truth about whether anything is actually unsaved.
+  const liveNotesSavedRef = useRef(null);
   const [inputText, setInputText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isScreenCapturing, setIsScreenCapturing] = useState(false);
@@ -860,9 +871,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // identity, so a refresh can recover the exact meeting rather than
     // guessing. caseId + meetingId is the only recovery key; nothing is
     // inferred from employee name, array order or the clock.
-    if (screen === SCREENS.RECORD && caseInfo.caseId && caseInfo.meetingId) {
-      params.set('case', caseInfo.caseId);
+    // Phase 4C.3 refresh fix — the recovery key is the MEETING id. Requiring
+    // caseInfo.caseId here meant a standalone meeting wrote no identity to the
+    // URL at all, so a reload arrived with nothing to recover: human UAT reloaded
+    // a live standalone meeting and landed on Cases. caseId is parentage, not
+    // identity, and the two must not be conflated.
+    if (screen === SCREENS.RECORD && caseInfo.meetingId) {
+      if (caseInfo.caseId) params.set('case', caseInfo.caseId);
       params.set('meeting', caseInfo.meetingId);
+      // Storage provenance travels explicitly rather than being inferred from the
+      // absence of a case — the same rule the read model follows.
+      if (caseInfo.meetingHome === TABLE_HOME) params.set('home', 'table');
     }
     const nextSearch = `?${params.toString()}`;
     // activeCaseId can change without the screen changing (e.g. linking a
@@ -871,7 +890,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // entry that just makes Back need an extra press for no visible change.
     if (nextSearch === window.location.search) return;
     window.history.pushState(null, '', `${window.location.pathname}${nextSearch}`);
-  }, [screen, activeCaseId, caseInfo.caseId, caseInfo.meetingId]);
+  }, [screen, activeCaseId, caseInfo.caseId, caseInfo.meetingId, caseInfo.meetingHome]);
 
   // Human UAT remediation, Batch 1 hardening round 2 — the signature-sync
   // effect that used to live here (checks pending meeting signatures
@@ -6261,14 +6280,66 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // closing the tab or browser directly.
   useEffect(() => {
     const handler = (e) => {
-      if(screen === SCREENS.RECORD && (transcript.length > 0 || inputText.trim())) {
+      if(screen !== SCREENS.RECORD) return;
+      // Phase 4C.3 refresh fix — for a table-resident meeting the notes are
+      // autosaved to public.meetings, so warning whenever any note exists told
+      // the user their work was at risk when it was already safe. Warn only when
+      // something is GENUINELY unsaved: an uncommitted input line, or a
+      // transcript that differs from what was last confirmed persisted.
+      //
+      // The embedded path is deliberately unchanged: its transcript really is
+      // only in the browser until End, so the warning there is accurate.
+      const standaloneLive = caseInfo.meetingHome === TABLE_HOME;
+      const dirty = standaloneLive
+        ? !!inputText.trim() || JSON.stringify(transcript) !== liveNotesSavedRef.current
+        : transcript.length > 0 || !!inputText.trim();
+      if(dirty) {
         e.preventDefault();
         e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [screen, transcript, inputText]);
+  }, [screen, transcript, inputText, caseInfo.meetingHome]);
+
+  // ── Phase 4C.3 refresh fix — live notes reach the server, not just localStorage
+  //
+  // Human UAT typed two notes into a live standalone meeting, reloaded, and lost
+  // both. The row in public.meetings had an EMPTY transcript, because the only
+  // write points were Start and End: until End, localStorage was the sole store
+  // for the conversation. That is the durability contract broken — local recovery
+  // may supplement server persistence, never replace it.
+  //
+  // Debounced ~1.5s idle, the same cadence as the Review draft autosave, and a
+  // self-transition (in_progress -> in_progress) so it can never move the
+  // meeting's state. Deliberately standalone-only: the embedded path keeps its
+  // existing behaviour exactly, because changing when a case row is written is a
+  // much larger blast radius than this defect justifies.
+  const liveNotesTimerRef = useRef(null);
+  useEffect(() => {
+    if(screen !== SCREENS.RECORD) return;
+    if(caseInfo.meetingHome !== TABLE_HOME || !caseInfo.meetingId) return;
+    const serialised = JSON.stringify(transcript);
+    // Nothing committed yet, or nothing changed since the last confirmed write.
+    if(!transcript.length) return;
+    if(serialised === liveNotesSavedRef.current) return;
+    if(liveNotesTimerRef.current) clearTimeout(liveNotesTimerRef.current);
+    liveNotesTimerRef.current = setTimeout(async () => {
+      const result = await persistStandaloneTranscript(supabase, {
+        id: caseInfo.meetingId, transcript,
+      });
+      if(result.ok) {
+        // Only now is the browser entitled to stop warning about these notes.
+        liveNotesSavedRef.current = serialised;
+      }
+      // A failure is deliberately NOT surfaced as an error toast mid-meeting: the
+      // notes are still in state and still in the crash-recovery draft, the next
+      // keystroke retries, and interrupting a live conversation with a save
+      // warning would be worse than the risk it describes. It stays dirty, so
+      // beforeunload still warns and nothing claims to be saved that is not.
+    }, 1500);
+    return () => { if(liveNotesTimerRef.current) clearTimeout(liveNotesTimerRef.current); };
+  }, [screen, transcript, caseInfo.meetingHome, caseInfo.meetingId]);
 
   // Once, on load: offer to resume a meeting that never made it past the
   // crash-recovery window above.
@@ -6598,6 +6669,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setMeetingStartTime(stored.startedAt);
     setMeetingEndTime(null);
     meetingEndedRef.current = false;
+    // A meeting that has just started has an empty transcript on the server, and
+    // an empty one locally. Recording that as the persisted state stops
+    // beforeunload warning about unsaved notes when none have been typed.
+    liveNotesSavedRef.current = JSON.stringify([]);
     // No case is active — leaving a stale activeCaseId set would make unrelated
     // case surfaces look like the context for this meeting.
     setActiveCaseId(null);
@@ -7013,12 +7088,16 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     return result.meeting;
   };
 
-  // Restores the authoritative persisted meeting. Never mints an id, never
-  // restamps startedAt (it is read from the row, and the write layer has no
-  // patch path to it at all), never re-emits "Meeting started".
-  const resumeStandaloneMeeting = async (meetingId) => {
-    const meeting = await loadStandaloneMeeting(meetingId);
-    if(!meeting) return { ok: false };
+  // Restores the authoritative persisted meeting into the live Record state.
+  //
+  // ONE applier, shared by Resume-from-Meetings and cold-load recovery. The 4C.3
+  // refresh defect was partly a consequence of recovery and Resume being separate
+  // paths with different notions of identity; there is now a single place that
+  // decides what "reopening this meeting" means.
+  //
+  // Never mints an id, never restamps startedAt (it is read from the row, and the
+  // write layer has no patch path to it), never re-emits "Meeting started".
+  const applyStandaloneMeetingToLive = (meeting) => {
     pendingStandaloneRef.current = null;
     setMeetingType(MEETING_TYPES.find(t => t.id === meeting.meetingTypeId) || null);
     setCaseInfo(p => ({ ...p,
@@ -7031,9 +7110,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setMeetingStartTime(meeting.startedAt || null);
     setMeetingEndTime(null);
     meetingEndedRef.current = false;
-    setTranscript(Array.isArray(meeting.transcript) ? meeting.transcript : []);
+    // The server's transcript is authoritative on reopen. Whatever the live notes
+    // autosave last persisted is what comes back.
+    const notes = Array.isArray(meeting.transcript) ? meeting.transcript : [];
+    setTranscript(notes);
+    liveNotesSavedRef.current = JSON.stringify(notes);
     setActiveCaseId(null);
     setScreen(SCREENS.RECORD);
+  };
+
+  const resumeStandaloneMeeting = async (meetingId) => {
+    const meeting = await loadStandaloneMeeting(meetingId);
+    if(!meeting) return { ok: false };
+    applyStandaloneMeetingToLive(meeting);
     return { ok: true, meetingId: meeting.id };
   };
 
@@ -7104,10 +7193,44 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // below so the effect body stays declarative — and so this logic is a plain
   // function that tests can drive directly, which is the coverage gap that let
   // the defect ship.
-  const resolveRecordRecovery = (nav) => {
-    const { caseId, meetingId } = nav;
-    // No identity at all — nothing to recover, and guessing is forbidden.
-    if(!caseId) { setRecordRecovery(null); setScreen(SCREENS.CASES); return { outcome: 'redirect_cases' }; }
+  const resolveRecordRecovery = async (nav) => {
+    const { caseId, meetingId, meetingHome } = nav;
+
+    // ── Phase 4C.3 refresh fix — the STANDALONE branch, and it comes first ──
+    //
+    // The defect human UAT found was here: the old first line was
+    // `if(!caseId) { setScreen(SCREENS.CASES); }`, which treated a missing case as
+    // "no identity at all". For a table-resident meeting the case is null BY
+    // DESIGN, so a live standalone meeting was reliably redirected to Cases on
+    // every reload. caseId is PARENTAGE; meetingId is IDENTITY. Only the second
+    // one decides whether there is something to recover.
+    if(meetingHome === TABLE_HOME || (!caseId && meetingId)) {
+      if(!meetingId) {
+        setRecordRecovery(null); setScreen(SCREENS.MEETINGS);
+        return { outcome: 'redirect_meetings' };
+      }
+      const loaded = await fetchStandaloneMeeting(supabase, meetingId);
+      // Not visible, or no longer live: send the user to the surface that lists
+      // meetings still in progress, and say so. Never silently, and never to a
+      // screen that has nothing to do with the meeting they were just in.
+      if(!loaded.ok || declaredStatus(loaded.meeting) !== MEETING_STATUS.IN_PROGRESS) {
+        setRecordRecovery(null); setScreen(SCREENS.MEETINGS);
+        showToast("That meeting couldn't be reopened from the link. Any meeting still in progress is listed here.", "error");
+        return { outcome: 'redirect_meetings' };
+      }
+      setRecordRecovery(null);
+      applyStandaloneMeetingToLive(loaded.meeting);
+      return { outcome: 'recovered', meetingId: loaded.meeting.id, home: TABLE_HOME };
+    }
+
+    // No identity at all — nothing to recover, and guessing is forbidden. Routed
+    // to Meetings rather than Cases: it is the surface that lists a meeting still
+    // in progress, which is what somebody arriving here was looking for.
+    if(!caseId) {
+      setRecordRecovery(null); setScreen(SCREENS.MEETINGS);
+      showToast("That meeting couldn't be reopened from the link. Any meeting still in progress is listed here.", "error");
+      return { outcome: 'redirect_meetings' };
+    }
     const cs = casesRef.current.find(c => c.id === caseId);
     // Case gone, or no longer visible to this user.
     if(!cs) { setRecordRecovery(null); setScreen(SCREENS.CASES); return { outcome: 'redirect_cases' }; }
@@ -7132,11 +7255,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!recordRecovery) return;
     // Wait for the authorised case set. Resolving against an empty list would
     // redirect a perfectly valid meeting away.
-    if(casesLoading) return;
+    //
+    // Phase 4C.3 refresh fix — a table-resident meeting is not IN that list, so
+    // waiting on it would make standalone recovery hostage to an unrelated load
+    // (and never fire at all if the case fetch failed). The standalone branch
+    // resolves against public.meetings and needs nothing from `cases`.
+    const isStandaloneNav = recordRecovery.meetingHome === TABLE_HOME
+      || (!recordRecovery.caseId && !!recordRecovery.meetingId);
+    if(casesLoading && !isStandaloneNav) return;
     // The rule guards against cascading renders. resolveRecordRecovery clears
     // recordRecovery on every branch it can take, and the guard above makes
     // re-entry impossible — so this resolves at most once per cold load and is
     // then inert. Same one-shot shape as the NEW-29 capture effect above.
+    // Async since 4C.3: the standalone branch has to read public.meetings. The
+    // recordRecovery guard above is still what makes this one-shot — it is
+    // cleared on every branch — so the await cannot let it re-enter.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     resolveRecordRecovery(recordRecovery);
     // resolveRecordRecovery is redefined every render and reads casesRef, so

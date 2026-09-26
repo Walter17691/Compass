@@ -211,6 +211,29 @@ export async function endStandaloneMeeting(client, { id, endedAt, transcript } =
   });
 }
 
+// ── Live notes ─────────────────────────────────────────────────────────────
+//
+// in_progress -> in_progress, carrying the transcript so far.
+//
+// WHY THIS EXISTS. Until Phase 4C.3's refresh defect, live notes were held in
+// React state and mirrored to a localStorage draft, and only reached the database
+// at End. For an embedded meeting that was survivable because the crash-recovery
+// draft could be matched against the case. For a table-resident meeting it meant
+// localStorage was the SOLE store for the conversation until End — and human UAT
+// proved the consequence: a reload lost two typed notes outright.
+//
+// A self-transition, so it shares the property that matters: it can never move
+// the meeting's state. If the meeting has already ended, the allowed-from filter
+// matches nothing and the late write is refused rather than resurrecting it.
+export async function persistStandaloneTranscript(client, { id, transcript } = {}) {
+  return transitionStandaloneMeeting(client, {
+    id,
+    allowedFrom: [MEETING_STATUS.IN_PROGRESS],
+    toStatus: MEETING_STATUS.IN_PROGRESS,
+    patch: { transcript: Array.isArray(transcript) ? transcript : [] },
+  });
+}
+
 // ── Review draft ───────────────────────────────────────────────────────────
 //
 // review_draft -> review_draft. Same shape as the embedded path's

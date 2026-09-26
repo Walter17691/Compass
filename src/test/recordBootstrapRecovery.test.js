@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { MEETING_STATUS, declaredStatus, isResumableMeeting } from '../lib/meetingLifecycle.js';
+import { TABLE_HOME } from '../lib/standaloneMeetings.js';
 
 // P1 — RecordScreen refresh lost the authoritative meeting and regenerated a
 // client startedAt. Human UAT, 2026-09-24.
@@ -24,12 +25,17 @@ const app = readFileSync('src/App.jsx', 'utf8');
 const record = readFileSync('src/screens/RecordScreen.jsx', 'utf8');
 const caseView = readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
 
-const SCREENS = { HOME: 'home', CASES: 'cases', RECORD: 'record', CASE_VIEW: 'case_view' };
+const SCREENS = { HOME: 'home', CASES: 'cases', RECORD: 'record', CASE_VIEW: 'case_view', MEETINGS: 'meetings' };
 
 // The shipped URL reader, as a predicate. Mirrors readNavFromUrl exactly.
 const readNav = search => {
   const params = new URLSearchParams(search);
-  return { screen: params.get('screen') || SCREENS.HOME, caseId: params.get('case') || null, meetingId: params.get('meeting') || null };
+  return {
+    screen: params.get('screen') || SCREENS.HOME,
+    caseId: params.get('case') || null,
+    meetingId: params.get('meeting') || null,
+    meetingHome: params.get('home') === 'table' ? TABLE_HOME : null,
+  };
 };
 
 // The shipped URL writer, as a predicate. Mirrors the nav-sync effect exactly.
@@ -37,20 +43,40 @@ const writeNav = ({ screen, activeCaseId, caseInfo = {} }) => {
   const params = new URLSearchParams();
   params.set('screen', screen);
   if (screen === SCREENS.CASE_VIEW && activeCaseId) params.set('case', activeCaseId);
-  if (screen === SCREENS.RECORD && caseInfo.caseId && caseInfo.meetingId) {
-    params.set('case', caseInfo.caseId);
+  // Phase 4C.3 refresh fix — identity is the MEETING id. Requiring caseId here
+  // was the production defect: a standalone meeting wrote no identity at all.
+  if (screen === SCREENS.RECORD && caseInfo.meetingId) {
+    if (caseInfo.caseId) params.set('case', caseInfo.caseId);
     params.set('meeting', caseInfo.meetingId);
+    if (caseInfo.meetingHome === TABLE_HOME) params.set('home', 'table');
   }
   return `?${params.toString()}`;
 };
 
 // The shipped resolver, as a driveable function. Mirrors resolveRecordRecovery
 // branch for branch, with its side effects captured instead of applied.
-const resolve = (nav, cases) => {
+const resolve = (nav, cases, tableMeetings = []) => {
   const effects = { screen: null, activeCaseId: null, resumed: null, recoveryCleared: false, writes: 0, audits: [] };
-  const { caseId, meetingId } = nav;
+  const { caseId, meetingId, meetingHome } = nav;
   const done = outcome => ({ outcome, effects });
-  if (!caseId) { effects.recoveryCleared = true; effects.screen = SCREENS.CASES; return done('redirect_cases'); }
+  // Phase 4C.3 refresh fix — the standalone branch comes first, and is keyed on
+  // the MEETING id. The old `if (!caseId) -> Cases` first line is what sent every
+  // reloaded standalone meeting to Cases, because its case is null by design.
+  if (meetingHome === TABLE_HOME || (!caseId && meetingId)) {
+    const m = (tableMeetings || []).find(x => x && x.id === meetingId);
+    if (!m || declaredStatus(m) !== MEETING_STATUS.IN_PROGRESS) {
+      effects.recoveryCleared = true; effects.screen = SCREENS.MEETINGS; return done('redirect_meetings');
+    }
+    effects.recoveryCleared = true;
+    effects.resumed = {
+      meetingId: m.id, caseId: null, home: TABLE_HOME, type: m.meetingTypeId,
+      employee: m.employeeName, startedAt: m.startedAt, manager: m.manager,
+      transcript: Array.isArray(m.transcript) ? m.transcript : [],
+    };
+    effects.screen = SCREENS.RECORD;
+    return done('recovered');
+  }
+  if (!caseId) { effects.recoveryCleared = true; effects.screen = SCREENS.MEETINGS; return done('redirect_meetings'); }
   const cs = cases.find(c => c.id === caseId);
   if (!cs) { effects.recoveryCleared = true; effects.screen = SCREENS.CASES; return done('redirect_cases'); }
   if (!meetingId) { effects.activeCaseId = cs.id; effects.recoveryCleared = true; effects.screen = SCREENS.CASE_VIEW; return done('redirect_case_view'); }
@@ -106,7 +132,8 @@ describe('1-6. the URL carries the workflow identity', () => {
 
   it('existing Case View URLs are unchanged', () => {
     expect(writeNav({ screen: SCREENS.CASE_VIEW, activeCaseId: UAT_CASE_ID })).toBe(`?screen=case_view&case=${UAT_CASE_ID}`);
-    expect(readNav('?screen=case_view&case=abc')).toEqual({ screen: 'case_view', caseId: 'abc', meetingId: null });
+    expect(readNav('?screen=case_view&case=abc'))
+      .toEqual({ screen: 'case_view', caseId: 'abc', meetingId: null, meetingHome: null });
   });
 
   it('other screens are untouched and still parse', () => {
@@ -118,8 +145,19 @@ describe('1-6. the URL carries the workflow identity', () => {
   });
 
   it('a record URL without an authoritative meeting carries no identity to guess from', () => {
+    // A case with no meeting is still no identity — parentage alone cannot name
+    // which meeting to reopen.
     expect(writeNav({ screen: SCREENS.RECORD, caseInfo: { caseId: UAT_CASE_ID } })).toBe('?screen=record');
     expect(writeNav({ screen: SCREENS.RECORD, caseInfo: {} })).toBe('?screen=record');
+  });
+
+  it('4C.3 — a STANDALONE live meeting writes its identity and provenance', () => {
+    // The production defect: this used to produce '?screen=record' with nothing
+    // to recover, and the reload landed on Cases.
+    expect(writeNav({ screen: SCREENS.RECORD, caseInfo: { meetingId: 'meeting_abc', meetingHome: TABLE_HOME } }))
+      .toBe('?screen=record&meeting=meeting_abc&home=table');
+    const nav = readNav('?screen=record&meeting=meeting_abc&home=table');
+    expect(nav).toEqual({ screen: 'record', caseId: null, meetingId: 'meeting_abc', meetingHome: TABLE_HOME });
   });
 });
 
@@ -200,7 +238,12 @@ describe('19/20. the recovering state never shows fake defaults', () => {
 
   it('recovery waits for the authorised case set before resolving', () => {
     // resolving against an empty list would redirect a valid meeting away
-    expect(app).toContain('if(casesLoading) return;');
+    // The 4C.3 refresh fix made this conditional: a table-resident meeting is not
+    // in the cases list, so waiting on it would make standalone recovery hostage
+    // to an unrelated load (and never fire if the case fetch failed). The
+    // guarantee for the EMBEDDED path is unchanged — it still waits.
+    expect(app).toContain('if(casesLoading && !isStandaloneNav) return;');
+    expect(app).toContain('const isStandaloneNav = recordRecovery.meetingHome === TABLE_HOME');
     expect(resolve(readNav(`?screen=record&case=${UAT_CASE_ID}&meeting=${UAT_MEETING_ID}`), []).outcome).toBe('redirect_cases');
   });
 });
@@ -226,11 +269,61 @@ describe('21-29. fails closed — never guesses', () => {
     expect(effects.activeCaseId).toBe(UAT_CASE_ID);
   });
 
-  it('23. no identity at all redirects to Cases', () => {
+  it('23. no identity at all redirects to Meetings, not Cases', () => {
+    // CHANGED BY THE 4C.3 REFRESH FIX, deliberately. Cases was chosen when every
+    // meeting lived on a case; human UAT then reloaded a live standalone meeting
+    // and was dumped there with no explanation and no route back. Meetings is the
+    // surface that lists a meeting still in progress, which is what someone
+    // arriving here was looking for — and the redirect now carries a toast rather
+    // than happening silently.
     const { outcome, effects } = resolve(readNav('?screen=record'), uatCases(uatMeeting()));
-    expect(outcome).toBe('redirect_cases');
-    expect(effects.screen).toBe('cases');
+    expect(outcome).toBe('redirect_meetings');
+    expect(effects.screen).toBe('meetings');
     expect(effects.resumed).toBeNull();
+    // Never silent.
+    expect(app).toContain("That meeting couldn't be reopened from the link.");
+  });
+
+  it('23b. a reloaded live STANDALONE meeting recovers instead of redirecting', () => {
+    // The exact human reproduction, end to end through the mirrored resolver.
+    const standalone = {
+      id: 'meeting_e18d5c5b-9f95-4bc3-bc7f-137727b45ff4', caseId: null,
+      meetingTypeId: 'informal', status: MEETING_STATUS.IN_PROGRESS,
+      employeeName: 'UAT - Standalone Meeting', manager: 'UAT - HR Manager',
+      startedAt: '2026-09-26T09:18:01.335Z',
+      transcript: [{ speaker: 'Note', text: 'UAT NOTE ONE — MUST SURVIVE REFRESH' }],
+    };
+    const url = writeNav({ screen: SCREENS.RECORD,
+      caseInfo: { meetingId: standalone.id, meetingHome: TABLE_HOME } });
+    const { outcome, effects } = resolve(readNav(url), uatCases(uatMeeting()), [standalone]);
+    expect(outcome).toBe('recovered');
+    expect(effects.screen).toBe('record');
+    expect(effects.resumed.meetingId).toBe(standalone.id);
+    expect(effects.resumed.caseId).toBeNull();          // caseId null is not "no identity"
+    expect(effects.resumed.home).toBe(TABLE_HOME);
+    expect(effects.resumed.startedAt).toBe('2026-09-26T09:18:01.335Z');   // not restamped
+    expect(effects.resumed.transcript[0].text).toContain('UAT NOTE ONE');  // notes come back
+  });
+
+  it('23c. a standalone meeting that is no longer live routes to Meetings, never Cases', () => {
+    const ended = { id: 'meeting_x', caseId: null, meetingTypeId: 'informal',
+      status: MEETING_STATUS.REVIEW_DRAFT, startedAt: 'T1', transcript: [] };
+    const url = writeNav({ screen: SCREENS.RECORD, caseInfo: { meetingId: 'meeting_x', meetingHome: TABLE_HOME } });
+    const { outcome, effects } = resolve(readNav(url), uatCases(uatMeeting()), [ended]);
+    expect(outcome).toBe('redirect_meetings');
+    expect(effects.screen).toBe('meetings');
+    expect(effects.resumed).toBeNull();
+  });
+
+  it('23d. an inaccessible or unknown standalone id fails safely and identically', () => {
+    // RLS has already removed anything the caller may not read, so "hidden" and
+    // "absent" arrive the same way and must behave the same way — a failed
+    // recovery cannot be used to probe another tenant.
+    const url = id => writeNav({ screen: SCREENS.RECORD, caseInfo: { meetingId: id, meetingHome: TABLE_HOME } });
+    const hidden = resolve(readNav(url('meeting_in_org_b')), uatCases(uatMeeting()), []);
+    const absent = resolve(readNav(url('meeting_never_existed')), uatCases(uatMeeting()), []);
+    expect(hidden.outcome).toBe('redirect_meetings');
+    expect(hidden).toEqual(absent);
   });
 
   it('24. an unknown meeting id redirects rather than guessing', () => {

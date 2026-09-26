@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   startStandaloneMeeting, endStandaloneMeeting, persistStandaloneReviewDraft,
-  fetchStandaloneMeeting, transitionStandaloneMeeting,
+  persistStandaloneTranscript, fetchStandaloneMeeting, transitionStandaloneMeeting,
   STANDALONE_WRITE, STANDALONE_FAILURE, describeStandaloneFailure,
 } from '../lib/standaloneMeetingWrites.js';
 import { meetingPatchToRow, newStandaloneMeetingRow, TABLE_HOME } from '../lib/standaloneMeetings.js';
@@ -281,11 +281,17 @@ describe('C. resume', () => {
     // Both reopen paths go through loadStandaloneMeeting, which is the single
     // place fetchStandaloneMeeting is called and failures are translated.
     expect(resume).toContain('await loadStandaloneMeeting(meetingId)');
-    const loader = appCode.slice(appCode.indexOf('const loadStandaloneMeeting ='), appCode.indexOf('const resumeStandaloneMeeting ='));
+    const loader = appCode.slice(appCode.indexOf('const loadStandaloneMeeting ='), appCode.indexOf('const applyStandaloneMeetingToLive ='));
     expect(loader).toContain('fetchStandaloneMeeting(supabase, meetingId)');
     expect(loader).toContain('describeStandaloneFailure(result.reason)');
-    expect(resume).toContain('meetingHome: TABLE_HOME');
-    ['employeeName ===', 'toLowerCase', 'casesRef', 'cases.find'].forEach(f => expect(resume, f).not.toContain(f));
+    // Provenance is stamped by the shared applier, which cold-load recovery uses
+    // too — the refresh fix made them one path rather than two.
+    expect(resume).toContain('applyStandaloneMeetingToLive(meeting)');
+    const applier = appCode.slice(appCode.indexOf('const applyStandaloneMeetingToLive ='),
+                                  appCode.indexOf('const resumeStandaloneMeeting ='));
+    expect(applier).toContain('meetingHome: TABLE_HOME');
+    ['employeeName ===', 'toLowerCase', 'casesRef', 'cases.find']
+      .forEach(f => { expect(resume, f).not.toContain(f); expect(applier, f).not.toContain(f); });
     // Discovery hands over an id only.
     expect(readFileSync('src/screens/MeetingsScreen.jsx', 'utf8')).toContain('onResume?.(entry.id)');
   });
@@ -370,6 +376,118 @@ describe('D. live writes route by storage home', () => {
     expect(failure).toContain('return { ok: false');
     expect(failure).not.toContain('saveCases');
     expect(failure).not.toContain('transitionMeeting');
+  });
+
+  it('16. the REAL resolver has a standalone branch, and it is reached before any caseId test', () => {
+    // WHY THIS TEST SHAPE. recordBootstrapRecovery.test.js drives a hand-written
+    // MIRROR of resolveRecordRecovery. A mirror proves the intended logic is sound
+    // but can never prove the shipped function still matches it — which is exactly
+    // how the caseId-first redirect survived into production and dumped a live
+    // standalone meeting onto Cases. These assertions are on the real source.
+    const resolver = appCode.slice(appCode.indexOf('const resolveRecordRecovery = async'),
+                                   appCode.indexOf('const m = (cs.meetings||[]).find'));
+    expect(resolver.length).toBeGreaterThan(400);
+    // Identity is the meeting id; parentage is not consulted to decide existence.
+    expect(resolver).toContain('if(meetingHome === TABLE_HOME || (!caseId && meetingId))');
+    expect(resolver).toContain('await fetchStandaloneMeeting(supabase, meetingId)');
+    expect(resolver).toContain('applyStandaloneMeetingToLive(loaded.meeting)');
+    // And it comes FIRST — before the branch that reads caseId.
+    expect(resolver.indexOf('meetingHome === TABLE_HOME'))
+      .toBeLessThan(resolver.indexOf('if(!caseId)'));
+    // Nothing in the resolver may send a standalone meeting to Cases any more.
+    const standaloneBranch = resolver.slice(resolver.indexOf('if(meetingHome === TABLE_HOME'),
+                                            resolver.indexOf('if(!caseId)'));
+    expect(standaloneBranch).not.toContain('SCREENS.CASES');
+    expect(standaloneBranch).toContain('SCREENS.MEETINGS');
+    // Only a live meeting is reopened as live.
+    expect(standaloneBranch).toContain("declaredStatus(loaded.meeting) !== MEETING_STATUS.IN_PROGRESS");
+  });
+
+  it('16. the REAL url writer carries the meeting id without needing a case', () => {
+    // recordBootstrapRecovery.test.js drives a MIRROR of this writer, which cannot
+    // detect the shipped one regressing — the same blind spot that let the defect
+    // ship. This asserts the real nav-sync effect.
+    const sync = appCode.slice(appCode.indexOf("params.set('screen', screen);"),
+                               appCode.indexOf('const nextSearch ='));
+    expect(sync).toContain("if (screen === SCREENS.RECORD && caseInfo.meetingId) {");
+    expect(sync).toContain("if (caseInfo.caseId) params.set('case', caseInfo.caseId);");
+    expect(sync).toContain("params.set('meeting', caseInfo.meetingId);");
+    expect(sync).toContain("if (caseInfo.meetingHome === TABLE_HOME) params.set('home', 'table');");
+    // The production defect, asserted gone: the meeting param must not be
+    // conditional on a case existing.
+    expect(sync).not.toContain("screen === SCREENS.RECORD && caseInfo.caseId && caseInfo.meetingId");
+    // And the reader parses the provenance back out.
+    expect(appCode).toContain("meetingHome: params.get('home') === 'table' ? TABLE_HOME : null,");
+  });
+
+  it('16. standalone recovery is not held hostage to the cases load', () => {
+    const effect = appCode.slice(appCode.indexOf('const isStandaloneNav = recordRecovery.meetingHome'),
+                                 appCode.indexOf('resolveRecordRecovery(recordRecovery);'));
+    expect(effect).toContain('if(casesLoading && !isStandaloneNav) return;');
+  });
+
+  it('11/12. typed notes are persisted to public.meetings and survive a reload', async () => {
+    // The human UAT defect: two notes were typed into a live standalone meeting,
+    // the page was reloaded, and BOTH were lost — the row had an empty transcript
+    // because the only write points were Start and End. localStorage was the sole
+    // store for the conversation.
+    const db = fakeDb([{ id: 'm', org_id: 'org-a', case_id: null,
+      status: MEETING_STATUS.IN_PROGRESS, started_at: 'T1', transcript: [], created_by: 'u' }]);
+    const notes = [
+      { speaker: 'Note', text: 'UAT NOTE ONE — MUST SURVIVE REFRESH' },
+      { speaker: 'Note', text: 'UAT NOTE TWO — SAME MEETING MUST RESUME' },
+    ];
+    const saved = await persistStandaloneTranscript(db, { id: 'm', transcript: notes });
+    expect(saved.ok).toBe(true);
+    // Persisted to the TABLE, and to nothing else.
+    expect(db.calls.filter(c => c.table).every(c => c.table === 'meetings')).toBe(true);
+    // And a reload — a fresh fetch — returns both.
+    const reloaded = await fetchStandaloneMeeting(db, 'm');
+    expect(reloaded.meeting.transcript).toHaveLength(2);
+    expect(reloaded.meeting.transcript[0].text).toContain('UAT NOTE ONE');
+    expect(reloaded.meeting.transcript[1].text).toContain('UAT NOTE TWO');
+    // The lifecycle did not move as a side effect of saving notes.
+    expect(db.rows[0].status).toBe(MEETING_STATUS.IN_PROGRESS);
+    expect(db.rows[0].started_at).toBe('T1');
+  });
+
+  it('11. a late note autosave cannot resurrect a meeting that has ended', async () => {
+    const db = fakeDb([{ id: 'm', org_id: 'org-a', case_id: null,
+      status: MEETING_STATUS.REVIEW_DRAFT, started_at: 'T1', ended_at: 'T2',
+      transcript: [{ speaker: 'A', text: 'final' }], created_by: 'u' }]);
+    const r = await persistStandaloneTranscript(db, { id: 'm', transcript: [{ speaker: 'A', text: 'stale' }] });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe(STANDALONE_FAILURE.STALE_STATUS);
+    expect(db.rows[0].status).toBe(MEETING_STATUS.REVIEW_DRAFT);
+    expect(db.rows[0].transcript).toEqual([{ speaker: 'A', text: 'final' }]);
+  });
+
+  it('11. the autosave is wired, debounced, and standalone-only', () => {
+    // End-anchored on CODE, not a comment: appCode has comment lines stripped, so
+    // a comment anchor resolves to -1 and the slice silently runs to end of file.
+    const autoStart = appCode.indexOf('const liveNotesTimerRef =');
+    const autosave = appCode.slice(autoStart,
+      appCode.indexOf('const draft = orgLs("compass_meeting_draft", null);', autoStart));
+    expect(autosave.length).toBeGreaterThan(200);
+    // Asserted as the awaited expression, not merely a substring somewhere in the
+    // block — a call wrapped in dead code would otherwise satisfy it.
+    expect(autosave).toContain('const result = await persistStandaloneTranscript(supabase, {');
+    expect(autosave).toContain('caseInfo.meetingHome !== TABLE_HOME || !caseInfo.meetingId) return;');
+    expect(autosave).toContain('1500');
+    // Only writes when something actually changed, and only records success.
+    expect(autosave).toContain("if(serialised === liveNotesSavedRef.current) return;");
+    expect(autosave).toContain('if(result.ok)');
+    // It must never reach a case writer.
+    ['saveCases', 'transitionMeeting(', 'persistMeeting'].forEach(f => expect(autosave, f).not.toContain(f));
+  });
+
+  it('a successful save stops the browser claiming the notes are unsaved', () => {
+    const guard = appCode.slice(appCode.indexOf("const standaloneLive = caseInfo.meetingHome === TABLE_HOME;"),
+                                appCode.indexOf("window.addEventListener('beforeunload', handler);"));
+    // Dirty for a standalone meeting means genuinely unsaved, not merely non-empty.
+    expect(guard).toContain("JSON.stringify(transcript) !== liveNotesSavedRef.current");
+    // The embedded path is unchanged: its notes really are browser-only until End.
+    expect(guard).toContain('transcript.length > 0 || !!inputText.trim()');
   });
 
   it('the live transcript is React state during the meeting, so nothing writes per utterance', () => {

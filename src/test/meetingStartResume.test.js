@@ -148,10 +148,16 @@ describe('12-18. Resume is deterministic', () => {
     expect((app.match(/audit\("Meeting started"/g) || []).length).toBe(3);
     // Phase 4C.3 — the standalone Resume is held to the same rule as the
     // embedded one: it restores, it does not re-announce a start.
+    // Since the 4C.3 refresh fix, Resume and cold-load recovery share ONE
+    // applier, so the restore assertions belong to it. The guarantee is unchanged:
+    // reopening restores, it does not re-announce a start.
+    const applier = app.slice(app.indexOf('const applyStandaloneMeetingToLive ='),
+                              app.indexOf('const resumeStandaloneMeeting ='));
     const standaloneResume = app.slice(app.indexOf('const resumeStandaloneMeeting ='),
                                        app.indexOf('const continueStandaloneReview ='));
+    expect(applier).not.toContain('audit(');
     expect(standaloneResume).not.toContain('audit(');
-    expect(standaloneResume).toContain('setMeetingStartTime(meeting.startedAt || null);');
+    expect(applier).toContain('setMeetingStartTime(meeting.startedAt || null);');
     expect(app.slice(app.indexOf('const startScheduledMeeting ='), app.indexOf('const prepareScheduledMeeting ='))).toContain('audit("Meeting started"');
   });
 

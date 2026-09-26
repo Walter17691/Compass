@@ -770,6 +770,59 @@ analysis for the whole file — read lint **per rule**, never by total.
   15 mutations caught**; plus **18 database-level proofs** run as rolled-back
   transactions against production (12 trigger/constraint, 6 RLS with real JWT
   impersonation). Full suite **5,044 / 301 files**, 0 failed.
+### NEW-45 — a reloaded standalone meeting was dumped on Cases and lost its notes — P1 — FIXED
+- **Severity** **P1** (data loss + navigation) · **Raised** 2026-09-26 (human UAT)
+- **STATUS: FIXED / DEPLOYED — HUMAN RETEST REQUIRED.**
+- **Observed.** Started *Informal / 1-1* for `UAT - Standalone Meeting`, no case
+  linked. Start succeeded (header *"Started 26/09/2026, 10:18"*). Two notes typed.
+  Chrome warned on reload; the user reloaded as the script required. Compass
+  navigated to **`?screen=cases`**, the live meeting was not restored, and **both
+  notes were gone**.
+- **Preserved evidence (read-only).** `public.meetings` held **two** rows for that
+  employee, 86 seconds apart — `meeting_db399f97…` (10:16:35 BST) and
+  **`meeting_e18d5c5b…` (10:18:01 BST, the one in the header)**. Both
+  `in_progress`, `case_id NULL`, `ended_at NULL`, `started_at` intact, **both with
+  `transcript` = 0 entries**. No case created, no embedded copy, no contamination.
+  The two rows are two deliberate Start presses, not a double-click — the retry ref
+  only dedupes an in-flight attempt, and a second *successful* Start is a second
+  meeting by design.
+- **THREE root causes, all mine.**
+  1. **The URL never carried the identity.** The nav-sync effect wrote the
+     `meeting` param only `if (screen === RECORD && caseInfo.caseId && caseInfo.meetingId)`.
+     A standalone meeting has no case, so the URL stayed `?screen=record` with
+     nothing to recover. **`caseId` is parentage; `meetingId` is identity** — the
+     two were conflated.
+  2. **The resolver used `caseId` as the existence test.** `resolveRecordRecovery`
+     opened with `if(!caseId) { setScreen(SCREENS.CASES); }`, so a live standalone
+     meeting was reliably redirected to Cases on every reload.
+  3. **Live notes never reached the server.** Writes happened only at Start and
+     End, so until End **localStorage was the sole store for the conversation** —
+     and the reload path that would have offered it never ran.
+- **Why the automated tests missed it.** `recordBootstrapRecovery.test.js` drives a
+  hand-written **mirror** of the URL writer and the resolver. A mirror proves the
+  intended logic is sound but **cannot detect the shipped function diverging from
+  it** — and both defects were in the shipped code while the mirror stayed
+  correct. The 4C.3 suite then asserted the *standalone branch existed* in the
+  draft-liveness check, which it did; nothing asserted the resolver or the URL
+  writer themselves. The fix adds assertions **on the real source** of both, and a
+  mutation confirms each now fails when reverted.
+- **Fixes.** `meeting` (and `home=table`) written whenever a meeting id exists ·
+  resolver gains a **standalone branch that runs first**, keyed on the meeting id,
+  resolving against `public.meetings` · standalone recovery no longer waits on the
+  cases load · a new **debounced live-notes autosave** (`persistStandaloneTranscript`,
+  `in_progress → in_progress`, ~1.5s) · `beforeunload` now reflects *genuine*
+  dirtiness for a standalone meeting instead of warning whenever a note exists ·
+  Resume and recovery unified behind one `applyStandaloneMeetingToLive` applier.
+- **No silent fallback to Cases anywhere.** An unrecoverable record route now goes
+  to **Meetings** — the surface that lists a meeting still in progress — **with a
+  toast**, never silently.
+- **Evidence** 51 tests in `standaloneMeetingLifecycle.test.jsx` plus the human
+  reproduction driven end-to-end in `recordBootstrapRecovery.test.js`; **10 of 10
+  mutations caught**, including reverting the exact production bug.
+- **Lint caught a fourth, smaller defect of mine** in the same pass: the nav-sync
+  effect read `caseInfo.meetingHome` without declaring it, so a provenance change
+  alone would not have updated the URL. Added to the dependency array.
+
 ### Phase 4C.3 — standalone Start / Resume / End (2026-09-25)
 - **STATUS: DEPLOYED / READY FOR HUMAN UAT.** A manager can now hold an Informal /
   1-1, Return to Work or Investigation meeting with **no case at all**.
