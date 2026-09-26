@@ -1,8 +1,14 @@
 -- ============================================================================
 -- Phase 4C.1 — standalone meeting persistence + security foundation — 2026-09-25
 -- ============================================================================
--- NOT YET APPLIED. Held for pre-deploy review per the established Compass
--- convention for schema/security changes.
+-- APPLIED to production 2026-09-25 as migration
+-- `20260925185911 standalone_meetings_2026_09_25`, after pre-deploy review.
+--
+-- (Documentation-only correction made during Phase E0: this header said "NOT YET
+-- APPLIED" for a day after the migration was approved and applied, because it was
+-- never updated at apply time. A migration file that misreports its own status is
+-- worse than one with no status at all — an audit read it and concluded the
+-- standalone meeting table did not exist in production.)
 --
 -- WHY THIS EXISTS. Compass can only persist a meeting by mutating the parent
 -- case row: every meeting today is a JSONB object inside cases.meetings, and

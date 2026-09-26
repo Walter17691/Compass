@@ -75,7 +75,12 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument());
   });
 
-  it('shows a possible-name-collision warning when the subject\'s cases carry more than one distinct email', async () => {
+  it('BLOCKS the export when the subject\'s cases carry more than one distinct email', async () => {
+    // STRENGTHENED BY PHASE E0, deliberately. This condition previously produced
+    // an advisory banner rendered BELOW an always-enabled download button, so the
+    // warning could be read after the package had already been taken. Ambiguous
+    // identity now blocks the download: a DSAR must prefer "identity requires
+    // reconciliation" over disclosing the wrong person's history.
     authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
     const user = userEvent.setup();
     const cases = [
@@ -84,7 +89,11 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     ];
     render(<DsarScreen {...baseProps} cases={cases} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    await waitFor(() => expect(screen.getByText(/Possible name collision/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Identity requires reconciliation/)).toBeInTheDocument());
+    // The collision is still surfaced — that guarantee is unchanged — but the
+    // download is now genuinely unavailable rather than merely discouraged.
+    expect(screen.queryByRole('button', { name: 'Download response package' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Download blocked/)).toBeInTheDocument();
   });
 
   it('does not show a collision warning for an ordinary, unambiguous subject', async () => {
@@ -94,6 +103,10 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
     await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument());
     expect(screen.queryByText(/Possible name collision/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Identity requires reconciliation/)).not.toBeInTheDocument();
+    // An unambiguous subject can still download, so the gate has not become a
+    // blanket refusal.
+    expect(screen.getByRole('button', { name: 'Download response package' })).toBeInTheDocument();
   });
 });
 

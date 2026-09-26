@@ -8,7 +8,7 @@ import { addCalendarMonth, toISODateLocal } from './lib/dates';
 import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
 import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, capRecentForCache } from './lib/storage';
-import { findEmployeeByName } from './lib/employeeRecords';
+import { findEmployeeByName, EMPLOYMENT_STATUSES } from './lib/employeeRecords';
 import { computeDueSoon, computeAuthoritativeAppealDeadline } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
@@ -621,7 +621,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // roster. Same fix, paged on a stable order (id, the primary key).
       const { data, error } = await fetchAllPages((from, to) => supabase.from('employee_records').select('*').eq('org_id', org.id).order('id', { ascending: true }).range(from, to));
       if (error) { console.error('loadEmployeeRecords', error); markLoadIssue('employee records'); }
-      setEmployeeRecords(data.map(r=>({name:r.name,jobTitle:r.job_title,startDate:r.start_date,location:r.location,employeeNumber:r.employee_number||"",department:r.department||"",manager:r.manager||"",status:r.status||"",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
+      // Phase E0 — `id` is the canonical employee identity and is now carried
+      // into client state. It was previously DISCARDED here, which is why nothing
+      // in the app could reference an employee by anything but their name. Every
+      // later phase depends on this one field being present.
+      setEmployeeRecords(data.map(r=>({id:r.id,name:r.name,jobTitle:r.job_title,startDate:r.start_date,endDate:r.end_date||"",location:r.location,employeeNumber:r.employee_number||"",workEmail:r.work_email||"",department:r.department||"",manager:r.manager||"",status:r.status||"",employmentStatus:r.employment_status||"unknown",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
     } catch(e) { console.error('loadEmployeeRecords', e); markLoadIssue('employee records'); }
   };
 
@@ -656,6 +660,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       status: fields.status||null,
       working_pattern: fields.workingPattern||null,
       probation_end_date: fields.probationEndDate||null,
+      // Phase E0 — additive and nullable, same pattern as the IP20 block above.
+      // employment_status is spread in ONLY when it is a valid member of the
+      // vocabulary: the column is NOT NULL with a CHECK, so passing `null` for an
+      // absent value would fail the insert outright. Omitting it lets the
+      // database default supply 'unknown', which is the truthful answer when a
+      // CSV import genuinely does not say.
+      work_email: fields.workEmail||null,
+      end_date: fields.endDate||null,
+      ...(EMPLOYMENT_STATUSES.includes(fields.employmentStatus) ? { employment_status: fields.employmentStatus } : {}),
       updated_at: new Date().toISOString(),
     }, {onConflict: 'org_id,name'});
     if(error) { console.error('saveEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }

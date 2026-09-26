@@ -103,13 +103,38 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
           {Object.entries(STATUS_LABEL).filter(([v])=>v!=="completed"||req.reviewedFlaggedSections).map(([v,l])=><option key={v} value={v}>{l}</option>)}
         </select>
         <Btn variant="secondary" onClick={compile} disabled={compiling}>{compiling?"Compiling…":compiled?"Recompile data":"Compile data"}</Btn>
-        {compiled&&<Btn variant="secondary" onClick={()=>{downloadJson(compiled, `DSAR_${req.employeeName.replace(/\s+/g,"_")}_${req.receivedDate}.json`);audit?.("DSAR response downloaded", req.employeeName);}}>Download response package</Btn>}
+        {/* Phase E0 — the export is GATED on identity, not merely annotated.
+            Before this, the collision warning rendered BELOW an always-enabled
+            download button, so the safeguard could be read after the damage. An
+            ambiguous identity means Compass would be guessing which of two real
+            people these records belong to, and a DSAR must prefer "identity
+            requires reconciliation" over disclosing the wrong person's history. */}
+        {compiled&&!compiled.identityRequiresReconciliation&&<Btn variant="secondary" onClick={()=>{downloadJson(compiled, `DSAR_${req.employeeName.replace(/\s+/g,"_")}_${req.receivedDate}.json`);audit?.("DSAR response downloaded", req.employeeName);}}>Download response package</Btn>}
+        {compiled&&compiled.identityRequiresReconciliation&&(
+          <span style={{fontSize:12,color:"#C84B2F",alignSelf:"center"}}>Download blocked — identity requires reconciliation</span>
+        )}
         {!req.extended&&req.status!=="completed"&&<Btn variant="ghost" onClick={handleExtend}>Extend deadline</Btn>}
       </div>
 
       {compiled&&(
         <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px"}}>
-          {compiled.possibleNameCollision&&(
+          {compiled.identityRequiresReconciliation&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF0EB",border:"1px solid #F0C4B0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#C84B2F" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#C84B2F"}}>
+                <strong>Identity requires reconciliation — this response cannot be downloaded.</strong> More than one employee answers to "{req.employeeName}" in this organisation, so Compass cannot tell which person these records belong to. Confirm which employee the request concerns before compiling a response; sending this package could disclose another person's confidential history.
+              </div>
+            </div>
+          )}
+          {compiled.identityStatus==="unreconciled"&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#6B6375"}}>
+                <strong>No employee record on file for this name.</strong> These records were gathered by name alone. Check they all belong to the same person before sending.
+              </div>
+            </div>
+          )}
+          {compiled.possibleNameCollision&&!compiled.identityRequiresReconciliation&&(
             <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF0EB",border:"1px solid #F0C4B0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
               <WarningIcon size={14} color="#C84B2F" style={{flexShrink:0,marginTop:1}}/>
               <div style={{fontSize:12,color:"#C84B2F"}}>

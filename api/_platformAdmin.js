@@ -12,7 +12,7 @@ import { supabaseRequest } from './_supabase.js';
 // case-content access — platform admins administer organisation/contract
 // metadata only, through dedicated routes that never query cases,
 // allegations, case_tasks, case_themes, case_signals, hr_review_requests,
-// signing_requests, meetings, or evidence content. See platform_admin_
+// signing_requests, meetings, employee_records, or evidence content. See platform_admin_
 // foundation_2026-09-06.sql's own header for the full reasoning.
 //
 // `meetings` joined that list in Phase 4C.1 (supabase/standalone_meetings_
@@ -24,6 +24,13 @@ import { supabaseRequest } from './_supabase.js';
 // requires an org_members row for auth.uid(), and platform admin status is
 // deliberately independent of org_members. The prohibition here is the second
 // lock, and platformAdminIsolation.test.js is the assertion that both hold.
+//
+// `employee_records` joined the list in Phase E0. It is now the canonical
+// Employee File — the spine that will hold a person's meetings, documents, HR
+// processes and employment timeline — so it is the single most disclosing table
+// in the product about a named individual. Its RLS grants platform admins nothing
+// (SELECT requires `org_id IN my_org_ids()`, i.e. an org_members row), and that
+// must stay true no matter what operator tooling is added later.
 //
 // Same response/return contract as requireOrgMembership/requireOrgRole in
 // _auth.js: writes the appropriate error response itself and returns null

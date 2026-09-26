@@ -942,6 +942,66 @@ analysis for the whole file — read lint **per rule**, never by total.
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
 
+### Phase E0 — employee identity foundation (2026-09-26)
+- **STATUS: DEPLOYED / VERIFIED.** Migration
+  `20260926… employee_identity_foundation_2026_09_26` applied. No identity
+  backfill, no RLS change, no case/meeting/document work.
+- **CANONICAL-TABLE DECISION: `public.employee_records` EVOLVES.** A second
+  `employees` table would have left Compass with two permanent sources of employee
+  truth, which the approved architecture forbids. The audit had recommended a new
+  table; that recommendation was **wrong** and is corrected here. The risk it
+  guarded against — dropping `UNIQUE(org_id,name)` and widening RLS — is deferred,
+  and with both deferred, evolving in place is strictly simpler.
+- **Decisive evidence:** exactly **two** call sites structurally depend on
+  `UNIQUE(org_id, name)` — the `onConflict:'org_id,name'` upserts at `App.jsx:660`
+  and `:711`. Everything else merely reads by name.
+- **THE IDENTITY PRINCIPLE, now encoded in schema comments:** `id` IS identity;
+  `name`, `employee_number`, `work_email`, `job_title`, `location` are labels and
+  attributes. The detection indexes on number and email are deliberately **NOT
+  unique** — making either unique would repeat the mistake being corrected.
+- **`UNIQUE (org_id, name)` deliberately RETAINED.** It is wrong for the target
+  model, but it is currently the only thing preventing **34 name-equality identity
+  decisions** (14 of them in the DSAR compiler) and **4 live database functions**
+  (`org_event_correlation`, `org_insights_overview`, `org_theme_root_cause`,
+  `org_trend_detection`) from combining two different people. Dropping it in E0
+  would have converted a latent design flaw into a live privacy incident.
+- **The canonical `id` now reaches the client.** It was previously **discarded** at
+  `App.jsx:624`, which is why nothing in the app could reference an employee by
+  anything but their name.
+- **P1 privacy fix shipped with it.** The DSAR duplicate-name detector was
+  **inert in production in both of its conditions**:
+  `matchingEmployeeRecords.length > 1` cannot fire under the unique constraint, and
+  the email fallback cannot fire because **0 of 2,960 cases carry an email**. It was
+  also advisory only — the download button rendered unconditionally with the
+  warning *below* it. DSAR now computes `identityStatus` and **blocks the export**
+  when identity is `AMBIGUOUS`. `UNRECONCILED` (650 of 2,939 production subjects
+  are name-only) warns but does not block, because refusing all of them would break
+  DSAR for most of the customer base while reconciliation is outstanding.
+- **Creation authority stays HR-only, conservatively.** Location-scoped creation
+  **cannot be expressed safely**: `org_members.location_ids` is `uuid[]` while
+  `employee_records.location` is free text with no FK to `locations`. Manager
+  creation is recorded as a later product decision **blocked on adding
+  `location_id`**. Investigator, Legal/Compliance Reviewer and Auditor are
+  explicitly **not** granted creation rights — they are case-scoped roles.
+- **Employment status:** `active | leaver | unknown`, `NOT NULL DEFAULT 'unknown'`.
+  2,671 rows are `unknown` because Compass genuinely does not know — defaulting
+  them to `active` would invent a fact about real people. 14 normalised from the
+  free-text column. **No automatic leaver logic**; `leaver_instances` stays a
+  separate offboarding checklist.
+- **Rehire stays possible:** identity is not the employment period. A rehire keeps
+  the same `id`, clears `end_date`, and changes `employee_number` as an attribute.
+  `buildEmployeeSnapshot`'s point-in-time meeting metadata is never rewritten.
+- **Evidence** `src/test/employeeIdentityFoundation.test.js` — 35 tests, **11 of 11
+  mutations caught**; plus **13 database proofs** including the target model proven
+  by dropping the constraint *inside a rolled-back transaction* (two `ZZ John
+  Smith` rows, distinct ids, Manchester and Leeds resolving correctly by id) and
+  employee deletion proven not to cascade (`cases 2960→2960`, `meetings 2→2`).
+- **One existing DSAR test was strengthened, not loosened:** the two-distinct-emails
+  case previously asserted an advisory banner; it now asserts the export is blocked
+  and the download button is absent.
+- Documentation housekeeping: the stale *"NOT YET APPLIED"* header on
+  `standalone_meetings_2026-09-25.sql` was corrected (applied semantics untouched).
+
 ### NEW-44 — two org-scoped tables are unclassified for erasure — P2 (GDPR) — OPEN
 - **Severity** P2 · **Area** GDPR erasure / data inventory · **Raised** 2026-09-25
   (found while verifying 4C.1's own erasure registration against the live schema)

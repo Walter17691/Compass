@@ -1,3 +1,4 @@
+import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
 // Compiles everything Compass holds about one named individual, for a UK
 // GDPR/DPA 2018 Subject Access Request. Pure/client-side — the data is
 // already loaded into the app, so this needs no new API route.
@@ -166,6 +167,32 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   const distinctCaseEmails = new Set(subjectCases.map(c => (c.employeeEmail || '').trim().toLowerCase()).filter(Boolean));
   const possibleNameCollision = matchingEmployeeRecords.length > 1 || distinctCaseEmails.size > 1;
 
+  // ── Phase E0 — the identity gate ──────────────────────────────────────────
+  //
+  // The detector above was inert in production, in BOTH of its conditions:
+  //   * `matchingEmployeeRecords.length > 1` cannot fire at all, because
+  //     employee_records enforces UNIQUE(org_id, name);
+  //   * the email fallback cannot fire either, because 0 of 2,960 production
+  //     cases carry an employee_email.
+  // And it was advisory only — DsarScreen rendered the download button
+  // unconditionally with the warning below it.
+  //
+  // So the one safeguard against handing one person's confidential history to
+  // another was, in practice, unreachable. classifyIdentityByName is written to
+  // work the moment two employees CAN share a name, and the export is now gated
+  // on it rather than merely annotated.
+  //
+  // UNRECONCILED (no canonical employee at all) is reported but does NOT block:
+  // 650 of 2,939 production subjects are name-only today, and refusing every one
+  // of them would break DSAR for most of the customer base while reconciliation
+  // is outstanding. AMBIGUOUS blocks, because that is the case where Compass
+  // would be guessing between real people.
+  const identityStatus = classifyIdentityByName(employeeRecords, employeeName, {
+    emailEvidence: [...distinctCaseEmails],
+  });
+  const identityRequiresReconciliation = identityStatus === IDENTITY.AMBIGUOUS;
+  const canonicalEmployeeIds = matchingEmployeeRecords.map(r => r.id).filter(Boolean);
+
   const otherNames = new Set();
   employeeRecords.forEach(r => { if (r.name && r.name !== employeeName) otherNames.add(r.name); });
   cases.forEach(c => { if (c.employeeName && c.employeeName !== employeeName) otherNames.add(c.employeeName); });
@@ -315,6 +342,11 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     employeeName,
     employeeRecord,
     possibleNameCollision,
+    // Phase E0 — identity provenance travels WITH the compiled package, so a
+    // reviewer can see on what basis these records were gathered.
+    identityStatus,
+    identityRequiresReconciliation,
+    canonicalEmployeeIds,
     cases: casesForExport,
     // Phase 4C.1 — a top-level category, not folded into `cases`, because these
     // meetings genuinely have no case and presenting them under one would
