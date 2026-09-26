@@ -362,8 +362,14 @@ describe('entry points supply authoritative parentage', () => {
   });
 
   it('the one implicit-case-creation exception is narrow, explicit and referral-only', () => {
-    expect(app).toContain('const referralCaseIntent = !structuredCaseId && !!caseInfo._linkedReferralId;');
+    // NARROWED in Phase E0.5A.1: a referral id alone is no longer enough. The
+    // canonical employee chosen on the referral card must be present too, so this
+    // one minting branch cannot produce a case whose only subject is a name
+    // somebody typed into a concern form.
+    expect(app).toContain('const referralCaseIntent = !structuredCaseId && !!caseInfo._linkedReferralId && !!caseInfo._linkedReferralEmployeeId;');
     // it is the ONLY remaining way the structured path can mint a case id
     expect((app.match(/const caseId = existing \? existing\.id : crypto\.randomUUID\(\);/g) || []).length).toBe(1);
+    // and the case it mints carries the canonical identity, not just the label
+    expect(app).toContain('employeeId:caseInfo._linkedReferralEmployeeId||null');
   });
 });

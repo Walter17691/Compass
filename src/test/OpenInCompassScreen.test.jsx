@@ -64,14 +64,20 @@ describe('OpenInCompassScreen (Phase 5, IP21)', () => {
     expect(setScreen).toHaveBeenCalledWith('concerns');
   });
 
-  it('"Create a case" seeds the case-prompt name and opens the modal', async () => {
+  it('"Create a case" opens the modal WITHOUT pre-deciding the employee (E0.5A.1)', async () => {
+    // CHANGED DELIBERATELY. This used to seed the new-case form with the employee
+    // name derived from an email address — the least reliable identity signal in
+    // the product, and a fifth route to a name-only case. The deep link now opens
+    // the form and the user selects the canonical employee there, from the roster,
+    // exactly as they would from anywhere else.
     const user = userEvent.setup();
     const setCasePromptName = vi.fn();
     const setShowCasePrompt = vi.fn();
     render(<OpenInCompassScreen {...baseProps({ setCasePromptName, setShowCasePrompt })} />);
     await user.click(screen.getByRole('button', { name: 'Create a case' }));
-    expect(setCasePromptName).toHaveBeenCalledWith('Sarah Jones');
     expect(setShowCasePrompt).toHaveBeenCalledWith(true);
+    // The name is no longer pushed into the form at all.
+    expect(setCasePromptName).not.toHaveBeenCalled();
   });
 
   it('"View active actions" opens the single matching case directly on its tasks tab', async () => {

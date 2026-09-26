@@ -9,6 +9,7 @@ import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
 import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, capRecentForCache } from './lib/storage';
 import { findEmployeeByName, findEmployeeById, EMPLOYMENT_STATUSES } from './lib/employeeRecords';
+import { planEmployeeImport, describeImportPlan } from './lib/employeeImportIdentity';
 import { computeDueSoon, computeAuthoritativeAppealDeadline } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
@@ -576,15 +577,27 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [employeeRecords, setEmployeeRecords] = useState(orgLs("compass_employees", []));
   const saveEmployeeRecords = u => { setEmployeeRecords(u); orgLsSet("compass_employees", u); };
   const getEmployeeRecord = (name) => findEmployeeByName(employeeRecords, name);
-  const upsertEmployeeRecord = (name, fields) => {
-    if(!name) return;
-    const existing = employeeRecords.find(e=>e.name===name);
+  // Phase E0.5A.1 — an UPDATE addresses the canonical id; only a CREATE uses the
+  // name, and only because UNIQUE(org_id, name) still exists.
+  //
+  // `employeeId` is the identity. The name fallback below survives solely for
+  // callers that have not been migrated yet (PersonViewScreen is name-keyed until
+  // E1) and is explicitly a lookup convenience, never the key a write is addressed
+  // by: once the record is resolved, every subsequent operation uses its id.
+  const upsertEmployeeRecord = (nameOrId, fields = {}) => {
+    const byId = findEmployeeById(employeeRecords, fields.employeeId || nameOrId);
+    const existing = byId || (typeof nameOrId === "string" ? findEmployeeByName(employeeRecords, nameOrId) : null);
     if(existing) {
-      saveEmployeeRecords(employeeRecords.map(e=>e.name===name?{...e,...fields}:e));
-    } else {
-      saveEmployeeRecords([...employeeRecords,{name,...fields,createdAt:new Date().toISOString()}]);
+      // Local state and the database write are both addressed by id.
+      saveEmployeeRecords(employeeRecords.map(e=>e.id===existing.id?{...e,...fields}:e));
+      updateEmployeeRecordById(existing.id, fields);
+      return existing.id;
     }
-    saveEmployeeRecordToDB(name, fields);
+    const name = typeof nameOrId === "string" ? nameOrId.trim() : "";
+    if(!name) return null;
+    saveEmployeeRecords([...employeeRecords,{name,...fields,createdAt:new Date().toISOString()}]);
+    createEmployeeRecord(name, fields);
+    return null;   // the canonical id arrives on the next load
   };
   const [employmentProfileLoading, setEmploymentProfileLoading] = useState(false);
   const [newCaseJobTitle, setNewCaseJobTitle] = useState("");
@@ -634,21 +647,57 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // files and meeting records are a separate legal record with their own
   // retention obligations (ACAS/tribunal limitation periods) and aren't
   // touched here, so this is safe to offer without a GDPR erasure review.
-  const deleteEmployeeRecord = async (name) => {
-    if(!name) return;
-    saveEmployeeRecords(employeeRecords.filter(e=>e.name!==name));
+  // Phase E0.5A.1 — deletion is BY CANONICAL ID ONLY.
+  //
+  // This used to run `.eq('org_id', org.id).eq('name', name)`. Once two employees
+  // in one organisation can share a name — which is the whole point of the target
+  // model — that statement deletes the wrong person, or both. Compass must never
+  // delete "John Smith" because the label matches.
+  //
+  // An id is now required: callers that only hold a name must resolve it first and
+  // be sure which person they mean.
+  const deleteEmployeeRecord = async (employeeId) => {
+    const existing = findEmployeeById(employeeRecords, employeeId);
+    if(!existing) {
+      showToast("Compass couldn't identify which employee record to remove.", "error");
+      return;
+    }
+    saveEmployeeRecords(employeeRecords.filter(e=>e.id!==existing.id));
     if(org?.id) {
-      const { error } = await supabase.from('employee_records').delete().eq('org_id', org.id).eq('name', name);
+      const { error } = await supabase.from('employee_records')
+        .delete().eq('id', existing.id).eq('org_id', org.id);
       if(error) { console.error('deleteEmployeeRecord', error); showToast("Couldn't delete the employee record — "+error.message, "error"); return; }
     }
-    audit("Employee record deleted", name);
+    audit("Employee record deleted", `${existing.name} — employee ${existing.id}`);
   };
 
-  const saveEmployeeRecordToDB = async (name, fields) => {
-    if(!org?.id) return;
-    const { error } = await supabase.from('employee_records').upsert({
-      org_id: org.id,
-      name,
+  // Phase E0.5A.1 — an UPDATE is addressed by canonical id and scoped to the org.
+  // It never touches `name`, so renaming is a deliberate separate act and can
+  // never be a side effect of editing a job title.
+  const updateEmployeeRecordById = async (employeeId, fields) => {
+    if(!org?.id || !employeeId) return;
+    const payload = employeeRecordPayload(fields);
+    const { error } = await supabase.from('employee_records')
+      .update(payload).eq('id', employeeId).eq('org_id', org.id);
+    if(error) { console.error('updateEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
+  };
+
+  // CREATE still goes through the (org_id, name) conflict target, because
+  // UNIQUE(org_id, name) is still in place — duplicate names are not production
+  // supported until the duplicate-name safety gate is complete. What has changed
+  // is that the application no longer treats the name as the identity AFTER
+  // creation: the canonical id arrives on the next load and is used from then on.
+  const createEmployeeRecord = async (name, fields) => {
+    if(!org?.id || !name) return;
+    const { error } = await supabase.from('employee_records')
+      .upsert({ org_id: org.id, name, ...employeeRecordPayload(fields) }, { onConflict: 'org_id,name' });
+    if(error) { console.error('createEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
+  };
+
+  const employeeRecordPayload = (fields) => ({
+      // NOTE: `name` is deliberately absent. An update must not be able to rename
+      // an employee as a side effect of editing their job title, and the create
+      // path supplies the name explicitly.
       job_title: fields.jobTitle||null,
       start_date: fields.startDate||null,
       location: fields.location||null,
@@ -671,9 +720,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       end_date: fields.endDate||null,
       ...(EMPLOYMENT_STATUSES.includes(fields.employmentStatus) ? { employment_status: fields.employmentStatus } : {}),
       updated_at: new Date().toISOString(),
-    }, {onConflict: 'org_id,name'});
-    if(error) { console.error('saveEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
-  };
+    });
 
   // ── HRIS/payroll CSV import-export — generic CSV rather than a specific
   // vendor API, since it works with whatever system (BambooHR, Xero, Sage,
@@ -692,6 +739,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // it doesn't (they just come through as "").
       const records = valid.map(o => ({
         name: o.name.trim(),
+        // Phase E0.5A.1 — an explicit canonical id, when the customer's export
+        // carries one, is the only unambiguous identity signal available. The
+        // column is optional; its absence falls back to the name rules below.
+        employeeId: o['compass employee id']||o.compassemployeeid||o['employee id']||"",
         jobTitle: o['job title']||o.jobtitle||"",
         startDate: o['start date']||o.startdate||"",
         location: o.location||"",
@@ -703,12 +754,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         probationEndDate: o['probation end date']||o.probationenddate||"",
       }));
 
-      const merged = mergeHrisEmployeesIntoRecords(employeeRecords, records.map(r=>({...r, site:r.location})));
+      // Phase E0.5A.1 — resolve identity per row BEFORE writing anything. A row
+      // whose name matches more than one existing employee is blocked and reported
+      // rather than overwriting one of two real people. Nothing is written for a
+      // blocked row: not a partial update, not a create.
+      const plan = planEmployeeImport(employeeRecords, records);
+      const importable = plan.applied;
+
+      const merged = mergeHrisEmployeesIntoRecords(employeeRecords, importable.map(r=>({...r, site:r.location})));
       saveEmployeeRecords(merged);
 
-      if(org?.id && records.length>0) {
+      if(org?.id && importable.length>0) {
         const { error } = await supabase.from('employee_records').upsert(
-          records.map(r => ({
+          importable.map(r => ({
             org_id: org.id,
             name: r.name,
             job_title: r.jobTitle||null,
@@ -726,7 +784,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         );
         if(error) throw error;
       }
-      showToast(`Imported ${records.length} employee${records.length===1?"":"s"}${skipped>0?`, skipped ${skipped} row${skipped===1?"":"s"} with no name`:""}`);
+      if(plan.blocked.length>0) {
+        // Named in the console for an operator, and counted truthfully for the
+        // user. A blocked row is not a failure of the import — it is a question
+        // only a human can answer.
+        console.error("Employee CSV rows needing reconciliation:", plan.blocked);
+      }
+      showToast(describeImportPlan(plan, skipped), plan.blocked.length>0?"error":undefined);
     } catch(err) {
       console.error("Employee CSV import error:", err);
       showToast("Could not import CSV — check the file format", "error");
@@ -947,7 +1011,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [chatInput, setChatInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatProcessing, setChatProcessing] = useState(false);
-  const [homeChatHistory, setHomeChatHistory] = useState([]);
+  // `homeChatHistory` removed in E0.5A.1 — its only consumer was the dead
+  // createCaseFromChat, and its setter was never called from anywhere.
   const [homeChatOpen, setHomeChatOpen] = useState(false);
   const [homeChatProcessing, setHomeChatProcessing] = useState(false);
 
@@ -1372,15 +1437,20 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // the target case the same way saveMeetingToCase() itself will at save
   // time (App.jsx:3721) — caseInfo._linkedCaseId only covers witness
   // interviews; an ordinary follow-up meeting on an employee who already
-  // has a case is matched by employee name, not a pre-set link, so
-  // checking _linkedCaseId alone would miss the common case. A brand-new
-  // meeting for an employee with no existing case has nowhere to attach a
-  // task until it's saved, so acceptance is still recorded locally either
-  // way (the sidebar reflects the user's decision) but the real task only
-  // gets created when a matching case already exists.
+  // CHANGED in Phase E0.5A.1 (Part G). This used to resolve the case by EMPLOYEE
+  // NAME when no explicit link existed, and then INSERT a case_tasks row against
+  // whatever it found. That is a write decision made on a label: where two people
+  // share a name, an action accepted in one person's meeting would be filed as a
+  // task on the other person's case — and nothing downstream would ever show it
+  // had gone to the wrong employee.
+  //
+  // It now uses only the link the user actually established. Where there is no
+  // link the existing "not yet applied" branch takes over: acceptance is still
+  // recorded locally, and the real task is created at save time once the meeting
+  // has a case. That branch already existed for employees with no case at all, so
+  // the degradation is the designed one, not a new dead end.
   const acceptMeetingEvidenceSuggestion = (suggestion) => {
-    const existingCase = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
-    const caseId = caseInfo._linkedCaseId || existingCase?.id;
+    const caseId = caseInfo._linkedCaseId;
     let applied = false;
     if(caseId) {
       createCaseTask(caseId, {
@@ -1401,10 +1471,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   // M4 — accept/dismiss for detected actions/commitments. Same case-
   // resolution and "record locally either way" behaviour as M3's
-  // acceptMeetingEvidenceSuggestion above.
+  // acceptMeetingEvidenceSuggestion above, including the Phase E0.5A.1 removal of
+  // the employee-name fallback.
   const acceptMeetingActionSuggestion = (suggestion) => {
-    const existingCase = cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
-    const caseId = caseInfo._linkedCaseId || existingCase?.id;
+    const caseId = caseInfo._linkedCaseId;
     let applied = false;
     if(caseId) {
       createCaseTask(caseId, { name:suggestion.description, owner:suggestion.suggestedOwner||"", dueDate:suggestion.suggestedDueDate||"" });
@@ -2241,7 +2311,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const liveContextTimer = useRef(null);
   const meetingEndedRef = useRef(false);
   const [showCasePrompt, setShowCasePrompt] = useState(false);
-  const [casePromptName, setCasePromptName] = useState("");
+  // `casePromptName` state removed in E0.5A.1 — the display name is now read from
+  // the SELECTED employee at submit time (selectedEmployee.name), so keeping a
+  // parallel name in state served no purpose and invited it becoming identity
+  // again by accident.
   // Phase E0.5A — the canonical employee this case will belong to. The NAME above
   // is now only a display snapshot derived from the selection; this uuid is the
   // identity, and a case cannot be created without it.
@@ -2249,7 +2322,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const closeCasePrompt = () => {
     setShowCasePrompt(false);
-    setCasePromptName("");
     setCasePromptEmployeeId(null);
     setNewCaseJobTitle("");
     setNewCaseStartDate("");
@@ -2290,21 +2362,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const onboardModalRef = useRef(null);
   useModalA11y(onboardModalRef, () => { setShowOnboard(false); setOnboardDone(true); lsSet("compass_onboard", true); }, showOnboard && !showGdpr);
 
-  const createCaseFromChat = () => {
-    if(!casePromptName.trim()) return;
-    const newCase = {
-      id: crypto.randomUUID(),
-      employeeName: casePromptName.trim(),
-      employeeEmail: "",
-      createdAt: new Date().toISOString(),
-      meetings: [],
-      backgroundChat: homeChatHistory,
-    };
-    saveCases([...cases, newCase]);
-    setShowCasePrompt(false);
-    setCasePromptName("");
-    setScreen(SCREENS.CASES);
-  };
+  // REMOVED in Phase E0.5A.1 — `createCaseFromChat` minted a case from
+  // `casePromptName` free text and had ZERO call sites anywhere in the
+  // repository. An unreachable function that can create a name-only case is a
+  // trap for whoever wires it up next, and no test can stop that; deleting it is
+  // the only guard that holds. Case creation now has exactly three entry points,
+  // all of which require a canonical employee id.
 
   const askCompass = async (msg, history, setHistory, setProcessing) => {
     if(!msg.trim() && !homeAttachment) return;
@@ -4290,15 +4353,32 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     bullying_harassment:"discrimination", safety_welfare:"other", other:"other",
   };
 
-  const triageReferral = (referralId, action) => {
+  // Phase E0.5A.1 — opening a referral as a case now requires a CANONICAL
+  // employee, selected explicitly.
+  //
+  // A concern referral carries only `employee_name`, typed free-hand by the
+  // reporting manager — and all 110 production referrals are unmappable to any
+  // employee record. So there is no uuid to reuse here, and the referral's name
+  // must not become one: this was the third case-creation path, and the last one
+  // still able to mint a case from a string.
+  const triageReferral = (referralId, action, opts = {}) => {
     const referral = concernReferrals.find(r=>r.id===referralId);
     if(!referral) return;
     const actionToStatus = {
       request_more_info:"more_info_requested", return_to_manager:"returned_to_manager", close:"closed",
     };
     if(action==="open_case") {
+      // No name fallback, and no exact-match shortcut. The referral's name is a
+      // starting point for the SEARCH, never the identity.
+      const employee = findEmployeeById(employeeRecords, opts.employeeId);
+      if(!employee) {
+        showToast("Select which employee this concern is about before opening a case.", "error");
+        return;
+      }
       const newCase = {
-        id: crypto.randomUUID(), employeeName: referral.employeeName, manager: "", email: "",
+        id: crypto.randomUUID(), employeeId: employee.id,
+        // Point-in-time display snapshot, taken FROM the selection.
+        employeeName: employee.name, manager: "", email: "",
         caseType: CONCERN_TYPE_TO_CASE_TYPE[referral.concernType]||"other",
         description: referral.description, referredBy: "Manager referral — "+(referral.submittedByName||"unknown"),
         dateReceived: new Date().toISOString().split("T")[0], status: "open", meetings: [],
@@ -4308,7 +4388,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       const updated = setReferralStatus(concernReferrals, referralId, "case_opened", { linkedCaseId: newCase.id });
       setConcernReferrals(updated);
       saveConcernReferralToDB(updated.find(r=>r.id===referralId));
-      audit("Concern referral opened as a case", referral.employeeName, newCase.id);
+      // Same identity provenance as the other two migrated paths.
+      audit("Case created", `${employee.name} — employee ${employee.id}`, newCase.id);
+      audit("Concern referral opened as a case", employee.name, newCase.id);
       return;
     }
     const status = actionToStatus[action];
@@ -4333,11 +4415,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // only happens once the meeting is actually saved — see
   // saveMeetingToCase's own _linkedReferralId branch — not here, so
   // nothing changes if the manager backs out without ever starting it.
-  const startInformalConversation = (referral) => {
+  // Phase E0.5A.1 — employeeId is now REQUIRED, and comes from the EmployeeSelect
+  // step on the referral card. This path defers case creation until the informal
+  // conversation is actually saved (so backing out leaves nothing behind), which
+  // is precisely why the identity has to be carried through the whole journey:
+  // the case is minted much later, in saveMeetingToCaseImpl, by which point the
+  // referral is long out of scope. The employee's NAME is still carried, but only
+  // as the display label it has always been.
+  const startInformalConversation = (referral, employeeId) => {
+    if(!employeeId) {
+      showToast("Select which employee this concern is about before starting the conversation.", "error");
+      return;
+    }
     setMeetingSetup(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"informal", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]}));
     setCaseInfo(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"",
       context: [referral.aiSummary, referral.description].filter(Boolean).join("\n\n"),
-      _linkedCaseId:null, _linkedCaseName:null, _linkedReferralId:referral.id, _linkedReferralName:referral.employeeName}));
+      _linkedCaseId:null, _linkedCaseName:null, _linkedReferralId:referral.id, _linkedReferralName:referral.employeeName,
+      _linkedReferralEmployeeId:employeeId}));
     setScreen(SCREENS.HOME+"_meeting");
   };
 
@@ -8063,19 +8157,30 @@ Please produce:
       savedAt: new Date().toISOString(),
       savedBy: currentUser?.name || "HR Manager",
     };
-    // Phase 6.5 hardening (closes independent audit finding 5.7, sibling
-    // instance) — same fix as saveMeetingToCase just below: disambiguate
-    // among same-named-employee matches via activeCaseId where possible,
-    // never override the name check itself.
-    const devNameMatches = cases.filter(c=>c.employeeName.toLowerCase()===employeeName.toLowerCase());
-    if(devNameMatches.length>1) console.error(`saveDevMeetingToCase: "${employeeName}" matches ${devNameMatches.length} cases — resolving via activeCaseId where possible, otherwise the first match`);
-    const existing = (activeCaseId && devNameMatches.find(c=>c.id===activeCaseId)) || devNameMatches[0];
-    const devCaseId = existing ? existing.id : crypto.randomUUID();
-    if(existing) {
-      saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
-    } else {
-      saveCases([...cases,{id:devCaseId, employeeName, email:s.caseInfo.email||"", createdAt:new Date().toISOString(), meetings:[meeting]}]);
+    // ── Phase E0.5A.1 INTERIM GUARD — no name-based identity, no implicit case ──
+    //
+    // This path used to resolve the target case by `employeeName.toLowerCase()`,
+    // take `[0]` on a collision with only a console warning, and MINT A CASE when
+    // nothing matched. Under the Employee File architecture all three are
+    // prohibited: a same-named colleague could receive somebody else's development
+    // review, and a typed name could create a case.
+    //
+    // The full migration of development meetings belongs to the meeting-parentage
+    // phase (E2), so this does NOT migrate it. It removes the ability to do harm
+    // in the meantime: the case must be the one the user is explicitly in.
+    // Anything else is refused, with a truthful reason.
+    const existing = activeCaseId ? cases.find(c => c && c.id === activeCaseId) : null;
+    if(!existing) {
+      showToast("Open the employee's case first, then save this review to it. Compass no longer matches a case by employee name.", "error");
+      return;
     }
+    const devCaseId = existing.id;
+    // The implicit-case-creation branch that used to sit here is REMOVED, not just
+    // bypassed. The early return above already makes it unreachable, but leaving a
+    // `saveCases([...cases, {employeeName, ...}])` in the file is precisely the
+    // trap that produced this defect class — a future edit to the guard would
+    // silently re-enable case minting from a name.
+    saveCases(cases.map(c=>c.id===existing.id?{...c,meetings:[...c.meetings,meeting]}:c));
     audit("Development meeting saved", `${employeeName} — ${s.type}`, devCaseId);
     showToast("Meeting saved to case file");
     if(devLetter && org?.id) {
@@ -8413,7 +8518,11 @@ Please produce:
     // nothing behind. That is case creation by explicit intent, not by name
     // inference, and it never consults cases.employeeName. Every other
     // unlinked meeting fails closed below.
-    const referralCaseIntent = !structuredCaseId && !!caseInfo._linkedReferralId;
+    // Phase E0.5A.1 — the referral exception now requires the canonical employee
+    // chosen on the referral card, not merely the presence of a referral id.
+    // Without this the one remaining case-minting branch in the whole meeting
+    // save could still produce a name-only case.
+    const referralCaseIntent = !structuredCaseId && !!caseInfo._linkedReferralId && !!caseInfo._linkedReferralEmployeeId;
     if(!structuredCaseId && !referralCaseIntent) {
       // Fail closed. No name match, no invented case, no silently chosen
       // case. reviewOutput/transcript are untouched, so the user keeps every
@@ -8453,7 +8562,10 @@ Please produce:
       // referral (MP6) — an existing employee's own case keeps whatever
       // type it already had; one informal chat about them doesn't
       // relabel it.
-      : {id:caseId, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[stampedMeeting], ...(caseInfo._linkedReferralId?{caseType:"informal"}:{})};
+      // employeeId is the canonical identity; employeeName remains the display
+      // label. This is the only branch of the meeting save that creates a case,
+      // and referralCaseIntent above guarantees the id is present.
+      : {id:caseId, employeeId:caseInfo._linkedReferralEmployeeId||null, employeeName:caseInfo.employee, email:caseInfo.email, createdAt:new Date().toISOString(), meetings:[stampedMeeting], ...(caseInfo._linkedReferralId?{caseType:"informal"}:{})};
     // Appeal Hearing P1 reliability pass (2026-09-18) — changedId (both
     // branches) makes the returned Promise real: the "sync all" branch
     // this previously fell into (changedId omitted) returns nothing at
@@ -8530,7 +8642,11 @@ Please produce:
         if(saved) saveConcernReferralToDB(saved);
         return updated;
       });
-      setCaseInfo(p=>({...p, _linkedReferralId:null, _linkedReferralName:null}));
+      // _linkedReferralEmployeeId is cleared with its siblings. referralCaseIntent
+      // also requires _linkedReferralId, so a stale id alone could not mint a
+      // case — but leaving a canonical employee id lying in caseInfo invites a
+      // later reader to mistake it for "this meeting's employee".
+      setCaseInfo(p=>({...p, _linkedReferralId:null, _linkedReferralName:null, _linkedReferralEmployeeId:null}));
       audit("Concern referral handled informally", caseInfo.employee, caseId);
     }
     // M7 — auto-refresh case intelligence so the rest of the case reflects
@@ -10376,9 +10492,6 @@ Please produce:
                 onRequestCreate={()=>{ setScreen(SCREENS.SETTINGS); showToast("Add the employee in Settings → Employee records, then create the case."); }}
                 onChange={(id, employee)=>{
                   setCasePromptEmployeeId(id);
-                  // The name is carried for display/snapshot only — it is derived
-                  // FROM the selection, never the other way round.
-                  setCasePromptName(employee?.name || "");
                   if(employee) {
                     setNewCaseJobTitle(employee.jobTitle||"");
                     setNewCaseStartDate(employee.startDate||"");
@@ -11030,7 +11143,7 @@ Please produce:
 
       {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}
       {screen===SCREENS.OPEN_EMPLOYEE&&(
-        <OpenInCompassScreen employeeName={openEmployeeName} cases={cases} getCaseStage={getCaseStage} getEmployeeRecord={getEmployeeRecord} setActiveCaseId={setActiveCaseId} setCaseViewInitialTab={setCaseViewInitialTab} setScreen={setScreen} setConcernForm={setConcernForm} emptyConcernForm={EMPTY_CONCERN_FORM} setConcernFormAutoOpen={setConcernFormAutoOpen} setCasePromptName={setCasePromptName} setShowCasePrompt={setShowCasePrompt} fmtDate={fmtDate} />
+        <OpenInCompassScreen employeeName={openEmployeeName} cases={cases} getCaseStage={getCaseStage} getEmployeeRecord={getEmployeeRecord} setActiveCaseId={setActiveCaseId} setCaseViewInitialTab={setCaseViewInitialTab} setScreen={setScreen} setConcernForm={setConcernForm} emptyConcernForm={EMPTY_CONCERN_FORM} setConcernFormAutoOpen={setConcernFormAutoOpen} setShowCasePrompt={setShowCasePrompt} fmtDate={fmtDate} />
       )}
 
       {screen===SCREENS.SEARCH&&(
@@ -11141,6 +11254,8 @@ Please produce:
           concernSubmitted={concernSubmitted}
           setConcernSubmitted={setConcernSubmitted}
           triageReferral={triageReferral}
+          employeeRecords={employeeRecords}
+          onRequestCreateEmployee={()=>{ setScreen(SCREENS.SETTINGS); showToast("Add the employee in Settings → Employee records, then open the case."); }}
           startInformalConversation={startInformalConversation}
           concernTriageLoading={concernTriageLoading}
           currentUser={currentUser}

@@ -259,8 +259,12 @@ describe('5/6/7/8. both creation paths, one contract', () => {
   });
 
   it('9. the selected UUID determines identity; the name is a snapshot', () => {
-    // The name is derived FROM the selection in both paths.
-    expect(appCode).toContain('setCasePromptName(employee?.name || "");');
+    // The name is derived FROM the selection in both paths. The modal no longer
+    // keeps a parallel name in state at all (removed in E0.5A.1) — it reads it off
+    // the selected employee at submit time, which is one fewer place a name could
+    // drift back into being identity.
+    expect(appCode).toContain('const name = selectedEmployee.name;');
+    expect(appCode).not.toContain('const [casePromptName, setCasePromptName]');
     expect(intake).toContain('employeeId:id, employee:employee?.name || ""');
     // And it is still stored, for display/compatibility.
     expect(appCode).toContain('employeeName: name,');

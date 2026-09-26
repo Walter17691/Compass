@@ -9,7 +9,7 @@ const STAGE_LABEL = { intake:"Intake", investigation:"Investigation", inv_report
 // No live HRIS platform exists to link FROM (IP19 is a stub adapter only),
 // so this screen is reachable today only via a hand-built ?employee= URL —
 // still real, testable routing/UI work, just without a live sender.
-export function OpenInCompassScreen({ employeeName, cases, getCaseStage, getEmployeeRecord, setActiveCaseId, setCaseViewInitialTab, setScreen, setConcernForm, emptyConcernForm, setConcernFormAutoOpen, setCasePromptName, setShowCasePrompt, fmtDate }) {
+export function OpenInCompassScreen({ employeeName, cases, getCaseStage, getEmployeeRecord, setActiveCaseId, setCaseViewInitialTab, setScreen, setConcernForm, emptyConcernForm, setConcernFormAutoOpen, setShowCasePrompt, fmtDate }) {
   const matches = findCasesForEmployee(cases, employeeName);
   const record = getEmployeeRecord ? getEmployeeRecord(employeeName) : null;
 
@@ -32,8 +32,15 @@ export function OpenInCompassScreen({ employeeName, cases, getCaseStage, getEmpl
     setScreen(SCREENS.CONCERNS);
   };
 
+  // Phase E0.5A.1 — this is the FIFTH entry point into case creation, reached from
+  // the Outlook add-in deep link. It used to prefill the new-case form with the
+  // employee NAME taken from an email address, which is the least reliable identity
+  // signal in the product.
+  //
+  // It now just opens the form. The user selects the canonical employee there, from
+  // the roster, exactly as they would from anywhere else — and the deep link cannot
+  // pre-decide who the case is about.
   const createCase = () => {
-    setCasePromptName(employeeName || "");
     setShowCasePrompt(true);
   };
 

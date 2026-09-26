@@ -104,12 +104,15 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
                     <div><label htmlFor="person-view-location" style={{fontSize:11,fontWeight:600,color:"#6B6375",display:"block",marginBottom:4}}>Location</label><select id="person-view-location" value={editLocation} onChange={e=>setEditLocation(e.target.value)} style={{width:"100%",fontSize:12,border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 10px",fontFamily:"DM Sans,system-ui,sans-serif",color:editLocation?"#1C1820":"#9B9098",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}><option value="">Select…</option>{locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}<option value="__other__">Other</option></select></div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>{upsertEmployeeRecord(empName,{jobTitle:editJobTitle,startDate:editStartDate,location:editLocation});setEditing(false);showToast("Employee record updated");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 16px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Save</button>
+                    <button onClick={()=>{upsertEmployeeRecord(rec.id||empName,{employeeId:rec.id,jobTitle:editJobTitle,startDate:editStartDate,location:editLocation});setEditing(false);showToast("Employee record updated");}} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:7,padding:"7px 16px",color:"#fff",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Save</button>
                     {(rec.jobTitle||rec.startDate||rec.location)&&(
                       <button onClick={async()=>{
                         const ok = await confirmDialog({title:"Delete employee record?", message:`This removes ${empName}'s job title, start date and location. Case files and meeting records are not affected.`, confirmLabel:"Delete", danger:true});
                         if(!ok) return;
-                        deleteEmployeeRecord(empName);
+                        // Phase E0.5A.1 — deletion is by canonical id. Deleting
+                        // by name would remove the wrong person once two
+                        // employees in one org can share one.
+                        deleteEmployeeRecord(rec.id);
                         setEditing(false);
                         showToast("Employee record deleted");
                       }} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:7,padding:"7px 16px",color:"#C84B2F",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:600}}>Delete record</button>

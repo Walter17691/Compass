@@ -36,6 +36,8 @@ export function mergeHrisEmployeesIntoRecords(existingRecords, hrisEmployees) {
     if (!name) return;
     const record = {
       name,
+      // Carried so a resolved row keeps its canonical identity through the merge.
+      ...(emp.employeeId ? { id: emp.employeeId } : {}),
       jobTitle: emp.jobTitle || "",
       startDate: emp.startDate || "",
       location: emp.site || "",
@@ -46,8 +48,24 @@ export function mergeHrisEmployeesIntoRecords(existingRecords, hrisEmployees) {
       workingPattern: emp.workingPattern || "",
       probationEndDate: emp.probationEndDate || "",
     };
-    const idx = merged.findIndex(m => m.name === name);
-    if (idx >= 0) merged[idx] = { ...merged[idx], ...record };
+    // ── Phase E0.5A.1 — identity by canonical id, never by name ──
+    //
+    // This used to do `merged.findIndex(m => m.name === name)`. Once two employees
+    // in one organisation can share a name, that silently merges two real people's
+    // records into one — the single most damaging thing this function could do.
+    //
+    // The caller (handleEmployeeCsvImport) now resolves identity per row FIRST via
+    // planEmployeeImport, which blocks an ambiguous name outright, so every row
+    // reaching here is either carrying a resolved `employeeId` or is genuinely new.
+    // This function honours that decision rather than re-deriving it.
+    const idx = emp.employeeId
+      ? merged.findIndex(m => m.id && m.id === emp.employeeId)
+      // No id supplied means the caller established this name matches at most one
+      // existing employee. Matching on it here is therefore a lookup of an already
+      // resolved decision, not an identity guess — and if the roster has drifted
+      // to contain two, the -1 below appends rather than overwriting either.
+      : merged.findIndex(m => m.name === name && merged.filter(x => x.name === name).length === 1);
+    if (idx >= 0) merged[idx] = { ...merged[idx], ...record, id: merged[idx].id };
     else merged.push(record);
   });
   return merged;

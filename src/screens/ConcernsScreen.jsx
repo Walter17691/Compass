@@ -6,6 +6,7 @@ import { computeConcernIntakeGaps } from '../lib/concernIntakeGaps';
 import { readEvidenceFiles } from '../lib/evidenceUpload';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { EvidenceDropzone } from '../components/EvidenceDropzone';
+import { EmployeeSelect } from '../components/EmployeeSelect';
 
 const inputStyle = { width:"100%", fontSize:14, border:"1px solid #E8E0D0", borderRadius:8, padding:"10px 14px", color:"#1A1535", outline:"none", fontFamily:"DM Sans,system-ui,sans-serif", boxSizing:"border-box" };
 const labelStyle = { display:"block", fontSize:13, fontWeight:500, color:"#1A1535", marginBottom:6 };
@@ -136,7 +137,13 @@ function TriageSummary({ referral, loading }) {
   );
 }
 
-function ReferralCard({ referral, onTriage, onOpenCase, onStartInformal, triageLoading }) {
+function ReferralCard({ referral, onTriage, onOpenCase, onStartInformal, triageLoading,
+  employeeRecords = [], canCreateEmployee = false, onRequestCreateEmployee }) {
+  // Local to the card, so opening one referral's selector does not disturb another.
+  // Phase E0.5A.1 — null, "formal" or "informal". BOTH referral outcomes create a
+  // case, so both go through the same identity step; only the wording differs.
+  const [caseIntent, setCaseIntent] = useState(null);
+  const [caseEmployeeId, setCaseEmployeeId] = useState(null);
   const meta = referralStatusMeta(referral.status);
   const isOpen = referral.status==="new";
   return (
@@ -167,10 +174,46 @@ function ReferralCard({ referral, onTriage, onOpenCase, onStartInformal, triageL
       {(referral.status==="case_opened"||referral.status==="handled_informally")&&referral.linkedCaseId&&(
         <button onClick={()=>onOpenCase(referral.linkedCaseId)} style={{fontSize:12,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>{referral.status==="case_opened"?"Open the case →":"View the conversation record →"}</button>
       )}
-      {isOpen&&(
+      {isOpen&&caseIntent&&(
+        /* Phase E0.5A.1 — a referral carries only a typed employee NAME, so the
+           canonical employee has to be chosen before a case can exist. Picking is
+           an explicit act, and an exact name match selects nothing by itself.
+
+           "Deal with informally" needs this just as much as "Open formal case":
+           it defers case creation to the point the conversation is saved, but it
+           still creates a real case, so it cannot be allowed to create one whose
+           only subject is a name somebody typed into a referral form. */
+        <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:10,padding:"14px 16px",marginBottom:12}}>
+          <div style={{fontSize:12,color:"#6B6880",marginBottom:10}}>
+            This concern was reported about “{referral.employeeName}”. Select which employee record it concerns.
+          </div>
+          <EmployeeSelect
+            inputId={`referral-employee-${referral.id}`}
+            employeeRecords={employeeRecords}
+            value={caseEmployeeId}
+            canCreateEmployee={canCreateEmployee}
+            onRequestCreate={onRequestCreateEmployee}
+            onChange={(id)=>setCaseEmployeeId(id)}
+          />
+          <div style={{display:"flex",gap:8,marginTop:12}}>
+            <Btn variant="secondary" disabled={!caseEmployeeId}
+              onClick={()=>{
+                if(caseIntent==="informal") onStartInformal(referral, caseEmployeeId);
+                else onTriage(referral.id,"open_case",{employeeId:caseEmployeeId});
+                setCaseIntent(null); setCaseEmployeeId(null);
+              }}
+              style={{padding:"6px 12px",fontSize:12}}>
+              {caseIntent==="informal"?"Start the conversation":"Open the case"}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>{ setCaseIntent(null); setCaseEmployeeId(null); }}
+              style={{padding:"6px 12px",fontSize:12}}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+      {isOpen&&!caseIntent&&(
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <Btn variant="secondary" onClick={()=>onTriage(referral.id,"open_case")} style={{padding:"6px 12px",fontSize:12}}>Open formal case</Btn>
-          <Btn variant="ghost" onClick={()=>onStartInformal(referral)} style={{padding:"6px 12px",fontSize:12}}>Deal with informally</Btn>
+          <Btn variant="secondary" onClick={()=>setCaseIntent("formal")} style={{padding:"6px 12px",fontSize:12}}>Open formal case</Btn>
+          <Btn variant="ghost" onClick={()=>setCaseIntent("informal")} style={{padding:"6px 12px",fontSize:12}}>Deal with informally</Btn>
           <Btn variant="ghost" onClick={()=>onTriage(referral.id,"request_more_info")} style={{padding:"6px 12px",fontSize:12}}>Request more info</Btn>
           <Btn variant="ghost" onClick={()=>onTriage(referral.id,"return_to_manager")} style={{padding:"6px 12px",fontSize:12}}>Return to manager</Btn>
           <Btn variant="ghost" onClick={()=>onTriage(referral.id,"close")} style={{padding:"6px 12px",fontSize:12}}>Close</Btn>
@@ -187,7 +230,7 @@ function ReferralCard({ referral, onTriage, onOpenCase, onStartInformal, triageL
 // clearInitialSection deep-link shape SettingsScreen already uses.
 // Non-HR always sees the form regardless (see the isHR branch below), so
 // this only matters for the HR branch's own showForm toggle.
-export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, startInformalConversation, concernTriageLoading={}, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens, autoOpenForm, clearAutoOpenForm }) {
+export function ConcernsScreen({ isHR, employeeRecords = [], onRequestCreateEmployee, concernReferrals, concernForm, setConcernForm, submitConcernReferral, concernSubmitted, setConcernSubmitted, triageReferral, startInformalConversation, concernTriageLoading={}, currentUser, showToast, setActiveCaseId, setActiveCaseStage, setScreen, screens, autoOpenForm, clearAutoOpenForm }) {
   const [showForm, setShowForm] = useState(!!autoOpenForm);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => clearAutoOpenForm?.(), []);
@@ -244,12 +287,12 @@ export function ConcernsScreen({ isHR, concernReferrals, concernForm, setConcern
         <Card style={{textAlign:"center",padding:"32px 20px",color:"#9B9098",fontSize:13}}>No concerns raised yet.</Card>
       )}
 
-      {open.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} onStartInformal={startInformalConversation} triageLoading={!!concernTriageLoading[r.id]} />)}
+      {open.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} onStartInformal={startInformalConversation} triageLoading={!!concernTriageLoading[r.id]} employeeRecords={employeeRecords} canCreateEmployee={isHR} onRequestCreateEmployee={onRequestCreateEmployee} />)}
 
       {otherStatusGroups.map(group=>(
         <div key={group.id}>
           <div style={{fontSize:11,fontWeight:700,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",margin:"20px 0 10px"}}>{group.label} ({group.referrals.length})</div>
-          {group.referrals.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} onStartInformal={startInformalConversation} triageLoading={!!concernTriageLoading[r.id]} />)}
+          {group.referrals.map(r=><ReferralCard key={r.id} referral={r} onTriage={triageReferral} onOpenCase={openCase} onStartInformal={startInformalConversation} triageLoading={!!concernTriageLoading[r.id]} employeeRecords={employeeRecords} canCreateEmployee={isHR} onRequestCreateEmployee={onRequestCreateEmployee} />)}
         </div>
       ))}
     </div>

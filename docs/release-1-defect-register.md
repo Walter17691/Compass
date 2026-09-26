@@ -942,6 +942,93 @@ analysis for the whole file — read lint **per rule**, never by total.
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
 
+### Phase E0.5A.1 — close new identity leaks (2026-09-26)
+- **STATUS: DEPLOYED / VERIFIED.** **No migration** — this phase is entirely
+  application-side. **No backfill, no reconciliation, no production write.**
+  Production verified unchanged: 2,960 cases, **0** with `employee_id`, 2,685
+  employee records, 890 embedded meetings, 2 table-resident meetings,
+  `cases.updated_at` max still `2026-09-25 14:23:20.9`.
+- **Why.** E0.5A migrated the two case-creation paths it knew about. This phase
+  assumed that inventory was **incomplete** and searched the repository again
+  rather than trusting it. It was incomplete: **three further active paths** could
+  still create identity debt, and one of them was a case-minting path.
+- **The complete active case-creation inventory is now the deliverable.** Four
+  `saveCases([...cases` sites in `App.jsx` plus `IntakeScreen`, all accounted for
+  and asserted by test 7. No active production path can create a case with no
+  canonical employee.
+- **LEAK 1 — the Outlook deep link (found by `no-undef`, not by tests).**
+  `OpenInCompassScreen` opened the new-case form pre-seeded with an employee name
+  **parsed out of an email display name** — the weakest identity signal in the
+  product, arriving from outside Compass entirely. The deep link may still open the
+  form; it may no longer decide the subject. The prop is removed from the component
+  contract so the seeding cannot be quietly reintroduced.
+  - *This was found because deleting `casePromptName` state left a live JSX prop
+    reference. The screen's own test passed a `vi.fn()` mock in, so the missing
+    state was invisible to it. Only `no-undef` saw it — and it would have thrown a
+    `ReferenceError` in production for every add-in user.*
+- **LEAK 2 — "Deal with informally" on a concern referral.** The referral card has
+  **two** outcomes and **both create a case**; E0.5A.1 initially gated only *"Open
+  formal case"*. The informal route defers case creation until the conversation is
+  saved (so backing out leaves nothing behind) — which is exactly why identity has
+  to survive the whole journey: the case is minted much later, in
+  `saveMeetingToCaseImpl`, long after the referral is out of scope. It created a
+  case with `employeeName` and **no `employee_id`**.
+  - Both outcomes now share **one** identity step behind a single `caseIntent`
+    flag, so they cannot drift apart again. `referralCaseIntent` — the one
+    remaining branch of the meeting save that can mint a case — now requires the
+    canonical id, not merely the presence of a referral id, and stamps it on the
+    new case.
+- **LEAK 3 (Part G) — a name read that decided a WRITE.**
+  `acceptMeetingEvidenceSuggestion` / `acceptMeetingActionSuggestion` resolved the
+  target case by `employeeName` and then called `createCaseTask` — **a real
+  `case_tasks` INSERT**. Where two people share a name, an action accepted in one
+  person's meeting became a task on the **other person's case**, and nothing
+  downstream would ever show it had gone to the wrong employee.
+  - Both now use only the link the user actually established. Where there is no
+    link, the **pre-existing** `applied:false` branch takes over: acceptance is
+    recorded locally and the task is created at save time. Both deferred call sites
+    were verified **id-based**, so the leak is closed rather than moved.
+- **Part G's distinction, recorded so it is not re-litigated.** A name comparison
+  that *narrows a list a human then picks from* is not an identity decision.
+  `appealLinkCandidates` is kept deliberately: showing every case in the org would
+  make misfiling an appeal **easier**, not harder. A name comparison whose result
+  is handed to an INSERT is an identity decision wearing a read's clothing, and
+  those are what this phase removed.
+- **CSV employee import can no longer silently merge two people.**
+  `src/lib/employeeImportIdentity.js` resolves each row by **explicit id first**,
+  then by name **only when exactly one employee answers to it** (re-checked, not
+  assumed from the unique constraint), creates when none does, and **BLOCKS** when
+  more than one does — reporting the **row number**, because with an ambiguous name
+  naming the person is precisely what cannot be done unambiguously. An unknown id
+  is **refused, not treated as a create**. `employee_number` and `work_email` are
+  deliberately **not** used to merge: neither is unique in the schema.
+- **`mergeHrisEmployeesIntoRecords` is id-first and appends on ambiguity** rather
+  than overwriting either person.
+- **Employee update and delete are by UUID.** `deleteEmployeeRecord(employeeId)`
+  and `updateEmployeeRecordById`; the update payload carries **no `name`**. Never
+  delete a "John Smith" because the label matched.
+- **`saveDevMeetingToCase` guarded (interim, smallest safe).** It can no longer
+  name-match or mint a case: it requires the case the user is explicitly in and
+  refuses otherwise. NEW-20 FULL remains open and unchanged.
+- **Dead code deleted, not merely unreferenced.** `createCaseFromChat` minted a
+  case from free text with zero call sites; it and its supporting state are gone.
+- **Evidence** `src/test/identityLeaksClosed.test.jsx` — **38 tests, 18 of 18
+  mutations caught.** Full suite **5,263 passing / 306 files**. Lint **162 errors /
+  9 warnings** against the 164/9 baseline, read **by rule**: `no-unused-vars`
+  120→118, and `react-hooks/immutability` (22) and `set-state-in-effect` (9) both
+  still reporting, confirming **no React Compiler callee bailout**. No lint rule
+  disabled. Build clean, API routes unchanged (none added).
+- **Method note.** One mutation initially appeared *caught-by-omission*: an inline
+  shell mutation silently failed to apply, making the test look strong when it had
+  not been exercised. A mutation harness without an **assert-the-mutation-applied**
+  step can only produce false confidence — the same blind spot class as the mirror
+  tests that let NEW-45 ship green. All 18 were re-proved with the assertion in
+  place.
+- **Explicitly NOT done:** no historical reconciliation, no `UNIQUE(org_id, name)`
+  removal, no case or meeting migration, no Employee File UI, no employee-parented
+  meetings, no formal-workflow semantic change, no second selector built, no
+  production fixtures.
+
 ### Phase E0.5A — new-write employee identity (2026-09-26)
 - **STATUS: DEPLOYED / VERIFIED.** Migration
   `case_employee_identity_2026_09_26` applied. **0 of 2,960 historical cases
