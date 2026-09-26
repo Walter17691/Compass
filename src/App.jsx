@@ -3496,7 +3496,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       });
     });
     employeeRecords.forEach(r => {
-      if((r.name||"").toLowerCase().includes(ql) && !cases.some(c=>c.employeeName===r.name))
+      // Phase E0.7 — the dedupe ("don't list a bare employee row when their cases
+      // are already in the results") was keyed on the NAME, so a roster employee
+      // became unfindable the moment ANY case shared their name — including a
+      // same-named colleague's case, and including the 396 employees People can
+      // now see. Keyed on the canonical employee instead.
+      if((r.name||"").toLowerCase().includes(ql) && !cases.some(c=>c.employeeId===r.id))
         // Phase E0.7 — the result carries the employee UUID. `r` is already the
         // roster row, so the id was in hand and was simply discarded; navigating
         // by title meant the only search result type that resolved by name.

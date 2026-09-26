@@ -309,6 +309,11 @@ describe('24/25. search and routing use stable ids', () => {
     expect(search).toContain('setActiveEmployeeId(r.employeeId)');
     expect(search).toContain('if(!r.employeeId) return;');
     expect(search).not.toContain('setActivePerson(r.title)');
+    // And the dedupe that decides whether to list a bare employee row is keyed on
+    // the canonical employee, not the name — a name key made a roster employee
+    // unfindable as soon as any case shared their name.
+    expect(appCode).toContain('!cases.some(c=>c.employeeId===r.id)');
+    expect(appCode).not.toContain('!cases.some(c=>c.employeeName===r.name)');
   });
 
   it('25. a person is deep-linkable by UUID, and refresh resolves the same one', () => {
