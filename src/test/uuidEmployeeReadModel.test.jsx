@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import {
   getEmployeeContext, buildEmployeeRoster, rosterNamesSharedBy,
   hasUnattributedRecords, EMPLOYEE_CONTEXT_COLLECTIONS,
@@ -16,7 +16,14 @@ const app = readFileSync('src/App.jsx', 'utf8');
 const appCode = app.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
 const people = readFileSync('src/screens/PeopleScreen.jsx', 'utf8');
 const peopleCode = people.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
-const person = readFileSync('src/screens/PersonViewScreen.jsx', 'utf8');
+// Phase E1 — Person View was replaced by the Employee File. These assertions
+// follow the guarantees to their new home rather than being deleted with the file.
+const person = [
+  readFileSync('src/screens/EmployeeFileScreen.jsx', 'utf8'),
+  readFileSync('src/lib/employeeFile.js', 'utf8'),
+  readFileSync('src/screens/employeeFile/EmployeeFileOverview.jsx', 'utf8'),
+  readFileSync('src/screens/employeeFile/EmployeeFileTabs.jsx', 'utf8'),
+].join('\n');
 const personCode = person.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
 const wellbeing = readFileSync('src/screens/WellbeingScreen.jsx', 'utf8');
 const wellbeingCode = wellbeing.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
@@ -138,9 +145,11 @@ describe('12. an empty context is valid, not an error', () => {
     });
   });
 
-  it('12. Person View renders the empty state instead of treating it as broken', () => {
+  it('12. the Employee File renders the empty state instead of treating it as broken', () => {
     expect(personCode).toContain('No recorded activity yet.');
-    expect(personCode).toContain('{ctx.isEmpty&&(');
+    // The flag is computed once in the derivation layer and branched on in the UI.
+    expect(personCode).toContain('isEmpty: ctx.isEmpty');
+    expect(personCode).toContain('if (isEmpty)');
   });
 });
 
@@ -182,21 +191,30 @@ describe('1. People is the roster, keyed by UUID', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 describe('2-6. Person View is UUID-based', () => {
-  it('2. it receives an employeeId and no longer a name', () => {
-    expect(personCode).toContain('export function PersonViewScreen({ employeeId');
+  it('2. the employee detail surface receives an employeeId and no longer a name', () => {
+    // Phase E1 — Person View was REPLACED, not kept alongside. One surface.
+    expect(personCode).toContain('export function EmployeeFileScreen({');
+    expect(personCode).toContain('buildEmployeeFile(employeeId,');
     expect(personCode).not.toContain('const empName = activePerson');
     expect(personCode).not.toContain('activePerson');
     expect(appCode).toContain('employeeId={activeEmployeeId}');
+    // And the old surface is gone from the tree entirely.
+    expect(appCode).not.toContain('PersonViewScreen');
+    expect(existsSync('src/screens/PersonViewScreen.jsx')).toBe(false);
   });
 
   it('3-6. every related collection comes from getEmployeeContext', () => {
-    expect(personCode).toContain('getEmployeeContext(employeeId, {');
-    expect(personCode).toContain('const empCases = ctx.cases;');
+    expect(personCode).toContain('getEmployeeContext(employeeId, authorisedData)');
+    expect(personCode).toContain('ctx.cases');
     expect(personCode).toContain('ctx.wellbeingNotes');
     expect(personCode).toContain('ctx.concernReferrals');
-    expect(personCode).toContain('ctx.dsarRequests');
-    // The old predicate is gone.
-    expect(personCode).not.toContain('cases.filter(c=>c.employeeName===empName)');
+    // dsarRequests is composed in the read primitive and threaded through the
+    // Employee File; Overview does not render DSAR as its own section (the brief:
+    // DSAR is not a prominent Employee File feature).
+    expect(contextCode).toContain('dsarRequests: employeeId ? byEmployee(dsarRequests, employeeId) : []');
+    // No name predicate anywhere in the employee detail surface.
+    expect(personCode).not.toContain('employeeName ===');
+    expect(personCode).not.toContain('employeeName===');
   });
 
   it('the legacy name lookup is not even available on this screen', () => {
@@ -206,15 +224,16 @@ describe('2-6. Person View is UUID-based', () => {
     expect(appCode).not.toContain('getEmployeeRecord={getEmployeeRecord}\n          editingEmployeeRecord');
   });
 
-  it('22. the AI employment profile can no longer receive a colleague\'s history', () => {
-    // The prompt asks for "Pattern Analysis" and a "Risk Assessment" over
-    // empCases. While that was a name match, two same-named people were profiled
-    // as one person with a merged disciplinary pattern.
-    const prompt = personCode.slice(personCode.indexOf('employment profile report for'),
-                                   personCode.indexOf('Be factual, objective'));
-    expect(prompt).toContain('empCases.length');
-    expect(personCode).toContain('const empCases = ctx.cases;');
-    expect(personCode).not.toContain('getEmployeeRecord(empName)');
+  it('22/26. the AI employment profile is GONE, not merely made canonical', () => {
+    // E0.7 fixed the cases it read. E1 removes the feature from the employee
+    // surface altogether: an "Employee Risk"/"Pattern Analysis" card is exactly
+    // the prominent profiling the brief refuses, and E6 owns bounded,
+    // provenance-aware intelligence instead.
+    ['Pattern Analysis', 'Risk Assessment', 'employment profile report',
+     'employmentProfileOutput', '/api/chat'].forEach(t => {
+      expect(personCode).not.toContain(t);
+    });
+    expect(personCode).not.toContain('getEmployeeRecord');
   });
 });
 
@@ -236,11 +255,14 @@ describe('14. Wellbeing reads are canonical, and confidentiality is unchanged', 
   });
 
   it('14. nothing in this phase widens wellbeing access', () => {
-    // The table is HR-only at the database and stays so; Person View additionally
-    // gates the section on isHR rather than relying on an empty array.
-    expect(personCode).toContain('{isHR&&ctx.wellbeingNotes.length>0&&(');
-    expect(personCode).toContain('{isHR&&ctx.concernReferrals.length>0&&(');
-    expect(personCode).toContain('{isHR&&ctx.dsarRequests.length>0&&(');
+    // Gated on an explicit viewer capability rather than on an array happening to
+    // be empty — so a section never renders, not even empty, for someone without
+    // it. An empty section header is itself a disclosure that records exist.
+    expect(personCode).toContain('canSeeWellbeing: !!isHR');
+    expect(personCode).toContain('canSeeReferrals: !!isHR');
+    expect(personCode).toContain('canSeeDsar: !!isHR');
+    expect(personCode).toContain('if (viewer.canSeeWellbeing)');
+    expect(personCode).toContain('if (viewer.canSeeReferrals)');
   });
 });
 
@@ -317,13 +339,16 @@ describe('24/25. search and routing use stable ids', () => {
   });
 
   it('25. a person is deep-linkable by UUID, and refresh resolves the same one', () => {
-    expect(appCode).toContain("if (screen === SCREENS.PERSON_VIEW && activeEmployeeId) params.set('employee', activeEmployeeId);");
+    // Phase E1 — the route is EMPLOYEE_FILE, and the tab travels with it.
+    expect(appCode).toContain("if (screen === SCREENS.EMPLOYEE_FILE && activeEmployeeId) {");
+    expect(appCode).toContain("params.set('employee', activeEmployeeId);");
+    expect(appCode).toContain("params.set('tab', employeeFileTab)");
     expect(appCode).toContain("employeeId: params.get('employee') || null,");
     // The state is INITIALISED from the URL, so a cold load resolves the employee
     // rather than rendering an empty screen and relying on a later effect.
     expect(appCode).toContain('useState(() => readNavFromUrl().employeeId)');
     // The effect re-runs when the employee changes, so the URL cannot go stale.
-    expect(appCode).toContain('[screen, activeCaseId, activeEmployeeId, caseInfo.caseId');
+    expect(appCode).toContain('[screen, activeCaseId, activeEmployeeId, employeeFileTab, caseInfo.caseId');
   });
 
   it('no employee identifier in a Compass route is a name', () => {
@@ -394,8 +419,10 @@ describe('the read model composes, it does not authorise', () => {
     expect(EMPLOYEE_CONTEXT_COLLECTIONS).toEqual(['cases', 'wellbeingNotes', 'concernReferrals', 'dsarRequests']);
     expect(contextCode).not.toContain('standaloneMeetings');
     expect(contextCode).not.toContain('meetings:');
-    // Person View still shows meetings, but reached THROUGH the case — which is
+    // The Employee File still shows meetings, reached THROUGH the case — which is
     // authoritative parentage, not a name match.
-    expect(personCode).toContain('empCases.flatMap(cs=>(cs.meetings||[])');
+    expect(personCode).toContain('(cs.meetings || [])');
+    // And it says so, so the tab is never mistaken for a complete history.
+    expect(personCode).toContain('Meetings held outside a case are not shown yet');
   });
 });

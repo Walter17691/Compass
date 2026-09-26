@@ -67,7 +67,7 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
           // still always visible, never hover-only.
           <DataRow key={p.id}>
             {/* Navigation carries the UUID. The name is a label on the way past. */}
-            <button type="button" onClick={()=>{setActiveEmployeeId(p.id);setScreen(SCREENS.PERSON_VIEW);}}
+            <button type="button" onClick={()=>{setActiveEmployeeId(p.id);setScreen(SCREENS.EMPLOYEE_FILE);}}
               style={{flex:1,minWidth:0,padding:"14px 4px",cursor:"pointer",background:"none",border:"none",textAlign:"left",font:"inherit",color:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:COLOR.ink,marginBottom:2}}>{p.name||"(no name recorded)"}</div>

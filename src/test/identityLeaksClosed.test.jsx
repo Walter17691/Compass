@@ -260,10 +260,14 @@ describe('9-11. employee update and delete use the canonical id', () => {
   });
 
   it('11. the caller that holds a record passes its id', () => {
-    const person = readFileSync('src/screens/PersonViewScreen.jsx', 'utf8');
-    expect(person).toContain('deleteEmployeeRecord(rec.id)');
-    expect(person).toContain('employeeId:rec.id');
-    expect(person).not.toContain('deleteEmployeeRecord(empName)');
+    // Phase E1 — Person View was REPLACED by the Employee File (one employee
+    // detail surface, not two). The per-employee edit flow moved with it, and the
+    // guarantee this test defends is unchanged: both writes go by canonical id.
+    const app = readFileSync('src/App.jsx', 'utf8');
+    expect(app).toContain('deleteEmployeeRecord(employee.id)');
+    expect(app).toContain('employeeId: employee.id');
+    expect(app).not.toContain('deleteEmployeeRecord(empName)');
+    expect(app).not.toContain('deleteEmployeeRecord(employee.name)');
   });
 
   it('creation still uses the name conflict target, because the constraint remains', () => {

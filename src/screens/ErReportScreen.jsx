@@ -291,7 +291,7 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, 
                   <div style={{ width: 28, height: 28, borderRadius: "50%", background: COLOR.purpleTint, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: COLOR.purple, flexShrink: 0 }}>
                     {name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                   </div>
-                  <button onClick={() => { setActiveEmployeeId(employeeId); setScreen(SCREENS.PERSON_VIEW); }} style={{ fontSize: 12, color: COLOR.purple, background: "none", border: "none", cursor: "pointer", fontFamily: FONT.sans, fontWeight: 500, textAlign: "left" }}>{name}</button>
+                  <button onClick={() => { setActiveEmployeeId(employeeId); setScreen(SCREENS.EMPLOYEE_FILE); }} style={{ fontSize: 12, color: COLOR.purple, background: "none", border: "none", cursor: "pointer", fontFamily: FONT.sans, fontWeight: 500, textAlign: "left" }}>{name}</button>
                 </div>
                 <span style={{ fontSize: 11, color: COLOR.amber, background: COLOR.amberTint, borderRadius: RADIUS.pill, padding: "2px 8px", fontWeight: 600 }}>{count} cases</span>
               </div>

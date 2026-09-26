@@ -44,7 +44,7 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
                   // one name once the unique-name constraint is removed, and a
                   // name-navigated result could not tell them apart.
                   if(!r.employeeId) return;
-                  setActiveEmployeeId(r.employeeId); setScreen(SCREENS.PERSON_VIEW); return;
+                  setActiveEmployeeId(r.employeeId); setScreen(SCREENS.EMPLOYEE_FILE); return;
                 }
                 if(r.type==="dsar") { setScreen(SCREENS.DSAR); return; }
                 setScreen(SCREENS.CASES);

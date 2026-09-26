@@ -116,7 +116,6 @@ import { IntakeScreen } from './screens/IntakeScreen';
 import { HomeMeetingScreen } from './screens/HomeMeetingScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { RecordScreen } from './screens/RecordScreen';
-import { PersonViewScreen } from './screens/PersonViewScreen';
 import { CaseViewScreen } from './screens/CaseViewScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { GlobalAssistantScreen } from './screens/GlobalAssistantScreen';
@@ -144,6 +143,7 @@ const CalendarScreen = lazy(() => import('./screens/CalendarScreen').then(m => (
 // has twice silently switched off the React Compiler's immutability (22) and
 // set-state-in-effect (9) analysis for the whole 10,700-line file.
 const MeetingsScreen = lazy(() => import('./screens/MeetingsScreen').then(m => ({default: m.MeetingsScreen})));
+const EmployeeFileScreen = lazy(() => import('./screens/EmployeeFileScreen').then(m => ({default: m.EmployeeFileScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { CommandBarModal } from './screens/CommandBarModal';
 import { EmployeeSelect } from './components/EmployeeSelect';
@@ -308,6 +308,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       screen: params.get('screen') || SCREENS.HOME,
       caseId: params.get('case') || null,
       employeeId: params.get('employee') || null,
+      employeeTab: params.get('tab') || null,
       meetingId: params.get('meeting') || null,
       // Phase 4C.3 refresh fix — which store owns the meeting the URL names.
       // Explicit, so recovery never has to guess from a missing case.
@@ -575,7 +576,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [casesSearch, setCasesSearch] = useState("");
   const [casesFilter, setCasesFilter] = useState("active");
   const [casesView, setCasesView] = useState("list");
-  const [employmentProfileOutput, setEmploymentProfileOutput] = useState("");
   const [employeeRecords, setEmployeeRecords] = useState(orgLs("compass_employees", []));
   const saveEmployeeRecords = u => { setEmployeeRecords(u); orgLsSet("compass_employees", u); };
   const getEmployeeRecord = (name) => findEmployeeByName(employeeRecords, name);
@@ -601,7 +601,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     createEmployeeRecord(name, fields);
     return null;   // the canonical id arrives on the next load
   };
-  const [employmentProfileLoading, setEmploymentProfileLoading] = useState(false);
   const [newCaseJobTitle, setNewCaseJobTitle] = useState("");
   const [newCaseStartDate, setNewCaseStartDate] = useState("");
   const [newCaseLocation, setNewCaseLocation] = useState("");
@@ -1010,6 +1009,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // react-hooks/immutability error ("accessed before it is declared"), which is
   // the compiler pointing out that the effect could see a stale value.
   const [activeEmployeeId, setActiveEmployeeId] = useState(() => readNavFromUrl().employeeId);
+  // Phase E1 — which Employee File tab is open. In the URL too, so a shared link
+  // to someone's Cases & processes tab arrives there rather than on Overview.
+  const [employeeFileTab, setEmployeeFileTab] = useState(() => readNavFromUrl().employeeTab || "overview");
 
   // Respond to Back/Forward: read the URL the browser just navigated to
   // and mirror it into state, tagging the source so the effect below
@@ -1039,7 +1041,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // Phase E0.7 — a person was not in the URL at all, so refreshing Person View
     // lost who you were looking at. It is the UUID, never the name: a name in a
     // route is an identifier that changes when somebody marries.
-    if (screen === SCREENS.PERSON_VIEW && activeEmployeeId) params.set('employee', activeEmployeeId);
+    if (screen === SCREENS.EMPLOYEE_FILE && activeEmployeeId) {
+      params.set('employee', activeEmployeeId);
+      if (employeeFileTab && employeeFileTab !== 'overview') params.set('tab', employeeFileTab);
+    }
     // P1 remediation — the live meeting screen carries its authoritative
     // identity, so a refresh can recover the exact meeting rather than
     // guessing. caseId + meetingId is the only recovery key; nothing is
@@ -1063,7 +1068,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // entry that just makes Back need an extra press for no visible change.
     if (nextSearch === window.location.search) return;
     window.history.pushState(null, '', `${window.location.pathname}${nextSearch}`);
-  }, [screen, activeCaseId, activeEmployeeId, caseInfo.caseId, caseInfo.meetingId, caseInfo.meetingHome]);
+  }, [screen, activeCaseId, activeEmployeeId, employeeFileTab, caseInfo.caseId, caseInfo.meetingId, caseInfo.meetingHome]);
 
   // Human UAT remediation, Batch 1 hardening round 2 — the signature-sync
   // effect that used to live here (checks pending meeting signatures
@@ -11099,47 +11104,57 @@ Please produce:
 
       
       
-      {/* ══ PERSON VIEW ══ */}
-      {screen===SCREENS.PERSON_VIEW&&(
-        <PersonViewScreen
+      {/* ══ EMPLOYEE FILE ══
+          Replaces Person View outright. There is one employee detail surface, and
+          it is identified by uuid. */}
+      {screen===SCREENS.EMPLOYEE_FILE&&(
+        <EmployeeFileScreen
           employeeId={activeEmployeeId}
           employeeRecords={employeeRecords}
+          cases={cases}
           wellbeingNotes={wellbeingNotes}
           concernReferrals={concernReferrals}
           dsarRequests={dsarRequests}
+          dueSoon={dueSoon}
           isHR={isHR}
-          cases={cases}
+          role={member?.role||null}
+          activeTab={employeeFileTab}
+          setActiveTab={setEmployeeFileTab}
           setScreen={setScreen}
-          setMeetingSetup={setMeetingSetup}
-          editingEmployeeRecord={editingEmployeeRecord}
-          setEditingEmployeeRecord={setEditingEmployeeRecord}
-          editJobTitle={editJobTitle}
-          setEditJobTitle={setEditJobTitle}
-          editStartDate={editStartDate}
-          setEditStartDate={setEditStartDate}
-          editLocation={editLocation}
-          setEditLocation={setEditLocation}
-          locations={locations}
-          upsertEmployeeRecord={upsertEmployeeRecord}
-          deleteEmployeeRecord={deleteEmployeeRecord}
-          confirmDialog={confirmDialog}
-          showToast={showToast}
           setActiveCaseId={setActiveCaseId}
           setActiveCaseStage={setActiveCaseStage}
-          getCaseStatus={getCaseStatus}
           fmtDate={fmtDate}
-          setReviewOutput={setReviewOutput}
-          setMeetingType={setMeetingType}
-          setCaseInfo={setCaseInfo}
-          employmentProfileLoading={employmentProfileLoading}
-          setEmploymentProfileLoading={setEmploymentProfileLoading}
-          employmentProfileOutput={employmentProfileOutput}
-          setEmploymentProfileOutput={setEmploymentProfileOutput}
-          getCaseStage={getCaseStage}
-          setLetterOutput={setLetterOutput}
-          org={org}
-          user={user}
-          promptDialog={promptDialog}
+          // Preselects the employee and opens the EXISTING case-creation modal.
+          // Employee File never creates a case itself and never bypasses the
+          // modal's required fields — the user still chooses a type and confirms.
+          onNewCase={(id)=>{ setCasePromptEmployeeId(id); setShowCasePrompt(true); }}
+          onReconcile={()=>{ setSettingsSection("identity-reconciliation"); setScreen(SCREENS.SETTINGS); }}
+          editing={editingEmployeeRecord}
+          setEditing={setEditingEmployeeRecord}
+          locations={locations}
+          editJobTitle={editJobTitle} setEditJobTitle={setEditJobTitle}
+          editStartDate={editStartDate} setEditStartDate={setEditStartDate}
+          editLocation={editLocation} setEditLocation={setEditLocation}
+          // Both writes are by CANONICAL ID. upsert carries employeeId so it
+          // updates the right row, and delete takes employee.id — deleting by
+          // name would remove the wrong person the moment two employees in one
+          // organisation share one.
+          onSaveEmployee={(employee)=>{
+            upsertEmployeeRecord(employee.id, { employeeId: employee.id, jobTitle: editJobTitle, startDate: editStartDate, location: editLocation });
+            setEditingEmployeeRecord(false);
+            showToast("Employee record updated");
+          }}
+          onDeleteEmployee={async (employee)=>{
+            const ok = await confirmDialog({
+              title: "Delete employment details?",
+              message: `This removes ${employee.name}'s job title, start date and location. Case files and meeting records are not affected.`,
+              confirmLabel: "Delete", danger: true,
+            });
+            if(!ok) return;
+            deleteEmployeeRecord(employee.id);
+            setEditingEmployeeRecord(false);
+            showToast("Employment details deleted");
+          }}
         />
       )}
 
